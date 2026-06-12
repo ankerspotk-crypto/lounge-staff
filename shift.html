@@ -39,11 +39,11 @@ header h1 { font-size: 17px; font-weight: 600; }
 .overlay.show { display: flex; align-items: flex-end; }
 .picker { background: #16162a; border-radius: 18px 18px 0 0; width: 100%; padding: 18px 16px 36px; border-top: 1px solid #2a2a40; }
 .picker-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #aaccff; }
-.time-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.time-opt { background: #1e1e30; border: 1px solid #2a2a44; color: #ccc; padding: 13px 8px; border-radius: 10px; font-size: 14px; text-align: center; cursor: pointer; -webkit-appearance: none; }
-.time-opt:active { background: #252540; }
-.time-opt.off { color: #cc6666; border-color: #3a2020; background: #1a1010; }
-.picker-cancel { margin-top: 10px; width: 100%; background: none; border: 1px solid #2a2a3a; color: #666; padding: 12px; border-radius: 10px; font-size: 14px; cursor: pointer; -webkit-appearance: none; }
+.time-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.time-select { flex: 1; background: #1e1e30; border: 1px solid #2a2a44; color: #fff; padding: 12px 8px; border-radius: 10px; font-size: 15px; -webkit-appearance: none; appearance: none; text-align: center; min-width: 0; }
+.confirm-btn { width: 100%; background: #1a5a30; border: none; color: #88eebb; padding: 13px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px; -webkit-appearance: none; }
+.delete-btn { width: 100%; background: none; border: 1px solid #3a2020; color: #cc6666; padding: 11px; border-radius: 10px; font-size: 13px; cursor: pointer; margin-bottom: 8px; -webkit-appearance: none; }
+.picker-cancel { width: 100%; background: none; border: 1px solid #2a2a3a; color: #555; padding: 11px; border-radius: 10px; font-size: 13px; cursor: pointer; -webkit-appearance: none; }
 
 .submit-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #13131f; border-top: 1px solid #2a2a40; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 .count-label { text-align: center; font-size: 12px; color: #666; margin-bottom: 8px; }
@@ -91,15 +91,15 @@ var selected = {};
 var activeKey = null;
 var viewYear, viewMonth;
 
-var TIMES = [
-  { label: '19:00〜24:00', val: '19:00~24:00' },
-  { label: '20:00〜24:00', val: '20:00~24:00' },
-  { label: '21:00〜24:00', val: '21:00~24:00' },
-  { label: '19:00〜23:00', val: '19:00~23:00' },
-  { label: '20:00〜23:00', val: '20:00~23:00' },
-  { label: '22:00〜24:00', val: '22:00~24:00' },
-  { label: '休み（削除）', val: 'OFF', off: true }
-];
+// 18:00〜26:00（=深夜2:00）を30分刻みで生成
+function genTimes() {
+  var t = [];
+  for (var m = 18*60; m <= 26*60; m += 30) {
+    var h = Math.floor(m/60), mn = m%60;
+    t.push((h<10?'0':'')+h+':'+(mn===0?'00':'30'));
+  }
+  return t;
+}
 
 // LIFF初期化
 liff.init({ liffId: LIFF_ID })
@@ -174,14 +174,41 @@ function shiftM(d) {
 function openPicker(key) {
   activeKey = key;
   document.getElementById('picker-title').textContent = key + ' の時間を選択';
-  document.getElementById('time-grid').innerHTML = TIMES.map(function(t) {
-    return '<button class="time-opt'+(t.off?' off':'')+'" onclick="pickTime(\''+t.val+'\')">'+t.label+'</button>';
-  }).join('');
+
+  var times = genTimes();
+  var cur = selected[key] || '';
+  var parts = cur.split('~');
+  var sv = parts[0] || '19:00';
+  var ev = parts[1] || '24:00';
+
+  var opts = function(arr, val) {
+    return arr.map(function(t) {
+      return '<option value="'+t+'"'+(t===val?' selected':'')+'>'+t+'</option>';
+    }).join('');
+  };
+
+  document.getElementById('time-grid').innerHTML =
+    '<div class="time-row">'
+    + '<select id="sel-s" class="time-select">'+opts(times.slice(0,-1), sv)+'</select>'
+    + '<span style="color:#666;font-size:18px;flex-shrink:0">〜</span>'
+    + '<select id="sel-e" class="time-select">'+opts(times.slice(1), ev)+'</select>'
+    + '</div>'
+    + '<button class="confirm-btn" onclick="confirmTime()">決定</button>'
+    + (cur ? '<button class="delete-btn" onclick="deleteDay()">この日を削除</button>' : '');
+
   document.getElementById('overlay').classList.add('show');
 }
 
-function pickTime(val) {
-  if (val==='OFF') delete selected[activeKey]; else selected[activeKey] = val;
+function confirmTime() {
+  var s = document.getElementById('sel-s').value;
+  var e = document.getElementById('sel-e').value;
+  if (s >= e) { alert('終了は開始より後にしてください'); return; }
+  selected[activeKey] = s + '~' + e;
+  closePicker(); render();
+}
+
+function deleteDay() {
+  delete selected[activeKey];
   closePicker(); render();
 }
 
