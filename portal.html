@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>マイページ</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0d0d14; color: #fff; min-height: 100vh; }
+
+header {
+  background: #16162a; padding: 14px 16px 0;
+  border-bottom: 1px solid #2a2a40; position: sticky; top: 0; z-index: 10;
+}
+.header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+header h1 { font-size: 17px; font-weight: 600; }
+.user-name { font-size: 13px; color: #aaa; }
+
+.tabs { display: flex; gap: 4px; }
+.tab {
+  flex: 1; padding: 10px 4px; text-align: center; font-size: 13px; font-weight: 500;
+  border-bottom: 2px solid transparent; cursor: pointer; color: #666;
+}
+.tab.active { color: #88aaff; border-bottom-color: #88aaff; }
+
+.content { padding: 16px; }
+
+.loading { text-align: center; color: #666; padding: 60px 0; font-size: 14px; }
+.err { text-align: center; color: #cc5555; padding: 40px 16px; font-size: 14px; line-height: 1.7; }
+.err small { color: #777; font-size: 11px; }
+
+/* month selector */
+.month-bar {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px;
+  scrollbar-width: none;
+}
+.month-bar::-webkit-scrollbar { display: none; }
+.month-chip {
+  flex-shrink: 0; padding: 5px 14px; border-radius: 20px; font-size: 13px;
+  background: #1e1e30; border: 1px solid #2a2a40; color: #999; cursor: pointer;
+}
+.month-chip.active { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
+
+/* card */
+.card {
+  background: #16162a; border: 1px solid #2a2a40; border-radius: 12px;
+  padding: 16px; margin-bottom: 12px;
+}
+.card-title { font-size: 12px; color: #666; margin-bottom: 10px; letter-spacing: .5px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #1e1e2a; }
+.row:last-child { border-bottom: none; }
+.row-label { font-size: 13px; color: #999; }
+.row-val { font-size: 14px; font-weight: 500; }
+.row-val.accent { color: #88ffcc; }
+.row-val.sub { color: #cc8844; }
+.row-val.minus { color: #cc5555; }
+
+.total-card {
+  background: #101828; border: 1px solid #2244aa; border-radius: 12px;
+  padding: 18px; text-align: center; margin-bottom: 16px;
+}
+.total-label { font-size: 12px; color: #5588cc; margin-bottom: 6px; }
+.total-val { font-size: 28px; font-weight: 700; color: #88aaff; }
+
+/* シフトカレンダー */
+.shift-month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.shift-month-label { font-size: 16px; font-weight: 600; }
+.nav-btn {
+  background: #2a2a40; border: none; color: #ccc;
+  width: 36px; height: 36px; border-radius: 50%; font-size: 18px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 4px; }
+.weekday { font-size: 11px; color: #555; padding: 4px 0; }
+.weekday.sun { color: #884444; }
+.weekday.sat { color: #445588; }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.day {
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; padding: 2px;
+}
+.day .num { font-size: 14px; font-weight: 500; line-height: 1; }
+.day .time-tag { font-size: 8px; color: #88ccff; margin-top: 2px; line-height: 1.1; text-align: center; white-space: nowrap; overflow: hidden; max-width: 100%; }
+.day.empty { pointer-events: none; }
+.day.past { opacity: 0.3; pointer-events: none; }
+.day.sun .num { color: #cc6666; }
+.day.sat .num { color: #6688cc; }
+.day.today .num { color: #ffdd44; font-weight: 700; }
+.day.selected { background: #152a40; border-color: #3377bb; }
+.day.selected .num { color: #88ccff; }
+
+/* picker overlay */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
+.overlay.show { display: flex; align-items: flex-end; }
+.picker { background: #16162a; border-radius: 18px 18px 0 0; width: 100%; padding: 18px 16px 36px; border-top: 1px solid #2a2a40; }
+.picker-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #aaccff; }
+.time-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.time-opt {
+  background: #1e1e30; border: 1px solid #2a2a44; color: #ccc;
+  padding: 13px 8px; border-radius: 10px; font-size: 14px; text-align: center;
+  cursor: pointer;
+}
+.time-opt:active, .time-opt.chosen { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
+.time-opt.off { color: #cc6666; border-color: #3a2020; background: #1a1010; }
+.picker-cancel {
+  margin-top: 10px; width: 100%; background: none; border: 1px solid #2a2a3a;
+  color: #666; padding: 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
+}
+
+.submit-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #16162a; border-top: 1px solid #2a2a40; padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.submit-btn {
+  width: 100%; background: #2244aa; border: none; color: #fff;
+  padding: 16px; border-radius: 12px; font-size: 16px; font-weight: 600;
+  cursor: pointer;
+}
+.submit-btn:active { background: #1a337f; }
+.submit-btn:disabled { background: #2a2a3a; color: #555; }
+.shift-spacer { height: 80px; }
+.shift-count { text-align: center; font-size: 13px; color: #666; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <h1>マイページ</h1>
+    <span class="user-name" id="user-name">読み込み中...</span>
+  </div>
+  <div class="tabs">
+    <div class="tab active" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
+    <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
+    <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
+  </div>
+</header>
+
+<div class="content" id="content">
+  <div class="loading">読み込み中...</div>
+</div>
+
+<div class="overlay" id="picker-overlay" onclick="closePicker()">
+  <div class="picker" onclick="event.stopPropagation()">
+    <div class="picker-title" id="picker-title"></div>
+    <div class="time-grid" id="picker-grid"></div>
+    <button class="picker-cancel" onclick="closePicker()">キャンセル</button>
+  </div>
+</div>
+
+<div class="submit-bar" id="submit-bar" style="display:none">
+  <button class="submit-btn" id="submit-btn" onclick="doSubmit()">シフトを提出する</button>
+  <div class="shift-count" id="shift-count"></div>
+</div>
+
+<script>
+var LIFF_ID = '2010376677-Y4qexCIH';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+
+var userId = '', userName = '', portalData = null;
+var currentTab = 'sales', currentMonth = '';
+var viewYear, viewMonth, shiftSelections = {};
+
+function fmt(n) {
+  if (n === '' || n === null || n === undefined) return '—';
+  var num = Number(String(n).replace(/,/g,''));
+  if (isNaN(num)) return String(n);
+  return num.toLocaleString('ja-JP') + '円';
+}
+
+// ---- LIFF init ----
+var initTimer = setTimeout(function() {
+  showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>');
+}, 12000);
+
+try {
+  liff.init({ liffId: LIFF_ID }).then(function() {
+    clearTimeout(initTimer);
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    return liff.getProfile();
+  }).then(function(p) {
+    if (!p) return;
+    userId   = p.userId;
+    userName = p.displayName;
+    document.getElementById('user-name').textContent = p.displayName;
+    loadPortal();
+  }).catch(function(e) {
+    clearTimeout(initTimer);
+    showErr('ログインエラー<br><small>' + (e && e.message || JSON.stringify(e)) + '</small>');
+  });
+} catch(e) {
+  clearTimeout(initTimer);
+  showErr('起動エラー: ' + e.message);
+}
+
+function loadPortal(month) {
+  setContent('<div class="loading">データ取得中...</div>');
+  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId);
+  if (month) url += '&month=' + encodeURIComponent(month);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        if (d.error === 'unregistered') {
+          showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
+        } else {
+          showErr('エラー: ' + d.error);
+        }
+        return;
+      }
+      portalData = d;
+      if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
+      renderTab(currentTab);
+    })
+    .catch(function(e) {
+      showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>');
+    });
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['sales','pay','shift'].forEach(function(t) {
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  });
+  document.getElementById('submit-bar').style.display = tab === 'shift' ? 'block' : 'none';
+  if (portalData) renderTab(tab);
+}
+
+function renderTab(tab) {
+  if (tab === 'sales') renderSales();
+  else if (tab === 'pay') renderPay();
+  else renderShiftCal();
+}
+
+// ---- 売上明細 ----
+function renderSales() {
+  if (!portalData) return;
+  var months = portalData.months || [];
+  var html = monthBar(months);
+
+  if (months.length === 0) {
+    html += '<div class="loading" style="color:#666">売上データがありません</div>';
+    setContent(html);
+    return;
+  }
+
+  var m = currentMonth;
+  var d = (portalData.sales && portalData.sales[m]) ? portalData.sales[m] : null;
+
+  if (!d) {
+    html += '<div class="loading" style="color:#666">データがありません</div>';
+    setContent(html);
+    return;
+  }
+
+  var total = d['売上合計'] || d['担当小計'] || 0;
+  html += '<div class="total-card">'
+    + '<div class="total-label">売上合計</div>'
+    + '<div class="total-val">' + fmt(total) + '</div>'
+    + '</div>';
+
+  html += '<div class="card"><div class="card-title">売上内訳</div>';
+  var items = [
+    ['担当売上', d['担当売上'] || d['担当小計']],
+    ['同伴', d['同伴'] || d['同伴小計']],
+    ['勤務日数', d['勤務日数'] ? d['勤務日数'] + '日' : '—'],
+  ];
+  items.forEach(function(it) {
+    html += row(it[0], it[1] !== undefined ? (typeof it[1]==='string' ? it[1] : fmt(it[1])) : '—');
+  });
+  html += '</div>';
+
+  html += '<div class="card"><div class="card-title">バック内訳</div>';
+  var bkItems = [
+    ['時間報酬', d['時間報酬']],
+    ['担当バック', d['担当バック']],
+    ['同伴バック', d['同伴バック']],
+    ['ドリンクバック', d['ドリンクバック']],
+    ['バック合計', d['バック合計'] || d['バック']],
+  ];
+  bkItems.forEach(function(it) {
+    html += row(it[0], fmt(it[1]));
+  });
+  html += '</div>';
+
+  if (d['ボーナス'] && Number(d['ボーナス']) > 0) {
+    html += '<div class="card">' + row('ボーナス', fmt(d['ボーナス']), 'accent') + '</div>';
+  }
+
+  setContent(html);
+}
+
+// ---- 給与明細 ----
+function renderPay() {
+  if (!portalData) return;
+  var months = portalData.months || [];
+  var html = monthBar(months);
+
+  if (months.length === 0) {
+    html += '<div class="loading" style="color:#666">給与データがありません</div>';
+    setContent(html);
+    return;
+  }
+
+  var m = currentMonth;
+  var d = (portalData.pay && portalData.pay[m]) ? portalData.pay[m] : null;
+
+  if (!d) {
+    html += '<div class="loading" style="color:#666">データがありません</div>';
+    setContent(html);
+    return;
+  }
+
+  var final = d['最終支給'] || 0;
+  html += '<div class="total-card">'
+    + '<div class="total-label">最終支給額</div>'
+    + '<div class="total-val">' + fmt(final) + '</div>'
+    + '</div>';
+
+  html += '<div class="card"><div class="card-title">課税支給</div>';
+  [
+    ['時間報酬', d['時間報酬']],
+    ['新バック', d['新バック'] || d['バック']],
+    ['キャスト紹介料', d['キャスト紹介料'] || d['キャスト紹介料(手入力)']],
+    ['課税支給計', d['課税支給']],
+  ].forEach(function(it) {
+    html += row(it[0], fmt(it[1]));
+  });
+  html += '</div>';
+
+  html += '<div class="card"><div class="card-title">控除・加算</div>';
+  [
+    ['源泉徴収(10.21%)', d['源泉'] || d['源泉徴収'] || d['源泉徴収(10.21%)'], 'minus'],
+    ['ヘアサロン立替', d['ヘアサロン立替'] || d['ヘアサロン立替(手入力)'], 'accent'],
+  ].forEach(function(it) {
+    var v = Number(String(it[1] || 0).replace(/,/g,''));
+    if (v !== 0) html += row(it[0], fmt(it[1]), it[2]);
+  });
+  html += '</div>';
+
+  setContent(html);
+}
+
+// ---- シフト提出 ----
+var TIMES = [];
+(function() {
+  for (var h = 18; h <= 25; h++) {
+    for (var m = 0; m < 60; m += 30) {
+      var disp = (h >= 24 ? (h-24) : h) + ':' + (m === 0 ? '00' : '30');
+      TIMES.push(String(h) + ':' + (m === 0 ? '00' : '30') + '〜');
+    }
+  }
+  TIMES.push('26:00〜');
+})();
+
+function renderShiftCal() {
+  var now = new Date();
+  if (!viewYear) { viewYear = now.getFullYear(); viewMonth = now.getMonth(); }
+  var html = calHtml();
+  html += '<div class="shift-spacer"></div>';
+  setContent(html);
+  document.getElementById('submit-bar').style.display = 'block';
+  updateSubmitBar();
+}
+
+function calHtml() {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var firstWday = new Date(viewYear, viewMonth, 1).getDay();
+  var daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  var WDAYS = ['日','月','火','水','木','金','土'];
+
+  var h = '<div class="shift-month-nav">'
+    + '<button class="nav-btn" onclick="shiftViewMonth(-1)">‹</button>'
+    + '<div class="shift-month-label">' + viewYear + '年' + (viewMonth+1) + '月</div>'
+    + '<button class="nav-btn" onclick="shiftViewMonth(1)">›</button>'
+    + '</div>';
+  h += '<div class="weekdays">'
+    + WDAYS.map(function(d,i) {
+        return '<div class="weekday'+(i===0?' sun':i===6?' sat':'')+'">'+d+'</div>';
+      }).join('')
+    + '</div><div class="days">';
+
+  for (var i=0; i<firstWday; i++) h += '<div class="day empty"></div>';
+
+  for (var d=1; d<=daysInMonth; d++) {
+    var dt = new Date(viewYear, viewMonth, d); dt.setHours(0,0,0,0);
+    var wday = dt.getDay();
+    var key = (viewMonth+1)+'/'+d;
+    var past = dt < today;
+    var isToday = dt.getTime() === today.getTime();
+    var sel = shiftSelections[key];
+    var cls = 'day';
+    if (wday===0) cls += ' sun';
+    if (wday===6) cls += ' sat';
+    if (past) cls += ' past';
+    if (isToday) cls += ' today';
+    if (sel) cls += ' selected';
+    h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
+      + '<div class="num">'+d+'</div>'
+      + (sel ? '<div class="time-tag">'+esc(sel.split('〜')[0])+'</div>' : '')
+      + '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function shiftViewMonth(dir) {
+  viewMonth += dir;
+  if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  renderShiftCal();
+}
+
+var pickerKey = '';
+function openPicker(key) {
+  pickerKey = key;
+  var cur = shiftSelections[key];
+  document.getElementById('picker-title').textContent = key + ' のシフト';
+  var g = document.getElementById('picker-grid');
+  g.innerHTML = '';
+  TIMES.forEach(function(t) {
+    var btn = document.createElement('button');
+    btn.className = 'time-opt' + (cur === t ? ' chosen' : '');
+    btn.textContent = t;
+    btn.onclick = function() { pickTime(key, t); };
+    g.appendChild(btn);
+  });
+  var off = document.createElement('button');
+  off.className = 'time-opt off';
+  off.textContent = '休み';
+  off.onclick = function() { pickTime(key, null); };
+  g.appendChild(off);
+  document.getElementById('picker-overlay').classList.add('show');
+}
+
+function pickTime(key, t) {
+  if (t) shiftSelections[key] = t;
+  else delete shiftSelections[key];
+  closePicker();
+  renderShiftCal();
+}
+
+function closePicker() {
+  document.getElementById('picker-overlay').classList.remove('show');
+}
+
+function updateSubmitBar() {
+  var count = Object.keys(shiftSelections).length;
+  document.getElementById('shift-count').textContent = count > 0 ? count + '日分選択中' : '';
+  document.getElementById('submit-btn').disabled = count === 0;
+}
+
+function doSubmit() {
+  var btn = document.getElementById('submit-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = '提出中...';
+
+  var shifts = [];
+  var sortedKeys = Object.keys(shiftSelections).sort(function(a, b) {
+    var ap = a.split('/'), bp = b.split('/');
+    var am = parseInt(ap[0]), ad = parseInt(ap[1]);
+    var bm = parseInt(bp[0]), bd = parseInt(bp[1]);
+    return am !== bm ? am - bm : ad - bd;
+  });
+  sortedKeys.forEach(function(k) {
+    shifts.push({ date: k, time: shiftSelections[k] });
+  });
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'submitShift', userId: userId, shifts: shifts })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      btn.textContent = '✓ 提出しました';
+      btn.style.background = '#1a4422';
+      shiftSelections = {};
+      setTimeout(function() {
+        btn.textContent = 'シフトを提出する';
+        btn.style.background = '';
+        btn.disabled = true;
+        renderShiftCal();
+      }, 2000);
+    } else {
+      alert('エラー: ' + (d.error || '不明'));
+      btn.disabled = false;
+      btn.textContent = 'シフトを提出する';
+    }
+  })
+  .catch(function(e) {
+    alert('通信エラー: ' + (e && e.message || ''));
+    btn.disabled = false;
+    btn.textContent = 'シフトを提出する';
+  });
+}
+
+// ---- helpers ----
+function monthBar(months) {
+  if (!months || months.length === 0) return '';
+  var h = '<div class="month-bar">';
+  months.forEach(function(m) {
+    h += '<div class="month-chip' + (m === currentMonth ? ' active' : '') + '" onclick="selectMonth(\'' + m + '\')">' + m + '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function selectMonth(m) {
+  currentMonth = m;
+  renderTab(currentTab);
+}
+
+function row(label, val, cls) {
+  return '<div class="row"><span class="row-label">' + esc(label) + '</span>'
+    + '<span class="row-val' + (cls ? ' '+cls : '') + '">' + (val !== undefined && val !== null ? esc(String(val)) : '—') + '</span></div>';
+}
+
+function setContent(html) {
+  document.getElementById('content').innerHTML = html;
+}
+
+function showErr(msg) {
+  document.getElementById('user-name').textContent = '';
+  setContent('<div class="err">' + msg + '</div>');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
