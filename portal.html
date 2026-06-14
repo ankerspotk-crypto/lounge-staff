@@ -220,7 +220,8 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYq
 var userId = '', userName = '', portalData = null;
 var currentTab = 'sales', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
-var isAdmin = false, adminViewAs = '', adminCastList = [];
+var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
+var staffRole = 'キャスト';
 
 function fmt(n) {
   if (n === '' || n === null || n === undefined) return '—';
@@ -274,10 +275,12 @@ function loadPortal(month) {
       if (d.isAdmin && d.castList && !adminViewAs) {
         isAdmin = true;
         adminCastList = d.castList;
+        adminCastRoles = d.castRoles || {};
         initAdminUI(d.castList);
         return;
       }
       isAdmin = d.isAdmin || false;
+      if (d.staffRole) staffRole = d.staffRole;
       if (isAdmin) showAdminTab();
       portalData = d;
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
@@ -299,6 +302,11 @@ function initAdminUI(castList) {
       + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
       + '<option value="">-- 選択 --</option>'
       + '</select>'
+      + '<select id="admin-role-sel" style="display:none;padding:4px 6px;background:#1a2a3a;color:#fff;border:1px solid #445;border-radius:6px;font-size:12px" onchange="setStaffRoleUI(this.value)">'
+      + '<option value="キャスト">キャスト</option>'
+      + '<option value="黒服社員">黒服社員</option>'
+      + '<option value="黒服バイト">黒服バイト</option>'
+      + '</select>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
@@ -312,15 +320,37 @@ function adminChange(name) {
   adminViewAs = name;
   currentMonth = '';
   portalData = null;
+  var roleSel = document.getElementById('admin-role-sel');
+  if (roleSel) {
+    if (name) {
+      staffRole = adminCastRoles[name] || 'キャスト';
+      roleSel.value = staffRole;
+      roleSel.style.display = 'inline-block';
+    } else {
+      roleSel.style.display = 'none';
+    }
+  }
   if (!name) {
     switchTabActive('requests');
     loadRequests();
     return;
   }
-  // キャスト選択したら売上明細へ
   currentTab = 'sales';
   switchTabActive('sales');
   loadPortal();
+}
+
+function setStaffRoleUI(role) {
+  staffRole = role;
+  adminCastRoles[adminViewAs] = role;
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'setStaffRole', userId: userId, targetName: adminViewAs, role: role })
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.ok) alert('属性の保存に失敗しました: ' + (d.error || ''));
+  });
 }
 
 function switchTabActive(tab) {
@@ -630,26 +660,37 @@ function showStartPicker() {
     g.appendChild(kyukinBtn);
   }
 
-  // ── キャストフル ──
-  var castFullBtn = document.createElement('button');
-  castFullBtn.className = 'time-opt full';
-  castFullBtn.textContent = 'キャストフル　20:00 ～ 24:00';
-  castFullBtn.onclick = function() { pickTime(pickerKey, '20:00～24:00', 'キャスト'); };
-  g.appendChild(castFullBtn);
+  if (staffRole === 'キャスト') {
+    var castFullBtn = document.createElement('button');
+    castFullBtn.className = 'time-opt full';
+    castFullBtn.textContent = 'キャストフル　20:00 ～ 24:00';
+    castFullBtn.onclick = function() { pickTime(pickerKey, '20:00～24:00', 'キャスト'); };
+    g.appendChild(castFullBtn);
+    g.appendChild(makePickerStep('時間指定の場合'));
+    g.appendChild(makeTimeRow([20,0,23,30], [20,30,24,0], 'キャスト'));
 
-  g.appendChild(makePickerStep('キャスト時間指定の場合'));
-  g.appendChild(makeTimeRow([20,0,23,30], [20,30,24,0], 'キャスト'));
+  } else if (staffRole === '黒服社員') {
+    var kuroEmpBtn = document.createElement('button');
+    kuroEmpBtn.className = 'time-opt full';
+    kuroEmpBtn.style.background = '#1a2a1a';
+    kuroEmpBtn.style.borderColor = '#448844';
+    kuroEmpBtn.style.color = '#88cc88';
+    kuroEmpBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
+    kuroEmpBtn.onclick = function() { pickTime(pickerKey, '18:00～26:00', '黒服社員'); };
+    g.appendChild(kuroEmpBtn);
 
-  // ── 黒服フル ──
-  var kuroFullBtn = document.createElement('button');
-  kuroFullBtn.className = 'time-opt';
-  kuroFullBtn.style.cssText = 'grid-column:span 2;background:#1a2a1a;border-color:#448844;color:#88cc88;font-weight:600;padding:13px 8px;border-radius:10px;font-size:14px;text-align:center;cursor:pointer';
-  kuroFullBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
-  kuroFullBtn.onclick = function() { pickTime(pickerKey, '18:00～26:00', '黒服社員'); };
-  g.appendChild(kuroFullBtn);
-
-  g.appendChild(makePickerStep('黒服時間指定の場合'));
-  g.appendChild(makeTimeRow([18,0,25,30], [18,30,26,0], '黒服バイト'));
+  } else { // 黒服バイト
+    var kuroPartBtn = document.createElement('button');
+    kuroPartBtn.className = 'time-opt full';
+    kuroPartBtn.style.background = '#1a2a1a';
+    kuroPartBtn.style.borderColor = '#448844';
+    kuroPartBtn.style.color = '#88cc88';
+    kuroPartBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
+    kuroPartBtn.onclick = function() { pickTime(pickerKey, '18:00～26:00', '黒服バイト'); };
+    g.appendChild(kuroPartBtn);
+    g.appendChild(makePickerStep('時間指定の場合'));
+    g.appendChild(makeTimeRow([18,0,25,30], [18,30,26,0], '黒服バイト'));
+  }
 
   addClearBtn(g);
 }
