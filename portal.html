@@ -924,7 +924,7 @@ function renderRanking(d) {
 
   var medals = ['🥇', '🥈', '🥉'];
 
-  function rankCard(title, list, valueLabel, valueKey) {
+  function rankCard(title, list, valueKey, isCount) {
     var c = '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px;margin-bottom:14px">';
     c += '<div style="font-size:12px;font-weight:700;color:#88aaff;margin-bottom:12px;letter-spacing:0.5px">' + title + '</div>';
     if (!list || list.length === 0) {
@@ -932,8 +932,8 @@ function renderRanking(d) {
     } else {
       list.forEach(function(item, idx) {
         var isMe = item.name === myName;
-        var medal = medals[idx] || ('<span style="font-size:11px;color:#556;min-width:20px;display:inline-block;text-align:center">' + (idx + 1) + '</span>');
-        var val = '¥' + (item[valueKey] || 0).toLocaleString();
+        var raw = item[valueKey] || 0;
+        var val = isCount ? (raw + '組') : ('¥' + raw.toLocaleString());
         c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828;'
           + (isMe ? 'background:#1a2a1a;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:6px;' : '') + '">';
         c += '<span style="font-size:18px;width:28px;flex-shrink:0">' + (idx < 3 ? medals[idx] : '') + '</span>';
@@ -948,9 +948,9 @@ function renderRanking(d) {
     return c;
   }
 
-  h += rankCard('売上ランキング', rd.tanto, '担当売上', 'tanto');
-  h += rankCard('同伴ランキング', rd.dohan, '同伴売上', 'dohan');
-  h += rankCard('予約バックランキング', rd.yoyaku, '予約バック', 'yoyaku');
+  h += rankCard('売上ランキング', rd.tanto,  'tanto',     false);
+  h += rankCard('同伴ランキング', rd.dohan,  'dohanCnt',  true);
+  h += rankCard('予約ランキング', rd.yoyaku, 'yoyakuCnt', true);
   h += '<div style="font-size:10px;color:#334;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
   h += '</div>';
   setContent(h);
