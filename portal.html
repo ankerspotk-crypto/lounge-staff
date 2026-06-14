@@ -274,7 +274,7 @@ function fmt(n) {
 }
 
 // ---- LIFF init ----
-var _devUid = new URLSearchParams(location.search).get('u');
+var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
 
 var initTimer = setTimeout(function() {
   showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>');
