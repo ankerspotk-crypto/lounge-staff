@@ -155,21 +155,25 @@ function setRole(name, role, btn, cardId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'setStaffRole', userId: userId, targetName: name, role: role })
   })
-  .then(function(r) { return r.json(); })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
   .then(function(d) {
-    var flash = document.getElementById('flash-' + cardId.replace('card-', ''));
+    var flashId = 'flash-' + cardId.replace('card-', '');
+    var flash = document.getElementById(flashId);
     if (d.ok) {
       card.classList.add('saved');
-      flash.classList.add('show');
+      if (flash) { flash.classList.add('show'); }
       setTimeout(function() {
-        flash.classList.remove('show');
+        if (flash) flash.classList.remove('show');
         card.classList.remove('saved');
       }, 1500);
     } else {
-      alert('保存エラー: ' + (d.error || ''));
+      alert('保存エラー: ' + (d.error || 'unknown'));
     }
   })
-  .catch(function() { alert('通信エラーが発生しました'); });
+  .catch(function(e) { alert('通信エラー: ' + (e && e.message || e)); });
 }
 
 function escHtml(s) {
