@@ -648,11 +648,24 @@ function showStartPicker() {
   }
 
   if (staffRole === 'キャスト') {
+    var castTopRow = document.createElement('div');
+    castTopRow.style.cssText = 'grid-column:span 2;display:flex;gap:8px';
+
     var castFullBtn = document.createElement('button');
     castFullBtn.className = 'time-opt full';
+    castFullBtn.style.flex = '2';
     castFullBtn.textContent = 'キャストフル　20:00 ～ 24:00';
     castFullBtn.onclick = function() { pickTime(pickerKey, '20:00～24:00', 'キャスト'); };
-    g.appendChild(castFullBtn);
+
+    var yoyakuBtn = document.createElement('button');
+    yoyakuBtn.className = 'time-opt';
+    yoyakuBtn.style.cssText = 'flex:1;background:#1a2035;border-color:#886633;color:#ffcc66;font-weight:600;font-size:13px';
+    yoyakuBtn.textContent = '予約出勤';
+    yoyakuBtn.onclick = function() { pickTime(pickerKey, '予約出勤', 'キャスト'); };
+
+    castTopRow.appendChild(castFullBtn);
+    castTopRow.appendChild(yoyakuBtn);
+    g.appendChild(castTopRow);
     g.appendChild(makePickerStep('時間指定の場合'));
     g.appendChild(makeTimeRow([20,0,23,30], [20,30,24,0], 'キャスト'));
 
