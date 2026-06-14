@@ -96,12 +96,14 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.kyukin { background: #2a1515; border-color: #bb4444; }
 .day.kyukin .num { color: #ff8888; }
 .day.kyukin .kyukin-label { font-size: 9px; color: #ff8888; margin-top: 2px; }
+.day .shift-time { font-size: 8px; margin-top: 2px; line-height: 1.1; text-align: center; }
 .day.scheduled { background: #152a1a; border-color: #336633; }
 .day.scheduled .num { color: #88ffaa; }
-.day.scheduled .shift-dot { background: #88ffaa; }
+.day.scheduled .shift-time { color: #66cc88; }
+.day.selected .shift-time { color: #66aadd; }
 .day.pending-shift { background: #2a1f0a; border-color: #886622; }
 .day.pending-shift .num { color: #ffcc66; }
-.day.pending-shift .shift-dot { background: #ffcc66; }
+.day.pending-shift .shift-time { color: #ccaa44; }
 
 /* picker overlay */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
@@ -463,10 +465,16 @@ function calHtml() {
     else if (sel) cls += ' selected';
     else if (isPending) cls += ' pending-shift';
     else if (existShift) cls += ' scheduled';
+    var displayTime = sel || isPending || existShift || '';
+    var timeLabel = '';
+    if (!isKyukin && displayTime && displayTime !== '休み') {
+      var tm = displayTime.match(/^(\d+):(\d+)/);
+      if (tm) timeLabel = tm[1] + ':' + tm[2] + '~';
+      else if (displayTime === '予約出勤') timeLabel = '予約';
+    }
     h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
       + '<div class="num">'+d+'</div>'
-      + (sel && !isKyukin ? '<div class="shift-dot"></div>' : '')
-      + (!sel && !isKyukin && (isPending || existShift) ? '<div class="shift-dot"></div>' : '')
+      + (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : '')
       + (isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
       + '</div>';
   }
