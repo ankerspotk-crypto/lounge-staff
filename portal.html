@@ -617,7 +617,8 @@ function renderPay() {
     return t;
   }
 
-  if (!isAdmin && !payPublished[sel]) {
+  var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
+  if (!isAdmin && !payPublished[sel] && !isHairOnlyMonth) {
     var hLock = '<div style="padding:14px">' + monthTabsHtml(sel)
       + '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
