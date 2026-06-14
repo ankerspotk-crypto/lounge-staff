@@ -464,27 +464,56 @@ function renderSales() {
 
 function switchSalesMonth(m) { currentMonth = m; renderSales(); }
 
-// ---- 給与明細 ----
+// ---- 給与明細（TRUST明細書形式） ----
 function renderPay() {
-  var pay = portalData && portalData.pay;
-  if (!pay || Object.keys(pay).length === 0) {
+  var sales = portalData && portalData.sales;
+  if (!sales || Object.keys(sales).length === 0) {
     setContent('<div style="text-align:center;padding:60px 20px">'
-      + '<div style="font-size:30px;margin-bottom:12px">📋</div>'
       + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">データなし</div>'
-      + '<div style="font-size:12px;color:#556;line-height:1.7">今月の給与明細はまだ計算されていません。<br>売上データ取得後に自動計算されます。</div>'
+      + '<div style="font-size:12px;color:#556;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
       + '</div>');
     return;
   }
 
-  var months = Object.keys(pay).sort().reverse();
-  var sel = currentMonth && pay[currentMonth] ? currentMonth : months[0];
-  var row = pay[sel];
+  var pay = portalData && portalData.pay;
+  var months = Object.keys(sales).sort().reverse();
+  var sel = currentMonth && sales[currentMonth] ? currentMonth : months[0];
+  var s = sales[sel];
+  var p = pay && pay[sel] ? pay[sel] : {};
 
-  function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
-  function num(v) { return parseInt(v) || 0; }
+  function n(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; }
+  function yen(v) { return '¥' + (parseInt(v) || 0).toLocaleString(); }
+
+  var jikanH  = n(s['時間報酬']);
+  var tantoB  = n(s['担当バック']);
+  var yoyakuB = n(s['予約バック']);
+  var dohanB  = n(s['同伴バック']);
+  var drinkB  = n(s['ドリンクバック']);
+  var bottleB = n(s['ボトルバック']);
+  var foodB   = n(s['フードバック']);
+  var bonus   = n(s['ボーナス']);
+  var shikyu  = jikanH + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus;
+
+  var gensen    = n(s['源泉徴収']);
+  var nichibara = n(s['日払']);
+  var minus     = n(s['マイナス']);
+  var kojo      = gensen + nichibara + minus;
+
+  var nokori    = n(s['残り支給額']);
+  var hair      = n(p['ヘアサロン立替(手入力)']);
+  var finalPay  = nokori + hair;
+
+  // 令和変換
+  var parts = sel.split('/');
+  var reiwaStr = sel;
+  if (parts.length === 2) {
+    var reiwa = parseInt(parts[0]) - 2018;
+    reiwaStr = '令和' + reiwa + '年' + parseInt(parts[1]) + '月分';
+  }
 
   var h = '<div style="padding:14px">';
 
+  // 月タブ
   if (months.length > 1) {
     h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
     months.forEach(function(m) {
@@ -496,35 +525,65 @@ function renderPay() {
     h += '</div>';
   }
 
-  h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px">';
-  h += '<div style="font-size:10px;color:#334;margin-bottom:10px;letter-spacing:0.5px">' + sel + ' 給与明細</div>';
+  // 明細書カード（白背景）
+  h += '<div style="background:#fff;color:#111;border-radius:12px;padding:16px 14px;font-family:sans-serif">';
 
-  function item(label, val, color, sub) {
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #181828">'
-      + '<span style="font-size:13px;color:#778">' + label + (sub ? '<br><span style="font-size:10px;color:#445">' + sub + '</span>' : '') + '</span>'
-      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#bbb') + '">' + val + '</span>'
-      + '</div>';
-  }
-
-  h += item('時間報酬', yen(row['時間報酬']));
-  if (num(row['担当小計']) > 0) {
-    var bairitu = parseFloat(row['倍率']) || 0;
-    var backRate = parseFloat(row['バック率']) || 0;
-    h += item('担当売上', yen(row['担当小計']), '#88aaff', '倍率 ' + bairitu.toFixed(1) + '倍 → バック率 ' + backRate + '%');
-    h += item('新バック', yen(row['新バック']), '#66cc88');
-  }
-  if (num(row['キャスト紹介料(手入力)']) > 0) h += item('キャスト紹介料', yen(row['キャスト紹介料(手入力)']), '#66cc88');
-  h += item('課税支給計', yen(row['課税支給']), '#aaccff');
-  h += item('源泉徴収(10.21%)', '−' + yen(row['源泉徴収(10.21%)']), '#cc6666');
-  if (num(row['ヘアサロン立替(手入力)']) > 0) h += item('ヘアサロン立替', '+' + yen(row['ヘアサロン立替(手入力)']), '#66cc88');
-
-  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0">'
-    + '<span style="font-size:14px;font-weight:600;color:#ccc">最終支給額</span>'
-    + '<span style="font-size:20px;font-weight:700;color:#88aaff">' + yen(row['最終支給']) + '</span>'
-    + '</div>';
+  // ヘッダー
+  h += '<div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px">';
+  h += '<div style="font-size:15px;font-weight:700">支払報酬明細書</div>';
+  h += '<div style="font-size:11px;margin-top:3px">' + esc(reiwaStr) + '</div>';
+  h += '<div style="font-size:11px">ラウンジ 家康</div>';
+  h += '<div style="font-size:17px;font-weight:700;margin-top:6px">' + esc(portalData.name || '') + '</div>';
   h += '</div>';
 
-  h += '<div style="font-size:10px;color:#334;text-align:center;padding:10px 0">新バックルール：倍率 ×2未満10% / ×2〜3は15% / ×3以上20%</div>';
+  function tr(label, val, section) {
+    var bg = section === 'shikyu' ? '#eef2ff' : section === 'kojo' ? '#fff0f0' : '';
+    var fw = section === 'total' ? 'font-weight:700;' : '';
+    return '<tr>'
+      + '<td style="padding:5px 8px;border:1px solid #ccc;font-size:12px;' + fw + (bg?'background:'+bg+';':'') + '">' + label + '</td>'
+      + '<td style="padding:5px 8px;border:1px solid #ccc;font-size:12px;text-align:right;' + fw + (bg?'background:'+bg+';':'') + '">' + val + '</td>'
+      + '</tr>';
+  }
+  function trHead(label) {
+    return '<tr><td colspan="2" style="padding:4px 8px;border:1px solid #ccc;font-size:11px;font-weight:700;background:#e8eaf6;color:#333">' + label + '</td></tr>';
+  }
+
+  h += '<table style="width:100%;border-collapse:collapse">';
+  h += trHead('支給対象');
+  h += tr('基本給（時給）', yen(jikanH), 'shikyu');
+  if (tantoB  > 0) h += tr('担当小計バック', yen(tantoB),  'shikyu');
+  if (yoyakuB > 0) h += tr('予約給',         yen(yoyakuB), 'shikyu');
+  if (dohanB  > 0) h += tr('同伴給',          yen(dohanB),  'shikyu');
+  if (drinkB  > 0) h += tr('ドリンクバック',  yen(drinkB),  'shikyu');
+  if (bottleB > 0) h += tr('ボトルバック',    yen(bottleB), 'shikyu');
+  if (foodB   > 0) h += tr('フードバック',    yen(foodB),   'shikyu');
+  if (bonus   > 0) h += tr('運営手当',        yen(bonus),   'shikyu');
+  h += tr('合計', yen(shikyu), 'total');
+
+  h += trHead('控除対象');
+  h += tr('源泉徴収', yen(gensen), 'kojo');
+  if (nichibara > 0) h += tr('日払', yen(nichibara), 'kojo');
+  if (minus     > 0) h += tr('マイナス', yen(minus), 'kojo');
+  h += tr('合計', yen(kojo), 'total');
+  h += '</table>';
+
+  // フッター
+  h += '<div style="margin-top:12px;border-top:1px solid #ccc;padding-top:10px">';
+  h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">'
+    + '<span>差引支給額</span><span style="font-weight:700">' + yen(nokori) + '</span></div>';
+
+  if (hair > 0) {
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#005500">'
+      + '<span>ヘアサロン立替代</span><span>＋' + yen(hair) + '</span></div>';
+    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #333;font-size:15px;font-weight:700">'
+      + '<span>最終支給額</span><span style="color:#003399">' + yen(finalPay) + '</span></div>';
+  } else {
+    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #333;font-size:15px;font-weight:700">'
+      + '<span>最終支給額</span><span style="color:#003399">' + yen(nokori) + '</span></div>';
+  }
+  h += '</div>';
+
+  h += '</div>';  // white card
   h += '</div>';
   setContent(h);
 }
