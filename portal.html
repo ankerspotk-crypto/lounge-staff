@@ -199,8 +199,8 @@ header h1 { font-size: 17px; font-weight: 600; }
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
   <div class="tabs">
-    <div class="tab coming-soon" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
-    <div class="tab coming-soon" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
+    <div class="tab" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
+    <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
     <div class="tab active" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
   </div>
@@ -389,21 +389,147 @@ function showAdminTab() {
 
 // ---- 売上明細 ----
 function renderSales() {
-  setContent('<div style="text-align:center;padding:60px 20px">'
-    + '<div style="font-size:36px;margin-bottom:16px">🔒</div>'
-    + '<div style="font-size:16px;font-weight:600;color:#88aaff;margin-bottom:8px">近日公開予定</div>'
-    + '<div style="font-size:13px;color:#556;line-height:1.6">売上明細は今月25日までに<br>ご利用いただけるようになります</div>'
-    + '</div>');
+  var sales = portalData && portalData.sales;
+  if (!sales || Object.keys(sales).length === 0) {
+    setContent('<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">データなし</div>'
+      + '<div style="font-size:12px;color:#556;line-height:1.7">今月の売上データはまだ取得されていません。<br>毎日深夜に自動更新されます。</div>'
+      + '</div>');
+    return;
+  }
+
+  var months = Object.keys(sales).sort().reverse();
+  var sel = currentMonth && sales[currentMonth] ? currentMonth : months[0];
+  var row = sales[sel];
+
+  function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
+  function num(v) { return parseInt(v) || 0; }
+
+  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','フードバック']
+    .reduce(function(s, k) { return s + num(row[k]); }, 0);
+
+  var h = '<div style="padding:14px">';
+
+  // 月タブ
+  if (months.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
+    months.forEach(function(m) {
+      var act = m === sel;
+      h += '<button onclick="switchSalesMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
+        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+    });
+    h += '</div>';
+  }
+
+  // カード
+  h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px">';
+  h += '<div style="font-size:10px;color:#334;margin-bottom:10px;letter-spacing:0.5px">' + sel + ' TRUSTデータ</div>';
+
+  function item(label, val, color, sub) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #181828">'
+      + '<span style="font-size:13px;color:#778">' + label + (sub ? '<br><span style="font-size:10px;color:#445">' + sub + '</span>' : '') + '</span>'
+      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#bbb') + '">' + val + '</span>'
+      + '</div>';
+  }
+
+  h += item('担当売上', yen(row['担当小計']), '#88aaff');
+  if (num(row['同伴小計']) > 0) h += item('同伴売上', yen(row['同伴小計']), '#7799cc');
+  h += item('勤務日数', num(row['勤務日数']) + '日', '#aaa');
+  h += item('時間報酬', yen(row['時間報酬']));
+
+  if (backTotal > 0) {
+    var backLines = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','フードバック']
+      .filter(function(k) { return num(row[k]) > 0; })
+      .map(function(k) { return k + ' ' + yen(row[k]); }).join(' / ');
+    h += item('バック合計', yen(backTotal), '#66cc88', backLines);
+  }
+
+  if (num(row['ボーナス']) > 0) h += item('ボーナス', yen(row['ボーナス']), '#ffcc44');
+  h += item('源泉徴収', '−' + yen(row['源泉徴収']), '#cc6666');
+  if (num(row['日払']) > 0) h += item('日払控除', '−' + yen(row['日払']), '#cc6666');
+  if (num(row['マイナス']) > 0) h += item('マイナス', '−' + yen(row['マイナス']), '#cc6666');
+
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0">'
+    + '<span style="font-size:14px;font-weight:600;color:#ccc">残り支給額</span>'
+    + '<span style="font-size:20px;font-weight:700;color:#88aaff">' + yen(row['残り支給額']) + '</span>'
+    + '</div>';
+  h += '</div>';
+
+  h += '<div style="font-size:10px;color:#334;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
+  h += '</div>';
+  setContent(h);
 }
+
+function switchSalesMonth(m) { currentMonth = m; renderSales(); }
 
 // ---- 給与明細 ----
 function renderPay() {
-  setContent('<div style="text-align:center;padding:60px 20px">'
-    + '<div style="font-size:36px;margin-bottom:16px">🔒</div>'
-    + '<div style="font-size:16px;font-weight:600;color:#88aaff;margin-bottom:8px">近日公開予定</div>'
-    + '<div style="font-size:13px;color:#556;line-height:1.6">給与明細は今月25日までに<br>ご利用いただけるようになります</div>'
-    + '</div>');
+  var pay = portalData && portalData.pay;
+  if (!pay || Object.keys(pay).length === 0) {
+    setContent('<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:30px;margin-bottom:12px">📋</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">データなし</div>'
+      + '<div style="font-size:12px;color:#556;line-height:1.7">今月の給与明細はまだ計算されていません。<br>売上データ取得後に自動計算されます。</div>'
+      + '</div>');
+    return;
+  }
+
+  var months = Object.keys(pay).sort().reverse();
+  var sel = currentMonth && pay[currentMonth] ? currentMonth : months[0];
+  var row = pay[sel];
+
+  function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
+  function num(v) { return parseInt(v) || 0; }
+
+  var h = '<div style="padding:14px">';
+
+  if (months.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
+    months.forEach(function(m) {
+      var act = m === sel;
+      h += '<button onclick="switchPayMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
+        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+    });
+    h += '</div>';
+  }
+
+  h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px">';
+  h += '<div style="font-size:10px;color:#334;margin-bottom:10px;letter-spacing:0.5px">' + sel + ' 給与明細</div>';
+
+  function item(label, val, color, sub) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #181828">'
+      + '<span style="font-size:13px;color:#778">' + label + (sub ? '<br><span style="font-size:10px;color:#445">' + sub + '</span>' : '') + '</span>'
+      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#bbb') + '">' + val + '</span>'
+      + '</div>';
+  }
+
+  h += item('時間報酬', yen(row['時間報酬']));
+  if (num(row['担当小計']) > 0) {
+    var bairitu = parseFloat(row['倍率']) || 0;
+    var backRate = parseFloat(row['バック率']) || 0;
+    h += item('担当売上', yen(row['担当小計']), '#88aaff', '倍率 ' + bairitu.toFixed(1) + '倍 → バック率 ' + backRate + '%');
+    h += item('新バック', yen(row['新バック']), '#66cc88');
+  }
+  if (num(row['キャスト紹介料(手入力)']) > 0) h += item('キャスト紹介料', yen(row['キャスト紹介料(手入力)']), '#66cc88');
+  h += item('課税支給計', yen(row['課税支給']), '#aaccff');
+  h += item('源泉徴収(10.21%)', '−' + yen(row['源泉徴収(10.21%)']), '#cc6666');
+  if (num(row['ヘアサロン立替(手入力)']) > 0) h += item('ヘアサロン立替', '+' + yen(row['ヘアサロン立替(手入力)']), '#66cc88');
+
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0">'
+    + '<span style="font-size:14px;font-weight:600;color:#ccc">最終支給額</span>'
+    + '<span style="font-size:20px;font-weight:700;color:#88aaff">' + yen(row['最終支給']) + '</span>'
+    + '</div>';
+  h += '</div>';
+
+  h += '<div style="font-size:10px;color:#334;text-align:center;padding:10px 0">新バックルール：倍率 ×2未満10% / ×2〜3は15% / ×3以上20%</div>';
+  h += '</div>';
+  setContent(h);
 }
+
+function switchPayMonth(m) { currentMonth = m; renderPay(); }
 
 // ---- シフト提出 ----
 
