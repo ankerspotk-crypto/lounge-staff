@@ -274,28 +274,38 @@ function fmt(n) {
 }
 
 // ---- LIFF init ----
+var _devUid = new URLSearchParams(location.search).get('u');
+
 var initTimer = setTimeout(function() {
   showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>');
 }, 12000);
 
-try {
-  liff.init({ liffId: LIFF_ID }).then(function() {
-    clearTimeout(initTimer);
-    if (!liff.isLoggedIn()) { liff.login(); return; }
-    return liff.getProfile();
-  }).then(function(p) {
-    if (!p) return;
-    userId   = p.userId;
-    userName = p.displayName;
-    document.getElementById('user-name').textContent = p.displayName;
-    loadPortal();
-  }).catch(function(e) {
-    clearTimeout(initTimer);
-    showErr('ログインエラー<br><small>' + (e && e.message || JSON.stringify(e)) + '</small>');
-  });
-} catch(e) {
+if (_devUid) {
+  // テスト用バイパス: ?u=TEST_TOKUKO
   clearTimeout(initTimer);
-  showErr('起動エラー: ' + e.message);
+  userId = _devUid;
+  document.getElementById('user-name').textContent = '読み込み中...';
+  loadPortal();
+} else {
+  try {
+    liff.init({ liffId: LIFF_ID }).then(function() {
+      clearTimeout(initTimer);
+      if (!liff.isLoggedIn()) { liff.login(); return; }
+      return liff.getProfile();
+    }).then(function(p) {
+      if (!p) return;
+      userId   = p.userId;
+      userName = p.displayName;
+      document.getElementById('user-name').textContent = p.displayName;
+      loadPortal();
+    }).catch(function(e) {
+      clearTimeout(initTimer);
+      showErr('ログインエラー<br><small>' + (e && e.message || JSON.stringify(e)) + '</small>');
+    });
+  } catch(e) {
+    clearTimeout(initTimer);
+    showErr('起動エラー: ' + e.message);
+  }
 }
 
 function loadPortal(month) {
@@ -325,6 +335,7 @@ function loadPortal(month) {
       isAdmin = d.isAdmin || false;
       if (d.staffRole) staffRole = d.staffRole;
       if (isAdmin) showAdminTab();
+      if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
       portalData = d;
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
       updateAdminBar(adminCastList);
