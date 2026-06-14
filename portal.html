@@ -453,7 +453,7 @@ function calHtml() {
     var sel = shiftSelections[key];
     var existShift = portalData && portalData.shifts && portalData.shifts[key];
     var isPending = pendingShifts[key];
-    var isKyukin = sel === '欠勤' || existShift === '休み';
+    var isKyukin = sel === '欠勤' || (!sel && existShift === '休み');
     var cls = 'day';
     if (wday===0) cls += ' sun';
     if (wday===6) cls += ' sat';
