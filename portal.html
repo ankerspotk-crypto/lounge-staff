@@ -485,6 +485,7 @@ function renderPay() {
   function yen(v) { return '¥' + (parseInt(v) || 0).toLocaleString(); }
 
   var jikanH  = n(s['時間報酬']);
+  var tantoK  = n(s['担当小計']);
   var tantoB  = n(s['担当バック']);
   var yoyakuB = n(s['予約バック']);
   var dohanB  = n(s['同伴バック']);
@@ -584,6 +585,58 @@ function renderPay() {
   h += '</div>';
 
   h += '</div>';  // white card
+
+  // ---- バック率メーター ----
+  if (tantoK > 0 && jikanH > 0) {
+    var bairitu = tantoK / jikanH;
+    var curRate  = bairitu < 2 ? 10 : (bairitu < 3 ? 15 : 20);
+    var nextRate = bairitu < 2 ? 15 : (bairitu < 3 ? 20 : null);
+    var nextThr  = bairitu < 2 ? 2  : (bairitu < 3 ? 3  : null);
+    // 0〜3倍スケールで位置を計算（3倍超えは100%）
+    var barPct   = Math.min(bairitu / 3, 1) * 100;
+    var barColor = curRate === 10 ? '#e08000' : (curRate === 15 ? '#c8a800' : '#44bb66');
+    var bgZone1  = curRate === 10 ? '#2a1a00' : '#1a1a00';
+
+    h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;margin-top:10px">';
+    h += '<div style="font-size:11px;color:#445;margin-bottom:12px;letter-spacing:0.5px">バック率メーター</div>';
+
+    // バー本体
+    h += '<div style="position:relative;height:28px;margin-bottom:4px">';
+    // 背景ゾーン（0〜2x: 10%帯、2〜3x: 15%帯）
+    h += '<div style="position:absolute;top:10px;left:0;width:66.7%;height:8px;background:#2a1800;border-radius:4px 0 0 4px"></div>';
+    h += '<div style="position:absolute;top:10px;left:66.7%;right:0;height:8px;background:#1a2a00;border-radius:0 4px 4px 0"></div>';
+    // 進捗バー
+    h += '<div style="position:absolute;top:10px;left:0;width:' + barPct.toFixed(1) + '%;height:8px;background:' + barColor + ';border-radius:4px;transition:width 0.5s"></div>';
+    // 2x境界線
+    h += '<div style="position:absolute;top:6px;left:66.7%;width:2px;height:16px;background:#444;transform:translateX(-1px)"></div>';
+    // 3x境界線（右端）
+    h += '<div style="position:absolute;top:6px;right:0;width:2px;height:16px;background:#444"></div>';
+    // 現在地ドット
+    h += '<div style="position:absolute;top:8px;left:' + barPct.toFixed(1) + '%;width:12px;height:12px;background:' + barColor + ';border:2px solid #fff;border-radius:50%;transform:translateX(-6px)"></div>';
+    h += '</div>';
+
+    // 目盛りラベル
+    h += '<div style="position:relative;height:28px;font-size:10px;color:#445">';
+    h += '<span style="position:absolute;left:0">0倍<br><span style="color:#cc6644">10%</span></span>';
+    h += '<span style="position:absolute;left:66.7%;transform:translateX(-50%);text-align:center">2倍<br><span style="color:#bbaa00">15%</span></span>';
+    h += '<span style="position:absolute;right:0;text-align:right">3倍<br><span style="color:#44bb66">20%</span></span>';
+    h += '</div>';
+
+    // 現在の状態テキスト
+    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #1e1e3a">';
+    h += '<div style="font-size:13px;font-weight:600;color:#ccc">倍率 ' + bairitu.toFixed(2) + '倍 → <span style="color:' + barColor + '">バック率 ' + curRate + '%</span></div>';
+    if (nextRate) {
+      var needed = Math.ceil(nextThr * jikanH - tantoK);
+      h += '<div style="font-size:12px;color:#667;margin-top:4px">'
+        + '<span style="color:#88aaff;font-weight:600">' + nextRate + '%</span> まであと担当売上 '
+        + '<span style="color:#88aaff;font-weight:600">¥' + needed.toLocaleString() + '</span></div>';
+    } else {
+      h += '<div style="font-size:12px;color:#44bb66;margin-top:4px">最高バック率（20%）達成！</div>';
+    }
+    h += '</div>';
+    h += '</div>';  // meter card
+  }
+
   h += '</div>';
   setContent(h);
 }
