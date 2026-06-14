@@ -302,11 +302,6 @@ function initAdminUI(castList) {
       + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
       + '<option value="">-- 選択 --</option>'
       + '</select>'
-      + '<select id="admin-role-sel" style="display:none;padding:4px 6px;background:#1a2a3a;color:#fff;border:1px solid #445;border-radius:6px;font-size:12px" onchange="setStaffRoleUI(this.value)">'
-      + '<option value="キャスト">キャスト</option>'
-      + '<option value="黒服社員">黒服社員</option>'
-      + '<option value="黒服バイト">黒服バイト</option>'
-      + '</select>'
       + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#88aaff;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
@@ -321,16 +316,7 @@ function adminChange(name) {
   adminViewAs = name;
   currentMonth = '';
   portalData = null;
-  var roleSel = document.getElementById('admin-role-sel');
-  if (roleSel) {
-    if (name) {
-      staffRole = adminCastRoles[name] || 'キャスト';
-      roleSel.value = staffRole;
-      roleSel.style.display = 'inline-block';
-    } else {
-      roleSel.style.display = 'none';
-    }
-  }
+  if (name) staffRole = adminCastRoles[name] || 'キャスト';
   if (!name) {
     switchTabActive('requests');
     loadRequests();
@@ -341,18 +327,6 @@ function adminChange(name) {
   loadPortal();
 }
 
-function setStaffRoleUI(role) {
-  staffRole = role;
-  adminCastRoles[adminViewAs] = role;
-  fetch(GAS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'setStaffRole', userId: userId, targetName: adminViewAs, role: role })
-  }).then(function(r) { return r.json(); })
-  .then(function(d) {
-    if (!d.ok) alert('属性の保存に失敗しました: ' + (d.error || ''));
-  });
-}
 
 function switchTabActive(tab) {
   currentTab = tab;
