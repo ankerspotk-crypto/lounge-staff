@@ -189,21 +189,35 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
 .req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #2a2a40; background: #1e1e30; color: #888; font-size: 13px; cursor: pointer; }
 .req-filter-btn.active { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
-.notif-list { display: flex; flex-direction: column; gap: 10px; }
-.notif-row { display: flex; align-items: center; gap: 12px; background: #1a1a2e; border-radius: 10px; padding: 12px 14px; transition: opacity .2s; }
-.notif-left { flex-shrink: 0; }
+.notif-list { display: flex; flex-direction: column; gap: 8px; }
+.notif-card { background: #1a1a2e; border-radius: 10px; overflow: hidden; transition: opacity .2s; }
+.notif-card-header { display: flex; align-items: center; gap: 10px; padding: 11px 12px; cursor: pointer; user-select: none; }
 .notif-mid { flex: 1; min-width: 0; }
-.notif-label { font-size: 13px; font-weight: 600; color: #dde; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.notif-group { font-size: 11px; color: #667; margin-top: 2px; }
-.notif-right { flex-shrink: 0; }
-.notif-time { background: #0f0f1e; color: #aac; border: 1px solid #2a2a40; border-radius: 6px; padding: 5px 8px; font-size: 14px; width: 90px; }
-.notif-toggle { position: relative; display: inline-block; width: 42px; height: 24px; }
+.notif-label { font-size: 13px; font-weight: 600; color: #dde; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-group-tag { font-size: 11px; color: #556; margin-top: 1px; }
+.notif-time { background: #0f0f1e; color: #aac; border: 1px solid #2a2a40; border-radius: 6px; padding: 5px 6px; font-size: 13px; width: 82px; flex-shrink: 0; }
+.notif-chevron { color: #334; font-size: 18px; transition: transform .2s; flex-shrink: 0; line-height: 1; }
+.notif-toggle { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
 .notif-toggle input { opacity: 0; width: 0; height: 0; }
 .notif-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #2a2a40; border-radius: 24px; transition: .3s; }
 .notif-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #667; border-radius: 50%; transition: .3s; }
 .notif-toggle input:checked + .notif-slider { background: #1a4a8a; }
 .notif-toggle input:checked + .notif-slider:before { transform: translateX(18px); background: #88aaff; }
-.notif-save-btn { display: block; width: 100%; margin-top: 18px; padding: 13px; background: #1a3a6a; color: #88aaff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
+.notif-expand { padding: 0 12px 12px; border-top: 1px solid #1e1e3a; }
+.notif-expand-label { font-size: 10px; color: #445; margin: 10px 0 4px; letter-spacing: .05em; text-transform: uppercase; }
+.notif-days-row { display: flex; gap: 5px; }
+.notif-day-box { position: relative; }
+.notif-day-box input { position: absolute; opacity: 0; width: 0; height: 0; }
+.notif-day-box span { display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; background: #111128; color: #445; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #222238; transition: .15s; }
+.notif-day-box input:checked + span { background: #1a3a6a; color: #88aaff; border-color: #3366cc; }
+.notif-msg-area { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #bbc; border: 1px solid #2a2a40; border-radius: 6px; padding: 8px; font-size: 11px; resize: vertical; font-family: monospace; line-height: 1.5; min-height: 60px; }
+.notif-msg-auto { font-size: 11px; color: #334; padding: 4px 0; font-style: italic; }
+.notif-group-sel { background: #0c0c1e; color: #aac; border: 1px solid #2a2a40; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 100%; }
+.notif-del-btn { margin-top: 12px; padding: 7px 14px; background: #1e0f0f; color: #d66; border: 1px solid #3a1a1a; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.notif-add-btn { display: block; width: 100%; margin-top: 10px; margin-bottom: 6px; padding: 11px; background: transparent; color: #556; border: 1px dashed #2a2a40; border-radius: 10px; font-size: 13px; cursor: pointer; }
+.notif-add-form { background: #111128; border: 1px solid #2a2a40; border-radius: 10px; padding: 14px; margin-top: 8px; margin-bottom: 8px; }
+.notif-add-input { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #ccd; border: 1px solid #2a2a40; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+.notif-save-btn { display: block; width: 100%; margin-top: 12px; padding: 13px; background: #1a3a6a; color: #88aaff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
 .notif-save-btn:active { background: #2a4a8a; }
 </style>
 </head>
@@ -1175,6 +1189,9 @@ function esc(s) {
 
 // ---- 通知設定タブ ----
 var notifSettings = null;
+var BUILTIN_NOTIF_KEYS = ['lineup','kinsen_mae','soganbansen','dohan_check','okuri_summary',
+                           'okuri_confirm','seki_check','shoumei','kinsen_go','oshibori'];
+var DAY_LABELS = ['月','火','水','木','金','土','日'];
 
 function loadNotifSettings() {
   setContent('<div class="loading">通知設定を読み込み中...</div>');
@@ -1191,51 +1208,182 @@ function loadNotifSettings() {
     .catch(function() { setContent('<div class="err">通信エラー</div>'); });
 }
 
-function renderNotif(settings) {
-  var keys = ['lineup','kinsen_mae','soganbansen','dohan_check','okuri_summary',
-               'okuri_confirm','seki_check','shoumei','kinsen_go','oshibori'];
-  var rows = keys.map(function(k) {
-    var s = settings[k] || {};
-    var label = s.label || k;
-    var group = s.group || '';
-    var enabled = s.enabled !== false;
-    var time = s.time || '00:00';
-    return '<div class="notif-row" id="nrow-' + k + '">'
-      + '<div class="notif-left">'
-      +   '<label class="notif-toggle"><input type="checkbox" id="ntog-' + k + '" '
-      +     (enabled ? 'checked' : '') + ' onchange="notifToggle(\'' + k + '\')">'
-      +   '<span class="notif-slider"></span></label>'
-      + '</div>'
-      + '<div class="notif-mid">'
-      +   '<div class="notif-label">' + esc(label) + '</div>'
-      +   '<div class="notif-group">' + esc(group) + '</div>'
-      + '</div>'
-      + '<div class="notif-right">'
-      +   '<input type="time" class="notif-time" id="ntime-' + k + '" value="' + esc(time) + '" '
-      +   'onchange="notifTimeChange(\'' + k + '\')">'
-      + '</div>'
-      + '</div>';
+function buildNotifRow(k, s) {
+  var isCustom = k.startsWith('custom_');
+  var days = s.days || [1,2,3,4,5,6];
+  var enabled = s.enabled !== false;
+  var time = s.time || '00:00';
+  var msgEditable = isCustom || s.msgEditable;
+
+  var dayBoxes = DAY_LABELS.map(function(d, i) {
+    var dayNum = i + 1;
+    var chk = days.indexOf(dayNum) >= 0 ? 'checked' : '';
+    return '<label class="notif-day-box">'
+      + '<input type="checkbox" ' + chk + ' onchange="notifDayChange(\'' + k + '\',' + dayNum + ',this.checked)">'
+      + '<span>' + d + '</span></label>';
   }).join('');
 
-  var html = '<div style="padding:16px">'
-    + '<div style="font-size:13px;font-weight:700;color:#aac;margin-bottom:12px;letter-spacing:.05em">LINE通知設定</div>'
+  var msgHtml = msgEditable
+    ? '<textarea class="notif-msg-area" rows="3" placeholder="メッセージ（空欄=デフォルト）" onchange="notifMsgChange(\'' + k + '\',this.value)">' + esc(s.message || '') + '</textarea>'
+    : '<div class="notif-msg-auto">自動生成（編集不可）</div>';
+
+  var groupSel = isCustom
+    ? ('<div class="notif-expand-label">送信先</div><select class="notif-group-sel" onchange="notifGroupChange(\'' + k + '\',this.value)">'
+       + ['staff','kurofuku','both'].map(function(v) {
+           var lbl = v==='staff'?'スタッフ':v==='kurofuku'?'黒服':'両方';
+           return '<option value="' + v + '"' + ((s.groupKey||'staff')===v?' selected':'') + '>' + lbl + '</option>';
+         }).join('') + '</select>')
+    : '';
+
+  var delBtn = isCustom
+    ? '<button class="notif-del-btn" onclick="deleteNotif(\'' + k + '\')">🗑 削除</button>'
+    : '';
+
+  return '<div class="notif-card" id="ncard-' + k + '" style="' + (enabled?'':'opacity:.45') + '">'
+    + '<div class="notif-card-header" onclick="toggleNotifExpand(\'' + k + '\')">'
+    +   '<label class="notif-toggle" onclick="event.stopPropagation()">'
+    +     '<input type="checkbox" id="ntog-' + k + '" ' + (enabled?'checked':'') + ' onchange="notifToggle(\'' + k + '\')">'
+    +     '<span class="notif-slider"></span></label>'
+    +   '<div class="notif-mid">'
+    +     '<div class="notif-label">' + esc(s.label || k) + '</div>'
+    +     '<div class="notif-group-tag">' + esc(s.group || '') + '</div>'
+    +   '</div>'
+    +   '<input type="time" class="notif-time" id="ntime-' + k + '" value="' + esc(time) + '" '
+    +     'onclick="event.stopPropagation()" onchange="notifTimeChange(\'' + k + '\')">'
+    +   '<span class="notif-chevron" id="nchev-' + k + '">›</span>'
+    + '</div>'
+    + '<div class="notif-expand" id="nexp-' + k + '" style="display:none">'
+    +   '<div class="notif-expand-label">曜日</div>'
+    +   '<div class="notif-days-row">' + dayBoxes + '</div>'
+    +   groupSel
+    +   '<div class="notif-expand-label">メッセージ</div>'
+    +   msgHtml
+    +   delBtn
+    + '</div>'
+    + '</div>';
+}
+
+function buildAddForm() {
+  var dayBoxes = DAY_LABELS.map(function(d, i) {
+    return '<label class="notif-day-box"><input type="checkbox" checked id="nadd-day-' + (i+1) + '"><span>' + d + '</span></label>';
+  }).join('');
+  return '<div id="notif-add-area" style="display:none"><div class="notif-add-form">'
+    + '<div class="notif-expand-label">通知名</div>'
+    + '<input type="text" class="notif-add-input" id="nadd-label" placeholder="例: 発注確認">'
+    + '<div class="notif-expand-label">時刻</div>'
+    + '<input type="time" class="notif-time" id="nadd-time" value="12:00">'
+    + '<div class="notif-expand-label">曜日</div>'
+    + '<div class="notif-days-row">' + dayBoxes + '</div>'
+    + '<div class="notif-expand-label">送信先</div>'
+    + '<select class="notif-group-sel" id="nadd-group">'
+    +   '<option value="staff">スタッフ</option>'
+    +   '<option value="kurofuku">黒服</option>'
+    +   '<option value="both">両方</option>'
+    + '</select>'
+    + '<div class="notif-expand-label">メッセージ</div>'
+    + '<textarea class="notif-msg-area" rows="3" id="nadd-msg" placeholder="送信するメッセージ"></textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:12px">'
+    +   '<button class="notif-save-btn" style="flex:1;margin-top:0" onclick="confirmAddNotif()">追加する</button>'
+    +   '<button class="notif-save-btn" style="flex:0;width:80px;margin-top:0;background:#1e0f0f;color:#d66" onclick="cancelAddNotif()">キャンセル</button>'
+    + '</div></div></div>';
+}
+
+function renderNotif(settings) {
+  var customKeys = Object.keys(settings).filter(function(k) { return k.startsWith('custom_'); });
+  var rows = BUILTIN_NOTIF_KEYS.concat(customKeys).map(function(k) {
+    return settings[k] ? buildNotifRow(k, settings[k]) : '';
+  }).join('');
+
+  var html = '<div style="padding:14px">'
+    + '<div style="font-size:13px;font-weight:700;color:#aac;margin-bottom:10px;letter-spacing:.05em">LINE通知設定</div>'
     + '<div class="notif-list">' + rows + '</div>'
+    + buildAddForm()
+    + '<button class="notif-add-btn" id="notif-add-btn" onclick="openAddNotifForm()">＋ 通知を追加</button>'
     + '<button class="notif-save-btn" onclick="saveNotifSettings()">保存する</button>'
     + '<div id="notif-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
     + '</div>';
   setContent(html);
 }
 
+function toggleNotifExpand(k) {
+  var exp = document.getElementById('nexp-' + k);
+  var chev = document.getElementById('nchev-' + k);
+  if (!exp) return;
+  var open = exp.style.display === 'none';
+  exp.style.display = open ? 'block' : 'none';
+  if (chev) chev.style.transform = open ? 'rotate(90deg)' : '';
+}
+
 function notifToggle(k) {
   if (!notifSettings || !notifSettings[k]) return;
   notifSettings[k].enabled = document.getElementById('ntog-' + k).checked;
-  var row = document.getElementById('nrow-' + k);
-  if (row) row.style.opacity = notifSettings[k].enabled ? '1' : '0.45';
+  var card = document.getElementById('ncard-' + k);
+  if (card) card.style.opacity = notifSettings[k].enabled ? '1' : '0.45';
 }
 
 function notifTimeChange(k) {
   if (!notifSettings || !notifSettings[k]) return;
   notifSettings[k].time = document.getElementById('ntime-' + k).value;
+}
+
+function notifDayChange(k, day, checked) {
+  if (!notifSettings || !notifSettings[k]) return;
+  var days = notifSettings[k].days || [];
+  if (checked && days.indexOf(day) < 0) days.push(day);
+  if (!checked) days = days.filter(function(d) { return d !== day; });
+  notifSettings[k].days = days;
+}
+
+function notifMsgChange(k, val) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].message = val.trim() || null;
+}
+
+function notifGroupChange(k, val) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].groupKey = val;
+  notifSettings[k].group = val === 'staff' ? 'スタッフ' : val === 'kurofuku' ? '黒服' : '両方';
+}
+
+function openAddNotifForm() {
+  var area = document.getElementById('notif-add-area');
+  var btn = document.getElementById('notif-add-btn');
+  if (area) area.style.display = 'block';
+  if (btn) btn.style.display = 'none';
+}
+
+function cancelAddNotif() {
+  var area = document.getElementById('notif-add-area');
+  var btn = document.getElementById('notif-add-btn');
+  if (area) area.style.display = 'none';
+  if (btn) btn.style.display = 'block';
+}
+
+function confirmAddNotif() {
+  var label = (document.getElementById('nadd-label').value || '').trim();
+  if (!label) { alert('通知名を入力してください'); return; }
+  var time = document.getElementById('nadd-time').value || '12:00';
+  var group = document.getElementById('nadd-group').value || 'staff';
+  var msg = (document.getElementById('nadd-msg').value || '').trim();
+  var days = [1,2,3,4,5,6,7].filter(function(d) {
+    var el = document.getElementById('nadd-day-' + d);
+    return el && el.checked;
+  });
+  var key = 'custom_' + Date.now();
+  notifSettings[key] = {
+    label: label, time: time, enabled: true,
+    group: group==='staff'?'スタッフ':group==='kurofuku'?'黒服':'両方',
+    groupKey: group, days: days, message: msg || null, custom: true
+  };
+  renderNotif(notifSettings);
+  setTimeout(function() { toggleNotifExpand(key); }, 30);
+}
+
+function deleteNotif(k) {
+  var name = notifSettings[k] && notifSettings[k].label || k;
+  if (!confirm('「' + name + '」を削除しますか？')) return;
+  delete notifSettings[k];
+  renderNotif(notifSettings);
 }
 
 function saveNotifSettings() {
