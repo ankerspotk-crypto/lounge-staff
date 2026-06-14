@@ -23,6 +23,8 @@ header h1 { font-size: 17px; font-weight: 600; }
   border-bottom: 2px solid transparent; cursor: pointer; color: #666;
 }
 .tab.active { color: #88aaff; border-bottom-color: #88aaff; }
+.tab.coming-soon { color: #44455a; cursor: default; position: relative; }
+.tab.coming-soon::after { content: '近日公開'; font-size: 9px; display: block; color: #554; margin-top: 1px; }
 
 .content { padding: 16px; }
 
@@ -195,9 +197,9 @@ header h1 { font-size: 17px; font-weight: 600; }
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
   <div class="tabs">
-    <div class="tab active" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
-    <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
-    <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
+    <div class="tab coming-soon" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
+    <div class="tab coming-soon" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
+    <div class="tab active" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
   </div>
 </header>
@@ -224,7 +226,7 @@ var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
 
 var userId = '', userName = '', portalData = null;
-var currentTab = 'sales', currentMonth = '';
+var currentTab = 'shift', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
 var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
 var staffRole = 'キャスト';
@@ -329,8 +331,8 @@ function adminChange(name) {
     loadRequests();
     return;
   }
-  currentTab = 'sales';
-  switchTabActive('sales');
+  currentTab = 'shift';
+  switchTabActive('shift');
   loadPortal();
 }
 
@@ -385,111 +387,20 @@ function showAdminTab() {
 
 // ---- 売上明細 ----
 function renderSales() {
-  if (!portalData) return;
-  var months = portalData.months || [];
-  var html = monthBar(months);
-
-  if (months.length === 0) {
-    html += '<div class="loading" style="color:#666">売上データがありません</div>';
-    setContent(html);
-    return;
-  }
-
-  var m = currentMonth;
-  var d = (portalData.sales && portalData.sales[m]) ? portalData.sales[m] : null;
-
-  if (!d) {
-    html += '<div class="loading" style="color:#666">データがありません</div>';
-    setContent(html);
-    return;
-  }
-
-  var total = d['売上合計'] || d['担当小計'] || 0;
-  html += '<div class="total-card">'
-    + '<div class="total-label">売上合計</div>'
-    + '<div class="total-val">' + fmt(total) + '</div>'
-    + '</div>';
-
-  html += '<div class="card"><div class="card-title">売上内訳</div>';
-  var items = [
-    ['担当売上', d['担当売上'] || d['担当小計']],
-    ['同伴', d['同伴'] || d['同伴小計']],
-    ['勤務日数', d['勤務日数'] ? d['勤務日数'] + '日' : '—'],
-  ];
-  items.forEach(function(it) {
-    html += row(it[0], it[1] !== undefined ? (typeof it[1]==='string' ? it[1] : fmt(it[1])) : '—');
-  });
-  html += '</div>';
-
-  html += '<div class="card"><div class="card-title">バック内訳</div>';
-  var bkItems = [
-    ['時間報酬', d['時間報酬']],
-    ['担当バック', d['担当バック']],
-    ['同伴バック', d['同伴バック']],
-    ['ドリンクバック', d['ドリンクバック']],
-    ['バック合計', d['バック合計'] || d['バック']],
-  ];
-  bkItems.forEach(function(it) {
-    html += row(it[0], fmt(it[1]));
-  });
-  html += '</div>';
-
-  if (d['ボーナス'] && Number(d['ボーナス']) > 0) {
-    html += '<div class="card">' + row('ボーナス', fmt(d['ボーナス']), 'accent') + '</div>';
-  }
-
-  setContent(html);
+  setContent('<div style="text-align:center;padding:60px 20px">'
+    + '<div style="font-size:36px;margin-bottom:16px">🔒</div>'
+    + '<div style="font-size:16px;font-weight:600;color:#88aaff;margin-bottom:8px">近日公開予定</div>'
+    + '<div style="font-size:13px;color:#556;line-height:1.6">売上明細は今月25日までに<br>ご利用いただけるようになります</div>'
+    + '</div>');
 }
 
 // ---- 給与明細 ----
 function renderPay() {
-  if (!portalData) return;
-  var months = portalData.months || [];
-  var html = monthBar(months);
-
-  if (months.length === 0) {
-    html += '<div class="loading" style="color:#666">給与データがありません</div>';
-    setContent(html);
-    return;
-  }
-
-  var m = currentMonth;
-  var d = (portalData.pay && portalData.pay[m]) ? portalData.pay[m] : null;
-
-  if (!d) {
-    html += '<div class="loading" style="color:#666">データがありません</div>';
-    setContent(html);
-    return;
-  }
-
-  var final = d['最終支給'] || 0;
-  html += '<div class="total-card">'
-    + '<div class="total-label">最終支給額</div>'
-    + '<div class="total-val">' + fmt(final) + '</div>'
-    + '</div>';
-
-  html += '<div class="card"><div class="card-title">課税支給</div>';
-  [
-    ['時間報酬', d['時間報酬']],
-    ['新バック', d['新バック'] || d['バック']],
-    ['キャスト紹介料', d['キャスト紹介料'] || d['キャスト紹介料(手入力)']],
-    ['課税支給計', d['課税支給']],
-  ].forEach(function(it) {
-    html += row(it[0], fmt(it[1]));
-  });
-  html += '</div>';
-
-  html += '<div class="card"><div class="card-title">控除・加算</div>';
-  [
-    ['源泉徴収(10.21%)', d['源泉'] || d['源泉徴収'] || d['源泉徴収(10.21%)'], 'minus'],
-    ['ヘアサロン立替', d['ヘアサロン立替'] || d['ヘアサロン立替(手入力)'], 'accent'],
-  ].forEach(function(it) {
-    var v = Number(String(it[1] || 0).replace(/,/g,''));
-    if (v !== 0) html += row(it[0], fmt(it[1]), it[2]);
-  });
-  html += '</div>';
-
-  setContent(html);
+  setContent('<div style="text-align:center;padding:60px 20px">'
+    + '<div style="font-size:36px;margin-bottom:16px">🔒</div>'
+    + '<div style="font-size:16px;font-weight:600;color:#88aaff;margin-bottom:8px">近日公開予定</div>'
+    + '<div style="font-size:13px;color:#556;line-height:1.6">給与明細は今月25日までに<br>ご利用いただけるようになります</div>'
+    + '</div>');
 }
 
 // ---- シフト提出 ----
