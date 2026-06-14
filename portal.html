@@ -232,6 +232,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
     <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
     <div class="tab active" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
+    <div class="tab" id="tab-ranking" onclick="switchTab('ranking')">ランキング</div>
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
@@ -384,7 +385,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','hair','requests','notif'].forEach(function(t) {
+  ['sales','pay','shift','ranking','hair','requests','notif'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -407,6 +408,7 @@ function switchTab(tab) {
   switchTabActive(tab);
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
+  if (tab === 'ranking') { loadRanking(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#666;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
@@ -852,6 +854,77 @@ function togglePayPublish(month, action) {
     }
   })
   .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+// ---- ランキング ----
+
+var rankingMonths = [];
+
+function loadRanking(m) {
+  setContent('<div style="text-align:center;color:#555;padding:60px 0;font-size:14px">読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&tab=ranking&userId=' + encodeURIComponent(userId)
+    + (m ? '&month=' + encodeURIComponent(m) : '');
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      rankingMonths = d.availMonths || [];
+      renderRanking(d);
+    })
+    .catch(function() { setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function renderRanking(d) {
+  var rd = d.rankData || {};
+  var selMonth = rd.month || '';
+  var myName = d.name || '';
+
+  var h = '<div style="padding:14px">';
+
+  // 月タブ
+  if (rankingMonths.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px">';
+    rankingMonths.forEach(function(m) {
+      var act = m === selMonth;
+      h += '<button onclick="loadRanking(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
+        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+    });
+    h += '</div>';
+  }
+
+  var medals = ['🥇', '🥈', '🥉'];
+
+  function rankCard(title, list, valueLabel, valueKey) {
+    var c = '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px;margin-bottom:14px">';
+    c += '<div style="font-size:12px;font-weight:700;color:#88aaff;margin-bottom:12px;letter-spacing:0.5px">' + title + '</div>';
+    if (!list || list.length === 0) {
+      c += '<div style="text-align:center;color:#445;font-size:13px;padding:20px 0">データなし</div>';
+    } else {
+      list.forEach(function(item, idx) {
+        var isMe = item.name === myName;
+        var medal = medals[idx] || ('<span style="font-size:11px;color:#556;min-width:20px;display:inline-block;text-align:center">' + (idx + 1) + '</span>');
+        var val = '¥' + (item[valueKey] || 0).toLocaleString();
+        c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828;'
+          + (isMe ? 'background:#1a2a1a;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:6px;' : '') + '">';
+        c += '<span style="font-size:18px;width:28px;flex-shrink:0">' + (idx < 3 ? medals[idx] : '') + '</span>';
+        if (idx >= 3) c += '<span style="font-size:12px;color:#556;width:20px;flex-shrink:0">' + (idx + 1) + '</span>';
+        c += '<span style="flex:1;font-size:13px;font-weight:' + (isMe ? '700' : '400') + ';color:' + (isMe ? '#66dd88' : '#bbb') + '">'
+          + esc(item.name) + (isMe ? ' ◀ あなた' : '') + '</span>';
+        c += '<span style="font-size:13px;font-weight:600;color:#ccc">' + val + '</span>';
+        c += '</div>';
+      });
+    }
+    c += '</div>';
+    return c;
+  }
+
+  h += rankCard('売上ランキング', rd.tanto, '担当売上', 'tanto');
+  h += rankCard('同伴ランキング', rd.dohan, '同伴売上', 'dohan');
+  h += rankCard('予約バックランキング', rd.yoyaku, '予約バック', 'yoyaku');
+  h += '<div style="font-size:10px;color:#334;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
+  h += '</div>';
+  setContent(h);
 }
 
 // ---- ヘアサロン領収書 ----
