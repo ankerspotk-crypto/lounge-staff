@@ -94,6 +94,12 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.kyukin { background: #2a1515; border-color: #bb4444; }
 .day.kyukin .num { color: #ff8888; }
 .day.kyukin .kyukin-label { font-size: 9px; color: #ff8888; margin-top: 2px; }
+.day.scheduled { background: #152a1a; border-color: #336633; }
+.day.scheduled .num { color: #88ffaa; }
+.day.scheduled .shift-dot { background: #88ffaa; }
+.day.pending-shift { background: #2a1f0a; border-color: #886622; }
+.day.pending-shift .num { color: #ffcc66; }
+.day.pending-shift .shift-dot { background: #ffcc66; }
 
 /* picker overlay */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
@@ -222,6 +228,7 @@ var currentTab = 'sales', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
 var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
 var staffRole = 'キャスト';
+var pendingShifts = {};
 
 function fmt(n) {
   if (n === '' || n === null || n === undefined) return '—';
@@ -533,17 +540,22 @@ function calHtml() {
     var past = dt < today;
     var isToday = dt.getTime() === today.getTime();
     var sel = shiftSelections[key];
-    var isKyukin = sel === '欠勤';
+    var existShift = portalData && portalData.shifts && portalData.shifts[key];
+    var isPending = pendingShifts[key];
+    var isKyukin = sel === '欠勤' || existShift === '休み';
     var cls = 'day';
     if (wday===0) cls += ' sun';
     if (wday===6) cls += ' sat';
     if (past) cls += ' past';
     if (isToday) cls += ' today';
-    if (sel && !isKyukin) cls += ' selected';
     if (isKyukin) cls += ' kyukin';
+    else if (sel) cls += ' selected';
+    else if (isPending) cls += ' pending-shift';
+    else if (existShift) cls += ' scheduled';
     h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
       + '<div class="num">'+d+'</div>'
       + (sel && !isKyukin ? '<div class="shift-dot"></div>' : '')
+      + (!sel && !isKyukin && (isPending || existShift) ? '<div class="shift-dot"></div>' : '')
       + (isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
       + '</div>';
   }
@@ -744,7 +756,9 @@ function doSubmit() {
     var bm = parseInt(bp[0]), bd = parseInt(bp[1]);
     return am !== bm ? am - bm : ad - bd;
   });
+  var submittedTimes = {};
   sortedKeys.forEach(function(k) {
+    submittedTimes[k] = shiftSelections[k];
     shifts.push({ date: k, time: shiftSelections[k], role: shiftRoles[k] || 'キャスト' });
   });
 
@@ -757,12 +771,24 @@ function doSubmit() {
     if (d.ok) {
       btn.textContent = '✓ 提出しました';
       btn.style.background = '#1a4422';
+      var autoSet = {};
+      (d.autoApproved || []).forEach(function(date) { autoSet[date] = true; });
+      Object.keys(submittedTimes).forEach(function(k) {
+        var t = submittedTimes[k];
+        if (autoSet[k]) {
+          if (!portalData) portalData = {};
+          if (!portalData.shifts) portalData.shifts = {};
+          portalData.shifts[k] = (t === '欠勤') ? '休み' : t;
+        } else {
+          pendingShifts[k] = t;
+        }
+      });
       shiftSelections = {}; shiftRoles = {};
+      renderShiftCal();
       setTimeout(function() {
         btn.textContent = 'シフトを提出する';
         btn.style.background = '';
         btn.disabled = true;
-        renderShiftCal();
       }, 2000);
     } else {
       alert('エラー: ' + (d.error || '不明'));
