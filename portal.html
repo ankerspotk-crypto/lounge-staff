@@ -750,7 +750,6 @@ function doSubmit() {
 
   fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'submitShift', userId: userId, shifts: shifts })
   })
   .then(function(r) { return r.json(); })
@@ -874,7 +873,6 @@ function processReq(rowIdx, name, date, time, decision) {
 
   fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'approveShift', userId: userId, rowIdx: rowIdx,
                            name: name, date: date, time: time, decision: decision })
   })
