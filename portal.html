@@ -122,6 +122,20 @@ header h1 { font-size: 17px; font-weight: 600; }
 .submit-btn:active { background: #1a337f; }
 .submit-btn:disabled { background: #2a2a3a; color: #555; }
 .shift-spacer { height: 80px; }
+
+/* 管理者キャスト選択 */
+.admin-bar {
+  background: #1a1a2e; border-bottom: 1px solid #2a2a40;
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+}
+.admin-label { font-size: 12px; color: #888; white-space: nowrap; }
+.cast-select {
+  flex: 1; background: #2a2a40; border: 1px solid #3a3a55; color: #ccc;
+  padding: 8px 12px; border-radius: 8px; font-size: 14px;
+  -webkit-appearance: none; appearance: none;
+}
+.cast-select:focus { outline: none; border-color: #5566aa; }
+.admin-badge { font-size: 10px; background: #553300; color: #ffaa44; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
 .shift-count { text-align: center; font-size: 13px; color: #666; margin-top: 10px; }
 </style>
 </head>
@@ -163,6 +177,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYq
 var userId = '', userName = '', portalData = null;
 var currentTab = 'sales', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {};
+var isAdmin = false, adminViewAs = '', adminCastList = [];
 
 function fmt(n) {
   if (n === '' || n === null || n === undefined) return '—';
@@ -200,6 +215,7 @@ function loadPortal(month) {
   setContent('<div class="loading">データ取得中...</div>');
   var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId);
   if (month) url += '&month=' + encodeURIComponent(month);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(d) {
@@ -211,13 +227,75 @@ function loadPortal(month) {
         }
         return;
       }
+      // 管理者で castList が返ってきた場合 → キャスト選択画面を表示
+      if (d.isAdmin && d.castList && !adminViewAs) {
+        isAdmin = true;
+        adminCastList = d.castList;
+        showAdminPicker(d.castList);
+        return;
+      }
+      isAdmin = d.isAdmin || false;
       portalData = d;
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
+      updateAdminBar(adminCastList);
       renderTab(currentTab);
     })
     .catch(function(e) {
       showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>');
     });
+}
+
+function showAdminPicker(castList) {
+  var sel = '<select class="cast-select" id="admin-cast-sel"><option value="">-- キャストを選択 --</option>';
+  castList.forEach(function(n) { sel += '<option value="' + esc(n) + '">' + esc(n) + '</option>'; });
+  sel += '</select>';
+  setContent(
+    '<div style="padding:24px 16px">'
+    + '<div style="font-size:13px;color:#888;margin-bottom:14px">閲覧するキャストを選択</div>'
+    + sel
+    + '<button onclick="adminSelect()" style="margin-top:14px;width:100%;background:#2244aa;border:none;color:#fff;padding:14px;border-radius:10px;font-size:15px;cursor:pointer">表示</button>'
+    + '</div>'
+  );
+}
+
+function adminSelect() {
+  var sel = document.getElementById('admin-cast-sel');
+  if (!sel || !sel.value) return;
+  adminViewAs = sel.value;
+  currentMonth = '';
+  // ヘッダーに管理者バーを追加
+  if (!document.getElementById('admin-bar')) {
+    var bar = document.createElement('div');
+    bar.id = 'admin-bar';
+    bar.className = 'admin-bar';
+    bar.innerHTML = '<span class="admin-label">閲覧中:</span>'
+      + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)"></select>'
+      + '<span class="admin-badge">管理者</span>';
+    document.querySelector('header').insertAdjacentElement('afterend', bar);
+    // ドロップダウンをキャスト一覧で埋める
+    updateAdminBar(adminCastList);
+  }
+  loadPortal();
+}
+
+function adminChange(name) {
+  if (!name) return;
+  adminViewAs = name;
+  currentMonth = '';
+  portalData = null;
+  loadPortal();
+}
+
+function updateAdminBar(castList) {
+  var sel = document.getElementById('admin-viewas-sel');
+  if (!sel || !castList) return;
+  sel.innerHTML = '';
+  castList.forEach(function(n) {
+    var opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    if (n === adminViewAs) opt.selected = true;
+    sel.appendChild(opt);
+  });
 }
 
 function switchTab(tab) {
