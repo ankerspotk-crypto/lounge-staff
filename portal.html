@@ -146,6 +146,28 @@ header h1 { font-size: 17px; font-weight: 600; }
 .cast-select:focus { outline: none; border-color: #5566aa; }
 .admin-badge { font-size: 10px; background: #553300; color: #ffaa44; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
 .shift-count { text-align: center; font-size: 13px; color: #666; margin-top: 10px; }
+
+/* 申請管理 */
+.req-card { background: #16162a; border: 1px solid #2a2a40; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+.req-card.approved { border-color: #336633; }
+.req-card.rejected { border-color: #663333; opacity: .6; }
+.req-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.req-name { font-size: 15px; font-weight: 600; }
+.req-time { font-size: 12px; color: #666; }
+.req-detail { font-size: 14px; color: #aac; margin-bottom: 10px; }
+.req-actions { display: flex; gap: 8px; }
+.req-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+.req-btn.approve { background: #1a3a22; color: #88ffaa; border: 1px solid #336633; }
+.req-btn.reject  { background: #3a1a1a; color: #ffaa88; border: 1px solid #663333; }
+.req-btn.approve:active { background: #1e4228; }
+.req-btn.reject:active  { background: #421e1e; }
+.req-status { text-align: center; font-size: 13px; padding: 6px 0; }
+.req-status.ok  { color: #88ffaa; }
+.req-status.off { color: #ff8866; }
+.req-empty { text-align: center; color: #555; padding: 40px 0; font-size: 14px; }
+.req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
+.req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #2a2a40; background: #1e1e30; color: #888; font-size: 13px; cursor: pointer; }
+.req-filter-btn.active { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
 </style>
 </head>
 <body>
@@ -159,6 +181,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab active" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
     <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
     <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
+    <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
   </div>
 </header>
 
@@ -244,6 +267,7 @@ function loadPortal(month) {
         return;
       }
       isAdmin = d.isAdmin || false;
+      if (isAdmin) showAdminTab();
       portalData = d;
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
       updateAdminBar(adminCastList);
@@ -309,17 +333,25 @@ function updateAdminBar(castList) {
 
 function switchTab(tab) {
   currentTab = tab;
-  ['sales','pay','shift'].forEach(function(t) {
-    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  ['sales','pay','shift','requests'].forEach(function(t) {
+    var el = document.getElementById('tab-'+t);
+    if (el) el.classList.toggle('active', t === tab);
   });
   document.getElementById('submit-bar').style.display = tab === 'shift' ? 'block' : 'none';
+  if (tab === 'requests') { loadRequests(); return; }
   if (portalData) renderTab(tab);
 }
 
 function renderTab(tab) {
   if (tab === 'sales') renderSales();
   else if (tab === 'pay') renderPay();
-  else renderShiftCal();
+  else if (tab === 'shift') renderShiftCal();
+}
+
+// 管理者タブを表示
+function showAdminTab() {
+  var el = document.getElementById('tab-requests');
+  if (el) el.style.display = '';
 }
 
 // ---- 売上明細 ----
@@ -656,6 +688,100 @@ function selectMonth(m) {
 function row(label, val, cls) {
   return '<div class="row"><span class="row-label">' + esc(label) + '</span>'
     + '<span class="row-val' + (cls ? ' '+cls : '') + '">' + (val !== undefined && val !== null ? esc(String(val)) : '—') + '</span></div>';
+}
+
+// ---- 申請管理 ----
+var reqFilter = 'pending';
+
+function loadRequests() {
+  setContent('<div class="loading">申請を読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId)
+    + '&viewAs=' + encodeURIComponent(adminViewAs || '')
+    + '&tab=requests';
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      renderRequests(d.requests || []);
+    })
+    .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderRequests(list) {
+  var filters = [
+    { key: 'pending', label: '未処理' },
+    { key: 'all',     label: 'すべて' },
+  ];
+  var filterHtml = '<div class="req-filter">'
+    + filters.map(function(f) {
+        return '<button class="req-filter-btn' + (reqFilter === f.key ? ' active' : '')
+          + '" onclick="setReqFilter(\'' + f.key + '\')">' + f.label + '</button>';
+      }).join('')
+    + '</div>';
+
+  var filtered = list.filter(function(r) {
+    return reqFilter === 'all' || r.status === 'pending';
+  });
+
+  if (filtered.length === 0) {
+    setContent(filterHtml + '<div class="req-empty">'
+      + (reqFilter === 'pending' ? '未処理の申請はありません' : '申請がありません') + '</div>');
+    return;
+  }
+
+  var html = filterHtml;
+  filtered.forEach(function(r) {
+    var isDone = r.status !== 'pending';
+    html += '<div class="req-card' + (r.status === '承諾' ? ' approved' : r.status === '休み' ? ' rejected' : '') + '">'
+      + '<div class="req-head">'
+      + '<span class="req-name">' + esc(r.name) + '</span>'
+      + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
+      + '</div>'
+      + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time) + '</div>';
+
+    if (isDone) {
+      html += '<div class="req-status ' + (r.status === '承諾' ? 'ok' : 'off') + '">'
+        + (r.status === '承諾' ? '✓ 承諾済み' : '✗ 休み決定') + '</div>';
+    } else {
+      html += '<div class="req-actions">'
+        + '<button class="req-btn approve" onclick="processReq(' + r.rowIdx + ',\''
+          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 承諾</button>'
+        + '<button class="req-btn reject" onclick="processReq(' + r.rowIdx + ',\''
+          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休み</button>'
+        + '</div>';
+    }
+    html += '</div>';
+  });
+  setContent(html);
+}
+
+function setReqFilter(f) {
+  reqFilter = f;
+  loadRequests();
+}
+
+function processReq(rowIdx, name, date, time, decision) {
+  var card = event.target.closest('.req-card');
+  if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'approveShift', userId: userId, rowIdx: rowIdx,
+                           name: name, date: date, time: time, decision: decision })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) { loadRequests(); }
+    else {
+      if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
+      alert('エラー: ' + (d.error || '不明'));
+    }
+  })
+  .catch(function() {
+    if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
+    alert('通信エラー');
+  });
 }
 
 function setContent(html) {
