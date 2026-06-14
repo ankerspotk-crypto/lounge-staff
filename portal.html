@@ -132,6 +132,14 @@ header h1 { font-size: 17px; font-weight: 600; }
 .submit-btn:disabled { background: #2a2a3a; color: #555; }
 .shift-spacer { height: 80px; }
 
+/* ロール選択 */
+.role-toggle { display: flex; gap: 6px; padding: 12px 0 4px; }
+.role-btn {
+  flex: 1; padding: 9px 4px; border-radius: 10px; border: 1px solid #2a2a40;
+  background: #1e1e30; color: #777; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.role-btn.active { background: #1a2a4a; border-color: #4466bb; color: #88aaff; }
+
 /* 管理者キャスト選択 */
 .admin-bar {
   background: #1a1a2e; border-bottom: 1px solid #2a2a40;
@@ -470,6 +478,20 @@ function renderPay() {
 }
 
 // ---- シフト提出 ----
+var shiftRole = 'cast'; // 'cast' | 'kuro-emp' | 'kuro-part'
+
+function setShiftRole(role) {
+  shiftRole = role;
+  shiftSelections = {};
+  renderShiftCal();
+}
+
+function roleLabel() {
+  if (shiftRole === 'kuro-emp')  return '黒服社員';
+  if (shiftRole === 'kuro-part') return '黒服バイト';
+  return 'キャスト';
+}
+
 function genTimes(startH, startM, endH, endM) {
   var list = [];
   for (var h = startH; h <= endH; h++) {
@@ -485,8 +507,13 @@ function genTimes(startH, startM, endH, endM) {
 function renderShiftCal() {
   var now = new Date();
   if (!viewYear) { viewYear = now.getFullYear(); viewMonth = now.getMonth(); }
-  var html = calHtml();
-  html += '<div class="shift-spacer"></div>';
+  var roleHtml = '<div class="role-toggle">'
+    + ['cast','kuro-emp','kuro-part'].map(function(r) {
+        var labels = { 'cast':'キャスト', 'kuro-emp':'黒服社員', 'kuro-part':'黒服バイト' };
+        return '<button class="role-btn'+(shiftRole===r?' active':'')+'" onclick="setShiftRole(\''+r+'\')">'+labels[r]+'</button>';
+      }).join('')
+    + '</div>';
+  var html = roleHtml + calHtml() + '<div class="shift-spacer"></div>';
   setContent(html);
   document.getElementById('submit-bar').style.display = 'block';
   updateSubmitBar();
@@ -550,18 +577,33 @@ function openPicker(key) {
 }
 
 function showStartPicker() {
-  document.getElementById('picker-title').textContent = pickerKey + ' のシフト';
+  document.getElementById('picker-title').textContent = pickerKey + ' のシフト（' + roleLabel() + '）';
   var g = document.getElementById('picker-grid');
+  g.innerHTML = '';
+
+  // 黒服社員：フルのみ
+  if (shiftRole === 'kuro-emp') {
+    g.innerHTML = '<div class="picker-step">黒服社員はフルシフトのみ</div>';
+    var full = document.createElement('button');
+    full.className = 'time-opt full';
+    full.textContent = 'フル　18:00 ～ 翌2:00';
+    full.onclick = function() { pickTime(pickerKey, '18:00～26:00'); };
+    g.appendChild(full);
+    addClearBtn(g);
+    return;
+  }
+
+  // キャスト / 黒服バイト：2ステップ
   g.innerHTML = '<div class="picker-step">スタート時間を選択</div>';
 
-  // フルボタン
+  var fullLabel = shiftRole === 'cast' ? 'フル　20:00 ～ 24:00' : 'フル　18:00 ～ 翌2:00';
+  var fullVal   = shiftRole === 'cast' ? '20:00～24:00' : '18:00～26:00';
   var full = document.createElement('button');
   full.className = 'time-opt full';
-  full.textContent = 'フル　20:00 ～ 24:00';
-  full.onclick = function() { pickTime(pickerKey, '20:00～24:00'); };
+  full.textContent = fullLabel;
+  full.onclick = function() { pickTime(pickerKey, fullVal); };
   g.appendChild(full);
 
-  // スタート時間一覧
   genTimes(18, 0, 25, 30).forEach(function(t) {
     var btn = document.createElement('button');
     var cur = shiftSelections[pickerKey];
@@ -571,15 +613,17 @@ function showStartPicker() {
     g.appendChild(btn);
   });
 
-  // クリアボタン
-  if (shiftSelections[pickerKey]) {
-    var off = document.createElement('button');
-    off.className = 'time-opt off';
-    off.style.gridColumn = 'span 2';
-    off.textContent = 'クリア';
-    off.onclick = function() { pickTime(pickerKey, null); };
-    g.appendChild(off);
-  }
+  addClearBtn(g);
+}
+
+function addClearBtn(g) {
+  if (!shiftSelections[pickerKey]) return;
+  var off = document.createElement('button');
+  off.className = 'time-opt off';
+  off.style.gridColumn = 'span 2';
+  off.textContent = 'クリア';
+  off.onclick = function() { pickTime(pickerKey, null); };
+  g.appendChild(off);
 }
 
 function selectStart(t) {
@@ -648,7 +692,7 @@ function doSubmit() {
   fetch(GAS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'submitShift', userId: userId, shifts: shifts })
+    body: JSON.stringify({ action: 'submitShift', userId: userId, role: roleLabel(), shifts: shifts })
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
@@ -743,7 +787,8 @@ function renderRequests(list) {
       + '<span class="req-name">' + esc(r.name) + '</span>'
       + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
       + '</div>'
-      + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time) + '</div>';
+      + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time)
+      + (r.role ? '　👤 ' + esc(r.role) : '') + '</div>';
 
     if (isDone) {
       html += '<div class="req-status ' + (r.status === '承諾' ? 'ok' : 'off') + '">'
