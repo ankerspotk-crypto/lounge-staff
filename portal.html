@@ -459,6 +459,60 @@ function renderSales() {
 
   h += '<div style="font-size:10px;color:#334;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
   h += '</div>';
+
+  // ---- バック率メーター（煽りあり） ----
+  var tantoK_s = num(row['担当小計']);
+  var jikanH_s = num(row['時間報酬']);
+  if (tantoK_s > 0 && jikanH_s > 0) {
+    var bairitu_s  = tantoK_s / jikanH_s;
+    var curRate_s  = bairitu_s < 2 ? 10 : (bairitu_s < 3 ? 15 : 20);
+    var nextRate_s = bairitu_s < 2 ? 15 : (bairitu_s < 3 ? 20 : null);
+    var nextThr_s  = bairitu_s < 2 ? 2  : (bairitu_s < 3 ? 3  : null);
+    var barPct_s   = Math.min(bairitu_s / 3, 1) * 100;
+    var barColor_s = curRate_s === 10 ? '#e08000' : (curRate_s === 15 ? '#c8a800' : '#44bb66');
+
+    h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;margin-top:10px">';
+    h += '<div style="font-size:11px;color:#445;margin-bottom:12px;letter-spacing:0.5px">担当バック率メーター</div>';
+
+    // バー
+    h += '<div style="position:relative;height:28px;margin-bottom:4px">';
+    h += '<div style="position:absolute;top:10px;left:0;width:66.7%;height:8px;background:#2a1800;border-radius:4px 0 0 4px"></div>';
+    h += '<div style="position:absolute;top:10px;left:66.7%;right:0;height:8px;background:#1a2a00;border-radius:0 4px 4px 0"></div>';
+    h += '<div style="position:absolute;top:10px;left:0;width:' + barPct_s.toFixed(1) + '%;height:8px;background:' + barColor_s + ';border-radius:4px"></div>';
+    h += '<div style="position:absolute;top:6px;left:66.7%;width:2px;height:16px;background:#444;transform:translateX(-1px)"></div>';
+    h += '<div style="position:absolute;top:6px;right:0;width:2px;height:16px;background:#444"></div>';
+    h += '<div style="position:absolute;top:8px;left:' + barPct_s.toFixed(1) + '%;width:12px;height:12px;background:' + barColor_s + ';border:2px solid #fff;border-radius:50%;transform:translateX(-6px)"></div>';
+    h += '</div>';
+
+    // 目盛り
+    h += '<div style="position:relative;height:28px;font-size:10px;color:#445">';
+    h += '<span style="position:absolute;left:0">0倍<br><span style="color:#cc6644">10%</span></span>';
+    h += '<span style="position:absolute;left:66.7%;transform:translateX(-50%);text-align:center">2倍<br><span style="color:#bbaa00">15%</span></span>';
+    h += '<span style="position:absolute;right:0;text-align:right">3倍<br><span style="color:#44bb66">20%</span></span>';
+    h += '</div>';
+
+    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #1e1e3a">';
+    h += '<div style="font-size:13px;font-weight:600;color:#ccc">倍率 ' + bairitu_s.toFixed(2) + '倍 → <span style="color:' + barColor_s + '">バック率 ' + curRate_s + '%</span></div>';
+
+    if (nextRate_s) {
+      var needed_s = Math.ceil(nextThr_s * jikanH_s - tantoK_s);
+      var neededW  = Math.ceil(needed_s / 10000);
+      // 煽りメッセージ
+      var cheers = curRate_s === 10
+        ? ['あと', '担当売上 ', '¥' + needed_s.toLocaleString(), ' (' + neededW + '万円)で15%へ！', '勢いに乗っていこう🔥']
+        : ['ラストスパート！あと', '担当売上 ', '¥' + needed_s.toLocaleString(), ' (' + neededW + '万円)で20%達成！', '今日が変わり目💪'];
+      h += '<div style="font-size:12px;color:#667;margin-top:4px">' + cheers[0]
+        + '<span style="color:#88aaff;font-weight:600">' + cheers[2] + '</span>'
+        + cheers[3] + '</div>';
+      h += '<div style="font-size:12px;color:' + barColor_s + ';margin-top:4px;font-weight:600">' + cheers[4] + '</div>';
+    } else {
+      h += '<div style="font-size:13px;color:#44bb66;margin-top:4px;font-weight:600">今月も最高バック率20%達成！さすが！🎉</div>';
+    }
+    h += '</div>';
+    h += '</div>';
+  }
+
+  h += '</div>';
   setContent(h);
 }
 
