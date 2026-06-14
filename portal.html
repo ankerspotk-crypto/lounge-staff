@@ -587,51 +587,79 @@ function showStartPicker() {
   var g = document.getElementById('picker-grid');
   g.innerHTML = '';
 
-  // 欠勤ボタン（全役割共通・先頭）
-  var kyukinBtn = document.createElement('button');
-  kyukinBtn.className = 'time-opt' + (shiftSelections[pickerKey] === '欠勤' ? ' chosen' : '');
-  kyukinBtn.style.cssText = 'background:#2a1515;border-color:#bb4444;color:#ff8888;grid-column:span 2';
-  kyukinBtn.textContent = '欠勤申請';
-  kyukinBtn.onclick = function() { pickTime(pickerKey, '欠勤'); };
-  g.appendChild(kyukinBtn);
+  // 欠勤申請ボタン（シフト表に既登録の日のみ表示）
+  var hasShift = portalData && portalData.shifts && portalData.shifts[pickerKey];
+  if (hasShift) {
+    var kyukinBtn = document.createElement('button');
+    kyukinBtn.className = 'time-opt' + (shiftSelections[pickerKey] === '欠勤' ? ' chosen' : '');
+    kyukinBtn.style.cssText = 'background:#2a1515;border-color:#bb4444;color:#ff8888;grid-column:span 2';
+    kyukinBtn.textContent = '欠勤申請';
+    kyukinBtn.onclick = function() { pickTime(pickerKey, '欠勤'); };
+    g.appendChild(kyukinBtn);
+  }
+
+  // フルボタン
+  var isCast = shiftRole === 'cast';
+  var fullLabel = isCast ? 'フル　20:00 ～ 24:00' : '黒服フル　18:00 ～ 翌2:00';
+  var fullVal   = isCast ? '20:00～24:00' : '18:00～26:00';
+  var fullBtn = document.createElement('button');
+  fullBtn.className = 'time-opt full';
+  fullBtn.textContent = fullLabel;
+  fullBtn.onclick = function() { pickTime(pickerKey, fullVal); };
+  g.appendChild(fullBtn);
 
   // 黒服社員：フルのみ
   if (shiftRole === 'kuro-emp') {
-    var step = document.createElement('div');
-    step.className = 'picker-step';
-    step.textContent = '黒服社員はフルシフトのみ';
-    g.appendChild(step);
-    var full = document.createElement('button');
-    full.className = 'time-opt full';
-    full.textContent = 'フル　18:00 ～ 翌2:00';
-    full.onclick = function() { pickTime(pickerKey, '18:00～26:00'); };
-    g.appendChild(full);
     addClearBtn(g);
     return;
   }
 
-  // キャスト / 黒服バイト：2ステップ
+  // キャスト / 黒服バイト：プルダウンで時間指定
   var stepDiv = document.createElement('div');
   stepDiv.className = 'picker-step';
-  stepDiv.textContent = 'スタート時間を選択';
+  stepDiv.style.gridColumn = 'span 2';
+  stepDiv.textContent = '時間指定の場合';
   g.appendChild(stepDiv);
 
-  var fullLabel = shiftRole === 'cast' ? 'フル　20:00 ～ 24:00' : 'フル　18:00 ～ 翌2:00';
-  var fullVal   = shiftRole === 'cast' ? '20:00～24:00' : '18:00～26:00';
-  var full = document.createElement('button');
-  full.className = 'time-opt full';
-  full.textContent = fullLabel;
-  full.onclick = function() { pickTime(pickerKey, fullVal); };
-  g.appendChild(full);
+  var row = document.createElement('div');
+  row.style.cssText = 'grid-column:span 2;display:flex;gap:6px;align-items:center';
 
+  var selStyle = 'flex:1;padding:9px 4px;background:#1a2a3a;color:#fff;border:1px solid #334;border-radius:8px;font-size:13px';
+
+  var startSel = document.createElement('select');
+  startSel.style.cssText = selStyle;
   genTimes(18, 0, 25, 30).forEach(function(t) {
-    var btn = document.createElement('button');
-    var cur = shiftSelections[pickerKey];
-    btn.className = 'time-opt' + (cur && cur.indexOf(t + '～') === 0 ? ' chosen' : '');
-    btn.textContent = t;
-    btn.onclick = function() { selectStart(t); };
-    g.appendChild(btn);
+    var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
+    startSel.appendChild(opt);
   });
+
+  var sep = document.createElement('span');
+  sep.textContent = '～'; sep.style.cssText = 'color:#888;flex-shrink:0';
+
+  var endSel = document.createElement('select');
+  endSel.style.cssText = selStyle;
+
+  function updateEnds() {
+    endSel.innerHTML = '';
+    var sp = startSel.value.split(':');
+    var startMins = parseInt(sp[0]) * 60 + parseInt(sp[1]);
+    genTimes(18, 30, 26, 0).forEach(function(t) {
+      var ep = t.split(':');
+      if (parseInt(ep[0]) * 60 + parseInt(ep[1]) <= startMins) return;
+      var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
+      endSel.appendChild(opt);
+    });
+  }
+  updateEnds();
+  startSel.onchange = updateEnds;
+
+  var submitBtn = document.createElement('button');
+  submitBtn.textContent = '提出';
+  submitBtn.style.cssText = 'padding:9px 12px;background:#1a5c2a;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0';
+  submitBtn.onclick = function() { pickTime(pickerKey, startSel.value + '～' + endSel.value); };
+
+  row.appendChild(startSel); row.appendChild(sep); row.appendChild(endSel); row.appendChild(submitBtn);
+  g.appendChild(row);
 
   addClearBtn(g);
 }
