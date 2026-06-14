@@ -307,6 +307,7 @@ function initAdminUI(castList) {
       + '<option value="黒服社員">黒服社員</option>'
       + '<option value="黒服バイト">黒服バイト</option>'
       + '</select>'
+      + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#88aaff;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
