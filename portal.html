@@ -623,11 +623,43 @@ function renderPay() {
     return;
   }
 
-  var s = sales[sel];
+  var s = (sales && sales[sel]) ? sales[sel] : {};
   var p = pay && pay[sel] ? pay[sel] : {};
 
   function n(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; }
   function yen(v) { return '¥' + (parseInt(v) || 0).toLocaleString(); }
+
+  // 売上データなし・領収書のみの月
+  var hairTotals = portalData.hairTotals || {};
+  var hairOnly = Object.keys(s).length === 0;
+  if (hairOnly && hairTotals[sel]) {
+    var hairAmt = hairTotals[sel];
+    var reiwaOnly = sel;
+    var partsO = sel.split('/');
+    if (partsO.length === 2) reiwaOnly = '令和' + (parseInt(partsO[0]) - 2018) + '年' + parseInt(partsO[1]) + '月分';
+    var hOnly = '<div style="padding:14px">' + monthTabsHtml(sel);
+    if (isAdmin) {
+      var isPubO = !!payPublished[sel];
+      hOnly += '<div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+      hOnly += '<div><div style="font-size:10px;color:#445;margin-bottom:4px">給与明細 公開状態</div>';
+      hOnly += '<div style="font-size:13px;font-weight:600;color:' + (isPubO ? '#44bb66' : '#cc8844') + '">' + (isPubO ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
+      hOnly += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPubO ? 'unpublishPay' : 'publishPay') + '\')" style="padding:8px 16px;background:' + (isPubO ? '#2a1010' : '#102a10') + ';border:1px solid ' + (isPubO ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPubO ? '#ff8888' : '#66dd66') + ';font-size:13px;font-weight:700;cursor:pointer">' + (isPubO ? '非公開に戻す' : '公開する') + '</button>';
+      hOnly += '</div>';
+    }
+    hOnly += '<div style="background:#fff;color:#111;border-radius:12px;padding:16px 14px">';
+    hOnly += '<div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px">';
+    hOnly += '<div style="font-size:15px;font-weight:700">支払報酬明細書</div>';
+    hOnly += '<div style="font-size:11px;margin-top:3px">' + esc(reiwaOnly) + '</div>';
+    hOnly += '<div style="font-size:11px">ラウンジ 家康</div>';
+    hOnly += '<div style="font-size:17px;font-weight:700;margin-top:6px">' + esc(portalData.viewAs || portalData.name || '') + '</div>';
+    hOnly += '</div>';
+    hOnly += '<div style="margin-top:12px;border-top:1px solid #ccc;padding-top:10px">';
+    hOnly += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#006600"><span>ヘアサロン立替代</span><span>＋¥' + hairAmt.toLocaleString() + '</span></div>';
+    hOnly += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #333;font-size:15px;font-weight:700"><span>最終支給額</span><span style="color:#003399">¥' + hairAmt.toLocaleString() + '</span></div>';
+    hOnly += '</div></div></div>';
+    setContent(hOnly);
+    return;
+  }
 
   var jikanH  = n(s['時間報酬']);
   var tantoK  = n(s['担当小計']);
