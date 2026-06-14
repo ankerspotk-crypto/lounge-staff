@@ -581,8 +581,13 @@ function switchSalesMonth(m) { currentMonth = m; renderSales(); }
 
 // ---- 給与明細（TRUST明細書形式） ----
 function renderPay() {
-  var sales = portalData && portalData.sales;
-  if (!sales || Object.keys(sales).length === 0) {
+  var sales = (portalData && portalData.sales) || {};
+  var hairTotals = (portalData && portalData.hairTotals) || {};
+  var salesMonths = Object.keys(sales);
+  var hairMonths  = Object.keys(hairTotals).filter(function(m) { return !salesMonths.includes(m); });
+  var allMonths   = salesMonths.concat(hairMonths).sort().reverse();
+
+  if (allMonths.length === 0) {
     setContent('<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">データなし</div>'
       + '<div style="font-size:12px;color:#556;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
@@ -591,8 +596,8 @@ function renderPay() {
   }
 
   var pay = portalData && portalData.pay;
-  var months = Object.keys(sales).sort().reverse();
-  var sel = currentMonth && sales[currentMonth] ? currentMonth : months[0];
+  var months = allMonths;
+  var sel = (currentMonth && (sales[currentMonth] || hairTotals[currentMonth])) ? currentMonth : months[0];
 
   // 公開チェック（非管理者は未公開月を表示しない）
   var payPublished = portalData.payPublished || {};
