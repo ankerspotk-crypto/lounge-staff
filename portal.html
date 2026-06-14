@@ -492,6 +492,19 @@ function renderSales() {
     + '<span style="font-size:14px;font-weight:600;color:#ccc">残り支給額</span>'
     + '<span style="font-size:20px;font-weight:700;color:#88aaff">' + yen(row['残り支給額']) + '</span>'
     + '</div>';
+
+  var hairTotals = portalData.hairTotals || {};
+  var hairAmt = hairTotals[sel] || 0;
+  if (hairAmt > 0) {
+    h += '<div style="margin-top:4px;padding:10px 0;border-top:1px solid #252540">';
+    h += item('ヘアサロン立替', '＋' + yen(hairAmt), '#66dd88', '領収書登録分・源泉対象外');
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:2px;border-top:1px solid #252540">'
+      + '<span style="font-size:14px;font-weight:600;color:#ccc">最終支給額</span>'
+      + '<span style="font-size:20px;font-weight:700;color:#66dd88">' + yen(num(row['残り支給額']) + hairAmt) + '</span>'
+      + '</div>';
+    h += '</div>';
+  }
+
   h += '</div>';
 
   h += '<div style="font-size:10px;color:#334;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
@@ -622,8 +635,11 @@ function renderPay() {
   var kojo      = gensen + nichibara + minus;
 
   var nokori    = n(s['残り支給額']);
-  var hair      = n(p['ヘアサロン立替(手入力)']);
-  var finalPay  = nokori + hair;
+  var hairTotals = portalData.hairTotals || {};
+  var hairReceipt = hairTotals[sel] || 0;
+  var hairManual  = n(p['ヘアサロン立替(手入力)']);
+  var hair        = hairReceipt > 0 ? hairReceipt : hairManual;
+  var finalPay    = nokori + hair;
 
   // 令和変換
   var parts = sel.split('/');
