@@ -1180,7 +1180,6 @@ function loadNotifSettings() {
   setContent('<div class="loading">通知設定を読み込み中...</div>');
   fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'getNotifSettings', userId: userId })
   })
     .then(function(r) { return r.json(); })
@@ -1244,7 +1243,6 @@ function saveNotifSettings() {
   if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
   fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'saveNotifSettings', userId: userId, settings: notifSettings })
   })
     .then(function(r) { return r.json(); })
