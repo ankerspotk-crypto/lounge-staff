@@ -152,7 +152,6 @@ function setRole(name, role, btn, cardId) {
 
   fetch(GAS_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'setStaffRole', userId: userId, targetName: name, role: role })
   })
   .then(function(r) {
