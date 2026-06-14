@@ -745,9 +745,7 @@ var reqFilter = 'pending';
 
 function loadRequests() {
   setContent('<div class="loading">申請を読み込み中...</div>');
-  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId)
-    + '&viewAs=' + encodeURIComponent(adminViewAs || '')
-    + '&tab=requests';
+  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId) + '&tab=requests';
   fetch(url)
     .then(function(r) { return r.json(); })
     .then(function(d) {
