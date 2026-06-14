@@ -82,7 +82,7 @@ header h1 { font-size: 17px; font-weight: 600; }
   border: 1px solid transparent; padding: 2px;
 }
 .day .num { font-size: 14px; font-weight: 500; line-height: 1; }
-.day .time-tag { font-size: 8px; color: #88ccff; margin-top: 2px; line-height: 1.1; text-align: center; white-space: nowrap; overflow: hidden; max-width: 100%; }
+.day .shift-dot { width: 6px; height: 6px; border-radius: 50%; background: #88aaff; margin-top: 4px; }
 .day.empty { pointer-events: none; }
 .day.past { opacity: 0.3; pointer-events: none; }
 .day.sun .num { color: #cc6666; }
@@ -90,6 +90,7 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.today .num { color: #ffdd44; font-weight: 700; }
 .day.selected { background: #152a40; border-color: #3377bb; }
 .day.selected .num { color: #88ccff; }
+.day.selected .shift-dot { background: #88ffcc; }
 
 /* picker overlay */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
@@ -104,6 +105,14 @@ header h1 { font-size: 17px; font-weight: 600; }
 }
 .time-opt:active, .time-opt.chosen { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
 .time-opt.off { color: #cc6666; border-color: #3a2020; background: #1a1010; }
+.time-opt.full { grid-column: span 2; background: #1a3020; border-color: #336644; color: #88ffaa; font-weight: 600; }
+.time-opt.full:active { background: #1e3a26; }
+.picker-step { font-size: 11px; color: #666; margin-bottom: 10px; }
+.picker-back {
+  width: 100%; background: none; border: 1px solid #2a2a3a;
+  color: #6688aa; padding: 10px; border-radius: 10px; font-size: 13px; cursor: pointer;
+  margin-bottom: 10px;
+}
 .picker-cancel {
   margin-top: 10px; width: 100%; background: none; border: 1px solid #2a2a3a;
   color: #666; padding: 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
@@ -423,16 +432,17 @@ function renderPay() {
 }
 
 // ---- シフト提出 ----
-var TIMES = [];
-(function() {
-  for (var h = 18; h <= 25; h++) {
+function genTimes(startH, startM, endH, endM) {
+  var list = [];
+  for (var h = startH; h <= endH; h++) {
     for (var m = 0; m < 60; m += 30) {
-      var disp = (h >= 24 ? (h-24) : h) + ':' + (m === 0 ? '00' : '30');
-      TIMES.push(String(h) + ':' + (m === 0 ? '00' : '30') + '〜');
+      if (h === endH && m > endM) break;
+      if (h === startH && m < startM) continue;
+      list.push(h + ':' + (m === 0 ? '00' : '30'));
     }
   }
-  TIMES.push('26:00〜');
-})();
+  return list;
+}
 
 function renderShiftCal() {
   var now = new Date();
@@ -478,7 +488,7 @@ function calHtml() {
     if (sel) cls += ' selected';
     h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
       + '<div class="num">'+d+'</div>'
-      + (sel ? '<div class="time-tag">'+esc(sel.split('〜')[0])+'</div>' : '')
+      + (sel ? '<div class="shift-dot"></div>' : '')
       + '</div>';
   }
   h += '</div>';
@@ -492,26 +502,75 @@ function shiftViewMonth(dir) {
   renderShiftCal();
 }
 
-var pickerKey = '';
+var pickerKey = '', pickerStart = '';
+
 function openPicker(key) {
   pickerKey = key;
-  var cur = shiftSelections[key];
-  document.getElementById('picker-title').textContent = key + ' のシフト';
+  pickerStart = '';
+  showStartPicker();
+  document.getElementById('picker-overlay').classList.add('show');
+}
+
+function showStartPicker() {
+  document.getElementById('picker-title').textContent = pickerKey + ' のシフト';
   var g = document.getElementById('picker-grid');
-  g.innerHTML = '';
-  TIMES.forEach(function(t) {
+  g.innerHTML = '<div class="picker-step">スタート時間を選択</div>';
+
+  // フルボタン
+  var full = document.createElement('button');
+  full.className = 'time-opt full';
+  full.textContent = 'フル　20:00 ～ 24:00';
+  full.onclick = function() { pickTime(pickerKey, '20:00～24:00'); };
+  g.appendChild(full);
+
+  // スタート時間一覧
+  genTimes(18, 0, 25, 30).forEach(function(t) {
     var btn = document.createElement('button');
-    btn.className = 'time-opt' + (cur === t ? ' chosen' : '');
+    var cur = shiftSelections[pickerKey];
+    btn.className = 'time-opt' + (cur && cur.indexOf(t + '～') === 0 ? ' chosen' : '');
     btn.textContent = t;
-    btn.onclick = function() { pickTime(key, t); };
+    btn.onclick = function() { selectStart(t); };
     g.appendChild(btn);
   });
-  var off = document.createElement('button');
-  off.className = 'time-opt off';
-  off.textContent = '休み';
-  off.onclick = function() { pickTime(key, null); };
-  g.appendChild(off);
-  document.getElementById('picker-overlay').classList.add('show');
+
+  // クリアボタン
+  if (shiftSelections[pickerKey]) {
+    var off = document.createElement('button');
+    off.className = 'time-opt off';
+    off.style.gridColumn = 'span 2';
+    off.textContent = 'クリア';
+    off.onclick = function() { pickTime(pickerKey, null); };
+    g.appendChild(off);
+  }
+}
+
+function selectStart(t) {
+  pickerStart = t;
+  document.getElementById('picker-title').textContent = t + '〜 終了時間を選択';
+  var g = document.getElementById('picker-grid');
+  g.innerHTML = '<div class="picker-step">' + pickerKey + ' | スタート: ' + t + '</div>';
+
+  // 戻るボタン
+  var back = document.createElement('button');
+  back.className = 'picker-back';
+  back.textContent = '← スタートを変更';
+  back.onclick = showStartPicker;
+  g.appendChild(back);
+
+  // 終了時間 (スタートの30分後〜26:00)
+  var sh = parseInt(t.split(':')[0]);
+  var sm = parseInt(t.split(':')[1]);
+  var startMins = sh * 60 + sm;
+  genTimes(18, 30, 26, 0).forEach(function(e) {
+    var eh = parseInt(e.split(':')[0]);
+    var em = parseInt(e.split(':')[1]);
+    if (eh * 60 + em <= startMins) return;
+    var btn = document.createElement('button');
+    btn.className = 'time-opt';
+    btn.textContent = e;
+    btn.onclick = function() { pickTime(pickerKey, t + '～' + e); };
+    g.appendChild(btn);
+  });
 }
 
 function pickTime(key, t) {
