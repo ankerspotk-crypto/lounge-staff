@@ -1223,8 +1223,9 @@ function buildNotifRow(k, s) {
       + '<span>' + d + '</span></label>';
   }).join('');
 
+  var msgVal = s.message != null ? s.message : (s.defaultMsg || '');
   var msgHtml = msgEditable
-    ? '<textarea class="notif-msg-area" rows="3" placeholder="メッセージ（空欄=デフォルト）" onchange="notifMsgChange(\'' + k + '\',this.value)">' + esc(s.message || '') + '</textarea>'
+    ? '<textarea class="notif-msg-area" rows="4" placeholder="メッセージ（空欄=デフォルト）" onchange="notifMsgChange(\'' + k + '\',this.value)">' + esc(msgVal) + '</textarea>'
     : '<div class="notif-msg-auto">自動生成（編集不可）</div>';
 
   var groupSel = isCustom
