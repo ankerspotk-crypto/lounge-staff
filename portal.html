@@ -232,6 +232,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
     <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
     <div class="tab active" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
+    <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
   </div>
@@ -372,7 +373,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','requests','notif'].forEach(function(t) {
+  ['sales','pay','shift','hair','requests','notif'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -395,6 +396,7 @@ function switchTab(tab) {
   switchTabActive(tab);
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
+  if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#666;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -411,6 +413,7 @@ function renderTab(tab) {
   if (tab === 'sales') renderSales();
   else if (tab === 'pay') renderPay();
   else if (tab === 'shift') renderShiftCal();
+  else if (tab === 'hair') loadHairReceipts();
 }
 
 // 管理者タブを表示
@@ -782,6 +785,182 @@ function togglePayPublish(month, action) {
     } else {
       alert('エラー: ' + (d.error || 'unknown'));
     }
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+// ---- ヘアサロン領収書 ----
+
+var receiptPhotoBase64 = '';
+var receiptPhotoMime   = 'image/jpeg';
+
+function loadHairReceipts() {
+  var targetName = isAdmin ? adminViewAs : '';
+  setContent('<div style="text-align:center;color:#555;padding:60px 0;font-size:14px">読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&tab=hair&userId=' + encodeURIComponent(userId)
+    + (targetName ? '&viewAs=' + encodeURIComponent(targetName) : '');
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      renderHairTab(d);
+    })
+    .catch(function() { setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function renderHairTab(d) {
+  var receipts = d.receipts || [];
+  var targetName = d.viewAs || d.name || '';
+  var h = '<div style="padding:14px">';
+
+  // ── 登録フォーム（管理者が特定キャストを選択中 or 一般キャスト） ──
+  var showForm = !isAdmin || (isAdmin && adminViewAs);
+  if (showForm) {
+    h += '<div style="background:#14142a;border:1px solid #2a2a44;border-radius:12px;padding:14px;margin-bottom:16px">';
+    h += '<div style="font-size:12px;color:#88aaff;font-weight:600;margin-bottom:12px">領収書を登録する</div>';
+
+    // 写真プレビュー
+    h += '<div style="margin-bottom:12px">';
+    h += '<label style="font-size:11px;color:#556;display:block;margin-bottom:6px">写真</label>';
+    h += '<div id="photo-preview" style="width:100%;max-width:280px;height:160px;background:#0d0d1a;border:2px dashed #2a2a44;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative" onclick="document.getElementById(\'photo-input\').click()">';
+    h += '<span id="photo-hint" style="font-size:12px;color:#445">タップして写真を選択</span>';
+    h += '</div>';
+    h += '<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">';
+    h += '<button onclick="clearPhoto()" style="margin-top:6px;font-size:11px;color:#665;background:none;border:none;cursor:pointer">写真をクリア</button>';
+    h += '</div>';
+
+    // 日付・金額
+    h += '<div style="display:flex;gap:10px;margin-bottom:12px">';
+    h += '<div style="flex:1"><label style="font-size:11px;color:#556;display:block;margin-bottom:4px">日付</label>';
+    h += '<input type="date" id="receipt-date" style="width:100%;background:#1a1a30;border:1px solid #2a2a44;border-radius:8px;color:#ccc;font-size:14px;padding:8px 10px"></div>';
+    h += '<div style="flex:1"><label style="font-size:11px;color:#556;display:block;margin-bottom:4px">金額（円）</label>';
+    h += '<input type="number" id="receipt-amount" placeholder="5000" style="width:100%;background:#1a1a30;border:1px solid #2a2a44;border-radius:8px;color:#ccc;font-size:14px;padding:8px 10px"></div>';
+    h += '</div>';
+
+    h += '<button onclick="submitReceipt()" style="width:100%;padding:11px;background:#1a2a4a;border:1px solid #3355aa;border-radius:10px;color:#88aaff;font-size:14px;font-weight:700;cursor:pointer">登録する</button>';
+    h += '<div id="receipt-msg" style="font-size:12px;color:#44bb66;margin-top:8px;min-height:16px"></div>';
+    h += '</div>';
+  }
+
+  // ── 一覧 ──
+  h += '<div style="font-size:11px;color:#445;letter-spacing:0.5px;margin-bottom:8px">登録済みの領収書' + (targetName ? '（' + esc(targetName) + '）' : '') + '</div>';
+  if (receipts.length === 0) {
+    h += '<div style="text-align:center;color:#445;padding:30px 0;font-size:13px">領収書がまだ登録されていません</div>';
+  } else {
+    var total = receipts.reduce(function(s, r) { return s + r.amount; }, 0);
+    h += '<div style="font-size:12px;color:#88aaff;margin-bottom:10px">合計: ¥' + total.toLocaleString() + '（' + receipts.length + '件）</div>';
+    receipts.forEach(function(r) {
+      h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:10px;padding:12px 14px;margin-bottom:8px">';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between">';
+      h += '<div>';
+      h += '<div style="font-size:15px;font-weight:700;color:#ccc;margin-bottom:3px">¥' + r.amount.toLocaleString() + '</div>';
+      h += '<div style="font-size:12px;color:#556">' + esc(r.date) + (r.month ? '  （' + esc(r.month) + '分）' : '') + '</div>';
+      if (isAdmin) h += '<div style="font-size:11px;color:#445;margin-top:2px">' + esc(r.name) + '</div>';
+      h += '<div style="font-size:10px;color:#333;margin-top:4px">登録: ' + esc(r.registeredAt) + '</div>';
+      h += '</div>';
+      h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">';
+      if (r.photoUrl) {
+        h += '<a href="' + esc(r.photoUrl) + '" target="_blank" style="font-size:11px;color:#88aaff;text-decoration:none;background:#1a2a4a;border:1px solid #3355aa;padding:4px 10px;border-radius:8px">写真を見る</a>';
+      }
+      if (isAdmin || !d.isAdmin) {
+        h += '<button onclick="deleteReceipt(' + r.rowIdx + ')" style="font-size:11px;color:#cc6666;background:#1a0f0f;border:1px solid #663333;padding:4px 10px;border-radius:8px;cursor:pointer">削除</button>';
+      }
+      h += '</div></div></div>';
+    });
+  }
+  h += '</div>';
+  setContent(h);
+}
+
+function previewPhoto(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  var img = new Image();
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    img.onload = function() {
+      var MAX = 1000;
+      var w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      receiptPhotoBase64 = dataUrl.split(',')[1];
+      receiptPhotoMime   = 'image/jpeg';
+      // プレビュー表示
+      var prev = document.getElementById('photo-preview');
+      if (prev) {
+        prev.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px">';
+      }
+      var hint = document.getElementById('photo-hint');
+      if (hint) hint.style.display = 'none';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  receiptPhotoBase64 = '';
+  receiptPhotoMime   = 'image/jpeg';
+  var prev = document.getElementById('photo-preview');
+  if (prev) prev.innerHTML = '<span id="photo-hint" style="font-size:12px;color:#445">タップして写真を選択</span>';
+  var inp = document.getElementById('photo-input');
+  if (inp) inp.value = '';
+}
+
+function submitReceipt() {
+  var date   = (document.getElementById('receipt-date') || {}).value || '';
+  var amount = parseInt((document.getElementById('receipt-amount') || {}).value) || 0;
+  var msg    = document.getElementById('receipt-msg');
+  if (!date)   { if (msg) msg.style.color = '#f88'; if (msg) msg.textContent = '日付を入力してください'; return; }
+  if (!amount) { if (msg) msg.style.color = '#f88'; if (msg) msg.textContent = '金額を入力してください'; return; }
+  var btn = document.querySelector('button[onclick="submitReceipt()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '送信中…'; }
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'submitHairReceipt',
+      userId: userId,
+      date: date,
+      amount: amount,
+      photo: receiptPhotoBase64,
+      mime: receiptPhotoMime
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = '登録する'; }
+    if (d.ok) {
+      if (msg) { msg.style.color = '#44bb66'; msg.textContent = '登録しました！'; }
+      receiptPhotoBase64 = '';
+      receiptPhotoMime   = 'image/jpeg';
+      setTimeout(function() { loadHairReceipts(); }, 800);
+    } else {
+      if (msg) { msg.style.color = '#f88'; msg.textContent = 'エラー: ' + (d.error || 'unknown'); }
+    }
+  })
+  .catch(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '登録する'; }
+    if (msg) { msg.style.color = '#f88'; msg.textContent = '通信エラーが発生しました'; }
+  });
+}
+
+function deleteReceipt(rowIdx) {
+  if (!confirm('この領収書を削除しますか？')) return;
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'deleteHairReceipt', userId: userId, rowIdx: rowIdx })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) loadHairReceipts();
+    else alert('削除エラー: ' + (d.error || 'unknown'));
   })
   .catch(function() { alert('通信エラーが発生しました'); });
 }
