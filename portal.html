@@ -189,6 +189,22 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
 .req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #2a2a40; background: #1e1e30; color: #888; font-size: 13px; cursor: pointer; }
 .req-filter-btn.active { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
+.notif-list { display: flex; flex-direction: column; gap: 10px; }
+.notif-row { display: flex; align-items: center; gap: 12px; background: #1a1a2e; border-radius: 10px; padding: 12px 14px; transition: opacity .2s; }
+.notif-left { flex-shrink: 0; }
+.notif-mid { flex: 1; min-width: 0; }
+.notif-label { font-size: 13px; font-weight: 600; color: #dde; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notif-group { font-size: 11px; color: #667; margin-top: 2px; }
+.notif-right { flex-shrink: 0; }
+.notif-time { background: #0f0f1e; color: #aac; border: 1px solid #2a2a40; border-radius: 6px; padding: 5px 8px; font-size: 14px; width: 90px; }
+.notif-toggle { position: relative; display: inline-block; width: 42px; height: 24px; }
+.notif-toggle input { opacity: 0; width: 0; height: 0; }
+.notif-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #2a2a40; border-radius: 24px; transition: .3s; }
+.notif-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #667; border-radius: 50%; transition: .3s; }
+.notif-toggle input:checked + .notif-slider { background: #1a4a8a; }
+.notif-toggle input:checked + .notif-slider:before { transform: translateX(18px); background: #88aaff; }
+.notif-save-btn { display: block; width: 100%; margin-top: 18px; padding: 13px; background: #1a3a6a; color: #88aaff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
+.notif-save-btn:active { background: #2a4a8a; }
 </style>
 </head>
 <body>
@@ -203,6 +219,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
     <div class="tab active" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
+    <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
   </div>
 </header>
 
@@ -341,7 +358,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','requests'].forEach(function(t) {
+  ['sales','pay','shift','requests','notif'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -363,6 +380,7 @@ function updateAdminBar(castList) {
 function switchTab(tab) {
   switchTabActive(tab);
   if (tab === 'requests') { loadRequests(); return; }
+  if (tab === 'notif') { loadNotifSettings(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#666;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -385,6 +403,8 @@ function renderTab(tab) {
 function showAdminTab() {
   var el = document.getElementById('tab-requests');
   if (el) el.style.display = '';
+  var el2 = document.getElementById('tab-notif');
+  if (el2) el2.style.display = '';
 }
 
 // ---- 売上明細 ----
@@ -1151,6 +1171,93 @@ function showErr(msg) {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ---- 通知設定タブ ----
+var notifSettings = null;
+
+function loadNotifSettings() {
+  setContent('<div class="loading">通知設定を読み込み中...</div>');
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'getNotifSettings', userId: userId })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      notifSettings = d.settings;
+      renderNotif(notifSettings);
+    })
+    .catch(function() { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderNotif(settings) {
+  var keys = ['lineup','kinsen_mae','soganbansen','dohan_check','okuri_summary',
+               'okuri_confirm','seki_check','shoumei','kinsen_go','oshibori'];
+  var rows = keys.map(function(k) {
+    var s = settings[k] || {};
+    var label = s.label || k;
+    var group = s.group || '';
+    var enabled = s.enabled !== false;
+    var time = s.time || '00:00';
+    return '<div class="notif-row" id="nrow-' + k + '">'
+      + '<div class="notif-left">'
+      +   '<label class="notif-toggle"><input type="checkbox" id="ntog-' + k + '" '
+      +     (enabled ? 'checked' : '') + ' onchange="notifToggle(\'' + k + '\')">'
+      +   '<span class="notif-slider"></span></label>'
+      + '</div>'
+      + '<div class="notif-mid">'
+      +   '<div class="notif-label">' + esc(label) + '</div>'
+      +   '<div class="notif-group">' + esc(group) + '</div>'
+      + '</div>'
+      + '<div class="notif-right">'
+      +   '<input type="time" class="notif-time" id="ntime-' + k + '" value="' + esc(time) + '" '
+      +   'onchange="notifTimeChange(\'' + k + '\')">'
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  var html = '<div style="padding:16px">'
+    + '<div style="font-size:13px;font-weight:700;color:#aac;margin-bottom:12px;letter-spacing:.05em">LINE通知設定</div>'
+    + '<div class="notif-list">' + rows + '</div>'
+    + '<button class="notif-save-btn" onclick="saveNotifSettings()">保存する</button>'
+    + '<div id="notif-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
+    + '</div>';
+  setContent(html);
+}
+
+function notifToggle(k) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].enabled = document.getElementById('ntog-' + k).checked;
+  var row = document.getElementById('nrow-' + k);
+  if (row) row.style.opacity = notifSettings[k].enabled ? '1' : '0.45';
+}
+
+function notifTimeChange(k) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].time = document.getElementById('ntime-' + k).value;
+}
+
+function saveNotifSettings() {
+  var btn = document.querySelector('.notif-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'saveNotifSettings', userId: userId, settings: notifSettings })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      var msg = document.getElementById('notif-save-msg');
+      if (msg) { msg.style.display = 'block'; setTimeout(function(){ msg.style.display='none'; }, 2500); }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      alert('通信エラー');
+    });
 }
 </script>
 </body>
