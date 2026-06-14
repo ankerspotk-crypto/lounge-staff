@@ -878,6 +878,7 @@ function renderRanking(d) {
   var rd = d.rankData || {};
   var selMonth = rd.month || '';
   var myName = d.name || '';
+  var rankPublished = d.rankPublished || {};
 
   var h = '<div style="padding:14px">';
 
@@ -886,11 +887,39 @@ function renderRanking(d) {
     h += '<div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px">';
     rankingMonths.forEach(function(m) {
       var act = m === selMonth;
+      var pub = rankPublished[m];
+      var label = m + (isAdmin && !pub ? ' 🔒' : '');
       h += '<button onclick="loadRanking(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
         + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
-        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
     });
     h += '</div>';
+  }
+
+  // 管理者：公開管理バー
+  if (isAdmin) {
+    var isPub = !!rankPublished[selMonth];
+    h += '<div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+    h += '<div><div style="font-size:10px;color:#445;margin-bottom:4px">ランキング 公開状態</div>';
+    h += '<div style="font-size:13px;font-weight:600;color:' + (isPub ? '#44bb66' : '#cc8844') + '">'
+      + (isPub ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
+    h += '<button onclick="toggleRankingPublish(\'' + selMonth + '\',\'' + (isPub ? 'unpublishRanking' : 'publishRanking') + '\')" '
+      + 'style="padding:8px 16px;background:' + (isPub ? '#2a1010' : '#102a10') + ';border:1px solid '
+      + (isPub ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPub ? '#ff8888' : '#66dd66')
+      + ';font-size:13px;font-weight:700;cursor:pointer">'
+      + (isPub ? '非公開に戻す' : '公開する') + '</button>';
+    h += '</div>';
+  }
+
+  // 非管理者・未公開ならロック画面
+  if (!isAdmin && !rankPublished[selMonth]) {
+    h += '<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#556">' + esc(selMonth) + ' のランキングは集計中です。</div>'
+      + '</div></div>';
+    setContent(h);
+    return;
   }
 
   var medals = ['🥇', '🥈', '🥉'];
@@ -925,6 +954,19 @@ function renderRanking(d) {
   h += '<div style="font-size:10px;color:#334;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
   h += '</div>';
   setContent(h);
+}
+
+function toggleRankingPublish(month, action) {
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: action, userId: userId, month: month })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) loadRanking(month);
+    else alert('エラー: ' + (d.error || 'unknown'));
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
 }
 
 // ---- ヘアサロン領収書 ----
