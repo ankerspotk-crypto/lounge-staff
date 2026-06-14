@@ -219,7 +219,7 @@ var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYq
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'sales', currentMonth = '';
-var viewYear, viewMonth, shiftSelections = {};
+var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
 var isAdmin = false, adminViewAs = '', adminCastList = [];
 
 function fmt(n) {
@@ -481,19 +481,6 @@ function renderPay() {
 }
 
 // ---- シフト提出 ----
-var shiftRole = 'cast'; // 'cast' | 'kuro-emp' | 'kuro-part'
-
-function setShiftRole(role) {
-  shiftRole = role;
-  shiftSelections = {};
-  renderShiftCal();
-}
-
-function roleLabel() {
-  if (shiftRole === 'kuro-emp')  return '黒服社員';
-  if (shiftRole === 'kuro-part') return '黒服バイト';
-  return 'キャスト';
-}
 
 function genTimes(startH, startM, endH, endM) {
   var list = [];
@@ -510,14 +497,7 @@ function genTimes(startH, startM, endH, endM) {
 function renderShiftCal() {
   var now = new Date();
   if (!viewYear) { viewYear = now.getFullYear(); viewMonth = now.getMonth(); }
-  var roleHtml = '<div class="role-toggle">'
-    + ['cast','kuro-emp','kuro-part'].map(function(r) {
-        var labels = { 'cast':'キャスト', 'kuro-emp':'黒服社員', 'kuro-part':'黒服バイト' };
-        return '<button class="role-btn'+(shiftRole===r?' active':'')+'" onclick="setShiftRole(\''+r+'\')">'+labels[r]+'</button>';
-      }).join('')
-    + '</div>';
-  var html = roleHtml + calHtml() + '<div class="shift-spacer"></div>';
-  setContent(html);
+  setContent(calHtml() + '<div class="shift-spacer"></div>');
   document.getElementById('submit-bar').style.display = 'block';
   updateSubmitBar();
 }
@@ -582,53 +562,23 @@ function openPicker(key) {
   document.getElementById('picker-overlay').classList.add('show');
 }
 
-function showStartPicker() {
-  document.getElementById('picker-title').textContent = pickerKey + ' のシフト（' + roleLabel() + '）';
-  var g = document.getElementById('picker-grid');
-  g.innerHTML = '';
+function makePickerStep(text) {
+  var d = document.createElement('div');
+  d.className = 'picker-step';
+  d.style.gridColumn = 'span 2';
+  d.textContent = text;
+  return d;
+}
 
-  // 欠勤申請ボタン（シフト表に既登録の日のみ表示）
-  var hasShift = portalData && portalData.shifts && portalData.shifts[pickerKey];
-  if (hasShift) {
-    var kyukinBtn = document.createElement('button');
-    kyukinBtn.className = 'time-opt' + (shiftSelections[pickerKey] === '欠勤' ? ' chosen' : '');
-    kyukinBtn.style.cssText = 'background:#2a1515;border-color:#bb4444;color:#ff8888;grid-column:span 2';
-    kyukinBtn.textContent = '欠勤申請';
-    kyukinBtn.onclick = function() { pickTime(pickerKey, '欠勤'); };
-    g.appendChild(kyukinBtn);
-  }
-
-  // フルボタン
-  var isCast = shiftRole === 'cast';
-  var fullLabel = isCast ? 'フル　20:00 ～ 24:00' : '黒服フル　18:00 ～ 翌2:00';
-  var fullVal   = isCast ? '20:00～24:00' : '18:00～26:00';
-  var fullBtn = document.createElement('button');
-  fullBtn.className = 'time-opt full';
-  fullBtn.textContent = fullLabel;
-  fullBtn.onclick = function() { pickTime(pickerKey, fullVal); };
-  g.appendChild(fullBtn);
-
-  // 黒服社員：フルのみ
-  if (shiftRole === 'kuro-emp') {
-    addClearBtn(g);
-    return;
-  }
-
-  // キャスト / 黒服バイト：プルダウンで時間指定
-  var stepDiv = document.createElement('div');
-  stepDiv.className = 'picker-step';
-  stepDiv.style.gridColumn = 'span 2';
-  stepDiv.textContent = '時間指定の場合';
-  g.appendChild(stepDiv);
-
+function makeTimeRow(sr, er, role) {
+  // sr=[startH,startM,maxStartH,maxStartM] er=[minEndH,minEndM,endH,endM]
   var row = document.createElement('div');
   row.style.cssText = 'grid-column:span 2;display:flex;gap:6px;align-items:center';
-
   var selStyle = 'flex:1;padding:9px 4px;background:#1a2a3a;color:#fff;border:1px solid #334;border-radius:8px;font-size:13px';
 
   var startSel = document.createElement('select');
   startSel.style.cssText = selStyle;
-  genTimes(18, 0, 25, 30).forEach(function(t) {
+  genTimes(sr[0], sr[1], sr[2], sr[3]).forEach(function(t) {
     var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
     startSel.appendChild(opt);
   });
@@ -638,12 +588,13 @@ function showStartPicker() {
 
   var endSel = document.createElement('select');
   endSel.style.cssText = selStyle;
+  var allEndTimes = genTimes(er[0], er[1], er[2], er[3]);
 
   function updateEnds() {
     endSel.innerHTML = '';
     var sp = startSel.value.split(':');
     var startMins = parseInt(sp[0]) * 60 + parseInt(sp[1]);
-    genTimes(18, 30, 26, 0).forEach(function(t) {
+    allEndTimes.forEach(function(t) {
       var ep = t.split(':');
       if (parseInt(ep[0]) * 60 + parseInt(ep[1]) <= startMins) return;
       var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
@@ -653,13 +604,52 @@ function showStartPicker() {
   updateEnds();
   startSel.onchange = updateEnds;
 
+  var r = role;
   var submitBtn = document.createElement('button');
   submitBtn.textContent = '提出';
   submitBtn.style.cssText = 'padding:9px 12px;background:#1a5c2a;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0';
-  submitBtn.onclick = function() { pickTime(pickerKey, startSel.value + '～' + endSel.value); };
+  submitBtn.onclick = function() { pickTime(pickerKey, startSel.value + '～' + endSel.value, r); };
 
   row.appendChild(startSel); row.appendChild(sep); row.appendChild(endSel); row.appendChild(submitBtn);
-  g.appendChild(row);
+  return row;
+}
+
+function showStartPicker() {
+  document.getElementById('picker-title').textContent = pickerKey + ' のシフト';
+  var g = document.getElementById('picker-grid');
+  g.innerHTML = '';
+
+  // 欠勤申請（既登録日のみ）
+  var hasShift = portalData && portalData.shifts && portalData.shifts[pickerKey];
+  if (hasShift) {
+    var kyukinBtn = document.createElement('button');
+    kyukinBtn.className = 'time-opt' + (shiftSelections[pickerKey] === '欠勤' ? ' chosen' : '');
+    kyukinBtn.style.cssText = 'background:#2a1515;border-color:#bb4444;color:#ff8888;grid-column:span 2';
+    kyukinBtn.textContent = '欠勤申請';
+    kyukinBtn.onclick = function() { pickTime(pickerKey, '欠勤', 'キャスト'); };
+    g.appendChild(kyukinBtn);
+  }
+
+  // ── キャストフル ──
+  var castFullBtn = document.createElement('button');
+  castFullBtn.className = 'time-opt full';
+  castFullBtn.textContent = 'キャストフル　20:00 ～ 24:00';
+  castFullBtn.onclick = function() { pickTime(pickerKey, '20:00～24:00', 'キャスト'); };
+  g.appendChild(castFullBtn);
+
+  g.appendChild(makePickerStep('キャスト時間指定の場合'));
+  g.appendChild(makeTimeRow([20,0,23,30], [20,30,24,0], 'キャスト'));
+
+  // ── 黒服フル ──
+  var kuroFullBtn = document.createElement('button');
+  kuroFullBtn.className = 'time-opt';
+  kuroFullBtn.style.cssText = 'grid-column:span 2;background:#1a2a1a;border-color:#448844;color:#88cc88;font-weight:600;padding:13px 8px;border-radius:10px;font-size:14px;text-align:center;cursor:pointer';
+  kuroFullBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
+  kuroFullBtn.onclick = function() { pickTime(pickerKey, '18:00～26:00', '黒服社員'); };
+  g.appendChild(kuroFullBtn);
+
+  g.appendChild(makePickerStep('黒服時間指定の場合'));
+  g.appendChild(makeTimeRow([18,0,25,30], [18,30,26,0], '黒服バイト'));
 
   addClearBtn(g);
 }
@@ -703,9 +693,14 @@ function selectStart(t) {
   });
 }
 
-function pickTime(key, t) {
-  if (t) shiftSelections[key] = t;
-  else delete shiftSelections[key];
+function pickTime(key, t, role) {
+  if (t) {
+    shiftSelections[key] = t;
+    shiftRoles[key] = role || 'キャスト';
+  } else {
+    delete shiftSelections[key];
+    delete shiftRoles[key];
+  }
   closePicker();
   renderShiftCal();
 }
@@ -734,20 +729,20 @@ function doSubmit() {
     return am !== bm ? am - bm : ad - bd;
   });
   sortedKeys.forEach(function(k) {
-    shifts.push({ date: k, time: shiftSelections[k] });
+    shifts.push({ date: k, time: shiftSelections[k], role: shiftRoles[k] || 'キャスト' });
   });
 
   fetch(GAS_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'submitShift', userId: userId, role: roleLabel(), shifts: shifts })
+    body: JSON.stringify({ action: 'submitShift', userId: userId, shifts: shifts })
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
     if (d.ok) {
       btn.textContent = '✓ 提出しました';
       btn.style.background = '#1a4422';
-      shiftSelections = {};
+      shiftSelections = {}; shiftRoles = {};
       setTimeout(function() {
         btn.textContent = 'シフトを提出する';
         btn.style.background = '';
