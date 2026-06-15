@@ -932,15 +932,12 @@ function renderRanking(d) {
     } else {
       list.forEach(function(item, idx) {
         var isMe = item.name === myName;
-        var raw = item[valueKey] || 0;
-        var val = isCount ? (raw + '組') : ('¥' + raw.toLocaleString());
         c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828;'
           + (isMe ? 'background:#1a2a1a;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:6px;' : '') + '">';
         c += '<span style="font-size:18px;width:28px;flex-shrink:0">' + (idx < 3 ? medals[idx] : '') + '</span>';
         if (idx >= 3) c += '<span style="font-size:12px;color:#556;width:20px;flex-shrink:0">' + (idx + 1) + '</span>';
         c += '<span style="flex:1;font-size:13px;font-weight:' + (isMe ? '700' : '400') + ';color:' + (isMe ? '#66dd88' : '#bbb') + '">'
           + esc(item.name) + (isMe ? ' ◀ あなた' : '') + '</span>';
-        c += '<span style="font-size:13px;font-weight:600;color:#ccc">' + val + '</span>';
         c += '</div>';
       });
     }
