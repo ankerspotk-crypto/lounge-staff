@@ -951,8 +951,79 @@ function renderRanking(d) {
   h += rankCard('同伴ランキング', rd.dohan,  'dohanCnt',  true);
   h += rankCard('予約ランキング', rd.yoyaku, 'yoyakuCnt', true);
   h += '<div style="font-size:10px;color:#334;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
+
+  // 管理者：TRUST組数同期ボタン
+  if (isAdmin) {
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #1e1e3a">';
+    h += '<button id="sync-btn" onclick="syncTrustCounts()" style="width:100%;padding:10px;background:#1a2a1a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;cursor:pointer">🔄 TRUST 組数を今すぐ同期</button>';
+    h += '<div id="sync-msg" style="font-size:11px;color:#556;text-align:center;margin-top:6px"></div>';
+    h += '</div>';
+  }
+
   h += '</div>';
   setContent(h);
+}
+
+function syncTrustCounts() {
+  var btn = document.getElementById('sync-btn');
+  var msg = document.getElementById('sync-msg');
+  if (btn) btn.disabled = true;
+  if (msg) msg.textContent = '取得中...';
+
+  var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth() + 1;
+  var monthKey = year + '/' + ('0' + month).slice(-2);
+
+  fetch('https://admin.trust-operation.com/cast/index/' + year + '/' + month + '/0')
+    .then(function(r) {
+      if (!r.ok) throw new Error('TRUST アクセス失敗（ログイン切れ？）');
+      return r.text();
+    })
+    .then(function(html) {
+      var parser = new DOMParser();
+      var doc = parser.parseFromString(html, 'text/html');
+      var links = doc.querySelectorAll('a[href*="/cast/detail/"]');
+      var urlMap = {};
+      links.forEach(function(a) {
+        var name = a.textContent.trim();
+        var href = a.getAttribute('href');
+        if (name && href && !urlMap[name]) urlMap[name] = 'https://admin.trust-operation.com' + href;
+      });
+      if (Object.keys(urlMap).length === 0) throw new Error('キャストURLが取得できません');
+      if (msg) msg.textContent = Object.keys(urlMap).length + '名の詳細を取得中...';
+      return Promise.all(Object.keys(urlMap).map(function(name) {
+        return fetch(urlMap[name]).then(function(r) { return r.text(); }).then(function(h2) {
+          var d2 = parser.parseFromString(h2, 'text/html');
+          var rows = d2.querySelectorAll('tr');
+          var yoyakuCnt = 0, dohanCnt = 0;
+          rows.forEach(function(tr) {
+            var cells = tr.querySelectorAll('td');
+            if (cells.length >= 35 && cells[0].textContent.trim() === '合計') {
+              yoyakuCnt = parseInt(cells[30].textContent.trim()) || 0;
+              dohanCnt  = parseInt(cells[33].textContent.trim()) || 0;
+            }
+          });
+          return { name: name, yoyakuCnt: yoyakuCnt, dohanCnt: dohanCnt };
+        });
+      }));
+    })
+    .then(function(counts) {
+      return fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'syncTrustCounts', userId: userId, monthKey: monthKey, counts: counts })
+      }).then(function(r) { return r.json(); });
+    })
+    .then(function(res) {
+      if (!res.ok) throw new Error(res.error || 'GAS書き込みエラー');
+      if (msg) msg.textContent = '✅ ' + monthKey + ' の組数を同期しました';
+      if (btn) { btn.disabled = false; }
+      setTimeout(function() { loadRanking(); }, 1000);
+    })
+    .catch(function(e) {
+      if (msg) msg.textContent = '❌ ' + (e.message || e);
+      if (btn) btn.disabled = false;
+    });
 }
 
 function toggleRankingPublish(month, action) {
