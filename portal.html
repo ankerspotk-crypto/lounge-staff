@@ -963,11 +963,22 @@ function renderRanking(d) {
        + '</div>';
     h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#1a2a1a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 TRUSТSync ← ドラッグしてブックマーク登録</a>';
     h += '</div>';
+
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #1e1e3a">';
+    h += '<div style="font-size:11px;color:#ccaa66;font-weight:600;margin-bottom:8px">💴 現金チェック用 日払い・経費を取得</div>';
+    h += '<div style="font-size:11px;color:#889;line-height:1.7;margin-bottom:10px">'
+       + '① 下のリンクをブックマークバーにドラッグ<br>'
+       + '② 営業後、TRUSTを開いてそのブックマークをクリック<br>'
+       + '③ 当日の日払い合計・経費合計を自動取得して記録'
+       + '</div>';
+    h += '<a id="trust-cash-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 現金Sync ← ドラッグしてブックマーク登録</a>';
+    h += '</div>';
   }
 
   h += '</div>';
   setContent(h);
   setupBookmarklet_();
+  setupCashBookmarklet_();
 }
 
 function setupBookmarklet_() {
@@ -1028,6 +1039,56 @@ function setupBookmarklet_() {
     +   'if(res.ok)show("✅ "+mk+" の売上データを同期しました<br><small>"+res.updated+"名分 完了</small>");'
     +   'else show("❌ "+(res.error||"エラー"));'
     +   'setTimeout(function(){var e=document.getElementById("_lsm");if(e)e.remove();},8000);'
+    + '})'
+    + '.catch(function(e){show("❌ "+(e.message||e));});'
+    + '})();';
+  el.href = code;
+}
+
+function setupCashBookmarklet_() {
+  var el = document.getElementById('trust-cash-bookmarklet');
+  if (!el) return;
+  var secret = 'lounge-sync-2026';
+  var gas = GAS_URL;
+
+  // TRUST「日報登録」(/report/index/{年}/{月}/{日}) から当日の日払い合計・経費合計を抽出する
+  // 実測で確認済み:
+  //  table#timecard (cast用・staff用の2つ) 内の input[name="1"] = 各人の日払い額 → 全行を合計
+  //  table#logCostOut の各行: select[name="cost_id"] の選択中option文字 = 経費カテゴリ名, input[name="price"] = 金額
+  //  営業は深夜に及ぶため、当日午前6時より前にクリックした場合は前日を営業日とみなす
+  var code = 'javascript:(function(){'
+    + 'var G=' + JSON.stringify(gas) + ';'
+    + 'var S=' + JSON.stringify(secret) + ';'
+    + 'var now=new Date();var biz=new Date(now);if(now.getHours()<6)biz.setDate(biz.getDate()-1);'
+    + 'var yr=biz.getFullYear();var mo=biz.getMonth()+1;var dy=biz.getDate();'
+    + 'function pad(n){return ("0"+n).slice(-2);}'
+    + 'var dateKey=yr+"-"+pad(mo)+"-"+pad(dy);'
+    + 'var path="/report/index/"+yr+"/"+pad(mo)+"/"+pad(dy);'
+    + 'var show=function(t){var e=document.getElementById("_lcm");if(!e){e=document.createElement("div");e.id="_lcm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#2a2210",border:"1px solid #aa8822",borderRadius:"10px",padding:"12px 16px",color:"#ddbb55",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+    + 'function pv(s){var n=parseFloat(String(s).replace(/[￥,]/g,""));return isNaN(n)?0:n;}'
+    + 'show("① "+dateKey+" の日報を取得中...");'
+    + 'fetch(path).then(function(r){return r.text();})'
+    + '.then(function(html){'
+    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
+    +   'var dayPayTotal=0;'
+    +   'doc.querySelectorAll("table#timecard input[name=\\"1\\"]").forEach(function(inp){dayPayTotal+=pv(inp.value);});'
+    +   'var costOutTotal=0;var costOutDetail=[];'
+    +   'doc.querySelectorAll("table#logCostOut tr").forEach(function(tr){'
+    +     'var sel=tr.querySelector("select[name=\\"cost_id\\"]");'
+    +     'var priceInp=tr.querySelector("input[name=\\"price\\"]");'
+    +     'if(!sel||!priceInp)return;'
+    +     'var label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:"";'
+    +     'var amount=pv(priceInp.value);'
+    +     'costOutTotal+=amount;'
+    +     'costOutDetail.push({label:label,amount:amount});'
+    +   '});'
+    +   'show("② GASに送信中...<br><small>日払い合計 ¥"+dayPayTotal.toLocaleString()+" / 経費合計 ¥"+costOutTotal.toLocaleString()+"</small>");'
+    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustDailyCash",syncSecret:S,dateKey:dateKey,dayPayTotal:dayPayTotal,costOutTotal:costOutTotal,costOutDetail:costOutDetail})}).then(function(r){return r.json();});'
+    + '})'
+    + '.then(function(res){'
+    +   'if(res.ok)show("✅ "+dateKey+" の現金データを記録しました<br><small>日払い合計 ¥"+res.dayPayTotal.toLocaleString()+" / 経費合計 ¥"+res.costOutTotal.toLocaleString()+"</small>");'
+    +   'else show("❌ "+(res.error||"エラー"));'
+    +   'setTimeout(function(){var e=document.getElementById("_lcm");if(e)e.remove();},8000);'
     + '})'
     + '.catch(function(e){show("❌ "+(e.message||e));});'
     + '})();';
