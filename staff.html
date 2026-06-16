@@ -49,6 +49,14 @@
     .role-btn.active-cast  { border-color: #3366cc; background: #1a2a4a; color: #88aaff; font-weight: 600; }
     .role-btn.active-kuro  { border-color: #448844; background: #1a2a1a; color: #88cc88; font-weight: 600; }
 
+    .safe-row { margin-top: 8px; }
+    .safe-btn {
+      padding: 7px 12px; border-radius: 8px;
+      border: 1px solid #2a2a44; background: #1e1e30; color: #666;
+      font-size: 12px; cursor: pointer;
+    }
+    .safe-btn.active { border-color: #aa8822; background: #2a2210; color: #ddbb55; font-weight: 600; }
+
     .flash {
       font-size: 11px; color: #44bb66; margin-top: 6px; height: 16px;
       transition: opacity 0.3s; opacity: 0;
@@ -132,6 +140,10 @@ function cardHtml(s, id) {
       + r + '</button>';
   }).join('');
 
+  var safeBtn = '<button class="safe-btn' + (s.safeAdmin ? ' active' : '') + '" '
+    + 'onclick="setSafeAdmin(\'' + escAttr(s.name) + '\',' + (!s.safeAdmin) + ',this,\'card-' + id + '\')">'
+    + '🔒 金庫管理' + (s.safeAdmin ? ' ✓' : '') + '</button>';
+
   return '<div class="staff-card" id="card-' + id + '">'
     + '<div class="card-top">'
     + '<span class="staff-name">' + escHtml(s.name) + '</span>'
@@ -139,6 +151,7 @@ function cardHtml(s, id) {
     + (s.registered ? 'LINE ○' : 'LINE ×') + '</span>'
     + '</div>'
     + '<div class="role-btns">' + btns + '</div>'
+    + '<div class="safe-row">' + safeBtn + '</div>'
     + '<div class="flash" id="flash-' + id + '">保存しました ✓</div>'
     + '</div>';
 }
@@ -168,6 +181,33 @@ function setRole(name, role, btn, cardId) {
         if (flash) flash.classList.remove('show');
         card.classList.remove('saved');
       }, 1500);
+    } else {
+      alert('保存エラー: ' + (d.error || 'unknown'));
+    }
+  })
+  .catch(function(e) { alert('通信エラー: ' + (e && e.message || e)); });
+}
+
+function setSafeAdmin(name, enabled, btn, cardId) {
+  var card = document.getElementById(cardId);
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'setSafeAdminTag', userId: userId, targetName: name, enabled: enabled })
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(d) {
+    var flashId = 'flash-' + cardId.replace('card-', '');
+    var flash = document.getElementById(flashId);
+    if (d.ok) {
+      btn.classList.toggle('active', enabled);
+      btn.setAttribute('onclick', "setSafeAdmin('" + name.replace(/'/g, "\\'") + "'," + (!enabled) + ",this,'" + cardId + "')");
+      btn.textContent = '🔒 金庫管理' + (enabled ? ' ✓' : '');
+      if (flash) { flash.classList.add('show'); }
+      setTimeout(function() { if (flash) flash.classList.remove('show'); }, 1500);
     } else {
       alert('保存エラー: ' + (d.error || 'unknown'));
     }
