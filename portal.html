@@ -2017,6 +2017,13 @@ function renderCashThresholds(thresholds) {
     + cashsetFloorCard('f2', '2F')
     + '<button class="notif-save-btn" onclick="saveCashThresholds()">保存する</button>'
     + '<div id="cashset-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
+    + '<div class="cashset-card" style="margin-top:18px">'
+    +   '<div class="cashset-floor">本日の申請をリセット</div>'
+    +   '<div style="font-size:11px;color:#669;margin-bottom:10px;line-height:1.6">提出済みの申請を削除し、未提出の状態に戻します。リセットすると黒服グループLINEに自動通知されます。</div>'
+    +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetOpeningCheck\',\'本日の開店チェック\')">🌅 開店チェックをリセット</button>'
+    +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetCashCheck\',\'本日の閉店チェック\')">🌙 閉店チェックをリセット</button>'
+    +   '<button class="notif-del-btn" style="width:100%;margin-top:0" onclick="resetCashAction(\'resetSafeWithdrawalLog\',\'本日の金庫出金ログ\')">🔓 金庫出金ログをリセット</button>'
+    + '</div>'
     + '</div>';
   setContent(html);
 }
@@ -2051,6 +2058,20 @@ function saveCashThresholds() {
       if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
       alert('通信エラー');
     });
+}
+
+function resetCashAction(action, label) {
+  if (!confirm(label + 'を削除し、未提出の状態に戻します。よろしいですか？')) return;
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: action, userId: userId })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      alert(label + 'をリセットしました');
+    })
+    .catch(function() { alert('通信エラー'); });
 }
 </script>
 </body>
