@@ -219,6 +219,13 @@ header h1 { font-size: 17px; font-weight: 600; }
 .notif-add-input { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #ccd; border: 1px solid #2a2a40; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
 .notif-save-btn { display: block; width: 100%; margin-top: 12px; padding: 13px; background: #1a3a6a; color: #88aaff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
 .notif-save-btn:active { background: #2a4a8a; }
+.cashset-card { background: #1a1a2e; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.cashset-floor { font-size: 13px; font-weight: 700; color: #dde; margin-bottom: 8px; }
+.cashset-denom-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cashset-denom-label { width: 52px; flex-shrink: 0; font-size: 12px; color: #889; }
+.cashset-field { flex: 1; display: flex; align-items: center; gap: 4px; }
+.cashset-field span { font-size: 10px; color: #556; flex-shrink: 0; }
+.cashset-input { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #ccd; border: 1px solid #2a2a40; border-radius: 6px; padding: 6px 8px; font-size: 13px; text-align: center; }
 </style>
 </head>
 <body>
@@ -236,6 +243,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
+    <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">現金設定</div>
   </div>
 </header>
 
@@ -385,7 +393,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','ranking','hair','requests','notif'].forEach(function(t) {
+  ['sales','pay','shift','ranking','hair','requests','notif','cashset'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -408,6 +416,7 @@ function switchTab(tab) {
   switchTabActive(tab);
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
+  if (tab === 'cashset') { loadCashThresholds(); return; }
   if (tab === 'ranking') { loadRanking(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
@@ -435,6 +444,8 @@ function showAdminTab() {
   if (el) el.style.display = '';
   var el2 = document.getElementById('tab-notif');
   if (el2) el2.style.display = '';
+  var el3 = document.getElementById('tab-cashset');
+  if (el3) el3.style.display = '';
 }
 
 // ---- 売上明細 ----
@@ -1953,6 +1964,87 @@ function saveNotifSettings() {
       if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
       if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
       var msg = document.getElementById('notif-save-msg');
+      if (msg) { msg.style.display = 'block'; setTimeout(function(){ msg.style.display='none'; }, 2500); }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      alert('通信エラー');
+    });
+}
+
+// ---- 現金設定タブ（レジ・金庫の枚数しきい値） ----
+var cashThresholds = null;
+var CASHSET_DENOMS = [['m10000','1万円'], ['m5000','5千円'], ['m1000','千円']];
+
+function loadCashThresholds() {
+  setContent('<div class="loading">現金設定を読み込み中...</div>');
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getCashThresholds', userId: userId })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      cashThresholds = d.thresholds;
+      renderCashThresholds(cashThresholds);
+    })
+    .catch(function() { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function cashsetFloorCard(floor, label) {
+  var rows = CASHSET_DENOMS.map(function(pair) {
+    var key = pair[0], denomLabel = pair[1];
+    var t = cashThresholds.till[floor][key] || {};
+    var s = cashThresholds.safe[floor][key] || {};
+    return '<div class="cashset-denom-row">'
+      + '<div class="cashset-denom-label">' + denomLabel + '</div>'
+      + '<div class="cashset-field"><span>レジ最少</span><input type="number" inputmode="numeric" class="cashset-input" '
+      +   'value="' + (t.min != null ? t.min : '') + '" onchange="cashsetTillChange(\'' + floor + '\',\'' + key + '\',\'min\',this.value)"></div>'
+      + '<div class="cashset-field"><span>レジ最大</span><input type="number" inputmode="numeric" class="cashset-input" '
+      +   'value="' + (t.max != null ? t.max : '') + '" onchange="cashsetTillChange(\'' + floor + '\',\'' + key + '\',\'max\',this.value)"></div>'
+      + '<div class="cashset-field"><span>金庫最少</span><input type="number" inputmode="numeric" class="cashset-input" '
+      +   'value="' + (s.min != null ? s.min : '') + '" onchange="cashsetSafeChange(\'' + floor + '\',\'' + key + '\',this.value)"></div>'
+      + '</div>';
+  }).join('');
+  return '<div class="cashset-card"><div class="cashset-floor">' + label + '</div>' + rows + '</div>';
+}
+
+function renderCashThresholds(thresholds) {
+  var html = '<div style="padding:14px">'
+    + '<div style="font-size:13px;font-weight:700;color:#aac;margin-bottom:10px;letter-spacing:.05em">現金設定（レジ・金庫の枚数しきい値）</div>'
+    + '<div style="font-size:11px;color:#556;margin-bottom:12px;line-height:1.6">レジの枚数が最少を下回る/最大を超える場合や、金庫の枚数が最少を下回る場合に、閉店チェック時に補充・移動の指示が自動表示されます。</div>'
+    + cashsetFloorCard('f5', '5F')
+    + cashsetFloorCard('f2', '2F')
+    + '<button class="notif-save-btn" onclick="saveCashThresholds()">保存する</button>'
+    + '<div id="cashset-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
+    + '</div>';
+  setContent(html);
+}
+
+function cashsetTillChange(floor, key, field, val) {
+  if (!cashThresholds) return;
+  var n = val === '' ? null : Number(val);
+  cashThresholds.till[floor][key][field] = n;
+}
+
+function cashsetSafeChange(floor, key, val) {
+  if (!cashThresholds) return;
+  var n = val === '' ? null : Number(val);
+  cashThresholds.safe[floor][key].min = n;
+}
+
+function saveCashThresholds() {
+  var btn = document.querySelector('.notif-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'saveCashThresholds', userId: userId, thresholds: cashThresholds })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      var msg = document.getElementById('cashset-save-msg');
       if (msg) { msg.style.display = 'block'; setTimeout(function(){ msg.style.display='none'; }, 2500); }
     })
     .catch(function() {
