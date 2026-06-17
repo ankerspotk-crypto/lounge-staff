@@ -604,7 +604,7 @@ function handleStaff(event, text, userId) {
   }
 
   // 送迎キャンセル
-  if (/送りキャンセル|送り不要|送り対応不可|送りなし/.test(text)) {
+  if (/送りキャンセル|送り不要|送り対応不可/.test(text)) {
     if (nowMins() >= 24 * 60 + 30) {
       reply(event.replyToken, '⚠️ 0:30以降は送り変更を受付できません');
       return;
