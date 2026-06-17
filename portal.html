@@ -2166,6 +2166,9 @@ var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の
 var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
 var yoyakuCustMode = '';    // '' = 未選択 / 'search' = 既存検索 / 'new' = 新規
 var staffName = '';         // GASから取得したスタッフ名（予約担当者表示用）
+var yoyakuRsvDate = '';     // 予約追加カレンダー選択日 YYYY-MM-DD
+var yoyakuRsvCalMonth = ''; // 予約追加カレンダー表示月 YYYY-MM
+var yoyakuRsvTime = '';     // 予約追加時間選択 HH:MM
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2193,6 +2196,9 @@ function loadYoyaku() {
       staffName = d.name || '';
       yoyakuRsvs = d.reservations || [];
       yoyakuCustMode = '';
+      yoyakuRsvDate = '';
+      yoyakuRsvCalMonth = '';
+      yoyakuRsvTime = '';
       renderYoyaku();
     })
     .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
@@ -2389,6 +2395,9 @@ function renderYoyakuAdd() {
   var preset = yoyakuGridPreset || {};
   var presetTable = preset.table || '未定';
   var presetTime  = preset.time  || '20:00';
+  if (!yoyakuRsvDate) yoyakuRsvDate = yoyakuDateStr(yoyakuDate);
+  if (!yoyakuRsvCalMonth) yoyakuRsvCalMonth = yoyakuRsvDate.slice(0, 7);
+  if (!yoyakuRsvTime) yoyakuRsvTime = presetTime;
   var tableOpts = '<option value="未定">未定</option>' + YOYAKU_TABLES.map(function(t){
     var val = t.f+' '+t.n;
     return '<option value="'+val+'"'+(val===presetTable?' selected':'')+'>'+val+'</option>';
@@ -2435,9 +2444,11 @@ function renderYoyakuAdd() {
         + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" style="margin-bottom:8px">'
       : '')
     + '<div class="yform-label">来店日</div>'
-    + '<input type="date" class="yform-input" id="yrsv-date" value="'+yoyakuDateStr(yoyakuDate)+'" style="margin-bottom:8px">'
-    + '<div class="yform-label">時間 / 人数</div>'
-    + '<div class="yform-row" style="margin-bottom:8px"><input type="time" class="yform-input" id="yrsv-time" value="'+presetTime+'" style="flex:1"><select class="yform-input" id="yrsv-pax" style="flex:0.5;margin-left:8px"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
+    + renderRsvCal()
+    + '<div class="yform-label">時間</div>'
+    + renderRsvTimeSel()
+    + '<div class="yform-label">人数</div>'
+    + '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select>'
     + '<div class="yform-label">席</div>'
     + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
     + '<div class="yform-label">要望・備考</div>'
@@ -2449,6 +2460,68 @@ function renderYoyakuAdd() {
 
 
 function afterYoyakuRender() {}
+
+function yoyakuRsvCalNav(diff) {
+  var p = yoyakuRsvCalMonth.split('-');
+  var d = new Date(parseInt(p[0]), parseInt(p[1]) - 1 + diff, 1);
+  yoyakuRsvCalMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  renderYoyaku();
+}
+function yoyakuRsvSelectDate(ds) {
+  yoyakuRsvDate = ds;
+  renderYoyaku();
+}
+function yoyakuRsvSelectTime(t) {
+  yoyakuRsvTime = t;
+  renderYoyaku();
+}
+
+function renderRsvCal() {
+  var p = yoyakuRsvCalMonth.split('-');
+  var year = parseInt(p[0]), month = parseInt(p[1]);
+  var firstDow = new Date(year, month - 1, 1).getDay();
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var today = yoyakuDateStr(new Date());
+  var h = '<div style="background:#13132a;border:1px solid #2a2a40;border-radius:8px;overflow:hidden;margin-bottom:10px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #2a2a40">'
+    + '<div onclick="yoyakuRsvCalNav(-1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#88aaff;line-height:1">‹</div>'
+    + '<div style="font-size:13px;font-weight:600;color:#ccc">' + year + '年' + month + '月</div>'
+    + '<div onclick="yoyakuRsvCalNav(1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#88aaff;line-height:1">›</div>'
+    + '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);padding:6px 6px 2px">';
+  ['日','月','火','水','木','金','土'].forEach(function(d, i) {
+    h += '<div style="text-align:center;font-size:10px;font-weight:600;color:' + (i===0?'#ff7766':i===6?'#7799ff':'#445') + '">' + d + '</div>';
+  });
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);padding:2px 6px 8px;gap:2px">';
+  for (var i = 0; i < firstDow; i++) h += '<div></div>';
+  for (var d = 1; d <= daysInMonth; d++) {
+    var ds = year + '-' + String(month).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var dow = new Date(year, month - 1, d).getDay();
+    var isSel = ds === yoyakuRsvDate, isToday = ds === today;
+    h += '<div onclick="yoyakuRsvSelectDate(\'' + ds + '\')" style="text-align:center;padding:5px 2px;border-radius:5px;cursor:pointer;font-size:12px;'
+      + (isSel ? 'background:#2255bb;color:#fff;font-weight:700'
+               : isToday ? 'background:#1a2a4a;color:#88aaff;font-weight:700'
+               : dow===0 ? 'color:#ff8877' : dow===6 ? 'color:#8899ff' : 'color:#aaa')
+      + '">' + d + '</div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function renderRsvTimeSel() {
+  var times = ['19:00','19:30','20:00','20:30','21:00','21:30','22:00','22:30','23:00','23:30','00:00','00:30','01:00','01:30','02:00'];
+  var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+  times.forEach(function(t) {
+    var sel = t === yoyakuRsvTime;
+    h += '<div onclick="yoyakuRsvSelectTime(\'' + t + '\')" style="padding:7px 11px;border-radius:6px;font-size:13px;cursor:pointer;min-width:60px;text-align:center;'
+      + (sel ? 'background:#2255bb;color:#fff;border:1px solid #4488cc;font-weight:700'
+             : 'background:#1a1a2e;color:#667;border:1px solid #2a2a40')
+      + '">' + t + '</div>';
+  });
+  h += '</div>';
+  return h;
+}
 
 function yoyakuGridClick(tableIdx, e, SH, HW) {
   var row = e.currentTarget;
@@ -2462,6 +2535,7 @@ function yoyakuGridClick(tableIdx, e, SH, HW) {
   var t = YOYAKU_TABLES[tableIdx];
   if (!t) return;
   yoyakuGridPreset = { table: t.f + ' ' + t.n, time: timeStr };
+  yoyakuRsvTime = timeStr;
   yoyakuSelectedCust = null;
   yoyakuSubTab = 'add';
   renderYoyaku();
@@ -2517,8 +2591,8 @@ function yoyakuSubmitRsv() {
   var paxEl = document.getElementById('yrsv-pax');
   var payload = {
     action: 'addReservation', userId: userId,
-    date: document.getElementById('yrsv-date').value,
-    time: document.getElementById('yrsv-time').value,
+    date: yoyakuRsvDate,
+    time: yoyakuRsvTime,
     customer: custName,
     memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : '',
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
@@ -2533,6 +2607,9 @@ function yoyakuSubmitRsv() {
       if (!d.ok) { if (stat) stat.textContent = '⚠️ ' + (d.error||'エラー'); return; }
       yoyakuSelectedCust = null;
       yoyakuCustMode = '';
+      yoyakuRsvDate = '';
+      yoyakuRsvCalMonth = '';
+      yoyakuRsvTime = '';
       yoyakuSubTab = 'list';
       loadYoyaku();
     }).catch(function(){ if (stat) stat.textContent = '⚠️ 通信エラー'; });
