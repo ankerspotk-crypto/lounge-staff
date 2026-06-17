@@ -4208,10 +4208,9 @@ function submitOpeningCheck(payload) {
     sh.appendRow([dateKey, reporterName, tillStr, tillTotal, new Date(), keihiStr, keihiTotal]);
 
     const lines = ['【開店チェック】' + dateKey, '報告者　' + reporterName];
-    if (tillStr) lines.push('レジ現金　' + tillStr);
+    if (tillStr) tillStr.split(' / ').forEach(s => lines.push(s));
     lines.push('レジ合計　¥' + tillTotal.toLocaleString());
-    if (keihiStr) lines.push('経費　' + keihiStr);
-    if (keihiTotal > 0) lines.push('経費合計　¥' + keihiTotal.toLocaleString());
+    if (keihiStr || keihiTotal > 0) lines.push('経費　' + (keihiStr || '') + '　¥' + keihiTotal.toLocaleString());
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
     return { ok: true, dateKey, tillTotal, keihiTotal };
