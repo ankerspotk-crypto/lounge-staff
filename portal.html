@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -7,30 +7,30 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0d0d14; color: #fff; min-height: 100vh; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0a0e1a; color: #e8f0ff; min-height: 100vh; }
 
 header {
-  background: #16162a; padding: 14px 16px 0;
-  border-bottom: 1px solid #2a2a40; position: sticky; top: 0; z-index: 10;
+  background: #111b2e; padding: 14px 16px 0;
+  border-bottom: 1px solid #1e3050; position: sticky; top: 0; z-index: 10;
 }
 .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 header h1 { font-size: 17px; font-weight: 600; }
-.user-name { font-size: 13px; color: #aaa; }
+.user-name { font-size: 13px; color: #a0c0e0; }
 
 .tabs { display: flex; gap: 4px; }
 .tab {
   flex: 1; padding: 10px 4px; text-align: center; font-size: 13px; font-weight: 500;
-  border-bottom: 2px solid transparent; cursor: pointer; color: #666;
+  border-bottom: 2px solid transparent; cursor: pointer; color: #6a8ab0;
 }
-.tab.active { color: #88aaff; border-bottom-color: #88aaff; }
+.tab.active { color: #7ab0f0; border-bottom-color: #7ab0f0; }
 .tab.coming-soon { color: #44455a; cursor: default; position: relative; }
 .tab.coming-soon::after { content: '近日公開'; font-size: 9px; display: block; color: #554; margin-top: 1px; }
 
 .content { padding: 16px; }
 
-.loading { text-align: center; color: #666; padding: 60px 0; font-size: 14px; }
+.loading { text-align: center; color: #6a8ab0; padding: 60px 0; font-size: 14px; }
 .err { text-align: center; color: #cc5555; padding: 40px 16px; font-size: 14px; line-height: 1.7; }
-.err small { color: #777; font-size: 11px; }
+.err small { color: #7a9cc8; font-size: 11px; }
 
 /* month selector */
 .month-bar {
@@ -40,41 +40,41 @@ header h1 { font-size: 17px; font-weight: 600; }
 .month-bar::-webkit-scrollbar { display: none; }
 .month-chip {
   flex-shrink: 0; padding: 5px 14px; border-radius: 20px; font-size: 13px;
-  background: #1e1e30; border: 1px solid #2a2a40; color: #999; cursor: pointer;
+  background: #141d30; border: 1px solid #1e3050; color: #8aabcc; cursor: pointer;
 }
-.month-chip.active { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
+.month-chip.active { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
 
 /* card */
 .card {
-  background: #16162a; border: 1px solid #2a2a40; border-radius: 12px;
+  background: #111b2e; border: 1px solid #1e3050; border-radius: 12px;
   padding: 16px; margin-bottom: 12px;
 }
-.card-title { font-size: 12px; color: #666; margin-bottom: 10px; letter-spacing: .5px; }
-.row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #1e1e2a; }
+.card-title { font-size: 12px; color: #6a8ab0; margin-bottom: 10px; letter-spacing: .5px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #162848; }
 .row:last-child { border-bottom: none; }
-.row-label { font-size: 13px; color: #999; }
+.row-label { font-size: 13px; color: #8aabcc; }
 .row-val { font-size: 14px; font-weight: 500; }
 .row-val.accent { color: #88ffcc; }
 .row-val.sub { color: #cc8844; }
 .row-val.minus { color: #cc5555; }
 
 .total-card {
-  background: #101828; border: 1px solid #2244aa; border-radius: 12px;
+  background: #0a1020; border: 1px solid #1a4499; border-radius: 12px;
   padding: 18px; text-align: center; margin-bottom: 16px;
 }
-.total-label { font-size: 12px; color: #5588cc; margin-bottom: 6px; }
-.total-val { font-size: 28px; font-weight: 700; color: #88aaff; }
+.total-label { font-size: 12px; color: #3a80cc; margin-bottom: 6px; }
+.total-val { font-size: 28px; font-weight: 700; color: #7ab0f0; }
 
 /* シフトカレンダー */
 .shift-month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .shift-month-label { font-size: 16px; font-weight: 600; }
 .nav-btn {
-  background: #2a2a40; border: none; color: #ccc;
+  background: #1e3050; border: none; color: #c0d4f0;
   width: 36px; height: 36px; border-radius: 50%; font-size: 18px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 4px; }
-.weekday { font-size: 11px; color: #555; padding: 4px 0; }
+.weekday { font-size: 11px; color: #6a8ab0; padding: 4px 0; }
 .weekday.sun { color: #884444; }
 .weekday.sat { color: #445588; }
 .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
@@ -84,13 +84,13 @@ header h1 { font-size: 17px; font-weight: 600; }
   border: 1px solid transparent; padding: 2px;
 }
 .day .num { font-size: 14px; font-weight: 500; line-height: 1; }
-.day .shift-dot { width: 6px; height: 6px; border-radius: 50%; background: #88aaff; margin-top: 4px; }
+.day .shift-dot { width: 6px; height: 6px; border-radius: 50%; background: #7ab0f0; margin-top: 4px; }
 .day.empty { pointer-events: none; }
 .day.past { opacity: 0.3; pointer-events: none; }
 .day.sun .num { color: #cc6666; }
-.day.sat .num { color: #6688cc; }
+.day.sat .num { color: #4a80cc; }
 .day.today .num { color: #ffdd44; font-weight: 700; }
-.day.selected { background: #152a40; border-color: #3377bb; }
+.day.selected { background: #0f2040; border-color: #2a60bb; }
 .day.selected .num { color: #88ccff; }
 .day.selected .shift-dot { background: #88ffcc; }
 .day.kyukin { background: #2a1515; border-color: #bb4444; }
@@ -108,74 +108,74 @@ header h1 { font-size: 17px; font-weight: 600; }
 /* picker overlay */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
 .overlay.show { display: flex; align-items: flex-end; }
-.picker { background: #16162a; border-radius: 18px 18px 0 0; width: 100%; padding: 18px 16px 36px; border-top: 1px solid #2a2a40; }
+.picker { background: #111b2e; border-radius: 18px 18px 0 0; width: 100%; padding: 18px 16px 36px; border-top: 1px solid #1e3050; }
 .picker-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #aaccff; }
 .time-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .time-opt {
-  background: #1e1e30; border: 1px solid #2a2a44; color: #ccc;
+  background: #141d30; border: 1px solid #1e3050; color: #c0d4f0;
   padding: 13px 8px; border-radius: 10px; font-size: 14px; text-align: center;
   cursor: pointer;
 }
-.time-opt:active, .time-opt.chosen { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
+.time-opt:active, .time-opt.chosen { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
 .time-opt.off { color: #cc6666; border-color: #3a2020; background: #1a1010; }
 .time-opt.full { grid-column: span 2; background: #1a3020; border-color: #336644; color: #88ffaa; font-weight: 600; }
 .time-opt.full:active { background: #1e3a26; }
-.picker-step { font-size: 11px; color: #666; margin-bottom: 10px; }
+.picker-step { font-size: 11px; color: #6a8ab0; margin-bottom: 10px; }
 .picker-back {
-  width: 100%; background: none; border: 1px solid #2a2a3a;
-  color: #6688aa; padding: 10px; border-radius: 10px; font-size: 13px; cursor: pointer;
+  width: 100%; background: none; border: 1px solid #1e3050;
+  color: #5080aa; padding: 10px; border-radius: 10px; font-size: 13px; cursor: pointer;
   margin-bottom: 10px;
 }
 .picker-cancel {
-  margin-top: 10px; width: 100%; background: none; border: 1px solid #2a2a3a;
-  color: #666; padding: 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
+  margin-top: 10px; width: 100%; background: none; border: 1px solid #1e3050;
+  color: #6a8ab0; padding: 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
 }
 
 .submit-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
-  background: #16162a; border-top: 1px solid #2a2a40; padding: 12px 16px;
+  background: #111b2e; border-top: 1px solid #1e3050; padding: 12px 16px;
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 .submit-btn {
-  width: 100%; background: #2244aa; border: none; color: #fff;
+  width: 100%; background: #1a4499; border: none; color: #e8f0ff;
   padding: 16px; border-radius: 12px; font-size: 16px; font-weight: 600;
   cursor: pointer;
 }
 .submit-btn:active { background: #1a337f; }
-.submit-btn:disabled { background: #2a2a3a; color: #555; }
+.submit-btn:disabled { background: #1e3050; color: #6a8ab0; }
 .shift-spacer { height: 80px; }
 
 /* ロール選択 */
 .role-toggle { display: flex; gap: 6px; padding: 12px 0 4px; }
 .role-btn {
-  flex: 1; padding: 9px 4px; border-radius: 10px; border: 1px solid #2a2a40;
-  background: #1e1e30; color: #777; font-size: 13px; font-weight: 500; cursor: pointer;
+  flex: 1; padding: 9px 4px; border-radius: 10px; border: 1px solid #1e3050;
+  background: #141d30; color: #7a9cc8; font-size: 13px; font-weight: 500; cursor: pointer;
 }
-.role-btn.active { background: #1a2a4a; border-color: #4466bb; color: #88aaff; }
+.role-btn.active { background: #0f2040; border-color: #3a60bb; color: #7ab0f0; }
 
 /* 管理者キャスト選択 */
 .admin-bar {
-  background: #1a1a2e; border-bottom: 1px solid #2a2a40;
+  background: #141d30; border-bottom: 1px solid #1e3050;
   padding: 10px 16px; display: flex; align-items: center; gap: 10px;
 }
-.admin-label { font-size: 12px; color: #888; white-space: nowrap; }
+.admin-label { font-size: 12px; color: #8aabcc; white-space: nowrap; }
 .cast-select {
-  flex: 1; background: #2a2a40; border: 1px solid #3a3a55; color: #ccc;
+  flex: 1; background: #1e3050; border: 1px solid #3a3a55; color: #c0d4f0;
   padding: 8px 12px; border-radius: 8px; font-size: 14px;
   -webkit-appearance: none; appearance: none;
 }
-.cast-select:focus { outline: none; border-color: #5566aa; }
+.cast-select:focus { outline: none; border-color: #3a6aaa; }
 .admin-badge { font-size: 10px; background: #553300; color: #ffaa44; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
-.shift-count { text-align: center; font-size: 13px; color: #666; margin-top: 10px; }
+.shift-count { text-align: center; font-size: 13px; color: #6a8ab0; margin-top: 10px; }
 
 /* 申請管理 */
-.req-card { background: #16162a; border: 1px solid #2a2a40; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+.req-card { background: #111b2e; border: 1px solid #1e3050; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
 .req-card.approved { border-color: #336633; }
 .req-card.rejected { border-color: #663333; opacity: .6; }
 .req-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
 .req-name { font-size: 15px; font-weight: 600; }
-.req-time { font-size: 12px; color: #666; }
-.req-detail { font-size: 14px; color: #aac; margin-bottom: 10px; }
+.req-time { font-size: 12px; color: #6a8ab0; }
+.req-detail { font-size: 14px; color: #a0c0e0; margin-bottom: 10px; }
 .req-actions { display: flex; gap: 8px; }
 .req-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
 .req-btn.approve { background: #1a3a22; color: #88ffaa; border: 1px solid #336633; }
@@ -185,137 +185,138 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-status { text-align: center; font-size: 13px; padding: 6px 0; }
 .req-status.ok  { color: #88ffaa; }
 .req-status.off { color: #ff8866; }
-.req-empty { text-align: center; color: #555; padding: 40px 0; font-size: 14px; }
+.req-empty { text-align: center; color: #6a8ab0; padding: 40px 0; font-size: 14px; }
 .req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
-.req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #2a2a40; background: #1e1e30; color: #888; font-size: 13px; cursor: pointer; }
-.req-filter-btn.active { background: #1a2a4a; border-color: #3366cc; color: #88aaff; }
+.req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #1e3050; background: #141d30; color: #8aabcc; font-size: 13px; cursor: pointer; }
+.req-filter-btn.active { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
 .notif-list { display: flex; flex-direction: column; gap: 8px; }
-.notif-card { background: #1a1a2e; border-radius: 10px; overflow: hidden; transition: opacity .2s; }
+.notif-card { background: #141d30; border-radius: 10px; overflow: hidden; transition: opacity .2s; }
 .notif-card-header { display: flex; align-items: center; gap: 10px; padding: 11px 12px; cursor: pointer; user-select: none; }
 .notif-mid { flex: 1; min-width: 0; }
-.notif-label { font-size: 13px; font-weight: 600; color: #dde; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.notif-group-tag { font-size: 11px; color: #556; margin-top: 1px; }
-.notif-time { background: #0f0f1e; color: #aac; border: 1px solid #2a2a40; border-radius: 6px; padding: 5px 6px; font-size: 13px; width: 82px; flex-shrink: 0; }
-.notif-chevron { color: #334; font-size: 18px; transition: transform .2s; flex-shrink: 0; line-height: 1; }
+.notif-label { font-size: 13px; font-weight: 600; color: #d0e4f8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-group-tag { font-size: 11px; color: #7a9cc8; margin-top: 1px; }
+.notif-time { background: #0d1828; color: #a0c0e0; border: 1px solid #1e3050; border-radius: 6px; padding: 5px 6px; font-size: 13px; width: 82px; flex-shrink: 0; }
+.notif-chevron { color: #6a8ab0; font-size: 18px; transition: transform .2s; flex-shrink: 0; line-height: 1; }
 .notif-toggle { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
 .notif-toggle input { opacity: 0; width: 0; height: 0; }
-.notif-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #2a2a40; border-radius: 24px; transition: .3s; }
-.notif-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #667; border-radius: 50%; transition: .3s; }
+.notif-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #1e3050; border-radius: 24px; transition: .3s; }
+.notif-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #8aabcc; border-radius: 50%; transition: .3s; }
 .notif-toggle input:checked + .notif-slider { background: #1a4a8a; }
-.notif-toggle input:checked + .notif-slider:before { transform: translateX(18px); background: #88aaff; }
-.notif-expand { padding: 0 12px 12px; border-top: 1px solid #1e1e3a; }
-.notif-expand-label { font-size: 10px; color: #445; margin: 10px 0 4px; letter-spacing: .05em; text-transform: uppercase; }
+.notif-toggle input:checked + .notif-slider:before { transform: translateX(18px); background: #7ab0f0; }
+.notif-expand { padding: 0 12px 12px; border-top: 1px solid #162848; }
+.notif-expand-label { font-size: 10px; color: #7a9cc8; margin: 10px 0 4px; letter-spacing: .05em; text-transform: uppercase; }
 .notif-days-row { display: flex; gap: 5px; }
 .notif-day-box { position: relative; }
 .notif-day-box input { position: absolute; opacity: 0; width: 0; height: 0; }
-.notif-day-box span { display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; background: #111128; color: #445; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #222238; transition: .15s; }
-.notif-day-box input:checked + span { background: #1a3a6a; color: #88aaff; border-color: #3366cc; }
-.notif-msg-area { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #bbc; border: 1px solid #2a2a40; border-radius: 6px; padding: 8px; font-size: 11px; resize: vertical; font-family: monospace; line-height: 1.5; min-height: 60px; }
-.notif-msg-auto { font-size: 11px; color: #334; padding: 4px 0; font-style: italic; }
-.notif-group-sel { background: #0c0c1e; color: #aac; border: 1px solid #2a2a40; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 100%; }
+.notif-day-box span { display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; background: #0d1520; color: #7a9cc8; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #222238; transition: .15s; }
+.notif-day-box input:checked + span { background: #0f3060; color: #7ab0f0; border-color: #2a5aaa; }
+.notif-msg-area { width: 100%; box-sizing: border-box; background: #0d1828; color: #b0c8e8; border: 1px solid #1e3050; border-radius: 6px; padding: 8px; font-size: 11px; resize: vertical; font-family: monospace; line-height: 1.5; min-height: 60px; }
+.notif-msg-auto { font-size: 11px; color: #6a8ab0; padding: 4px 0; font-style: italic; }
+.notif-group-sel { background: #0d1828; color: #a0c0e0; border: 1px solid #1e3050; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 100%; }
 .notif-del-btn { margin-top: 12px; padding: 7px 14px; background: #1e0f0f; color: #d66; border: 1px solid #3a1a1a; border-radius: 6px; font-size: 12px; cursor: pointer; }
-.notif-add-btn { display: block; width: 100%; margin-top: 10px; margin-bottom: 6px; padding: 11px; background: transparent; color: #556; border: 1px dashed #2a2a40; border-radius: 10px; font-size: 13px; cursor: pointer; }
-.notif-add-form { background: #111128; border: 1px solid #2a2a40; border-radius: 10px; padding: 14px; margin-top: 8px; margin-bottom: 8px; }
-.notif-add-input { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #ccd; border: 1px solid #2a2a40; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
-.notif-save-btn { display: block; width: 100%; margin-top: 12px; padding: 13px; background: #1a3a6a; color: #88aaff; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
+.notif-add-btn { display: block; width: 100%; margin-top: 10px; margin-bottom: 6px; padding: 11px; background: transparent; color: #7a9cc8; border: 1px dashed #1e3050; border-radius: 10px; font-size: 13px; cursor: pointer; }
+.notif-add-form { background: #0d1520; border: 1px solid #1e3050; border-radius: 10px; padding: 14px; margin-top: 8px; margin-bottom: 8px; }
+.notif-add-input { width: 100%; box-sizing: border-box; background: #0d1828; color: #c0d4f0; border: 1px solid #1e3050; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+.notif-save-btn { display: block; width: 100%; margin-top: 12px; padding: 13px; background: #0f3060; color: #7ab0f0; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
 .notif-save-btn:active { background: #2a4a8a; }
-.cashset-card { background: #1a1a2e; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
-.cashset-floor { font-size: 13px; font-weight: 700; color: #dde; margin-bottom: 8px; }
+.cashset-card { background: #141d30; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.cashset-floor { font-size: 13px; font-weight: 700; color: #d0e4f8; margin-bottom: 8px; }
 .cashset-denom-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.cashset-denom-label { width: 52px; flex-shrink: 0; font-size: 12px; color: #889; }
+.cashset-denom-label { width: 52px; flex-shrink: 0; font-size: 12px; color: #8aabcc; }
 .cashset-field { flex: 1; display: flex; align-items: center; gap: 4px; }
-.cashset-field span { font-size: 10px; color: #556; flex-shrink: 0; }
-.cashset-input { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #ccd; border: 1px solid #2a2a40; border-radius: 6px; padding: 6px 8px; font-size: 13px; text-align: center; }
+.cashset-field span { font-size: 10px; color: #7a9cc8; flex-shrink: 0; }
+.cashset-input { width: 100%; box-sizing: border-box; background: #0d1828; color: #c0d4f0; border: 1px solid #1e3050; border-radius: 6px; padding: 6px 8px; font-size: 13px; text-align: center; }
 
 /* ---- 予約管理 ---- */
 .yoyaku-date-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.yoyaku-date-nav button { background: #1a1a2e; border: 1px solid #2a2a40; color: #88aaff; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 14px; }
-.yoyaku-date-text { font-size: 15px; font-weight: 700; color: #fff; flex: 1; text-align: center; }
-.yoyaku-today-btn { font-size: 10px; background: #1a2a4a; color: #88aaff; border: 1px solid #2255aa; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.yoyaku-date-nav button { background: #141d30; border: 1px solid #1e3050; color: #7ab0f0; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 14px; }
+.yoyaku-date-text { font-size: 15px; font-weight: 700; color: #e8f0ff; flex: 1; text-align: center; }
+.yoyaku-today-btn { font-size: 10px; background: #0f2040; color: #7ab0f0; border: 1px solid #1a50a0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
 .yoyaku-stats { display: flex; gap: 8px; margin-bottom: 12px; }
-.yoyaku-stat { flex: 1; background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 8px; padding: 9px; text-align: center; }
+.yoyaku-stat { flex: 1; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; padding: 9px; text-align: center; }
 .yoyaku-stat .num { font-size: 22px; font-weight: 700; }
-.yoyaku-stat .lbl { font-size: 9px; color: #556; margin-top: 2px; }
-.yoyaku-card { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
+.yoyaku-stat .lbl { font-size: 9px; color: #7a9cc8; margin-top: 2px; }
+.yoyaku-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
 .yoyaku-card .yc-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #88aaff; width: 46px; flex-shrink: 0; }
-.yoyaku-card .yc-name { font-size: 14px; font-weight: 600; color: #fff; }
+.yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #7ab0f0; width: 46px; flex-shrink: 0; }
+.yoyaku-card .yc-name { font-size: 14px; font-weight: 600; color: #e8f0ff; }
 .yoyaku-card .yc-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 54px; margin-bottom: 3px; }
-.yoyaku-card .yc-note { font-size: 11px; color: #445; padding-left: 54px; }
+.yoyaku-card .yc-note { font-size: 11px; color: #7a9cc8; padding-left: 54px; }
 .yb { font-size: 10px; padding: 2px 8px; border-radius: 7px; font-weight: 600; }
-.yb-seat { background: #0d1a2e; color: #88aaff; border: 1px solid #1e3a6a; }
-.yb-pax  { background: #1a1a2e; color: #aaa; border: 1px solid #2a2a40; }
+.yb-seat { background: #0a1428; color: #7ab0f0; border: 1px solid #1e3a6a; }
+.yb-pax  { background: #141d30; color: #a0c0e0; border: 1px solid #1e3050; }
 .yb-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
 .yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
 .yb-pend { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
 /* 顧客検索 */
-.ycust-search { width: 100%; background: #111128; border: 1px solid #2a2a40; border-radius: 9px; padding: 10px 12px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px; }
-.ycust-row { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px; background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: .15s; }
-.ycust-row:hover { border-color: #3a3a6a; }
-.ycust-row.selected { border-color: #88aaff; background: #0d1a2e; }
-.ycust-name { font-size: 13px; font-weight: 600; color: #fff; }
-.ycust-sub { font-size: 10px; color: #445; margin-top: 2px; }
+.ycust-search { width: 100%; background: #0d1520; border: 1px solid #1e3050; border-radius: 9px; padding: 10px 12px; color: #e8f0ff; font-size: 13px; outline: none; margin-bottom: 10px; }
+.ycust-row { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: .15s; }
+.ycust-row:hover { border-color: #1e3050; }
+.ycust-row.selected { border-color: #7ab0f0; background: #0a1428; }
+.ycust-name { font-size: 13px; font-weight: 600; color: #e8f0ff; }
+.ycust-sub { font-size: 10px; color: #7a9cc8; margin-top: 2px; }
 .ycust-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .ycm { font-size: 9px; padding: 1px 6px; border-radius: 5px; }
 .ycm-bottle { background: #1a2a10; color: #88cc55; border: 1px solid #336622; }
 .ycm-bday   { background: #1a1040; color: #9988ee; border: 1px solid #4433aa; }
-.ycm-note   { background: #141428; color: #667; border: 1px solid #2a2a44; }
+.ycm-note   { background: #141428; color: #8aabcc; border: 1px solid #1e3050; }
 /* 予約フォーム */
-.yform-sec { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 10px; padding: 13px; margin-top: 10px; }
-.yform-sec .selected-name { font-size: 14px; font-weight: 600; color: #88aaff; margin-bottom: 12px; }
-.yform-label { font-size: 10px; color: #445; margin: 8px 0 4px; letter-spacing: .5px; text-transform: uppercase; }
-.yform-input { width: 100%; box-sizing: border-box; background: #0c0c1e; border: 1px solid #2a2a40; border-radius: 8px; padding: 9px 11px; color: #fff; font-size: 13px; outline: none; }
+.yform-sec { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 13px; margin-top: 10px; }
+.yform-sec .selected-name { font-size: 14px; font-weight: 600; color: #7ab0f0; margin-bottom: 12px; }
+.yform-label { font-size: 11px; color: #7ab0f0; margin: 10px 0 5px; letter-spacing: .4px; font-weight: 600; }
+.yform-input { width: 100%; box-sizing: border-box; background: #1c2a42; border: 1px solid #2a4068; border-radius: 8px; padding: 10px 12px; color: #e8f0ff; -webkit-text-fill-color: #e8f0ff; font-size: 14px; outline: none; -webkit-appearance: none; appearance: none; }
+.yform-input::placeholder { color: #4a6888; -webkit-text-fill-color: #4a6888; }
 .yform-row { display: flex; gap: 8px; }
 .yform-row .yform-input { margin: 0; }
 .yform-toggles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
-.ytbtn { padding: 7px 10px; border-radius: 7px; border: 1px solid #2a2a40; background: #0c0c1e; color: #556; font-size: 12px; cursor: pointer; }
-.ytbtn.on { border-color: #88aaff; background: #0d1a2e; color: #88aaff; }
+.ytbtn { padding: 7px 10px; border-radius: 7px; border: 1px solid #1e3050; background: #0d1828; color: #7a9cc8; font-size: 12px; cursor: pointer; }
+.ytbtn.on { border-color: #7ab0f0; background: #0a1428; color: #7ab0f0; }
 .yreq-card.cast { border-color: #2a1a3a; }
 .yreq-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-.yreq-from { font-size: 12px; font-weight: 600; color: #fff; }
+.yreq-from { font-size: 12px; font-weight: 600; color: #e8f0ff; }
 .yreq-tag { font-size: 9px; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
 .yrt-cust { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
 .yrt-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
-.yreq-body { font-size: 12px; color: #889; line-height: 1.5; }
-.yreq-time { font-size: 10px; color: #334; margin-top: 3px; }
+.yreq-body { font-size: 12px; color: #8aabcc; line-height: 1.5; }
+.yreq-time { font-size: 10px; color: #6a8ab0; margin-top: 3px; }
 .yreq-acts { display: flex; gap: 6px; margin-top: 8px; }
 .yra { flex: 1; padding: 7px; border-radius: 7px; font-size: 11px; cursor: pointer; text-align: center; }
 .yra-ok { background: #0d2010; border: 1px solid #1a4a22; color: #66cc88; }
-.yra-ng { background: #141428; border: 1px solid #2a2a40; color: #556; }
+.yra-ng { background: #141428; border: 1px solid #1e3050; color: #7a9cc8; }
 /* カレンダービュー */
 .ycal-month-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.ycal-month-nav button { background: #1a1a2e; border: 1px solid #2a2a40; color: #88aaff; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 14px; }
-.ycal-month-title { font-size: 15px; font-weight: 700; color: #fff; flex: 1; text-align: center; }
+.ycal-month-nav button { background: #141d30; border: 1px solid #1e3050; color: #7ab0f0; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 14px; }
+.ycal-month-title { font-size: 15px; font-weight: 700; color: #e8f0ff; flex: 1; text-align: center; }
 .ycal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .ycal-dow { text-align: center; font-size: 10px; font-weight: 700; padding: 6px 0; }
 .ycal-dow.sun { color: #ee6666; }
 .ycal-dow.sat { color: #6688ee; }
 .ycal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; padding: 6px 2px; min-height: 50px; cursor: pointer; position: relative; }
-.ycal-day:hover { background: #1a1a2e; }
-.ycal-day.today { background: #1a2a4a; border: 1px solid #2255aa; }
-.ycal-day.today .ycal-num { color: #88aaff; }
+.ycal-day:hover { background: #141d30; }
+.ycal-day.today { background: #0f2040; border: 1px solid #1a50a0; }
+.ycal-day.today .ycal-num { color: #7ab0f0; }
 .ycal-day.other { opacity: 0.25; pointer-events: none; }
 .ycal-day.sunday .ycal-num { color: #ee6666; }
 .ycal-day.saturday .ycal-num { color: #6688ee; }
 .ycal-num { font-size: 15px; font-weight: 600; color: #ddd; line-height: 1; }
-.ycal-pax { font-size: 10px; color: #88aaff; font-weight: 700; margin-top: 3px; }
+.ycal-pax { font-size: 10px; color: #7ab0f0; font-weight: 700; margin-top: 3px; }
 .ycal-dot { width: 6px; height: 6px; background: #ddaa44; border-radius: 50%; position: absolute; top: 5px; right: 5px; }
 /* スケジュールグリッド */
 .ysched-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .ysched-inner { display: flex; min-width: max-content; }
-.ysched-left { flex-shrink: 0; width: 70px; position: sticky; left: 0; z-index: 2; background: #12122a; }
+.ysched-left { flex-shrink: 0; width: 70px; position: sticky; left: 0; z-index: 2; background: #0d1520; }
 .ysched-right { flex-shrink: 0; }
-.ysched-hdr { display: flex; background: #1a1a2e; border-bottom: 1px solid #2a2a40; }
-.ysched-tbl-hdr { width: 70px; padding: 7px 6px; font-size: 9px; color: #445; border-right: 1px solid #2a2a40; flex-shrink: 0; background: #1a1a2e; }
+.ysched-hdr { display: flex; background: #141d30; border-bottom: 1px solid #1e3050; }
+.ysched-tbl-hdr { width: 70px; padding: 7px 6px; font-size: 9px; color: #7a9cc8; border-right: 1px solid #1e3050; flex-shrink: 0; background: #141d30; }
 .ysched-time-hdr { display: flex; }
-.ysched-time-cell { font-size: 10px; color: #88aaff; text-align: center; border-right: 1px solid #141426; padding: 7px 4px; }
-.ysched-floor-div { height: 5px; background: #111128; border-bottom: 1px solid #2a2a40; }
-.ysched-name-cell { height: 46px; padding: 4px 6px; border-bottom: 1px solid #1e1e38; border-right: 1px solid #2a2a40; display: flex; flex-direction: column; justify-content: center; }
-.ysched-name-main { font-size: 11px; font-weight: 600; color: #bbb; }
-.ysched-name-cap { font-size: 9px; color: #334; }
-.ysched-row { height: 46px; position: relative; border-bottom: 1px solid #1e1e38; }
+.ysched-time-cell { font-size: 10px; color: #7ab0f0; text-align: center; border-right: 1px solid #0d1830; padding: 7px 4px; }
+.ysched-floor-div { height: 5px; background: #0d1520; border-bottom: 1px solid #1e3050; }
+.ysched-name-cell { height: 46px; padding: 4px 6px; border-bottom: 1px solid #162848; border-right: 1px solid #1e3050; display: flex; flex-direction: column; justify-content: center; }
+.ysched-name-main { font-size: 11px; font-weight: 600; color: #b0c8e8; }
+.ysched-name-cap { font-size: 9px; color: #6a8ab0; }
+.ysched-row { height: 46px; position: relative; border-bottom: 1px solid #162848; }
 .ysched-row-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; }
-.ysched-hour-cell { border-right: 1px solid #141426; height: 100%; }
+.ysched-hour-cell { border-right: 1px solid #0d1830; height: 100%; }
 .yrsv-blk { position: absolute; top: 5px; bottom: 5px; border-radius: 6px; padding: 2px 6px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; overflow: hidden; min-width: 30px; }
 .yrsv-blk:hover { filter: brightness(1.15); }
 .yrsv-name { font-size: 10px; font-weight: 700; color: #aaccff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -460,7 +461,7 @@ function initAdminUI(castList) {
       + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
       + '<option value="">-- 選択 --</option>'
       + '</select>'
-      + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#88aaff;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
+      + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#7ab0f0;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
@@ -516,7 +517,7 @@ function switchTab(tab) {
   if (tab === 'ranking') { loadRanking(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
-    setContent('<div style="text-align:center;color:#666;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
   }
   if (portalData) renderTab(tab);
@@ -525,7 +526,7 @@ function switchTab(tab) {
 
 function renderTab(tab) {
   if (isAdmin && !adminViewAs) {
-    setContent('<div style="text-align:center;color:#666;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
   }
   if (tab === 'sales') renderSales();
@@ -550,8 +551,8 @@ function renderSales() {
   if (!sales || Object.keys(sales).length === 0) {
     setContent('<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
-      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">データなし</div>'
-      + '<div style="font-size:12px;color:#556;line-height:1.7">今月の売上データはまだ取得されていません。<br>毎日深夜に自動更新されます。</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">データなし</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.7">今月の売上データはまだ取得されていません。<br>毎日深夜に自動更新されます。</div>'
       + '</div>');
     return;
   }
@@ -574,26 +575,26 @@ function renderSales() {
     months.forEach(function(m) {
       var act = m === sel;
       h += '<button onclick="switchSalesMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
-        + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
-        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+        + (act ? '#4488ee' : '#1a2e50') + ';background:' + (act ? '#0f2040' : 'transparent')
+        + ';color:' + (act ? '#7ab0f0' : '#7a9cc8') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
     });
     h += '</div>';
   }
 
   // カード
-  h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px">';
-  h += '<div style="font-size:10px;color:#334;margin-bottom:10px;letter-spacing:0.5px">' + sel + ' TRUSTデータ</div>';
+  h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px">';
+  h += '<div style="font-size:10px;color:#6a8ab0;margin-bottom:10px;letter-spacing:0.5px">' + sel + ' TRUSTデータ</div>';
 
   function item(label, val, color, sub) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #181828">'
-      + '<span style="font-size:13px;color:#778">' + label + (sub ? '<br><span style="font-size:10px;color:#445">' + sub + '</span>' : '') + '</span>'
-      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#bbb') + '">' + val + '</span>'
+      + '<span style="font-size:13px;color:#778">' + label + (sub ? '<br><span style="font-size:10px;color:#7a9cc8">' + sub + '</span>' : '') + '</span>'
+      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#b0c8e8') + '">' + val + '</span>'
       + '</div>';
   }
 
-  h += item('担当売上', yen(row['担当小計']), '#88aaff');
+  h += item('担当売上', yen(row['担当小計']), '#7ab0f0');
   if (num(row['同伴小計']) > 0) h += item('同伴売上', yen(row['同伴小計']), '#7799cc');
-  h += item('勤務日数', num(row['勤務日数']) + '日', '#aaa');
+  h += item('勤務日数', num(row['勤務日数']) + '日', '#a0c0e0');
   h += item('時間報酬', yen(row['時間報酬']));
 
   if (backTotal > 0) {
@@ -609,17 +610,17 @@ function renderSales() {
   if (num(row['マイナス']) > 0) h += item('マイナス', '−' + yen(row['マイナス']), '#cc6666');
 
   h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0">'
-    + '<span style="font-size:14px;font-weight:600;color:#ccc">残り支給額</span>'
-    + '<span style="font-size:20px;font-weight:700;color:#88aaff">' + yen(row['残り支給額']) + '</span>'
+    + '<span style="font-size:14px;font-weight:600;color:#c0d4f0">残り支給額</span>'
+    + '<span style="font-size:20px;font-weight:700;color:#7ab0f0">' + yen(row['残り支給額']) + '</span>'
     + '</div>';
 
   var hairTotals = portalData.hairTotals || {};
   var hairAmt = hairTotals[sel] || 0;
   if (hairAmt > 0) {
-    h += '<div style="margin-top:4px;padding:10px 0;border-top:1px solid #252540">';
+    h += '<div style="margin-top:4px;padding:10px 0;border-top:1px solid #1a2e50">';
     h += item('ヘアサロン立替', '＋' + yen(hairAmt), '#66dd88', '領収書登録分・源泉対象外');
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:2px;border-top:1px solid #252540">'
-      + '<span style="font-size:14px;font-weight:600;color:#ccc">最終支給額</span>'
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:2px;border-top:1px solid #1a2e50">'
+      + '<span style="font-size:14px;font-weight:600;color:#c0d4f0">最終支給額</span>'
       + '<span style="font-size:20px;font-weight:700;color:#66dd88">' + yen(num(row['残り支給額']) + hairAmt) + '</span>'
       + '</div>';
     h += '</div>';
@@ -627,7 +628,7 @@ function renderSales() {
 
   h += '</div>';
 
-  h += '<div style="font-size:10px;color:#334;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
+  h += '<div style="font-size:10px;color:#6a8ab0;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
   h += '</div>';
 
   // ---- バック率メーター（煽りあり） ----
@@ -641,8 +642,8 @@ function renderSales() {
     var barPct_s   = Math.min(bairitu_s / 3, 1) * 100;
     var barColor_s = curRate_s === 10 ? '#e08000' : (curRate_s === 15 ? '#c8a800' : '#44bb66');
 
-    h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;margin-top:10px">';
-    h += '<div style="font-size:11px;color:#445;margin-bottom:12px;letter-spacing:0.5px">担当バック率メーター</div>';
+    h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px 16px;margin-top:10px">';
+    h += '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;letter-spacing:0.5px">担当バック率メーター</div>';
 
     // バー
     h += '<div style="position:relative;height:28px;margin-bottom:4px">';
@@ -651,18 +652,18 @@ function renderSales() {
     h += '<div style="position:absolute;top:10px;left:0;width:' + barPct_s.toFixed(1) + '%;height:8px;background:' + barColor_s + ';border-radius:4px"></div>';
     h += '<div style="position:absolute;top:6px;left:66.7%;width:2px;height:16px;background:#444;transform:translateX(-1px)"></div>';
     h += '<div style="position:absolute;top:6px;right:0;width:2px;height:16px;background:#444"></div>';
-    h += '<div style="position:absolute;top:8px;left:' + barPct_s.toFixed(1) + '%;width:12px;height:12px;background:' + barColor_s + ';border:2px solid #fff;border-radius:50%;transform:translateX(-6px)"></div>';
+    h += '<div style="position:absolute;top:8px;left:' + barPct_s.toFixed(1) + '%;width:12px;height:12px;background:' + barColor_s + ';border:2px solid #e8f0ff;border-radius:50%;transform:translateX(-6px)"></div>';
     h += '</div>';
 
     // 目盛り
-    h += '<div style="position:relative;height:28px;font-size:10px;color:#445">';
+    h += '<div style="position:relative;height:28px;font-size:10px;color:#7a9cc8">';
     h += '<span style="position:absolute;left:0">0倍<br><span style="color:#cc6644">10%</span></span>';
     h += '<span style="position:absolute;left:66.7%;transform:translateX(-50%);text-align:center">2倍<br><span style="color:#bbaa00">15%</span></span>';
     h += '<span style="position:absolute;right:0;text-align:right">3倍<br><span style="color:#44bb66">20%</span></span>';
     h += '</div>';
 
-    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #1e1e3a">';
-    h += '<div style="font-size:13px;font-weight:600;color:#ccc">倍率 ' + bairitu_s.toFixed(2) + '倍 → <span style="color:' + barColor_s + '">バック率 ' + curRate_s + '%</span></div>';
+    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #162848">';
+    h += '<div style="font-size:13px;font-weight:600;color:#c0d4f0">倍率 ' + bairitu_s.toFixed(2) + '倍 → <span style="color:' + barColor_s + '">バック率 ' + curRate_s + '%</span></div>';
 
     if (nextRate_s) {
       var needed_s = Math.ceil(nextThr_s * jikanH_s - tantoK_s);
@@ -671,8 +672,8 @@ function renderSales() {
       var cheers = curRate_s === 10
         ? ['あと', '担当売上 ', '¥' + needed_s.toLocaleString(), ' (' + neededW + '万円)で15%へ！', '勢いに乗っていこう🔥']
         : ['ラストスパート！あと', '担当売上 ', '¥' + needed_s.toLocaleString(), ' (' + neededW + '万円)で20%達成！', '今日が変わり目💪'];
-      h += '<div style="font-size:12px;color:#667;margin-top:4px">' + cheers[0]
-        + '<span style="color:#88aaff;font-weight:600">' + cheers[2] + '</span>'
+      h += '<div style="font-size:12px;color:#8aabcc;margin-top:4px">' + cheers[0]
+        + '<span style="color:#7ab0f0;font-weight:600">' + cheers[2] + '</span>'
         + cheers[3] + '</div>';
       h += '<div style="font-size:12px;color:' + barColor_s + ';margin-top:4px;font-weight:600">' + cheers[4] + '</div>';
     } else {
@@ -698,8 +699,8 @@ function renderPay() {
 
   if (allMonths.length === 0) {
     setContent('<div style="text-align:center;padding:60px 20px">'
-      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">データなし</div>'
-      + '<div style="font-size:12px;color:#556;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">データなし</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
       + '</div>');
     return;
   }
@@ -719,8 +720,8 @@ function renderPay() {
       var pub = payPublished[m];
       var label = m + (isAdmin && !pub ? ' 🔒' : '');
       t += '<button onclick="switchPayMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
-        + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
-        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
+        + (act ? '#4488ee' : '#1a2e50') + ';background:' + (act ? '#0f2040' : 'transparent')
+        + ';color:' + (act ? '#7ab0f0' : '#7a9cc8') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
     });
     t += '</div>';
     return t;
@@ -731,8 +732,8 @@ function renderPay() {
     var hLock = '<div style="padding:14px">' + monthTabsHtml(sel)
       + '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
-      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">まだ公開されていません</div>'
-      + '<div style="font-size:12px;color:#556;line-height:1.8">' + esc(sel) + ' の給与明細は確認中です。<br>公開されるまでお待ちください。</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.8">' + esc(sel) + ' の給与明細は確認中です。<br>公開されるまでお待ちください。</div>'
       + '</div></div>';
     setContent(hLock);
     return;
@@ -755,22 +756,22 @@ function renderPay() {
     var hOnly = '<div style="padding:14px">' + monthTabsHtml(sel);
     if (isAdmin) {
       var isPubO = !!payPublished[sel];
-      hOnly += '<div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
-      hOnly += '<div><div style="font-size:10px;color:#445;margin-bottom:4px">給与明細 公開状態</div>';
+      hOnly += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+      hOnly += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">給与明細 公開状態</div>';
       hOnly += '<div style="font-size:13px;font-weight:600;color:' + (isPubO ? '#44bb66' : '#cc8844') + '">' + (isPubO ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
       hOnly += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPubO ? 'unpublishPay' : 'publishPay') + '\')" style="padding:8px 16px;background:' + (isPubO ? '#2a1010' : '#102a10') + ';border:1px solid ' + (isPubO ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPubO ? '#ff8888' : '#66dd66') + ';font-size:13px;font-weight:700;cursor:pointer">' + (isPubO ? '非公開に戻す' : '公開する') + '</button>';
       hOnly += '</div>';
     }
-    hOnly += '<div style="background:#fff;color:#111;border-radius:12px;padding:16px 14px">';
-    hOnly += '<div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px">';
+    hOnly += '<div style="background:#e8f0ff;color:#111;border-radius:12px;padding:16px 14px">';
+    hOnly += '<div style="text-align:center;border-bottom:2px solid #6a8ab0;padding-bottom:10px;margin-bottom:12px">';
     hOnly += '<div style="font-size:15px;font-weight:700">支払報酬明細書</div>';
     hOnly += '<div style="font-size:11px;margin-top:3px">' + esc(reiwaOnly) + '</div>';
     hOnly += '<div style="font-size:11px">ラウンジ 家康</div>';
     hOnly += '<div style="font-size:17px;font-weight:700;margin-top:6px">' + esc(portalData.viewAs || portalData.name || '') + '</div>';
     hOnly += '</div>';
-    hOnly += '<div style="margin-top:12px;border-top:1px solid #ccc;padding-top:10px">';
+    hOnly += '<div style="margin-top:12px;border-top:1px solid #c0d4f0;padding-top:10px">';
     hOnly += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#006600"><span>ヘアサロン立替代</span><span>＋¥' + hairAmt.toLocaleString() + '</span></div>';
-    hOnly += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #333;font-size:15px;font-weight:700"><span>最終支給額</span><span style="color:#003399">¥' + hairAmt.toLocaleString() + '</span></div>';
+    hOnly += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #6a8ab0;font-size:15px;font-weight:700"><span>最終支給額</span><span style="color:#003399">¥' + hairAmt.toLocaleString() + '</span></div>';
     hOnly += '</div></div></div>';
     setContent(hOnly);
     return;
@@ -814,9 +815,9 @@ function renderPay() {
   // 管理者用：公開管理バー
   if (isAdmin) {
     var isPub = !!payPublished[sel];
-    h += '<div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
     h += '<div>';
-    h += '<div style="font-size:10px;color:#445;letter-spacing:0.5px;margin-bottom:4px">給与明細 公開状態</div>';
+    h += '<div style="font-size:10px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:4px">給与明細 公開状態</div>';
     h += '<div style="font-size:13px;font-weight:600;color:' + (isPub ? '#44bb66' : '#cc8844') + '">'
       + (isPub ? '✅ 公開中 — キャストが閲覧可能' : '🔒 未公開 — キャストには表示されません') + '</div>';
     h += '</div>';
@@ -829,10 +830,10 @@ function renderPay() {
   }
 
   // 明細書カード（白背景）
-  h += '<div style="background:#fff;color:#111;border-radius:12px;padding:16px 14px;font-family:sans-serif">';
+  h += '<div style="background:#e8f0ff;color:#111;border-radius:12px;padding:16px 14px;font-family:sans-serif">';
 
   // ヘッダー
-  h += '<div style="text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px">';
+  h += '<div style="text-align:center;border-bottom:2px solid #6a8ab0;padding-bottom:10px;margin-bottom:12px">';
   h += '<div style="font-size:15px;font-weight:700">支払報酬明細書</div>';
   h += '<div style="font-size:11px;margin-top:3px">' + esc(reiwaStr) + '</div>';
   h += '<div style="font-size:11px">ラウンジ 家康</div>';
@@ -843,12 +844,12 @@ function renderPay() {
     var bg = section === 'shikyu' ? '#eef2ff' : section === 'kojo' ? '#fff0f0' : '';
     var fw = section === 'total' ? 'font-weight:700;' : '';
     return '<tr>'
-      + '<td style="padding:5px 8px;border:1px solid #ccc;font-size:12px;' + fw + (bg?'background:'+bg+';':'') + '">' + label + '</td>'
-      + '<td style="padding:5px 8px;border:1px solid #ccc;font-size:12px;text-align:right;' + fw + (bg?'background:'+bg+';':'') + '">' + val + '</td>'
+      + '<td style="padding:5px 8px;border:1px solid #c0d4f0;font-size:12px;' + fw + (bg?'background:'+bg+';':'') + '">' + label + '</td>'
+      + '<td style="padding:5px 8px;border:1px solid #c0d4f0;font-size:12px;text-align:right;' + fw + (bg?'background:'+bg+';':'') + '">' + val + '</td>'
       + '</tr>';
   }
   function trHead(label) {
-    return '<tr><td colspan="2" style="padding:4px 8px;border:1px solid #ccc;font-size:11px;font-weight:700;background:#e8eaf6;color:#333">' + label + '</td></tr>';
+    return '<tr><td colspan="2" style="padding:4px 8px;border:1px solid #c0d4f0;font-size:11px;font-weight:700;background:#e8eaf6;color:#6a8ab0">' + label + '</td></tr>';
   }
 
   h += '<table style="width:100%;border-collapse:collapse">';
@@ -871,17 +872,17 @@ function renderPay() {
   h += '</table>';
 
   // フッター
-  h += '<div style="margin-top:12px;border-top:1px solid #ccc;padding-top:10px">';
+  h += '<div style="margin-top:12px;border-top:1px solid #c0d4f0;padding-top:10px">';
   h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">'
     + '<span>差引支給額</span><span style="font-weight:700">' + yen(nokori) + '</span></div>';
 
   if (hair > 0) {
     h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#005500">'
       + '<span>ヘアサロン立替代</span><span>＋' + yen(hair) + '</span></div>';
-    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #333;font-size:15px;font-weight:700">'
+    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #6a8ab0;font-size:15px;font-weight:700">'
       + '<span>最終支給額</span><span style="color:#003399">' + yen(finalPay) + '</span></div>';
   } else {
-    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #333;font-size:15px;font-weight:700">'
+    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #6a8ab0;font-size:15px;font-weight:700">'
       + '<span>最終支給額</span><span style="color:#003399">' + yen(nokori) + '</span></div>';
   }
   h += '</div>';
@@ -899,8 +900,8 @@ function renderPay() {
     var barColor = curRate === 10 ? '#e08000' : (curRate === 15 ? '#c8a800' : '#44bb66');
     var bgZone1  = curRate === 10 ? '#2a1a00' : '#1a1a00';
 
-    h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px 16px;margin-top:10px">';
-    h += '<div style="font-size:11px;color:#445;margin-bottom:12px;letter-spacing:0.5px">バック率メーター</div>';
+    h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px 16px;margin-top:10px">';
+    h += '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;letter-spacing:0.5px">バック率メーター</div>';
 
     // バー本体
     h += '<div style="position:relative;height:28px;margin-bottom:4px">';
@@ -914,24 +915,24 @@ function renderPay() {
     // 3x境界線（右端）
     h += '<div style="position:absolute;top:6px;right:0;width:2px;height:16px;background:#444"></div>';
     // 現在地ドット
-    h += '<div style="position:absolute;top:8px;left:' + barPct.toFixed(1) + '%;width:12px;height:12px;background:' + barColor + ';border:2px solid #fff;border-radius:50%;transform:translateX(-6px)"></div>';
+    h += '<div style="position:absolute;top:8px;left:' + barPct.toFixed(1) + '%;width:12px;height:12px;background:' + barColor + ';border:2px solid #e8f0ff;border-radius:50%;transform:translateX(-6px)"></div>';
     h += '</div>';
 
     // 目盛りラベル
-    h += '<div style="position:relative;height:28px;font-size:10px;color:#445">';
+    h += '<div style="position:relative;height:28px;font-size:10px;color:#7a9cc8">';
     h += '<span style="position:absolute;left:0">0倍<br><span style="color:#cc6644">10%</span></span>';
     h += '<span style="position:absolute;left:66.7%;transform:translateX(-50%);text-align:center">2倍<br><span style="color:#bbaa00">15%</span></span>';
     h += '<span style="position:absolute;right:0;text-align:right">3倍<br><span style="color:#44bb66">20%</span></span>';
     h += '</div>';
 
     // 現在の状態テキスト
-    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #1e1e3a">';
-    h += '<div style="font-size:13px;font-weight:600;color:#ccc">倍率 ' + bairitu.toFixed(2) + '倍 → <span style="color:' + barColor + '">バック率 ' + curRate + '%</span></div>';
+    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #162848">';
+    h += '<div style="font-size:13px;font-weight:600;color:#c0d4f0">倍率 ' + bairitu.toFixed(2) + '倍 → <span style="color:' + barColor + '">バック率 ' + curRate + '%</span></div>';
     if (nextRate) {
       var needed = Math.ceil(nextThr * jikanH - tantoK);
-      h += '<div style="font-size:12px;color:#667;margin-top:4px">'
-        + '<span style="color:#88aaff;font-weight:600">' + nextRate + '%</span> まであと担当売上 '
-        + '<span style="color:#88aaff;font-weight:600">¥' + needed.toLocaleString() + '</span></div>';
+      h += '<div style="font-size:12px;color:#8aabcc;margin-top:4px">'
+        + '<span style="color:#7ab0f0;font-weight:600">' + nextRate + '%</span> まであと担当売上 '
+        + '<span style="color:#7ab0f0;font-weight:600">¥' + needed.toLocaleString() + '</span></div>';
     } else {
       h += '<div style="font-size:12px;color:#44bb66;margin-top:4px">最高バック率（20%）達成！</div>';
     }
@@ -968,7 +969,7 @@ function togglePayPublish(month, action) {
 var rankingMonths = [];
 
 function loadRanking(m) {
-  setContent('<div style="text-align:center;color:#555;padding:60px 0;font-size:14px">読み込み中...</div>');
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
   var url = GAS_URL + '?action=portal&tab=ranking&userId=' + encodeURIComponent(userId)
     + (m ? '&month=' + encodeURIComponent(m) : '');
   fetch(url)
@@ -997,8 +998,8 @@ function renderRanking(d) {
       var pub = rankPublished[m];
       var label = m + (isAdmin && !pub ? ' 🔒' : '');
       h += '<button onclick="loadRanking(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
-        + (act ? '#5588ff' : '#252540') + ';background:' + (act ? '#1a2a4a' : 'transparent')
-        + ';color:' + (act ? '#88aaff' : '#556') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
+        + (act ? '#4488ee' : '#1a2e50') + ';background:' + (act ? '#0f2040' : 'transparent')
+        + ';color:' + (act ? '#7ab0f0' : '#7a9cc8') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
     });
     h += '</div>';
   }
@@ -1006,8 +1007,8 @@ function renderRanking(d) {
   // 管理者：公開管理バー
   if (isAdmin) {
     var isPub = !!rankPublished[selMonth];
-    h += '<div style="background:#1a1a2e;border:1px solid #2a2a44;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
-    h += '<div><div style="font-size:10px;color:#445;margin-bottom:4px">ランキング 公開状態</div>';
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+    h += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">ランキング 公開状態</div>';
     h += '<div style="font-size:13px;font-weight:600;color:' + (isPub ? '#44bb66' : '#cc8844') + '">'
       + (isPub ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
     h += '<button onclick="toggleRankingPublish(\'' + selMonth + '\',\'' + (isPub ? 'unpublishRanking' : 'publishRanking') + '\')" '
@@ -1022,8 +1023,8 @@ function renderRanking(d) {
   if (!isAdmin && !rankPublished[selMonth]) {
     h += '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
-      + '<div style="font-size:15px;font-weight:600;color:#88aaff;margin-bottom:8px">まだ公開されていません</div>'
-      + '<div style="font-size:12px;color:#556">' + esc(selMonth) + ' のランキングは集計中です。</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#7a9cc8">' + esc(selMonth) + ' のランキングは集計中です。</div>'
       + '</div></div>';
     setContent(h);
     return;
@@ -1032,21 +1033,21 @@ function renderRanking(d) {
   var medals = ['🥇', '🥈', '🥉'];
 
   function rankCard(title, list, valueKey, isCount) {
-    var c = '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:12px;padding:14px;margin-bottom:14px">';
-    c += '<div style="font-size:12px;font-weight:700;color:#88aaff;margin-bottom:12px;letter-spacing:0.5px">' + title + '</div>';
+    var c = '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px;margin-bottom:14px">';
+    c += '<div style="font-size:12px;font-weight:700;color:#7ab0f0;margin-bottom:12px;letter-spacing:0.5px">' + title + '</div>';
     if (!list || list.length === 0) {
-      c += '<div style="text-align:center;color:#445;font-size:13px;padding:20px 0">データなし</div>';
+      c += '<div style="text-align:center;color:#7a9cc8;font-size:13px;padding:20px 0">データなし</div>';
     } else {
       list.forEach(function(item, idx) {
         var isMe = item.name === myName;
         var val = isCount ? ((item[valueKey] || 0) + '組') : '';
         c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828;'
-          + (isMe ? 'background:#1a2a1a;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:6px;' : '') + '">';
+          + (isMe ? 'background:#0f201a;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:6px;' : '') + '">';
         c += '<span style="font-size:18px;width:28px;flex-shrink:0">' + (idx < 3 ? medals[idx] : '') + '</span>';
-        if (idx >= 3) c += '<span style="font-size:12px;color:#556;width:20px;flex-shrink:0">' + (idx + 1) + '</span>';
-        c += '<span style="flex:1;font-size:13px;font-weight:' + (isMe ? '700' : '400') + ';color:' + (isMe ? '#66dd88' : '#bbb') + '">'
+        if (idx >= 3) c += '<span style="font-size:12px;color:#7a9cc8;width:20px;flex-shrink:0">' + (idx + 1) + '</span>';
+        c += '<span style="flex:1;font-size:13px;font-weight:' + (isMe ? '700' : '400') + ';color:' + (isMe ? '#66dd88' : '#b0c8e8') + '">'
           + esc(item.name) + (isMe ? ' ◀ あなた' : '') + '</span>';
-        if (val) c += '<span style="font-size:13px;font-weight:600;color:#aaa">' + val + '</span>';
+        if (val) c += '<span style="font-size:13px;font-weight:600;color:#a0c0e0">' + val + '</span>';
         c += '</div>';
       });
     }
@@ -1057,23 +1058,23 @@ function renderRanking(d) {
   h += rankCard('売上ランキング', rd.tanto,  'tanto',     false);
   h += rankCard('同伴ランキング', rd.dohan,  'dohanCnt',  true);
   h += rankCard('予約ランキング', rd.yoyaku, 'yoyakuCnt', true);
-  h += '<div style="font-size:10px;color:#334;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
+  h += '<div style="font-size:10px;color:#6a8ab0;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
 
   // 管理者：TRUST組数同期（ブックマークレット）
   if (isAdmin) {
-    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #1e1e3a">';
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #162848">';
     h += '<div style="font-size:11px;color:#88aacc;font-weight:600;margin-bottom:8px">🔄 TRUST 組数を同期する</div>';
-    h += '<div style="font-size:11px;color:#889;line-height:1.7;margin-bottom:10px">'
+    h += '<div style="font-size:11px;color:#8aabcc;line-height:1.7;margin-bottom:10px">'
        + '① 下のリンクをブックマークバーにドラッグ<br>'
        + '② TRUSTを開いてそのブックマークをクリック<br>'
        + '③ 自動で今月分の同伴・予約組数が反映される'
        + '</div>';
-    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#1a2a1a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 TRUSТSync ← ドラッグしてブックマーク登録</a>';
+    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 TRUSТSync ← ドラッグしてブックマーク登録</a>';
     h += '</div>';
 
-    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #1e1e3a">';
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #162848">';
     h += '<div style="font-size:11px;color:#ccaa66;font-weight:600;margin-bottom:8px">💴 現金チェック用 日払い・経費を取得</div>';
-    h += '<div style="font-size:11px;color:#889;line-height:1.7;margin-bottom:10px">'
+    h += '<div style="font-size:11px;color:#8aabcc;line-height:1.7;margin-bottom:10px">'
        + '① 下のリンクをブックマークバーにドラッグ<br>'
        + '② 営業後、TRUSTを開いてそのブックマークをクリック<br>'
        + '③ 当日の日払い合計・経費合計を自動取得して記録'
@@ -1105,7 +1106,7 @@ function setupBookmarklet_() {
     + 'var S=' + JSON.stringify(secret) + ';'
     + 'var now=new Date();var yr=now.getFullYear();var mo=now.getMonth()+1;'
     + 'var mk=yr+"/"+(("0"+mo).slice(-2));'
-    + 'var show=function(t){var e=document.getElementById("_lsm");if(!e){e=document.createElement("div");e.id="_lsm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#182a3a",border:"1px solid #4488cc",borderRadius:"10px",padding:"12px 16px",color:"#aaddff",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+    + 'var show=function(t){var e=document.getElementById("_lsm");if(!e){e=document.createElement("div");e.id="_lsm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#182a3a",border:"1px solid #3a80cc",borderRadius:"10px",padding:"12px 16px",color:"#aaddff",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
     + 'function pv(s){if(!s||s==="--")return null;var n=parseFloat(s.replace(/[￥,]/g,""));return isNaN(n)?null:n;}'
     + 'function extractCast(html,name){'
     +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
@@ -1222,7 +1223,7 @@ var receiptPhotoMime   = 'image/jpeg';
 
 function loadHairReceipts() {
   var targetName = isAdmin ? adminViewAs : '';
-  setContent('<div style="text-align:center;color:#555;padding:60px 0;font-size:14px">読み込み中...</div>');
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
   var url = GAS_URL + '?action=portal&tab=hair&userId=' + encodeURIComponent(userId)
     + (targetName ? '&viewAs=' + encodeURIComponent(targetName) : '');
   fetch(url)
@@ -1242,15 +1243,15 @@ function renderHairTab(d) {
   // ── 登録フォーム（管理者が特定キャストを選択中 or 一般キャスト） ──
   var showForm = !isAdmin || (isAdmin && adminViewAs);
   if (showForm) {
-    h += '<div style="background:#14142a;border:1px solid #2a2a44;border-radius:12px;padding:14px;margin-bottom:16px">';
-    h += '<div style="font-size:15px;font-weight:700;color:#ccc;margin-bottom:6px">サロン代領収書登録する</div>';
+    h += '<div style="background:#111b2e;border:1px solid #1e3050;border-radius:12px;padding:14px;margin-bottom:16px">';
+    h += '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:6px">サロン代領収書登録する</div>';
     h += '<div style="font-size:12px;color:#aa8833;background:#1a1500;border:1px solid #3a2e00;border-radius:8px;padding:8px 10px;margin-bottom:14px">⚠️ 原本は翌月月初に黒服に提出してください</div>';
 
     // 写真プレビュー
     h += '<div style="margin-bottom:12px">';
-    h += '<label style="font-size:11px;color:#556;display:block;margin-bottom:6px">写真</label>';
-    h += '<div id="photo-preview" style="width:100%;max-width:280px;height:160px;background:#0d0d1a;border:2px dashed #2a2a44;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative" onclick="document.getElementById(\'photo-input\').click()">';
-    h += '<span id="photo-hint" style="font-size:12px;color:#445">タップして写真を選択</span>';
+    h += '<label style="font-size:11px;color:#7a9cc8;display:block;margin-bottom:6px">写真</label>';
+    h += '<div id="photo-preview" style="width:100%;max-width:280px;height:160px;background:#0d0d1a;border:2px dashed #1e3050;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative" onclick="document.getElementById(\'photo-input\').click()">';
+    h += '<span id="photo-hint" style="font-size:12px;color:#7a9cc8">タップして写真を選択</span>';
     h += '</div>';
     h += '<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">';
     h += '<button onclick="clearPhoto()" style="margin-top:6px;font-size:11px;color:#665;background:none;border:none;cursor:pointer">写真をクリア</button>';
@@ -1258,36 +1259,36 @@ function renderHairTab(d) {
 
     // 日付・金額
     h += '<div style="display:flex;gap:10px;margin-bottom:12px">';
-    h += '<div style="flex:1"><label style="font-size:11px;color:#556;display:block;margin-bottom:4px">日付</label>';
-    h += '<input type="date" id="receipt-date" style="width:100%;background:#1a1a30;border:1px solid #2a2a44;border-radius:8px;color:#ccc;font-size:14px;padding:8px 10px"></div>';
-    h += '<div style="flex:1"><label style="font-size:11px;color:#556;display:block;margin-bottom:4px">金額（円）</label>';
-    h += '<input type="number" id="receipt-amount" placeholder="5000" style="width:100%;background:#1a1a30;border:1px solid #2a2a44;border-radius:8px;color:#ccc;font-size:14px;padding:8px 10px"></div>';
+    h += '<div style="flex:1"><label style="font-size:11px;color:#7a9cc8;display:block;margin-bottom:4px">日付</label>';
+    h += '<input type="date" id="receipt-date" style="width:100%;background:#1a1a30;border:1px solid #1e3050;border-radius:8px;color:#c0d4f0;font-size:14px;padding:8px 10px"></div>';
+    h += '<div style="flex:1"><label style="font-size:11px;color:#7a9cc8;display:block;margin-bottom:4px">金額（円）</label>';
+    h += '<input type="number" id="receipt-amount" placeholder="5000" style="width:100%;background:#1a1a30;border:1px solid #1e3050;border-radius:8px;color:#c0d4f0;font-size:14px;padding:8px 10px"></div>';
     h += '</div>';
 
-    h += '<button onclick="submitReceipt()" style="width:100%;padding:11px;background:#1a2a4a;border:1px solid #3355aa;border-radius:10px;color:#88aaff;font-size:14px;font-weight:700;cursor:pointer">登録する</button>';
+    h += '<button onclick="submitReceipt()" style="width:100%;padding:11px;background:#0f2040;border:1px solid #3355aa;border-radius:10px;color:#7ab0f0;font-size:14px;font-weight:700;cursor:pointer">登録する</button>';
     h += '<div id="receipt-msg" style="font-size:12px;color:#44bb66;margin-top:8px;min-height:16px"></div>';
     h += '</div>';
   }
 
   // ── 一覧 ──
-  h += '<div style="font-size:11px;color:#445;letter-spacing:0.5px;margin-bottom:8px">登録済みの領収書' + (targetName ? '（' + esc(targetName) + '）' : '') + '</div>';
+  h += '<div style="font-size:11px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:8px">登録済みの領収書' + (targetName ? '（' + esc(targetName) + '）' : '') + '</div>';
   if (receipts.length === 0) {
-    h += '<div style="text-align:center;color:#445;padding:30px 0;font-size:13px">領収書がまだ登録されていません</div>';
+    h += '<div style="text-align:center;color:#7a9cc8;padding:30px 0;font-size:13px">領収書がまだ登録されていません</div>';
   } else {
     var total = receipts.reduce(function(s, r) { return s + r.amount; }, 0);
-    h += '<div style="font-size:12px;color:#88aaff;margin-bottom:10px">合計: ¥' + total.toLocaleString() + '（' + receipts.length + '件）</div>';
+    h += '<div style="font-size:12px;color:#7ab0f0;margin-bottom:10px">合計: ¥' + total.toLocaleString() + '（' + receipts.length + '件）</div>';
     receipts.forEach(function(r) {
-      h += '<div style="background:#14142a;border:1px solid #1e1e3a;border-radius:10px;padding:12px 14px;margin-bottom:8px">';
+      h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:10px;padding:12px 14px;margin-bottom:8px">';
       h += '<div style="display:flex;align-items:flex-start;justify-content:space-between">';
       h += '<div>';
-      h += '<div style="font-size:15px;font-weight:700;color:#ccc;margin-bottom:3px">¥' + r.amount.toLocaleString() + '</div>';
-      h += '<div style="font-size:12px;color:#556">' + esc(r.date) + (r.month ? '  （' + esc(r.month) + '分）' : '') + '</div>';
-      if (isAdmin) h += '<div style="font-size:11px;color:#445;margin-top:2px">' + esc(r.name) + '</div>';
-      h += '<div style="font-size:10px;color:#333;margin-top:4px">登録: ' + esc(r.registeredAt) + '</div>';
+      h += '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:3px">¥' + r.amount.toLocaleString() + '</div>';
+      h += '<div style="font-size:12px;color:#7a9cc8">' + esc(r.date) + (r.month ? '  （' + esc(r.month) + '分）' : '') + '</div>';
+      if (isAdmin) h += '<div style="font-size:11px;color:#7a9cc8;margin-top:2px">' + esc(r.name) + '</div>';
+      h += '<div style="font-size:10px;color:#6a8ab0;margin-top:4px">登録: ' + esc(r.registeredAt) + '</div>';
       h += '</div>';
       h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">';
       if (r.photoUrl) {
-        h += '<a href="' + esc(r.photoUrl) + '" target="_blank" style="font-size:11px;color:#88aaff;text-decoration:none;background:#1a2a4a;border:1px solid #3355aa;padding:4px 10px;border-radius:8px">写真を見る</a>';
+        h += '<a href="' + esc(r.photoUrl) + '" target="_blank" style="font-size:11px;color:#7ab0f0;text-decoration:none;background:#0f2040;border:1px solid #3355aa;padding:4px 10px;border-radius:8px">写真を見る</a>';
       }
       if (isAdmin || !d.isAdmin) {
         h += '<button onclick="deleteReceipt(' + r.rowIdx + ')" style="font-size:11px;color:#cc6666;background:#1a0f0f;border:1px solid #663333;padding:4px 10px;border-radius:8px;cursor:pointer">削除</button>';
@@ -1336,7 +1337,7 @@ function clearPhoto() {
   receiptPhotoBase64 = '';
   receiptPhotoMime   = 'image/jpeg';
   var prev = document.getElementById('photo-preview');
-  if (prev) prev.innerHTML = '<span id="photo-hint" style="font-size:12px;color:#445">タップして写真を選択</span>';
+  if (prev) prev.innerHTML = '<span id="photo-hint" style="font-size:12px;color:#7a9cc8">タップして写真を選択</span>';
   var inp = document.getElementById('photo-input');
   if (inp) inp.value = '';
 }
@@ -1497,7 +1498,7 @@ function makeTimeRow(sr, er, role) {
   // sr=[startH,startM,maxStartH,maxStartM] er=[minEndH,minEndM,endH,endM]
   var row = document.createElement('div');
   row.style.cssText = 'grid-column:span 2;display:flex;gap:6px;align-items:center';
-  var selStyle = 'flex:1;padding:9px 4px;background:#1a2a3a;color:#fff;border:1px solid #334;border-radius:8px;font-size:13px';
+  var selStyle = 'flex:1;padding:9px 4px;background:#1a2a3a;color:#e8f0ff;border:1px solid #6a8ab0;border-radius:8px;font-size:13px';
 
   var startSel = document.createElement('select');
   startSel.style.cssText = selStyle;
@@ -1507,7 +1508,7 @@ function makeTimeRow(sr, er, role) {
   });
 
   var sep = document.createElement('span');
-  sep.textContent = '～'; sep.style.cssText = 'color:#888;flex-shrink:0';
+  sep.textContent = '～'; sep.style.cssText = 'color:#8aabcc;flex-shrink:0';
 
   var endSel = document.createElement('select');
   endSel.style.cssText = selStyle;
@@ -1530,7 +1531,7 @@ function makeTimeRow(sr, er, role) {
   var r = role;
   var submitBtn = document.createElement('button');
   submitBtn.textContent = '提出';
-  submitBtn.style.cssText = 'padding:9px 12px;background:#1a5c2a;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0';
+  submitBtn.style.cssText = 'padding:9px 12px;background:#1a5c2a;color:#e8f0ff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0';
   submitBtn.onclick = function() { pickTime(pickerKey, startSel.value + '～' + endSel.value, r); };
 
   row.appendChild(startSel); row.appendChild(sep); row.appendChild(endSel); row.appendChild(submitBtn);
@@ -1578,7 +1579,7 @@ function showStartPicker() {
   } else if (staffRole === '黒服社員') {
     var kuroEmpBtn = document.createElement('button');
     kuroEmpBtn.className = 'time-opt full';
-    kuroEmpBtn.style.background = '#1a2a1a';
+    kuroEmpBtn.style.background = '#0f201a';
     kuroEmpBtn.style.borderColor = '#448844';
     kuroEmpBtn.style.color = '#88cc88';
     kuroEmpBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
@@ -1588,7 +1589,7 @@ function showStartPicker() {
   } else { // 黒服バイト
     var kuroPartBtn = document.createElement('button');
     kuroPartBtn.className = 'time-opt full';
-    kuroPartBtn.style.background = '#1a2a1a';
+    kuroPartBtn.style.background = '#0f201a';
     kuroPartBtn.style.borderColor = '#448844';
     kuroPartBtn.style.color = '#88cc88';
     kuroPartBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
@@ -1957,7 +1958,7 @@ function renderNotif(settings) {
   }).join('');
 
   var html = '<div style="padding:14px">'
-    + '<div style="font-size:13px;font-weight:700;color:#aac;margin-bottom:10px;letter-spacing:.05em">LINE通知設定</div>'
+    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">LINE通知設定</div>'
     + '<div class="notif-list">' + rows + '</div>'
     + buildAddForm()
     + '<button class="notif-add-btn" id="notif-add-btn" onclick="openAddNotifForm()">＋ 通知を追加</button>'
@@ -2107,8 +2108,8 @@ function cashsetFloorCard(floor, label) {
 
 function renderCashThresholds(thresholds) {
   var html = '<div style="padding:14px">'
-    + '<div style="font-size:13px;font-weight:700;color:#aac;margin-bottom:10px;letter-spacing:.05em">現金設定（レジ・金庫の枚数しきい値）</div>'
-    + '<div style="font-size:11px;color:#556;margin-bottom:12px;line-height:1.6">レジの枚数が最少を下回る/最大を超える場合や、金庫の枚数が最少を下回る場合に、閉店チェック時に補充・移動の指示が自動表示されます。</div>'
+    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">現金設定（レジ・金庫の枚数しきい値）</div>'
+    + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;line-height:1.6">レジの枚数が最少を下回る/最大を超える場合や、金庫の枚数が最少を下回る場合に、閉店チェック時に補充・移動の指示が自動表示されます。</div>'
     + cashsetFloorCard('f5', '5F')
     + cashsetFloorCard('f2', '2F')
     + '<button class="notif-save-btn" onclick="saveCashThresholds()">保存する</button>'
@@ -2225,7 +2226,7 @@ function renderYoyaku() {
     + ['cal','list','sched','add'].map(function(t) {
       var labels = {cal:'カレンダー', list:'リスト', sched:'スケジュール', add:'予約追加'};
       return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
-        + (yoyakuSubTab===t ? 'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;' : 'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
+        + (yoyakuSubTab===t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
         + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
     }).join('')
     + '</div>';
@@ -2257,7 +2258,7 @@ function loadYoyakuCal(headerHtml) {
       + ['cal','list','sched','add'].map(function(t) {
         var labels = {cal:'カレンダー',list:'リスト',sched:'スケジュール',add:'予約追加'};
         return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
-          + (t==='cal'?'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;':'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
+          + (t==='cal'?'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;':'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
           + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
       }).join('') + '</div>';
     headerHtml = '' + subtabs;
@@ -2340,19 +2341,19 @@ function renderYoyakuList() {
   var rsv = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
   var pax = rsv.reduce(function(s,r){ return s+(r.pax||0); }, 0);
   var stats = '<div class="yoyaku-stats">'
-    + '<div class="yoyaku-stat"><div class="num" style="color:#88aaff">'+rsv.length+'</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">'+rsv.length+'</div><div class="lbl">本日の予約</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
     + '</div>';
-  if (rsv.length === 0) return stats + '<div style="text-align:center;color:#334;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  if (rsv.length === 0) return stats + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
   return stats + rsv.map(function(r) {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
     var stsBadge = r.status === '確定' ? '<span class="yb yb-ok">確定</span>' : '<span class="yb yb-pend">'+esc(r.status)+'</span>';
     return '<div class="yoyaku-card" onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer">'
-      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span><span style="font-size:10px;color:#334;margin-left:auto">✏️</span></div>'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span><span style="font-size:10px;color:#6a8ab0;margin-left:auto">✏️</span></div>'
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+yoyakuCastBadge+tantouBadge+'</div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
-      + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#334">予約担当: '+esc(r.regBy)+'</div>' : '')
+      + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
       + '</div>';
   }).join('');
 }
@@ -2390,7 +2391,7 @@ function renderYoyakuSched() {
       var em = sm + 120;
       var lx = ((sm-SH*60)/60)*HW, wx = ((em-sm)/60)*HW-3;
       if (lx < 0) { wx += lx; lx = 0; }
-      var colors = ['background:#162848;border:1px solid #2a5090','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
+      var colors = ['background:#162848;border:1px solid #1a4080','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
       blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;'+colors[i%4]+'" onclick="event.stopPropagation()">'
         + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
     });
@@ -2424,47 +2425,47 @@ function renderYoyakuAdd() {
     return '<option value="'+val+'"'+(val===presetTable?' selected':'')+'>'+val+(booked?' ●予約済':'')+'</option>';
   }).join('');
   var presetBanner = preset.table
-    ? '<div style="font-size:12px;background:#1a2a1a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+    ? '<div style="font-size:12px;background:#0f201a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
       + '<span>📅 <b>'+esc(presetTable)+'</b>　'+esc(presetTime)+'〜（デフォルト2時間）を選択中</span>'
-      + '<span style="font-size:11px;color:#445;cursor:pointer" onclick="yoyakuGridPreset=null;renderYoyaku()">✕ クリア</span></div>'
+      + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer" onclick="yoyakuGridPreset=null;renderYoyaku()">✕ クリア</span></div>'
     : '';
 
   var tantouCast = (yoyakuSelectedCust && yoyakuSelectedCust.tantou) ? yoyakuSelectedCust.tantou : '';
   var custSection;
   if (yoyakuEditRsv) {
     custSection = '<div style="background:#1a1400;border:1px solid #554400;border-radius:8px;padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
-      + '<div><span style="font-size:11px;color:#ddaa44">✏️ 編集中</span><span style="font-size:13px;font-weight:600;color:#fff;margin-left:8px">'+esc(yoyakuEditRsv.customer)+'様</span></div>'
-      + '<span style="font-size:11px;color:#556;cursor:pointer" onclick="yoyakuCancelEdit()">← キャンセル</span>'
+      + '<div><span style="font-size:11px;color:#ddaa44">✏️ 編集中</span><span style="font-size:13px;font-weight:600;color:#e8f0ff;margin-left:8px">'+esc(yoyakuEditRsv.customer)+'様</span></div>'
+      + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer" onclick="yoyakuCancelEdit()">← キャンセル</span>'
       + '</div>';
   } else if (yoyakuSelectedCust) {
-    custSection = '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
-      + '<div><div style="font-size:13px;font-weight:600;color:#88aaff">'+esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様</div>'
+    custSection = '<div style="background:#0a1428;border:1px solid #7ab0f0;border-radius:8px;padding:9px 11px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><div style="font-size:13px;font-weight:600;color:#7ab0f0">'+esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様</div>'
       + (tantouCast ? '<div style="font-size:11px;color:#bb99ff;margin-top:3px">担当: '+esc(tantouCast)+'</div>' : '')
       + '</div>'
-      + '<span style="font-size:11px;color:#556;cursor:pointer;white-space:nowrap;margin-left:8px" onclick="yoyakuClearCust()">変更</span>'
+      + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer;white-space:nowrap;margin-left:8px" onclick="yoyakuClearCust()">変更</span>'
       + '</div>';
   } else if (yoyakuCustMode === 'search') {
     custSection = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
-      + '<span style="font-size:12px;color:#556;cursor:pointer" onclick="yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
-      + '<span style="font-size:12px;color:#88aaff">既存のお客様を検索</span>'
+      + '<span style="font-size:12px;color:#7a9cc8;cursor:pointer" onclick="yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
+      + '<span style="font-size:12px;color:#7ab0f0">既存のお客様を検索</span>'
       + '</div>'
       + '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索" oninput="yoyakuSearch(this.value)" style="margin-bottom:6px">'
       + '<div id="ycust-results"></div>';
   } else if (yoyakuCustMode === 'new') {
     custSection = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-      + '<span style="font-size:12px;color:#556;cursor:pointer" onclick="yoyakuRsvCustManual=\'\';yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
+      + '<span style="font-size:12px;color:#7a9cc8;cursor:pointer" onclick="yoyakuRsvCustManual=\'\';yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
       + '<span style="font-size:12px;color:#66cc88">✨ 新規のお客様</span>'
       + '</div>';
   } else {
     custSection = '<div style="display:flex;gap:8px;margin-bottom:12px">'
-      + '<div style="flex:1;padding:11px 8px;text-align:center;background:#0d1a2e;border:1px solid #1e3a6a;border-radius:8px;cursor:pointer;font-size:12px;color:#88aaff" onclick="yoyakuCustMode=\'search\';renderYoyaku()">🔍 既存のお客様</div>'
+      + '<div style="flex:1;padding:11px 8px;text-align:center;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;cursor:pointer;font-size:12px;color:#7ab0f0" onclick="yoyakuCustMode=\'search\';renderYoyaku()">🔍 既存のお客様</div>'
       + '<div style="flex:1;padding:11px 8px;text-align:center;background:#0d2010;border:1px solid #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88" onclick="yoyakuCustMode=\'new\';renderYoyaku()">＋ 新規のお客様</div>'
       + '</div>';
   }
 
   return presetBanner + custSection
     + '<div class="yform-sec" id="yform">'
-    + '<div style="font-size:11px;color:#445;margin-bottom:10px">予約担当者: <span style="color:#88aaff">'+esc(staffName||'')+'</span></div>'
+    + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:10px">予約担当者: <span style="color:#7ab0f0">'+esc(staffName||'')+'</span></div>'
     + (yoyakuEditRsv || (!yoyakuSelectedCust && yoyakuCustMode === 'new') ?
         '<div class="yform-label">お客様名</div>'
         + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" value="'+esc(yoyakuRsvCustManual)+'" style="margin-bottom:8px">'
@@ -2499,7 +2500,7 @@ function renderYoyakuAdd() {
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
     + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>'
-    + '<div id="yrsv-status" style="font-size:12px;color:#999;text-align:center;margin-top:6px"></div>'
+    + '<div id="yrsv-status" style="font-size:12px;color:#8aabcc;text-align:center;margin-top:6px"></div>'
     + '</div>';
 }
 
@@ -2539,15 +2540,15 @@ function renderRsvCal() {
   var firstDow = new Date(year, month - 1, 1).getDay();
   var daysInMonth = new Date(year, month, 0).getDate();
   var today = yoyakuDateStr(new Date());
-  var h = '<div style="background:#13132a;border:1px solid #2a2a40;border-radius:8px;overflow:hidden;margin-bottom:10px">';
-  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #2a2a40">'
-    + '<div onclick="yoyakuRsvCalNav(-1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#88aaff;line-height:1">‹</div>'
-    + '<div style="font-size:13px;font-weight:600;color:#ccc">' + year + '年' + month + '月</div>'
-    + '<div onclick="yoyakuRsvCalNav(1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#88aaff;line-height:1">›</div>'
+  var h = '<div style="background:#13132a;border:1px solid #1e3050;border-radius:8px;overflow:hidden;margin-bottom:10px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #1e3050">'
+    + '<div onclick="yoyakuRsvCalNav(-1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#7ab0f0;line-height:1">‹</div>'
+    + '<div style="font-size:13px;font-weight:600;color:#c0d4f0">' + year + '年' + month + '月</div>'
+    + '<div onclick="yoyakuRsvCalNav(1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#7ab0f0;line-height:1">›</div>'
     + '</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);padding:6px 6px 2px">';
   ['日','月','火','水','木','金','土'].forEach(function(d, i) {
-    h += '<div style="text-align:center;font-size:10px;font-weight:600;color:' + (i===0?'#ff7766':i===6?'#7799ff':'#445') + '">' + d + '</div>';
+    h += '<div style="text-align:center;font-size:10px;font-weight:600;color:' + (i===0?'#ff7766':i===6?'#7799ff':'#7a9cc8') + '">' + d + '</div>';
   });
   h += '</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);padding:2px 6px 8px;gap:2px">';
@@ -2557,9 +2558,9 @@ function renderRsvCal() {
     var dow = new Date(year, month - 1, d).getDay();
     var isSel = ds === yoyakuRsvDate, isToday = ds === today;
     h += '<div onclick="yoyakuRsvSelectDate(\'' + ds + '\')" style="text-align:center;padding:5px 2px;border-radius:5px;cursor:pointer;font-size:12px;'
-      + (isSel ? 'background:#2255bb;color:#fff;font-weight:700'
-               : isToday ? 'background:#1a2a4a;color:#88aaff;font-weight:700'
-               : dow===0 ? 'color:#ff8877' : dow===6 ? 'color:#8899ff' : 'color:#aaa')
+      + (isSel ? 'background:#1a55bb;color:#e8f0ff;font-weight:700'
+               : isToday ? 'background:#0f2040;color:#7ab0f0;font-weight:700'
+               : dow===0 ? 'color:#ff8877' : dow===6 ? 'color:#8899ff' : 'color:#a0c0e0')
       + '">' + d + '</div>';
   }
   h += '</div></div>';
@@ -2575,9 +2576,9 @@ function renderRsvTimeSel() {
     h += '<div onclick="yoyakuRsvSelectTime(\'' + t + '\')" style="padding:7px 11px;border-radius:6px;font-size:13px;cursor:pointer;min-width:60px;text-align:center;'
       + (sel
           ? (isDouhan ? 'background:#664400;color:#ffcc66;border:1px solid #aa7700;font-weight:700'
-                      : 'background:#2255bb;color:#fff;border:1px solid #4488cc;font-weight:700')
+                      : 'background:#1a55bb;color:#e8f0ff;border:1px solid #3a80cc;font-weight:700')
           : (isDouhan ? 'background:#2a1800;color:#aa7733;border:1px solid #553300'
-                      : 'background:#1a1a2e;color:#667;border:1px solid #2a2a40'))
+                      : 'background:#141d30;color:#8aabcc;border:1px solid #1e3050'))
       + '">' + t + '</div>';
   });
   h += '</div>';
@@ -2608,11 +2609,11 @@ function yoyakuSearch(q) {
   var res = document.getElementById('ycust-results');
   if (!res) return;
   if (q.length < 1) { res.innerHTML = ''; return; }
-  res.innerHTML = '<div style="font-size:11px;color:#445;padding:4px 0">検索中...</div>';
+  res.innerHTML = '<div style="font-size:11px;color:#7a9cc8;padding:4px 0">検索中...</div>';
   fetch(GAS_URL + '?action=portal&tab=yoyakuCustomers&userId=' + encodeURIComponent(userId) + '&q=' + encodeURIComponent(q))
     .then(function(r){ return r.json(); })
     .then(function(d) {
-      if (!d.ok || !d.customers || !d.customers.length) { res.innerHTML = '<div style="font-size:11px;color:#334;padding:4px 0">見つかりませんでした</div>'; return; }
+      if (!d.ok || !d.customers || !d.customers.length) { res.innerHTML = '<div style="font-size:11px;color:#6a8ab0;padding:4px 0">見つかりませんでした</div>'; return; }
       yoyakuCustResults = d.customers;
       res.innerHTML = d.customers.map(function(c, i) {
         var badges = '';
@@ -2624,7 +2625,7 @@ function yoyakuSearch(q) {
           + '<div class="ycust-sub">'+(c.no?'会員'+c.no:'')+' '+(c.tantou?'担当:'+c.tantou:'')+'</div>'
           + (badges?'<div class="ycust-badges">'+badges+'</div>':'')+'</div></div>';
       }).join('');
-    }).catch(function(){ res.innerHTML = '<div style="font-size:11px;color:#445">通信エラー</div>'; });
+    }).catch(function(){ res.innerHTML = '<div style="font-size:11px;color:#7a9cc8">通信エラー</div>'; });
 }
 
 function yoyakuSelectCust(i) {
