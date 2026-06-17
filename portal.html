@@ -440,6 +440,8 @@ function loadPortal(month) {
       isAdmin = d.isAdmin || false;
       if (d.staffRole) staffRole = d.staffRole;
       if (isAdmin) showAdminTab();
+      var isKuro = staffRole === '黒服社員' || staffRole === '黒服バイト';
+      if (isKuro || isAdmin) showGunshiLink();
       if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
       portalData = d;
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
@@ -533,6 +535,15 @@ function renderTab(tab) {
   else if (tab === 'pay') renderPay();
   else if (tab === 'shift') renderShiftCal();
   else if (tab === 'hair') loadHairReceipts();
+}
+
+function showGunshiLink() {
+  if (document.getElementById('gunshi-bar')) return;
+  var bar = document.createElement('div');
+  bar.id = 'gunshi-bar';
+  bar.style.cssText = 'background:#0f1a10;border-bottom:1px solid #1a3a1a;padding:8px 16px;display:flex;align-items:center;gap:10px';
+  bar.innerHTML = '<a href="' + GAS_URL + '" style="padding:6px 16px;background:#1a2a0a;color:#88cc44;border:1px solid #446622;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none">🏯 軍師システムを開く</a>';
+  document.querySelector('header').insertAdjacentElement('afterend', bar);
 }
 
 // 管理者タブを表示

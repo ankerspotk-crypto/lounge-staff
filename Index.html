@@ -422,7 +422,10 @@ header h1 { font-size: 17px; letter-spacing: .5px; }
 <body>
 
 <header>
-  <h1>🏯 IEYAS軍師システム <span style="font-size:10px;color:#556;font-weight:normal;letter-spacing:0;vertical-align:middle">v<?= VERSION ?></span></h1>
+  <div style="display:flex;align-items:center;gap:10px">
+    <a href="https://ankerspotk-crypto.github.io/lounge-staff/portal.html" style="font-size:11px;color:#7a9cc8;text-decoration:none;padding:4px 8px;border:1px solid #1e3050;border-radius:6px;white-space:nowrap">← ポータル</a>
+    <h1>🏯 IEYAS軍師システム <span style="font-size:10px;color:#556;font-weight:normal;letter-spacing:0;vertical-align:middle">v<?= VERSION ?></span></h1>
+  </div>
   <div style="display:flex;gap:8px;align-items:center">
     <button onclick="openOpeningCheck()" style="background:#102a22;border:1px solid #226655;color:#55ddbb;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🌅 開店チェック</button>
     <button onclick="openSafeWithdrawal()" style="background:#221a2a;border:1px solid #553a88;color:#bb99ee;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🔓 金庫出金</button>
