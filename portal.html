@@ -2398,9 +2398,20 @@ function renderYoyakuAdd() {
   if (!yoyakuRsvDate) yoyakuRsvDate = yoyakuDateStr(yoyakuDate);
   if (!yoyakuRsvCalMonth) yoyakuRsvCalMonth = yoyakuRsvDate.slice(0, 7);
   if (!yoyakuRsvTime) yoyakuRsvTime = presetTime;
+  // 選択日時と被る予約済み席を取得（リスト日付と一致する場合のみ）
+  var bookedTables = {};
+  if (yoyakuRsvDate === yoyakuDateStr(yoyakuDate) && yoyakuRsvTime) {
+    var selMin = (function(t){ var p=t.split(':'),h=parseInt(p[0]),m=parseInt(p[1])||0; if(h<6)h+=24; return h*60+m; })(yoyakuRsvTime);
+    yoyakuRsvs.forEach(function(r) {
+      if (!r.table || r.table === '未定') return;
+      var eMin = (function(t){ var p=(t||'20:00').split(':'),h=parseInt(p[0]),m=parseInt(p[1])||0; if(h<6)h+=24; return h*60+m; })(r.time);
+      if (Math.abs(selMin - eMin) < 120) bookedTables[r.table.replace(/\s/g,'')] = r.customer;
+    });
+  }
   var tableOpts = '<option value="未定">未定</option>' + YOYAKU_TABLES.map(function(t){
     var val = t.f+' '+t.n;
-    return '<option value="'+val+'"'+(val===presetTable?' selected':'')+'>'+val+'</option>';
+    var booked = bookedTables[(t.f+t.n).replace(/\s/g,'')];
+    return '<option value="'+val+'"'+(val===presetTable?' selected':'')+'>'+val+(booked?' ●予約済':'')+'</option>';
   }).join('');
   var presetBanner = preset.table
     ? '<div style="font-size:12px;background:#1a2a1a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
