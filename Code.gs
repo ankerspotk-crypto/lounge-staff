@@ -349,11 +349,13 @@ function handleEvent(event) {
   const ST = prop('GROUP_STAFF');
   const DR = prop('GROUP_DRIVER');
   const HK = prop('GROUP_HAKEN');
+  const YQ = prop('GROUP_YOYAKU');
 
   if (groupId && KF && groupId === KF) { handleKurofuku(event, text, userId); return; }
   if (groupId && ST && groupId === ST) { handleStaff(event, text, userId);    return; }
   if (groupId && DR && groupId === DR) { handleDriver(event, text, userId);   return; }
   if (groupId && HK && groupId === HK) { handleHaken(event, text);            return; }
+  if (groupId && YQ && groupId === YQ) return; // ラウンジ全体グループはお客様情報に反応しない
 
   // デフォルト: 予約グループ
   handleReservation(event, text);
