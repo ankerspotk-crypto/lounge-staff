@@ -551,17 +551,16 @@ function seatCard(s) {
     ? '<div class="seat-ng-badge">NG設定あり（' + s.ngCast.map(function(n) { return castDisplayLabel(n); }).join('、') + '）</div>'
     : '';
 
-  var rsrvBadge = (s.rsrv && !isWaiting && !isKurofuku)
-    ? '<div style="font-size:10px;color:#66ddff;background:#05111a;border:1px solid #0a3a5a;border-radius:5px;padding:2px 6px;margin:2px 0 3px">📅 ' + esc(s.rsrv.customer) + '様　' + s.rsrv.pax + '名</div>'
+  var rsrvInline = (s.rsrv && !isWaiting && !isKurofuku)
+    ? '<span style="font-size:10px;color:#66ddff;margin-left:5px">📅' + esc(s.rsrv.customer) + '様</span>'
     : '';
 
   if (!s.occupied || !s.casts || s.casts.length === 0) {
     var emptyText = isKurofuku ? '─ 黒服なし ─' : isWaiting ? '─ 待機なし ─' : '─ 空き ─';
     var extraClass = isKurofuku ? ' kurofuku' : isWaiting ? ' waiting' : '';
     return '<div class="seat' + extraClass + '" id="' + id + '">'
-      + '<div class="seat-header"><div class="seat-short">' + esc(s.short) + inlineTags + '</div></div>'
+      + '<div class="seat-header"><div class="seat-short">' + esc(s.short) + inlineTags + rsrvInline + '</div></div>'
       + ngBadge
-      + rsrvBadge
       + '<div class="seat-empty">' + emptyText + '</div>'
       + '</div>';
   }
@@ -607,10 +606,9 @@ function seatCard(s) {
   var seatClass = isKurofuku ? 'kurofuku' : isWaiting ? 'waiting' : s.status;
   return '<div class="seat ' + seatClass + '" id="' + id + '">'
     + '<div class="seat-header">'
-    + '<div class="seat-short">' + esc(s.short) + inlineTags + '</div>'
+    + '<div class="seat-short">' + esc(s.short) + inlineTags + rsrvInline + '</div>'
     + '</div>'
     + ngBadge
-    + rsrvBadge
     + castsHtml
     + '</div>';
 }
