@@ -270,8 +270,6 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yform-toggles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
 .ytbtn { padding: 7px 10px; border-radius: 7px; border: 1px solid #2a2a40; background: #0c0c1e; color: #556; font-size: 12px; cursor: pointer; }
 .ytbtn.on { border-color: #88aaff; background: #0d1a2e; color: #88aaff; }
-/* リクエストカード */
-.yreq-card { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 9px; padding: 11px 13px; margin-bottom: 8px; }
 .yreq-card.cast { border-color: #2a1a3a; }
 .yreq-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .yreq-from { font-size: 12px; font-weight: 600; color: #fff; }
@@ -2161,12 +2159,12 @@ function saveCashThresholds() {
 // ---- 予約管理タブ ----
 var yoyakuDate = new Date();
 var yoyakuRsvs = [];
-var yoyakuReqs = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
 var yoyakuSubTab = 'list'; // list / sched / add / req / cal
 var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
 var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
+var yoyakuNewCust = false;  // 新規顧客モード
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2192,7 +2190,6 @@ function loadYoyaku() {
     .then(function(d) {
       if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
       yoyakuRsvs = d.reservations || [];
-      yoyakuReqs = d.requests || [];
       renderYoyaku();
     })
     .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
@@ -2207,8 +2204,8 @@ function renderYoyaku() {
     + '</div>';
 
   var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
-    + ['cal','list','sched','add','req'].map(function(t) {
-      var labels = {cal:'カレンダー', list:'リスト', sched:'スケジュール', add:'予約追加', req:'リクエスト'+(yoyakuReqs.length?'('+yoyakuReqs.length+')':'')};
+    + ['cal','list','sched','add'].map(function(t) {
+      var labels = {cal:'カレンダー', list:'リスト', sched:'スケジュール', add:'予約追加'};
       return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
         + (yoyakuSubTab===t ? 'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;' : 'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
         + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
@@ -2220,7 +2217,6 @@ function renderYoyaku() {
   else if (yoyakuSubTab === 'list')  body = renderYoyakuList();
   else if (yoyakuSubTab === 'sched') body = renderYoyakuSched();
   else if (yoyakuSubTab === 'add')   body = renderYoyakuAdd();
-  else                               body = renderYoyakuReq();
 
   setContent('<div style="padding:14px">' + dateNav + subtabs + body + '</div>');
   afterYoyakuRender();
@@ -2240,8 +2236,8 @@ function loadYoyakuCal(headerHtml) {
   if (!headerHtml) {
     // subtabsだけ再生成
     var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
-      + ['cal','list','sched','add','req'].map(function(t) {
-        var labels = {cal:'カレンダー',list:'リスト',sched:'スケジュール',add:'予約追加',req:'リクエスト'+(yoyakuReqs.length?'('+yoyakuReqs.length+')':'')};
+      + ['cal','list','sched','add'].map(function(t) {
+        var labels = {cal:'カレンダー',list:'リスト',sched:'スケジュール',add:'予約追加'};
         return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
           + (t==='cal'?'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;':'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
           + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
@@ -2328,7 +2324,6 @@ function renderYoyakuList() {
   var stats = '<div class="yoyaku-stats">'
     + '<div class="yoyaku-stat"><div class="num" style="color:#88aaff">'+rsv.length+'</div><div class="lbl">本日の予約</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
-    + '<div class="yoyaku-stat"><div class="num" style="color:#ddaa44">'+yoyakuReqs.length+'</div><div class="lbl">リクエスト</div></div>'
     + '</div>';
   if (rsv.length === 0) return stats + '<div style="text-align:center;color:#334;padding:30px 0;font-size:13px">本日の予約はありません</div>';
   return stats + rsv.map(function(r) {
@@ -2426,32 +2421,6 @@ function renderYoyakuAdd() {
     + '</div>';
 }
 
-function renderYoyakuReq() {
-  var custReqs = yoyakuReqs.filter(function(r){ return r.type==='お客様'; });
-  var castReqs = yoyakuReqs.filter(function(r){ return r.type==='キャスト'; });
-  function card(r) {
-    return '<div class="yreq-card'+(r.type==='キャスト'?' cast':'')+'">'
-      + '<div class="yreq-hd"><span class="yreq-from">'+esc(r.customer)+'</span><span class="yreq-tag '+(r.type==='お客様'?'yrt-cust':'yrt-cast')+'">'+esc(r.type)+'</span></div>'
-      + '<div class="yreq-body">'+esc(r.content)+'</div>'
-      + '<div class="yreq-time">'+esc(r.regBy)+' · '+esc(r.regAt)+'</div>'
-      + '<div class="yreq-acts"><div class="yra yra-ok" onclick="yoyakuDoneReq('+r.rowIdx+',this)">対応済みにする</div><div class="yra yra-ng">メモ追加</div></div>'
-      + '</div>';
-  }
-  var html = '';
-  if (custReqs.length) html += '<div style="font-size:10px;color:#445;margin:4px 0 6px;text-transform:uppercase;letter-spacing:.5px">お客様（'+custReqs.length+'件）</div>' + custReqs.map(card).join('');
-  if (castReqs.length) html += '<div style="font-size:10px;color:#445;margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">キャスト（'+castReqs.length+'件）</div>' + castReqs.map(card).join('');
-  if (!yoyakuReqs.length) html = '<div style="text-align:center;color:#334;padding:30px 0;font-size:13px">リクエストはありません</div>';
-  html += '<div style="margin-top:12px;background:#1a1a2e;border:1px dashed #3a3a55;color:#88aadd;padding:11px;border-radius:9px;font-size:13px;text-align:center;cursor:pointer" onclick="yoyakuToggleReqForm()">＋ キャストリクエストを追加</div>'
-    + '<div id="yreq-form" style="display:none;background:#1a1a2e;border:1px solid #2a2a40;border-radius:9px;padding:12px;margin-top:8px">'
-    + '<div style="font-size:10px;color:#445;margin-bottom:4px;text-transform:uppercase">お客様名</div>'
-    + '<input type="text" class="yform-input" id="yreq-cust" placeholder="例: 山田 貴志 様" style="margin-bottom:8px">'
-    + '<div style="font-size:10px;color:#445;margin-bottom:4px;text-transform:uppercase">リクエスト内容</div>'
-    + '<textarea class="yform-input" id="yreq-content" rows="2" placeholder="担当希望など..." style="resize:none;margin-bottom:8px"></textarea>'
-    + '<div class="notif-save-btn" onclick="yoyakuSubmitReq()" style="cursor:pointer">送信する</div>'
-    + '<div id="yreq-status" style="font-size:12px;color:#999;text-align:center;margin-top:6px"></div>'
-    + '</div>';
-  return html;
-}
 
 function afterYoyakuRender() {
   if (yoyakuSubTab === 'add' && yoyakuSelectedCust) {
@@ -2534,29 +2503,6 @@ function yoyakuSubmitRsv() {
     }).catch(function(){ if (stat) stat.textContent = '⚠️ 通信エラー'; });
 }
 
-function yoyakuDoneReq(rowIdx, el) {
-  el.textContent = '処理中...';
-  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'doneYoyakuRequest', userId:userId, rowIdx:rowIdx }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){ if (d.ok) loadYoyaku(); else alert('エラー: '+(d.error||'')); })
-    .catch(function(){ alert('通信エラー'); });
-}
-
-function yoyakuToggleReqForm() {
-  var f = document.getElementById('yreq-form');
-  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-
-function yoyakuSubmitReq() {
-  var cust = (document.getElementById('yreq-cust').value||'').trim();
-  var content = (document.getElementById('yreq-content').value||'').trim();
-  if (!cust||!content) { alert('お客様名とリクエスト内容を入力してください'); return; }
-  var stat = document.getElementById('yreq-status');
-  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'addYoyakuRequest', userId:userId, type:'キャスト', customer:cust, content:content, date:yoyakuDateStr(yoyakuDate) }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){ if (d.ok) loadYoyaku(); else { if(stat) stat.textContent='⚠️ '+(d.error||'エラー'); } })
-    .catch(function(){ if(stat) stat.textContent='⚠️ 通信エラー'; });
-}
 
 function resetCashAction(action, label) {
   if (!confirm(label + 'を削除し、未提出の状態に戻します。よろしいですか？')) return;
