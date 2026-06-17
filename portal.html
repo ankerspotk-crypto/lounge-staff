@@ -2166,9 +2166,10 @@ var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の
 var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
 var yoyakuCustMode = '';    // '' = 未選択 / 'search' = 既存検索 / 'new' = 新規
 var staffName = '';         // GASから取得したスタッフ名（予約担当者表示用）
-var yoyakuRsvDate = '';     // 予約追加カレンダー選択日 YYYY-MM-DD
-var yoyakuRsvCalMonth = ''; // 予約追加カレンダー表示月 YYYY-MM
-var yoyakuRsvTime = '';     // 予約追加時間選択 HH:MM
+var yoyakuRsvDate = '';       // 予約追加カレンダー選択日 YYYY-MM-DD
+var yoyakuRsvCalMonth = '';   // 予約追加カレンダー表示月 YYYY-MM
+var yoyakuRsvTime = '';       // 予約追加時間選択 HH:MM
+var yoyakuRsvCustManual = ''; // 新規顧客名テキスト（再描画時に保持）
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2199,6 +2200,7 @@ function loadYoyaku() {
       yoyakuRsvDate = '';
       yoyakuRsvCalMonth = '';
       yoyakuRsvTime = '';
+      yoyakuRsvCustManual = '';
       renderYoyaku();
     })
     .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
@@ -2437,7 +2439,7 @@ function renderYoyakuAdd() {
       + '<div id="ycust-results"></div>';
   } else if (yoyakuCustMode === 'new') {
     custSection = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-      + '<span style="font-size:12px;color:#556;cursor:pointer" onclick="yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
+      + '<span style="font-size:12px;color:#556;cursor:pointer" onclick="yoyakuRsvCustManual=\'\';yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
       + '<span style="font-size:12px;color:#66cc88">✨ 新規のお客様</span>'
       + '</div>';
   } else {
@@ -2452,7 +2454,7 @@ function renderYoyakuAdd() {
     + '<div style="font-size:11px;color:#445;margin-bottom:10px">予約担当者: <span style="color:#88aaff">'+esc(staffName||'')+'</span></div>'
     + (!yoyakuSelectedCust && yoyakuCustMode === 'new' ?
         '<div class="yform-label">お客様名</div>'
-        + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" style="margin-bottom:8px">'
+        + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" value="'+esc(yoyakuRsvCustManual)+'" style="margin-bottom:8px">'
       : '')
     + '<div class="yform-label">来店日</div>'
     + renderRsvCal()
@@ -2472,17 +2474,24 @@ function renderYoyakuAdd() {
 
 function afterYoyakuRender() {}
 
+function saveManualCustInput() {
+  var el = document.getElementById('yrsv-cust-manual');
+  if (el) yoyakuRsvCustManual = el.value;
+}
 function yoyakuRsvCalNav(diff) {
+  saveManualCustInput();
   var p = yoyakuRsvCalMonth.split('-');
   var d = new Date(parseInt(p[0]), parseInt(p[1]) - 1 + diff, 1);
   yoyakuRsvCalMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
   renderYoyaku();
 }
 function yoyakuRsvSelectDate(ds) {
+  saveManualCustInput();
   yoyakuRsvDate = ds;
   renderYoyaku();
 }
 function yoyakuRsvSelectTime(t) {
+  saveManualCustInput();
   yoyakuRsvTime = t;
   renderYoyaku();
 }
@@ -2621,6 +2630,7 @@ function yoyakuSubmitRsv() {
       yoyakuRsvDate = '';
       yoyakuRsvCalMonth = '';
       yoyakuRsvTime = '';
+      yoyakuRsvCustManual = '';
       yoyakuSubTab = 'list';
       loadYoyaku();
     }).catch(function(){ if (stat) stat.textContent = '⚠️ 通信エラー'; });
