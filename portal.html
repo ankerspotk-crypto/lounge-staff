@@ -226,6 +226,84 @@ header h1 { font-size: 17px; font-weight: 600; }
 .cashset-field { flex: 1; display: flex; align-items: center; gap: 4px; }
 .cashset-field span { font-size: 10px; color: #556; flex-shrink: 0; }
 .cashset-input { width: 100%; box-sizing: border-box; background: #0c0c1e; color: #ccd; border: 1px solid #2a2a40; border-radius: 6px; padding: 6px 8px; font-size: 13px; text-align: center; }
+
+/* ---- 予約管理 ---- */
+.yoyaku-date-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.yoyaku-date-nav button { background: #1a1a2e; border: 1px solid #2a2a40; color: #88aaff; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 14px; }
+.yoyaku-date-text { font-size: 15px; font-weight: 700; color: #fff; flex: 1; text-align: center; }
+.yoyaku-today-btn { font-size: 10px; background: #1a2a4a; color: #88aaff; border: 1px solid #2255aa; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.yoyaku-stats { display: flex; gap: 8px; margin-bottom: 12px; }
+.yoyaku-stat { flex: 1; background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 8px; padding: 9px; text-align: center; }
+.yoyaku-stat .num { font-size: 22px; font-weight: 700; }
+.yoyaku-stat .lbl { font-size: 9px; color: #556; margin-top: 2px; }
+.yoyaku-card { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
+.yoyaku-card .yc-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #88aaff; width: 46px; flex-shrink: 0; }
+.yoyaku-card .yc-name { font-size: 14px; font-weight: 600; color: #fff; }
+.yoyaku-card .yc-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 54px; margin-bottom: 3px; }
+.yoyaku-card .yc-note { font-size: 11px; color: #445; padding-left: 54px; }
+.yb { font-size: 10px; padding: 2px 8px; border-radius: 7px; font-weight: 600; }
+.yb-seat { background: #0d1a2e; color: #88aaff; border: 1px solid #1e3a6a; }
+.yb-pax  { background: #1a1a2e; color: #aaa; border: 1px solid #2a2a40; }
+.yb-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
+.yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
+.yb-pend { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
+/* 顧客検索 */
+.ycust-search { width: 100%; background: #111128; border: 1px solid #2a2a40; border-radius: 9px; padding: 10px 12px; color: #fff; font-size: 13px; outline: none; margin-bottom: 10px; }
+.ycust-row { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px; background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: .15s; }
+.ycust-row:hover { border-color: #3a3a6a; }
+.ycust-row.selected { border-color: #88aaff; background: #0d1a2e; }
+.ycust-name { font-size: 13px; font-weight: 600; color: #fff; }
+.ycust-sub { font-size: 10px; color: #445; margin-top: 2px; }
+.ycust-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.ycm { font-size: 9px; padding: 1px 6px; border-radius: 5px; }
+.ycm-bottle { background: #1a2a10; color: #88cc55; border: 1px solid #336622; }
+.ycm-bday   { background: #1a1040; color: #9988ee; border: 1px solid #4433aa; }
+.ycm-note   { background: #141428; color: #667; border: 1px solid #2a2a44; }
+/* 予約フォーム */
+.yform-sec { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 10px; padding: 13px; margin-top: 10px; }
+.yform-sec .selected-name { font-size: 14px; font-weight: 600; color: #88aaff; margin-bottom: 12px; }
+.yform-label { font-size: 10px; color: #445; margin: 8px 0 4px; letter-spacing: .5px; text-transform: uppercase; }
+.yform-input { width: 100%; box-sizing: border-box; background: #0c0c1e; border: 1px solid #2a2a40; border-radius: 8px; padding: 9px 11px; color: #fff; font-size: 13px; outline: none; }
+.yform-row { display: flex; gap: 8px; }
+.yform-row .yform-input { margin: 0; }
+.yform-toggles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.ytbtn { padding: 7px 10px; border-radius: 7px; border: 1px solid #2a2a40; background: #0c0c1e; color: #556; font-size: 12px; cursor: pointer; }
+.ytbtn.on { border-color: #88aaff; background: #0d1a2e; color: #88aaff; }
+/* リクエストカード */
+.yreq-card { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 9px; padding: 11px 13px; margin-bottom: 8px; }
+.yreq-card.cast { border-color: #2a1a3a; }
+.yreq-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.yreq-from { font-size: 12px; font-weight: 600; color: #fff; }
+.yreq-tag { font-size: 9px; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
+.yrt-cust { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
+.yrt-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
+.yreq-body { font-size: 12px; color: #889; line-height: 1.5; }
+.yreq-time { font-size: 10px; color: #334; margin-top: 3px; }
+.yreq-acts { display: flex; gap: 6px; margin-top: 8px; }
+.yra { flex: 1; padding: 7px; border-radius: 7px; font-size: 11px; cursor: pointer; text-align: center; }
+.yra-ok { background: #0d2010; border: 1px solid #1a4a22; color: #66cc88; }
+.yra-ng { background: #141428; border: 1px solid #2a2a40; color: #556; }
+/* スケジュールグリッド */
+.ysched-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ysched-inner { display: flex; min-width: max-content; }
+.ysched-left { flex-shrink: 0; width: 70px; position: sticky; left: 0; z-index: 2; background: #12122a; }
+.ysched-right { flex-shrink: 0; }
+.ysched-hdr { display: flex; background: #1a1a2e; border-bottom: 1px solid #2a2a40; }
+.ysched-tbl-hdr { width: 70px; padding: 7px 6px; font-size: 9px; color: #445; border-right: 1px solid #2a2a40; flex-shrink: 0; background: #1a1a2e; }
+.ysched-time-hdr { display: flex; }
+.ysched-time-cell { font-size: 10px; color: #88aaff; text-align: center; border-right: 1px solid #141426; padding: 7px 4px; }
+.ysched-floor-div { height: 5px; background: #111128; border-bottom: 1px solid #2a2a40; }
+.ysched-name-cell { height: 46px; padding: 4px 6px; border-bottom: 1px solid #1e1e38; border-right: 1px solid #2a2a40; display: flex; flex-direction: column; justify-content: center; }
+.ysched-name-main { font-size: 11px; font-weight: 600; color: #bbb; }
+.ysched-name-cap { font-size: 9px; color: #334; }
+.ysched-row { height: 46px; position: relative; border-bottom: 1px solid #1e1e38; }
+.ysched-row-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; }
+.ysched-hour-cell { border-right: 1px solid #141426; height: 100%; }
+.yrsv-blk { position: absolute; top: 5px; bottom: 5px; border-radius: 6px; padding: 2px 6px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; overflow: hidden; min-width: 30px; }
+.yrsv-blk:hover { filter: brightness(1.15); }
+.yrsv-name { font-size: 10px; font-weight: 700; color: #aaccff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yrsv-pax { font-size: 9px; color: #4466aa; }
 </style>
 </head>
 <body>
@@ -241,6 +319,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab active" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
     <div class="tab" id="tab-ranking" onclick="switchTab('ranking')">ランキング</div>
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
+    <div class="tab" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
     <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">現金設定</div>
@@ -393,7 +472,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','ranking','hair','requests','notif','cashset'].forEach(function(t) {
+  ['sales','pay','shift','ranking','hair','yoyaku','requests','notif','cashset'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -417,6 +496,7 @@ function switchTab(tab) {
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
+  if (tab === 'yoyaku') { loadYoyaku(); return; }
   if (tab === 'ranking') { loadRanking(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
@@ -2058,6 +2138,281 @@ function saveCashThresholds() {
       if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
       alert('通信エラー');
     });
+}
+
+// ---- 予約管理タブ ----
+var yoyakuDate = new Date();
+var yoyakuRsvs = [];
+var yoyakuReqs = [];
+var yoyakuCustResults = [];
+var yoyakuSelectedCust = null;
+var yoyakuSubTab = 'list'; // list / sched / add / req
+
+var YOYAKU_TABLES = [
+  {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
+  {f:'2F',n:'ボックス1',cap:4},{f:'2F',n:'ボックス2',cap:4},{f:'2F',n:'ボックス3',cap:4},
+  {f:'5F',n:'カウンター1',cap:1},{f:'5F',n:'カウンター2',cap:1},{f:'5F',n:'カウンター3',cap:1},
+  {f:'5F',n:'カウンター4',cap:1},{f:'5F',n:'カウンター5',cap:1},{f:'5F',n:'カウンター6',cap:1},
+  {f:'5F',n:'ボックス1',cap:6},{f:'5F',n:'ボックス2',cap:6}
+];
+
+function yoyakuDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function yoyakuDateDisplay(d) {
+  var dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  return (d.getMonth()+1) + '/' + d.getDate() + '（' + dow + '）';
+}
+
+function loadYoyaku() {
+  yoyakuSelectedCust = null;
+  setContent('<div class="loading">読み込み中...</div>');
+  fetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + yoyakuDateStr(yoyakuDate))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      yoyakuRsvs = d.reservations || [];
+      yoyakuReqs = d.requests || [];
+      renderYoyaku();
+    })
+    .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderYoyaku() {
+  var dateNav = '<div class="yoyaku-date-nav">'
+    + '<button onclick="yoyakuChangeDate(-1)">‹</button>'
+    + '<span class="yoyaku-today-btn" onclick="yoyakuToday()">今日</span>'
+    + '<span class="yoyaku-date-text">' + yoyakuDateDisplay(yoyakuDate) + '</span>'
+    + '<button onclick="yoyakuChangeDate(1)">›</button>'
+    + '</div>';
+
+  var subtabs = '<div style="display:flex;gap:6px;margin-bottom:12px">'
+    + ['list','sched','add','req'].map(function(t) {
+      var labels = {list:'予約リスト', sched:'スケジュール', add:'予約追加', req:'リクエスト'+(yoyakuReqs.length?'('+yoyakuReqs.length+')':'')};
+      return '<div style="flex:1;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
+        + (yoyakuSubTab===t ? 'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;' : 'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
+        + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
+    }).join('')
+    + '</div>';
+
+  var body = '';
+  if (yoyakuSubTab === 'list')  body = renderYoyakuList();
+  else if (yoyakuSubTab === 'sched') body = renderYoyakuSched();
+  else if (yoyakuSubTab === 'add')   body = renderYoyakuAdd();
+  else                               body = renderYoyakuReq();
+
+  setContent('<div style="padding:14px">' + dateNav + subtabs + body + '</div>');
+  afterYoyakuRender();
+}
+
+function yoyakuSubSwitch(t) { yoyakuSubTab = t; renderYoyaku(); }
+
+function yoyakuChangeDate(d) {
+  yoyakuDate = new Date(yoyakuDate.getTime() + d * 86400000);
+  loadYoyaku();
+}
+function yoyakuToday() { yoyakuDate = new Date(); loadYoyaku(); }
+
+function renderYoyakuList() {
+  var rsv = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+  var pax = rsv.reduce(function(s,r){ return s+(r.pax||0); }, 0);
+  var stats = '<div class="yoyaku-stats">'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#88aaff">'+rsv.length+'</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#ddaa44">'+yoyakuReqs.length+'</div><div class="lbl">リクエスト</div></div>'
+    + '</div>';
+  if (rsv.length === 0) return stats + '<div style="text-align:center;color:#334;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  return stats + rsv.map(function(r) {
+    var castBadge = (r.castReq && r.castReq !== 'なし') ? '<span class="yb yb-cast">'+esc(r.castReq)+'希望</span>' : '';
+    var stsBadge = r.status === '確定' ? '<span class="yb yb-ok">確定</span>' : '<span class="yb yb-pend">'+esc(r.status)+'</span>';
+    return '<div class="yoyaku-card">'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span></div>'
+      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+castBadge+'</div>'
+      + (r.note ? '<div class="yc-note">'+esc(r.note)+'</div>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function renderYoyakuSched() {
+  var HW = 52, SH = 19, EH = 26, TW = (EH-SH)*HW;
+  var prevF = '';
+  var leftHtml = '<div class="ysched-tbl-hdr">テーブル</div>';
+  var rightHtml = '<div class="ysched-hdr"><div style="width:'+TW+'px;display:flex">';
+  for (var h = SH; h < EH; h++) rightHtml += '<div class="ysched-time-cell" style="width:'+HW+'px">'+(h<24?h:h-24)+':00</div>';
+  rightHtml += '</div></div>';
+
+  YOYAKU_TABLES.forEach(function(t, i) {
+    if (t.f !== prevF && prevF !== '') {
+      leftHtml += '<div class="ysched-floor-div"></div>';
+      rightHtml += '<div class="ysched-floor-div" style="width:'+TW+'px"></div>';
+    }
+    prevF = t.f;
+    leftHtml += '<div class="ysched-name-cell"><div class="ysched-name-main">'+t.f+' '+t.n.replace('カウンター','カウ').replace('ボックス','ボックス')+'</div></div>';
+    var rowBg = ''; for (var c=0;c<(EH-SH);c++) rowBg += '<div class="ysched-hour-cell" style="width:'+HW+'px"></div>';
+    var blocks = '';
+    yoyakuRsvs.forEach(function(r) {
+      if ((r.table||'').replace(/\s/g,'') !== (t.f+t.n).replace(/\s/g,'')) return;
+      var pts = (r.time||'20:00').split(':');
+      var sm = (parseInt(pts[0])||20)*60+(parseInt(pts[1])||0);
+      var em = sm + 120;
+      var lx = ((sm-SH*60)/60)*HW, wx = ((em-sm)/60)*HW-3;
+      if (lx < 0) { wx += lx; lx = 0; }
+      var colors = ['background:#162848;border:1px solid #2a5090','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
+      blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;'+colors[i%4]+'">'
+        + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
+    });
+    rightHtml += '<div class="ysched-row" style="width:'+TW+'px"><div class="ysched-row-bg">'+rowBg+'</div>'+blocks+'</div>';
+  });
+
+  return '<div class="ysched-wrap"><div class="ysched-inner"><div class="ysched-left">'+leftHtml+'</div><div class="ysched-right">'+rightHtml+'</div></div></div>';
+}
+
+function renderYoyakuAdd() {
+  var tableOpts = '<option value="未定">未定</option>' + YOYAKU_TABLES.map(function(t){ return '<option value="'+t.f+' '+t.n+'">'+t.f+' '+t.n+'</option>'; }).join('');
+  var casts = ['なし','りく','まや','ゆうか','のあ','ぼん','ゆき','その他'];
+  var castBtns = casts.map(function(c){ return '<div class="ytbtn'+(c==='なし'?' on':'')+ '" onclick="yoyakuToggleCast(this)">'+esc(c)+'</div>'; }).join('');
+  var custSection = yoyakuSelectedCust
+    ? '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:13px;font-weight:600;color:#88aaff">'
+      + esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様　<span style="font-size:10px;color:#445;font-weight:400">選択中</span></div>'
+    : '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索..." oninput="yoyakuSearch(this.value)">'
+      + '<div id="ycust-results"></div>';
+  return custSection
+    + '<div class="yform-sec" id="yform" style="'+(yoyakuSelectedCust?'':'display:none')+'">'
+    + '<div class="yform-label">来店日</div>'
+    + '<input type="date" class="yform-input" id="yrsv-date" value="'+yoyakuDateStr(yoyakuDate)+'" style="margin-bottom:8px">'
+    + '<div class="yform-label">時間 / 人数</div>'
+    + '<div class="yform-row" style="margin-bottom:8px"><input type="time" class="yform-input" id="yrsv-time" value="20:00" style="flex:1"><select class="yform-input" id="yrsv-pax" style="flex:0.5;margin-left:8px"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
+    + '<div class="yform-label">席</div>'
+    + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
+    + '<div class="yform-label">キャストリクエスト</div>'
+    + '<div class="yform-toggles" id="ycast-toggle" style="margin-bottom:8px">'+castBtns+'</div>'
+    + '<div class="yform-label">備考</div>'
+    + '<textarea class="yform-input" id="yrsv-note" rows="2" placeholder="VIP・誕生日・ボトルなど..." style="resize:none;margin-bottom:8px"></textarea>'
+    + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">予約を確定する</div>'
+    + '<div id="yrsv-status" style="font-size:12px;color:#999;text-align:center;margin-top:6px"></div>'
+    + '</div>';
+}
+
+function renderYoyakuReq() {
+  var custReqs = yoyakuReqs.filter(function(r){ return r.type==='お客様'; });
+  var castReqs = yoyakuReqs.filter(function(r){ return r.type==='キャスト'; });
+  function card(r) {
+    return '<div class="yreq-card'+(r.type==='キャスト'?' cast':'')+'">'
+      + '<div class="yreq-hd"><span class="yreq-from">'+esc(r.customer)+'</span><span class="yreq-tag '+(r.type==='お客様'?'yrt-cust':'yrt-cast')+'">'+esc(r.type)+'</span></div>'
+      + '<div class="yreq-body">'+esc(r.content)+'</div>'
+      + '<div class="yreq-time">'+esc(r.regBy)+' · '+esc(r.regAt)+'</div>'
+      + '<div class="yreq-acts"><div class="yra yra-ok" onclick="yoyakuDoneReq('+r.rowIdx+',this)">対応済みにする</div><div class="yra yra-ng">メモ追加</div></div>'
+      + '</div>';
+  }
+  var html = '';
+  if (custReqs.length) html += '<div style="font-size:10px;color:#445;margin:4px 0 6px;text-transform:uppercase;letter-spacing:.5px">お客様（'+custReqs.length+'件）</div>' + custReqs.map(card).join('');
+  if (castReqs.length) html += '<div style="font-size:10px;color:#445;margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">キャスト（'+castReqs.length+'件）</div>' + castReqs.map(card).join('');
+  if (!yoyakuReqs.length) html = '<div style="text-align:center;color:#334;padding:30px 0;font-size:13px">リクエストはありません</div>';
+  html += '<div style="margin-top:12px;background:#1a1a2e;border:1px dashed #3a3a55;color:#88aadd;padding:11px;border-radius:9px;font-size:13px;text-align:center;cursor:pointer" onclick="yoyakuToggleReqForm()">＋ キャストリクエストを追加</div>'
+    + '<div id="yreq-form" style="display:none;background:#1a1a2e;border:1px solid #2a2a40;border-radius:9px;padding:12px;margin-top:8px">'
+    + '<div style="font-size:10px;color:#445;margin-bottom:4px;text-transform:uppercase">お客様名</div>'
+    + '<input type="text" class="yform-input" id="yreq-cust" placeholder="例: 山田 貴志 様" style="margin-bottom:8px">'
+    + '<div style="font-size:10px;color:#445;margin-bottom:4px;text-transform:uppercase">リクエスト内容</div>'
+    + '<textarea class="yform-input" id="yreq-content" rows="2" placeholder="担当希望など..." style="resize:none;margin-bottom:8px"></textarea>'
+    + '<div class="notif-save-btn" onclick="yoyakuSubmitReq()" style="cursor:pointer">送信する</div>'
+    + '<div id="yreq-status" style="font-size:12px;color:#999;text-align:center;margin-top:6px"></div>'
+    + '</div>';
+  return html;
+}
+
+function afterYoyakuRender() {
+  if (yoyakuSubTab === 'add' && yoyakuSelectedCust) {
+    var f = document.getElementById('yform');
+    if (f) f.style.display = 'block';
+  }
+}
+
+function yoyakuSearch(q) {
+  q = (q||'').trim();
+  var res = document.getElementById('ycust-results');
+  if (!res) return;
+  if (q.length < 1) { res.innerHTML = ''; return; }
+  res.innerHTML = '<div style="font-size:11px;color:#445;padding:4px 0">検索中...</div>';
+  fetch(GAS_URL + '?action=portal&tab=yoyakuCustomers&userId=' + encodeURIComponent(userId) + '&q=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok || !d.customers || !d.customers.length) { res.innerHTML = '<div style="font-size:11px;color:#334;padding:4px 0">見つかりませんでした</div>'; return; }
+      yoyakuCustResults = d.customers;
+      res.innerHTML = d.customers.map(function(c, i) {
+        var badges = '';
+        if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶ボトルあり</span>';
+        if (c.bday && String(c.bday).trim()) badges += '<span class="ycm ycm-bday">🎂'+esc(c.bday)+'</span>';
+        if (c.note) badges += '<span class="ycm ycm-note">📝メモあり</span>';
+        return '<div class="ycust-row" data-cidx="'+i+'" onclick="yoyakuSelectCust('+i+')">'
+          + '<div><div class="ycust-name">'+esc(c.card||c.name||'')+'様</div>'
+          + '<div class="ycust-sub">'+(c.no?'会員'+c.no:'')+' '+(c.tantou?'担当:'+c.tantou:'')+'</div>'
+          + (badges?'<div class="ycust-badges">'+badges+'</div>':'')+'</div></div>';
+      }).join('');
+    }).catch(function(){ res.innerHTML = '<div style="font-size:11px;color:#445">通信エラー</div>'; });
+}
+
+function yoyakuSelectCust(i) {
+  yoyakuSelectedCust = yoyakuCustResults[i];
+  yoyakuSubTab = 'add';
+  renderYoyaku();
+}
+
+function yoyakuToggleCast(el) {
+  document.querySelectorAll('#ycast-toggle .ytbtn').forEach(function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+}
+
+function yoyakuSubmitRsv() {
+  if (!yoyakuSelectedCust) { alert('お客様を選択してください'); return; }
+  var castReq = '';
+  var onBtn = document.querySelector('#ycast-toggle .ytbtn.on');
+  if (onBtn) castReq = onBtn.textContent.trim();
+  var paxEl = document.getElementById('yrsv-pax');
+  var payload = {
+    action: 'addReservation', userId: userId,
+    date: document.getElementById('yrsv-date').value,
+    time: document.getElementById('yrsv-time').value,
+    customer: yoyakuSelectedCust.card || yoyakuSelectedCust.name || '',
+    memberId: yoyakuSelectedCust.no || '',
+    pax: parseInt(paxEl ? paxEl.value : '1') || 1,
+    table: document.getElementById('yrsv-table').value,
+    castReq: castReq || 'なし',
+    note: document.getElementById('yrsv-note').value
+  };
+  var stat = document.getElementById('yrsv-status');
+  if (stat) stat.textContent = '送信中...';
+  fetch(GAS_URL, { method:'POST', body: JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (stat) stat.textContent = '⚠️ ' + (d.error||'エラー'); return; }
+      yoyakuSelectedCust = null;
+      yoyakuSubTab = 'list';
+      loadYoyaku();
+    }).catch(function(){ if (stat) stat.textContent = '⚠️ 通信エラー'; });
+}
+
+function yoyakuDoneReq(rowIdx, el) {
+  el.textContent = '処理中...';
+  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'doneYoyakuRequest', userId:userId, rowIdx:rowIdx }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d.ok) loadYoyaku(); else alert('エラー: '+(d.error||'')); })
+    .catch(function(){ alert('通信エラー'); });
+}
+
+function yoyakuToggleReqForm() {
+  var f = document.getElementById('yreq-form');
+  if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+function yoyakuSubmitReq() {
+  var cust = (document.getElementById('yreq-cust').value||'').trim();
+  var content = (document.getElementById('yreq-content').value||'').trim();
+  if (!cust||!content) { alert('お客様名とリクエスト内容を入力してください'); return; }
+  var stat = document.getElementById('yreq-status');
+  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'addYoyakuRequest', userId:userId, type:'キャスト', customer:cust, content:content, date:yoyakuDateStr(yoyakuDate) }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d.ok) loadYoyaku(); else { if(stat) stat.textContent='⚠️ '+(d.error||'エラー'); } })
+    .catch(function(){ if(stat) stat.textContent='⚠️ 通信エラー'; });
 }
 
 function resetCashAction(action, label) {
