@@ -512,7 +512,7 @@ function switchTab(tab) {
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
-  if (tab === 'yoyaku') { loadYoyaku(); return; }
+  if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'ranking') { loadRanking(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
@@ -2161,10 +2161,11 @@ var yoyakuDate = new Date();
 var yoyakuRsvs = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
-var yoyakuSubTab = 'list'; // list / sched / add / req / cal
+var yoyakuSubTab = 'list'; // list / sched / add / cal
 var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
 var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
 var yoyakuNewCust = false;  // 新規顧客モード
+var staffName = '';         // GASから取得したスタッフ名（予約担当者表示用）
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2189,6 +2190,7 @@ function loadYoyaku() {
     .then(function(r){ return r.json(); })
     .then(function(d) {
       if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      staffName = d.name || '';
       yoyakuRsvs = d.reservations || [];
       renderYoyaku();
     })
