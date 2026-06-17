@@ -4308,9 +4308,9 @@ function denomYen_(a) {
 function formatDenom_(a) {
   if (!a) return '';
   const parts = [];
-  if (a.m10000) parts.push('1万×' + a.m10000);
-  if (a.m5000)  parts.push('5千×' + a.m5000);
-  if (a.m1000)  parts.push('千×' + a.m1000);
+  if (a.m10000) parts.push('10,000円×' + a.m10000 + '枚');
+  if (a.m5000)  parts.push('5,000円×' + a.m5000 + '枚');
+  if (a.m1000)  parts.push('1,000円×' + a.m1000 + '枚');
   return parts.join(' ');
 }
 
