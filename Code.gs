@@ -3060,6 +3060,20 @@ function resetGunshiSettings_() {
   Object.keys(all).forEach(k => {
     if (!KEEP.includes(k)) ps.deleteProperty(k);
   });
+
+  // アテンドログの未終了行（今日分）をクリア
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sh = ss.getSheetByName(ATEN_TAB);
+    if (sh && sh.getLastRow() > 1) {
+      const rows = sh.getDataRange().getValues();
+      for (let i = rows.length - 1; i >= 1; i--) {
+        if (String(rows[i][5]).trim() === '') sh.deleteRow(i + 1);
+      }
+    }
+  } catch(e) {
+    Logger.log('アテンドログクリア失敗: ' + e);
+  }
 }
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
