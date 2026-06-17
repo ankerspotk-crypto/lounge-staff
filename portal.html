@@ -2147,6 +2147,7 @@ var yoyakuReqs = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
 var yoyakuSubTab = 'list'; // list / sched / add / req
+var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2248,7 +2249,16 @@ function renderYoyakuSched() {
     }
     prevF = t.f;
     leftHtml += '<div class="ysched-name-cell"><div class="ysched-name-main">'+t.f+' '+t.n.replace('カウンター','カウ').replace('ボックス','ボックス')+'</div></div>';
-    var rowBg = ''; for (var c=0;c<(EH-SH);c++) rowBg += '<div class="ysched-hour-cell" style="width:'+HW+'px"></div>';
+    // 1時間ごとのセル（内部に15分区切りの薄い縦線を入れる）
+    var rowBg = '';
+    for (var c = 0; c < (EH-SH); c++) {
+      rowBg += '<div class="ysched-hour-cell" style="width:'+HW+'px;display:flex">'
+        + '<div style="flex:1;border-right:1px solid #0f0f20"></div>'
+        + '<div style="flex:1;border-right:1px solid #0f0f20"></div>'
+        + '<div style="flex:1;border-right:1px solid #0f0f20"></div>'
+        + '<div style="flex:1"></div>'
+        + '</div>';
+    }
     var blocks = '';
     yoyakuRsvs.forEach(function(r) {
       if ((r.table||'').replace(/\s/g,'') !== (t.f+t.n).replace(/\s/g,'')) return;
@@ -2258,30 +2268,44 @@ function renderYoyakuSched() {
       var lx = ((sm-SH*60)/60)*HW, wx = ((em-sm)/60)*HW-3;
       if (lx < 0) { wx += lx; lx = 0; }
       var colors = ['background:#162848;border:1px solid #2a5090','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
-      blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;'+colors[i%4]+'">'
+      blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;'+colors[i%4]+'" onclick="event.stopPropagation()">'
         + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
     });
-    rightHtml += '<div class="ysched-row" style="width:'+TW+'px"><div class="ysched-row-bg">'+rowBg+'</div>'+blocks+'</div>';
+    rightHtml += '<div class="ysched-row" style="width:'+TW+'px;cursor:crosshair" data-tidx="'+i+'" onclick="yoyakuGridClick('+i+',event,'+SH+','+HW+')">'
+      + '<div class="ysched-row-bg">'+rowBg+'</div>'+blocks+'</div>';
   });
 
   return '<div class="ysched-wrap"><div class="ysched-inner"><div class="ysched-left">'+leftHtml+'</div><div class="ysched-right">'+rightHtml+'</div></div></div>';
 }
 
 function renderYoyakuAdd() {
-  var tableOpts = '<option value="未定">未定</option>' + YOYAKU_TABLES.map(function(t){ return '<option value="'+t.f+' '+t.n+'">'+t.f+' '+t.n+'</option>'; }).join('');
+  var preset = yoyakuGridPreset || {};
+  var presetTable = preset.table || '未定';
+  var presetTime  = preset.time  || '20:00';
+  var tableOpts = '<option value="未定">未定</option>' + YOYAKU_TABLES.map(function(t){
+    var val = t.f+' '+t.n;
+    return '<option value="'+val+'"'+(val===presetTable?' selected':'')+'>'+val+'</option>';
+  }).join('');
   var casts = ['なし','りく','まや','ゆうか','のあ','ぼん','ゆき','その他'];
   var castBtns = casts.map(function(c){ return '<div class="ytbtn'+(c==='なし'?' on':'')+ '" onclick="yoyakuToggleCast(this)">'+esc(c)+'</div>'; }).join('');
+  // グリッドクリック時のプリセット表示
+  var presetBanner = preset.table
+    ? '<div style="font-size:12px;background:#1a2a1a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<span>📅 <b>'+esc(presetTable)+'</b>　'+esc(presetTime)+'〜（デフォルト2時間）を選択中</span>'
+      + '<span style="font-size:11px;color:#445;cursor:pointer" onclick="yoyakuGridPreset=null;renderYoyaku()">✕ クリア</span></div>'
+    : '';
+
   var custSection = yoyakuSelectedCust
     ? '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:13px;font-weight:600;color:#88aaff">'
       + esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様　<span style="font-size:10px;color:#445;font-weight:400">選択中</span></div>'
     : '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索..." oninput="yoyakuSearch(this.value)">'
       + '<div id="ycust-results"></div>';
-  return custSection
+  return presetBanner + custSection
     + '<div class="yform-sec" id="yform" style="'+(yoyakuSelectedCust?'':'display:none')+'">'
     + '<div class="yform-label">来店日</div>'
     + '<input type="date" class="yform-input" id="yrsv-date" value="'+yoyakuDateStr(yoyakuDate)+'" style="margin-bottom:8px">'
     + '<div class="yform-label">時間 / 人数</div>'
-    + '<div class="yform-row" style="margin-bottom:8px"><input type="time" class="yform-input" id="yrsv-time" value="20:00" style="flex:1"><select class="yform-input" id="yrsv-pax" style="flex:0.5;margin-left:8px"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
+    + '<div class="yform-row" style="margin-bottom:8px"><input type="time" class="yform-input" id="yrsv-time" value="'+presetTime+'" style="flex:1"><select class="yform-input" id="yrsv-pax" style="flex:0.5;margin-left:8px"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
     + '<div class="yform-label">席</div>'
     + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
     + '<div class="yform-label">キャストリクエスト</div>'
@@ -2325,6 +2349,23 @@ function afterYoyakuRender() {
     var f = document.getElementById('yform');
     if (f) f.style.display = 'block';
   }
+}
+
+function yoyakuGridClick(tableIdx, e, SH, HW) {
+  var row = e.currentTarget;
+  var rect = row.getBoundingClientRect();
+  var clickX = e.clientX - rect.left;
+  var minutesFromStart = (clickX / HW) * 60;
+  var startMins = SH * 60 + Math.floor(minutesFromStart / 15) * 15; // 15分単位に丸める
+  var hour = Math.floor(startMins / 60);
+  var min = startMins % 60;
+  var timeStr = String(hour).padStart(2,'0') + ':' + String(min).padStart(2,'0');
+  var t = YOYAKU_TABLES[tableIdx];
+  if (!t) return;
+  yoyakuGridPreset = { table: t.f + ' ' + t.n, time: timeStr };
+  yoyakuSelectedCust = null;
+  yoyakuSubTab = 'add';
+  renderYoyaku();
 }
 
 function yoyakuSearch(q) {
