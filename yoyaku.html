@@ -108,23 +108,7 @@ select.finput option{background:#1a1a2e}
 .sub-btn{width:100%;background:#1a2a4a;border:1px solid #2255aa;color:#88aaff;padding:14px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px}
 .sub-btn:active{background:#2a3a5a}
 
-/* ===== リクエスト ===== */
-#req-wrap{padding:12px}
-.req-card{background:#14142a;border:1px solid #1e1e3a;border-radius:9px;padding:11px 13px;margin-bottom:8px}
-.req-card.cast{border-color:#2a1a3a}
-.rq-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
-.rq-from{font-size:12px;font-weight:600;color:#fff}
-.rq-tag{font-size:9px;padding:2px 7px;border-radius:5px;font-weight:600}
-.rt-cust{background:#2a2210;color:#ddaa44;border:1px solid #5a4400}
-.rt-cast{background:#1a0d2e;color:#bb99ff;border:1px solid #3a1a6a}
-.rq-body{font-size:12px;color:#889;line-height:1.5;margin-bottom:5px}
-.rq-time{font-size:10px;color:#334}
-.rq-acts{display:flex;gap:6px;margin-top:8px}
-.ra{flex:1;padding:7px;border-radius:7px;font-size:11px;cursor:pointer;text-align:center}
-.ra-ok{background:#0d2010;border:1px solid #1a4a22;color:#66cc88}
-.ra-ng{background:#1a1a2e;border:1px solid #2a2a40;color:#556}
-.add-req-btn{width:100%;background:#1a1a2e;border:1px dashed #3a3a55;color:#88aadd;padding:10px;border-radius:9px;font-size:13px;cursor:pointer;margin-top:12px}
-.req-form{background:#14142a;border:1px solid #1e1e3a;border-radius:9px;padding:12px;margin-top:8px;display:none}
+
 </style>
 </head>
 <body>
@@ -151,7 +135,6 @@ select.finput option{background:#1a1a2e}
   <div class="tab" id="tab-sched" onclick="switchTab('sched')">スケジュール</div>
   <div class="tab active" id="tab-list" onclick="switchTab('list')">予約リスト</div>
   <div class="tab" id="tab-add" onclick="switchTab('add')">予約追加</div>
-  <div class="tab" id="tab-req" onclick="switchTab('req')">リクエスト<span class="badge-dot" id="req-cnt" style="display:none">0</span></div>
 </div>
 
 <div id="content"><div class="loading">読み込み中...</div></div>
@@ -164,7 +147,6 @@ var currentTab = 'list';
 var isAdmin = false;
 var staffName = '';
 var allReservations = [];
-var allRequests = [];
 var selectedCustomer = null;
 
 var TABLES = [
@@ -222,10 +204,6 @@ function loadData() {
       isAdmin = !!d.isAdmin;
       staffName = d.name || '';
       allReservations = d.reservations || [];
-      allRequests = d.requests || [];
-      var cnt = allRequests.length;
-      var badge = document.getElementById('req-cnt');
-      if (cnt > 0) { badge.textContent = cnt; badge.style.display = ''; } else { badge.style.display = 'none'; }
       renderCurrentTab();
     })
     .catch(function(){ document.getElementById('content').innerHTML = '<div class="err">通信エラー</div>'; });
@@ -242,7 +220,6 @@ function renderCurrentTab() {
   if (currentTab === 'sched') renderSched();
   else if (currentTab === 'list') renderList();
   else if (currentTab === 'add') renderAdd();
-  else renderReq();
 }
 
 // ---- スケジュールビュー ----
@@ -300,16 +277,15 @@ function renderList() {
   var statsHtml = '<div class="stats-row">'
     + '<div class="stat-box"><div class="stat-num" style="color:#88aaff">'+rsv.length+'</div><div class="stat-lbl">本日の予約</div></div>'
     + '<div class="stat-box"><div class="stat-num" style="color:#66cc88">'+rsv.reduce(function(s,r){return s+(r.pax||0);},0)+'</div><div class="stat-lbl">予約人数</div></div>'
-    + '<div class="stat-box"><div class="stat-num" style="color:#ddaa44">'+allRequests.length+'</div><div class="stat-lbl">リクエスト</div></div>'
     + '</div>';
 
   var cardsHtml = rsv.length === 0 ? '<div style="text-align:center;color:#334;padding:40px 0">本日の予約はありません</div>' : rsv.map(function(r) {
-    var castBadge = (r.castReq && r.castReq !== 'なし') ? '<span class="badge b-cast">'+escHtml(r.castReq)+'希望</span>' : '';
+    var castBadge = r.tantouCast ? '<span class="badge b-cast">'+escHtml(r.tantouCast)+'</span>' : '';
     var statusBadge = r.status === '確定' ? '<span class="badge b-ok">確定</span>' : '<span class="badge b-pend">'+escHtml(r.status)+'</span>';
     return '<div class="card" onclick="openRsv('+r.rowIdx+')" style="cursor:pointer">'
       + '<div class="yc-row1"><span class="yc-time">'+escHtml(r.time||'')+'</span><span class="yc-name">'+escHtml(r.customer||'')+'様</span></div>'
       + '<div class="yc-row2"><span class="badge b-pax">'+r.pax+'名</span><span class="badge b-seat">'+escHtml(r.table||'未定')+'</span>'+statusBadge+castBadge+'</div>'
-      + (r.note ? '<div class="yc-note">'+escHtml(r.note)+'</div>' : '')
+      + (r.youbou ? '<div class="yc-note">'+escHtml(r.youbou)+'</div>' : '')
       + '</div>';
   }).join('');
 
@@ -365,14 +341,13 @@ function selectCust(idx) {
   document.querySelector('.cust-row[data-idx="'+idx+'"]').classList.add('sel');
   document.getElementById('rsv-form').style.display = 'block';
   document.getElementById('rsv-cust-name').textContent = (c.card||c.name||'') + '様';
-  if (c.note) document.getElementById('rsv-note').placeholder = '参考情報: ' + c.note;
+  var tantouEl = document.getElementById('rsv-tantou-cast');
+  if (tantouEl) tantouEl.textContent = c.tantou || 'なし';
+  if (c.note) document.getElementById('rsv-youbou').placeholder = '参考情報: ' + c.note;
 }
 
 function buildRsvForm() {
   var tableOpts = '<option value="未定">未定</option>' + TABLES.map(function(t){ return '<option value="'+t.f+' '+t.n+'">'+t.f+' '+t.n+'</option>'; }).join('');
-  var castOpts = ['なし','りく','まや','ゆうか','のあ','ぼん','ゆき','その他'].map(function(n){
-    return '<div class="ftbtn'+(n==='なし'?' on':'')+ '" onclick="toggleCast(this,\''+n+'\')">'+n+'</div>';
-  }).join('');
   return '<div class="form-sec">'
     + '<div class="form-sel-name" id="rsv-cust-name"></div>'
     + '<div class="flabel">来店日</div>'
@@ -381,25 +356,17 @@ function buildRsvForm() {
     + '<div class="frow"><input type="time" class="finput" id="rsv-time" value="20:00" style="flex:1"><select class="finput" id="rsv-pax" style="flex:0.5"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
     + '<div class="flabel">席</div>'
     + '<select class="finput" id="rsv-table">'+tableOpts+'</select>'
-    + '<div class="flabel">キャストリクエスト（お客様希望）</div>'
-    + '<div class="ftoggle" id="cast-toggle">'+castOpts+'</div>'
-    + '<div class="flabel">備考</div>'
-    + '<textarea class="finput" id="rsv-note" rows="2" placeholder="VIP対応・誕生日・ボトル情報など..." style="resize:none"></textarea>'
+    + '<div class="flabel">担当キャスト</div>'
+    + '<div class="finput" id="rsv-tantou-cast" style="background:#1a1a2e;color:#8899aa;padding:8px 12px;border-radius:8px;min-height:36px;line-height:36px">（お客様を選択すると自動表示）</div>'
+    + '<div class="flabel">要望</div>'
+    + '<textarea class="finput" id="rsv-youbou" rows="2" placeholder="VIP対応・誕生日・ボトル情報など..." style="resize:none"></textarea>'
     + '<button class="sub-btn" onclick="submitRsv()">予約を確定する</button>'
     + '<div id="rsv-status" style="font-size:12px;color:#999;text-align:center;margin-top:8px"></div>'
     + '</div>';
 }
 
-function toggleCast(el, name) {
-  document.querySelectorAll('#cast-toggle .ftbtn').forEach(function(b){ b.classList.remove('on'); });
-  el.classList.add('on');
-}
-
 function submitRsv() {
   if (!selectedCustomer) { alert('お客様を選択してください'); return; }
-  var castReq = '';
-  var onBtn = document.querySelector('#cast-toggle .ftbtn.on');
-  if (onBtn) castReq = onBtn.textContent;
   var paxEl = document.getElementById('rsv-pax');
   var paxStr = paxEl ? paxEl.value : '1名';
   var payload = {
@@ -409,8 +376,8 @@ function submitRsv() {
     memberId: selectedCustomer.no || '',
     pax: parseInt(paxStr) || 1,
     table: document.getElementById('rsv-table').value,
-    castReq: castReq || 'なし',
-    note: document.getElementById('rsv-note').value
+    tantouCast: selectedCustomer.tantou || '',
+    youbou: document.getElementById('rsv-youbou').value
   };
   var btn = document.querySelector('.sub-btn');
   btn.disabled = true; btn.textContent = '送信中...';
@@ -425,65 +392,10 @@ function submitRsv() {
     .catch(function(){ btn.disabled=false; btn.textContent='予約を確定する'; document.getElementById('rsv-status').textContent='⚠️ 通信エラー'; });
 }
 
-// ---- リクエスト ----
-function renderReq() {
-  var custReqs = allRequests.filter(function(r){ return r.type === 'お客様'; });
-  var castReqs = allRequests.filter(function(r){ return r.type === 'キャスト'; });
-
-  function reqCard(r) {
-    return '<div class="req-card'+(r.type==='キャスト'?' cast':'')+'">'
-      + '<div class="rq-hd"><span class="rq-from">'+escHtml(r.customer)+'</span><span class="rq-tag '+(r.type==='お客様'?'rt-cust':'rt-cast')+'">'+escHtml(r.type)+'</span></div>'
-      + '<div class="rq-body">'+escHtml(r.content)+'</div>'
-      + '<div class="rq-time">'+escHtml(r.regBy)+' · '+escHtml(r.regAt)+'</div>'
-      + '<div class="rq-acts"><div class="ra ra-ok" onclick="doneReq('+r.rowIdx+',this)">対応済みにする</div><div class="ra ra-ng">メモ追加</div></div>'
-      + '</div>';
-  }
-
-  var html = '<div id="req-wrap">'
-    + (custReqs.length ? '<div class="section-label">お客様からのリクエスト（'+custReqs.length+'件）</div>' + custReqs.map(reqCard).join('') : '')
-    + (castReqs.length ? '<div class="section-label">キャストからのリクエスト（'+castReqs.length+'件）</div>' + castReqs.map(reqCard).join('') : '')
-    + (allRequests.length === 0 ? '<div style="text-align:center;color:#334;padding:40px 0">リクエストはありません</div>' : '')
-    + '<button class="add-req-btn" onclick="toggleReqForm()">＋ キャストリクエストを追加</button>'
-    + '<div class="req-form" id="req-form">'
-    + '<div class="flabel">お客様名</div><input type="text" class="finput" id="req-cust" placeholder="例: 山田 貴志 様">'
-    + '<div class="flabel">リクエスト内容</div><textarea class="finput" id="req-content" rows="2" placeholder="担当希望の内容..." style="resize:none"></textarea>'
-    + '<button class="sub-btn" onclick="submitReq()">送信する</button>'
-    + '<div id="req-form-status" style="font-size:12px;color:#999;text-align:center;margin-top:6px"></div>'
-    + '</div>'
-    + '</div>';
-  document.getElementById('content').innerHTML = html;
-}
-
-function toggleReqForm() {
-  var f = document.getElementById('req-form');
-  f.style.display = f.style.display === 'none' ? 'block' : 'none';
-}
-
-function doneReq(rowIdx, btn) {
-  btn.textContent = '処理中...';
-  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'doneYoyakuRequest', userId:userId, rowIdx:rowIdx }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d) {
-      if (d.ok) loadData();
-      else alert('エラー: ' + (d.error||''));
-    }).catch(function(){ alert('通信エラー'); });
-}
-
-function submitReq() {
-  var cust = (document.getElementById('req-cust').value||'').trim();
-  var content = (document.getElementById('req-content').value||'').trim();
-  if (!cust || !content) { alert('お客様名とリクエスト内容を入力してください'); return; }
-  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'addYoyakuRequest', userId:userId, type:'キャスト', customer:cust, content:content, date:dateStr(currentDate) }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d) {
-      if (d.ok) { loadData(); } else alert('エラー: '+(d.error||''));
-    }).catch(function(){ alert('通信エラー'); });
-}
-
 function openRsv(rowIdx) {
   var r = allReservations.find(function(x){ return x.rowIdx === rowIdx; });
   if (!r) return;
-  alert('【'+r.time+'】'+r.customer+'様\n'+r.pax+'名 / '+r.table+'\nキャスト希望: '+(r.castReq||'なし')+(r.note?'\n備考: '+r.note:''));
+  alert('【'+r.time+'】'+r.customer+'様\n'+r.pax+'名 / '+r.table+(r.tantouCast?'\n担当キャスト: '+r.tantouCast:'')+(r.youbou?'\n要望: '+r.youbou:''));
 }
 
 function escHtml(s) {
