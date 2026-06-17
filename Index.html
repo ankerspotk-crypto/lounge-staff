@@ -1324,6 +1324,7 @@ function initCashCheck(data, approverNames) {
     init: data,
     reporterName: '',
     till: { f5: { m10000: 0, m5000: 0, m1000: 0 }, f2: { m10000: 0, m5000: 0, m1000: 0 } },
+    keihi: { m10000: 0, m5000: 0, m1000: 0 },
     slips: [],  // [{type, payee, amount, photoBase64, mime, previewUrl}]
     approverName: '',
     approverNames: approverNames || [],
@@ -1394,6 +1395,13 @@ function renderCashCheckForm() {
         + '差額　　　¥' + Math.abs(db).toLocaleString() + (db === 0 ? '（一致）' : '（要確認）'));
     }
 
+    // 経費
+    if (init.keihiStr || init.keihiTotal > 0) {
+      html += '<div class="section-label" style="margin-top:12px">経費（閉店）</div>';
+      html += '<div style="font-size:13px;color:#ccc;padding:4px 0">' + (esc(init.keihiStr) || '（内訳なし）') + '</div>';
+      html += '<div style="font-size:13px;color:#aaa">合計　¥' + Number(init.keihiTotal).toLocaleString() + '</div>';
+    }
+
     // 承認セクション
     if (init.approved) {
       html += cashBannerBox('#1f6040', '#5dcc88', '✅ 承認済み　承認者: ' + esc(init.approver) + '　（' + esc(init.approvedAt) + '）<br>🚪 退勤OKです');
@@ -1457,6 +1465,7 @@ function renderCashCheckForm() {
       cashCheckState.slips = [];
       cashCheckState.reporterName = '';
       cashCheckState.till = { f5: { m10000: 0, m5000: 0, m1000: 0 }, f2: { m10000: 0, m5000: 0, m1000: 0 } };
+      cashCheckState.keihi = { m10000: 0, m5000: 0, m1000: 0 };
       renderCashCheckForm();
     });
     document.getElementById('cancel-btn').addEventListener('click', closeSheet);
@@ -1494,6 +1503,9 @@ function renderCashCheckForm() {
     html += '<div class="cast-time-row"><div class="cast-time-label">' + (floor === 'f5' ? '5F' : '2F') + '</div>'
       + denomInputsHtml('till', floor) + '</div>';
   });
+  html += '<div class="section-label" style="margin-top:16px">経費</div>';
+  html += '<div class="cast-time-row"><div class="cast-time-label">経費</div>'
+    + denomInputsHtml('keihi', 'keihi') + '</div>';
 
   html += '<div style="font-size:11px;color:#556;margin-top:10px">※照合チェック送信時にTRUSTから自動取得します（20〜30秒かかります）</div>';
   html += '<div id="cash-submit-status" style="font-size:12px;color:#999;margin-top:8px;text-align:center"></div>';
@@ -1520,7 +1532,9 @@ function bindCashCheckEvents() {
 
   document.querySelectorAll('.cash-denom-input').forEach(function(inp) {
     inp.addEventListener('input', function() {
-      if (this.dataset.group === 'till') {
+      if (this.dataset.group === 'keihi') {
+        cashCheckState.keihi[this.dataset.denom] = Number(this.value) || 0;
+      } else if (this.dataset.group === 'till') {
         cashCheckState.till[this.dataset.floor][this.dataset.denom] = Number(this.value) || 0;
       }
     });
@@ -1621,6 +1635,7 @@ function submitCashCheckForm() {
   var payload = {
     reporterName: st.reporterName,
     till: st.till,
+    keihi: st.keihi,
     slips: st.slips.filter(function(s) { return s.amount > 0 || s.photoBase64; })
   };
 

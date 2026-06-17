@@ -3961,7 +3961,8 @@ const CASH_CHECK_HEADERS_ = [
   '報告者', 'レジ実測内訳', '伝票合計', '伝票内訳JSON',
   'レジ実測合計', 'レジ理論値', 'TRUST-伝票差額', '理論-実測差額',
   '現金売上(TRUST)', 'TRUST差引残高',
-  '承認者', '承認時刻'
+  '承認者', '承認時刻',
+  '経費実測内訳（閉店）', '経費実測合計（閉店）'
 ];
 
 // 現金管理シートを取得（なければ作成、列が古ければ拡張）
@@ -4390,8 +4391,10 @@ function getCashCheckInit() {
       result.theoreticalTill = row[10] !== '' ? Number(row[10]) : null;
       result.diffA = row[11] !== '' ? Number(row[11]) : null;
       result.diffB = row[12] !== '' ? Number(row[12]) : null;
-      result.cashSales    = row[13] !== '' ? Number(row[13]) : null;
+      result.cashSales     = row[13] !== '' ? Number(row[13]) : null;
       result.netCashChange = row[14] !== '' ? Number(row[14]) : null;
+      result.keihiStr      = String(row[17] || '');
+      result.keihiTotal    = row[18] !== '' ? Number(row[18]) || 0 : 0;
     }
     if (row[15]) {
       result.approved = true;
@@ -4445,6 +4448,8 @@ function submitCashCheck(payload) {
     // レジ実測
     const tillStr = formatTill_(payload.till);
     const actualTill = tillTotalYen_(payload.till);
+    const keihiStr = formatDenom_(payload.keihi);
+    const keihiTotal = denomYen_(payload.keihi);
     const openingInit = getOpeningCheckInit();
     const withdrawalTotal = getSafeWithdrawalTotalToday_(dateKey);
 
@@ -4470,7 +4475,8 @@ function submitCashCheck(payload) {
       reporterName, tillStr, slipTotal, JSON.stringify(slipDetails),
       actualTill, theoreticalTill, diffA, diffB,
       cashSales, netCashChange,   // col14: 現金売上, col15: TRUST差引残高
-      '', ''                       // col16: 承認者, col17: 承認時刻
+      '', '',                      // col16: 承認者, col17: 承認時刻
+      keihiStr, keihiTotal         // col18: 経費実測内訳, col19: 経費実測合計
     ];
     if (rowIdx > 0) sh.getRange(rowIdx, 1, 1, rowData.length).setValues([rowData]);
     else sh.appendRow(rowData);
@@ -4497,6 +4503,7 @@ function submitCashCheck(payload) {
       lines.push('実測値　　　¥' + actualTill.toLocaleString());
       lines.push('差額　　　　¥' + Math.abs(diffB).toLocaleString() + (diffB === 0 ? '（一致）' : '（要確認）'));
     }
+    if (keihiStr) lines.push('', '経費　' + keihiStr + '　合計¥' + keihiTotal.toLocaleString());
     lines.push('', '管理者の承認をお待ちください');
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
