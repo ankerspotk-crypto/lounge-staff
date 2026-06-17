@@ -375,6 +375,19 @@ function handleEvent(event) {
 function handleKurofuku(event, text, userId) {
   if (text === 'ping') { reply(event.replyToken, 'pong ✅ v61'); return; }
 
+  // 検索コマンド: 「検索　◯◯様」→ 会員情報返信
+  const searchM = text.match(/^検索[\s　]+(.+)/);
+  if (searchM) {
+    const query = searchM[1].trim();
+    const matches = searchCustomers(query);
+    if (matches.length === 0) {
+      reply(event.replyToken, '「' + query + '」の会員情報が見つかりませんでした');
+    } else {
+      reply(event.replyToken, matches.map(formatCard).join('\n──────────\n'));
+    }
+    return;
+  }
+
   // 延長コマンド: 「延長」「延長 さくら」
   const enchoM = text.match(/^延長[\s　]*(.*)/);
   if (enchoM) {
