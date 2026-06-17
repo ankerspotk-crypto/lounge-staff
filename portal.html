@@ -339,7 +339,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
-    <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">現金設定</div>
+    <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
   </div>
 </header>
 
@@ -462,8 +462,6 @@ function initAdminUI(castList) {
       + '<option value="">-- 選択 --</option>'
       + '</select>'
       + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#7ab0f0;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
-      + '<button onclick="resetGunshiSeating()" style="padding:4px 10px;background:#1a1a2a;color:#cc99ff;border:1px solid #443366;border-radius:6px;font-size:12px;cursor:pointer">席リセット</button>'
-      + '<button onclick="resetGunshiAll()" style="padding:4px 10px;background:#2a0f0f;color:#ff7777;border:1px solid #552222;border-radius:6px;font-size:12px;cursor:pointer">軍師リセット</button>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
@@ -2145,6 +2143,11 @@ function renderCashThresholds(thresholds) {
     +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetOpeningCheck\',\'本日の開店チェック\')">🌅 開店チェックをリセット</button>'
     +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetCashCheck\',\'本日の閉店チェック\')">🌙 閉店チェックをリセット</button>'
     +   '<button class="notif-del-btn" style="width:100%;margin-top:0" onclick="resetCashAction(\'resetSafeWithdrawalLog\',\'本日の金庫出金ログ\')">🔓 金庫出金ログをリセット</button>'
+    + '</div>'
+    + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a2a5a">'
+    +   '<div class="cashset-floor" style="color:#cc99ff">🪑 テーブルステータスリセット</div>'
+    +   '<div style="font-size:11px;color:#8aabcc;margin-bottom:12px;line-height:1.6">席割り当て・NGキャスト・席タグをクリアします。通知設定など他の設定は保持されます。</div>'
+    +   '<button onclick="resetGunshiSeating()" style="width:100%;padding:12px;background:#1a0f2a;color:#cc99ff;border:1px solid #443366;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🪑 席ステータスをリセット</button>'
     + '</div>'
     + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a1a1a">'
     +   '<div class="cashset-floor" style="color:#ff8888">⚠️ 軍師システム 全設定リセット</div>'
