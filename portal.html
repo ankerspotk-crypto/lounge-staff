@@ -2555,10 +2555,10 @@ function renderYoyakuAdd() {
       })()
     + '<div class="yform-label">席</div>'
     + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
-    + '<div class="yform-label">予約キャスト</div>'
+    + '<div class="yform-label" style="display:flex;align-items:center;gap:8px">予約キャスト<button type="button" onclick="setYoyakuCastDirect()" style="font-size:10px;padding:2px 8px;background:#1a1a0a;color:#ddcc55;border:1px solid #665500;border-radius:6px;cursor:pointer">直接来店</button></div>'
     + (function(){
         var cur = yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : '');
-        var opts = '<option value="">-- 未定 --</option>';
+        var opts = '<option value="">-- 未定 --</option><option value="直接来店"'+(cur==='直接来店'?' selected':'')+'>直接来店</option>';
         yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'; });
         return '<select class="yform-input" id="yrsv-yoyaku-cast" style="margin-bottom:8px">'+opts+'</select>';
       })()
@@ -2707,6 +2707,11 @@ function yoyakuSelectCust(i) {
   renderYoyaku();
 }
 
+
+function setYoyakuCastDirect() {
+  var sel = document.getElementById('yrsv-yoyaku-cast');
+  if (sel) sel.value = '直接来店';
+}
 
 function yoyakuClearCust() {
   yoyakuSelectedCust = null;
