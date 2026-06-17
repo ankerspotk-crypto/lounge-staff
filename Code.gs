@@ -189,9 +189,6 @@ function handleApiRequest_(body) {
   if (body.action === 'updateReservation') {
     const staffName = getStaffName(body.userId);
     if (!staffName) return { ok: false, error: '未登録のユーザーです' };
-    const role = getStaffRoleByName_(normalizeName_(staffName));
-    const isKuro = role === '黒服社員' || role === '黒服バイト';
-    if (!isKuro && !ADMIN_NAMES_.includes(staffName)) return { ok: false, error: '権限がありません' };
     return updateReservation_(Number(body.rowIdx), body);
   }
   if (body.action === 'cancelReservation') {
