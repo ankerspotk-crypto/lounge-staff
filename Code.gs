@@ -246,6 +246,7 @@ function handleApiRequest_(body) {
     }
     if (!body.monthKey || !body.casts) return { ok: false, error: 'monthKey/casts required' };
     const cnt = writeTrustDataAll_(body.monthKey, body.casts);
+    recordSalesDataDate_(body.monthKey);
     return { ok: true, monthKey: body.monthKey, updated: cnt };
   }
   // TRUST日報ページから当日の日払い・経費合計を取得して記録
@@ -3426,6 +3427,7 @@ function fetchTrustSalesNightly() {
 
   writeTrustSales_(monthKey, data);
   calcAndWriteKyuyo_(monthKey);
+  recordSalesDataDate_(monthKey);
   Logger.log('✅ 完了: ' + monthKey);
 }
 
@@ -3736,6 +3738,14 @@ function calcAndWriteKyuyo_(monthKey) {
       .setValues(writeRows);
   }
   Logger.log('給与計算書き込み: ' + monthKey + ' ' + writeRows.length + '件');
+}
+
+function recordSalesDataDate_(monthKey) {
+  const now = new Date();
+  const dateStr = Utilities.formatDate(now, TZ, 'M月d日 HH:mm');
+  const dates = JSON.parse(prop('SALES_DATA_DATES') || '{}');
+  dates[monthKey] = dateStr;
+  PropertiesService.getScriptProperties().setProperty('SALES_DATA_DATES', JSON.stringify(dates));
 }
 
 // 2026/06 組数を直接書き込む（GASエディタから実行）
