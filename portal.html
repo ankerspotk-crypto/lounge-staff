@@ -2399,15 +2399,20 @@ function renderYoyakuAdd() {
 
   var tantouCast = (yoyakuSelectedCust && yoyakuSelectedCust.tantou) ? yoyakuSelectedCust.tantou : '';
   var custSection = yoyakuSelectedCust
-    ? '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px">'
-      + '<div style="font-size:13px;font-weight:600;color:#88aaff">'+esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様</div>'
-      + (tantouCast ? '<div style="font-size:11px;color:#bb99ff;margin-top:3px">担当キャスト: '+esc(tantouCast)+'</div>' : '')
+    ? '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><div style="font-size:13px;font-weight:600;color:#88aaff">'+esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様</div>'
+      + (tantouCast ? '<div style="font-size:11px;color:#bb99ff;margin-top:3px">担当: '+esc(tantouCast)+'</div>' : '')
       + '</div>'
-    : '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索..." oninput="yoyakuSearch(this.value)">'
+      + '<span style="font-size:11px;color:#556;cursor:pointer;white-space:nowrap;margin-left:8px" onclick="yoyakuClearCust()">変更</span>'
+      + '</div>'
+    : '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索（任意）" oninput="yoyakuSearch(this.value)" style="margin-bottom:6px">'
       + '<div id="ycust-results"></div>';
   return presetBanner + custSection
-    + '<div class="yform-sec" id="yform" style="'+(yoyakuSelectedCust?'':'display:none')+'">'
+    + '<div class="yform-sec" id="yform">'
     + '<div style="font-size:11px;color:#445;margin-bottom:10px">予約担当者: <span style="color:#88aaff">'+esc(staffName||'')+'</span></div>'
+    + (yoyakuSelectedCust ? '' :
+        '<div class="yform-label">お客様名</div>'
+        + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" style="margin-bottom:8px">')
     + '<div class="yform-label">来店日</div>'
     + '<input type="date" class="yform-input" id="yrsv-date" value="'+yoyakuDateStr(yoyakuDate)+'" style="margin-bottom:8px">'
     + '<div class="yform-label">時間 / 人数</div>'
@@ -2422,12 +2427,7 @@ function renderYoyakuAdd() {
 }
 
 
-function afterYoyakuRender() {
-  if (yoyakuSubTab === 'add' && yoyakuSelectedCust) {
-    var f = document.getElementById('yform');
-    if (f) f.style.display = 'block';
-  }
-}
+function afterYoyakuRender() {}
 
 function yoyakuGridClick(tableIdx, e, SH, HW) {
   var row = e.currentTarget;
@@ -2477,18 +2477,26 @@ function yoyakuSelectCust(i) {
 }
 
 
+function yoyakuClearCust() {
+  yoyakuSelectedCust = null;
+  renderYoyaku();
+}
+
 function yoyakuSubmitRsv() {
-  if (!yoyakuSelectedCust) { alert('お客様を選択してください'); return; }
+  var manualEl = document.getElementById('yrsv-cust-manual');
+  var custName = yoyakuSelectedCust
+    ? (yoyakuSelectedCust.card || yoyakuSelectedCust.name || '')
+    : (manualEl ? manualEl.value.trim() : '');
   var paxEl = document.getElementById('yrsv-pax');
   var payload = {
     action: 'addReservation', userId: userId,
     date: document.getElementById('yrsv-date').value,
     time: document.getElementById('yrsv-time').value,
-    customer: yoyakuSelectedCust.card || yoyakuSelectedCust.name || '',
-    memberId: yoyakuSelectedCust.no || '',
+    customer: custName,
+    memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : '',
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
     table: document.getElementById('yrsv-table').value,
-    tantouCast: yoyakuSelectedCust.tantou || '',
+    tantouCast: yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : '',
     youbou: document.getElementById('yrsv-youbou').value
   };
   var stat = document.getElementById('yrsv-status');
