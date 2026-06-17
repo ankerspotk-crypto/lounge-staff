@@ -3104,7 +3104,8 @@ function getYoyakuReservations_(dateKey) {
     time: row[1] instanceof Date ? Utilities.formatDate(row[1], TZ, 'HH:mm') : String(row[1]).trim(),
     customer: String(row[2]), memberId: String(row[3]),
     pax: Number(row[4]) || 1, table: String(row[5]), tantouCast: String(row[6]),
-    youbou: String(row[7]), status: String(row[8]), regBy: String(row[9])
+    youbou: String(row[7]), status: String(row[8]), regBy: String(row[9]),
+    yoyakuCast: String(row[11] || '')
   })).filter(r => r.date === dateKey && r.status !== 'キャンセル');
 }
 
@@ -3115,7 +3116,7 @@ function addReservation_(payload, regBy) {
     dateKey, String(payload.time || ''), String(payload.customer || ''),
     String(payload.memberId || ''), Number(payload.pax) || 1,
     String(payload.table || '未定'), String(payload.tantouCast || ''),
-    String(payload.youbou || ''), '確定', regBy, new Date()
+    String(payload.youbou || ''), '確定', regBy, new Date(), String(payload.yoyakuCast || '')
   ]);
   return { ok: true, dateKey };
 }
@@ -3128,6 +3129,7 @@ function updateReservation_(rowIdx, payload) {
     String(payload.table || '未定'), String(payload.tantouCast || ''),
     String(payload.youbou || ''), String(payload.status || '確定')
   ]]);
+  sh.getRange(rowIdx, 12).setValue(String(payload.yoyakuCast || ''));
   return { ok: true };
 }
 
