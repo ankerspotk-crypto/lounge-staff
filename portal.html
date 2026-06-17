@@ -284,6 +284,24 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yra { flex: 1; padding: 7px; border-radius: 7px; font-size: 11px; cursor: pointer; text-align: center; }
 .yra-ok { background: #0d2010; border: 1px solid #1a4a22; color: #66cc88; }
 .yra-ng { background: #141428; border: 1px solid #2a2a40; color: #556; }
+/* カレンダービュー */
+.ycal-month-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ycal-month-nav button { background: #1a1a2e; border: 1px solid #2a2a40; color: #88aaff; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 14px; }
+.ycal-month-title { font-size: 15px; font-weight: 700; color: #fff; flex: 1; text-align: center; }
+.ycal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.ycal-dow { text-align: center; font-size: 10px; font-weight: 700; padding: 6px 0; }
+.ycal-dow.sun { color: #ee6666; }
+.ycal-dow.sat { color: #6688ee; }
+.ycal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; padding: 6px 2px; min-height: 50px; cursor: pointer; position: relative; }
+.ycal-day:hover { background: #1a1a2e; }
+.ycal-day.today { background: #1a2a4a; border: 1px solid #2255aa; }
+.ycal-day.today .ycal-num { color: #88aaff; }
+.ycal-day.other { opacity: 0.25; pointer-events: none; }
+.ycal-day.sunday .ycal-num { color: #ee6666; }
+.ycal-day.saturday .ycal-num { color: #6688ee; }
+.ycal-num { font-size: 15px; font-weight: 600; color: #ddd; line-height: 1; }
+.ycal-pax { font-size: 10px; color: #88aaff; font-weight: 700; margin-top: 3px; }
+.ycal-dot { width: 6px; height: 6px; background: #ddaa44; border-radius: 50%; position: absolute; top: 5px; right: 5px; }
 /* スケジュールグリッド */
 .ysched-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .ysched-inner { display: flex; min-width: max-content; }
@@ -2146,8 +2164,9 @@ var yoyakuRsvs = [];
 var yoyakuReqs = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
-var yoyakuSubTab = 'list'; // list / sched / add / req
+var yoyakuSubTab = 'list'; // list / sched / add / req / cal
 var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
+var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2187,17 +2206,18 @@ function renderYoyaku() {
     + '<button onclick="yoyakuChangeDate(1)">›</button>'
     + '</div>';
 
-  var subtabs = '<div style="display:flex;gap:6px;margin-bottom:12px">'
-    + ['list','sched','add','req'].map(function(t) {
-      var labels = {list:'予約リスト', sched:'スケジュール', add:'予約追加', req:'リクエスト'+(yoyakuReqs.length?'('+yoyakuReqs.length+')':'')};
-      return '<div style="flex:1;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
+  var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
+    + ['cal','list','sched','add','req'].map(function(t) {
+      var labels = {cal:'カレンダー', list:'リスト', sched:'スケジュール', add:'予約追加', req:'リクエスト'+(yoyakuReqs.length?'('+yoyakuReqs.length+')':'')};
+      return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
         + (yoyakuSubTab===t ? 'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;' : 'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
         + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
     }).join('')
     + '</div>';
 
   var body = '';
-  if (yoyakuSubTab === 'list')  body = renderYoyakuList();
+  if (yoyakuSubTab === 'cal')        { loadYoyakuCal(dateNav + subtabs); return; }
+  else if (yoyakuSubTab === 'list')  body = renderYoyakuList();
   else if (yoyakuSubTab === 'sched') body = renderYoyakuSched();
   else if (yoyakuSubTab === 'add')   body = renderYoyakuAdd();
   else                               body = renderYoyakuReq();
@@ -2206,7 +2226,95 @@ function renderYoyaku() {
   afterYoyakuRender();
 }
 
-function yoyakuSubSwitch(t) { yoyakuSubTab = t; renderYoyaku(); }
+function yoyakuSubSwitch(t) {
+  yoyakuSubTab = t;
+  if (t === 'cal') loadYoyakuCal(null);
+  else renderYoyaku();
+}
+
+function loadYoyakuCal(headerHtml) {
+  if (!yoyakuCalMonth) {
+    var d = new Date();
+    yoyakuCalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+  if (!headerHtml) {
+    // subtabsだけ再生成
+    var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
+      + ['cal','list','sched','add','req'].map(function(t) {
+        var labels = {cal:'カレンダー',list:'リスト',sched:'スケジュール',add:'予約追加',req:'リクエスト'+(yoyakuReqs.length?'('+yoyakuReqs.length+')':'')};
+        return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
+          + (t==='cal'?'background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;':'background:#1a1a2e;color:#445;border:1px solid #2a2a40;')
+          + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
+      }).join('') + '</div>';
+    headerHtml = '' + subtabs;
+  }
+  setContent('<div style="padding:14px">' + headerHtml + '<div class="loading">カレンダー読み込み中...</div></div>');
+  fetch(GAS_URL + '?action=portal&tab=yoyakuMonth&userId=' + encodeURIComponent(userId) + '&month=' + yoyakuCalMonth)
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: '+esc(d.error||'')+'</div>'); return; }
+      setContent('<div style="padding:14px">' + headerHtml + renderYoyakuCal(d.summary || {}) + '</div>');
+    })
+    .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderYoyakuCal(summary) {
+  var parts = yoyakuCalMonth.split('-');
+  var year = parseInt(parts[0]), month = parseInt(parts[1]);
+  var firstDay = new Date(year, month-1, 1).getDay(); // 0=日
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+  var monthNav = '<div class="ycal-month-nav">'
+    + '<button onclick="yoyakuCalChangeMonth(-1)">‹</button>'
+    + '<div class="ycal-month-title">'+year+'年'+month+'月</div>'
+    + '<button onclick="yoyakuCalChangeMonth(1)">›</button>'
+    + '</div>';
+
+  var dows = ['日','月','火','水','木','金','土'];
+  var dowHdr = '<div class="ycal-grid">' + dows.map(function(d,i){
+    return '<div class="ycal-dow'+(i===0?' sun':i===6?' sat':'')+'">' + d + '</div>';
+  }).join('') + '</div>';
+
+  var cells = '<div class="ycal-grid">';
+  // 月初の空白
+  for (var b = 0; b < firstDay; b++) cells += '<div class="ycal-day other"><span class="ycal-num"></span></div>';
+
+  for (var day = 1; day <= daysInMonth; day++) {
+    var dateKey = year + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+    var dow = (firstDay + day - 1) % 7;
+    var cls = 'ycal-day';
+    if (dateKey === todayStr) cls += ' today';
+    if (dow === 0) cls += ' sunday';
+    if (dow === 6) cls += ' saturday';
+    var s = summary[dateKey];
+    var paxHtml = s ? '<div class="ycal-pax">'+s.pax+'名</div>' : '';
+    var dotHtml = ''; // 将来：仮予約バッジ用
+    cells += '<div class="'+cls+'" onclick="yoyakuCalGo(\''+dateKey+'\')">'
+      + dotHtml
+      + '<div class="ycal-num">'+day+'</div>'
+      + paxHtml
+      + '</div>';
+  }
+  cells += '</div>';
+
+  return monthNav + dowHdr + cells;
+}
+
+function yoyakuCalChangeMonth(diff) {
+  var parts = yoyakuCalMonth.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1])-1+diff, 1);
+  yoyakuCalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  loadYoyakuCal(null);
+}
+
+function yoyakuCalGo(dateKey) {
+  var parts = dateKey.split('-');
+  yoyakuDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  yoyakuSubTab = 'list';
+  loadYoyaku();
+}
 
 function yoyakuChangeDate(d) {
   yoyakuDate = new Date(yoyakuDate.getTime() + d * 86400000);
