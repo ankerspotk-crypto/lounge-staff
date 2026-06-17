@@ -2572,7 +2572,7 @@ function renderYoyakuAdd() {
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
     + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>'
-    + (yoyakuEditRsv && isAdmin ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
+    + (yoyakuEditRsv ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
     + '<div id="yrsv-status" style="font-size:12px;color:#8aabcc;text-align:center;margin-top:6px"></div>'
     + '</div>';
 }

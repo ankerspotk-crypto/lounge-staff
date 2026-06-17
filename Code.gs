@@ -193,7 +193,7 @@ function handleApiRequest_(body) {
   }
   if (body.action === 'cancelReservation') {
     const staffName = getStaffName(body.userId);
-    if (!staffName || !ADMIN_NAMES_.includes(staffName)) return { ok: false, error: '権限がありません（管理者のみ）' };
+    if (!staffName) return { ok: false, error: '未登録のユーザーです' };
     return cancelReservation_(Number(body.rowIdx));
   }
   if (body.action === 'checkInReservation') {
