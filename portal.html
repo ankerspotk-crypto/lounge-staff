@@ -2406,12 +2406,26 @@ function renderYoyakuList() {
   return stats + rsv.map(function(r) {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
-    var stsBadge = r.status === '確定' ? '<span class="yb yb-ok">確定</span>' : '<span class="yb yb-pend">'+esc(r.status)+'</span>';
+    var stsBadge = r.status === '確定' ? '<span class="yb yb-ok">確定</span>'
+      : r.status === '来店済み' ? '<span class="yb" style="background:#0a2010;color:#66ff99;border:1px solid #1a6040">来店済み</span>'
+      : r.status === '退店済み' ? '<span class="yb" style="background:#101010;color:#888;border:1px solid #333">退店済み</span>'
+      : '<span class="yb yb-pend">'+esc(r.status)+'</span>';
+    var actionBtns = '';
+    if (r.status === '確定') {
+      actionBtns = '<div style="margin-top:8px" onclick="event.stopPropagation()">'
+        + '<button onclick="yoyakuCheckIn('+r.rowIdx+')" style="padding:6px 14px;background:#0a2010;color:#66ff99;border:1px solid #1a6040;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-right:6px">🚪 来店</button>'
+        + '</div>';
+    } else if (r.status === '来店済み') {
+      actionBtns = '<div style="margin-top:8px" onclick="event.stopPropagation()">'
+        + '<button onclick="yoyakuCheckOut('+r.rowIdx+')" style="padding:6px 14px;background:#1a1a1a;color:#aaa;border:1px solid #444;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🚶 退店</button>'
+        + '</div>';
+    }
     return '<div class="yoyaku-card" onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer">'
       + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span><span style="font-size:10px;color:#6a8ab0;margin-left:auto">✏️</span></div>'
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+yoyakuCastBadge+tantouBadge+'</div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
+      + actionBtns
       + '</div>';
   }).join('');
 }
@@ -2717,6 +2731,32 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvYoyakuCast = rsv.yoyakuCast || '';
   yoyakuSubTab = 'add';
   renderYoyaku();
+}
+
+function yoyakuCheckIn(rowIdx) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : 'お客様';
+  if (!confirm(esc(name) + '様の来店を記録しますか？\n軍師システムの予約テーブルに反映されます。')) return;
+  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'checkInReservation', userId: userId, rowIdx: rowIdx }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error || '')); return; }
+      loadYoyaku();
+    })
+    .catch(function() { alert('通信エラー'); });
+}
+
+function yoyakuCheckOut(rowIdx) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : 'お客様';
+  if (!confirm(esc(name) + '様の退店を記録しますか？\n軍師システムの予約テーブルがリセットされます。')) return;
+  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'checkOutReservation', userId: userId, rowIdx: rowIdx }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error || '')); return; }
+      loadYoyaku();
+    })
+    .catch(function() { alert('通信エラー'); });
 }
 
 function yoyakuCancelReservation(rowIdx) {

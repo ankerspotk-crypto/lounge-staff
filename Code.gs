@@ -199,6 +199,16 @@ function handleApiRequest_(body) {
     if (!staffName || !ADMIN_NAMES_.includes(staffName)) return { ok: false, error: '権限がありません（管理者のみ）' };
     return cancelReservation_(Number(body.rowIdx));
   }
+  if (body.action === 'checkInReservation') {
+    const staffName = getStaffName(body.userId);
+    if (!staffName) return { ok: false, error: '未登録のユーザーです' };
+    return checkInReservation_(Number(body.rowIdx));
+  }
+  if (body.action === 'checkOutReservation') {
+    const staffName = getStaffName(body.userId);
+    if (!staffName) return { ok: false, error: '未登録のユーザーです' };
+    return checkOutReservation_(Number(body.rowIdx));
+  }
   if (body.action === 'addYoyakuRequest') {
     const staffName = getStaffName(body.userId);
     if (!staffName) return { ok: false, error: '未登録のユーザーです' };
@@ -2211,6 +2221,10 @@ function getSekiJokyouData() {
       const v = allProps['NGCAST_' + code];
       return v ? JSON.parse(v) : [];
     };
+    const getRsrvCached = code => {
+      const v = allProps['RSRV_' + code];
+      return v ? JSON.parse(v) : null;
+    };
 
     const mapArr = {};
     active.forEach(r => {
@@ -2222,7 +2236,8 @@ function getSekiJokyouData() {
       const list = mapArr[s.code] || [];
       const tags = getTagsCached(s.code);
       const ngCast = getNgCached(s.code);
-      if (list.length === 0) return Object.assign({}, s, { occupied: false, casts: [], tags: tags, ngCast: ngCast });
+      const rsrv = getRsrvCached(s.code);
+      if (list.length === 0) return Object.assign({}, s, { occupied: false, casts: [], tags, ngCast, rsrv });
 
       const casts = list.map(r => {
         const el = elapsedMins_(r.start);
@@ -2234,7 +2249,7 @@ function getSekiJokyouData() {
       const worstStatus = (s.type === 'W' || s.type === 'K') ? 'ok'
                         : casts.some(c => c.status === 'over') ? 'over'
                         : casts.some(c => c.status === 'warn') ? 'warn' : 'ok';
-      return Object.assign({}, s, { occupied: true, casts: casts, status: worstStatus, tags: tags, ngCast: ngCast });
+      return Object.assign({}, s, { occupied: true, casts, status: worstStatus, tags, ngCast, rsrv });
     });
   } catch(e) {
     console.error('getSekiJokyouData error:', e);
@@ -3074,7 +3089,7 @@ function resetGunshiSeating_() {
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   Object.keys(all).forEach(k => {
     if (k.startsWith('NGCAST_') || k.startsWith('STAG_') ||
-        k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_')) {
+        k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_') || k.startsWith('RSRV_')) {
       ps.deleteProperty(k);
     }
   });
@@ -3192,6 +3207,37 @@ function updateReservation_(rowIdx, payload) {
 
 function cancelReservation_(rowIdx) {
   getYoyakuRsrvSheet_().getRange(rowIdx, 9).setValue('キャンセル');
+  return { ok: true };
+}
+
+// テーブル名（"5F ボックス1" 等）→ 席コード（"5F-B1" 等）変換
+function tableNameToSeatCode_(tableName) {
+  const m = String(tableName || '').match(/^(2F|5F)\s+(カウンター|ボックス)(\d+)$/);
+  if (!m) return null;
+  return m[1] + '-' + (m[2] === 'カウンター' ? 'C' : 'B') + m[3];
+}
+
+function checkInReservation_(rowIdx) {
+  const sh = getYoyakuRsrvSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 12).getValues()[0];
+  const customer = String(row[2]);
+  const pax = Number(row[4]) || 1;
+  const seatCode = tableNameToSeatCode_(String(row[5]));
+  sh.getRange(rowIdx, 9).setValue('来店済み');
+  if (seatCode) {
+    PropertiesService.getScriptProperties().setProperty('RSRV_' + seatCode, JSON.stringify({ customer, pax }));
+  }
+  return { ok: true, seatCode };
+}
+
+function checkOutReservation_(rowIdx) {
+  const sh = getYoyakuRsrvSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
+  const seatCode = tableNameToSeatCode_(String(row[5]));
+  sh.getRange(rowIdx, 9).setValue('退店済み');
+  if (seatCode) {
+    PropertiesService.getScriptProperties().deleteProperty('RSRV_' + seatCode);
+  }
   return { ok: true };
 }
 
