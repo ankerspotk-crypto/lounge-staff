@@ -2173,6 +2173,7 @@ var yoyakuRsvCustManual = ''; // 再描画時に保持: お客様名
 var yoyakuRsvYoubou = '';    // 再描画時に保持: 要望・備考
 var yoyakuRsvPax = 0;        // 再描画時に保持: 人数（0=デフォルト3名）
 var yoyakuRsvTable = '';     // 再描画時に保持: 席
+var yoyakuRsvTantou = '';    // 再描画時に保持: 担当者
 var yoyakuEditRsv = null;    // 編集中の予約オブジェクト（null=新規追加モード）
 
 var YOYAKU_TABLES = [
@@ -2202,7 +2203,7 @@ function loadYoyaku() {
       yoyakuRsvs = d.reservations || [];
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
-      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = '';
+      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = '';
       yoyakuEditRsv = null;
       renderYoyaku();
     })
@@ -2477,6 +2478,8 @@ function renderYoyakuAdd() {
       })()
     + '<div class="yform-label">席</div>'
     + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
+    + '<div class="yform-label">担当者</div>'
+    + '<input type="text" class="yform-input" id="yrsv-tantou" placeholder="担当キャスト名" value="'+(esc(yoyakuRsvTantou || (yoyakuSelectedCust ? yoyakuSelectedCust.tantou||'' : '') || (yoyakuEditRsv ? yoyakuEditRsv.tantouCast||'' : '')))+'" style="margin-bottom:8px">'
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
     + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>'
@@ -2493,6 +2496,7 @@ function saveFormInputs() {
   el = document.getElementById('yrsv-youbou');      if (el) yoyakuRsvYoubou = el.value;
   el = document.getElementById('yrsv-pax');         if (el) yoyakuRsvPax = parseInt(el.value) || 3;
   el = document.getElementById('yrsv-table');       if (el) yoyakuRsvTable = el.value;
+  el = document.getElementById('yrsv-tantou');      if (el) yoyakuRsvTantou = el.value;
 }
 function yoyakuRsvCalNav(diff) {
   saveFormInputs();
@@ -2628,6 +2632,7 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvYoubou = rsv.youbou || '';
   yoyakuRsvPax = rsv.pax || 3;
   yoyakuRsvTable = rsv.table || '未定';
+  yoyakuRsvTantou = rsv.tantouCast || '';
   yoyakuSubTab = 'add';
   renderYoyaku();
 }
@@ -2665,7 +2670,7 @@ function yoyakuSubmitRsv() {
     memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : (yoyakuEditRsv ? (yoyakuEditRsv.memberId || '') : ''),
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
     table: document.getElementById('yrsv-table').value,
-    tantouCast: yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : ''),
+    tantouCast: (document.getElementById('yrsv-tantou') ? document.getElementById('yrsv-tantou').value : '') || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')),
     youbou: document.getElementById('yrsv-youbou').value,
     rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
   };
@@ -2677,7 +2682,7 @@ function yoyakuSubmitRsv() {
       yoyakuSelectedCust = null;
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
-      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = '';
+      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = '';
       yoyakuEditRsv = null;
       yoyakuSubTab = 'list';
       loadYoyaku();
