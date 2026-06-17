@@ -174,6 +174,12 @@ function handleApiRequest_(body) {
     resetGunshiSettings_();
     return { ok: true };
   }
+  if (body.action === 'resetGunshiSeating') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    resetGunshiSeating_();
+    return { ok: true };
+  }
   // ---- 予約管理 ----
   if (body.action === 'addReservation') {
     const staffName = getStaffName(body.userId);
@@ -3062,6 +3068,30 @@ function resetGunshiSettings_() {
   });
 
   // アテンドログの未終了行（今日分）をクリア
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sh = ss.getSheetByName(ATEN_TAB);
+    if (sh && sh.getLastRow() > 1) {
+      const rows = sh.getDataRange().getValues();
+      for (let i = rows.length - 1; i >= 1; i--) {
+        if (String(rows[i][5]).trim() === '') sh.deleteRow(i + 1);
+      }
+    }
+  } catch(e) {
+    Logger.log('アテンドログクリア失敗: ' + e);
+  }
+}
+
+function resetGunshiSeating_() {
+  const ps = PropertiesService.getScriptProperties();
+  const all = ps.getProperties();
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  Object.keys(all).forEach(k => {
+    if (k.startsWith('NGCAST_') || k.startsWith('STAG_') ||
+        k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_')) {
+      ps.deleteProperty(k);
+    }
+  });
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
     const sh = ss.getSheetByName(ATEN_TAB);

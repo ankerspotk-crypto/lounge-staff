@@ -462,6 +462,7 @@ function initAdminUI(castList) {
       + '<option value="">-- 選択 --</option>'
       + '</select>'
       + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#7ab0f0;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
+      + '<button onclick="resetGunshiSeating()" style="padding:4px 10px;background:#1a1a2a;color:#cc99ff;border:1px solid #443366;border-radius:6px;font-size:12px;cursor:pointer">席リセット</button>'
       + '<button onclick="resetGunshiAll()" style="padding:4px 10px;background:#2a0f0f;color:#ff7777;border:1px solid #552222;border-radius:6px;font-size:12px;cursor:pointer">軍師リセット</button>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
@@ -2153,6 +2154,17 @@ function renderCashThresholds(thresholds) {
     + '</div>'
     + '</div>';
   setContent(html);
+}
+
+function resetGunshiSeating() {
+  if (!confirm('テーブルのステータス（席割り当て・NGキャスト・席タグ）をリセットします。\nシステム設定（通知・現金しきい値等）は保持されます。\n\n実行しますか？')) return;
+  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'resetGunshiSeating', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      alert('✅ 席ステータスをリセットしました');
+    })
+    .catch(function() { alert('通信エラー'); });
 }
 
 function resetGunshiAll() {
