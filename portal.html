@@ -2159,6 +2159,7 @@ function saveCashThresholds() {
 // ---- 予約管理タブ ----
 var yoyakuDate = new Date();
 var yoyakuRsvs = [];
+var yoyakuCastList = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
 var yoyakuSubTab = 'list'; // list / sched / add / cal
@@ -2202,6 +2203,7 @@ function loadYoyaku() {
       if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
       staffName = d.name || '';
       yoyakuRsvs = d.reservations || [];
+      yoyakuCastList = d.casts || [];
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = '';
@@ -2481,9 +2483,19 @@ function renderYoyakuAdd() {
     + '<div class="yform-label">席</div>'
     + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
     + '<div class="yform-label">予約キャスト</div>'
-    + '<input type="text" class="yform-input" id="yrsv-yoyaku-cast" placeholder="指名キャスト名" value="'+esc(yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : ''))+'" style="margin-bottom:8px">'
+    + (function(){
+        var cur = yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : '');
+        var opts = '<option value="">-- 未定 --</option>';
+        yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'; });
+        return '<select class="yform-input" id="yrsv-yoyaku-cast" style="margin-bottom:8px">'+opts+'</select>';
+      })()
     + '<div class="yform-label">担当キャスト</div>'
-    + '<input type="text" class="yform-input" id="yrsv-tantou" placeholder="担当キャスト名" value="'+esc(yoyakuRsvTantou || (yoyakuSelectedCust ? yoyakuSelectedCust.tantou||'' : '') || (yoyakuEditRsv ? yoyakuEditRsv.tantouCast||'' : ''))+'" style="margin-bottom:8px">'
+    + (function(){
+        var defVal = yoyakuRsvTantou || (yoyakuSelectedCust ? yoyakuSelectedCust.tantou||'' : '') || (yoyakuEditRsv ? yoyakuEditRsv.tantouCast||'' : '');
+        var opts = '<option value="">-- 未定 --</option>';
+        yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===defVal?' selected':'')+'>'+esc(c)+'</option>'; });
+        return '<select class="yform-input" id="yrsv-tantou" style="margin-bottom:8px">'+opts+'</select>';
+      })()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
     + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>'

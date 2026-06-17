@@ -2475,7 +2475,8 @@ function handlePortalApi_(e) {
     const date = e.parameter.date || todayStr();
     return out({ ok: true, name, isAdmin, date,
       reservations: getYoyakuReservations_(date),
-      requests: getYoyakuRequests_(null) });
+      requests: getYoyakuRequests_(null),
+      casts: getCastNamesForYoyaku_(ss) });
   }
   if (tab === 'yoyakuMonth') {
     const month = e.parameter.month || todayStr().slice(0, 7);
@@ -3045,6 +3046,15 @@ function getYoyakuReqSheet_() {
 }
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
+function getCastNamesForYoyaku_(ss) {
+  const sh = (ss || SpreadsheetApp.openById(SHEET_ID)).getSheetByName(STAFF_TAB);
+  if (!sh) return [];
+  const KURO = ['黒服社員', '黒服バイト', '管理者'];
+  return sh.getDataRange().getValues().slice(1)
+    .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role); })
+    .map(r => String(r[1]).trim());
+}
+
 function searchCustomersForYoyaku_(query) {
   const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(MASTER_TAB);
   if (!sheet) return [];
