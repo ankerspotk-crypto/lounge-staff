@@ -4162,7 +4162,7 @@ function parseTrustDailyReport_(html) {
   return { dayPayTotal: dayPayTotal, costOutTotal: costOutTotal, costOutDetail: costOutDetail };
 }
 
-const OPENING_CHECK_HEADERS_ = ['日付', '報告者', 'レジ現金内訳', 'レジ現金合計額', '報告時刻'];
+const OPENING_CHECK_HEADERS_ = ['日付', '報告者', 'レジ現金内訳', 'レジ現金合計額', '報告時刻', '経費内訳', '経費合計額'];
 
 // 開店チェックシートを取得（なければ作成）
 function getOpeningCheckSheet_() {
@@ -4196,7 +4196,9 @@ function getOpeningCheckInit() {
     locked: true,
     reporterName: String(row[1]),
     tillStr: String(row[2]),
-    tillTotal: Number(row[3]) || 0
+    tillTotal: Number(row[3]) || 0,
+    keihiStr: String(row[5] || ''),
+    keihiTotal: Number(row[6]) || 0
   };
 }
 
@@ -4214,14 +4216,18 @@ function submitOpeningCheck(payload) {
 
     const tillStr = formatTill_(payload.till);
     const tillTotal = tillTotalYen_(payload.till);
-    sh.appendRow([dateKey, reporterName, tillStr, tillTotal, new Date()]);
+    const keihiStr = formatDenom_(payload.keihi);
+    const keihiTotal = denomYen_(payload.keihi);
+    sh.appendRow([dateKey, reporterName, tillStr, tillTotal, new Date(), keihiStr, keihiTotal]);
 
     const lines = ['【開店チェック】' + dateKey, '報告者　' + reporterName];
     if (tillStr) lines.push('レジ現金　' + tillStr);
-    lines.push('合計　¥' + tillTotal.toLocaleString());
+    lines.push('レジ合計　¥' + tillTotal.toLocaleString());
+    if (keihiStr) lines.push('経費　' + keihiStr);
+    if (keihiTotal > 0) lines.push('経費合計　¥' + keihiTotal.toLocaleString());
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
-    return { ok: true, dateKey, tillTotal };
+    return { ok: true, dateKey, tillTotal, keihiTotal };
   } catch (e) {
     console.error('submitOpeningCheck error:', e);
     return { ok: false, error: String(e) };
