@@ -583,7 +583,16 @@ function renderSales() {
 
   // カード
   h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px">';
-  h += '<div style="font-size:10px;color:#6a8ab0;margin-bottom:10px;letter-spacing:0.5px">' + sel + ' TRUSTデータ</div>';
+  var salesDates = (portalData && portalData.salesDataDates) || {};
+  var asOf = salesDates[sel] || '';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  h += '<span style="font-size:10px;color:#6a8ab0;letter-spacing:0.5px">' + sel + ' TRUSTデータ'
+    + (asOf ? '　<span style="color:#7ab0f0;font-weight:600">' + asOf + '時点</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>') + '</span>';
+  if (isAdmin) {
+    h += '<span style="font-size:10px;color:#7a9cc8;cursor:pointer;text-decoration:underline" onclick="salesSetDate(\'' + sel + '\')">'
+      + (asOf ? '変更' : '取込日を設定') + '</span>';
+  }
+  h += '</div>';
 
   function item(label, val, color, sub) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #181828">'
@@ -688,6 +697,20 @@ function renderSales() {
 }
 
 function switchSalesMonth(m) { currentMonth = m; renderSales(); }
+
+function salesSetDate(month) {
+  var cur = ((portalData && portalData.salesDataDates) || {})[month] || '';
+  var d = prompt(month + ' の取込日を入力（例: 6月15日 または 2026-06-15）', cur);
+  if (d === null) return;
+  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'setSalesDataDate', userId:userId, month:month, date:d.trim() }) })
+    .then(function(r){ return r.json(); })
+    .then(function(res) {
+      if (!res.ok) { alert('エラー: ' + (res.error||'')); return; }
+      if (!portalData.salesDataDates) portalData.salesDataDates = {};
+      portalData.salesDataDates[month] = d.trim();
+      renderSales();
+    });
+}
 
 // ---- 給与明細（TRUST明細書形式） ----
 function renderPay() {
@@ -2121,8 +2144,27 @@ function renderCashThresholds(thresholds) {
     +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetCashCheck\',\'本日の閉店チェック\')">🌙 閉店チェックをリセット</button>'
     +   '<button class="notif-del-btn" style="width:100%;margin-top:0" onclick="resetCashAction(\'resetSafeWithdrawalLog\',\'本日の金庫出金ログ\')">🔓 金庫出金ログをリセット</button>'
     + '</div>'
+    + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a1a1a">'
+    +   '<div class="cashset-floor" style="color:#ff8888">⚠️ 軍師システム 全設定リセット</div>'
+    +   '<div style="font-size:11px;color:#8aabcc;margin-bottom:12px;line-height:1.6">通知設定・現金しきい値・給与公開フラグ・スタッフ活動ログなど、LINE/グループIDを除く全スクリプトプロパティを削除します。元に戻せません。</div>'
+    +   '<button onclick="resetGunshiAll()" style="width:100%;padding:12px;background:#2a0f0f;color:#ff7777;border:1px solid #552222;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔴 全設定を削除してリセット</button>'
+    +   '<div id="gunshi-reset-msg" style="display:none;text-align:center;font-size:12px;color:#ff8888;margin-top:8px"></div>'
+    + '</div>'
     + '</div>';
   setContent(html);
+}
+
+function resetGunshiAll() {
+  if (!confirm('⚠️ 軍師システムの全設定を削除します。\nLINEトークン・グループIDは保持されますが、通知設定・現金しきい値・給与公開フラグなどは全て消去されます。\n\n本当に実行しますか？')) return;
+  var msg = document.getElementById('gunshi-reset-msg');
+  if (msg) { msg.style.display = 'block'; msg.textContent = '実行中...'; }
+  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'resetGunshiSettings', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (msg) msg.textContent = 'エラー: ' + (d.error||''); return; }
+      if (msg) msg.textContent = '✅ リセット完了。ページを再読み込みしてください。';
+    })
+    .catch(function() { if (msg) msg.textContent = '通信エラー'; });
 }
 
 function cashsetTillChange(floor, key, field, val) {

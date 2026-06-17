@@ -160,6 +160,20 @@ function handleApiRequest_(body) {
   if (body.action === 'submitHairReceipt') {
     return submitHairReceipt_(body);
   }
+  if (body.action === 'setSalesDataDate') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    const dates = JSON.parse(prop('SALES_DATA_DATES') || '{}');
+    dates[body.month] = body.date;
+    PropertiesService.getScriptProperties().setProperty('SALES_DATA_DATES', JSON.stringify(dates));
+    return { ok: true };
+  }
+  if (body.action === 'resetGunshiSettings') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    resetGunshiSettings_();
+    return { ok: true };
+  }
   // ---- 予約管理 ----
   if (body.action === 'addReservation') {
     const staffName = getStaffName(body.userId);
@@ -430,7 +444,7 @@ function handleKurofuku(event, text, userId) {
         reply(event.replyToken, '⚠️ シフト表への書き込みに失敗しました（今日の日付列が見つかりません）');
       }
     } else {
-      reply(event.replyToken, '⚠️ 派遣メッセージを受信しましたが、名前・時間を読み取れませんでした。\n（書式例: まおちゃん20:30~24:00）');
+      // 書式不一致は無視（エラーメッセージ不要）
     }
     return;
   }
@@ -594,15 +608,7 @@ function handleStaff(event, text, userId) {
     return;
   }
 
-  // 顧客名検索 → 黒服グループに送信 + 階数未指定なら確認
-  const matches = searchCustomers(text);
-  if (matches.length > 0) {
-    push_(prop('GROUP_KUROFUKU'), matches.map(formatCard).join('\n──────────\n'));
-    logReservation(text, matches);
-    if (!/[1-9０-９]\s*[階FfＦ]/.test(text)) {
-      reply(event.replyToken, '何階希望ですか？');
-    }
-  }
+  // スタッフグループでは顧客名検索に反応しない
 }
 
 // ============================================================
@@ -2543,7 +2549,8 @@ function handlePortalApi_(e) {
   const payPublished = {};
   (months || []).forEach(m => { payPublished[m] = !!prop('PAY_PUBLISHED_' + m); });
 
-  return out({ ok: true, name, isAdmin, viewAs: lookupName, months, sales, pay, shifts, staffRole, payPublished, hairTotals });
+  const salesDataDates = JSON.parse(prop('SALES_DATA_DATES') || '{}');
+  return out({ ok: true, name, isAdmin, viewAs: lookupName, months, sales, pay, shifts, staffRole, payPublished, hairTotals, salesDataDates });
 }
 
 function portalCastList_(ss) {
@@ -3043,6 +3050,15 @@ function getYoyakuReqSheet_() {
     sh.appendRow(['日付','種別','お客様名','内容','登録者','登録日時','ステータス']);
   }
   return sh;
+}
+
+function resetGunshiSettings_() {
+  const ps = PropertiesService.getScriptProperties();
+  const all = ps.getProperties();
+  const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID'];
+  Object.keys(all).forEach(k => {
+    if (!KEEP.includes(k)) ps.deleteProperty(k);
+  });
 }
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
