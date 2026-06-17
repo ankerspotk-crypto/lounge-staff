@@ -2332,12 +2332,13 @@ function renderYoyakuList() {
     + '</div>';
   if (rsv.length === 0) return stats + '<div style="text-align:center;color:#334;padding:30px 0;font-size:13px">本日の予約はありません</div>';
   return stats + rsv.map(function(r) {
-    var castBadge = (r.castReq && r.castReq !== 'なし') ? '<span class="yb yb-cast">'+esc(r.castReq)+'希望</span>' : '';
+    var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var stsBadge = r.status === '確定' ? '<span class="yb yb-ok">確定</span>' : '<span class="yb yb-pend">'+esc(r.status)+'</span>';
     return '<div class="yoyaku-card">'
       + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span></div>'
-      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+castBadge+'</div>'
-      + (r.note ? '<div class="yc-note">'+esc(r.note)+'</div>' : '')
+      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+tantouBadge+'</div>'
+      + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
+      + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#334">予約担当: '+esc(r.regBy)+'</div>' : '')
       + '</div>';
   }).join('');
 }
@@ -2394,8 +2395,6 @@ function renderYoyakuAdd() {
     var val = t.f+' '+t.n;
     return '<option value="'+val+'"'+(val===presetTable?' selected':'')+'>'+val+'</option>';
   }).join('');
-  var casts = ['なし','りく','まや','ゆうか','のあ','ぼん','ゆき','その他'];
-  var castBtns = casts.map(function(c){ return '<div class="ytbtn'+(c==='なし'?' on':'')+ '" onclick="yoyakuToggleCast(this)">'+esc(c)+'</div>'; }).join('');
   // グリッドクリック時のプリセット表示
   var presetBanner = preset.table
     ? '<div style="font-size:12px;background:#1a2a1a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
@@ -2403,23 +2402,25 @@ function renderYoyakuAdd() {
       + '<span style="font-size:11px;color:#445;cursor:pointer" onclick="yoyakuGridPreset=null;renderYoyaku()">✕ クリア</span></div>'
     : '';
 
+  var tantouCast = (yoyakuSelectedCust && yoyakuSelectedCust.tantou) ? yoyakuSelectedCust.tantou : '';
   var custSection = yoyakuSelectedCust
-    ? '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:13px;font-weight:600;color:#88aaff">'
-      + esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様　<span style="font-size:10px;color:#445;font-weight:400">選択中</span></div>'
+    ? '<div style="background:#0d1a2e;border:1px solid #88aaff;border-radius:8px;padding:9px 11px;margin-bottom:10px">'
+      + '<div style="font-size:13px;font-weight:600;color:#88aaff">'+esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様</div>'
+      + (tantouCast ? '<div style="font-size:11px;color:#bb99ff;margin-top:3px">担当キャスト: '+esc(tantouCast)+'</div>' : '')
+      + '</div>'
     : '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索..." oninput="yoyakuSearch(this.value)">'
       + '<div id="ycust-results"></div>';
   return presetBanner + custSection
     + '<div class="yform-sec" id="yform" style="'+(yoyakuSelectedCust?'':'display:none')+'">'
+    + '<div style="font-size:11px;color:#445;margin-bottom:10px">予約担当者: <span style="color:#88aaff">'+esc(staffName||'')+'</span></div>'
     + '<div class="yform-label">来店日</div>'
     + '<input type="date" class="yform-input" id="yrsv-date" value="'+yoyakuDateStr(yoyakuDate)+'" style="margin-bottom:8px">'
     + '<div class="yform-label">時間 / 人数</div>'
     + '<div class="yform-row" style="margin-bottom:8px"><input type="time" class="yform-input" id="yrsv-time" value="'+presetTime+'" style="flex:1"><select class="yform-input" id="yrsv-pax" style="flex:0.5;margin-left:8px"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
     + '<div class="yform-label">席</div>'
     + '<select class="yform-input" id="yrsv-table" style="margin-bottom:8px">'+tableOpts+'</select>'
-    + '<div class="yform-label">キャストリクエスト</div>'
-    + '<div class="yform-toggles" id="ycast-toggle" style="margin-bottom:8px">'+castBtns+'</div>'
-    + '<div class="yform-label">備考</div>'
-    + '<textarea class="yform-input" id="yrsv-note" rows="2" placeholder="VIP・誕生日・ボトルなど..." style="resize:none;margin-bottom:8px"></textarea>'
+    + '<div class="yform-label">要望・備考</div>'
+    + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px"></textarea>'
     + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">予約を確定する</div>'
     + '<div id="yrsv-status" style="font-size:12px;color:#999;text-align:center;margin-top:6px"></div>'
     + '</div>';
@@ -2506,16 +2507,9 @@ function yoyakuSelectCust(i) {
   renderYoyaku();
 }
 
-function yoyakuToggleCast(el) {
-  document.querySelectorAll('#ycast-toggle .ytbtn').forEach(function(b){ b.classList.remove('on'); });
-  el.classList.add('on');
-}
 
 function yoyakuSubmitRsv() {
   if (!yoyakuSelectedCust) { alert('お客様を選択してください'); return; }
-  var castReq = '';
-  var onBtn = document.querySelector('#ycast-toggle .ytbtn.on');
-  if (onBtn) castReq = onBtn.textContent.trim();
   var paxEl = document.getElementById('yrsv-pax');
   var payload = {
     action: 'addReservation', userId: userId,
@@ -2525,8 +2519,8 @@ function yoyakuSubmitRsv() {
     memberId: yoyakuSelectedCust.no || '',
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
     table: document.getElementById('yrsv-table').value,
-    castReq: castReq || 'なし',
-    note: document.getElementById('yrsv-note').value
+    tantouCast: yoyakuSelectedCust.tantou || '',
+    youbou: document.getElementById('yrsv-youbou').value
   };
   var stat = document.getElementById('yrsv-status');
   if (stat) stat.textContent = '送信中...';
