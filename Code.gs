@@ -2147,7 +2147,7 @@ function resetAllAtendou_() {
   // ENCHO_LAST・席タグ もクリア
   const props = PropertiesService.getScriptProperties().getProperties();
   Object.keys(props).forEach(k => {
-    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_')) {
+    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('RSRV_')) {
       PropertiesService.getScriptProperties().deleteProperty(k);
     }
   });

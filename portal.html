@@ -2227,7 +2227,7 @@ function saveCashThresholds() {
 }
 
 // ---- 予約管理タブ ----
-var yoyakuDate = new Date();
+var yoyakuDate = (function(){ var d = new Date(); return d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; })();
 var yoyakuRsvs = [];
 var yoyakuCastList = [];
 var yoyakuCustResults = [];
@@ -2404,7 +2404,7 @@ function yoyakuChangeDate(d) {
   yoyakuDate = new Date(yoyakuDate.getTime() + d * 86400000);
   loadYoyaku();
 }
-function yoyakuToday() { yoyakuDate = new Date(); loadYoyaku(); }
+function yoyakuToday() { var d = new Date(); yoyakuDate = d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; loadYoyaku(); }
 
 function renderYoyakuList() {
   var rsv = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
@@ -2432,7 +2432,7 @@ function renderYoyakuList() {
         + '</div>';
     }
     return '<div class="yoyaku-card" onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer">'
-      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span><span style="font-size:10px;color:#6a8ab0;margin-left:auto">✏️</span></div>'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:6px">会員番号：'+esc(r.memberId)+'</span>':'')+'<span style="font-size:10px;color:#6a8ab0;margin-left:auto">✏️</span></div>'
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+yoyakuCastBadge+tantouBadge+'</div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
