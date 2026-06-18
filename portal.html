@@ -317,10 +317,10 @@ header h1 { font-size: 17px; font-weight: 600; }
 .ysched-time-hdr { display: flex; }
 .ysched-time-cell { font-size: 10px; color: #7ab0f0; text-align: center; border-right: 1px solid #0d1830; padding: 7px 4px; }
 .ysched-floor-div { height: 5px; background: #0d1520; border-bottom: 1px solid #1e3050; }
-.ysched-name-cell { height: 46px; padding: 4px 6px; border-bottom: 1px solid #162848; border-right: 1px solid #1e3050; display: flex; flex-direction: column; justify-content: center; }
+.ysched-name-cell { height: 52px; padding: 4px 6px; border-bottom: 1px solid #162848; border-right: 1px solid #1e3050; display: flex; flex-direction: column; justify-content: center; }
 .ysched-name-main { font-size: 11px; font-weight: 600; color: #b0c8e8; }
 .ysched-name-cap { font-size: 9px; color: #6a8ab0; }
-.ysched-row { height: 46px; position: relative; border-bottom: 1px solid #162848; }
+.ysched-row { height: 52px; position: relative; border-bottom: 1px solid #162848; }
 .ysched-row-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; }
 .ysched-hour-cell { border-right: 1px solid #0d1830; height: 100%; }
 .yrsv-blk { position: absolute; top: 5px; bottom: 5px; border-radius: 6px; padding: 2px 6px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; overflow: hidden; min-width: 30px; }
@@ -2585,9 +2585,9 @@ function renderYoyakuSched() {
       var lx = ((sm - SH*60) / 60) * HW, wx = ((em - sm) / 60) * HW - 3;
       if (lx < 0) { wx += lx; lx = 0; }
       var colors = ['background:#162848;border:1px solid #1a4080','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
-      var extra = tables.length > 1 ? '<div style="font-size:9px;color:#aabbcc">+' + (tables.length-1) + '席</div>' : '';
+      var extraLabel = tables.length > 1 ? ' +' + (tables.length-1) + '席' : '';
       blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;'+colors[i%4]+'" onclick="event.stopPropagation()">'
-        + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div>'+extra+'</div>';
+        + '<div class="yrsv-pax">'+r.pax+'名'+extraLabel+'</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
     });
     rightHtml += '<div class="ysched-row" style="width:'+TW+'px;cursor:crosshair" data-tidx="'+i+'" onclick="yoyakuGridClick('+i+',event,'+SH+','+HW+')">'
       + '<div class="ysched-row-bg">'+rowBg+'</div>'+blocks+'</div>';
