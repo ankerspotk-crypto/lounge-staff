@@ -2513,40 +2513,33 @@ function renderAvailability_(all) {
     }
   });
 
-  var html = '';
+  var rows = '';
   Object.keys(sections).sort().forEach(function(f) {
     var sec = sections[f];
-    html += '<div style="font-size:10px;color:#5a7a9a;font-weight:700;margin:6px 0 3px">'+f+'</div>';
-
-    if (sec.counters.length > 0) {
-      var freeC = sec.counters.filter(function(c){ return c.info.isFree; });
-      var busyC = sec.counters.filter(function(c){ return !c.info.isFree; });
-      var cLabel, cColor;
-      if (freeC.length === sec.counters.length) {
-        cLabel = '全' + sec.counters.length + '席空き'; cColor = '#66cc88';
-      } else if (freeC.length === 0) {
-        cLabel = '全' + sec.counters.length + '席埋まり'; cColor = '#ff8866';
-      } else {
-        cLabel = freeC.length + '席空き'; cColor = '#88aacc';
-      }
-      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
+    var freeC = sec.counters.filter(function(c){ return c.info.isFree; });
+    var freeB = sec.boxes.filter(function(b){ return b.info.isFree; });
+    if (freeC.length === 0 && freeB.length === 0) return;
+    rows += '<div style="font-size:10px;color:#5a7a9a;font-weight:700;margin:6px 0 3px">'+f+'</div>';
+    if (freeC.length > 0) {
+      rows += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
         + '<span style="font-size:11px;color:#8aabcc;flex:1">カウンター</span>'
-        + '<span style="font-size:11px;font-weight:700;color:'+cColor+'">'+cLabel+'</span>'
+        + '<span style="font-size:11px;font-weight:700;color:#66cc88">'+freeC.length+'席空き</span>'
         + '</div>';
     }
-
-    sec.boxes.forEach(function(b) {
-      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
+    freeB.forEach(function(b) {
+      rows += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
         + '<span style="font-size:11px;color:#8aabcc;flex:1">'+b.n+'</span>'
-        + '<span style="font-size:11px;font-weight:700;color:'+b.info.color+'">'+b.info.label+'</span>'
+        + '<span style="font-size:11px;font-weight:700;color:#66cc88">空き</span>'
         + '<span style="font-size:10px;color:#5a7a9a">'+b.cap+'名</span>'
         + '</div>';
     });
   });
 
+  if (!rows) rows = '<div style="font-size:11px;color:#6a8ab0;padding:4px 0">現在空き席はありません</div>';
+
   return '<div style="background:#0e1624;border:1px solid #1a2a40;border-radius:8px;padding:10px;margin-bottom:12px">'
-    + '<div style="font-size:11px;color:#6a8ab0;font-weight:700;margin-bottom:4px">📋 空き席案内</div>'
-    + html
+    + '<div style="font-size:11px;color:#6a8ab0;font-weight:700;margin-bottom:4px">📋 空き席</div>'
+    + rows
     + '</div>';
 }
 
