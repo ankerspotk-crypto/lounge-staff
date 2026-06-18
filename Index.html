@@ -277,6 +277,8 @@ header h1 { font-size: 17px; letter-spacing: .5px; }
 }
 .next-seat-btn.set { color: #33aaff; border-color: #2266aa; background: #0a1a2a; }
 .next-seat-btn:active { background: #152535; }
+.extend-cast-btn { background:#0f2010;border:1px solid #1a5020;color:#66cc88;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer; }
+.extend-cast-btn:active { background:#1a3020; }
 
 /* staff grid */
 .staff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -676,6 +678,7 @@ function showMainSheet() {
         + '</div>'
         + '<div class="active-cast-btns">'
         + '<button class="end-cast-btn" data-name="' + esc(c.name) + '">' + changeLabel + '</button>'
+        + (!isNoTimer ? '<button class="extend-cast-btn" data-name="' + esc(c.name) + '">+15</button>' : '')
         + (!isNoTimer ? '<button class="' + nextBtnClass + '" data-name="' + esc(c.name) + '">→<br>' + esc(nextLabel) + '</button>' : '')
         + '</div>'
         + '</div>';
@@ -801,6 +804,23 @@ function showMainSheet() {
       return;
     }
 
+    // +15分延長ボタン
+    if (btn.classList.contains('extend-cast-btn')) {
+      var name = btn.dataset.name;
+      var seatCode = activeSeat.code;
+      btn.textContent = '...';
+      btn.disabled = true;
+      google.script.run
+        .withSuccessHandler(function(data) {
+          applySeatsData(data);
+          activeSeat = seats.find(function(s){ return s.code === seatCode; });
+          if (activeSeat) showMainSheet();
+        })
+        .withFailureHandler(loadSeats)
+        .extendCast(name);
+      return;
+    }
+
     // 次席ボタン
     if (btn.classList.contains('next-seat-btn')) {
       nextSeatTarget = { seatCode: activeSeat.code, castName: btn.dataset.name };
@@ -822,18 +842,6 @@ function showMainSheet() {
         return;
       }
 
-      // 再タップでリセット
-      if (btn.classList.contains('cast-pending')) {
-        btn.classList.remove('cast-pending');
-        var picker = document.getElementById('cast-time-picker');
-        if (picker) picker.remove();
-        return;
-      }
-
-      // ハイライト
-      sheetBody.querySelectorAll('.staff-btn').forEach(function(b) { b.classList.remove('cast-pending'); });
-      btn.classList.add('cast-pending');
-
       // 他席在席チェック
       var fromSeat = null;
       seats.forEach(function(s) {
@@ -844,7 +852,8 @@ function showMainSheet() {
       if (fromSeat) {
         showCastConflictPicker_(name, fromSeat, seatCode, seatLabel);
       } else {
-        showPerCastTimePicker_(name, seatCode, seatLabel);
+        // 30分固定で即アサイン
+        assignOneAndRefresh(seatCode, seatLabel, name, 30);
       }
     }
   };

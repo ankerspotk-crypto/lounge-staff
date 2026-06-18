@@ -2436,6 +2436,11 @@ function assignSeatMulti(seatCode, seatLabel, staffNamesJson, mins) {
   return getSekiJokyouData();
 }
 
+function extendCast(castName) {
+  extendAtendou_(castName);
+  return getSekiJokyouData();
+}
+
 function getTimelineData() {
   const today = todayStr();
   const sh    = getAtenSheet_();
