@@ -2455,8 +2455,8 @@ function renderYoyakuList() {
       : '<span style="margin-left:auto;font-size:10px;color:#6a8ab0">'
         + (r.status === '来店済み' ? '来店済' : r.status === '退店済み' ? '退店済' : '来店前')
         + '</span>';
-    var tantouInline = r.tantouCast ? '<span style="font-size:14px;font-weight:600;color:#88cc44">'+esc(r.tantouCast)+'</span>' : '';
-    var yoyakuInline = r.yoyakuCast ? '<span style="font-size:14px;font-weight:600;color:#ffcc66">'+esc(r.yoyakuCast)+'</span>' : '';
+    var tantouInline = r.tantouCast ? '<span style="font-size:14px;font-weight:600;color:#88cc44"><span style="font-size:10px;font-weight:400;color:#5a9a3a">担当</span>'+esc(r.tantouCast)+'</span>' : '';
+    var yoyakuInline = r.yoyakuCast ? '<span style="font-size:14px;font-weight:600;color:#ffcc66"><span style="font-size:10px;font-weight:400;color:#aa8830">予約</span>'+esc(r.yoyakuCast)+'</span>' : '';
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
       + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:2px">'+esc(r.memberId)+'</span>':'')+tantouInline+yoyakuInline+statusBtns+'</div>'
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span></div>'
