@@ -236,12 +236,17 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yoyaku-stat { flex: 1; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; padding: 6px; text-align: center; }
 .yoyaku-stat .num { font-size: 16px; font-weight: 700; }
 .yoyaku-stat .lbl { font-size: 9px; color: #7a9cc8; margin-top: 1px; }
-.yoyaku-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
-.yoyaku-card .yc-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #7ab0f0; width: 46px; flex-shrink: 0; }
-.yoyaku-card .yc-name { font-size: 14px; font-weight: 600; color: #e8f0ff; }
-.yoyaku-card .yc-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 54px; margin-bottom: 3px; }
-.yoyaku-card .yc-note { font-size: 11px; color: #7a9cc8; padding-left: 54px; }
+.yoyaku-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.yoyaku-card .yc-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #7ab0f0; width: 44px; flex-shrink: 0; }
+.yoyaku-card .yc-name { font-size: 14px; font-weight: 600; color: #e8f0ff; flex: 1; min-width: 0; }
+.yoyaku-card .yc-cast-row { display: flex; flex-wrap: wrap; gap: 5px; padding-left: 50px; margin-bottom: 4px; }
+.yc-cast { font-size: 11px; padding: 2px 7px; border-radius: 8px; white-space: nowrap; }
+.yc-cast.dohan  { background: #281200; color: #ffaa44; border: 1px solid #553300; }
+.yc-cast.tantou { background: #0a1e0a; color: #88cc44; border: 1px solid #2a5a1a; }
+.yc-cast.yoyaku { background: #1a1500; color: #ffcc66; border: 1px solid #554400; }
+.yoyaku-card .yc-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 50px; margin-bottom: 3px; }
+.yoyaku-card .yc-note { font-size: 11px; color: #7a9cc8; padding-left: 50px; }
 .yb { font-size: 10px; padding: 2px 8px; border-radius: 7px; font-weight: 600; }
 .yb-seat { background: #0a1428; color: #7ab0f0; border: 1px solid #1e3a6a; }
 .yb-pax  { background: #141d30; color: #a0c0e0; border: 1px solid #1e3050; }
@@ -2459,11 +2464,14 @@ function renderYoyakuList() {
       : '<span style="margin-left:auto;font-size:10px;color:#6a8ab0">'
         + (r.status === '来店済み' ? '来店済' : r.status === '退店済み' ? '退店済' : '来店前')
         + '</span>';
-    var dohanInline  = r.dohanCast  ? '<span style="font-size:14px;font-weight:600;color:#ffaa44"><span style="font-size:10px;font-weight:400;color:#aa6600">同伴</span>'+esc(r.dohanCast)+'</span>' : '';
-    var tantouInline = r.tantouCast ? '<span style="font-size:14px;font-weight:600;color:#88cc44"><span style="font-size:10px;font-weight:400;color:#5a9a3a">担当</span>'+esc(r.tantouCast)+'</span>' : '';
-    var yoyakuInline = r.yoyakuCast ? '<span style="font-size:14px;font-weight:600;color:#ffcc66"><span style="font-size:10px;font-weight:400;color:#aa8830">予約</span>'+esc(r.yoyakuCast)+'</span>' : '';
+    var castTags = '';
+    if (r.dohanCast)  castTags += '<span class="yc-cast dohan">同伴 '+esc(r.dohanCast)+'</span>';
+    if (r.tantouCast) castTags += '<span class="yc-cast tantou">担当 '+esc(r.tantouCast)+'</span>';
+    if (r.yoyakuCast) castTags += '<span class="yc-cast yoyaku">予約 '+esc(r.yoyakuCast)+'</span>';
+    var castRow = castTags ? '<div class="yc-cast-row">'+castTags+'</div>' : '';
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
-      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:2px">'+esc(r.memberId)+'</span>':'')+dohanInline+tantouInline+yoyakuInline+statusBtns+'</div>'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#7a9cc8">'+esc(r.memberId)+'</span>':'')+'</span>'+statusBtns+'</div>'
+      + castRow
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span></div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
