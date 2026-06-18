@@ -2469,40 +2469,47 @@ function renderYoyakuList() {
 }
 
 function renderAvailability_(all) {
-  var now = new Date();
-  var nowH = now.getHours(), nowM = now.getMinutes();
-  if (nowH < 6) nowH += 24;
-  var nowMin = nowH * 60 + nowM;
-
-  var tableEndMap = {};
-  all.forEach(function(r) {
-    if (r.status === '退店済み') return;
-    var pts = (r.time || '20:00').split(':');
-    var sh = parseInt(pts[0]) || 20;
-    if (sh < 6) sh += 24;
-    var sm = sh * 60 + (parseInt(pts[1]) || 0);
-    var em = sm + 120;
-    (r.table || '').split('、').forEach(function(tbl) {
-      var key = tbl.trim();
-      if (!key || key === '未定') return;
-      if (!tableEndMap[key] || em > tableEndMap[key]) tableEndMap[key] = em;
-    });
-  });
-
   var minToTime = function(m) {
     var h = Math.floor(m / 60) % 24, mm = m % 60;
     return h + ':' + (mm < 10 ? '0' : '') + mm;
   };
 
-  // グループ: ボックスは個別、カウンターはフロアごとにまとめ
+  // 退店済み以外の予約だけをテーブルにマッピング
+  var tableRsvMap = {};
+  all.forEach(function(r) {
+    if (r.status === '退店済み') return;
+    (r.table || '').split('、').forEach(function(tbl) {
+      var key = tbl.trim();
+      if (!key || key === '未定') return;
+      if (!tableRsvMap[key]) tableRsvMap[key] = [];
+      tableRsvMap[key].push(r);
+    });
+  });
+
+  var getInfo = function(key) {
+    var rsvs = tableRsvMap[key] || [];
+    if (rsvs.length === 0) return { isFree: true, label: '空き', color: '#66cc88' };
+    var latestEnd = 0;
+    rsvs.forEach(function(r) {
+      var pts = (r.time || '20:00').split(':');
+      var sh = parseInt(pts[0]) || 20;
+      if (sh < 6) sh += 24;
+      var em = sh * 60 + (parseInt(pts[1]) || 0) + 120;
+      if (em > latestEnd) latestEnd = em;
+    });
+    var isIn = rsvs.some(function(r){ return r.status === '来店済み'; });
+    return { isFree: false, label: (isIn ? '来店中' : '来店前') + '（' + minToTime(latestEnd) + '〜見込）', color: isIn ? '#ff8866' : '#ffcc44' };
+  };
+
   var sections = {};
   YOYAKU_TABLES.forEach(function(t) {
     var key = t.f + ' ' + t.n;
     if (!sections[t.f]) sections[t.f] = { counters: [], boxes: [] };
+    var info = getInfo(key);
     if (t.n.indexOf('カウンター') >= 0) {
-      sections[t.f].counters.push({ key: key, n: t.n, cap: t.cap, endMin: tableEndMap[key] || 0 });
+      sections[t.f].counters.push({ n: t.n, cap: t.cap, info: info });
     } else {
-      sections[t.f].boxes.push({ key: key, n: t.n, cap: t.cap, endMin: tableEndMap[key] || 0 });
+      sections[t.f].boxes.push({ n: t.n, cap: t.cap, info: info });
     }
   });
 
@@ -2511,18 +2518,16 @@ function renderAvailability_(all) {
     var sec = sections[f];
     html += '<div style="font-size:10px;color:#5a7a9a;font-weight:700;margin:6px 0 3px">'+f+'</div>';
 
-    // カウンター: まとめて表示
     if (sec.counters.length > 0) {
-      var freeC = sec.counters.filter(function(c){ return c.endMin <= nowMin; });
-      var busyC = sec.counters.filter(function(c){ return c.endMin > nowMin; });
-      var cLabel = '', cColor = '';
+      var freeC = sec.counters.filter(function(c){ return c.info.isFree; });
+      var busyC = sec.counters.filter(function(c){ return !c.info.isFree; });
+      var cLabel, cColor;
       if (freeC.length === sec.counters.length) {
         cLabel = '全' + sec.counters.length + '席空き'; cColor = '#66cc88';
       } else if (freeC.length === 0) {
-        var latest = Math.max.apply(null, busyC.map(function(c){return c.endMin;}));
-        cLabel = minToTime(latest) + '〜空き'; cColor = '#ffcc44';
+        cLabel = '全' + sec.counters.length + '席埋まり'; cColor = '#ff8866';
       } else {
-        cLabel = freeC.length + '席空き / ' + busyC.length + '席予約中'; cColor = '#88aacc';
+        cLabel = freeC.length + '席空き'; cColor = '#88aacc';
       }
       html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
         + '<span style="font-size:11px;color:#8aabcc;flex:1">カウンター</span>'
@@ -2530,19 +2535,17 @@ function renderAvailability_(all) {
         + '</div>';
     }
 
-    // ボックス: 個別
     sec.boxes.forEach(function(b) {
-      var isFree = b.endMin <= nowMin;
       html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
         + '<span style="font-size:11px;color:#8aabcc;flex:1">'+b.n+'</span>'
-        + '<span style="font-size:11px;font-weight:700;color:'+(isFree?'#66cc88':'#ffcc44')+'">'+(isFree?'空き中':minToTime(b.endMin)+'〜空き')+'</span>'
+        + '<span style="font-size:11px;font-weight:700;color:'+b.info.color+'">'+b.info.label+'</span>'
         + '<span style="font-size:10px;color:#5a7a9a">'+b.cap+'名</span>'
         + '</div>';
     });
   });
 
   return '<div style="background:#0e1624;border:1px solid #1a2a40;border-radius:8px;padding:10px;margin-bottom:12px">'
-    + '<div style="font-size:11px;color:#6a8ab0;font-weight:700;margin-bottom:4px">📋 空き席案内（予約+2h）</div>'
+    + '<div style="font-size:11px;color:#6a8ab0;font-weight:700;margin-bottom:4px">📋 空き席案内</div>'
     + html
     + '</div>';
 }
