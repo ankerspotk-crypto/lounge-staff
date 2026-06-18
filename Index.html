@@ -974,10 +974,10 @@ function showCastConflictPicker_(name, fromSeat, toCode, toLabel) {
       .updateNextSeat(fromSeat.code, name, toCode);
   });
 
-  // 席チェンジ: 時間選択 → アサイン
+  // 席チェンジ: 30分固定でアサイン
   document.getElementById('conflict-change').addEventListener('click', function() {
     picker.remove();
-    showPerCastTimePicker_(name, toCode, toLabel);
+    assignOneAndRefresh(toCode, toLabel, name, 30);
   });
 
   picker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
