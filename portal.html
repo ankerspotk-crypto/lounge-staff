@@ -2861,6 +2861,7 @@ function yoyakuSubmitRsv() {
     tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
     yoyakuCast: document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : '',
     youbou: document.getElementById('yrsv-youbou').value,
+    status: yoyakuEditRsv ? (yoyakuEditRsv.status || '確定') : '確定',
     rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
   };
   if (stat) stat.textContent = '送信中...';
