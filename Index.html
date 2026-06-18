@@ -557,12 +557,15 @@ function seatCard(s) {
   var rsrvInline = (s.rsrv && !isWaiting && !isKurofuku)
     ? '<span style="font-size:10px;color:#66ddff;margin-left:5px">📅' + esc(s.rsrv.customer) + '様</span>'
     : '';
+  var yrsrvInline = (!s.rsrv && s.yrsrv && !isWaiting && !isKurofuku)
+    ? '<span style="font-size:10px;color:#ffcc44;margin-left:5px">📋' + esc(s.yrsrv.time) + ' ' + esc(s.yrsrv.customer) + '様</span>'
+    : '';
 
   if (!s.occupied || !s.casts || s.casts.length === 0) {
     var emptyText = isKurofuku ? '─ 黒服なし ─' : isWaiting ? '─ 待機なし ─' : '─ 空き ─';
     var extraClass = isKurofuku ? ' kurofuku' : isWaiting ? ' waiting' : '';
     return '<div class="seat' + extraClass + '" id="' + id + '">'
-      + '<div class="seat-header"><div class="seat-short">' + esc(s.short) + inlineTags + rsrvInline + '</div></div>'
+      + '<div class="seat-header"><div class="seat-short">' + esc(s.short) + inlineTags + rsrvInline + yrsrvInline + '</div></div>'
       + ngBadge
       + '<div class="seat-empty">' + emptyText + '</div>'
       + '</div>';
@@ -609,7 +612,7 @@ function seatCard(s) {
   var seatClass = isKurofuku ? 'kurofuku' : isWaiting ? 'waiting' : s.status;
   return '<div class="seat ' + seatClass + '" id="' + id + '">'
     + '<div class="seat-header">'
-    + '<div class="seat-short">' + esc(s.short) + inlineTags + rsrvInline + '</div>'
+    + '<div class="seat-short">' + esc(s.short) + inlineTags + rsrvInline + yrsrvInline + '</div>'
     + '</div>'
     + ngBadge
     + castsHtml

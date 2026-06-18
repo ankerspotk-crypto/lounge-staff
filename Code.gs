@@ -2152,7 +2152,7 @@ function resetAllAtendou_() {
   // ENCHO_LAST・席タグ もクリア
   const props = PropertiesService.getScriptProperties().getProperties();
   Object.keys(props).forEach(k => {
-    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('RSRV_')) {
+    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('RSRV_') || k.startsWith('YRSRV_')) {
       PropertiesService.getScriptProperties().deleteProperty(k);
     }
   });
@@ -2243,6 +2243,10 @@ function getSekiJokyouData() {
       const v = allProps['RSRV_' + code];
       return v ? JSON.parse(v) : null;
     };
+    const getYrsrvCached = code => {
+      const v = allProps['YRSRV_' + code];
+      return v ? JSON.parse(v) : null;
+    };
 
     const mapArr = {};
     active.forEach(r => {
@@ -2255,7 +2259,8 @@ function getSekiJokyouData() {
       const tags = getTagsCached(s.code);
       const ngCast = getNgCached(s.code);
       const rsrv = getRsrvCached(s.code);
-      if (list.length === 0) return Object.assign({}, s, { occupied: false, casts: [], tags, ngCast, rsrv });
+      const yrsrv = getYrsrvCached(s.code);
+      if (list.length === 0) return Object.assign({}, s, { occupied: false, casts: [], tags, ngCast, rsrv, yrsrv });
 
       const casts = list.map(r => {
         const el = elapsedMins_(r.start);
@@ -2267,7 +2272,7 @@ function getSekiJokyouData() {
       const worstStatus = (s.type === 'W' || s.type === 'K') ? 'ok'
                         : casts.some(c => c.status === 'over') ? 'over'
                         : casts.some(c => c.status === 'warn') ? 'warn' : 'ok';
-      return Object.assign({}, s, { occupied: true, casts, status: worstStatus, tags, ngCast, rsrv });
+      return Object.assign({}, s, { occupied: true, casts, status: worstStatus, tags, ngCast, rsrv, yrsrv });
     });
   } catch(e) {
     console.error('getSekiJokyouData error:', e);
@@ -3107,7 +3112,7 @@ function resetGunshiSeating_() {
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   Object.keys(all).forEach(k => {
     if (k.startsWith('NGCAST_') || k.startsWith('STAG_') ||
-        k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_') || k.startsWith('RSRV_')) {
+        k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_') || k.startsWith('RSRV_') || k.startsWith('YRSRV_')) {
       ps.deleteProperty(k);
     }
   });
@@ -3132,6 +3137,35 @@ function autoSyncRsrvIfNeeded_() {
   if (Date.now() - last < 5 * 60 * 1000) return;
   sp.setProperty('RSRV_SYNC_AT', String(Date.now()));
   syncRsrvWithReservations_();
+  syncYrsrv_();
+}
+
+// 確定予約をYRSRV_プロパティに書き込む（席カードに予告表示用）
+function syncYrsrv_() {
+  const today = bizDateStr_();
+  const sh = getYoyakuRsrvSheet_();
+  const rows = sh.getDataRange().getValues();
+  const sp = PropertiesService.getScriptProperties();
+  const allProps = sp.getProperties();
+  // 既存YRSRV_をクリア
+  Object.keys(allProps).filter(k => k.startsWith('YRSRV_')).forEach(k => sp.deleteProperty(k));
+  // 本日の確定予約を席コード→最早時刻でマッピング
+  const seatMap = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]);
+    if (d !== today || String(r[8]) !== '確定') continue;
+    const time = String(r[1]), customer = String(r[2]), pax = Number(r[4]) || 1;
+    String(r[5]).split('、').forEach(t => {
+      const code = tableNameToSeatCode_(t.trim());
+      if (!code) return;
+      if (!seatMap[code] || time < seatMap[code].time) seatMap[code] = { customer, time, pax };
+    });
+  }
+  // RSRV_（来店済み）がある席は上書きしない
+  Object.entries(seatMap).forEach(([code, data]) => {
+    if (!allProps['RSRV_' + code]) sp.setProperty('YRSRV_' + code, JSON.stringify(data));
+  });
 }
 
 // 予約システムと整合を取り、ゾンビRSRV_を削除
@@ -3243,6 +3277,7 @@ function addReservation_(payload, regBy) {
     String(payload.table || '未定'), String(payload.tantouCast || ''),
     String(payload.youbou || ''), '確定', regBy, new Date(), String(payload.yoyakuCast || '')
   ]);
+  PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true, dateKey };
 }
 
@@ -3264,11 +3299,14 @@ function updateReservation_(rowIdx, payload) {
   if ((oldStatus === '来店済み' || newStatus === '来店済み') && oldTable !== newTable) {
     transferSeatState_(oldTable, newTable, String(payload.customer || oldRow[2]), Number(payload.pax) || Number(oldRow[4]) || 1);
   }
+  // 予約変更でYRSRV_を即時更新
+  PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true };
 }
 
 function cancelReservation_(rowIdx) {
   getYoyakuRsrvSheet_().getRange(rowIdx, 9).setValue('キャンセル');
+  PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true };
 }
 
@@ -3334,7 +3372,11 @@ function checkInReservation_(rowIdx) {
   const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('来店済み');
   const sp = PropertiesService.getScriptProperties();
-  seatCodes.forEach(code => sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax })));
+  seatCodes.forEach(code => {
+    sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax }));
+    sp.deleteProperty('YRSRV_' + code);
+  });
+  PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true, seatCodes };
 }
 
