@@ -211,6 +211,11 @@ function handleApiRequest_(body) {
     if (!staffName) return { ok: false, error: '未登録のユーザーです' };
     return checkOutReservation_(Number(body.rowIdx));
   }
+  if (body.action === 'setReservationStatus') {
+    const staffName = getStaffName(body.userId);
+    if (!staffName) return { ok: false, error: '未登録のユーザーです' };
+    return setReservationStatus_(Number(body.rowIdx), String(body.status));
+  }
   if (body.action === 'addYoyakuRequest') {
     const staffName = getStaffName(body.userId);
     if (!staffName) return { ok: false, error: '未登録のユーザーです' };
@@ -3399,6 +3404,19 @@ function checkOutReservation_(rowIdx) {
   sh.getRange(rowIdx, 9).setValue('退店済み');
   const sp = PropertiesService.getScriptProperties();
   seatCodes.forEach(code => sp.deleteProperty('RSRV_' + code));
+  return { ok: true };
+}
+
+function setReservationStatus_(rowIdx, status) {
+  const sh = getYoyakuRsrvSheet_();
+  sh.getRange(rowIdx, 9).setValue(status);
+  if (status === '確定') {
+    const row = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
+    const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
+    const sp = PropertiesService.getScriptProperties();
+    seatCodes.forEach(code => sp.deleteProperty('RSRV_' + code));
+    sp.deleteProperty('RSRV_SYNC_AT');
+  }
   return { ok: true };
 }
 
