@@ -2498,7 +2498,8 @@ function renderAvailability_(all) {
       if (em > latestEnd) latestEnd = em;
     });
     var isIn = rsvs.some(function(r){ return r.status === '来店済み'; });
-    return { isFree: false, label: (isIn ? '来店中' : '来店前') + '（' + minToTime(latestEnd) + '〜見込）', color: isIn ? '#ff8866' : '#ffcc44' };
+    var timeLabel = latestEnd < 24 * 60 ? '（' + minToTime(latestEnd) + '〜見込）' : '';
+    return { isFree: false, label: (isIn ? '来店中' : '来店前') + timeLabel, color: isIn ? '#ff8866' : '#ffcc44' };
   };
 
   var sections = {};
