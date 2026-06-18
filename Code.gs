@@ -2222,6 +2222,9 @@ function setSeatNgCast(seatCode, names) {
 
 function getSekiJokyouData() {
   try {
+    // 予約との整合チェック（5分おき）
+    autoSyncRsrvIfNeeded_();
+
     const today   = todayStr();
     const active  = getActiveAtendou(today);
 
@@ -3120,6 +3123,15 @@ function resetGunshiSeating_() {
   } catch(e) {
     Logger.log('アテンドログクリア失敗: ' + e);
   }
+}
+
+// 5分おきに自動で予約整合（getSekiJokyouDataから呼ばれる）
+function autoSyncRsrvIfNeeded_() {
+  const sp = PropertiesService.getScriptProperties();
+  const last = Number(sp.getProperty('RSRV_SYNC_AT') || 0);
+  if (Date.now() - last < 5 * 60 * 1000) return;
+  sp.setProperty('RSRV_SYNC_AT', String(Date.now()));
+  syncRsrvWithReservations_();
 }
 
 // 予約システムと整合を取り、ゾンビRSRV_を削除
