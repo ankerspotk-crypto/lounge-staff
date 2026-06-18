@@ -2548,21 +2548,31 @@ function renderAvailability_(all) {
 }
 
 function renderYoyakuSched() {
-  var HW = 52, SH = 19, EH = 26, TW = (EH-SH)*HW, RH = 52;
+  var HW = 52, SH = 19, EH = 26, TW = (EH-SH)*HW, RH = 52, FD = 5;
   var prevF = '';
-  // テーブルキー → インデックスのマップ
-  var tblIdxMap = {};
-  YOYAKU_TABLES.forEach(function(tt, idx) { tblIdxMap[(tt.f+tt.n).replace(/\s/g,'')] = idx; });
+
+  // テーブルキー → インデックス、行Y座標マップを事前計算
+  var tblIdxMap = {}, rowYMap = {};
+  var yOff = 0, lastFloor = '';
+  YOYAKU_TABLES.forEach(function(tt, idx) {
+    tblIdxMap[(tt.f+tt.n).replace(/\s/g,'')] = idx;
+    if (lastFloor && tt.f !== lastFloor) yOff += FD;
+    rowYMap[idx] = yOff;
+    yOff += RH;
+    lastFloor = tt.f;
+  });
 
   var leftHtml = '<div class="ysched-tbl-hdr">テーブル</div>';
-  var rightHtml = '<div class="ysched-hdr"><div style="width:'+TW+'px;display:flex">';
-  for (var h = SH; h < EH; h++) rightHtml += '<div class="ysched-time-cell" style="width:'+HW+'px">'+(h<24?h:h-24)+':00</div>';
-  rightHtml += '</div></div>';
+  var rightHdr = '<div class="ysched-hdr"><div style="width:'+TW+'px;display:flex">';
+  for (var h = SH; h < EH; h++) rightHdr += '<div class="ysched-time-cell" style="width:'+HW+'px">'+(h<24?h:h-24)+':00</div>';
+  rightHdr += '</div></div>';
+  var rowsHtml = ''; // 背景グリッドのみ
+  var overlayHtml = ''; // 全予約ブロック（背景の上に重ねる）
 
   YOYAKU_TABLES.forEach(function(t, i) {
     if (t.f !== prevF && prevF !== '') {
       leftHtml += '<div class="ysched-floor-div"></div>';
-      rightHtml += '<div class="ysched-floor-div" style="width:'+TW+'px"></div>';
+      rowsHtml  += '<div class="ysched-floor-div" style="width:'+TW+'px"></div>';
     }
     prevF = t.f;
     leftHtml += '<div class="ysched-name-cell"><div class="ysched-name-main">'+t.f+' '+t.n.replace('カウンター','カウ').replace('ボックス','ボックス')+'</div></div>';
@@ -2575,12 +2585,14 @@ function renderYoyakuSched() {
         + '<div style="flex:1"></div>'
         + '</div>';
     }
-    var blocks = '';
+    rowsHtml += '<div class="ysched-row" style="width:'+TW+'px;cursor:crosshair" data-tidx="'+i+'" onclick="yoyakuGridClick('+i+',event,'+SH+','+HW+')">'
+      + '<div class="ysched-row-bg">'+rowBg+'</div></div>';
+
+    // 予約ブロックはオーバーレイ層に描画（行をまたぐバー対応）
     var curKey = (t.f+t.n).replace(/\s/g,'');
     yoyakuRsvs.forEach(function(r) {
       var tables = (r.table||'').split('、').map(function(s){ return s.trim(); });
       if (tables[0].replace(/\s/g,'') !== curKey) return;
-      // 連続して割り当てられた席数を数えてバーの高さを決定
       var span = 1;
       for (var k = 1; k < tables.length; k++) {
         if (tblIdxMap[tables[k].replace(/\s/g,'')] === i + k) span++; else break;
@@ -2588,19 +2600,21 @@ function renderYoyakuSched() {
       var pts = (r.time||'20:00').split(':');
       var sh = parseInt(pts[0]); if (isNaN(sh)) sh = 20;
       var sm = sh * 60 + (parseInt(pts[1]) || 0);
-      var em = sm + 120;
-      var lx = ((sm - SH*60) / 60) * HW, wx = ((em - sm) / 60) * HW - 3;
+      var lx = ((sm - SH*60) / 60) * HW, wx = ((120) / 60) * HW - 3;
       if (lx < 0) { wx += lx; lx = 0; }
+      var topY = rowYMap[i] + 5, bh = span * RH - 10;
       var colors = ['background:#162848;border:1px solid #1a4080','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
-      var bh = span * RH - 10; // 複数行スパン
-      blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;top:5px;height:'+bh+'px;z-index:3;'+colors[i%4]+'" onclick="event.stopPropagation()">'
+      overlayHtml += '<div class="yrsv-blk" style="position:absolute;left:'+lx+'px;top:'+topY+'px;width:'+wx+'px;height:'+bh+'px;'+colors[i%4]+'" onclick="event.stopPropagation()">'
         + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
     });
-    rightHtml += '<div class="ysched-row" style="width:'+TW+'px;cursor:crosshair" data-tidx="'+i+'" onclick="yoyakuGridClick('+i+',event,'+SH+','+HW+')">'
-      + '<div class="ysched-row-bg">'+rowBg+'</div>'+blocks+'</div>';
   });
 
-  return '<div class="ysched-wrap"><div class="ysched-inner"><div class="ysched-left">'+leftHtml+'</div><div class="ysched-right">'+rightHtml+'</div></div></div>';
+  var rowsWrapper = '<div style="position:relative">'
+    + rowsHtml
+    + '<div style="position:absolute;top:0;left:0;pointer-events:none;z-index:10">'
+    + overlayHtml
+    + '</div></div>';
+  return '<div class="ysched-wrap"><div class="ysched-inner"><div class="ysched-left">'+leftHtml+'</div><div class="ysched-right">'+rightHdr+rowsWrapper+'</div></div></div>';
 }
 
 function renderYoyakuAdd() {
