@@ -233,9 +233,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yoyaku-date-text { font-size: 15px; font-weight: 700; color: #e8f0ff; flex: 1; text-align: center; }
 .yoyaku-today-btn { font-size: 10px; background: #0f2040; color: #7ab0f0; border: 1px solid #1a50a0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
 .yoyaku-stats { display: flex; gap: 8px; margin-bottom: 12px; }
-.yoyaku-stat { flex: 1; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; padding: 9px; text-align: center; }
-.yoyaku-stat .num { font-size: 22px; font-weight: 700; }
-.yoyaku-stat .lbl { font-size: 9px; color: #7a9cc8; margin-top: 2px; }
+.yoyaku-stat { flex: 1; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; padding: 6px; text-align: center; }
+.yoyaku-stat .num { font-size: 16px; font-weight: 700; }
+.yoyaku-stat .lbl { font-size: 9px; color: #7a9cc8; margin-top: 1px; }
 .yoyaku-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
 .yoyaku-card .yc-row1 { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
 .yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #7ab0f0; width: 46px; flex-shrink: 0; }
@@ -2434,7 +2434,8 @@ function renderYoyakuList() {
     + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">'+all.length+'</div><div class="lbl">本日の予約</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
     + '</div>';
-  if (all.length === 0) return stats + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  var avail = renderAvailability_(all);
+  if (all.length === 0) return stats + avail + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
   var cards = all.map(function(r) {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
@@ -2464,7 +2465,86 @@ function renderYoyakuList() {
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
       + '</div>';
   }).join('');
-  return stats + cards;
+  return stats + avail + cards;
+}
+
+function renderAvailability_(all) {
+  var now = new Date();
+  var nowH = now.getHours(), nowM = now.getMinutes();
+  if (nowH < 6) nowH += 24;
+  var nowMin = nowH * 60 + nowM;
+
+  var tableEndMap = {};
+  all.forEach(function(r) {
+    if (r.status === '退店済み') return;
+    var pts = (r.time || '20:00').split(':');
+    var sh = parseInt(pts[0]) || 20;
+    if (sh < 6) sh += 24;
+    var sm = sh * 60 + (parseInt(pts[1]) || 0);
+    var em = sm + 120;
+    (r.table || '').split('、').forEach(function(tbl) {
+      var key = tbl.trim();
+      if (!key || key === '未定') return;
+      if (!tableEndMap[key] || em > tableEndMap[key]) tableEndMap[key] = em;
+    });
+  });
+
+  var minToTime = function(m) {
+    var h = Math.floor(m / 60) % 24, mm = m % 60;
+    return h + ':' + (mm < 10 ? '0' : '') + mm;
+  };
+
+  // グループ: ボックスは個別、カウンターはフロアごとにまとめ
+  var sections = {};
+  YOYAKU_TABLES.forEach(function(t) {
+    var key = t.f + ' ' + t.n;
+    if (!sections[t.f]) sections[t.f] = { counters: [], boxes: [] };
+    if (t.n.indexOf('カウンター') >= 0) {
+      sections[t.f].counters.push({ key: key, n: t.n, cap: t.cap, endMin: tableEndMap[key] || 0 });
+    } else {
+      sections[t.f].boxes.push({ key: key, n: t.n, cap: t.cap, endMin: tableEndMap[key] || 0 });
+    }
+  });
+
+  var html = '';
+  Object.keys(sections).sort().forEach(function(f) {
+    var sec = sections[f];
+    html += '<div style="font-size:10px;color:#5a7a9a;font-weight:700;margin:6px 0 3px">'+f+'</div>';
+
+    // カウンター: まとめて表示
+    if (sec.counters.length > 0) {
+      var freeC = sec.counters.filter(function(c){ return c.endMin <= nowMin; });
+      var busyC = sec.counters.filter(function(c){ return c.endMin > nowMin; });
+      var cLabel = '', cColor = '';
+      if (freeC.length === sec.counters.length) {
+        cLabel = '全' + sec.counters.length + '席空き'; cColor = '#66cc88';
+      } else if (freeC.length === 0) {
+        var latest = Math.max.apply(null, busyC.map(function(c){return c.endMin;}));
+        cLabel = minToTime(latest) + '〜空き'; cColor = '#ffcc44';
+      } else {
+        cLabel = freeC.length + '席空き / ' + busyC.length + '席予約中'; cColor = '#88aacc';
+      }
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
+        + '<span style="font-size:11px;color:#8aabcc;flex:1">カウンター</span>'
+        + '<span style="font-size:11px;font-weight:700;color:'+cColor+'">'+cLabel+'</span>'
+        + '</div>';
+    }
+
+    // ボックス: 個別
+    sec.boxes.forEach(function(b) {
+      var isFree = b.endMin <= nowMin;
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
+        + '<span style="font-size:11px;color:#8aabcc;flex:1">'+b.n+'</span>'
+        + '<span style="font-size:11px;font-weight:700;color:'+(isFree?'#66cc88':'#ffcc44')+'">'+(isFree?'空き中':minToTime(b.endMin)+'〜空き')+'</span>'
+        + '<span style="font-size:10px;color:#5a7a9a">'+b.cap+'名</span>'
+        + '</div>';
+    });
+  });
+
+  return '<div style="background:#0e1624;border:1px solid #1a2a40;border-radius:8px;padding:10px;margin-bottom:12px">'
+    + '<div style="font-size:11px;color:#6a8ab0;font-weight:700;margin-bottom:4px">📋 空き席案内（予約+2h）</div>'
+    + html
+    + '</div>';
 }
 
 function renderYoyakuSched() {
