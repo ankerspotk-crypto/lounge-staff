@@ -2162,7 +2162,9 @@ function renderCashThresholds(thresholds) {
     + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a2a5a">'
     +   '<div class="cashset-floor" style="color:#cc99ff">🪑 テーブルステータスリセット</div>'
     +   '<div style="font-size:11px;color:#8aabcc;margin-bottom:12px;line-height:1.6">席割り当て・NGキャスト・席タグをクリアします。通知設定など他の設定は保持されます。</div>'
-    +   '<button onclick="resetGunshiSeating()" style="width:100%;padding:12px;background:#1a0f2a;color:#cc99ff;border:1px solid #443366;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🪑 席ステータスをリセット</button>'
+    +   '<button onclick="resetGunshiSeating()" style="width:100%;padding:12px;background:#1a0f2a;color:#cc99ff;border:1px solid #443366;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🪑 席ステータスをリセット</button>'
+    +   '<button onclick="syncRsrvWithReservations()" style="width:100%;padding:12px;background:#0f1f2a;color:#66ccff;border:1px solid #1a4a66;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔄 予約と整合・ゾンビ客名をクリア</button>'
+    +   '<div id="sync-rsrv-msg" style="display:none;text-align:center;font-size:12px;margin-top:8px"></div>'
     + '</div>'
     + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a1a1a">'
     +   '<div class="cashset-floor" style="color:#ff8888">⚠️ 軍師システム 全設定リセット</div>'
@@ -2172,6 +2174,19 @@ function renderCashThresholds(thresholds) {
     + '</div>'
     + '</div>';
   setContent(html);
+}
+
+function syncRsrvWithReservations() {
+  if (!confirm('予約システムと整合を取り、来店済み予約のない席の客名をクリアします。\n実行しますか？')) return;
+  var msg = document.getElementById('sync-rsrv-msg');
+  if (msg) { msg.style.display = 'block'; msg.style.color = '#8aabcc'; msg.textContent = '処理中...'; }
+  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'syncRsrvWithReservations', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (msg) { msg.style.color = '#ff6666'; msg.textContent = 'エラー: ' + (d.error || ''); } return; }
+      if (msg) { msg.style.color = '#66ccff'; msg.textContent = 'クリア完了（' + d.cleared + '件削除、有効席: ' + (d.validSeats && d.validSeats.length ? d.validSeats.join(', ') : 'なし') + '）'; }
+    })
+    .catch(function() { if (msg) { msg.style.color = '#ff6666'; msg.textContent = '通信エラー'; } });
 }
 
 function resetGunshiSeating() {

@@ -180,6 +180,11 @@ function handleApiRequest_(body) {
     resetGunshiSeating_();
     return { ok: true };
   }
+  if (body.action === 'syncRsrvWithReservations') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    return syncRsrvWithReservations_();
+  }
   // ---- 予約管理 ----
   if (body.action === 'addReservation') {
     const staffName = getStaffName(body.userId);
@@ -3115,6 +3120,32 @@ function resetGunshiSeating_() {
   } catch(e) {
     Logger.log('アテンドログクリア失敗: ' + e);
   }
+}
+
+// 予約システムと整合を取り、ゾンビRSRV_を削除
+function syncRsrvWithReservations_() {
+  const today = bizDateStr_();
+  const sh = getYoyakuRsrvSheet_();
+  const rows = sh.getDataRange().getValues();
+  // 本日の来店済み予約から有効な席コードを収集
+  const validCodes = new Set();
+  for (let i = 1; i < rows.length; i++) {
+    const d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], TZ, 'yyyy-MM-dd') : String(rows[i][0]);
+    if (d !== today || String(rows[i][8]) !== '来店済み') continue;
+    String(rows[i][5]).split('、').forEach(t => {
+      const code = tableNameToSeatCode_(t.trim());
+      if (code) validCodes.add(code);
+    });
+  }
+  // validCodesに含まれないRSRV_を削除
+  const sp = PropertiesService.getScriptProperties();
+  const props = sp.getProperties();
+  let cleared = 0;
+  Object.keys(props).forEach(k => {
+    if (!k.startsWith('RSRV_')) return;
+    if (!validCodes.has(k.slice(5))) { sp.deleteProperty(k); cleared++; }
+  });
+  return { ok: true, cleared, validSeats: [...validCodes] };
 }
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
