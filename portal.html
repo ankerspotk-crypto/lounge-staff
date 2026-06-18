@@ -2252,6 +2252,7 @@ var yoyakuCastList = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
 var yoyakuSubTab = 'list'; // list / sched / add / cal
+var yoyakuListFilter = '来店前'; // 来店前 / 来店済 / 退店済
 var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
 var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
 var yoyakuCustMode = '';    // '' = 未選択 / 'search' = 既存検索 / 'new' = 新規
@@ -2427,14 +2428,30 @@ function yoyakuChangeDate(d) {
 function yoyakuToday() { var d = new Date(); yoyakuDate = d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; loadYoyaku(); }
 
 function renderYoyakuList() {
-  var rsv = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
-  var pax = rsv.reduce(function(s,r){ return s+(r.pax||0); }, 0);
+  var all = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+  var pax = all.reduce(function(s,r){ return s+(r.pax||0); }, 0);
   var stats = '<div class="yoyaku-stats">'
-    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">'+rsv.length+'</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">'+all.length+'</div><div class="lbl">本日の予約</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
     + '</div>';
-  if (rsv.length === 0) return stats + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
-  return stats + rsv.map(function(r) {
+  var filters = [
+    {k:'来店前', label:'来店前'},
+    {k:'来店済', label:'来店済'},
+    {k:'退店済', label:'退店済'}
+  ];
+  var filterBar = '<div style="display:flex;gap:6px;margin-bottom:12px">'
+    + filters.map(function(f) {
+      var active = yoyakuListFilter === f.k;
+      return '<button onclick="yoyakuListFilter=\''+f.k+'\';renderYoyaku()" style="flex:1;padding:7px 4px;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;border:1px solid '
+        + (active ? '#1a50a0;background:#0f2040;color:#7ab0f0' : '#1e3050;background:#141d30;color:#7a9cc8')
+        + '">'+f.label+'</button>';
+    }).join('')
+    + '</div>';
+  var statusMap = {'来店前':'確定','来店済':'来店済み','退店済':'退店済み'};
+  var rsv = all.filter(function(r){ return r.status === statusMap[yoyakuListFilter]; });
+  if (all.length === 0) return stats + filterBar + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  if (rsv.length === 0) return stats + filterBar + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">該当する予約はありません</div>';
+  var cards = rsv.map(function(r) {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
     var stsBadge = r.status === '確定' ? '<span class="yb yb-ok">確定</span>'
@@ -2460,6 +2477,7 @@ function renderYoyakuList() {
       + actionBtns
       + '</div>';
   }).join('');
+  return stats + filterBar + cards;
 }
 
 function renderYoyakuSched() {
