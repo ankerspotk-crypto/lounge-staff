@@ -246,6 +246,8 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yb-seat { background: #0a1428; color: #7ab0f0; border: 1px solid #1e3a6a; }
 .yb-pax  { background: #141d30; color: #a0c0e0; border: 1px solid #1e3050; }
 .yb-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
+.tantou-chip { padding:5px 12px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.tantou-chip.sel { background:#1a2a0a;color:#88cc44;border-color:#446622;font-weight:700; }
 .yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
 .yb-pend { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
 /* 顧客検索 */
@@ -2573,12 +2575,14 @@ function renderYoyakuAdd() {
         yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'; });
         return '<select class="yform-input" id="yrsv-yoyaku-cast" style="margin-bottom:8px">'+opts+'</select>';
       })()
-    + '<div class="yform-label">担当キャスト</div>'
+    + '<div class="yform-label">担当キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
     + (function(){
         var defVal = yoyakuRsvTantou || (yoyakuSelectedCust ? yoyakuSelectedCust.tantou||'' : '') || (yoyakuEditRsv ? yoyakuEditRsv.tantouCast||'' : '');
-        var opts = '<option value="">-- 未定 --</option>';
-        yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===defVal?' selected':'')+'>'+esc(c)+'</option>'; });
-        return '<select class="yform-input" id="yrsv-tantou" style="margin-bottom:8px">'+opts+'</select>';
+        var selArr = defVal ? defVal.split('、') : [];
+        var chips = yoyakuCastList.map(function(c){
+          return '<button type="button" class="tantou-chip'+(selArr.indexOf(c)>=0?' sel':'')+'" data-val="'+esc(c)+'" onclick="toggleTantouChip(this)">'+esc(c)+'</button>';
+        }).join('');
+        return '<div id="yrsv-tantou-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
       })()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
@@ -2597,7 +2601,7 @@ function saveFormInputs() {
   el = document.getElementById('yrsv-youbou');      if (el) yoyakuRsvYoubou = el.value;
   el = document.getElementById('yrsv-pax');         if (el) yoyakuRsvPax = parseInt(el.value) || 3;
   el = document.getElementById('yrsv-table');       if (el) yoyakuRsvTable = el.value;
-  el = document.getElementById('yrsv-tantou');      if (el) yoyakuRsvTantou = el.value;
+  (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); yoyakuRsvTantou = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
   el = document.getElementById('yrsv-yoyaku-cast'); if (el) yoyakuRsvYoyakuCast = el.value;
 }
 function yoyakuRsvCalNav(diff) {
@@ -2719,6 +2723,8 @@ function yoyakuSelectCust(i) {
 }
 
 
+function toggleTantouChip(el) { el.classList.toggle('sel'); }
+
 function setYoyakuCastDirect() {
   var sel = document.getElementById('yrsv-yoyaku-cast');
   if (sel) sel.value = '直接来店';
@@ -2822,7 +2828,7 @@ function yoyakuSubmitRsv() {
     memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : (yoyakuEditRsv ? (yoyakuEditRsv.memberId || '') : ''),
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
     table: document.getElementById('yrsv-table').value,
-    tantouCast: (document.getElementById('yrsv-tantou') ? document.getElementById('yrsv-tantou').value : '') || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')),
+    tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
     yoyakuCast: document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : '',
     youbou: document.getElementById('yrsv-youbou').value,
     rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
