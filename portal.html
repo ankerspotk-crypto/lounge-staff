@@ -2524,7 +2524,7 @@ function renderYoyakuAdd() {
       + '</div>';
   } else if (yoyakuSelectedCust) {
     custSection = '<div style="background:#0a1428;border:1px solid #7ab0f0;border-radius:8px;padding:9px 11px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
-      + '<div><div style="font-size:13px;font-weight:600;color:#7ab0f0">'+esc(yoyakuSelectedCust.card||yoyakuSelectedCust.name||'')+'様</div>'
+      + '<div><div style="font-size:13px;font-weight:600;color:#7ab0f0">'+esc(yoyakuSelectedCust.name||yoyakuSelectedCust.card||'')+'様</div>'
       + (tantouCast ? '<div style="font-size:11px;color:#bb99ff;margin-top:3px">担当: '+esc(tantouCast)+'</div>' : '')
       + '</div>'
       + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer;white-space:nowrap;margin-left:8px" onclick="yoyakuClearCust()">変更</span>'
@@ -2709,7 +2709,7 @@ function yoyakuSearch(q) {
         if (c.bday && String(c.bday).trim()) badges += '<span class="ycm ycm-bday">🎂'+esc(c.bday)+'</span>';
         if (c.note) badges += '<span class="ycm ycm-note">📝メモあり</span>';
         return '<div class="ycust-row" data-cidx="'+i+'" onclick="yoyakuSelectCust('+i+')">'
-          + '<div><div class="ycust-name">'+esc(c.card||c.name||'')+'様</div>'
+          + '<div><div class="ycust-name">'+esc(c.name||c.card||'')+'様</div>'
           + '<div class="ycust-sub">'+(c.no?'会員'+c.no:'')+' '+(c.tantou?'担当:'+c.tantou:'')+'</div>'
           + (badges?'<div class="ycust-badges">'+badges+'</div>':'')+'</div></div>';
       }).join('');
@@ -2812,7 +2812,7 @@ function yoyakuSubmitRsv() {
   var stat = document.getElementById('yrsv-status');
   var manualEl = document.getElementById('yrsv-cust-manual');
   var custName = yoyakuSelectedCust
-    ? (yoyakuSelectedCust.card || yoyakuSelectedCust.name || '')
+    ? (yoyakuSelectedCust.name || yoyakuSelectedCust.card || '')
     : (manualEl ? manualEl.value.trim() : '');
   if (!custName) {
     if (stat) stat.textContent = '⚠️ お客様を選択または名前を入力してください';
