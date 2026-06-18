@@ -3205,19 +3205,75 @@ function addReservation_(payload, regBy) {
 
 function updateReservation_(rowIdx, payload) {
   const sh = getYoyakuRsrvSheet_();
+  const oldRow = sh.getRange(rowIdx, 1, 1, 9).getValues()[0];
+  const oldTable = String(oldRow[5]);
+  const oldStatus = String(oldRow[8]);
+  const newTable = String(payload.table || '未定');
+  const newStatus = String(payload.status || '確定');
   sh.getRange(rowIdx, 1, 1, 9).setValues([[
     String(payload.date || ''), String(payload.time || ''), String(payload.customer || ''),
     String(payload.memberId || ''), Number(payload.pax)||1,
-    String(payload.table || '未定'), String(payload.tantouCast || ''),
-    String(payload.youbou || ''), String(payload.status || '確定')
+    newTable, String(payload.tantouCast || ''),
+    String(payload.youbou || ''), newStatus
   ]]);
   sh.getRange(rowIdx, 12).setValue(String(payload.yoyakuCast || ''));
+  // 来店済み状態でテーブルが変わった場合、軍師システムに即時反映
+  if ((oldStatus === '来店済み' || newStatus === '来店済み') && oldTable !== newTable) {
+    transferSeatState_(oldTable, newTable, String(payload.customer || oldRow[2]), Number(payload.pax) || Number(oldRow[4]) || 1);
+  }
   return { ok: true };
 }
 
 function cancelReservation_(rowIdx) {
   getYoyakuRsrvSheet_().getRange(rowIdx, 9).setValue('キャンセル');
   return { ok: true };
+}
+
+// 席移譲：旧テーブル文字列→新テーブル文字列（来店済みテーブルチェンジ時）
+function transferSeatState_(oldTableStr, newTableStr, customer, pax) {
+  const parseCodes = str => String(str).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
+  const oldCodes = parseCodes(oldTableStr);
+  const newCodes = parseCodes(newTableStr);
+  const removed = oldCodes.filter(c => !newCodes.includes(c));
+  const added = newCodes.filter(c => !oldCodes.includes(c));
+  if (!removed.length && !added.length) return;
+  const sp = PropertiesService.getScriptProperties();
+  const allProps = sp.getProperties();
+  // 旧席からSTAG_・NGCAST_を回収
+  const stagData = removed.length ? (allProps['STAG_' + removed[0]] || null) : null;
+  const ngData   = removed.length ? (allProps['NGCAST_' + removed[0]] || null) : null;
+  // 旧席をクリア
+  removed.forEach(code => {
+    sp.deleteProperty('RSRV_' + code);
+    sp.deleteProperty('STAG_' + code);
+    sp.deleteProperty('NGCAST_' + code);
+  });
+  // 新席にRSRV_をセット
+  added.forEach(code => sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax })));
+  // 最初の新席にSTAG_・NGCAST_を移行
+  if (added.length > 0) {
+    if (stagData) sp.setProperty('STAG_' + added[0], stagData);
+    if (ngData)   sp.setProperty('NGCAST_' + added[0], ngData);
+  }
+  // キャスト出席レコードの席コード更新（旧席→最初の新席）
+  if (removed.length > 0 && added.length > 0) transferAttendance_(removed, added[0]);
+}
+
+function transferAttendance_(oldCodes, newCode) {
+  const sh = getAtenSheet_();
+  const today = todayStr();
+  const newSeat = ALL_SEATS.find(s => s.code === newCode);
+  if (!newSeat) return;
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]);
+    if (d !== today || String(r[5]) !== '') continue;
+    if (oldCodes.includes(String(r[1]))) {
+      sh.getRange(i + 1, 2).setValue(newCode);
+      sh.getRange(i + 1, 3).setValue(newSeat.label);
+    }
+  }
 }
 
 // テーブル名（"5F ボックス1" 等）→ 席コード（"5F-B1" 等）変換
@@ -3232,22 +3288,20 @@ function checkInReservation_(rowIdx) {
   const row = sh.getRange(rowIdx, 1, 1, 12).getValues()[0];
   const customer = String(row[2]);
   const pax = Number(row[4]) || 1;
-  const seatCode = tableNameToSeatCode_(String(row[5]));
+  const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('来店済み');
-  if (seatCode) {
-    PropertiesService.getScriptProperties().setProperty('RSRV_' + seatCode, JSON.stringify({ customer, pax }));
-  }
-  return { ok: true, seatCode };
+  const sp = PropertiesService.getScriptProperties();
+  seatCodes.forEach(code => sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax })));
+  return { ok: true, seatCodes };
 }
 
 function checkOutReservation_(rowIdx) {
   const sh = getYoyakuRsrvSheet_();
   const row = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
-  const seatCode = tableNameToSeatCode_(String(row[5]));
+  const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('退店済み');
-  if (seatCode) {
-    PropertiesService.getScriptProperties().deleteProperty('RSRV_' + seatCode);
-  }
+  const sp = PropertiesService.getScriptProperties();
+  seatCodes.forEach(code => sp.deleteProperty('RSRV_' + code));
   return { ok: true };
 }
 
