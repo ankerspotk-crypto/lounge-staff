@@ -248,6 +248,8 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yb-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
 .tantou-chip { padding:5px 12px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
 .tantou-chip.sel { background:#1a2a0a;color:#88cc44;border-color:#446622;font-weight:700; }
+.dohan-chip { padding:5px 12px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.dohan-chip.sel { background:#2a1800;color:#ffaa44;border-color:#884400;font-weight:700; }
 .table-chip { padding:5px 10px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:8px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
 .table-chip.sel { background:#0f2040;color:#7ab0f0;border-color:#1a50a0;font-weight:700; }
 .yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
@@ -2266,6 +2268,7 @@ var yoyakuRsvPax = 0;        // 再描画時に保持: 人数（0=デフォル�
 var yoyakuRsvTable = '';     // 再描画時に保持: 席
 var yoyakuRsvTantou = '';    // 再描画時に保持: 担当キャスト
 var yoyakuRsvYoyakuCast = ''; // 再描画時に保持: 予約キャスト
+var yoyakuRsvDohan = '';     // 再描画時に保持: 同伴キャスト
 var yoyakuEditRsv = null;    // 編集中の予約オブジェクト（null=新規追加モード）
 
 var YOYAKU_TABLES = [
@@ -2296,7 +2299,7 @@ function loadYoyaku() {
       yoyakuCastList = d.casts || [];
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
-      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = '';
+      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
       yoyakuEditRsv = null;
       renderYoyaku();
     })
@@ -2456,10 +2459,11 @@ function renderYoyakuList() {
       : '<span style="margin-left:auto;font-size:10px;color:#6a8ab0">'
         + (r.status === '来店済み' ? '来店済' : r.status === '退店済み' ? '退店済' : '来店前')
         + '</span>';
+    var dohanInline  = r.dohanCast  ? '<span style="font-size:14px;font-weight:600;color:#ffaa44"><span style="font-size:10px;font-weight:400;color:#aa6600">同伴</span>'+esc(r.dohanCast)+'</span>' : '';
     var tantouInline = r.tantouCast ? '<span style="font-size:14px;font-weight:600;color:#88cc44"><span style="font-size:10px;font-weight:400;color:#5a9a3a">担当</span>'+esc(r.tantouCast)+'</span>' : '';
     var yoyakuInline = r.yoyakuCast ? '<span style="font-size:14px;font-weight:600;color:#ffcc66"><span style="font-size:10px;font-weight:400;color:#aa8830">予約</span>'+esc(r.yoyakuCast)+'</span>' : '';
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
-      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:2px">'+esc(r.memberId)+'</span>':'')+tantouInline+yoyakuInline+statusBtns+'</div>'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:2px">'+esc(r.memberId)+'</span>':'')+dohanInline+tantouInline+yoyakuInline+statusBtns+'</div>'
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span></div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
@@ -2674,6 +2678,15 @@ function renderYoyakuAdd() {
       })()
     + '<div class="yform-label">席<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
     + '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>'
+    + '<div class="yform-label">同伴キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
+    + (function(){
+        var defVal = yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : '');
+        var selArr = defVal ? defVal.split('、') : [];
+        var chips = yoyakuCastList.map(function(c){
+          return '<button type="button" class="dohan-chip'+(selArr.indexOf(c)>=0?' sel':'')+'" data-val="'+esc(c)+'" onclick="toggleDohanChip(this)">'+esc(c)+'</button>';
+        }).join('');
+        return '<div id="yrsv-dohan-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
+      })()
     + '<div class="yform-label" style="display:flex;align-items:center;gap:8px">予約キャスト<button type="button" onclick="setYoyakuCastDirect()" style="font-size:10px;padding:2px 8px;background:#1a1a0a;color:#ddcc55;border:1px solid #665500;border-radius:6px;cursor:pointer">直接来店</button></div>'
     + (function(){
         var cur = yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : '');
@@ -2708,6 +2721,7 @@ function saveFormInputs() {
   el = document.getElementById('yrsv-pax');         if (el) yoyakuRsvPax = parseInt(el.value) || 3;
   (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); yoyakuRsvTable = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } })();
   (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); yoyakuRsvTantou = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
+  (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); yoyakuRsvDohan = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
   el = document.getElementById('yrsv-yoyaku-cast'); if (el) yoyakuRsvYoyakuCast = el.value;
 }
 function yoyakuRsvCalNav(diff) {
@@ -2830,6 +2844,7 @@ function yoyakuSelectCust(i) {
 
 
 function toggleTantouChip(el) { el.classList.toggle('sel'); }
+function toggleDohanChip(el) { el.classList.toggle('sel'); }
 function toggleTableChip(el) { el.classList.toggle('sel'); }
 
 function canEditYoyaku() {
@@ -2862,6 +2877,7 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvTable = rsv.table || '未定';
   yoyakuRsvTantou = rsv.tantouCast || '';
   yoyakuRsvYoyakuCast = rsv.yoyakuCast || '';
+  yoyakuRsvDohan = rsv.dohanCast || '';
   yoyakuSubTab = 'add';
   renderYoyaku();
 }
@@ -2934,6 +2950,9 @@ function yoyakuCancelEdit() {
   yoyakuRsvYoubou = '';
   yoyakuRsvPax = 0;
   yoyakuRsvTable = '';
+  yoyakuRsvTantou = '';
+  yoyakuRsvYoyakuCast = '';
+  yoyakuRsvDohan = '';
   yoyakuSubTab = 'list';
   renderYoyaku();
 }
@@ -2960,6 +2979,7 @@ function yoyakuSubmitRsv() {
     table: (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })(),
     tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
     yoyakuCast: document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : '',
+    dohanCast: (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : ''); })(),
     youbou: document.getElementById('yrsv-youbou').value,
     status: yoyakuEditRsv ? (yoyakuEditRsv.status || '確定') : '確定',
     rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
@@ -2972,7 +2992,7 @@ function yoyakuSubmitRsv() {
       yoyakuSelectedCust = null;
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
-      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = '';
+      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
       yoyakuEditRsv = null;
       yoyakuSubTab = 'list';
       loadYoyaku();

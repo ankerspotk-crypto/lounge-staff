@@ -3281,7 +3281,7 @@ function getYoyakuReservations_(dateKey) {
     customer: String(row[2]), memberId: String(row[3]),
     pax: Number(row[4]) || 1, table: String(row[5]), tantouCast: String(row[6]),
     youbou: String(row[7]), status: String(row[8]), regBy: String(row[9]),
-    yoyakuCast: String(row[11] || '')
+    yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || '')
   })).filter(r => r.date === dateKey && r.status !== 'キャンセル');
 }
 
@@ -3292,7 +3292,7 @@ function addReservation_(payload, regBy) {
     dateKey, String(payload.time || ''), String(payload.customer || ''),
     String(payload.memberId || ''), Number(payload.pax) || 1,
     String(payload.table || '未定'), String(payload.tantouCast || ''),
-    String(payload.youbou || ''), '確定', regBy, new Date(), String(payload.yoyakuCast || '')
+    String(payload.youbou || ''), '確定', regBy, new Date(), String(payload.yoyakuCast || ''), String(payload.dohanCast || '')
   ]);
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true, dateKey };
@@ -3312,6 +3312,7 @@ function updateReservation_(rowIdx, payload) {
     String(payload.youbou || ''), newStatus
   ]]);
   sh.getRange(rowIdx, 12).setValue(String(payload.yoyakuCast || ''));
+  sh.getRange(rowIdx, 13).setValue(String(payload.dohanCast || ''));
   // 来店済み状態でテーブルが変わった場合、軍師システムに即時反映
   if ((oldStatus === '来店済み' || newStatus === '来店済み') && oldTable !== newTable) {
     transferSeatState_(oldTable, newTable, String(payload.customer || oldRow[2]), Number(payload.pax) || Number(oldRow[4]) || 1);
