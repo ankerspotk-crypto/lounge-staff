@@ -3155,7 +3155,8 @@ function syncYrsrv_() {
     const r = rows[i];
     const d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]);
     if (d !== today || String(r[8]) !== '確定') continue;
-    const time = String(r[1]), customer = String(r[2]), pax = Number(r[4]) || 1;
+    const time = r[1] instanceof Date ? Utilities.formatDate(r[1], TZ, 'HH:mm') : String(r[1]);
+    const customer = String(r[2]), pax = Number(r[4]) || 1;
     String(r[5]).split('、').forEach(t => {
       const code = tableNameToSeatCode_(t.trim());
       if (!code) return;
