@@ -2293,8 +2293,9 @@ function renderYoyaku() {
     + '<button onclick="yoyakuChangeDate(1)">›</button>'
     + '</div>';
 
+  var tabList = canEditYoyaku() ? ['cal','list','sched','add'] : ['cal','list','sched'];
   var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
-    + ['cal','list','sched','add'].map(function(t) {
+    + tabList.map(function(t) {
       var labels = {cal:'カレンダー', list:'リスト', sched:'スケジュール', add:'予約追加'};
       return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
         + (yoyakuSubTab===t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
@@ -2423,18 +2424,19 @@ function renderYoyakuList() {
       : r.status === '来店済み' ? '<span class="yb" style="background:#0a2010;color:#66ff99;border:1px solid #1a6040">来店済み</span>'
       : r.status === '退店済み' ? '<span class="yb" style="background:#101010;color:#888;border:1px solid #333">退店済み</span>'
       : '<span class="yb yb-pend">'+esc(r.status)+'</span>';
+    var canEdit = canEditYoyaku();
     var actionBtns = '';
-    if (r.status === '確定') {
+    if (canEdit && r.status === '確定') {
       actionBtns = '<div style="margin-top:8px" onclick="event.stopPropagation()">'
         + '<button onclick="yoyakuCheckIn('+r.rowIdx+')" style="padding:6px 14px;background:#0a2010;color:#66ff99;border:1px solid #1a6040;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-right:6px">🚪 来店</button>'
         + '</div>';
-    } else if (r.status === '来店済み') {
+    } else if (canEdit && r.status === '来店済み') {
       actionBtns = '<div style="margin-top:8px" onclick="event.stopPropagation()">'
         + '<button onclick="yoyakuCheckOut('+r.rowIdx+')" style="padding:6px 14px;background:#1a1a1a;color:#aaa;border:1px solid #444;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🚶 退店</button>'
         + '</div>';
     }
-    return '<div class="yoyaku-card" onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer">'
-      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:6px">会員番号：'+esc(r.memberId)+'</span>':'')+'<span style="font-size:10px;color:#6a8ab0;margin-left:auto">✏️</span></div>'
+    return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様</span>'+(r.memberId?'<span style="font-size:10px;color:#7a9cc8;margin-left:6px">会員番号：'+esc(r.memberId)+'</span>':'')+(canEdit?'<span style="font-size:10px;color:#6a8ab0;margin-left:auto">✏️</span>':'')+'</div>'
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'+stsBadge+yoyakuCastBadge+tantouBadge+'</div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
@@ -2586,8 +2588,8 @@ function renderYoyakuAdd() {
       })()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
-    + '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>'
-    + (yoyakuEditRsv ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
+    + (canEditYoyaku() ? '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>' : '')
+    + (canEditYoyaku() && yoyakuEditRsv ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
     + '<div id="yrsv-status" style="font-size:12px;color:#8aabcc;text-align:center;margin-top:6px"></div>'
     + '</div>';
 }
@@ -2724,6 +2726,10 @@ function yoyakuSelectCust(i) {
 
 
 function toggleTantouChip(el) { el.classList.toggle('sel'); }
+
+function canEditYoyaku() {
+  return isAdmin || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffName === 'りく';
+}
 
 function setYoyakuCastDirect() {
   var sel = document.getElementById('yrsv-yoyaku-cast');
