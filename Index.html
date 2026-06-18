@@ -974,10 +974,14 @@ function showCastConflictPicker_(name, fromSeat, toCode, toLabel) {
       .updateNextSeat(fromSeat.code, name, toCode);
   });
 
-  // 席チェンジ: 30分固定でアサイン
+  // 席チェンジ: 旧席から外して新席に30分固定でアサイン
   document.getElementById('conflict-change').addEventListener('click', function() {
     picker.remove();
-    assignOneAndRefresh(toCode, toLabel, name, 30);
+    closeSheet();
+    google.script.run
+      .withSuccessHandler(applySeatsData)
+      .withFailureHandler(loadSeats)
+      .changeSeat(fromSeat.code, toCode, toLabel, name);
   });
 
   picker.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

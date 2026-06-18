@@ -2441,6 +2441,12 @@ function extendCast(castName) {
   return getSekiJokyouData();
 }
 
+function changeSeat(fromCode, toCode, toLabel, staffName) {
+  endAtendouByName_(fromCode, staffName);
+  startAtendou_(toCode, toLabel, staffName, 30);
+  return getSekiJokyouData();
+}
+
 function getTimelineData() {
   const today = todayStr();
   const sh    = getAtenSheet_();
