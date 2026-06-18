@@ -2548,8 +2548,12 @@ function renderAvailability_(all) {
 }
 
 function renderYoyakuSched() {
-  var HW = 52, SH = 19, EH = 26, TW = (EH-SH)*HW;
+  var HW = 52, SH = 19, EH = 26, TW = (EH-SH)*HW, RH = 52;
   var prevF = '';
+  // テーブルキー → インデックスのマップ
+  var tblIdxMap = {};
+  YOYAKU_TABLES.forEach(function(tt, idx) { tblIdxMap[(tt.f+tt.n).replace(/\s/g,'')] = idx; });
+
   var leftHtml = '<div class="ysched-tbl-hdr">テーブル</div>';
   var rightHtml = '<div class="ysched-hdr"><div style="width:'+TW+'px;display:flex">';
   for (var h = SH; h < EH; h++) rightHtml += '<div class="ysched-time-cell" style="width:'+HW+'px">'+(h<24?h:h-24)+':00</div>';
@@ -2562,7 +2566,6 @@ function renderYoyakuSched() {
     }
     prevF = t.f;
     leftHtml += '<div class="ysched-name-cell"><div class="ysched-name-main">'+t.f+' '+t.n.replace('カウンター','カウ').replace('ボックス','ボックス')+'</div></div>';
-    // 1時間ごとのセル（内部に15分区切りの薄い縦線を入れる）
     var rowBg = '';
     for (var c = 0; c < (EH-SH); c++) {
       rowBg += '<div class="ysched-hour-cell" style="width:'+HW+'px;display:flex">'
@@ -2576,8 +2579,12 @@ function renderYoyakuSched() {
     var curKey = (t.f+t.n).replace(/\s/g,'');
     yoyakuRsvs.forEach(function(r) {
       var tables = (r.table||'').split('、').map(function(s){ return s.trim(); });
-      // 先頭席の行にのみ表示（重複描画防止）
       if (tables[0].replace(/\s/g,'') !== curKey) return;
+      // 連続して割り当てられた席数を数えてバーの高さを決定
+      var span = 1;
+      for (var k = 1; k < tables.length; k++) {
+        if (tblIdxMap[tables[k].replace(/\s/g,'')] === i + k) span++; else break;
+      }
       var pts = (r.time||'20:00').split(':');
       var sh = parseInt(pts[0]); if (isNaN(sh)) sh = 20;
       var sm = sh * 60 + (parseInt(pts[1]) || 0);
@@ -2585,9 +2592,9 @@ function renderYoyakuSched() {
       var lx = ((sm - SH*60) / 60) * HW, wx = ((em - sm) / 60) * HW - 3;
       if (lx < 0) { wx += lx; lx = 0; }
       var colors = ['background:#162848;border:1px solid #1a4080','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
-      var extraLabel = tables.length > 1 ? ' +' + (tables.length-1) + '席' : '';
-      blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;'+colors[i%4]+'" onclick="event.stopPropagation()">'
-        + '<div class="yrsv-pax">'+r.pax+'名'+extraLabel+'</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
+      var bh = span * RH - 10; // 複数行スパン
+      blocks += '<div class="yrsv-blk" style="left:'+lx+'px;width:'+wx+'px;top:5px;height:'+bh+'px;z-index:3;'+colors[i%4]+'" onclick="event.stopPropagation()">'
+        + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
     });
     rightHtml += '<div class="ysched-row" style="width:'+TW+'px;cursor:crosshair" data-tidx="'+i+'" onclick="yoyakuGridClick('+i+',event,'+SH+','+HW+')">'
       + '<div class="ysched-row-bg">'+rowBg+'</div>'+blocks+'</div>';
