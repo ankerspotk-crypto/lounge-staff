@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title><?= TERM_LABEL ?></title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0d0d14; color: #fff; height: 100%; overflow: hidden; }
+
+.kiosk-wrap { display: flex; height: 100vh; width: 100vw; }
+
+.kiosk-left {
+  width: 38%;
+  min-width: 320px;
+  height: 100%;
+  overflow-y: auto;
+  border-right: 1px solid #2a2a40;
+  background: #0d0d14;
+}
+.kiosk-right { flex: 1; height: 100%; }
+.kiosk-right iframe { width: 100%; height: 100%; border: none; }
+
+header {
+  background: #16162a;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid #2a2a40;
+}
+header h1 { font-size: 16px; letter-spacing: .5px; }
+#last-updated { font-size: 11px; color: #777; }
+
+.yoyaku-stats { display: flex; gap: 10px; padding: 12px 14px 4px; }
+.yoyaku-stat { flex: 1; background: #141426; border: 1px solid #2a2a40; border-radius: 10px; padding: 10px; text-align: center; }
+.yoyaku-stat .num { font-size: 22px; font-weight: 700; }
+.yoyaku-stat .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+
+.rsv-list { padding: 6px 14px 20px; }
+.rsv-card { background: #141426; border: 1px solid #1e2038; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.rsv-row1 { display: flex; align-items: baseline; gap: 8px; }
+.rsv-time { font-size: 15px; font-weight: 700; color: #7ab0f0; }
+.rsv-name { font-size: 14px; font-weight: 600; flex: 1; }
+.rsv-status { font-size: 10px; padding: 3px 8px; border-radius: 8px; font-weight: 700; flex-shrink: 0; }
+.rsv-status.before { background: #2a2410; color: #ffcc44; }
+.rsv-status.in     { background: #2a1410; color: #ff8866; }
+.rsv-status.out    { background: #1a2a1a; color: #66cc88; }
+.rsv-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.rsv-badge { font-size: 10px; padding: 2px 7px; border-radius: 6px; background: #1a1a30; color: #99aacc; border: 1px solid #28284a; }
+.rsv-note { font-size: 11px; color: #889; margin-top: 5px; }
+.empty-msg { text-align: center; color: #6a8ab0; padding: 30px 14px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="kiosk-wrap">
+  <div class="kiosk-left">
+    <header>
+      <h1>📋 <?= TERM_LABEL ?>　本日の予約</h1>
+      <div id="last-updated">--:--</div>
+    </header>
+    <div id="rsv-content"><div class="empty-msg">読み込み中...</div></div>
+  </div>
+  <div class="kiosk-right">
+    <iframe src="<?= GAS_URL ?>"></iframe>
+  </div>
+</div>
+
+<script>
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+function statusInfo(status) {
+  if (status === '来店済み') return { cls: 'in', label: '来店中' };
+  if (status === '退店済み') return { cls: 'out', label: '退店済' };
+  return { cls: 'before', label: '来店前' };
+}
+
+function render(list) {
+  var el = document.getElementById('rsv-content');
+  var pax = list.reduce(function(s, r) { return s + (r.pax || 0); }, 0);
+  var stats = '<div class="yoyaku-stats">'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">' + list.length + '</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">' + pax + '</div><div class="lbl">予約人数</div></div>'
+    + '</div>';
+
+  if (list.length === 0) {
+    el.innerHTML = stats + '<div class="empty-msg">本日の予約はありません</div>';
+    return;
+  }
+
+  var cards = list.map(function(r) {
+    var si = statusInfo(r.status);
+    var badges = '<span class="rsv-badge">' + r.pax + '名</span>'
+      + '<span class="rsv-badge">' + esc(r.table || '未定') + '</span>';
+    if (r.tantouCast) badges += '<span class="rsv-badge">担当 ' + esc(r.tantouCast) + '</span>';
+    if (r.dohanCast)  badges += '<span class="rsv-badge">同伴 ' + esc(r.dohanCast) + '</span>';
+    if (r.yoyakuCast) badges += '<span class="rsv-badge">予約 ' + esc(r.yoyakuCast) + '</span>';
+    return '<div class="rsv-card">'
+      + '<div class="rsv-row1">'
+      +   '<span class="rsv-time">' + esc(r.time) + '</span>'
+      +   '<span class="rsv-name">' + esc(r.customer) + '様' + (r.memberId ? ' <span style="font-size:10px;color:#7a9cc8">' + esc(r.memberId) + '</span>' : '') + '</span>'
+      +   '<span class="rsv-status ' + si.cls + '">' + si.label + '</span>'
+      + '</div>'
+      + '<div class="rsv-badges">' + badges + '</div>'
+      + (r.youbou ? '<div class="rsv-note">📝 ' + esc(r.youbou) + '</div>' : '')
+      + '</div>';
+  }).join('');
+
+  el.innerHTML = stats + '<div class="rsv-list">' + cards + '</div>';
+}
+
+function load() {
+  google.script.run.withSuccessHandler(function(list) {
+    render(list || []);
+    var d = new Date();
+    document.getElementById('last-updated').textContent =
+      ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ' 更新';
+  }).withFailureHandler(function(e) {
+    document.getElementById('last-updated').textContent = 'エラー';
+  }).getKioskReservations();
+}
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

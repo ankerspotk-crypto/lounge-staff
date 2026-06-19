@@ -81,6 +81,15 @@ function doGet(e) {
         .setTitle('シフト提出')
         .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
     }
+    if (e && e.parameter && e.parameter.page === 'kiosk') {
+      const term = e.parameter.term === '2f' ? '2F端末' : '5F端末';
+      const ktpl = HtmlService.createTemplateFromFile('Kiosk');
+      ktpl.TERM_LABEL = term;
+      ktpl.GAS_URL = ScriptApp.getService().getUrl();
+      return ktpl.evaluate()
+        .setTitle(term)
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    }
     var tpl = HtmlService.createTemplateFromFile('Index');
     tpl.VERSION = Utilities.formatDate(new Date(), TZ, 'yy.MMdd');
     return tpl.evaluate()
@@ -3425,6 +3434,12 @@ function getYoyakuReservations_(dateKey) {
     youbou: String(row[7]), status: String(row[8]), regBy: String(row[9]),
     yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || '')
   })).filter(r => r.date === dateKey && r.status !== 'キャンセル');
+}
+
+// 端末キオスク用：本日の予約一覧（時間順）
+function getKioskReservations() {
+  return getYoyakuReservations_(bizDateStr_())
+    .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
 function addReservation_(payload, regBy) {
