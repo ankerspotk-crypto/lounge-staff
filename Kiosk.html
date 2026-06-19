@@ -35,6 +35,11 @@ header {
 header h1 { font-size: 16px; letter-spacing: .5px; }
 #last-updated { font-size: 11px; color: #777; }
 
+.date-nav { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 14px 4px; }
+.date-nav-btn { background: #141426; border: 1px solid #2a2a40; color: #7ab0f0; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1; }
+.date-today-btn { background: #0f2040; border: 1px solid #1a50a0; color: #7ab0f0; padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 700; }
+.date-label { font-size: 15px; font-weight: 700; flex: 1; text-align: center; }
+
 .yoyaku-stats { display: flex; gap: 10px; padding: 12px 14px 4px; }
 .yoyaku-stat { flex: 1; background: #141426; border: 1px solid #2a2a40; border-radius: 10px; padding: 10px; text-align: center; }
 .yoyaku-stat .num { font-size: 22px; font-weight: 700; }
@@ -59,9 +64,15 @@ header h1 { font-size: 16px; letter-spacing: .5px; }
 <div class="kiosk-wrap">
   <div class="kiosk-left">
     <header>
-      <h1>📋 <?= TERM_LABEL ?>　本日の予約</h1>
+      <h1>📋 <?= TERM_LABEL ?>　予約一覧</h1>
       <div id="last-updated">--:--</div>
     </header>
+    <div class="date-nav">
+      <button class="date-nav-btn" onclick="shiftDay(-1)">‹</button>
+      <button class="date-today-btn" onclick="goToday()">今日</button>
+      <div class="date-label" id="date-label"></div>
+      <button class="date-nav-btn" onclick="shiftDay(1)">›</button>
+    </div>
     <div id="rsv-content"><div class="empty-msg">読み込み中...</div></div>
   </div>
   <div class="kiosk-right">
@@ -74,6 +85,32 @@ function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
     return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
   });
+}
+
+var TODAY_KEY = '<?= TODAY ?>';
+var currentDate = TODAY_KEY;
+
+function parseDateKey(s) {
+  var p = s.split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
+}
+function formatDateKey(d) {
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+function formatDateLabel(s) {
+  var d = parseDateKey(s);
+  var dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  return (d.getMonth() + 1) + '/' + d.getDate() + '（' + dow + '）';
+}
+function shiftDay(n) {
+  var d = parseDateKey(currentDate);
+  d.setDate(d.getDate() + n);
+  currentDate = formatDateKey(d);
+  load();
+}
+function goToday() {
+  currentDate = TODAY_KEY;
+  load();
 }
 
 function statusBtnsHtml(r) {
@@ -103,12 +140,12 @@ function render(list) {
   var el = document.getElementById('rsv-content');
   var pax = list.reduce(function(s, r) { return s + (r.pax || 0); }, 0);
   var stats = '<div class="yoyaku-stats">'
-    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">' + list.length + '</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">' + list.length + '</div><div class="lbl">予約件数</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">' + pax + '</div><div class="lbl">予約人数</div></div>'
     + '</div>';
 
   if (list.length === 0) {
-    el.innerHTML = stats + '<div class="empty-msg">本日の予約はありません</div>';
+    el.innerHTML = stats + '<div class="empty-msg">この日の予約はありません</div>';
     return;
   }
 
@@ -133,6 +170,7 @@ function render(list) {
 }
 
 function load() {
+  document.getElementById('date-label').textContent = formatDateLabel(currentDate);
   google.script.run.withSuccessHandler(function(list) {
     render(list || []);
     var d = new Date();
@@ -140,7 +178,7 @@ function load() {
       ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ' 更新';
   }).withFailureHandler(function(e) {
     document.getElementById('last-updated').textContent = 'エラー';
-  }).getKioskReservations();
+  }).getKioskReservations(currentDate);
 }
 
 load();

@@ -86,6 +86,7 @@ function doGet(e) {
       const ktpl = HtmlService.createTemplateFromFile('Kiosk');
       ktpl.TERM_LABEL = term;
       ktpl.GAS_URL = ScriptApp.getService().getUrl();
+      ktpl.TODAY = bizDateStr_();
       return ktpl.evaluate()
         .setTitle(term)
         .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
@@ -3438,9 +3439,9 @@ function getYoyakuReservations_(dateKey) {
   })).filter(r => r.date === dateKey && r.status !== 'キャンセル');
 }
 
-// 端末キオスク用：本日の予約一覧（時間順）
-function getKioskReservations() {
-  return getYoyakuReservations_(bizDateStr_())
+// 端末キオスク用：指定日の予約一覧（時間順、省略時は本日）
+function getKioskReservations(dateKey) {
+  return getYoyakuReservations_(dateKey || bizDateStr_())
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
