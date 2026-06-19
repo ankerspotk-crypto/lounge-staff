@@ -88,13 +88,15 @@ function doGet(e) {
       ktpl.GAS_URL = ScriptApp.getService().getUrl();
       return ktpl.evaluate()
         .setTitle(term)
-        .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
     var tpl = HtmlService.createTemplateFromFile('Index');
     tpl.VERSION = Utilities.formatDate(new Date(), TZ, 'yy.MMdd');
     return tpl.evaluate()
       .setTitle('IEYAS軍師')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   } catch (err) {
     console.error('doGet error:', err);
     if (e && e.parameter && e.parameter.action === 'portal') return jsonErr(String(err.message || err));
