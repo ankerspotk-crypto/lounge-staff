@@ -1346,7 +1346,10 @@ function initCashCheck(data, approverNames) {
     dateKey: data.dateKey,
     init: data,
     reporterName: '',
+    cashSalesInput: 0,
     till: { f5: { m10000: 0, m5000: 0, m1000: 0 }, f2: { m10000: 0, m5000: 0, m1000: 0 } },
+    safeTransfer: { m10000: 0, m5000: 0, m1000: 0 },
+    safeFinal: { m10000: 0, m5000: 0, m1000: 0 },
     keihi: { m10000: 0, m5000: 0, m1000: 0 },
     slips: [],  // [{type, payee, amount, photoBase64, mime, previewUrl}]
     approverName: '',
@@ -1382,44 +1385,40 @@ function renderCashCheckForm() {
   if (!st.formMode && init.reportSubmitted) {
     var html = '<div style="font-size:11px;color:#889;margin-bottom:8px">対象日：' + esc(init.dateKey) + '　報告者：' + esc(init.reporterName) + '</div>';
 
-    // Check A
-    html += '<div class="section-label">Check A: TRUST vs 伝票</div>';
-    if (!init.trustSynced) {
-      html += cashBannerBox('#7a5a00', '#ffcc44', '⚠️ TRUST取得に失敗しました。やり直してください。');
+    // 現金売上
+    html += '<div class="section-label">現金売上（手入力）</div>';
+    html += '<div style="font-size:14px;color:#ddd;padding:6px 0">¥' + Number(init.cashSalesInput || 0).toLocaleString() + '</div>';
+
+    // 照合チェック
+    html += '<div class="section-label">照合チェック（理論値 vs 実測）</div>';
+    if (init.theoreticalRemain === null) {
+      html += cashBannerBox('#7a5a00', '#ffcc44', '⚠️ 開店チェック未提出のため理論値なし');
     } else {
-      var da = init.diffA;
-      var daAbs = Math.abs(da);
-      var daColor = da === 0 ? '#5dcc88' : daAbs < 1000 ? '#ffcc44' : '#ff8888';
-      var daBorder = da === 0 ? '#1f6040' : daAbs < 1000 ? '#7a5a00' : '#882020';
-      var daNote = da === 0 ? '（一致）' : daAbs < 1000 ? '（小銭分の差異の可能性あり）' : '（要確認）';
-      html += cashBannerBox(daBorder, daColor,
-        'TRUST支出合計　¥' + Number(init.trustTotal).toLocaleString() + '<br>'
-        + '伝票合計　　　¥' + Number(init.slipTotal).toLocaleString() + '<br>'
-        + '差額　　　　　¥' + daAbs.toLocaleString() + '　' + daNote);
+      var d = init.diff;
+      var dColor = d === 0 ? '#5dcc88' : '#ff8888';
+      var dBorder = d === 0 ? '#1f6040' : '#882020';
+      html += cashBannerBox(dBorder, dColor,
+        '理論値　　¥' + Number(init.theoreticalRemain).toLocaleString()
+        + '　（開店¥' + Number(init.openingTotal || 0).toLocaleString()
+        + '＋売上¥' + Number(init.cashSalesInput || 0).toLocaleString()
+        + '＋出金¥' + Number(init.withdrawalTotal || 0).toLocaleString()
+        + '－伝票¥' + Number(init.slipTotal || 0).toLocaleString()
+        + '－経費¥' + Number(init.keihiTotal || 0).toLocaleString() + '）<br>'
+        + '実測合計　¥' + Number(init.actualTotal || 0).toLocaleString()
+        + '　（レジ¥' + Number(init.actualTill || 0).toLocaleString()
+        + '＋金庫移動¥' + Number(init.safeTransferTotal || 0).toLocaleString() + '）<br>'
+        + '差額　　　¥' + Math.abs(d).toLocaleString() + (d === 0 ? '（一致）' : '（要確認）'));
     }
 
-    // Check B
-    html += '<div class="section-label">Check B: 理論値 vs 実測</div>';
-    if (init.theoreticalTill === null) {
-      html += cashBannerBox('#7a5a00', '#ffcc44', '⚠️ 開店チェック未提出またはTRUST未取得のため理論値なし');
-    } else {
-      var db = init.diffB;
-      var dbColor = db === 0 ? '#5dcc88' : '#ff8888';
-      var dbBorder = db === 0 ? '#1f6040' : '#882020';
-      var nc = init.netCashChange != null ? init.netCashChange : 0;
-      html += cashBannerBox(dbBorder, dbColor,
-        '現金売上　¥' + Number(init.cashSales || 0).toLocaleString()
-        + '　差引残高　¥' + nc.toLocaleString() + '（TRUST）<br>'
-        + '理論値　　¥' + Number(init.theoreticalTill).toLocaleString()
-        + '　（開店¥' + Number(init.openingTotal || 0).toLocaleString()
-        + '＋出金¥' + Number(init.withdrawalTotal || 0).toLocaleString()
-        + '＋差引¥' + nc.toLocaleString() + '）<br>'
-        + '実測値　　¥' + Number(init.actualTill).toLocaleString() + '<br>'
-        + '差額　　　¥' + Math.abs(db).toLocaleString() + (db === 0 ? '（一致）' : '（要確認）'));
+    // 金庫
+    if ((init.safeTransferTotal || 0) > 0 || init.safeFinalStr) {
+      html += '<div class="section-label" style="margin-top:12px">金庫</div>';
+      if ((init.safeTransferTotal || 0) > 0) html += '<div style="font-size:13px;color:#ccc;padding:2px 0">移動分　¥' + Number(init.safeTransferTotal).toLocaleString() + '</div>';
+      if (init.safeFinalStr) html += '<div style="font-size:13px;color:#ccc;padding:2px 0">最終　' + esc(init.safeFinalStr) + '</div>';
     }
 
     // 経費
-    if (init.keihiStr || init.keihiTotal > 0) {
+    if (init.keihiStr || (init.keihiTotal || 0) > 0) {
       html += '<div class="section-label" style="margin-top:12px">経費（閉店）</div>';
       html += '<div style="font-size:13px;color:#ccc;padding:4px 0">' + (esc(init.keihiStr) || '（内訳なし）') + '</div>';
       html += '<div style="font-size:13px;color:#aaa">合計　¥' + Number(init.keihiTotal).toLocaleString() + '</div>';
@@ -1487,7 +1486,10 @@ function renderCashCheckForm() {
       cashCheckState.formMode = true;
       cashCheckState.slips = [];
       cashCheckState.reporterName = '';
+      cashCheckState.cashSalesInput = 0;
       cashCheckState.till = { f5: { m10000: 0, m5000: 0, m1000: 0 }, f2: { m10000: 0, m5000: 0, m1000: 0 } };
+      cashCheckState.safeTransfer = { m10000: 0, m5000: 0, m1000: 0 };
+      cashCheckState.safeFinal = { m10000: 0, m5000: 0, m1000: 0 };
       cashCheckState.keihi = { m10000: 0, m5000: 0, m1000: 0 };
       renderCashCheckForm();
     });
@@ -1516,24 +1518,37 @@ function renderCashCheckForm() {
     html += '</div>';
   }
 
+  html += '<div class="section-label" style="margin-top:16px">現金売上</div>';
+  html += '<input type="number" inputmode="numeric" id="cash-sales-input" min="0" placeholder="0" value="0" '
+    + 'style="width:100%;box-sizing:border-box;background:#0d0d18;border:1px solid #2a2a40;color:#fff;'
+    + 'padding:10px;border-radius:8px;font-size:16px;text-align:right">';
+
   html += '<div class="section-label" style="margin-top:16px">出金伝票（種別・相手先・金額・写真）</div>';
   html += '<div id="cash-slip-rows"></div>';
   html += '<button id="cash-add-slip-btn" type="button" style="width:100%;background:#1a1a2e;border:1px dashed #3a3a55;'
     + 'color:#88aadd;padding:11px;border-radius:10px;font-size:13px;cursor:pointer;margin-top:4px">＋ 伝票を追加</button>';
 
-  html += '<div class="section-label" style="margin-top:16px">現金（紙幣のみ・小銭は不要）</div>';
+  html += '<div class="section-label" style="margin-top:16px">レジ現金（紙幣のみ・小銭は不要）</div>';
   ['f5', 'f2'].forEach(function(floor) {
     html += '<div class="cast-time-row"><div class="cast-time-label">' + (floor === 'f5' ? '5F' : '2F') + '</div>'
       + denomInputsHtml('till', floor) + '</div>';
   });
+
+  html += '<div class="section-label" style="margin-top:16px">金庫へ移動した分</div>';
+  html += '<div class="cast-time-row"><div class="cast-time-label">金庫移動</div>'
+    + denomInputsHtml('safeTransfer', 'safeTransfer') + '</div>';
+
+  html += '<div class="section-label" style="margin-top:16px">金庫 最終枚数</div>';
+  html += '<div class="cast-time-row"><div class="cast-time-label">金庫</div>'
+    + denomInputsHtml('safeFinal', 'safeFinal') + '</div>';
+
   html += '<div class="section-label" style="margin-top:16px">経費</div>';
   html += '<div class="cast-time-row"><div class="cast-time-label">経費</div>'
     + denomInputsHtml('keihi', 'keihi') + '</div>';
 
-  html += '<div style="font-size:11px;color:#556;margin-top:10px">※照合チェック送信時にTRUSTから自動取得します（20〜30秒かかります）</div>';
-  html += '<div id="cash-submit-status" style="font-size:12px;color:#999;margin-top:8px;text-align:center"></div>';
+  html += '<div id="cash-submit-status" style="font-size:12px;color:#999;margin-top:10px;text-align:center"></div>';
   html += '<button id="cash-submit-btn" type="button" style="width:100%;background:#1a2a3a;border:1px solid #2255aa;color:#88bbff;'
-    + 'padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:10px">照合チェックを送信</button>';
+    + 'padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px">照合チェックを送信</button>';
   html += '<button id="cancel-btn" type="button">閉じる</button>';
 
   body.innerHTML = html;
@@ -1553,12 +1568,25 @@ function bindCashCheckEvents() {
     });
   }
 
+  var salesInput = document.getElementById('cash-sales-input');
+  if (salesInput) {
+    salesInput.addEventListener('input', function() {
+      cashCheckState.cashSalesInput = Number(this.value) || 0;
+    });
+  }
+
   document.querySelectorAll('.cash-denom-input').forEach(function(inp) {
     inp.addEventListener('input', function() {
-      if (this.dataset.group === 'keihi') {
-        cashCheckState.keihi[this.dataset.denom] = Number(this.value) || 0;
-      } else if (this.dataset.group === 'till') {
-        cashCheckState.till[this.dataset.floor][this.dataset.denom] = Number(this.value) || 0;
+      var g = this.dataset.group;
+      var denom = this.dataset.denom;
+      if (g === 'keihi') {
+        cashCheckState.keihi[denom] = Number(this.value) || 0;
+      } else if (g === 'safeTransfer') {
+        cashCheckState.safeTransfer[denom] = Number(this.value) || 0;
+      } else if (g === 'safeFinal') {
+        cashCheckState.safeFinal[denom] = Number(this.value) || 0;
+      } else if (g === 'till') {
+        cashCheckState.till[this.dataset.floor][denom] = Number(this.value) || 0;
       }
     });
   });
@@ -1653,11 +1681,14 @@ function submitCashCheckForm() {
 
   var btn = document.getElementById('cash-submit-btn');
   btn.disabled = true;
-  btn.textContent = 'TRUSTから取得中… (20〜30秒)';
+  btn.textContent = '送信中…';
 
   var payload = {
     reporterName: st.reporterName,
+    cashSalesInput: st.cashSalesInput || 0,
     till: st.till,
+    safeTransfer: st.safeTransfer,
+    safeFinal: st.safeFinal,
     keihi: st.keihi,
     slips: st.slips.filter(function(s) { return s.amount > 0 || s.photoBase64; })
   };

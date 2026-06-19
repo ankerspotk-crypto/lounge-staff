@@ -4332,10 +4332,10 @@ function buildCashInstructions_(till, safe, thresholds) {
 }
 
 const CASH_CHECK_HEADERS_ = [
-  '日付', 'トラスト日払い合計', 'トラスト経費合計', '経費内訳', 'TRUST取得日時',
+  '日付', '現金売上（手入力）', '金庫移動合計', '金庫最終内訳', '提出時刻',
   '報告者', 'レジ実測内訳', '伝票合計', '伝票内訳JSON',
-  'レジ実測合計', 'レジ理論値', 'TRUST-伝票差額', '理論-実測差額',
-  '現金売上(TRUST)', 'TRUST差引残高',
+  'レジ実測合計', '理論値', '差額',
+  '', '', '',
   '承認者', '承認時刻',
   '経費実測内訳（閉店）', '経費実測合計（閉店）'
 ];
@@ -4732,47 +4732,43 @@ function getCashCheckInit() {
     openingSubmitted: openingInit.locked,
     openingTotal: openingInit.locked ? openingInit.tillTotal : null,
     withdrawalTotal: getSafeWithdrawalTotalToday_(dateKey),
-    trustSynced: false,
-    trustDayPayTotal: 0,
-    trustCostTotal: 0,
-    trustTotal: 0,
     reportSubmitted: false,
     reporterName: '',
+    cashSalesInput: 0,
+    safeTransferTotal: 0,
+    safeFinalStr: '',
     slipTotal: 0,
     slipDetails: [],
     actualTill: null,
-    theoreticalTill: null,
-    diffA: null,
-    diffB: null,
+    actualTotal: null,
+    theoreticalRemain: null,
+    diff: null,
+    keihiStr: '',
+    keihiTotal: 0,
     approved: false,
     approver: '',
     approvedAt: ''
   };
   if (rowIdx > 0) {
     const row = sh.getRange(rowIdx, 1, 1, CASH_CHECK_HEADERS_.length).getValues()[0];
-    if (row[1] !== '' && row[1] !== null) {
-      result.trustSynced = true;
-      result.trustDayPayTotal = Number(row[1]);
-      result.trustCostTotal = Number(row[2]);
-      result.trustTotal = result.trustDayPayTotal + result.trustCostTotal;
-    }
     if (row[5]) {
       result.reportSubmitted = true;
-      result.reporterName = String(row[5]);
-      result.slipTotal = Number(row[7]) || 0;
+      result.reporterName    = String(row[5]);
+      result.cashSalesInput  = Number(row[1]) || 0;
+      result.safeTransferTotal = Number(row[2]) || 0;
+      result.safeFinalStr    = String(row[3] || '');
+      result.slipTotal       = Number(row[7]) || 0;
       try { result.slipDetails = JSON.parse(String(row[8])); } catch(e) { result.slipDetails = []; }
-      result.actualTill = row[9] !== '' ? Number(row[9]) : null;
-      result.theoreticalTill = row[10] !== '' ? Number(row[10]) : null;
-      result.diffA = row[11] !== '' ? Number(row[11]) : null;
-      result.diffB = row[12] !== '' ? Number(row[12]) : null;
-      result.cashSales     = row[13] !== '' ? Number(row[13]) : null;
-      result.netCashChange = row[14] !== '' ? Number(row[14]) : null;
-      result.keihiStr      = String(row[17] || '');
-      result.keihiTotal    = row[18] !== '' ? Number(row[18]) || 0 : 0;
+      result.actualTill       = row[9]  !== '' ? Number(row[9])  : null;
+      result.theoreticalRemain = row[10] !== '' ? Number(row[10]) : null;
+      result.diff             = row[11] !== '' ? Number(row[11]) : null;
+      result.actualTotal      = result.actualTill !== null ? result.actualTill + result.safeTransferTotal : null;
+      result.keihiStr         = String(row[17] || '');
+      result.keihiTotal       = row[18] !== '' ? Number(row[18]) || 0 : 0;
     }
     if (row[15]) {
-      result.approved = true;
-      result.approver = String(row[15]);
+      result.approved   = true;
+      result.approver   = String(row[15]);
       result.approvedAt = String(row[16]);
     }
   }
@@ -4788,14 +4784,13 @@ function submitCashCheck(payload) {
 
     const dateKey = bizDateStr_();
 
-    // TRUSTから自動取得
-    const trust = fetchTrustDailyData_(dateKey);
-    const trustDayPayTotal = trust.ok ? Number(trust.dayPayTotal || 0) : 0;
-    const trustCostTotal   = trust.ok ? Number(trust.costOutTotal || 0) : 0;
-    const trustTotal = trustDayPayTotal + trustCostTotal;
-    const trustDetailStr = trust.ok
-      ? (trust.costOutDetail || []).map(d => d.label + ':¥' + Number(d.amount).toLocaleString()).join(' / ')
-      : '';
+    // 現金売上（手入力）
+    const cashSalesInput    = Number(payload.cashSalesInput) || 0;
+    const safeTransferCount = payload.safeTransfer || {};
+    const safeTransferTotal = denomYen_(safeTransferCount);
+    const safeTransferStr   = formatDenom_(safeTransferCount);
+    const safeFinalCount    = payload.safeFinal || {};
+    const safeFinalStr      = formatDenom_(safeFinalCount);
 
     // 伝票処理
     const slips = payload.slips || [];
@@ -4827,68 +4822,73 @@ function submitCashCheck(payload) {
     const openingInit = getOpeningCheckInit();
     const withdrawalTotal = getSafeWithdrawalTotalToday_(dateKey);
 
-    // TRUST差引残高を使った正しい理論値計算
-    // 理論値 = 開店時レジ + 金庫出金 + TRUST差引残高（現金売上 - 全支出）
-    const cashSales    = trust.ok ? Number(trust.cashSales    || 0) : 0;
-    const netCashChange = trust.ok ? Number(trust.netCashChange || 0) : 0;
-    let theoreticalTill = '';
-    if (openingInit.locked && trust.ok) {
-      theoreticalTill = openingInit.tillTotal + withdrawalTotal + netCashChange;
+    // 理論値 = 開店残高 + 現金売上(手入力) + 金庫出金 - 伝票合計 - 経費
+    // 実測合計 = レジ実測 + 金庫移動分
+    let theoreticalRemain = '';
+    let actualTotal = '';
+    let diff = '';
+    if (openingInit.locked) {
+      theoreticalRemain = openingInit.tillTotal + withdrawalTotal + cashSalesInput - slipTotal - keihiTotal;
+      actualTotal       = actualTill + safeTransferTotal;
+      diff              = theoreticalRemain - actualTotal;
     }
 
-    // CheckA: TRUST支出合計 vs 伝票合計（黒服が入力した金額との照合）
-    const diffA = trust.ok ? (trustTotal - slipTotal) : '';
-    // CheckB: 理論値（TRUST差引残高ベース）vs 実測値
-    const diffB = (openingInit.locked && trust.ok) ? (theoreticalTill - actualTill) : '';
-
-    // シートへ保存（承認列は空白でリセット。17列）
+    // シートへ保存
     const sh = getCashCheckSheet_();
     const rowIdx = findCashCheckRow_(sh, dateKey);
     const rowData = [
-      dateKey, trustDayPayTotal, trustCostTotal, trustDetailStr, trust.ok ? now_() : '',
-      reporterName, tillStr, slipTotal, JSON.stringify(slipDetails),
-      actualTill, theoreticalTill, diffA, diffB,
-      cashSales, netCashChange,   // col14: 現金売上, col15: TRUST差引残高
-      '', '',                      // col16: 承認者, col17: 承認時刻
-      keihiStr, keihiTotal         // col18: 経費実測内訳, col19: 経費実測合計
+      dateKey,
+      cashSalesInput,              // col2: 現金売上（手入力）
+      safeTransferTotal,           // col3: 金庫移動合計
+      safeFinalStr,                // col4: 金庫最終内訳
+      now_(),                      // col5: 提出時刻
+      reporterName,                // col6: 報告者
+      tillStr,                     // col7: レジ実測内訳
+      slipTotal,                   // col8: 伝票合計
+      JSON.stringify(slipDetails), // col9: 伝票内訳JSON
+      actualTill,                  // col10: レジ実測合計
+      theoreticalRemain,           // col11: 理論値
+      diff,                        // col12: 差額
+      '', '', '',                  // col13-15: 未使用
+      '', '',                      // col16: 承認者, col17: 承認時刻（リセット）
+      keihiStr,                    // col18: 経費実測内訳
+      keihiTotal                   // col19: 経費実測合計
     ];
     if (rowIdx > 0) sh.getRange(rowIdx, 1, 1, rowData.length).setValues([rowData]);
     else sh.appendRow(rowData);
 
     // LINE通知
     const lines = ['【閉店チェック 照合結果】' + dateKey, '報告者　' + reporterName, ''];
-    if (!trust.ok) {
-      lines.push('⚠️ TRUST自動取得に失敗: ' + (trust.error || '不明'));
-    } else {
-      lines.push('━ CheckA: TRUST支出 vs 伝票 ━');
-      lines.push('TRUST支出合計　¥' + trustTotal.toLocaleString());
-      lines.push('伝票合計　　　　¥' + slipTotal.toLocaleString());
-      const daNote = diffA === 0 ? '（一致）' : Math.abs(diffA) < 1000 ? '（小銭分の差異の可能性あり）' : '（要確認）';
-      lines.push('差額　　　　　　¥' + Math.abs(diffA).toLocaleString() + daNote);
-    }
+    lines.push('現金売上　¥' + cashSalesInput.toLocaleString());
     lines.push('');
-    lines.push('━ CheckB: 理論値 vs 実測 ━');
-    if (!openingInit.locked || !trust.ok) {
-      lines.push('⚠️ ' + (!openingInit.locked ? '開店チェック未提出' : 'TRUST取得失敗') + 'のため理論値なし');
+    lines.push('━ 照合チェック ━');
+    if (!openingInit.locked) {
+      lines.push('⚠️ 開店チェック未提出のため理論値なし');
     } else {
-      lines.push('現金売上　　¥' + cashSales.toLocaleString());
-      lines.push('差引残高　　¥' + netCashChange.toLocaleString() + '（現金売上－全支出）');
-      lines.push('理論値　　　¥' + Number(theoreticalTill).toLocaleString() + '　（開店¥' + openingInit.tillTotal.toLocaleString() + '＋出金¥' + withdrawalTotal.toLocaleString() + '＋差引¥' + netCashChange.toLocaleString() + '）');
-      lines.push('実測値　　　¥' + actualTill.toLocaleString());
-      lines.push('差額　　　　¥' + Math.abs(diffB).toLocaleString() + (diffB === 0 ? '（一致）' : '（要確認）'));
+      lines.push('理論値　¥' + theoreticalRemain.toLocaleString()
+        + '（開店¥' + openingInit.tillTotal.toLocaleString()
+        + '＋売上¥' + cashSalesInput.toLocaleString()
+        + '＋出金¥' + withdrawalTotal.toLocaleString()
+        + '－伝票¥' + slipTotal.toLocaleString()
+        + '－経費¥' + keihiTotal.toLocaleString() + '）');
+      lines.push('実測合計　¥' + actualTotal.toLocaleString()
+        + '（レジ¥' + actualTill.toLocaleString()
+        + '＋金庫移動¥' + safeTransferTotal.toLocaleString() + '）');
+      lines.push('差額　¥' + Math.abs(diff).toLocaleString() + (diff === 0 ? '（一致）' : '（要確認）'));
     }
+    if (safeTransferStr) lines.push('', '金庫移動　' + safeTransferStr);
+    if (safeFinalStr)    lines.push('金庫最終　' + safeFinalStr);
     if (keihiStr) lines.push('', '経費　' + keihiStr + '　合計¥' + keihiTotal.toLocaleString());
     lines.push('', '管理者の承認をお待ちください');
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
     return {
       ok: true, dateKey,
-      trustOk: trust.ok, trustDayPayTotal, trustCostTotal, trustTotal,
-      cashSales, netCashChange,
+      cashSalesInput, safeTransferTotal, safeTransferStr, safeFinalStr,
       slipTotal, slipDetails, actualTill,
-      theoreticalTill: (openingInit.locked && trust.ok) ? theoreticalTill : null,
-      diffA: trust.ok ? diffA : null,
-      diffB: (openingInit.locked && trust.ok) ? diffB : null
+      theoreticalRemain: openingInit.locked ? theoreticalRemain : null,
+      actualTotal: openingInit.locked ? actualTotal : null,
+      diff: openingInit.locked ? diff : null
     };
   } catch (e) {
     console.error('submitCashCheck error:', e);
