@@ -1338,6 +1338,7 @@ function checkAtendou() {
     const sm = r.mins !== null ? r.mins : defMins;
     if (sm === 0) return; // 無限設定はスキップ
     const el = elapsedMins_(r.start);
+    if (el >= 45) return; // 45分超過後はアラート停止
     if (el < sm - 5) return;
 
     const nextSeatObj = r.nextSeat ? ALL_SEATS.find(s => s.code === r.nextSeat) : null;
