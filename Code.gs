@@ -65,24 +65,32 @@ function getOrOpenSS_() {
 }
 
 function doGet(e) {
-  if (e && e.parameter && e.parameter.action === 'portal') {
-    return handlePortalApi_(e);
-  }
-  if (e && e.parameter && e.parameter.view === 'timeline') {
-    return HtmlService.createHtmlOutputFromFile('Timeline')
-      .setTitle('タイムテーブル')
+  const jsonErr = msg => ContentService.createTextOutput(JSON.stringify({ ok: false, error: msg }))
+    .setMimeType(ContentService.MimeType.JSON);
+  try {
+    if (e && e.parameter && e.parameter.action === 'portal') {
+      return handlePortalApi_(e);
+    }
+    if (e && e.parameter && e.parameter.view === 'timeline') {
+      return HtmlService.createHtmlOutputFromFile('Timeline')
+        .setTitle('タイムテーブル')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    }
+    if (e && e.parameter && e.parameter.page === 'shift') {
+      return HtmlService.createHtmlOutputFromFile('Shift')
+        .setTitle('シフト提出')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    }
+    var tpl = HtmlService.createTemplateFromFile('Index');
+    tpl.VERSION = Utilities.formatDate(new Date(), TZ, 'yy.MMdd');
+    return tpl.evaluate()
+      .setTitle('IEYAS軍師')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+  } catch (err) {
+    console.error('doGet error:', err);
+    if (e && e.parameter && e.parameter.action === 'portal') return jsonErr(String(err.message || err));
+    return HtmlService.createHtmlOutput('<p>エラーが発生しました: ' + err.message + '</p>');
   }
-  if (e && e.parameter && e.parameter.page === 'shift') {
-    return HtmlService.createHtmlOutputFromFile('Shift')
-      .setTitle('シフト提出')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-  }
-  var tpl = HtmlService.createTemplateFromFile('Index');
-  tpl.VERSION = Utilities.formatDate(new Date(), TZ, 'yy.MMdd');
-  return tpl.evaluate()
-    .setTitle('IEYAS軍師')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
 function doPost(e) {
@@ -98,7 +106,11 @@ function doPost(e) {
     // LINE Webhook
     if (!body.events) return ok_();
     body.events.forEach(handleEvent);
-  } catch (err) { console.error(err); }
+  } catch (err) {
+    console.error('doPost error:', err);
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: String(err.message || err) }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   return ok_();
 }
 
