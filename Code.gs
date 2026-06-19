@@ -347,14 +347,6 @@ function ok_() {
 
 function handleEvent(event) {
   if (event.type !== 'message') return;
-
-  // 画像メッセージ → グループごとに直近のmessageIdを保存
-  if (event.message.type === 'image') {
-    const gid = event.source && event.source.groupId;
-    if (gid) setProp('LAST_IMG_' + gid, event.message.id);
-    return;
-  }
-
   if (event.message.type !== 'text') return;
 
   const text    = (event.message.text || '').trim();
@@ -412,20 +404,6 @@ function handleEvent(event) {
 
 function handleKurofuku(event, text, userId) {
   if (text === 'ping') { reply(event.replyToken, 'pong ✅ v61'); return; }
-
-  if (text === '伝票チェック') {
-    const gid = event.source && event.source.groupId;
-    const imgId = gid ? prop('LAST_IMG_' + gid) : null;
-    if (!imgId) {
-      reply(event.replyToken, '直前に伝票の画像を送ってから「伝票チェック」と入力してください。');
-      return;
-    }
-    reply(event.replyToken, '🔍 伝票を解析中です…少々お待ちください');
-    const result = checkDenpyouWithGemini_(imgId);
-    push_(gid, result);
-    PropertiesService.getScriptProperties().deleteProperty('LAST_IMG_' + gid);
-    return;
-  }
 
   if (text === '?') {
     reply(event.replyToken, [
@@ -5050,67 +5028,3 @@ function setupTrustTrigger() {
   Logger.log('✅ TRUSTトリガー登録完了（毎日 3:00 JST）');
 }
 
-// ============================================================
-// 伝票チェック（Gemini Vision）
-// ============================================================
-
-function checkDenpyouWithGemini_(lineMessageId) {
-  const PROJECT_ID = prop('GCP_PROJECT_ID');
-  if (!PROJECT_ID) return '⚠️ GCP_PROJECT_ID がスクリプトプロパティに未設定です';
-
-  // LINE Content APIから画像取得
-  let imgBase64;
-  try {
-    const res = UrlFetchApp.fetch(
-      'https://api-data.line.me/v2/bot/message/' + lineMessageId + '/content',
-      { headers: { Authorization: 'Bearer ' + prop('LINE_TOKEN') }, muteHttpExceptions: true }
-    );
-    if (res.getResponseCode() !== 200) return '⚠️ 画像の取得に失敗しました（LINE API ' + res.getResponseCode() + '）';
-    imgBase64 = Utilities.base64Encode(res.getContent());
-  } catch(e) {
-    return '⚠️ 画像取得エラー: ' + e.message;
-  }
-
-  // Vertex AI Gemini（APIキー不要・OAuthトークン認証）
-  const url = 'https://us-central1-aiplatform.googleapis.com/v1/projects/' + PROJECT_ID
-    + '/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent';
-  const body = {
-    contents: [{
-      parts: [
-        {
-          text: [
-            '画像には左側に手書きの「お会計伝票」と右側に印刷された「会計伝票（レシート）」が写っています。',
-            '',
-            '以下の点をチェックしてください：',
-            '1. 手書き伝票に記載された品名・数量が、印刷レシートの注文欄に正しく反映されているか',
-            '2. 数量や品名のズレがあれば具体的に指摘する',
-            '3. 最後に「✅ 問題なし」または「⚠️ 要確認」と判定を出す',
-            '',
-            '回答は日本語で、箇条書きで簡潔にまとめてください。'
-          ].join('\n')
-        },
-        { inlineData: { mimeType: 'image/jpeg', data: imgBase64 } }
-      ]
-    }],
-    generationConfig: { maxOutputTokens: 512 }
-  };
-
-  try {
-    const token = ScriptApp.getOAuthToken();
-    const res = UrlFetchApp.fetch(url, {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + token },
-      payload: JSON.stringify(body),
-      muteHttpExceptions: true
-    });
-    const json = JSON.parse(res.getContentText());
-    const answer = json.candidates && json.candidates[0] && json.candidates[0].content
-      && json.candidates[0].content.parts && json.candidates[0].content.parts[0]
-      && json.candidates[0].content.parts[0].text;
-    if (!answer) return '⚠️ Vertex AIの応答が取得できませんでした\n' + res.getContentText().slice(0, 200);
-    return '📋【伝票チェック結果】\n\n' + answer;
-  } catch(e) {
-    return '⚠️ Vertex AI エラー: ' + e.message;
-  }
-}
