@@ -3421,7 +3421,11 @@ function checkOutReservation_(rowIdx) {
   const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('退店済み');
   const sp = PropertiesService.getScriptProperties();
-  seatCodes.forEach(code => sp.deleteProperty('RSRV_' + code));
+  seatCodes.forEach(code => {
+    sp.deleteProperty('RSRV_' + code);
+    endAtendou_(code); // 退店と同時にキャストのアテンドを終了
+  });
+  sp.deleteProperty('RSRV_SYNC_AT');
   return { ok: true };
 }
 
