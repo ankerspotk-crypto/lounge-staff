@@ -5055,8 +5055,8 @@ function setupTrustTrigger() {
 // ============================================================
 
 function checkDenpyouWithGemini_(lineMessageId) {
-  const GEMINI_KEY = prop('GEMINI_API_KEY');
-  if (!GEMINI_KEY) return '⚠️ GEMINI_API_KEY がスクリプトプロパティに未設定です';
+  const PROJECT_ID = prop('GCP_PROJECT_ID');
+  if (!PROJECT_ID) return '⚠️ GCP_PROJECT_ID がスクリプトプロパティに未設定です';
 
   // LINE Content APIから画像取得
   let imgBase64;
@@ -5071,8 +5071,9 @@ function checkDenpyouWithGemini_(lineMessageId) {
     return '⚠️ 画像取得エラー: ' + e.message;
   }
 
-  // Gemini 1.5 Flash へ送信
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY;
+  // Vertex AI Gemini（APIキー不要・OAuthトークン認証）
+  const url = 'https://us-central1-aiplatform.googleapis.com/v1/projects/' + PROJECT_ID
+    + '/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent';
   const body = {
     contents: [{
       parts: [
@@ -5095,9 +5096,11 @@ function checkDenpyouWithGemini_(lineMessageId) {
   };
 
   try {
+    const token = ScriptApp.getOAuthToken();
     const res = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
       payload: JSON.stringify(body),
       muteHttpExceptions: true
     });
@@ -5105,9 +5108,9 @@ function checkDenpyouWithGemini_(lineMessageId) {
     const answer = json.candidates && json.candidates[0] && json.candidates[0].content
       && json.candidates[0].content.parts && json.candidates[0].content.parts[0]
       && json.candidates[0].content.parts[0].text;
-    if (!answer) return '⚠️ Geminiの応答が取得できませんでした\n' + res.getContentText().slice(0, 200);
+    if (!answer) return '⚠️ Vertex AIの応答が取得できませんでした\n' + res.getContentText().slice(0, 200);
     return '📋【伝票チェック結果】\n\n' + answer;
   } catch(e) {
-    return '⚠️ Gemini APIエラー: ' + e.message;
+    return '⚠️ Vertex AI エラー: ' + e.message;
   }
 }
