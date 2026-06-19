@@ -2468,8 +2468,7 @@ function renderYoyakuList() {
     + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">'+all.length+'</div><div class="lbl">本日の予約</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
     + '</div>';
-  var avail = renderAvailability_(all);
-  if (all.length === 0) return stats + avail + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  if (all.length === 0) return stats + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
   var cards = all.map(function(r) {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
@@ -2503,7 +2502,7 @@ function renderYoyakuList() {
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
       + '</div>';
   }).join('');
-  return stats + avail + cards;
+  return stats + cards;
 }
 
 function renderAvailability_(all) {
