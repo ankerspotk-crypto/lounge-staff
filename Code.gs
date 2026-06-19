@@ -1076,6 +1076,71 @@ function jobOkuriConfirm() {
   ].join('\n'));
 }
 
+// 23:40 チェック順番提案
+function proposeCheckSchedule_() {
+  const KF = prop('GROUP_KUROFUKU');
+  if (!KF) return;
+
+  const today = bizDateStr_();
+  const reservations = getYoyakuReservations_(today)
+    .filter(r => r.status === '来店済み' && r.table && r.table !== '未定');
+
+  if (reservations.length === 0) return;
+
+  // 担当キャストごとに担当している予約をグループ化
+  const castMap = {};
+  reservations.forEach(r => {
+    const casts = r.tantouCast.split(/[、,，]/).map(s => s.trim()).filter(Boolean);
+    casts.forEach(c => {
+      if (!castMap[c]) castMap[c] = [];
+      if (!castMap[c].some(x => x.rowIdx === r.rowIdx)) castMap[c].push(r);
+    });
+  });
+
+  // 担当キャストが2席以上担当している予約を「被り席」として抽出
+  const overlapRowIdxs = new Set();
+  Object.values(castMap).forEach(rsvs => {
+    if (rsvs.length >= 2) rsvs.forEach(r => overlapRowIdxs.add(r.rowIdx));
+  });
+
+  const toM_ = s => {
+    const h = parseInt(String(s).slice(0, 2), 10);
+    return (h < 6 ? h + 24 : h) * 60 + parseInt(String(s).slice(3), 10);
+  };
+
+  const overlapRsvs = reservations
+    .filter(r => overlapRowIdxs.has(r.rowIdx))
+    .sort((a, b) => toM_(a.time) - toM_(b.time));
+
+  const normalRsvs = reservations.filter(r => !overlapRowIdxs.has(r.rowIdx));
+
+  const lines = ['📋 今夜のチェック順番（案）', ''];
+
+  if (overlapRsvs.length > 0) {
+    lines.push('【担当被り → 来店順にチェック】');
+    let checkMins = 23 * 60 + 45;
+    overlapRsvs.forEach(r => {
+      const h = Math.floor(checkMins / 60) % 24;
+      const mm = String(checkMins % 60).padStart(2, '0');
+      const t = String(h).padStart(2, '0') + ':' + mm;
+      lines.push(t + '　' + r.table + '（' + r.customer + '様 来店' + r.time + '）');
+      checkMins += 10;
+    });
+    lines.push('');
+  }
+
+  if (normalRsvs.length > 0) {
+    lines.push('【通常チェック 23:45】');
+    normalRsvs.forEach(r => {
+      lines.push('・' + r.table + '（' + r.customer + '様）');
+    });
+  }
+
+  if (overlapRsvs.length === 0 && normalRsvs.length === 0) return;
+
+  push_(KF, lines.join('\n'));
+}
+
 // ============================================================
 // アテンド管理（席付け回し）
 // ============================================================
@@ -1563,6 +1628,8 @@ function scheduledJobs() {
   notif_('okuri_summary', jobOkuriSummary);
 
   notif_('okuri_confirm', jobOkuriConfirm);
+
+  if (hhmm >= '23:40' && hhmm <= '23:49') once('CHECK_PROPOSAL', proposeCheckSchedule_);
 
   notif_('seki_check', () => {
     push_(prop('GROUP_KUROFUKU'), ns_['seki_check'].message || '各席チェックを出してください');
