@@ -389,15 +389,35 @@ function fmt(n) {
   return num.toLocaleString('ja-JP') + '円';
 }
 
+// ---- タイムアウト付き fetch ヘルパー ----
+function gasFetch(url, options, timeoutMs) {
+  var ms = timeoutMs || 28000;
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, ms) : null;
+  var opts = Object.assign({}, options || {});
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(url, opts).then(function(r) {
+    if (timer) clearTimeout(timer);
+    return r;
+  }, function(e) {
+    if (timer) clearTimeout(timer);
+    if (e && e.name === 'AbortError') throw new Error('タイムアウト（サーバー応答なし）');
+    throw e;
+  });
+}
+
+function retryBtn_(fn) {
+  return '<br><button onclick="' + fn + '()" style="margin-top:14px;padding:10px 24px;background:#1a3a6a;color:#7ab0f0;border:1px solid #2a5aaa;border-radius:8px;font-size:14px;cursor:pointer">再試行</button>';
+}
+
 // ---- LIFF init ----
 var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
 
 var initTimer = setTimeout(function() {
-  showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>');
-}, 12000);
+  showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>' + retryBtn_('location.reload'));
+}, 15000);
 
 if (_devUid) {
-  // テスト用バイパス: ?u=TEST_TOKUKO
   clearTimeout(initTimer);
   userId = _devUid;
   document.getElementById('user-name').textContent = '読み込み中...';
@@ -406,21 +426,25 @@ if (_devUid) {
   try {
     liff.init({ liffId: LIFF_ID }).then(function() {
       clearTimeout(initTimer);
-      if (!liff.isLoggedIn()) { liff.login(); return; }
+      if (!liff.isLoggedIn()) {
+        setContent('<div class="loading">LINEログイン中...</div>');
+        liff.login();
+        return null;
+      }
       return liff.getProfile();
     }).then(function(p) {
-      if (!p) return;
+      if (!p) return; // login redirect pending
       userId   = p.userId;
       userName = p.displayName;
       document.getElementById('user-name').textContent = p.displayName;
       loadPortal();
     }).catch(function(e) {
       clearTimeout(initTimer);
-      showErr('ログインエラー<br><small>' + (e && e.message || JSON.stringify(e)) + '</small>');
+      showErr('ログインエラー<br><small>' + (e && e.message || JSON.stringify(e)) + '</small>' + retryBtn_('location.reload'));
     });
   } catch(e) {
     clearTimeout(initTimer);
-    showErr('起動エラー: ' + e.message);
+    showErr('起動エラー: ' + e.message + retryBtn_('location.reload'));
   }
 }
 
@@ -429,14 +453,14 @@ function loadPortal(month) {
   var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId);
   if (month) url += '&month=' + encodeURIComponent(month);
   if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
-  fetch(url)
+  gasFetch(url)
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d.ok) {
         if (d.error === 'unregistered') {
           showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
         } else {
-          showErr('エラー: ' + d.error);
+          showErr('エラー: ' + d.error + retryBtn_('loadPortal'));
         }
         return;
       }
@@ -460,7 +484,7 @@ function loadPortal(month) {
       renderTab(currentTab);
     })
     .catch(function(e) {
-      showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>');
+      showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
     });
 }
 
@@ -2295,10 +2319,10 @@ function yoyakuDateDisplay(d) {
 function loadYoyaku() {
   yoyakuSelectedCust = null;
   setContent('<div class="loading">読み込み中...</div>');
-  fetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + yoyakuDateStr(yoyakuDate))
+  gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + yoyakuDateStr(yoyakuDate))
     .then(function(r){ return r.json(); })
     .then(function(d) {
-      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + retryBtn_('loadYoyaku') + '</div>'); return; }
       staffName = d.name || '';
       yoyakuRsvs = d.reservations || [];
       yoyakuCastList = d.casts || [];
@@ -2308,7 +2332,7 @@ function loadYoyaku() {
       yoyakuEditRsv = null;
       renderYoyaku();
     })
-    .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
+    .catch(function(e){ setContent('<div class="err">通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadYoyaku') + '</div>'); });
 }
 
 function renderYoyaku() {
