@@ -662,7 +662,7 @@ function handleKurofuku(event, text, userId) {
 function handleStaff(event, text, userId) {
   const regName = getStaffName(userId);
   const name    = regName || userId;
-  const today   = todayStr();
+  const today   = bizDateStr_();
   // 今日の発言者を記録（出勤未報告チェック用）- 登録済みスタッフのみ
   if (regName) setProp('ACTIVE_' + today + '_' + userId, regName);
 
