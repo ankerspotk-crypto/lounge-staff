@@ -2916,49 +2916,41 @@ function yoyakuOpenEdit(rowIdx) {
   renderYoyaku();
 }
 
+// 楽観的UI更新: ローカル状態を即時変更してレンダリング、APIはバックグラウンドで実行
+function yoyakuStatusOptimistic_(rowIdx, newStatus, payload) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var prev = rsv ? rsv.status : '';
+  if (rsv) rsv.status = newStatus;
+  renderYoyaku();
+  fetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (rsv) { rsv.status = prev; renderYoyaku(); } alert('エラー: ' + (d.error || '')); }
+    })
+    .catch(function() { if (rsv) { rsv.status = prev; renderYoyaku(); } alert('通信エラー'); });
+}
+
 function yoyakuCheckIn(rowIdx) {
   var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
   var name = rsv ? rsv.customer : 'お客様';
-  if (!confirm(esc(name) + '様の来店を記録しますか？\n軍師システムの予約テーブルに反映されます。')) return;
-  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'checkInReservation', userId: userId, rowIdx: rowIdx }) })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { alert('エラー: ' + (d.error || '')); return; }
-      loadYoyaku();
-    })
-    .catch(function() { alert('通信エラー'); });
+  if (!confirm(esc(name) + '様の来店を記録しますか？')) return;
+  yoyakuStatusOptimistic_(rowIdx, '来店済み', { action: 'checkInReservation', userId: userId, rowIdx: rowIdx });
 }
 
 function yoyakuCheckOut(rowIdx) {
   var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
   var name = rsv ? rsv.customer : 'お客様';
-  if (!confirm(esc(name) + '様の退店を記録しますか？\n軍師システムの予約テーブルがリセットされます。')) return;
-  fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'checkOutReservation', userId: userId, rowIdx: rowIdx }) })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { alert('エラー: ' + (d.error || '')); return; }
-      loadYoyaku();
-    })
-    .catch(function() { alert('通信エラー'); });
+  if (!confirm(esc(name) + '様の退店を記録しますか？')) return;
+  yoyakuStatusOptimistic_(rowIdx, '退店済み', { action: 'checkOutReservation', userId: userId, rowIdx: rowIdx });
 }
 
 function yoyakuSetStatus(rowIdx, status) {
-  if (status === '来店済') {
-    yoyakuCheckIn(rowIdx);
-  } else if (status === '退店済') {
-    yoyakuCheckOut(rowIdx);
-  } else {
-    var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
-    var name = rsv ? rsv.customer : 'お客様';
-    if (!confirm(esc(name) + '様を来店前（確定）に戻しますか？')) return;
-    fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'setReservationStatus', rowIdx: rowIdx, status: '確定', userId: userId }) })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        if (!d.ok) { alert('エラー: ' + (d.error || '')); return; }
-        loadYoyaku();
-      })
-      .catch(function() { alert('通信エラー'); });
-  }
+  if (status === '来店済') { yoyakuCheckIn(rowIdx); return; }
+  if (status === '退店済') { yoyakuCheckOut(rowIdx); return; }
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : 'お客様';
+  if (!confirm(esc(name) + '様を来店前（確定）に戻しますか？')) return;
+  yoyakuStatusOptimistic_(rowIdx, '確定', { action: 'setReservationStatus', rowIdx: rowIdx, status: '確定', userId: userId });
 }
 
 function yoyakuCancelReservation(rowIdx) {

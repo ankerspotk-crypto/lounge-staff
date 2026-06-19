@@ -57,6 +57,13 @@ const NAME_ALIAS = {
   'みれい': '美玲',
 };
 
+// 同一リクエスト内でスプレッドシートをキャッシュ（複数回 openById を防ぐ）
+var _sharedSS_;
+function getOrOpenSS_() {
+  if (!_sharedSS_) _sharedSS_ = SpreadsheetApp.openById(SHEET_ID);
+  return _sharedSS_;
+}
+
 function doGet(e) {
   if (e && e.parameter && e.parameter.action === 'portal') {
     return handlePortalApi_(e);
@@ -1399,8 +1406,7 @@ function deleteStaff(userId) {
 
 function getStaffName(userId) {
   if (!userId) return '';
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sh = ss.getSheetByName(STAFF_TAB);
+  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return '';
   const row = sh.getDataRange().getValues().find(r => r[0] === userId);
   return row ? String(row[1]) : '';
@@ -2513,7 +2519,7 @@ function handlePortalApi_(e) {
 
   const ADMINS = ADMIN_NAMES_;
   const isAdmin = ADMINS.includes(name);
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = getOrOpenSS_();
 
   const viewAs = e.parameter.viewAs || '';
   const tab    = e.parameter.tab    || '';
@@ -2635,8 +2641,7 @@ function getAllStaff_(ss) {
 
 // スタッフマスタ C列（属性）を名前で取得
 function getStaffRoleByName_(name) {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sh = ss.getSheetByName(STAFF_TAB);
+  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return 'キャスト';
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
@@ -3080,7 +3085,7 @@ function setupTriggers() {
 // ============================================================
 
 function getYoyakuRsrvSheet_() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = getOrOpenSS_();
   let sh = ss.getSheetByName(YOYAKU_RSRV_TAB);
   if (!sh) {
     sh = ss.insertSheet(YOYAKU_RSRV_TAB);
@@ -3090,7 +3095,7 @@ function getYoyakuRsrvSheet_() {
 }
 
 function getYoyakuReqSheet_() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = getOrOpenSS_();
   let sh = ss.getSheetByName(YOYAKU_REQ_TAB);
   if (!sh) {
     sh = ss.insertSheet(YOYAKU_REQ_TAB);
@@ -3222,7 +3227,7 @@ function getCastNamesForYoyaku_(ss) {
 }
 
 function searchCustomersForYoyaku_(query) {
-  const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName(MASTER_TAB);
+  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
   if (!sheet) return [];
   const values = sheet.getDataRange().getValues();
   let h = -1;
