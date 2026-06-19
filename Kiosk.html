@@ -45,10 +45,10 @@ header h1 { font-size: 16px; letter-spacing: .5px; }
 .rsv-row1 { display: flex; align-items: baseline; gap: 8px; }
 .rsv-time { font-size: 15px; font-weight: 700; color: #7ab0f0; }
 .rsv-name { font-size: 14px; font-weight: 600; flex: 1; }
-.rsv-status { font-size: 10px; padding: 3px 8px; border-radius: 8px; font-weight: 700; flex-shrink: 0; }
-.rsv-status.before { background: #2a2410; color: #ffcc44; }
-.rsv-status.in     { background: #2a1410; color: #ff8866; }
-.rsv-status.out    { background: #1a2a1a; color: #66cc88; }
+.rsv-statusbtns { display: flex; gap: 4px; flex-shrink: 0; }
+.rsv-statusbtn { padding: 4px 9px; font-size: 11px; border-radius: 7px; cursor: pointer; border: 1px solid #1e3050; background: #141d30; color: #6a8ab0; font-weight: 600; }
+.rsv-statusbtn.active { border-color: #1a50a0; background: #0f2040; color: #7ab0f0; }
+.rsv-statusbtn:disabled { opacity: .5; cursor: default; }
 .rsv-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .rsv-badge { font-size: 10px; padding: 2px 7px; border-radius: 6px; background: #1a1a30; color: #99aacc; border: 1px solid #28284a; }
 .rsv-note { font-size: 11px; color: #889; margin-top: 5px; }
@@ -76,10 +76,27 @@ function esc(s) {
   });
 }
 
-function statusInfo(status) {
-  if (status === '来店済み') return { cls: 'in', label: '来店中' };
-  if (status === '退店済み') return { cls: 'out', label: '退店済' };
-  return { cls: 'before', label: '来店前' };
+function statusBtnsHtml(r) {
+  var items = [
+    { k: '来店前', s: '確定' },
+    { k: '来店済', s: '来店済み' },
+    { k: '退店済', s: '退店済み' }
+  ];
+  return '<div class="rsv-statusbtns">' + items.map(function(it) {
+    var active = r.status === it.s;
+    return '<button class="rsv-statusbtn' + (active ? ' active' : '') + '" onclick="setStatus(' + r.rowIdx + ',\'' + it.s + '\',this)">' + it.k + '</button>';
+  }).join('') + '</div>';
+}
+
+function setStatus(rowIdx, status, btn) {
+  var group = btn.parentElement;
+  group.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+  google.script.run.withSuccessHandler(function() {
+    load();
+  }).withFailureHandler(function(e) {
+    alert('更新に失敗しました: ' + (e && e.message || e));
+    group.querySelectorAll('button').forEach(function(b) { b.disabled = false; });
+  }).setKioskReservationStatus(rowIdx, status);
 }
 
 function render(list) {
@@ -96,7 +113,6 @@ function render(list) {
   }
 
   var cards = list.map(function(r) {
-    var si = statusInfo(r.status);
     var badges = '<span class="rsv-badge">' + r.pax + '名</span>'
       + '<span class="rsv-badge">' + esc(r.table || '未定') + '</span>';
     if (r.tantouCast) badges += '<span class="rsv-badge">担当 ' + esc(r.tantouCast) + '</span>';
@@ -106,7 +122,7 @@ function render(list) {
       + '<div class="rsv-row1">'
       +   '<span class="rsv-time">' + esc(r.time) + '</span>'
       +   '<span class="rsv-name">' + esc(r.customer) + '様' + (r.memberId ? ' <span style="font-size:10px;color:#7a9cc8">' + esc(r.memberId) + '</span>' : '') + '</span>'
-      +   '<span class="rsv-status ' + si.cls + '">' + si.label + '</span>'
+      +   statusBtnsHtml(r)
       + '</div>'
       + '<div class="rsv-badges">' + badges + '</div>'
       + (r.youbou ? '<div class="rsv-note">📝 ' + esc(r.youbou) + '</div>' : '')

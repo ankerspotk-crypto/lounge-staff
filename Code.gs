@@ -3444,6 +3444,13 @@ function getKioskReservations() {
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
+// 端末キオスク用：ステータス変更（来店前=確定 / 来店済み / 退店済み）
+function setKioskReservationStatus(rowIdx, status) {
+  if (status === '来店済み') return checkInReservation_(rowIdx);
+  if (status === '退店済み') return checkOutReservation_(rowIdx);
+  return setReservationStatus_(rowIdx, '確定');
+}
+
 function addReservation_(payload, regBy) {
   const sh = getYoyakuRsrvSheet_();
   const dateKey = String(payload.date || todayStr());
