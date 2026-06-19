@@ -1168,6 +1168,15 @@ function startAtendou_(seatCode, seatLabel, staffName, mins) {
   }
 
   sh.appendRow([today, seatCode, seatLabel, staffName, nowTime, '', mins, '']);
+
+  // カスタマー席に来店済み予約がない場合は黒服へ通知
+  if (targetSeat && (targetSeat.type === 'C' || targetSeat.type === 'B')) {
+    const rsrv = PropertiesService.getScriptProperties().getProperty('RSRV_' + seatCode);
+    if (!rsrv) {
+      const KF = prop('GROUP_KUROFUKU');
+      if (KF) push_(KF, '⚠️ 予約管理でテーブル指定してください（席: ' + seatLabel + '）');
+    }
+  }
 }
 
 function endAtendou_(seatCode) {
@@ -1269,18 +1278,21 @@ function checkAtendou() {
     const nextSeatObj = r.nextSeat ? ALL_SEATS.find(s => s.code === r.nextSeat) : null;
     const nextLine = nextSeatObj ? '次席：' + nextSeatObj.label : '次席：未設定';
     const rem = sm - el;
-    const header = rem > 0
-      ? '⏰【' + rem + '分前】'
-      : '🔴【時間超過 ' + Math.abs(rem) + '分】';
-
-    const remLabel = rem > 0 ? '残り' + rem + '分' : '超過' + Math.abs(rem) + '分';
-    const msg = header + '\n'
-      + r.label + '：' + r.name + '\n'
-      + nextLine + '\n'
-      + '設定' + sm + '分　' + remLabel + '\n'
-      + '━━━━━━━━━━\n'
-      + '声かけ or 延長どちらですか？\n'
-      + '「延長 ' + r.name + '」で+15分';
+    let msg;
+    if (rem > 0) {
+      msg = '⏰【残り' + rem + '分】\n'
+        + r.label + '：' + r.name + '\n'
+        + nextLine + '\n'
+        + '設定' + sm + '分　残り' + rem + '分\n'
+        + '━━━━━━━━━━\n'
+        + '声かけ or 延長どちらですか？\n'
+        + '「延長 ' + r.name + '」で+15分';
+    } else {
+      msg = '🔴【時間オーバー ' + Math.abs(rem) + '分】\n'
+        + r.label + '：' + r.name + 'がオーバーしています。\n'
+        + '延長する場合は\n'
+        + '「延長 ' + r.name + '」';
+    }
 
     push_(KF, msg);
     setProp('ENCHO_LAST_' + today, r.name + '|' + r.code); // 延長コマンド用
@@ -3448,7 +3460,8 @@ function checkInReservation_(rowIdx) {
   const row = sh.getRange(rowIdx, 1, 1, 12).getValues()[0];
   const customer = String(row[2]);
   const pax = Number(row[4]) || 1;
-  const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
+  const tableStr = String(row[5]).trim();
+  const seatCodes = tableStr.split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('来店済み');
   const sp = PropertiesService.getScriptProperties();
   seatCodes.forEach(code => {
@@ -3456,6 +3469,10 @@ function checkInReservation_(rowIdx) {
     sp.deleteProperty('YRSRV_' + code);
   });
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
+  if (seatCodes.length === 0) {
+    const KF = prop('GROUP_KUROFUKU');
+    if (KF) push_(KF, '⚠️ テーブル設定おねがいします（' + customer + '様）');
+  }
   return { ok: true, seatCodes };
 }
 
