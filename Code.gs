@@ -3452,6 +3452,36 @@ function setKioskReservationStatus(rowIdx, status) {
   return setReservationStatus_(rowIdx, '確定');
 }
 
+// 端末キオスク用：月次予約サマリー（カレンダー表示用）
+function getKioskMonthSummary(monthKey) {
+  return getYoyakuMonthSummary_(monthKey);
+}
+
+// 端末キオスク用：キャスト名一覧
+function getKioskCastNames() {
+  return getCastNamesForYoyaku_(getOrOpenSS_());
+}
+
+// 端末キオスク用：顧客検索
+function searchKioskCustomers(query) {
+  return searchCustomersForYoyaku_(String(query || '').trim());
+}
+
+// 端末キオスク用：予約追加（登録者は端末名で記録）
+function addKioskReservation(payload, term) {
+  return addReservation_(payload, term || 'キオスク端末');
+}
+
+// 端末キオスク用：予約変更
+function updateKioskReservation(rowIdx, payload) {
+  return updateReservation_(rowIdx, payload);
+}
+
+// 端末キオスク用：予約キャンセル
+function cancelKioskReservation(rowIdx) {
+  return cancelReservation_(rowIdx);
+}
+
 function addReservation_(payload, regBy) {
   const sh = getYoyakuRsrvSheet_();
   const dateKey = String(payload.date || todayStr());
