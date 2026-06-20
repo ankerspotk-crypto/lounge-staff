@@ -802,7 +802,9 @@ function handleHaken(event, text) {
 // 派遣会社メッセージから名前+時間を抽出
 // 対応フォーマット:
 //   A) あかねちゃん20:30~24:00  （同一行）
-//   B) あかねちゃん\n20:30~24:00 （名前行の次に時間行）
+//   B) あかねちゃん\n20:30~24:00 （名前行の後、数行以内に時間行）
+//   C) あかねちゃん\n（任意の行）\n20:30~1名ご予定できました （終了時刻省略時は24:00を補完）
+const HAKEN_DEFAULT_END_ = '24:00';
 function parseHakenMessage_(text) {
   const list  = [];
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
@@ -811,24 +813,33 @@ function parseHakenMessage_(text) {
     const line = lines[i];
 
     // フォーマットA: 名前＋時間が同一行
-    const mA = line.match(/^(.+?)(?:ちゃん|くん|さん)?\s*(\d{1,2}:\d{2}\s*[^\d\s]\s*\d{1,2}:\d{2})/);
+    const mA = line.match(/^(?:本日|今日)?(.+?)(?:ちゃん|くん|さん)?\s*(\d{1,2}:\d{2})\s*[^\d\s]\s*(\d{1,2}:\d{2})/);
     if (mA) {
       const name = mA[1].replace(/(?:ちゃん|くん|さん)$/, '').trim();
-      const time = mA[2].replace(/\s/g, '');
+      const time = mA[2] + '~' + mA[3];
       if (name) list.push({ name, time });
       continue;
     }
 
-    // フォーマットB: 名前のみ行（敬称で終わる）→ 次行が時間
-    const mB = line.match(/^(.+?)(?:ちゃん|くん|さん)$/);
-    if (mB && i + 1 < lines.length) {
-      const nextLine = lines[i + 1];
-      const mT = nextLine.match(/^(\d{1,2}:\d{2}\s*[^\d\s]\s*\d{1,2}:\d{2})/);
-      if (mT) {
-        const name = mB[1].trim();
-        const time = mT[1].replace(/\s/g, '');
-        if (name) list.push({ name, time });
-        i++; // 時間行をスキップ
+    // フォーマットB/C: 名前のみ行（敬称で終わる）→ 数行以内の時間情報を検索
+    const mB = line.match(/^(?:本日|今日)?(.+?)(?:ちゃん|くん|さん)$/);
+    if (mB) {
+      const name = mB[1].trim();
+      if (!name) continue;
+      for (let j = i + 1; j < lines.length && j <= i + 3; j++) {
+        const nextLine = lines[j];
+        const mT = nextLine.match(/^(\d{1,2}:\d{2})\s*[^\d\s]\s*(\d{1,2}:\d{2})/);
+        if (mT) {
+          list.push({ name, time: mT[1] + '~' + mT[2] });
+          i = j;
+          break;
+        }
+        const mT2 = nextLine.match(/^(\d{1,2}:\d{2})\s*[^\d\s]/);
+        if (mT2) {
+          list.push({ name, time: mT2[1] + '~' + HAKEN_DEFAULT_END_ });
+          i = j;
+          break;
+        }
       }
     }
   }
