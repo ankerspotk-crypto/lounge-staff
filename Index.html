@@ -1618,8 +1618,8 @@ function renderSlipRows() {
       + '" class="cash-slip-amount" style="width:100%;background:#1a1a2e;border:1px solid #2a2a40;color:#fff;padding:8px;border-radius:8px;font-size:14px;margin-bottom:6px">'
       + '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#5599cc;cursor:pointer">'
       + (s.previewUrl ? '<img src="' + s.previewUrl + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px">' : '<span style="font-size:22px">📷</span>')
-      + '<span>' + (s.photoBase64 ? '撮影済み（タップで変更）' : '伝票と現金を一緒に撮影') + '</span>'
-      + '<input type="file" accept="image/*" capture="environment" data-idx="' + i + '" class="cash-slip-photo" style="display:none"></label>'
+      + '<span>' + (s.photoBase64 ? '撮影済み（タップで変更）' : '伝票と現金を一緒に撮影 / フォルダから選択') + '</span>'
+      + '<input type="file" accept="image/*" data-idx="' + i + '" class="cash-slip-photo" style="display:none"></label>'
       + '</div>';
   }).join('');
   wrap.innerHTML = rowsHtml || '<div style="font-size:12px;color:#555;text-align:center;padding:8px 0">伝票はまだありません</div>';
