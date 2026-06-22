@@ -1889,7 +1889,7 @@ function getTodayShiftDetail_() {
       : String(shiftRaw).trim();
     if (!name || !shift) continue;
     if (role === 'キャスト' || role === '体験') cast.push({ name, shift, role });
-    else if (role === '黒服') kurofuku.push({ name, shift });
+    else if (role === '黒服社員' || role === '黒服バイト' || role === '黒服') kurofuku.push({ name, shift });
     else if (role === '派遣') haken.push({ name, shift });
   }
   return { cast, kurofuku, haken };
