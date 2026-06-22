@@ -851,8 +851,7 @@ function parseHakenMessage_(text) {
 function cancelHakenStaff_(name) {
   const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
   if (!sh) return false;
-  const today   = new Date();
-  const colKey  = (today.getMonth() + 1) + '/' + today.getDate();
+  const colKey  = bizShiftColKey_();
   const data    = sh.getDataRange().getValues();
   const headers = data[0].map(v => {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
@@ -875,8 +874,7 @@ function cancelHakenStaff_(name) {
 function formatHakenList_() {
   const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
   if (!sh) return '';
-  const today   = new Date();
-  const colKey  = (today.getMonth() + 1) + '/' + today.getDate();
+  const colKey  = bizShiftColKey_();
   const data    = sh.getDataRange().getValues();
   const headers = data[0].map(v => {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
@@ -899,8 +897,7 @@ function updateHakenTime_(name, oldTime, newTime) {
   const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
   if (!sh) return null;
 
-  const today   = new Date();
-  const colKey  = (today.getMonth() + 1) + '/' + today.getDate();
+  const colKey  = bizShiftColKey_();
   const data    = sh.getDataRange().getValues();
   const headers = data[0].map(v => {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
@@ -1866,8 +1863,7 @@ function getTodayShiftDetail_() {
   const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
   if (!sh) return { cast: [], kurofuku: [], haken: [] };
 
-  const today  = new Date();
-  const colKey = (today.getMonth() + 1) + '/' + today.getDate();
+  const colKey = bizShiftColKey_();
   const data   = sh.getDataRange().getValues();
   if (data.length < 2) return { cast: [], kurofuku: [], haken: [] };
 
@@ -1988,8 +1984,7 @@ function setHakenStaff(names, times) {
   const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
   if (!sh) return false;
 
-  const today   = new Date();
-  const colKey  = (today.getMonth() + 1) + '/' + today.getDate();
+  const colKey  = bizShiftColKey_();
   const data    = sh.getDataRange().getValues();
   const headers = data[0].map(v => {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
@@ -4437,6 +4432,13 @@ function bizDateStr_() {
   const now = new Date();
   if (now.getHours() < 6) now.setDate(now.getDate() - 1);
   return Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
+}
+
+// シフト表の列キー（M/d形式・営業日基準。深夜6時より前は前日扱い）
+function bizShiftColKey_() {
+  const d = new Date();
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+  return (d.getMonth() + 1) + '/' + d.getDate();
 }
 
 // TRUST日報ページから取得した当日の日払い・経費合計をシートに記録し、黒服グループへ参照値を通知
