@@ -1324,7 +1324,7 @@ function renderHairTab(d) {
     h += '<div id="photo-preview" style="width:100%;max-width:280px;height:160px;background:#0d0d1a;border:2px dashed #1e3050;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative" onclick="document.getElementById(\'photo-input\').click()">';
     h += '<span id="photo-hint" style="font-size:12px;color:#7a9cc8">タップして写真を選択</span>';
     h += '</div>';
-    h += '<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">';
+    h += '<input type="file" id="photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">';
     h += '<button onclick="clearPhoto()" style="margin-top:6px;font-size:11px;color:#665;background:none;border:none;cursor:pointer">写真をクリア</button>';
     h += '</div>';
 
