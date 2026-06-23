@@ -701,12 +701,12 @@ function handleStaff(event, text, userId) {
     return;
   }
 
-  // 出退勤記録
-  if (/出勤(しました|してました|していました|いたしました|致しました|です)/.test(text)) {
+  // 出退勤記録（「出勤」「退勤」を含む口語表現を広く許容）
+  if (/出勤/.test(text)) {
     recordKintai(name, '出勤');
     return;
   }
-  if (/退勤(しました|いたしました|致しました|です)/.test(text)) {
+  if (/退勤/.test(text)) {
     const role = getStaffRoleByName_(normalizeName_(name));
     const isKuro = role === '黒服社員' || role === '黒服バイト';
     if (isKuro && !isCashCheckPassed_(bizDateStr_())) {
