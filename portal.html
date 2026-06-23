@@ -1040,6 +1040,12 @@ function togglePayPublish(month, action) {
 var rankingMonths = [];
 
 function loadRanking(m) {
+  setContent('<div style="text-align:center;padding:60px 20px">'
+    + '<div style="font-size:36px;margin-bottom:14px">🛠️</div>'
+    + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">ランキングは現在表示を停止しています</div>'
+    + '</div>');
+  return;
+  // 以下、表示停止中のため未実行（再開する場合は上のreturnを削除）
   setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
   var url = GAS_URL + '?action=portal&tab=ranking&userId=' + encodeURIComponent(userId)
     + (m ? '&month=' + encodeURIComponent(m) : '');
