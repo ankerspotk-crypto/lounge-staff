@@ -291,6 +291,12 @@ function handleApiRequest_(body) {
     return { ok: true };
   }
   // TRUSTから取得した全売上データをシートに書き込む
+  if (body.action === 'importPayrollCsv') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    if (!body.month || !body.csvText) return { ok: false, error: 'month/csvText required' };
+    return importPayrollCsv_(body.month, body.csvText);
+  }
   if (body.action === 'syncTrustAll') {
     const secret = prop('SYNC_SECRET');
     const bySecret = secret && body.syncSecret === secret;
@@ -4142,6 +4148,67 @@ function writeTrustSales_(monthKey, data) {
       .setValues(writeData);
   }
   Logger.log('売上明細書き込み: ' + monthKey + ' ' + writeData.length + '件');
+}
+
+// シンプルなCSVパーサー（ダブルクォート対応）
+function parseCsv_(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim() !== '');
+  return lines.map(line => {
+    const cells = [];
+    let cur = '', inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === ',' && !inQuotes) { cells.push(cur); cur = ''; continue; }
+      cur += ch;
+    }
+    cells.push(cur);
+    return cells.map(c => c.trim());
+  });
+}
+
+// 管理者がアップロードした給与計算済みCSVを「売上明細」タブへ取り込む
+// CSVヘッダー想定: 名前,担当小計,同伴小計,給率(%),勤務日数,残り支給額,時間報酬,
+//                   担当バック,予約バック,同伴バック,ドリンクバック,ボトルバック,フードバック,
+//                   ボーナス,源泉徴収,日払,マイナス（順不同・列名で検索）
+function importPayrollCsv_(monthKey, csvText) {
+  if (!monthKey) return { ok: false, error: '対象月が指定されていません' };
+  const rows = parseCsv_(String(csvText || ''));
+  if (rows.length < 2) return { ok: false, error: 'CSVにデータ行がありません' };
+
+  const headers = rows[0];
+  const idx = label => headers.indexOf(label);
+  const iName = idx('名前');
+  if (iName < 0) return { ok: false, error: 'CSVに「名前」列が見つかりません' };
+
+  const col = {
+    tanto: idx('担当小計'), dohan: idx('同伴小計'), kyuritsu: idx('給率(%)'),
+    kinmu: idx('勤務日数'), nokori: idx('残り支給額'), jikan: idx('時間報酬'),
+    tantoBk: idx('担当バック'), yoyakuBk: idx('予約バック'), dohanBk: idx('同伴バック'),
+    drinkBk: idx('ドリンクバック'), bottleBk: idx('ボトルバック'), foodBk: idx('フードバック'),
+    bonus: idx('ボーナス'), gensen: idx('源泉徴収'), hizuke: idx('日払'), minus: idx('マイナス')
+  };
+  const num = (row, i) => (i >= 0 && row[i] !== undefined) ? (parseFloat(String(row[i]).replace(/[¥,　\s]/g, '')) || 0) : 0;
+
+  const data = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const name = String(row[iName] || '').trim();
+    if (!name) continue;
+    const tanto = num(row, col.tanto), dohan = num(row, col.dohan);
+    data.push([
+      '', name, tanto, dohan, tanto + dohan,
+      num(row, col.kyuritsu), num(row, col.kinmu), num(row, col.nokori), num(row, col.jikan),
+      num(row, col.tantoBk), num(row, col.yoyakuBk), num(row, col.dohanBk),
+      num(row, col.drinkBk), num(row, col.bottleBk), num(row, col.foodBk),
+      num(row, col.bonus), num(row, col.gensen), num(row, col.hizuke), num(row, col.minus)
+    ]);
+  }
+  if (data.length === 0) return { ok: false, error: '有効なデータ行がありません（名前が空欄）' };
+
+  writeTrustSales_(monthKey, data);
+  recordSalesDataDate_(monthKey);
+  return { ok: true, count: data.length };
 }
 
 // 売上明細から給与計算タブを自動計算（手入力列は保持）

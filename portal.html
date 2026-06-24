@@ -832,6 +832,19 @@ function renderPay() {
       hOnly += '<div style="font-size:13px;font-weight:600;color:' + (isPubO ? '#44bb66' : '#cc8844') + '">' + (isPubO ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
       hOnly += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPubO ? 'unpublishPay' : 'publishPay') + '\')" style="padding:8px 16px;background:' + (isPubO ? '#2a1010' : '#102a10') + ';border:1px solid ' + (isPubO ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPubO ? '#ff8888' : '#66dd66') + ';font-size:13px;font-weight:700;cursor:pointer">' + (isPubO ? '非公開に戻す' : '公開する') + '</button>';
       hOnly += '</div>';
+
+      hOnly += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+      hOnly += '<div style="font-size:10px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
+      hOnly += '<div style="display:flex;gap:8px;align-items:center">';
+      hOnly += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
+        + 'style="width:80px;background:#0d0d18;border:1px solid #2a2a40;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
+      hOnly += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
+      hOnly += 'CSVファイルを選択';
+      hOnly += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
+      hOnly += '</label>';
+      hOnly += '</div>';
+      hOnly += '<div id="payroll-csv-status" style="font-size:11px;color:#7a9cc8;margin-top:6px"></div>';
+      hOnly += '</div>';
     }
     hOnly += '<div style="background:#e8f0ff;color:#111;border-radius:12px;padding:16px 14px">';
     hOnly += '<div style="text-align:center;border-bottom:2px solid #6a8ab0;padding-bottom:10px;margin-bottom:12px">';
@@ -897,6 +910,19 @@ function renderPay() {
       + (isPub ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPub ? '#ff8888' : '#66dd66')
       + ';font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">'
       + (isPub ? '非公開に戻す' : '公開する') + '</button>';
+    h += '</div>';
+
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+    h += '<div style="font-size:10px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
+    h += '<div style="display:flex;gap:8px;align-items:center">';
+    h += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
+      + 'style="width:80px;background:#0d0d18;border:1px solid #2a2a40;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
+    h += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
+    h += 'CSVファイルを選択';
+    h += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
+    h += '</label>';
+    h += '</div>';
+    h += '<div id="payroll-csv-status" style="font-size:11px;color:#7a9cc8;margin-top:6px"></div>';
     h += '</div>';
   }
 
@@ -1016,6 +1042,41 @@ function renderPay() {
 }
 
 function switchPayMonth(m) { currentMonth = m; renderPay(); }
+
+function handlePayrollCsv(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var monthEl = document.getElementById('payroll-csv-month');
+  var month = monthEl ? monthEl.value.trim() : '';
+  var statusEl = document.getElementById('payroll-csv-status');
+  if (!month) {
+    if (statusEl) statusEl.textContent = '⚠️ 対象月を入力してください（例: 2026/06）';
+    input.value = '';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '読み込み中...';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var csvText = e.target.result;
+    gasFetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'importPayrollCsv', userId: userId, month: month, csvText: csvText })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      input.value = '';
+      if (!d.ok) { if (statusEl) statusEl.textContent = '⚠️ ' + (d.error || 'エラー'); return; }
+      if (statusEl) statusEl.textContent = '✅ ' + d.count + '名分を取り込みました';
+      currentMonth = month;
+      loadPortal();
+    })
+    .catch(function() {
+      input.value = '';
+      if (statusEl) statusEl.textContent = '⚠️ 通信エラーが発生しました';
+    });
+  };
+  reader.readAsText(file, 'UTF-8');
+}
 
 function togglePayPublish(month, action) {
   gasFetch(GAS_URL, {
