@@ -27,6 +27,7 @@ const KINTAI_TAB = '勤怠ログ';
 const ATEN_TAB   = 'アテンドログ';
 const SHIFT_TAB         = 'シフト表';
 const SHIFT_REQUEST_TAB = 'シフト申請';
+const INVENTORY_TAB     = '在庫管理';
 const TZ                = 'Asia/Tokyo';
 
 function prop(k) {
@@ -5161,5 +5162,88 @@ function setupTrustTrigger() {
     .inTimezone(TZ)
     .create();
   Logger.log('✅ TRUSTトリガー登録完了（毎日 3:00 JST）');
+}
+
+// ============================================================
+// 軍師システム「在庫管理」
+// ============================================================
+
+function getInventorySheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sh = ss.getSheetByName(INVENTORY_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(INVENTORY_TAB);
+    sh.appendRow(['フロア', '品名', '在庫数', '更新日時']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// 在庫一覧取得
+function getInventoryList() {
+  const sh = getInventorySheet_();
+  const rows = sh.getDataRange().getValues().slice(1);
+  return rows.map((r, i) => ({
+    rowIdx: i + 2,
+    floor: String(r[0]),
+    name: String(r[1]),
+    qty: Number(r[2]) || 0
+  })).filter(r => r.name);
+}
+
+// 在庫数を増減（delta: +1 / -1）。0未満にはならない
+function updateInventoryQty(rowIdx, delta) {
+  const sh = getInventorySheet_();
+  const cur = Number(sh.getRange(rowIdx, 3).getValue()) || 0;
+  const next = Math.max(0, cur + Number(delta));
+  sh.getRange(rowIdx, 3).setValue(next);
+  sh.getRange(rowIdx, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  return { ok: true, qty: next };
+}
+
+// 新規アイテム追加
+function addInventoryItem(floor, name, qty) {
+  name = String(name || '').trim();
+  if (!name) return { ok: false, error: '品名を入力してください' };
+  const sh = getInventorySheet_();
+  sh.appendRow([floor, name, Number(qty) || 0, Utilities.formatDate(new Date(), TZ, 'M/d HH:mm')]);
+  return { ok: true };
+}
+
+// アイテム削除
+function deleteInventoryItem(rowIdx) {
+  getInventorySheet_().deleteRow(rowIdx);
+  return { ok: true };
+}
+
+// 在庫ノートからの初期データ移行（GASエディタから1回だけ手動実行）
+function seedInventoryData_() {
+  const sh = getInventorySheet_();
+  const now = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
+  const data5F = [
+    ['ヒネモス', 3], ['ニュートンアンフィルタードカベルネソーヴィニョン', 0],
+    ['ニュートンザパズル', 0], ['ニュートンアンフィルタードシャルドネ', 1],
+    ['オーパスワン', 1], ['オーヴァーチュア', 1], ['明日香', 1],
+    ['赤ボーヌプルミエ', 1], ['白ボーヌプルミエ', 2], ['白ジョンティ', 1],
+    ['ファンタスティックロゼ', 1], ['バローロ', 2], ['PJ', 2],
+    ['PJブラゾンロゼ', 3], ['ベルエポック ロゼ', 2], ['ベルエポック フロレサンス', 1],
+    ['ヴーヴクリコ ラグランダムブリュット', 1], ['ドンペリニオン', 2],
+    ['ドンペリニオン ロゼ', 1], ['ドンペリニオン P2', 1], ['ドンペリニオン ラベイ', 1],
+    ['クリュッグ グランドキュヴェ', 1], ['クリュッグ ロゼ', 1], ['サロン', 1],
+    ['クリスタル', 1], ['クリスタル ロゼ', 1], ['ラルス', 1]
+  ];
+  const data2F = [
+    ['山崎18年', 0], ['白州18年', 0], ['バランタイン17年', 1],
+    ['ロイヤルハウスホールド', 2], ['マッカラン12年', 1], ['マッカラン18年', 2],
+    ['ジャックダニエルブラック', 1], ['ジャックダニエルシングルバレル47°', 0],
+    ['ヘネシーVSOP', 0], ['ヘネシーXO', 1], ['ボウモア12年', 1], ['1800', 1],
+    ['鳥飼', 0], ['赤兎馬', 1], ['黒霧島', 0], ['赤霧島', 2], ['金霧島', 0],
+    ['森伊蔵', 0], ['百年の孤独', 0], ['ウィリアムフェーブルシャブリ', 1],
+    ['佐藤(芋)', 1], ['佐藤(麦)', 1], ['pjグランブリュット', 2], ['pjブランロゼ', 2],
+    ['ドンペリロゼ', 1]
+  ];
+  data5F.forEach(d => sh.appendRow(['5F', d[0], d[1], now]));
+  data2F.forEach(d => sh.appendRow(['2F', d[0], d[1], now]));
+  Logger.log('✅ 在庫初期データ投入完了: 5F ' + data5F.length + '件, 2F ' + data2F.length + '件');
 }
 

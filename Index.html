@@ -431,6 +431,7 @@ header h1 { font-size: 17px; letter-spacing: .5px; }
     <button onclick="openOpeningCheck()" style="background:#102a22;border:1px solid #226655;color:#55ddbb;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🌅 開店チェック</button>
     <button onclick="openSafeWithdrawal()" style="background:#221a2a;border:1px solid #553a88;color:#bb99ee;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🔓 金庫出金</button>
     <button onclick="openCashCheck()" style="background:#2a2210;border:1px solid #886622;color:#ddbb55;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🌙 閉店チェック</button>
+    <button onclick="openInventory()" style="background:#1a2a10;border:1px solid #447722;color:#aadd66;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">📦 在庫管理</button>
     <button id="refresh-btn" onclick="loadAll()">↻ 更新</button>
   </div>
 </header>
@@ -455,6 +456,7 @@ var nextSeatTarget = null; // {seatCode, castName}
 var cashCheckState = null;     // {dateKey, init, reporterName, till, safe, slips}
 var openingCheckState = null;  // {reporterName, till}
 var withdrawalState = null;    // {reporterName, floor, out, remain}
+var inventoryState = null;     // {list, floor}
 
 document.getElementById('overlay').addEventListener('click', closeSheet);
 
@@ -1046,6 +1048,111 @@ function closeSheet() {
   cashCheckState = null;
   openingCheckState = null;
   withdrawalState = null;
+  inventoryState = null;
+}
+
+// ---- 📦 在庫管理 ----
+
+function openInventory() {
+  activeSeat = null;
+  nextSeatTarget = null;
+  document.getElementById('sheet-title').textContent = '📦 在庫管理';
+  document.getElementById('sheet-body').onclick = null;
+  document.getElementById('sheet-body').innerHTML = '<div style="text-align:center;padding:30px 0;color:#777">読み込み中...</div>';
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('sheet').style.display   = 'block';
+  google.script.run
+    .withSuccessHandler(function(list) {
+      var prevFloor = inventoryState ? inventoryState.floor : null;
+      inventoryState = { list: list || [], floor: prevFloor };
+      renderInventory();
+    })
+    .withFailureHandler(function(err) {
+      document.getElementById('sheet-body').innerHTML =
+        '<div style="color:#cc5555;padding:20px 0;text-align:center">読み込みエラー<br><small style="color:#888">' +
+        (err && err.message ? err.message : '通信エラー') + '</small></div>';
+    })
+    .getInventoryList();
+}
+
+function renderInventory() {
+  var st = inventoryState;
+  var floors = [];
+  st.list.forEach(function(i) { if (floors.indexOf(i.floor) < 0) floors.push(i.floor); });
+  floors.sort();
+  if (!st.floor || floors.indexOf(st.floor) < 0) st.floor = floors[0] || '5F';
+
+  var items = st.list.filter(function(i) { return i.floor === st.floor; });
+  var zeroCount = items.filter(function(i) { return i.qty === 0; }).length;
+
+  var html = '<div style="display:flex;gap:6px;margin-bottom:10px">';
+  floors.forEach(function(f) {
+    var act = f === st.floor;
+    html += '<button onclick="switchInventoryFloor(\'' + f + '\')" style="flex:1;padding:8px;border-radius:8px;border:1px solid '
+      + (act ? '#447722' : '#333') + ';background:' + (act ? '#1a2a10' : '#1a1a2e') + ';color:' + (act ? '#aadd66' : '#aaa')
+      + ';font-size:13px;cursor:pointer">' + esc(f) + '</button>';
+  });
+  html += '</div>';
+
+  html += '<div style="display:flex;gap:14px;margin-bottom:10px;font-size:12px;color:#aaa">'
+    + '<span>在庫 ' + items.length + '</span><span style="color:#ff6666">欠品 ' + zeroCount + '</span></div>';
+
+  html += '<div id="inventory-list">' + renderInventoryRows(items) + '</div>';
+
+  html += '<div style="display:flex;gap:6px;margin-top:14px">'
+    + '<input type="text" id="inv-new-name" placeholder="新しい品名" style="flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:8px;border-radius:8px;font-size:13px">'
+    + '<button onclick="addInventoryNew()" style="padding:8px 14px;background:#1a2a10;border:1px solid #447722;color:#aadd66;border-radius:8px;font-size:13px;cursor:pointer">追加</button>'
+    + '</div>';
+
+  document.getElementById('sheet-body').innerHTML = html;
+}
+
+function renderInventoryRows(items) {
+  if (items.length === 0) return '<div style="text-align:center;color:#777;padding:20px 0">アイテムがありません</div>';
+  return items.map(function(it) {
+    var zero = it.qty === 0;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #222">'
+      + '<span style="flex:1;font-size:13px;' + (zero ? 'color:#ff8888' : 'color:#eee') + '">' + esc(it.name) + '</span>'
+      + '<button onclick="changeInventoryQty(' + it.rowIdx + ',-1)" style="width:28px;height:28px;border-radius:50%;border:1px solid #444;background:#1a1a2e;color:#ccc;font-size:14px;cursor:pointer">−</button>'
+      + '<span style="width:24px;text-align:center;font-size:14px;font-weight:700;' + (zero ? 'color:#ff6666' : 'color:#fff') + '">' + it.qty + '</span>'
+      + '<button onclick="changeInventoryQty(' + it.rowIdx + ',1)" style="width:28px;height:28px;border-radius:50%;border:1px solid #444;background:#1a1a2e;color:#ccc;font-size:14px;cursor:pointer">＋</button>'
+      + '<button onclick="deleteInventoryRow(' + it.rowIdx + ')" style="margin-left:4px;width:24px;height:24px;border:none;background:none;color:#665;font-size:14px;cursor:pointer">×</button>'
+      + '</div>';
+  }).join('');
+}
+
+function switchInventoryFloor(f) {
+  inventoryState.floor = f;
+  renderInventory();
+}
+
+function changeInventoryQty(rowIdx, delta) {
+  var item = inventoryState.list.find(function(i) { return i.rowIdx === rowIdx; });
+  if (item) { item.qty = Math.max(0, item.qty + delta); renderInventory(); }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (item && res && res.ok) { item.qty = res.qty; renderInventory(); }
+    })
+    .withFailureHandler(function() {})
+    .updateInventoryQty(rowIdx, delta);
+}
+
+function deleteInventoryRow(rowIdx) {
+  if (!confirm('このアイテムを削除しますか？')) return;
+  inventoryState.list = inventoryState.list.filter(function(i) { return i.rowIdx !== rowIdx; });
+  renderInventory();
+  google.script.run.deleteInventoryItem(rowIdx);
+}
+
+function addInventoryNew() {
+  var nameEl = document.getElementById('inv-new-name');
+  var name = nameEl.value.trim();
+  if (!name) return;
+  var floor = inventoryState.floor;
+  google.script.run
+    .withSuccessHandler(function() { openInventory(); })
+    .withFailureHandler(function() { alert('追加に失敗しました'); })
+    .addInventoryItem(floor, name, 0);
 }
 
 function applySeatsData(data) {
