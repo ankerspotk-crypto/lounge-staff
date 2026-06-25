@@ -612,7 +612,7 @@ function renderSales() {
   function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
   function num(v) { return parseInt(v) || 0; }
 
-  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','フードバック']
+  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
     .reduce(function(s, k) { return s + num(row[k]); }, 0);
 
   var h = '<div style="padding:14px">';
@@ -655,7 +655,7 @@ function renderSales() {
   h += item('時間報酬', yen(row['時間報酬']));
 
   if (backTotal > 0) {
-    var backLines = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','フードバック']
+    var backLines = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
       .filter(function(k) { return num(row[k]) > 0; })
       .map(function(k) { return k + ' ' + yen(row[k]); }).join(' / ');
     h += item('バック合計', yen(backTotal), '#66cc88', backLines);
@@ -868,7 +868,7 @@ function renderPay() {
   var dohanB  = n(s['同伴バック']);
   var drinkB  = n(s['ドリンクバック']);
   var bottleB = n(s['ボトルバック']);
-  var foodB   = n(s['フードバック']);
+  var foodB   = n(s['年会費バック']);
   var bonus   = n(s['ボーナス']);
   var shikyu  = jikanH + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus;
 
@@ -957,7 +957,7 @@ function renderPay() {
   if (dohanB  > 0) h += tr('同伴給',          yen(dohanB),  'shikyu');
   if (drinkB  > 0) h += tr('ドリンクバック',  yen(drinkB),  'shikyu');
   if (bottleB > 0) h += tr('ボトルバック',    yen(bottleB), 'shikyu');
-  if (foodB   > 0) h += tr('フードバック',    yen(foodB),   'shikyu');
+  if (foodB   > 0) h += tr('年会費バック',    yen(foodB),   'shikyu');
   if (bonus   > 0) h += tr('運営手当',        yen(bonus),   'shikyu');
   h += tr('合計', yen(shikyu), 'total');
 
@@ -1238,7 +1238,7 @@ function setupBookmarklet_() {
   //  1=残り支給額, 3=担当小計, 5=同伴小計, 6=給率%, 7=勤務日数
   //  20=時間報酬計, 29=担当バック金額, 30=予約組数, 32=予約バック金額
   //  33=同伴組数, 35=同伴バック金額, 39=ドリンクバック金額
-  //  43=ボトルバック金額, 47=フードバック金額, 54=源泉徴収, 55=日払, 61=マイナス計
+  //  43=ボトルバック金額, 47=年会費バック金額, 54=源泉徴収, 55=日払, 61=マイナス計
   var code = 'javascript:(function(){'
     + 'var G=' + JSON.stringify(gas) + ';'
     + 'var S=' + JSON.stringify(secret) + ';'
