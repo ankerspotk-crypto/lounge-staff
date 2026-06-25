@@ -872,7 +872,8 @@ function renderPay() {
   var foodB   = n(s['年会費バック']);
   var bonus   = n(s['ボーナス']);
   var nyutenB = n(s['入店祝い金']);
-  var shikyu  = jikanH + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + nyutenB;
+  var shoBack = n(p['新バック']);
+  var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + nyutenB;
 
   var gensen    = n(s['源泉徴収']);
   var nichibara = n(s['日払']);
@@ -926,6 +927,18 @@ function renderPay() {
     h += '</div>';
     h += '<div id="payroll-csv-status" style="font-size:11px;color:#7a9cc8;margin-top:6px"></div>';
     h += '</div>';
+
+    var receiptStatus = (portalData.payReceipt && portalData.payReceipt[sel]) || '未送信';
+    var rcColor = receiptStatus === '確認済み' ? '#44bb66' : (receiptStatus === '送信済み・未確認' ? '#cc8844' : '#7a9cc8');
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    h += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">受領確認状況</div>';
+    h += '<div style="font-size:13px;font-weight:600;color:' + rcColor + '">' + esc(receiptStatus) + '</div></div>';
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px">';
+    h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'現金\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">現金で受領確認を送信</button>';
+    h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'銀行振込\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">振込で受領確認を送信</button>';
+    h += '</div></div>';
   }
 
   // 明細書カード（白背景）
@@ -954,6 +967,7 @@ function renderPay() {
   h += '<table style="width:100%;border-collapse:collapse">';
   h += trHead('支給対象');
   h += tr('基本給（時給）', yen(jikanH), 'shikyu');
+  if (shoBack > 0) h += tr('小計バック', yen(shoBack), 'shikyu');
   if (tantoB  > 0) h += tr('担当小計バック', yen(tantoB),  'shikyu');
   if (yoyakuB > 0) h += tr('予約給',         yen(yoyakuB), 'shikyu');
   if (dohanB  > 0) h += tr('同伴給',          yen(dohanB),  'shikyu');
@@ -1095,6 +1109,29 @@ function togglePayPublish(month, action) {
     } else {
       alert('エラー: ' + (d.error || 'unknown'));
     }
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+function sendPayrollReceipt(month, method) {
+  var s = (portalData.sales && portalData.sales[month]) || {};
+  var p = (portalData.pay && portalData.pay[month]) || {};
+  var num = function(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; };
+  var nokori = num(s['残り支給額']);
+  var hairTotals = portalData.hairTotals || {};
+  var hair = (hairTotals[month] || 0) > 0 ? hairTotals[month] : num(p['ヘアサロン立替(手入力)']);
+  var amount = nokori + hair;
+
+  if (!confirm(method + 'で給与受領確認をLINEに送信します。よろしいですか？')) return;
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'sendPayrollReceipt', userId: userId, month: month, targetName: portalData.viewAs || portalData.name, amount: amount, method: method })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) { alert('送信しました'); loadPortal(); }
+    else alert('エラー: ' + (d.error || 'unknown'));
   })
   .catch(function() { alert('通信エラーが発生しました'); });
 }
