@@ -927,19 +927,20 @@ function renderPay() {
     h += '</div>';
     h += '<div id="payroll-csv-status" style="font-size:11px;color:#7a9cc8;margin-top:6px"></div>';
     h += '</div>';
-
-    var receiptStatus = (portalData.payReceipt && portalData.payReceipt[sel]) || '未送信';
-    var rcColor = receiptStatus === '確認済み' ? '#44bb66' : (receiptStatus === '送信済み・未確認' ? '#cc8844' : '#7a9cc8');
-    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
-    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-    h += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">受領確認状況</div>';
-    h += '<div style="font-size:13px;font-weight:600;color:' + rcColor + '">' + esc(receiptStatus) + '</div></div>';
-    h += '</div>';
-    h += '<div style="display:flex;gap:8px">';
-    h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'現金\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">現金で受領確認を送信</button>';
-    h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'銀行振込\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">振込で受領確認を送信</button>';
-    h += '</div></div>';
   }
+
+  // 受領確認状況・送信ボタン（管理者・キャスト共通）
+  var receiptStatus = (portalData.payReceipt && portalData.payReceipt[sel]) || '未送信';
+  var rcColor = receiptStatus === '確認済み' ? '#44bb66' : (receiptStatus === '送信済み・未確認' ? '#cc8844' : '#7a9cc8');
+  h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+  h += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">受領確認状況</div>';
+  h += '<div style="font-size:13px;font-weight:600;color:' + rcColor + '">' + esc(receiptStatus) + '</div></div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'現金\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">現金で受領確認を送信</button>';
+  h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'銀行振込\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">振込で受領確認を送信</button>';
+  h += '</div></div>';
 
   // 明細書カード（白背景）
   h += '<div style="background:#e8f0ff;color:#111;border-radius:12px;padding:16px 14px;font-family:sans-serif">';
