@@ -1946,7 +1946,9 @@ function renderRequests(list) {
     { key: 'pending', label: '未処理' },
     { key: 'all',     label: 'すべて' },
   ];
-  var filterHtml = '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
+  var filterHtml = '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
+    + buildWeekOptionsHtml_() + '</select>'
+    + '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
     + '📅 シフト確定→黒服に通知</button>'
     + '<div class="req-filter">'
     + filters.map(function(f) {
@@ -1997,14 +1999,41 @@ function setReqFilter(f) {
   loadRequests();
 }
 
+function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
+
+// 今週を含む直近6週分の「月曜始まり」週リストをoptionタグとして返す
+function buildWeekOptionsHtml_() {
+  var today = new Date();
+  var dow = today.getDay(); // 0=日...6=土
+  var diffToMon = (dow === 0) ? -6 : (1 - dow);
+  var monday = new Date(today);
+  monday.setDate(today.getDate() + diffToMon);
+  monday.setHours(0, 0, 0, 0);
+
+  var opts = '';
+  for (var i = 0; i < 6; i++) {
+    var start = new Date(monday);
+    start.setDate(monday.getDate() + i * 7);
+    var end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    var val = start.getFullYear() + '-' + pad2_(start.getMonth() + 1) + '-' + pad2_(start.getDate());
+    var label = (start.getMonth() + 1) + '/' + start.getDate() + '〜' + (end.getMonth() + 1) + '/' + end.getDate() + '週';
+    opts += '<option value="' + val + '">' + label + '</option>';
+  }
+  return opts;
+}
+
 function confirmKurofukuShift(ev) {
-  if (!confirm('黒服全員に確定シフトをLINEで個別通知します。よろしいですか？')) return;
+  var weekSel = document.getElementById('shift-confirm-week');
+  var weekStart = weekSel ? weekSel.value : '';
+  var weekLabel = weekSel ? weekSel.options[weekSel.selectedIndex].textContent : '';
+  if (!confirm(weekLabel + 'の確定シフトを黒服全員にLINEで個別通知します。よろしいですか？')) return;
   var btn = document.getElementById('shift-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
 
   gasFetch(GAS_URL, {
     method: 'POST',
-    body: JSON.stringify({ action: 'notifyKurofukuShiftConfirmed', userId: userId })
+    body: JSON.stringify({ action: 'notifyKurofukuShiftConfirmed', userId: userId, weekStart: weekStart })
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
