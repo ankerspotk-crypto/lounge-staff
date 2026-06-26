@@ -354,6 +354,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-ranking" onclick="switchTab('ranking')">ランキング</div>
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
     <div class="tab active" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
+    <div class="tab" id="tab-seatreq" onclick="switchTab('seatreq')">席リクエスト</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
     <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
@@ -532,7 +533,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','ranking','hair','yoyaku','requests','notif','cashset'].forEach(function(t) {
+  ['sales','pay','shift','ranking','hair','yoyaku','seatreq','requests','notif','cashset'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -553,6 +554,7 @@ function updateAdminBar(castList) {
 
 function switchTab(tab) {
   switchTabActive(tab);
+  if (tab === 'seatreq') { renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
@@ -2063,6 +2065,65 @@ function confirmKurofukuShift(ev) {
     if (btn) { btn.disabled = false; btn.textContent = '📅 シフト確定→黒服に通知'; }
     alert('通信エラー');
   });
+}
+
+// ---- 席リクエスト（NG席／着席希望、本日限りで黒服LINEに即時通知） ----
+var seatReqType = 'NG';
+var seatReqSeat = '';
+
+function renderSeatRequest() {
+  var html = '<div style="font-size:13px;color:#8aabcc;margin-bottom:14px">本日限りのリクエストです。送信すると黒服LINEグループに即時通知されます。</div>';
+
+  html += '<div class="req-filter">'
+    + '<button class="req-filter-btn' + (seatReqType === 'NG' ? ' active' : '') + '" onclick="setSeatReqType(\'NG\')">🚫 NG席</button>'
+    + '<button class="req-filter-btn' + (seatReqType === '希望' ? ' active' : '') + '" onclick="setSeatReqType(\'希望\')">🙋 着席希望</button>'
+    + '</div>';
+
+  html += '<div style="font-size:12px;color:#7a9cc8;margin:14px 0 6px">席を選択</div>';
+  ['2F', '5F'].forEach(function(floor) {
+    html += '<div style="font-size:11px;color:#6a8ab0;margin:8px 0 6px">' + floor + '</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    YOYAKU_TABLES.filter(function(t) { return t.f === floor; }).forEach(function(t) {
+      var label = t.f + t.n;
+      var sel = seatReqSeat === label;
+      html += '<div class="table-chip' + (sel ? ' sel' : '') + '" onclick="setSeatReqSeat(\'' + label + '\')">' + t.n + '</div>';
+    });
+    html += '</div>';
+  });
+
+  html += '<div style="font-size:12px;color:#7a9cc8;margin:16px 0 6px">コメント（任意）</div>'
+    + '<textarea id="seatreq-comment" class="notif-msg-area" style="min-height:50px;width:100%;box-sizing:border-box" placeholder="例：今日は体調が悪いので…"></textarea>';
+
+  html += '<button class="req-confirm-btn" style="margin-top:16px" onclick="submitSeatRequest()">📣 黒服に送信</button>';
+
+  setContent(html);
+}
+
+function setSeatReqType(t) { seatReqType = t; renderSeatRequest(); }
+function setSeatReqSeat(s) { seatReqSeat = (seatReqSeat === s) ? '' : s; renderSeatRequest(); }
+
+function submitSeatRequest() {
+  if (!seatReqSeat) { alert('席を選択してください'); return; }
+  var commentEl = document.getElementById('seatreq-comment');
+  var comment = commentEl ? commentEl.value.trim() : '';
+  var typeLabel = seatReqType === 'NG' ? '🚫 NG席' : '🙋 着席希望';
+  if (!confirm(typeLabel + '：' + seatReqSeat + '\nを黒服に送信します。よろしいですか？')) return;
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'sendCastSeatRequest', userId: userId, type: seatReqType, seatLabel: seatReqSeat, comment: comment })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      alert('送信しました');
+      seatReqSeat = '';
+      renderSeatRequest();
+    } else {
+      alert('エラー: ' + (d.error || '不明'));
+    }
+  })
+  .catch(function() { alert('通信エラー'); });
 }
 
 function processReq(ev, rowIdx, name, date, time, decision) {
