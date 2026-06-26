@@ -189,6 +189,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
 .req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #1e3050; background: #141d30; color: #8aabcc; font-size: 13px; cursor: pointer; }
 .req-filter-btn.active { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
+.req-confirm-btn { display: block; width: 100%; margin-bottom: 14px; padding: 13px; background: #0f3060; color: #7ab0f0; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .03em; }
+.req-confirm-btn:active { background: #2a4a8a; }
+.req-confirm-btn:disabled { opacity: .5; }
 .notif-list { display: flex; flex-direction: column; gap: 8px; }
 .notif-card { background: #141d30; border-radius: 10px; overflow: hidden; transition: opacity .2s; }
 .notif-card-header { display: flex; align-items: center; gap: 10px; padding: 11px 12px; cursor: pointer; user-select: none; }
@@ -1943,7 +1946,9 @@ function renderRequests(list) {
     { key: 'pending', label: '未処理' },
     { key: 'all',     label: 'すべて' },
   ];
-  var filterHtml = '<div class="req-filter">'
+  var filterHtml = '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
+    + '📅 シフト確定→黒服に通知</button>'
+    + '<div class="req-filter">'
     + filters.map(function(f) {
         return '<button class="req-filter-btn' + (reqFilter === f.key ? ' active' : '')
           + '" onclick="setReqFilter(\'' + f.key + '\')">' + f.label + '</button>';
@@ -1990,6 +1995,32 @@ function renderRequests(list) {
 function setReqFilter(f) {
   reqFilter = f;
   loadRequests();
+}
+
+function confirmKurofukuShift(ev) {
+  if (!confirm('黒服全員に確定シフトをLINEで個別通知します。よろしいですか？')) return;
+  var btn = document.getElementById('shift-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'notifyKurofukuShiftConfirmed', userId: userId })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = '📅 シフト確定→黒服に通知'; }
+    if (d.ok) {
+      var msg = d.sent + '名に通知しました。';
+      if (d.skipped && d.skipped.length) msg += '\n\nスキップ:\n' + d.skipped.join('\n');
+      alert(msg);
+    } else {
+      alert('エラー: ' + (d.error || '不明'));
+    }
+  })
+  .catch(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '📅 シフト確定→黒服に通知'; }
+    alert('通信エラー');
+  });
 }
 
 function processReq(ev, rowIdx, name, date, time, decision) {
