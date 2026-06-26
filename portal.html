@@ -104,6 +104,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.pending-shift { background: #2a1f0a; border-color: #886622; }
 .day.pending-shift .num { color: #ffcc66; }
 .day.pending-shift .shift-time { color: #ccaa44; }
+.day .shift-status-label { font-size: 8px; margin-top: 1px; line-height: 1.1; text-align: center; }
+.day.pending-shift .shift-status-label { color: #ccaa44; }
+.day.scheduled .shift-status-label { color: #66cc88; }
 
 /* picker overlay */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
@@ -1626,6 +1629,11 @@ function calHtml() {
     var existShift = portalData && portalData.shifts && portalData.shifts[key];
     var isPending = pendingShifts[key];
     var isKyukin = sel === '欠勤' || (!sel && existShift === '休み');
+    var role = portalData && portalData.staffRole;
+    var isKurofukuRole = role === '黒服社員' || role === '黒服バイト';
+    var isConfirmed = portalData && portalData.confirmedShifts && portalData.confirmedShifts.indexOf(key) !== -1;
+    // 黒服のみ「申請中(未確定)」と「確定済み」を区別する。それ以外の役職は従来通りscheduled扱い
+    var notYetConfirmed = isKurofukuRole && existShift && !isKyukin && !isConfirmed;
     var cls = 'day';
     if (wday===0) cls += ' sun';
     if (wday===6) cls += ' sat';
@@ -1633,7 +1641,7 @@ function calHtml() {
     if (isToday) cls += ' today';
     if (isKyukin) cls += ' kyukin';
     else if (sel) cls += ' selected';
-    else if (isPending) cls += ' pending-shift';
+    else if (isPending || notYetConfirmed) cls += ' pending-shift';
     else if (existShift) cls += ' scheduled';
     var displayTime = sel || isPending || existShift || '';
     var timeLabel = '';
@@ -1642,10 +1650,15 @@ function calHtml() {
       if (tm) timeLabel = tm[1] + ':' + tm[2] + '~';
       else if (displayTime === '予約出勤') timeLabel = '予約';
     }
+    var statusLabel = '';
+    if (isKurofukuRole && existShift && !isKyukin && !sel) {
+      statusLabel = isConfirmed ? '確定' : '申請中';
+    }
     h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
       + '<div class="num">'+d+'</div>'
       + (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : '')
       + (isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
+      + (statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
       + '</div>';
   }
   h += '</div>';
