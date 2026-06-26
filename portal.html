@@ -348,10 +348,8 @@ header h1 { font-size: 17px; font-weight: 600; }
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
   <div class="tabs">
-    <div class="tab" id="tab-sales" onclick="switchTab('sales')">売上明細</div>
-    <div class="tab" id="tab-pay" onclick="switchTab('pay')">給与明細</div>
+    <div class="tab" id="tab-stats" onclick="switchTab('stats')">成績</div>
     <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
-    <div class="tab" id="tab-ranking" onclick="switchTab('ranking')">ランキング</div>
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
     <div class="tab active" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
     <div class="tab" id="tab-seatreq" onclick="switchTab('seatreq')">席リクエスト</div>
@@ -533,7 +531,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['sales','pay','shift','ranking','hair','yoyaku','seatreq','requests','notif','cashset'].forEach(function(t) {
+  ['stats','shift','hair','yoyaku','seatreq','requests','notif','cashset'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -553,13 +551,14 @@ function updateAdminBar(castList) {
 }
 
 function switchTab(tab) {
+  contentTargetId = 'content';
   switchTabActive(tab);
+  if (tab === 'stats') { renderStats(); return; }
   if (tab === 'seatreq') { renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
-  if (tab === 'ranking') { loadRanking(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
@@ -570,16 +569,47 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
+  if (tab === 'stats') { renderStats(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
   }
-  if (tab === 'sales') renderSales();
-  else if (tab === 'pay') renderPay();
-  else if (tab === 'shift') renderShiftCal();
+  if (tab === 'shift') renderShiftCal();
   else if (tab === 'hair') loadHairReceipts();
   else if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); }
-  else if (tab === 'ranking') loadRanking();
+}
+
+// ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
+var statsSubTab = 'sales';
+
+function renderStats() {
+  var labels = { sales: '売上明細', pay: '給与明細', ranking: 'ランキング' };
+  var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
+    + ['sales', 'pay', 'ranking'].map(function(t) {
+        return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:12px;cursor:pointer;border-radius:7px;'
+          + (statsSubTab === t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
+          + '" onclick="statsSubSwitch(\'' + t + '\')">' + labels[t] + '</div>';
+      }).join('')
+    + '</div>';
+
+  contentTargetId = 'content';
+  setContent('<div style="padding:14px">' + subtabs + '<div id="stats-body"><div class="loading">読み込み中...</div></div></div>');
+  contentTargetId = 'stats-body';
+
+  if (statsSubTab === 'ranking') { loadRanking(); return; }
+  // 売上明細・給与明細は管理者がキャストを選んでいないと表示できない
+  if (isAdmin && !adminViewAs) {
+    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    return;
+  }
+  if (!portalData) { loadPortal(); return; }
+  if (statsSubTab === 'sales') renderSales();
+  else if (statsSubTab === 'pay') renderPay();
+}
+
+function statsSubSwitch(t) {
+  statsSubTab = t;
+  renderStats();
 }
 
 function showGunshiLink() {
@@ -2149,8 +2179,10 @@ function processReq(ev, rowIdx, name, date, time, decision) {
   });
 }
 
+var contentTargetId = 'content';
 function setContent(html) {
-  document.getElementById('content').innerHTML = html;
+  var el = document.getElementById(contentTargetId);
+  if (el) el.innerHTML = html;
 }
 
 function showErr(msg) {
