@@ -2854,13 +2854,17 @@ function renderYoyakuAdd() {
         }).join('');
         return '<div id="yrsv-dohan-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
       })()
-    + '<div class="yform-label" style="display:flex;align-items:center;gap:8px">予約キャスト<button type="button" onclick="setYoyakuCastDirect()" style="font-size:10px;padding:2px 8px;background:#1a1a0a;color:#ddcc55;border:1px solid #665500;border-radius:6px;cursor:pointer">直接来店</button></div>'
-    + (function(){
-        var cur = yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : '');
-        var opts = '<option value="">-- 未定 --</option><option value="直接来店"'+(cur==='直接来店'?' selected':'')+'>直接来店</option>';
-        yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'; });
-        return '<select class="yform-input" id="yrsv-yoyaku-cast" style="margin-bottom:8px">'+opts+'</select>';
-      })()
+    + (yoyakuRsvTime === '同伴'
+        ? '<div class="yform-label">予約キャスト</div>'
+          + '<div style="font-size:12px;color:#aa8833;background:#2a1800;border:1px solid #553300;border-radius:8px;padding:9px;margin-bottom:8px">同伴のため予約キャストは設定できません</div>'
+        : '<div class="yform-label" style="display:flex;align-items:center;gap:8px">予約キャスト<button type="button" onclick="setYoyakuCastDirect()" style="font-size:10px;padding:2px 8px;background:#1a1a0a;color:#ddcc55;border:1px solid #665500;border-radius:6px;cursor:pointer">直接来店</button></div>'
+          + (function(){
+              var cur = yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : '');
+              var opts = '<option value="">-- 未定 --</option><option value="直接来店"'+(cur==='直接来店'?' selected':'')+'>直接来店</option>';
+              yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'; });
+              return '<select class="yform-input" id="yrsv-yoyaku-cast" style="margin-bottom:8px">'+opts+'</select>';
+            })()
+      )
     + '<div class="yform-label">担当キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
     + (function(){
         var defVal = yoyakuRsvTantou || (yoyakuSelectedCust ? yoyakuSelectedCust.tantou||'' : '') || (yoyakuEditRsv ? yoyakuEditRsv.tantouCast||'' : '');
@@ -3141,7 +3145,7 @@ function yoyakuSubmitRsv() {
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
     table: (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })(),
     tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
-    yoyakuCast: document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : '',
+    yoyakuCast: yoyakuRsvTime === '同伴' ? '' : (document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : ''),
     dohanCast: (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : ''); })(),
     youbou: document.getElementById('yrsv-youbou').value,
     status: yoyakuEditRsv ? (yoyakuEditRsv.status || '確定') : '確定',
