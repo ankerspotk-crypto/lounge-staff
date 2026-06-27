@@ -350,7 +350,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
   <div class="tabs">
-    <div class="tab" id="tab-stats" onclick="switchTab('stats')">成績</div>
+    <div class="tab" id="tab-stats" onclick="switchTab('stats')">売上・給与</div>
     <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
     <div class="tab active" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
@@ -2123,14 +2123,19 @@ function renderSeatRequest() {
   html += '<div class="req-filter">'
     + '<button class="req-filter-btn' + (seatReqType === 'NG' ? ' active' : '') + '" onclick="setSeatReqType(\'NG\')">🚫 NG</button>'
     + '<button class="req-filter-btn' + (seatReqType === '希望' ? ' active' : '') + '" onclick="setSeatReqType(\'希望\')">🙋 着席希望</button>'
+    + '<button class="req-filter-btn' + (seatReqType === 'キャスト希望' ? ' active' : '') + '" onclick="setSeatReqType(\'キャスト希望\')">✋ キャスト希望</button>'
     + '</div>';
 
-  html += '<div class="req-filter" style="margin-top:8px">'
-    + '<button class="req-filter-btn' + (seatReqMode === 'rsv' ? ' active' : '') + '" onclick="setSeatReqMode(\'rsv\')">予約から選ぶ</button>'
-    + '<button class="req-filter-btn' + (seatReqMode === 'store' ? ' active' : '') + '" onclick="setSeatReqMode(\'store\')">店全体へ</button>'
-    + '</div>';
+  if (seatReqType === 'キャスト希望') {
+    html += '<div style="font-size:12px;color:#7a9cc8;margin:8px 0">この子（自分）を担当につけてほしい予約を選んでください</div>';
+  } else {
+    html += '<div class="req-filter" style="margin-top:8px">'
+      + '<button class="req-filter-btn' + (seatReqMode === 'rsv' ? ' active' : '') + '" onclick="setSeatReqMode(\'rsv\')">予約から選ぶ</button>'
+      + '<button class="req-filter-btn' + (seatReqMode === 'store' ? ' active' : '') + '" onclick="setSeatReqMode(\'store\')">店全体へ</button>'
+      + '</div>';
+  }
 
-  if (seatReqMode === 'rsv') {
+  if (seatReqMode === 'rsv' || seatReqType === 'キャスト希望') {
     html += '<div style="font-size:12px;color:#7a9cc8;margin:14px 0 6px">対象の予約を選択（複数可）</div>';
     if (seatReqRsvs.length === 0) {
       html += '<div style="text-align:center;color:#6a8ab0;padding:20px 0;font-size:13px">本日の予約はありません</div>';
@@ -2166,24 +2171,30 @@ function toggleSeatReqRsv(rowIdx) {
   renderSeatRequest();
 }
 
-function setSeatReqType(t) { seatReqType = t; renderSeatRequest(); }
+function setSeatReqType(t) {
+  seatReqType = t;
+  if (t === 'キャスト希望') seatReqMode = 'rsv';
+  renderSeatRequest();
+}
 
 function submitSeatRequest() {
   var commentEl = document.getElementById('seatreq-comment');
   var comment = commentEl ? commentEl.value.trim() : '';
-  var typeLabel = seatReqType === 'NG' ? '🚫 NG' : '🙋 着席希望';
-  var storeWide = seatReqMode === 'store';
+  var typeLabel = seatReqType === 'NG' ? '🚫 NG' : seatReqType === 'キャスト希望' ? '✋ キャスト希望' : '🙋 着席希望';
+  var storeWide = seatReqType !== 'キャスト希望' && seatReqMode === 'store';
   var targets = [];
+  var confirmLines = [];
 
   if (!storeWide) {
     if (seatReqSelected.length === 0) { alert('対象の予約を選択するか、「店全体へ」を選んでください'); return; }
-    targets = seatReqRsvs.filter(function(r) { return seatReqSelected.indexOf(r.rowIdx) >= 0; })
-      .map(function(r) { return r.time + ' ' + r.customer + '様（' + (r.table || '未定') + '）'; });
+    var picked = seatReqRsvs.filter(function(r) { return seatReqSelected.indexOf(r.rowIdx) >= 0; });
+    targets = picked.map(function(r) { return { rowIdx: r.rowIdx, time: r.time, customer: r.customer, table: r.table || '未定' }; });
+    confirmLines = picked.map(function(r) { return r.time + ' ' + r.customer + '様（' + (r.table || '未定') + '）'; });
   }
 
   var confirmMsg = storeWide
     ? (typeLabel + '：店全体へのリクエストを黒服に送信します。よろしいですか？')
-    : (typeLabel + '：\n' + targets.join('\n') + '\nを黒服に送信します。よろしいですか？');
+    : (typeLabel + '：\n' + confirmLines.join('\n') + '\nを黒服に送信します。よろしいですか？');
   if (!confirm(confirmMsg)) return;
 
   gasFetch(GAS_URL, {
