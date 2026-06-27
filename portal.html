@@ -107,6 +107,8 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day .shift-status-label { font-size: 8px; margin-top: 1px; line-height: 1.1; text-align: center; }
 .day.pending-shift .shift-status-label { color: #ccaa44; }
 .day.scheduled .shift-status-label { color: #66cc88; }
+.seatreq-rsv-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.seatreq-rsv-card.sel { background: #0f2040; border-color: #2a60bb; }
 
 /* picker overlay */
 .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
@@ -554,7 +556,7 @@ function switchTab(tab) {
   contentTargetId = 'content';
   switchTabActive(tab);
   if (tab === 'stats') { renderStats(); return; }
-  if (tab === 'seatreq') { renderSeatRequest(); return; }
+  if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
@@ -2097,29 +2099,55 @@ function confirmKurofukuShift(ev) {
   });
 }
 
-// ---- 席リクエスト（NG席／着席希望、本日限りで黒服LINEに即時通知） ----
+// ---- 席リクエスト（NG／着席希望、本日限りで黒服LINEに即時通知） ----
 var seatReqType = 'NG';
-var seatReqSeat = '';
+var seatReqMode = 'rsv';   // 'rsv' = 本日の予約から選ぶ / 'store' = 店全体へのリクエスト
+var seatReqRsvs = null;    // 本日の予約一覧（タブを開くたびに再取得）
+var seatReqSelected = [];  // 選択中の予約 rowIdx 配列
 
 function renderSeatRequest() {
+  if (seatReqRsvs === null) {
+    setContent('<div class="loading">本日の予約を読み込み中...</div>');
+    gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + yoyakuDateStr(yoyakuDate))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        seatReqRsvs = (d.ok && d.reservations) ? d.reservations.filter(function(r) { return r.status !== 'キャンセル'; }) : [];
+        renderSeatRequest();
+      })
+      .catch(function() { seatReqRsvs = []; renderSeatRequest(); });
+    return;
+  }
+
   var html = '<div style="font-size:13px;color:#8aabcc;margin-bottom:14px">本日限りのリクエストです。送信すると黒服LINEグループに即時通知されます。</div>';
 
   html += '<div class="req-filter">'
-    + '<button class="req-filter-btn' + (seatReqType === 'NG' ? ' active' : '') + '" onclick="setSeatReqType(\'NG\')">🚫 NG席</button>'
+    + '<button class="req-filter-btn' + (seatReqType === 'NG' ? ' active' : '') + '" onclick="setSeatReqType(\'NG\')">🚫 NG</button>'
     + '<button class="req-filter-btn' + (seatReqType === '希望' ? ' active' : '') + '" onclick="setSeatReqType(\'希望\')">🙋 着席希望</button>'
     + '</div>';
 
-  html += '<div style="font-size:12px;color:#7a9cc8;margin:14px 0 6px">席を選択</div>';
-  ['2F', '5F'].forEach(function(floor) {
-    html += '<div style="font-size:11px;color:#6a8ab0;margin:8px 0 6px">' + floor + '</div>'
-      + '<div style="display:flex;flex-wrap:wrap;gap:6px">';
-    YOYAKU_TABLES.filter(function(t) { return t.f === floor; }).forEach(function(t) {
-      var label = t.f + t.n;
-      var sel = seatReqSeat === label;
-      html += '<div class="table-chip' + (sel ? ' sel' : '') + '" onclick="setSeatReqSeat(\'' + label + '\')">' + t.n + '</div>';
-    });
-    html += '</div>';
-  });
+  html += '<div class="req-filter" style="margin-top:8px">'
+    + '<button class="req-filter-btn' + (seatReqMode === 'rsv' ? ' active' : '') + '" onclick="setSeatReqMode(\'rsv\')">予約から選ぶ</button>'
+    + '<button class="req-filter-btn' + (seatReqMode === 'store' ? ' active' : '') + '" onclick="setSeatReqMode(\'store\')">店全体へ</button>'
+    + '</div>';
+
+  if (seatReqMode === 'rsv') {
+    html += '<div style="font-size:12px;color:#7a9cc8;margin:14px 0 6px">対象の予約を選択（複数可）</div>';
+    if (seatReqRsvs.length === 0) {
+      html += '<div style="text-align:center;color:#6a8ab0;padding:20px 0;font-size:13px">本日の予約はありません</div>';
+    } else {
+      var sorted = seatReqRsvs.slice().sort(function(a, b) { return (a.time || '').localeCompare(b.time || ''); });
+      html += sorted.map(function(r) {
+        var sel = seatReqSelected.indexOf(r.rowIdx) >= 0;
+        return '<div class="seatreq-rsv-card' + (sel ? ' sel' : '') + '" onclick="toggleSeatReqRsv(' + r.rowIdx + ')">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+          + '<span style="font-weight:700;color:#d0e4f8">' + esc(r.time) + '　' + esc(r.customer) + '様</span>'
+          + '<span style="font-size:16px;flex-shrink:0">' + (sel ? '✅' : '⬜') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:#8aabcc;margin-top:4px">' + esc(r.table || '未定') + '　' + r.pax + '名</div>'
+          + '</div>';
+      }).join('');
+    }
+  }
 
   html += '<div style="font-size:12px;color:#7a9cc8;margin:16px 0 6px">コメント（任意）</div>'
     + '<textarea id="seatreq-comment" class="notif-msg-area" style="min-height:50px;width:100%;box-sizing:border-box" placeholder="例：今日は体調が悪いので…"></textarea>';
@@ -2129,25 +2157,44 @@ function renderSeatRequest() {
   setContent(html);
 }
 
+function setSeatReqMode(m) { seatReqMode = m; renderSeatRequest(); }
+
+function toggleSeatReqRsv(rowIdx) {
+  var idx = seatReqSelected.indexOf(rowIdx);
+  if (idx >= 0) seatReqSelected.splice(idx, 1);
+  else seatReqSelected.push(rowIdx);
+  renderSeatRequest();
+}
+
 function setSeatReqType(t) { seatReqType = t; renderSeatRequest(); }
-function setSeatReqSeat(s) { seatReqSeat = (seatReqSeat === s) ? '' : s; renderSeatRequest(); }
 
 function submitSeatRequest() {
-  if (!seatReqSeat) { alert('席を選択してください'); return; }
   var commentEl = document.getElementById('seatreq-comment');
   var comment = commentEl ? commentEl.value.trim() : '';
-  var typeLabel = seatReqType === 'NG' ? '🚫 NG席' : '🙋 着席希望';
-  if (!confirm(typeLabel + '：' + seatReqSeat + '\nを黒服に送信します。よろしいですか？')) return;
+  var typeLabel = seatReqType === 'NG' ? '🚫 NG' : '🙋 着席希望';
+  var storeWide = seatReqMode === 'store';
+  var targets = [];
+
+  if (!storeWide) {
+    if (seatReqSelected.length === 0) { alert('対象の予約を選択するか、「店全体へ」を選んでください'); return; }
+    targets = seatReqRsvs.filter(function(r) { return seatReqSelected.indexOf(r.rowIdx) >= 0; })
+      .map(function(r) { return r.time + ' ' + r.customer + '様（' + (r.table || '未定') + '）'; });
+  }
+
+  var confirmMsg = storeWide
+    ? (typeLabel + '：店全体へのリクエストを黒服に送信します。よろしいですか？')
+    : (typeLabel + '：\n' + targets.join('\n') + '\nを黒服に送信します。よろしいですか？');
+  if (!confirm(confirmMsg)) return;
 
   gasFetch(GAS_URL, {
     method: 'POST',
-    body: JSON.stringify({ action: 'sendCastSeatRequest', userId: userId, type: seatReqType, seatLabel: seatReqSeat, comment: comment })
+    body: JSON.stringify({ action: 'sendCastSeatRequest', userId: userId, type: seatReqType, targets: targets, storeWide: storeWide, comment: comment })
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
     if (d.ok) {
       alert('送信しました');
-      seatReqSeat = '';
+      seatReqSelected = [];
       renderSeatRequest();
     } else {
       alert('エラー: ' + (d.error || '不明'));
