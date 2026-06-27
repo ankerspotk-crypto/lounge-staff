@@ -2235,6 +2235,13 @@ function buildNotifRow(k, s) {
     ? '<textarea class="notif-msg-area" rows="4" placeholder="メッセージ（空欄=デフォルト）" onchange="notifMsgChange(\'' + k + '\',this.value)">' + esc(msgVal) + '</textarea>'
     : '<div class="notif-msg-auto">自動生成（編集不可）</div>';
 
+  var staffMsgHtml = '';
+  if (s.staffMsgEditable) {
+    var staffMsgVal = s.staffMessage != null ? s.staffMessage : (s.defaultStaffMsg || '');
+    staffMsgHtml = '<div class="notif-expand-label">スタッフへのメッセージ（同時送信）</div>'
+      + '<textarea class="notif-msg-area" rows="4" placeholder="メッセージ（空欄=デフォルト）" onchange="notifStaffMsgChange(\'' + k + '\',this.value)">' + esc(staffMsgVal) + '</textarea>';
+  }
+
   var groupSel = isCustom
     ? ('<div class="notif-expand-label">送信先</div><select class="notif-group-sel" onchange="notifGroupChange(\'' + k + '\',this.value)">'
        + ['staff','kurofuku','both'].map(function(v) {
@@ -2266,6 +2273,7 @@ function buildNotifRow(k, s) {
     +   groupSel
     +   '<div class="notif-expand-label">メッセージ</div>'
     +   msgHtml
+    +   staffMsgHtml
     +   delBtn
     + '</div>'
     + '</div>';
@@ -2345,6 +2353,11 @@ function notifDayChange(k, day, checked) {
 function notifMsgChange(k, val) {
   if (!notifSettings || !notifSettings[k]) return;
   notifSettings[k].message = val.trim() || null;
+}
+
+function notifStaffMsgChange(k, val) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].staffMessage = val.trim() || null;
 }
 
 function notifGroupChange(k, val) {
@@ -2575,6 +2588,7 @@ var yoyakuRsvTantou = '';    // 再描画時に保持: 担当キャスト
 var yoyakuRsvYoyakuCast = ''; // 再描画時に保持: 予約キャスト
 var yoyakuRsvDohan = '';     // 再描画時に保持: 同伴キャスト
 var yoyakuEditRsv = null;    // 編集中の予約オブジェクト（null=新規追加モード）
+var yoyakuSubmitBusy = false; // 予約追加/変更の二重送信防止フラグ
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -3042,7 +3056,7 @@ function renderYoyakuAdd() {
       })()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
-    + (canEditYoyaku() ? '<div class="notif-save-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>' : '')
+    + (canEditYoyaku() ? '<div class="notif-save-btn" id="yrsv-submit-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>' : '')
     + (canEditYoyaku() && yoyakuEditRsv ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
     + '<div id="yrsv-status" style="font-size:12px;color:#8aabcc;text-align:center;margin-top:6px"></div>'
     + '</div>';
@@ -3291,6 +3305,7 @@ function yoyakuCancelEdit() {
 }
 
 function yoyakuSubmitRsv() {
+  if (yoyakuSubmitBusy) return; // 二重送信防止（連打・通信が遅い時の多重タップ対策）
   var stat = document.getElementById('yrsv-status');
   var manualEl = document.getElementById('yrsv-cust-manual');
   var custName = yoyakuSelectedCust
@@ -3317,11 +3332,19 @@ function yoyakuSubmitRsv() {
     status: yoyakuEditRsv ? (yoyakuEditRsv.status || '確定') : '確定',
     rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
   };
+  yoyakuSubmitBusy = true;
+  var btn = document.getElementById('yrsv-submit-btn');
+  if (btn) { btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
   if (stat) stat.textContent = '送信中...';
   gasFetch(GAS_URL, { method:'POST', body: JSON.stringify(payload) })
     .then(function(r){ return r.json(); })
     .then(function(d) {
-      if (!d.ok) { if (stat) stat.textContent = '⚠️ ' + (d.error||'エラー'); return; }
+      yoyakuSubmitBusy = false;
+      if (!d.ok) {
+        if (stat) stat.textContent = '⚠️ ' + (d.error||'エラー');
+        if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+        return;
+      }
       yoyakuSelectedCust = null;
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
@@ -3329,7 +3352,11 @@ function yoyakuSubmitRsv() {
       yoyakuEditRsv = null;
       yoyakuSubTab = 'list';
       loadYoyaku();
-    }).catch(function(){ if (stat) stat.textContent = '⚠️ 通信エラー'; });
+    }).catch(function(){
+      yoyakuSubmitBusy = false;
+      if (stat) stat.textContent = '⚠️ 通信エラー';
+      if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    });
 }
 
 
