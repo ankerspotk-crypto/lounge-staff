@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>予約管理 | ラウンジ家康</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d18;color:#ddd;font-family:-apple-system,'Helvetica Neue',sans-serif;min-height:100vh}
+.loading{text-align:center;color:#445;padding:60px 0;font-size:14px}
+.err{color:#cc5555;text-align:center;padding:40px 0;font-size:14px}
+
+/* ===== ヘッダー ===== */
+header{background:#12122a;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e1e3a;position:sticky;top:0;z-index:20}
+.hdr-title{font-size:15px;font-weight:700;color:#fff}
+.hdr-btns{display:flex;gap:14px}
+.hdr-btn{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;color:#88aaff}
+.hdr-btn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8}
+.hdr-btn span{font-size:9px}
+
+/* ===== 日付ナビ ===== */
+.date-nav{background:#0f0f22;padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #1e1e3a}
+.date-nav-btn{width:30px;height:30px;border-radius:7px;background:#1a1a2e;border:1px solid #2a2a40;color:#88aaff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.today-badge{font-size:10px;background:#1a2a4a;color:#88aaff;border:1px solid #2255aa;border-radius:5px;padding:2px 8px;cursor:pointer}
+.date-display{font-size:15px;font-weight:700;color:#fff;flex:1;text-align:center}
+
+/* ===== タブ ===== */
+.tabs{display:flex;background:#0a0a16;border-bottom:1px solid #1e1e3a;position:sticky;top:54px;z-index:19}
+.tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;color:#445;cursor:pointer;border-bottom:2px solid transparent;line-height:1.4}
+.tab.active{color:#88aaff;border-bottom-color:#88aaff}
+.tab .badge-dot{display:inline-block;background:#ddaa44;color:#1a1200;border-radius:7px;font-size:9px;padding:0 4px;font-weight:700;margin-left:3px}
+#content{min-height:calc(100vh - 120px)}
+
+/* ===== 共通カード ===== */
+.card{background:#14142a;border:1px solid #1e1e3a;border-radius:10px;padding:11px 13px;margin-bottom:8px}
+.section-label{font-size:10px;color:#445;letter-spacing:.5px;text-transform:uppercase;margin:14px 0 7px;padding-left:2px}
+
+/* ===== スケジュールビュー ===== */
+#sched-wrap{overflow:hidden}
+.sched-container{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.sched-left-col{flex-shrink:0;width:68px;position:sticky;left:0;z-index:5;background:#0d0d18}
+.sched-right{flex-shrink:0}
+.sched-hdr-row{display:flex;background:#12122a;border-bottom:1px solid #1e1e3a;position:sticky;top:0;z-index:4}
+.sched-table-hdr{width:68px;padding:8px 6px;font-size:9px;color:#445;border-right:1px solid #1e1e3a;flex-shrink:0;background:#12122a}
+.time-hdr{display:flex}
+.time-hdr-cell{font-size:10px;color:#88aaff;text-align:center;border-right:1px solid #141426;padding:8px 4px}
+.floor-div{height:6px;background:#0a0a14;border-bottom:1px solid #1e1e3a}
+.table-name-cell{height:48px;padding:4px 6px;border-bottom:1px solid #141428;border-right:1px solid #1e1e3a;display:flex;flex-direction:column;justify-content:center}
+.tn-main{font-size:11px;font-weight:600;color:#bbb}
+.tn-cap{font-size:9px;color:#334}
+.time-row{height:48px;position:relative;border-bottom:1px solid #141428}
+.time-row-bg{position:absolute;top:0;left:0;right:0;bottom:0;display:flex}
+.time-row-cell{border-right:1px solid #141426;height:100%}
+.rsv-blk{position:absolute;top:5px;bottom:5px;border-radius:7px;padding:3px 7px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;overflow:hidden;min-width:36px}
+.rsv-blk:active{filter:brightness(1.2)}
+.rb-blue{background:#162848;border:1px solid #2a5090}
+.rb-teal{background:#0d2820;border:1px solid #1a5038}
+.rb-purple{background:#20163a;border:1px solid #402870}
+.rb-amber{background:#281800;border:1px solid #503010}
+.rb-name{font-size:10px;font-weight:700;color:#aaccff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rb-pax{font-size:9px;color:#4466aa}
+
+/* ===== 予約リスト ===== */
+#list-wrap{padding:12px}
+.yc-row1{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.yc-time{font-size:14px;font-weight:700;color:#88aaff;width:46px;flex-shrink:0}
+.yc-name{font-size:14px;font-weight:600;color:#fff}
+.yc-row2{display:flex;flex-wrap:wrap;gap:4px;padding-left:54px}
+.badge{font-size:10px;padding:2px 8px;border-radius:7px;font-weight:600}
+.b-seat{background:#0d1a2e;color:#88aaff;border:1px solid #1e3a6a}
+.b-pax{background:#1a1a2e;color:#aaa;border:1px solid #2a2a40}
+.b-cast{background:#1a0d2e;color:#bb99ff;border:1px solid #3a1a6a}
+.b-ok{background:#0d2010;color:#66cc88;border:1px solid #1a4a22}
+.b-pend{background:#2a2210;color:#ddaa44;border:1px solid #5a4400}
+.yc-note{font-size:11px;color:#445;padding-left:54px;margin-top:3px}
+.stats-row{display:flex;gap:8px;margin-bottom:12px}
+.stat-box{flex:1;background:#14142a;border:1px solid #1e1e3a;border-radius:8px;padding:9px;text-align:center}
+.stat-num{font-size:22px;font-weight:700}
+.stat-lbl{font-size:9px;color:#445;margin-top:2px}
+
+/* ===== 予約追加 ===== */
+#add-wrap{padding:12px}
+.search-box{background:#0a0a16;border:1px solid #2a2a40;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.search-box input{background:transparent;border:none;outline:none;color:#fff;font-size:14px;flex:1}
+.search-box input::placeholder{color:#334}
+.cust-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#14142a;border:1px solid #1e1e3a;border-radius:8px;margin-bottom:6px;cursor:pointer}
+.cust-row:active{background:#1a1a38}
+.cust-row.sel{border-color:#88aaff;background:#0d1a2e}
+.cust-name-main{font-size:13px;font-weight:600;color:#fff}
+.cust-sub{font-size:10px;color:#445;margin-top:2px}
+.cust-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.cm-badge{font-size:9px;padding:1px 6px;border-radius:5px}
+.cm-bottle{background:#1a2a10;color:#88cc55;border:1px solid #336622}
+.cm-bday{background:#1a1040;color:#9988ee;border:1px solid #4433aa}
+.cm-drink{background:#141428;color:#667;border:1px solid #2a2a44}
+.cust-cnt{font-size:10px;color:#334;white-space:nowrap}
+.form-sec{background:#14142a;border:1px solid #1e1e3a;border-radius:10px;padding:13px;margin-top:10px}
+.form-sel-name{font-size:14px;font-weight:600;color:#88aaff;margin-bottom:12px}
+.flabel{font-size:9px;color:#445;margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase}
+.finput{background:#0a0a16;border:1px solid #2a2a40;border-radius:8px;padding:9px 11px;color:#fff;font-size:13px;width:100%;outline:none;margin-bottom:10px}
+.finput:focus{border-color:#3a3a6a}
+select.finput option{background:#1a1a2e}
+.frow{display:flex;gap:8px;margin-bottom:10px}
+.frow .finput{margin-bottom:0}
+.ftoggle{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.ftbtn{padding:7px 10px;border-radius:7px;border:1px solid #2a2a40;background:#0a0a16;color:#556;font-size:12px;cursor:pointer}
+.ftbtn.on{border-color:#88aaff;background:#0d1a2e;color:#88aaff}
+.sub-btn{width:100%;background:#1a2a4a;border:1px solid #2255aa;color:#88aaff;padding:14px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px}
+.sub-btn:active{background:#2a3a5a}
+
+
+</style>
+</head>
+<body>
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden">ラウンジ家康 予約管理システム</h2>
+
+<header>
+  <div class="hdr-title">🏯 予約管理</div>
+  <div class="hdr-btns">
+    <div class="hdr-btn" onclick="switchTab('add')">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>予約登録</span>
+    </div>
+  </div>
+</header>
+
+<div class="date-nav">
+  <div class="date-nav-btn" onclick="changeDate(-1)">‹</div>
+  <div class="today-badge" onclick="goToday()">今日</div>
+  <div class="date-display" id="date-display"></div>
+  <div class="date-nav-btn" onclick="changeDate(1)">›</div>
+</div>
+
+<div class="tabs">
+  <div class="tab" id="tab-sched" onclick="switchTab('sched')">スケジュール</div>
+  <div class="tab active" id="tab-list" onclick="switchTab('list')">予約リスト</div>
+  <div class="tab" id="tab-add" onclick="switchTab('add')">予約追加</div>
+</div>
+
+<div id="content"><div class="loading">読み込み中...</div></div>
+
+<script>
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+var userId = new URLSearchParams(location.search).get('u') || '';
+var currentDate = new Date(); // today
+var currentTab = 'list';
+var isAdmin = false;
+var staffName = '';
+var allReservations = [];
+var selectedCustomer = null;
+
+var TABLES = [
+  {f:'2F', n:'カウンター1', short:'カウ1', cap:1},
+  {f:'2F', n:'カウンター2', short:'カウ2', cap:1},
+  {f:'2F', n:'カウンター3', short:'カウ3', cap:1},
+  {f:'2F', n:'カウンター4', short:'カウ4', cap:1},
+  {f:'2F', n:'ボックス1', short:'ボックス1', cap:4},
+  {f:'2F', n:'ボックス2', short:'ボックス2', cap:4},
+  {f:'2F', n:'ボックス3', short:'ボックス3', cap:4},
+  {f:'5F', n:'カウンター1', short:'カウ1', cap:1},
+  {f:'5F', n:'カウンター2', short:'カウ2', cap:1},
+  {f:'5F', n:'カウンター3', short:'カウ3', cap:1},
+  {f:'5F', n:'カウンター4', short:'カウ4', cap:1},
+  {f:'5F', n:'カウンター5', short:'カウ5', cap:1},
+  {f:'5F', n:'カウンター6', short:'カウ6', cap:1},
+  {f:'5F', n:'ボックス1', short:'ボックス1', cap:6},
+  {f:'5F', n:'ボックス2', short:'ボックス2', cap:6}
+];
+
+if (!userId) {
+  document.getElementById('content').innerHTML = '<div class="err">URLパラメータが不正です</div>';
+} else {
+  loadData();
+}
+
+function dateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtDateDisplay(d) {
+  var dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  return (d.getMonth()+1) + '/' + d.getDate() + '（' + dow + '）';
+}
+function updateDateDisplay() {
+  document.getElementById('date-display').textContent = fmtDateDisplay(currentDate);
+}
+function changeDate(diff) {
+  currentDate = new Date(currentDate.getTime() + diff * 86400000);
+  updateDateDisplay();
+  loadData();
+}
+function goToday() {
+  currentDate = new Date();
+  updateDateDisplay();
+  loadData();
+}
+
+function loadData() {
+  updateDateDisplay();
+  document.getElementById('content').innerHTML = '<div class="loading">読み込み中...</div>';
+  fetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + dateStr(currentDate))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { document.getElementById('content').innerHTML = '<div class="err">' + escHtml(d.error||'エラー') + '</div>'; return; }
+      isAdmin = !!d.isAdmin;
+      staffName = d.name || '';
+      allReservations = d.reservations || [];
+      renderCurrentTab();
+    })
+    .catch(function(){ document.getElementById('content').innerHTML = '<div class="err">通信エラー</div>'; });
+}
+
+function switchTab(t) {
+  currentTab = t;
+  document.querySelectorAll('.tab').forEach(function(el){ el.classList.remove('active'); });
+  document.getElementById('tab-' + t).classList.add('active');
+  renderCurrentTab();
+}
+
+function renderCurrentTab() {
+  if (currentTab === 'sched') renderSched();
+  else if (currentTab === 'list') renderList();
+  else if (currentTab === 'add') renderAdd();
+}
+
+// ---- スケジュールビュー ----
+function renderSched() {
+  var HOUR_W = 54, START_H = 19, END_H = 26, TOTAL_W = (END_H - START_H) * HOUR_W;
+  var prevFloor = '';
+  var leftHtml = '<div class="sched-table-hdr">テーブル</div>';
+  var rightHtml = '<div class="time-hdr">';
+  for (var h = START_H; h < END_H; h++) {
+    rightHtml += '<div class="time-hdr-cell" style="width:'+HOUR_W+'px">' + (h < 24 ? h : h-24) + ':00</div>';
+  }
+  rightHtml += '</div>';
+
+  TABLES.forEach(function(t, i) {
+    if (t.f !== prevFloor && prevFloor !== '') {
+      leftHtml += '<div class="floor-div"></div>';
+      rightHtml += '<div class="floor-div" style="width:'+TOTAL_W+'px"></div>';
+    }
+    prevFloor = t.f;
+    leftHtml += '<div class="table-name-cell"><div class="tn-main">'+t.f+' '+t.short+'</div></div>';
+
+    var rowBlocks = '';
+    allReservations.forEach(function(r) {
+      var tableKey = (r.table||'').replace(/\s/g,'');
+      var tKey = (t.f + t.n).replace(/\s/g,'');
+      if (tableKey !== tKey) return;
+      var parts = (r.time||'').split(':');
+      var startMins = (parseInt(parts[0])||19)*60 + (parseInt(parts[1])||0);
+      var endMins = startMins + 120; // default 2h
+      var left = ((startMins - START_H*60) / 60) * HOUR_W;
+      var width = ((endMins - startMins) / 60) * HOUR_W - 3;
+      if (left < 0) { width += left; left = 0; }
+      var cls = ['rb-blue','rb-teal','rb-purple','rb-amber'][i % 4];
+      rowBlocks += '<div class="rsv-blk '+cls+'" style="left:'+left+'px;width:'+width+'px" onclick="openRsv('+r.rowIdx+')">'
+        + '<div class="rb-pax">'+r.pax+'名</div>'
+        + '<div class="rb-name">'+escHtml(r.customer||'')+'様</div>'
+        + '</div>';
+    });
+
+    var bgCells = '';
+    for (var c = 0; c < (END_H - START_H); c++) bgCells += '<div class="time-row-cell" style="width:'+HOUR_W+'px"></div>';
+    rightHtml += '<div class="time-row" style="width:'+TOTAL_W+'px"><div class="time-row-bg">'+bgCells+'</div>'+rowBlocks+'</div>';
+  });
+
+  document.getElementById('content').innerHTML = '<div id="sched-wrap">'
+    + '<div class="sched-container">'
+    + '<div class="sched-left-col">'+leftHtml+'</div>'
+    + '<div class="sched-right">'+rightHtml+'</div>'
+    + '</div></div>';
+}
+
+// ---- 予約リスト ----
+function renderList() {
+  var rsv = allReservations.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+  var statsHtml = '<div class="stats-row">'
+    + '<div class="stat-box"><div class="stat-num" style="color:#88aaff">'+rsv.length+'</div><div class="stat-lbl">本日の予約</div></div>'
+    + '<div class="stat-box"><div class="stat-num" style="color:#66cc88">'+rsv.reduce(function(s,r){return s+(r.pax||0);},0)+'</div><div class="stat-lbl">予約人数</div></div>'
+    + '</div>';
+
+  var cardsHtml = rsv.length === 0 ? '<div style="text-align:center;color:#334;padding:40px 0">本日の予約はありません</div>' : rsv.map(function(r) {
+    var castBadge = r.tantouCast ? '<span class="badge b-cast">'+escHtml(r.tantouCast)+'</span>' : '';
+    var statusBadge = r.status === '確定' ? '<span class="badge b-ok">確定</span>' : '<span class="badge b-pend">'+escHtml(r.status)+'</span>';
+    return '<div class="card" onclick="openRsv('+r.rowIdx+')" style="cursor:pointer">'
+      + '<div class="yc-row1"><span class="yc-time">'+escHtml(r.time||'')+'</span><span class="yc-name">'+escHtml(r.customer||'')+'様</span></div>'
+      + '<div class="yc-row2"><span class="badge b-pax">'+r.pax+'名</span><span class="badge b-seat">'+escHtml(r.table||'未定')+'</span>'+statusBadge+castBadge+'</div>'
+      + (r.youbou ? '<div class="yc-note">'+escHtml(r.youbou)+'</div>' : '')
+      + '</div>';
+  }).join('');
+
+  document.getElementById('content').innerHTML = '<div id="list-wrap">'+statsHtml+cardsHtml+'</div>';
+}
+
+// ---- 予約追加 ----
+function renderAdd() {
+  selectedCustomer = null;
+  var html = '<div id="add-wrap">'
+    + '<div class="search-box"><svg style="width:16px;height:16px;stroke:#445;fill:none;stroke-width:2;flex-shrink:0" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>'
+    + '<input type="text" id="cust-search" placeholder="顧客名・会員番号で検索..." oninput="searchCust(this.value)" autocomplete="off"></div>'
+    + '<div id="cust-list"></div>'
+    + '<div id="rsv-form" style="display:none">' + buildRsvForm() + '</div>'
+    + '</div>';
+  document.getElementById('content').innerHTML = html;
+}
+
+function searchCust(q) {
+  q = q.trim();
+  if (q.length < 1) { document.getElementById('cust-list').innerHTML = ''; return; }
+  document.getElementById('cust-list').innerHTML = '<div style="font-size:12px;color:#445;padding:6px 0">検索中...</div>';
+  fetch(GAS_URL + '?action=portal&tab=yoyakuCustomers&userId=' + encodeURIComponent(userId) + '&q=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok || !d.customers) { document.getElementById('cust-list').innerHTML = ''; return; }
+      var custs = d.customers;
+      if (custs.length === 0) { document.getElementById('cust-list').innerHTML = '<div style="font-size:12px;color:#334;padding:6px 0">見つかりませんでした</div>'; return; }
+      document.getElementById('cust-list').innerHTML = custs.map(function(c, i) {
+        var badges = '';
+        if (c.bottle) badges += '<span class="cm-badge cm-bottle">🍶ボトルあり</span>';
+        var bd = c.bday ? String(c.bday) : '';
+        if (bd && bd !== '') badges += '<span class="cm-badge cm-bday">🎂'+bd+'</span>';
+        if (c.drink) badges += '<span class="cm-badge cm-drink">'+escHtml(c.drink)+'</span>';
+        return '<div class="cust-row" data-idx="'+i+'" onclick="selectCust('+i+')">'
+          + '<div><div class="cust-name-main">'+escHtml(c.card||c.name||'')+'様</div>'
+          + '<div class="cust-sub">'+(c.no?'会員'+c.no:'')+(c.tantou?' 担当:'+c.tantou:'')+'</div>'
+          + (badges ? '<div class="cust-meta">'+badges+'</div>' : '')
+          + '</div>'
+          + '<div class="cust-cnt">'+(c.note ? '📝' : '')+'</div>'
+          + '</div>';
+      }).join('');
+      window._custResults = custs;
+    })
+    .catch(function(){ document.getElementById('cust-list').innerHTML = '<div style="font-size:12px;color:#445">通信エラー</div>'; });
+}
+
+function selectCust(idx) {
+  var c = (window._custResults || [])[idx];
+  if (!c) return;
+  selectedCustomer = c;
+  document.querySelectorAll('.cust-row').forEach(function(el){ el.classList.remove('sel'); });
+  document.querySelector('.cust-row[data-idx="'+idx+'"]').classList.add('sel');
+  document.getElementById('rsv-form').style.display = 'block';
+  document.getElementById('rsv-cust-name').textContent = (c.card||c.name||'') + '様';
+  var tantouEl = document.getElementById('rsv-tantou-cast');
+  if (tantouEl) tantouEl.textContent = c.tantou || 'なし';
+  if (c.note) document.getElementById('rsv-youbou').placeholder = '参考情報: ' + c.note;
+}
+
+function buildRsvForm() {
+  var tableOpts = '<option value="未定">未定</option>' + TABLES.map(function(t){ return '<option value="'+t.f+' '+t.n+'">'+t.f+' '+t.n+'</option>'; }).join('');
+  return '<div class="form-sec">'
+    + '<div class="form-sel-name" id="rsv-cust-name"></div>'
+    + '<div class="flabel">来店日</div>'
+    + '<input type="date" class="finput" id="rsv-date" value="'+dateStr(currentDate)+'">'
+    + '<div class="flabel">時間 / 人数</div>'
+    + '<div class="frow"><input type="time" class="finput" id="rsv-time" value="20:00" style="flex:1"><select class="finput" id="rsv-pax" style="flex:0.5"><option>1名</option><option>2名</option><option selected>3名</option><option>4名</option><option>5名</option><option>6名+</option></select></div>'
+    + '<div class="flabel">席</div>'
+    + '<select class="finput" id="rsv-table">'+tableOpts+'</select>'
+    + '<div class="flabel">担当キャスト</div>'
+    + '<div class="finput" id="rsv-tantou-cast" style="background:#1a1a2e;color:#8899aa;padding:8px 12px;border-radius:8px;min-height:36px;line-height:36px">（お客様を選択すると自動表示）</div>'
+    + '<div class="flabel">要望</div>'
+    + '<textarea class="finput" id="rsv-youbou" rows="2" placeholder="VIP対応・誕生日・ボトル情報など..." style="resize:none"></textarea>'
+    + '<button class="sub-btn" onclick="submitRsv()">予約を確定する</button>'
+    + '<div id="rsv-status" style="font-size:12px;color:#999;text-align:center;margin-top:8px"></div>'
+    + '</div>';
+}
+
+function submitRsv() {
+  if (!selectedCustomer) { alert('お客様を選択してください'); return; }
+  var paxEl = document.getElementById('rsv-pax');
+  var paxStr = paxEl ? paxEl.value : '1名';
+  var payload = {
+    date: document.getElementById('rsv-date').value,
+    time: document.getElementById('rsv-time').value,
+    customer: selectedCustomer.card || selectedCustomer.name || '',
+    memberId: selectedCustomer.no || '',
+    pax: parseInt(paxStr) || 1,
+    table: document.getElementById('rsv-table').value,
+    tantouCast: selectedCustomer.tantou || '',
+    youbou: document.getElementById('rsv-youbou').value
+  };
+  var btn = document.querySelector('.sub-btn');
+  btn.disabled = true; btn.textContent = '送信中...';
+  fetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'addReservation', userId:userId, ...payload }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      btn.disabled = false; btn.textContent = '予約を確定する';
+      if (!d.ok) { document.getElementById('rsv-status').textContent = '⚠️ ' + (d.error||'エラー'); return; }
+      document.getElementById('rsv-status').textContent = '✅ 予約を確定しました';
+      setTimeout(function(){ switchTab('list'); loadData(); }, 800);
+    })
+    .catch(function(){ btn.disabled=false; btn.textContent='予約を確定する'; document.getElementById('rsv-status').textContent='⚠️ 通信エラー'; });
+}
+
+function openRsv(rowIdx) {
+  var r = allReservations.find(function(x){ return x.rowIdx === rowIdx; });
+  if (!r) return;
+  alert('【'+r.time+'】'+r.customer+'様\n'+r.pax+'名 / '+r.table+(r.tantouCast?'\n担当キャスト: '+r.tantouCast:'')+(r.youbou?'\n要望: '+r.youbou:''));
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+updateDateDisplay();
+</script>
+</body>
+</html>

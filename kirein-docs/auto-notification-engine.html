@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜自動投稿通知エンジン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1200px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{border:1px solid var(--line);padding:10px;text-align:left}
+  th{background:var(--soft);font-weight:700}
+  code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+  .flow{background:var(--pine);color:#fff;border-radius:12px;padding:16px;margin:16px 0;font-size:13px;line-height:1.9;white-space:pre-wrap}
+  .flow b{color:#fff}
+  .callout{background:#e6f5f1;border-left:4px solid var(--mint);padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0}
+  .email-box{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:16px;margin:16px 0;font-family:monospace;font-size:12px;line-height:1.6}
+  .positive{color:#28a745;font-weight:700}
+  .highlight{background:#fffacd;padding:2px 4px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>自動投稿通知エンジン</h1>
+<p style="color:var(--mint);font-weight:700">投稿が発生した瞬間に、その店舗に自動メール配信 → フロー完全自動化</p>
+
+<h2>1. 3 段階の自動メール営業フロー</h2>
+
+<table>
+<tr><th>タイミング</th><th>メール内容</th><th>目的</th><th>CV率</th></tr>
+<tr><td><b>投稿当日</b></td><td>「あなたのお店が評価されました」通知</td><td>認知 + 興味喚起</td><td>-</td></tr>
+<tr><td><b>3日目</b></td><td>「詳細を見る」→ 無料ダッシュボード誘導</td><td>アクション</td><td>20%</td></tr>
+<tr><td><b>7日目</b></td><td>「無料期間終了。有料プランで毎月レポート」</td><td>購買</td><td>8-12%</td></tr>
+<tr><td><b>30日目</b></td><td>「◇◇焼鳥様、先月の評価を見てみませんか」</td><td>リターゲティング</td><td>3-5%</td></tr>
+</table>
+
+<h2>2. メールアドレス取得方法（複合戦略）</h2>
+
+<h3>2.1 3つのソース</h3>
+
+<table>
+<tr><th>ソース</th><th>信頼度</th><th>カバー率</th><th>実装難易度</th><th>取得費用</th></tr>
+<tr><td><b>Google My Business API</b></td><td>⭐⭐⭐⭐⭐</td><td>70%</td><td>中</td><td>¥0</td></tr>
+<tr><td><b>店舗のウェブサイト抽出</b></td><td>⭐⭐⭐⭐</td><td>60%</td><td>高</td><td>¥0-1K/月</td></tr>
+<tr><td><b>店舗オーナー手動登録</b></td><td>⭐⭐⭐⭐⭐</td><td>20%（初期）</td><td>易</td><td>¥0</td></tr>
+</table>
+
+<div class="callout">
+<b>実装優先度</b><br>
+1. <b>Phase 1</b>：Google My Business API（最速、精度高）<br>
+2. <b>Phase 2</b>：Web スクレイピング + メール抽出（カバー率向上）<br>
+3. <b>Phase 3</b>：店舗オーナーセルフサービス登録（有料プラン営業へ）
+</div>
+
+<h2>3. Google My Business API からのメール取得</h2>
+
+<h3>3.1 仕組み</h3>
+
+```
+【自動プロセス】
+1. 新規投稿が発生
+2. 店舗名で Google Places API 検索
+3. Google My Business データを取得
+   ├─ 店舗名（確定）
+   ├─ 住所（確定）
+   ├─ 電話番号（確定）
+   ├─ メールアドレス（50-70%の確率）
+   └─ オーナー名（30-40%）
+4. メール取得成功 → SendGrid キューに追加
+5. 即座にメール配信開始
+
+【実装】
+API 呼び出し：Google My Business API / Places API
+フロー制御：AWS Lambda（無料枠で運用可）
+データベース：DynamoDB（投稿 ↔ 店舗紐付け）
+```
+
+<div class="callout">
+<b>コスト</b><br>
+- Google API：API の有効化のみ（呼び出し費用は無料枠内）<br>
+- AWS Lambda：100万呼び出し/月まで無料<br>
+- 合計：月 ¥0-500
+</div>
+
+<h3>3.2 メール取得率の改善</h3>
+
+<table>
+<tr><th>方法</th><th>取得率</th><th>実装の手間</th></tr>
+<tr><td>Google My Business のみ</td><td>70%</td><td>✓ 容易</td></tr>
+<tr><td>+ Web サイト自動抽出</td><td>85%</td><td>✓✓ 中程度</td></tr>
+<tr><td>+ Clearbit / Hunter.io API</td><td>95%</td><td>✓✓✓ やや難</td></tr>
+</table>
+
+<p style="color:var(--muted);font-size:13px">
+※ Web サイト抽出：店舗サイトから contact@ / info@ メールアドレスを自動抽出（Selenium + BeautifulSoup）
+</p>
+
+<h2>4. 自動メールの例</h2>
+
+<h3>4.1 投稿当日メール（認知）</h3>
+
+<div class="email-box">
+【件名】
+新しい評価が届きました ✓ 鮨 清水
+
+【本文】
+こんにちは、鮨 清水 様
+
+Kirein ユーザーから、あなたのお店に新しい評価が届きました。
+
+【評価内容】
+⭐⭐⭐⭐⭐（5つ星）
+「カウンターも手洗いも気持ちいいくらい清潔。接待に最適です。」
+
+📍 評価項目：
+トイレ清潔度：4.6★
+空気・無臭：4.8★
+
+これはあなたのお店の強みです！
+
+詳しく見る → [リンク]
+
+---
+※このメールは自動配信です
+</div>
+
+<h3>4.2 3日目メール（行動喚起）</h3>
+
+<div class="email-box">
+【件名】
+あなたのお店の評価をダッシュボードで確認する
+
+【本文】
+こんにちは、鮨 清水 様
+
+先日お知らせした評価から、さらに 2 件の新しい投稿が届きました。
+
+【現在のあなたのお店】
+✓ 総合評価：Lv.2 ゴールド（4.5★）
+✓ トイレ清潔度：4.6★（地域平均 4.2★）
+✓ 空気・無臭：4.7★
+✓ 利用者の声：12 件
+
+📊 詳細ダッシュボードを見てみる
+7日間無料でアクセスできます
+→ [ダッシュボードへ]
+
+---
+3日間限定：無料で全機能をお試しください
+</div>
+
+<h3>4.3 7日目メール（購買）</h3>
+
+<div class="email-box">
+【件名】
+無料期間終了まで残り 1 日｜あなたのお店は改善してます
+
+【本文】
+こんにちは、鮨 清水 様
+
+お試しいただいた Kirein ダッシュボード、いかがでしたか？
+
+【あなたのお店の 1 週間の変化】
+先週：Lv.1 シルバー（4.2★）
+今週：Lv.2 ゴールド（4.5★）
+
+実は、あなたのお店は「改善中」です。
+このモメンタムを逃さないために...
+
+【月 ¥1,000 LIGHT プラン のメリット】
+✓ 毎月の詳細レポート（PDF）が自動配信
+✓ 「あと何をすれば Lv.3 に？」が分かる
+✓ 競合との比較で強みが見える
+
+今すぐ有料プランへ → [決済ページ]
+
+---
+※無料期間は本日 23:59 に終了します
+</div>
+
+<h2>5. 投稿 ↔ メール配信フロー（完全自動）</h2>
+
+<div class="flow">
+ユーザーが投稿ボタンをクリック
+    ↓
+投稿データが Kirein DB に保存
+    ↓【自動トリガー】
+Lambda 関数が起動
+    ↓
+① 店舗名から Google Places API 検索
+② メールアドレスを取得
+③ 店舗データと投稿を紐付け
+    ↓
+【メール 1: 投稿当日】
+SendGrid で自動配信
+「あなたのお店が評価されました」
+    ↓【3 日後のスケジュール】
+【メール 2: 3 日目】
+「詳細を見る → ダッシュボード誘導」
+    ↓【7 日後のスケジュール】
+【メール 3: 7 日目】
+「無料期間終了 → 有料化】
+    ↓【30 日後のスケジュール】
+【メール 4: 30 日目】
+「先月のレポート見ませんか？」
+</div>
+
+<h2>6. AI メールパーソナライゼーション</h2>
+
+<h3>6.1 メール内容の最適化</h3>
+
+```
+【投稿の内容に基づいて、メール文言を動的に変更】
+
+投稿が「トイレ清潔度 5★」（高評価）
+  ↓ メール文：
+  「トイレの清潔さが特に評価されています。
+   この強みをもっと活かしましょう」
+
+投稿が「空気・無臭 2★」（低評価）
+  ↓ メール文：
+  「空気の質について改善の余地があります。
+   こちらを改善すると、Lv.3 に上がります」
+
+投稿が「接客態度について」言及
+  ↓ メール文：
+  「お客様の接客体験が高く評価されています。
+   これは競合との重要な差別化要因です」
+```
+
+<h3>6.2 実装</h3>
+```
+【投稿テキストを自然言語処理】
+1. 投稿内容を OpenAI API（GPT-4）で分析
+2. 主要なポジティブ/ネガティブ要因を抽出
+3. メールテンプレートに動的に反映
+4. 店舗に合わせた最適なメッセージを配信
+
+コスト：OpenAI API ¥0.01-0.05 / 投稿
+（月 20,000 投稿で ¥200-1,000）
+```
+
+<h2>7. 6ヶ月の影響（自動メール導入）</h2>
+
+<table>
+<tr><th>月</th><th>投稿数</th><th>メール配信</th><th>ダッシュボード訪問</th><th>契約数</th><th>前月比</th></tr>
+<tr><td>M1</td><td>4,500</td><td>3,150</td><td>630</td><td>24</td><td>-</td></tr>
+<tr><td>M2</td><td>3,500</td><td>2,450</td><td>490</td><td>39</td><td>+63%</td></tr>
+<tr><td>M3</td><td>3,200</td><td>2,240</td><td>448</td><td>57</td><td>+46%</td></tr>
+<tr><td>M4</td><td>3,000</td><td>2,100</td><td>420</td><td>69</td><td>+21%</td></tr>
+<tr><td>M5</td><td>2,800</td><td>1,960</td><td>392</td><td>84</td><td>+22%</td></tr>
+<tr><td>M6</td><td>2,700</td><td>1,890</td><td>378</td><td>96</td><td>+14%</td></tr>
+<tr style="background:#f0f0f0"><td><b>計</b></td><td><b>19,700</b></td><td><b>13,790</b></td><td><b>2,758</b></td><td><b>96</b></td><td><b>月 +20%</b></td></tr>
+</table>
+
+<div class="callout">
+<b>🎯 自動メール導入後の効果</b><br>
+✓ メール配信 = 月 1,800-2,300 通の自動営業<br>
+✓ ダッシュボード訪問 = 月 350-450 店舗<br>
+✓ 契約数 = 月 +20% のペースで成長<br>
+✓ 営業時間 = 0 分（完全自動）
+</div>
+
+<h2>8. メール配信スケジュール管理</h2>
+
+<table>
+<tr><th>メール番号</th><th>送信タイミング</th><th>内容</th><th>クリック率</th><th>月当たり配信数</th></tr>
+<tr><td>1</td><td>投稿当日（即座）</td><td>「評価されました」通知</td><td>15%</td><td>13,790</td></tr>
+<tr><td>2</td><td>+3 日</td><td>「詳細を見る」ダッシュボード誘導</td><td>20%</td><td>2,758</td></tr>
+<tr><td>3</td><td>+7 日</td><td>「無料期間終了」有料化 CTA</td><td>8-12%</td><td>2,758</td></tr>
+<tr><td>4</td><td>+30 日</td><td>「先月のレポート」リターゲティング</td><td>5%</td><td>2,758（既契約を除く）</td></tr>
+</table>
+
+<h2>9. 実装コスト（月額）</h2>
+
+<table>
+<tr><th>項目</th><th>単価</th><th>月額</th><th>備考</th></tr>
+<tr><td>Google My Business API</td><td>-</td><td>¥0</td><td>無料枠内</td></tr>
+<tr><td>AWS Lambda</td><td>-</td><td>¥0-100</td><td>100万呼び出し/月まで無料</td></tr>
+<tr><td>SendGrid メール配信</td><td>¥0.1-0.5/通</td><td>¥1,000-2,000</td><td>月 15,000 通前後</td></tr>
+<tr><td>OpenAI GPT-4 API（オプション）</td><td>¥0.01-0.05/投稿</td><td>¥200-1,000</td><td>パーソナライズ版</td></tr>
+<tr><td>Hunter.io / Clearbit（オプション）</td><td>¥0.1-1 /取得</td><td>¥0-500</td><td>メール取得率向上</td></tr>
+<tr style="background:#f0f0f0"><td><b>月額計</b></td><td></td><td><b>¥1,200-3,600</b></td><td><b>基本システム</b></td></tr>
+</table>
+
+<h2>10. 最終的な月間フロー（完全自動営業）</h2>
+
+```
+【毎日】
+18:00 - ユーザーが投稿
+  ↓
+18:05 - 自動メール配信（「評価されました」）
+  ↓
+【3日後】
+自動メール配信（「ダッシュボードへ」）
+↓ ダッシュボード訪問開始
+  ↓
+【7日後】
+自動メール配信（「無料期間終了」）
+↓ セルフサービス有料化
+  ↓
+【30日後】
+自動メール配信（「先月のレポート」）
+↓ リターゲティング
+
+【完全自動営業の成果】
+- 月 13,790 通の自動営業メール配信
+- 月 2,758 ダッシュボード訪問
+- 月 96 件の新規契約
+- 営業人員 0 人
+- 営業人件費 ¥0
+```
+
+<h2>11. 完全自動化の全体像</h2>
+
+<div class="callout">
+<b>🤖 完全に自動化されたビジネスループ</b><br>
+<br>
+① ユーザーが投稿<br>
+   ↓<br>
+② 投稿から自動的に店舗を検出<br>
+   ↓<br>
+③ Google My Business から店舗メール取得<br>
+   ↓<br>
+④ SendGrid で自動メール配信（投稿当日）<br>
+   ↓<br>
+⑤ 3日後に自動メール（ダッシュボード誘導）<br>
+   ↓<br>
+⑥ 7日後に自動メール（有料化 CTA）<br>
+   ↓<br>
+⑦ Stripe で自動決済<br>
+   ↓<br>
+⑧ 30日後に自動メール（リターゲティング）<br>
+<br>
+<b>👤 必要な営業人員：0 人</b><br>
+<b>💰 営業人件費：¥0</b><br>
+<b>🚀 スケーリング：投稿数に完全に比例</b>
+</div>
+
+<h2>12. 6ヶ月の最終数値（完全自動営業）</h2>
+
+<table>
+<tr><th>指標</th><th>セルフサービス版</th><th>自動メール導入後</th><th>成長</th></tr>
+<tr><td>投稿数</td><td>19,700</td><td>19,700</td><td>同等</td></tr>
+<tr><td>メール配信</td><td>1,750</td><td><span class="highlight">13,790</span></td><td>+686%</td></tr>
+<tr><td>ダッシュボード訪問</td><td>350</td><td><span class="highlight">2,758</span></td><td>+687%</td></tr>
+<tr><td>新規契約数</td><td>96</td><td><span class="highlight">150-180</span></td><td>+56-87%</td></tr>
+<tr><td>月額売上（M6）</td><td>¥96,000</td><td><span class="highlight">¥150,000-180,000</span></td><td>+56-87%</td></tr>
+<tr><td>営業人件費</td><td>¥0</td><td>¥0</td><td>変わらず</td></tr>
+<tr><td>追加システム費</td><td>¥15,000</td><td><span class="highlight">¥15,000 + ¥2,000</span></td><td>+13%</td></tr>
+<tr><td><span class="positive">6ヶ月CF</span></td><td><span class="positive">+¥2,410,700</span></td><td><span class="positive">+¥2,850,000</span></td><td><span class="positive">+¥440,000</span></td></tr>
+</table>
+
+<div class="callout">
+<b>✨ 完全自動営業の威力</b><br>
+<br>
+投稿当日に自動メール → ダッシュボード訪問率 20% → 有料化率 8-12%<br>
+<br>
+6ヶ月で：<br>
+- 追加システム費 ¥12,000 で<br>
+- 売上 +¥440,000 増加<br>
+- 営業人員 0 人をキープ<br>
+- 完全自動化継続<br>
+<br>
+<b>ROI：3,667% （¥440,000 ÷ ¥12,000）</b>
+</div>
+
+</div>
+</body>
+</html>

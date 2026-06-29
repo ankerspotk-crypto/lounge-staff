@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>スタッフ管理 | ラウンジ家康</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d1a; color: #ddd; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; min-height: 100vh; }
+
+    header {
+      background: #12122a; padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid #1e1e3a; position: sticky; top: 0; z-index: 10;
+    }
+    .back-btn {
+      color: #88aaff; background: none; border: none;
+      font-size: 22px; cursor: pointer; line-height: 1; padding: 0 4px;
+    }
+    header h1 { font-size: 17px; font-weight: 600; flex: 1; }
+    .header-count { font-size: 12px; color: #556; }
+
+    #content { padding: 12px 16px 40px; }
+    .loading { text-align: center; color: #555; padding: 60px 0; font-size: 14px; }
+
+    .staff-card {
+      background: #14142a; border: 1px solid #1e1e3a; border-radius: 12px;
+      padding: 14px 16px; margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    .staff-card.saved { border-color: #336644; }
+
+    .card-top {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+    }
+    .staff-name { font-size: 16px; font-weight: 600; }
+    .line-badge {
+      font-size: 11px; padding: 3px 9px; border-radius: 10px; font-weight: 500;
+    }
+    .line-ok { background: #1a3320; color: #66cc88; }
+    .line-ng { background: #2a1a1a; color: #cc6666; }
+
+    .role-btns { display: flex; gap: 8px; }
+    .role-btn {
+      flex: 1; padding: 9px 4px; border-radius: 8px;
+      border: 1px solid #2a2a44; background: #1e1e30; color: #666;
+      font-size: 12px; cursor: pointer; text-align: center; transition: all 0.15s;
+    }
+    .role-btn.active-cast  { border-color: #3366cc; background: #1a2a4a; color: #88aaff; font-weight: 600; }
+    .role-btn.active-kuro  { border-color: #448844; background: #1a2a1a; color: #88cc88; font-weight: 600; }
+
+    .safe-row { margin-top: 8px; }
+    .safe-btn {
+      padding: 7px 12px; border-radius: 8px;
+      border: 1px solid #2a2a44; background: #1e1e30; color: #666;
+      font-size: 12px; cursor: pointer;
+    }
+    .safe-btn.active { border-color: #aa8822; background: #2a2210; color: #ddbb55; font-weight: 600; }
+
+    .flash {
+      font-size: 11px; color: #44bb66; margin-top: 6px; height: 16px;
+      transition: opacity 0.3s; opacity: 0;
+    }
+    .flash.show { opacity: 1; }
+
+    .section-header {
+      font-size: 11px; color: #445; margin: 16px 0 8px; letter-spacing: 0.5px; text-transform: uppercase;
+    }
+
+    .haken-store-input {
+      width: 100%; box-sizing: border-box; background: #0d0d1a; border: 1px solid #2a2a44;
+      color: #ddd; padding: 9px 11px; border-radius: 8px; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <button class="back-btn" onclick="history.back()">‹</button>
+  <h1>スタッフ管理</h1>
+  <span class="header-count" id="header-count"></span>
+</header>
+
+<div id="content">
+  <div class="loading">読み込み中...</div>
+</div>
+
+<script>
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+var userId  = new URLSearchParams(location.search).get('u') || '';
+
+if (!userId) {
+  document.getElementById('content').innerHTML = '<div class="loading">URLパラメータが不正です<br><small>ポータルの「スタッフ管理」ボタンからアクセスしてください</small></div>';
+} else {
+  loadStaff();
+}
+
+function loadStaff() {
+  fetch(GAS_URL + '?action=portal&tab=staffList&userId=' + encodeURIComponent(userId))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        document.getElementById('content').innerHTML = '<div class="loading">' + escHtml(d.error || 'エラーが発生しました') + '</div>';
+        return;
+      }
+      if (!d.isAdmin) {
+        document.getElementById('content').innerHTML = '<div class="loading">管理者のみアクセス可能です</div>';
+        return;
+      }
+      renderStaff(d.staff || [], d.hakenList || []);
+    })
+    .catch(function() {
+      document.getElementById('content').innerHTML = '<div class="loading">通信エラーが発生しました</div>';
+    });
+}
+
+function renderStaff(staff, hakenList) {
+  var registered   = staff.filter(function(s) { return s.registered; });
+  var unregistered = staff.filter(function(s) { return !s.registered; });
+
+  document.getElementById('header-count').textContent = staff.length + '名';
+
+  var html = '';
+
+  if (registered.length) {
+    html += '<div class="section-header">LINE 登録済み (' + registered.length + '名)</div>';
+    registered.forEach(function(s, i) { html += cardHtml(s, 'r' + i); });
+  }
+
+  if (unregistered.length) {
+    html += '<div class="section-header">LINE 未登録 (' + unregistered.length + '名)</div>';
+    unregistered.forEach(function(s, i) { html += cardHtml(s, 'u' + i); });
+  }
+
+  if (hakenList && hakenList.length) {
+    html += '<div class="section-header">派遣名前マッピング (' + hakenList.length + '名)</div>';
+    html += '<div style="font-size:11px;color:#556;margin-bottom:10px;line-height:1.6">'
+      + '派遣会社からの名前と店での呼び名が違う場合、店での名前を入力すると席管理画面で「店名(派遣名)」の形式で表示されます。'
+      + '</div>';
+    hakenList.forEach(function(h, i) { html += hakenCardHtml(h, 'hk' + i); });
+  }
+
+  document.getElementById('content').innerHTML = html || '<div class="loading">スタッフが登録されていません</div>';
+}
+
+function hakenCardHtml(h, id) {
+  return '<div class="staff-card" id="card-' + id + '">'
+    + '<div class="card-top">'
+    + '<span class="staff-name">' + escHtml(h.hakenName) + '</span>'
+    + '</div>'
+    + '<input type="text" class="haken-store-input" placeholder="店での名前（未設定なら派遣名のまま表示）" '
+    + 'value="' + escHtml(h.storeName).replace(/"/g, '&quot;') + '" '
+    + 'onchange="setHakenName(\'' + escAttr(h.hakenName) + '\',this.value,\'' + id + '\')">'
+    + '<div class="flash" id="flash-' + id + '">保存しました ✓</div>'
+    + '</div>';
+}
+
+function setHakenName(hakenName, storeName, id) {
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'setHakenStoreName', userId: userId, hakenName: hakenName, storeName: storeName })
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(d) {
+    var flash = document.getElementById('flash-' + id);
+    if (d.ok) {
+      if (flash) { flash.classList.add('show'); setTimeout(function() { flash.classList.remove('show'); }, 1500); }
+    } else {
+      alert('保存エラー: ' + (d.error || 'unknown'));
+    }
+  })
+  .catch(function(e) { alert('通信エラー: ' + (e && e.message || e)); });
+}
+
+function cardHtml(s, id) {
+  var roles = ['キャスト', '黒服社員', '黒服バイト'];
+  var btns = roles.map(function(r) {
+    var isKuro = r !== 'キャスト';
+    var active = s.role === r ? (isKuro ? ' active-kuro' : ' active-cast') : '';
+    return '<button class="role-btn' + active + '" '
+      + 'onclick="setRole(\'' + escAttr(s.name) + '\',\'' + r + '\',this,\'card-' + id + '\')">'
+      + r + '</button>';
+  }).join('');
+
+  var safeBtn = '<button class="safe-btn' + (s.safeAdmin ? ' active' : '') + '" '
+    + 'onclick="setSafeAdmin(\'' + escAttr(s.name) + '\',' + (!s.safeAdmin) + ',this,\'card-' + id + '\')">'
+    + '🔒 金庫管理' + (s.safeAdmin ? ' ✓' : '') + '</button>';
+
+  return '<div class="staff-card" id="card-' + id + '">'
+    + '<div class="card-top">'
+    + '<span class="staff-name">' + escHtml(s.name) + '</span>'
+    + '<span class="line-badge ' + (s.registered ? 'line-ok' : 'line-ng') + '">'
+    + (s.registered ? 'LINE ○' : 'LINE ×') + '</span>'
+    + '</div>'
+    + '<div class="role-btns">' + btns + '</div>'
+    + '<div class="safe-row">' + safeBtn + '</div>'
+    + '<div class="flash" id="flash-' + id + '">保存しました ✓</div>'
+    + '</div>';
+}
+
+function setRole(name, role, btn, cardId) {
+  var card = document.getElementById(cardId);
+  card.querySelectorAll('.role-btn').forEach(function(b) {
+    b.classList.remove('active-cast', 'active-kuro');
+  });
+  btn.classList.add(role === 'キャスト' ? 'active-cast' : 'active-kuro');
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'setStaffRole', userId: userId, targetName: name, role: role })
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(d) {
+    var flashId = 'flash-' + cardId.replace('card-', '');
+    var flash = document.getElementById(flashId);
+    if (d.ok) {
+      card.classList.add('saved');
+      if (flash) { flash.classList.add('show'); }
+      setTimeout(function() {
+        if (flash) flash.classList.remove('show');
+        card.classList.remove('saved');
+      }, 1500);
+    } else {
+      alert('保存エラー: ' + (d.error || 'unknown'));
+    }
+  })
+  .catch(function(e) { alert('通信エラー: ' + (e && e.message || e)); });
+}
+
+function setSafeAdmin(name, enabled, btn, cardId) {
+  var card = document.getElementById(cardId);
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'setSafeAdminTag', userId: userId, targetName: name, enabled: enabled })
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(d) {
+    var flashId = 'flash-' + cardId.replace('card-', '');
+    var flash = document.getElementById(flashId);
+    if (d.ok) {
+      btn.classList.toggle('active', enabled);
+      btn.setAttribute('onclick', "setSafeAdmin('" + name.replace(/'/g, "\\'") + "'," + (!enabled) + ",this,'" + cardId + "')");
+      btn.textContent = '🔒 金庫管理' + (enabled ? ' ✓' : '');
+      if (flash) { flash.classList.add('show'); }
+      setTimeout(function() { if (flash) flash.classList.remove('show'); }, 1500);
+    } else {
+      alert('保存エラー: ' + (d.error || 'unknown'));
+    }
+  })
+  .catch(function(e) { alert('通信エラー: ' + (e && e.message || e)); });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escAttr(s) {
+  return String(s).replace(/'/g, "\\'");
+}
+</script>
+</body>
+</html>

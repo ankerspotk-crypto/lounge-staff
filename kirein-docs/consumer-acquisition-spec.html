@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜消費者獲得システム仕様書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1000px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:4px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0}
+  th,td{border:1px solid var(--line);padding:10px;text-align:left}
+  th{background:var(--soft);font-weight:700}
+  code{background:var(--soft);padding:2px 6px;border-radius:4px;font-family:monospace}
+  .flow{background:var(--pine);color:#e0f2ed;border-radius:12px;padding:16px;margin:14px 0;font-size:13px;line-height:1.8}
+  .flow b{color:#fff}
+  .callout{background:#e6f5f1;border-left:4px solid var(--mint);padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0}
+  .tab{margin-left:20px;padding-left:20px;border-left:2px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>消費者獲得システム仕様書 v1.0</h1>
+<p style="color:var(--mint);font-weight:700">目標：初月5,000件の投稿獲得 → レポーター・調査員パイプライン構築</p>
+
+<h2>1. ポイント・Lvシステム</h2>
+
+<h3>1.1 ポイント付与ルール</h3>
+<table>
+<tr><th>シーン</th><th>通常</th><th>キャンペーン中</th><th>その他</th></tr>
+<tr><td>投稿1件</td><td>50pt</td><td>150pt（3倍） or 250pt（5倍）</td><td>—</td></tr>
+<tr><td>高評価（5★）</td><td>+10pt</td><td>+30pt（3倍）</td><td>実績ベース</td></tr>
+<tr><td>位置情報付き</td><td>+5pt</td><td>+15pt</td><td>—</td></tr>
+<tr><td>写真付き</td><td>+10pt</td><td>+30pt</td><td>将来検討</td></tr>
+</table>
+
+<h3>1.2 Lvシステム（レポーター昇格）</h3>
+<table>
+<tr><th>Lv</th><th>必要ポイント</th><th>投稿数（通常）</th><th>投稿数（キャンペーン中）</th><th>ステータス</th></tr>
+<tr><td>0</td><td>0pt</td><td>—</td><td>—</td><td>ビジター</td></tr>
+<tr><td>1</td><td>500pt</td><td>10件</td><td>2〜3件</td><td><b>認定レポーター</b></td></tr>
+<tr><td>2</td><td>2,000pt</td><td>40件</td><td>8〜10件</td><td>見習い調査員（選抜）</td></tr>
+<tr><td>3</td><td>5,000pt</td><td>100件</td><td>20〜25件</td><td>公認覆面調査員</td></tr>
+</table>
+
+<div class="callout">
+<b>自動判定ロジック</b><br>
+ユーザーのポイント が Lv.N の必要ポイント に到達 → 自動で Lv.N に昇格 → 自動DM送信「おめでとうございます！」
+</div>
+
+<h3>1.3 Lv.2（見習い調査員）への昇格条件</h3>
+<ul>
+<li><b>必須</b>：Lv.1で 20件以上の投稿実績</li>
+<li><b>必須</b>：整合度スコア 90% 以上（プロの評価と一致度）</li>
+<li><b>条件</b>：本人確認（電話 or 身分証）</li>
+<li><b>条件</b>：利用規約同意</li>
+<li><b>判定</b>：キレイン側で月1回、手動選抜</li>
+</ul>
+
+<h2>2. 調査員報酬・業務設計</h2>
+
+<h3>2.1 見習い調査員（Lv.2）</h3>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>報告書報酬</td><td>1件あたり ¥1,000（指定フォーマットで報告）</td></tr>
+<tr><td>月の期待件数</td><td>2〜3件（無理強いしない）</td></tr>
+<tr><td>月の獲得額目安</td><td>¥2,000-3,000</td></tr>
+<tr><td>報告項目</td><td>トイレ清潔度・空気・接客態度・全体評価・写真</td></tr>
+<tr><td>契約</td><td>業務委託契約（試用3ヶ月）</td></tr>
+</table>
+
+<h3>2.2 公認調査員（Lv.3）</h3>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>報告書報酬</td><td>1件あたり ¥3,000（指定フォーマットで報告）</td></tr>
+<tr><td>月の期待件数</td><td>4〜6件</td></tr>
+<tr><td>月の獲得額目安</td><td>¥12,000-18,000</td></tr>
+<tr><td>報告項目</td><td>詳細レポート（トイレ・空気・接客・衛生管理）+ 改善提案</td></tr>
+<tr><td>特典</td><td>専用ダッシュボード、優先案件配分</td></tr>
+<tr><td>契約</td><td>本契約（年1回更新）</td></tr>
+</table>
+
+<div class="callout">
+<b>見習い→本契約への昇格</b><br>
+試用3ヶ月で「実績・精度・対応」が基準をクリア → Lv.3へ昇格提案
+</div>
+
+<h2>3. 初月5,000件投稿の達成シミュレーション</h2>
+
+<h3>3.1 投稿の内訳想定</h3>
+<ul>
+<li><b>TikTok施策</b>：フォロワー数 10万達成時点で月 2,000〜3,000件見込み</li>
+<li><b>Instagram施策</b>：月 1,500〜2,000件見込み</li>
+<li><b>口コミサイト（食べログ等）</b>：クロスポスト誘導で 500〜1,000件</li>
+<li><b>既存加盟店からの投稿</b>：月 200〜300件</li>
+</ul>
+
+<h3>3.2 キャンペーン戦略</h3>
+<div class="flow">
+<b>Phase 1（Week 1-2）：告知・認知</b><br>
+TikTok / Instagram で「無料で調査員になれる」キャンペーン開始<br>
+インフルエンサー、飲食店アカウントでシェア
+<br><br>
+<b>Phase 2（Week 3-4）：投稿誘導</b><br>
+「今だけ投稿ポイント3倍〜5倍」の限定感で急かす<br>
+ポイント到達者に「レポーター認定おめでとう」DM
+<br><br>
+<b>Phase 3（Month 2-）：継続投稿</b><br>
+Lv.1→Lv.2へのアップセルDM<br>
+「見習い調査員募集中、月¥5,000」で有料化へ導く
+</div>
+
+<h3>3.3 5,000件到達時点でのデータ</h3>
+<ul>
+<li>投稿ユーザー数：3,000〜4,000人（重複除く）</li>
+<li>Lv.1到達者：500〜1,000人</li>
+<li>見習い調査員候補：50〜100人</li>
+<li>掲載店舗：1,000〜1,500軒（全国）</li>
+<li>Lv分布：Lv.1 = 投稿の10〜15%、Lv.2+ = 1〜2%</li>
+</ul>
+
+<h2>4. DBスキーマ・実装詳細</h2>
+
+<h3>4.1 ユーザーテーブル</h3>
+<pre style="background:var(--soft);padding:12px;border-radius:8px;overflow-x:auto">
+users
+├ user_id (PK)
+├ phone_or_line_id
+├ nickname
+├ profile_image
+├ total_points
+├ current_lv (0-3)
+├ lv_update_date
+├ integrity_score (整合度)
+├ post_count
+├ verified (本人確認済み)
+├ created_at
+└ updated_at
+</pre>
+
+<h3>4.2 ポイント・Lvロジック</h3>
+<pre style="background:var(--soft);padding:12px;border-radius:8px">
+【自動判定】
+WHEN user.total_points >= Lv.N_threshold
+  THEN user.current_lv = N
+  THEN auto_send_dm("Lv.N認定！")
+  THEN trigger_lv_milestone()
+</pre>
+
+<h3>4.3 見習い調査員の昇格フロー</h3>
+<pre style="background:var(--soft);padding:12px;border-radius:8px">
+【月1回のバッチ処理】
+SELECT * FROM users
+WHERE current_lv = 1
+AND post_count >= 20
+AND integrity_score >= 0.90
+AND verified = true
+THEN suggest_apprentice_recruit()
+THEN send_dm_with_contract()
+</pre>
+
+<h2>5. 消費者サイトへの実装（次セクション参照）</h2>
+<p>投稿フォーム・マイページ・Lv表示 の設計は「UI Flow設計書」を参照。</p>
+
+</div>
+</body>
+</html>

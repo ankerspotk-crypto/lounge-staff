@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜店舗ダッシュボード</title>
+<meta name="description" content="お客様の匿名フィードバックをリアルタイムで確認。清潔さの評価・改善点・口コミを店舗オーナー専用ダッシュボードで。" />
+<meta name="robots" content="noindex" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet" />
+
+<!-- Firebase (compat 版・index.html と同一プロジェクト) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<!-- Google Places (店舗検索・登録用) -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDRfloVijkhdUhF9v_DG7O3JV17Fqd9V7w&libraries=places&language=ja"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBmd6J3uyIEkyybGVLlMR5_p9LLiHZQk3U",
+    authDomain: "kirein-ac148.firebaseapp.com",
+    projectId: "kirein-ac148",
+    storageBucket: "kirein-ac148.firebasestorage.app",
+    messagingSenderId: "512365581418",
+    appId: "1:512365581418:web:9686273005ff1b4dbf6613"
+  };
+  try {
+    firebase.initializeApp(firebaseConfig);
+    window.db   = firebase.firestore();
+    window.auth = firebase.auth();
+  } catch(e){ console.error('Firebase 初期化エラー', e); }
+</script>
+
+<style>
+:root{
+  --pine:#0e3a33;--pine-deep:#082722;--mint:#25b598;--mint-soft:#e6f5f1;
+  --gold:#c2a25f;--ink:#182320;--muted:#5d6b66;--line:#e4eae7;
+  --bg:#fff;--soft:#f6f9f8;--radius:16px;--shadow:0 16px 44px -22px rgba(14,58,51,.3);
+  --red:#e0563b;--red-soft:#fdeee9;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.7;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Noto Serif JP",serif}
+a{color:inherit;text-decoration:none}
+.wrap{width:min(1040px,94vw);margin-inline:auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 26px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;border:none;transition:.2s;font-family:inherit}
+.btn-mint{background:var(--mint);color:#062019}.btn-mint:hover{background:#1ea487;transform:translateY(-1px);box-shadow:0 8px 24px rgba(37,181,152,.3)}
+.btn-pine{background:var(--pine);color:#fff}.btn-pine:hover{background:var(--pine-deep)}
+.btn-ghost{background:#fff;color:var(--pine);border:1.5px solid var(--line)}.btn-ghost:hover{background:var(--mint-soft);border-color:var(--mint)}
+.btn-google{background:#fff;color:#3c4043;border:1.5px solid #dadce0;font-weight:700}.btn-google:hover{background:#f8f9fa;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+.btn-sm{padding:8px 16px;font-size:12px}
+
+header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.head-in{display:flex;align-items:center;justify-content:space-between;padding:13px 0;gap:12px}
+.logo{display:flex;align-items:center;gap:8px;font-family:"Cormorant Garamond",serif;font-size:22px;color:var(--pine);font-weight:600}
+.logo .seal{font-size:11px;font-family:"Noto Sans JP";background:var(--mint-soft);color:var(--pine);padding:3px 9px;border-radius:999px;font-weight:700}
+.user-chip{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.user-chip img{width:26px;height:26px;border-radius:50%}
+
+.center-stage{min-height:calc(100vh - 58px);display:flex;align-items:center;justify-content:center;padding:50px 0}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.auth-card{max-width:440px;width:94vw;padding:44px 36px;text-align:center}
+.auth-card .mark{font-size:40px;margin-bottom:10px}
+.auth-card h1{font-size:24px;color:var(--pine);margin-bottom:10px}
+.auth-card p{font-size:14px;color:var(--muted);margin-bottom:26px}
+.muted-note{font-size:12px;color:var(--muted);margin-top:18px;line-height:1.8}
+
+/* 店舗登録 */
+.claim-card{max-width:520px;width:94vw;padding:40px 34px}
+.claim-card h1{font-size:22px;color:var(--pine);margin-bottom:8px}
+.claim-card .sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.field-label{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:7px;display:block}
+.input{width:100%;padding:13px 15px;border:1.5px solid var(--line);border-radius:12px;font-size:14px;font-family:inherit;transition:.2s}
+.input:focus{outline:none;border-color:var(--mint);box-shadow:0 0 0 3px var(--mint-soft)}
+.picked-store{background:var(--mint-soft);border:1px solid var(--mint);border-radius:12px;padding:14px 16px;margin-top:14px;display:none}
+.picked-store .name{font-weight:700;color:var(--pine);font-size:15px}
+.picked-store .addr{font-size:12px;color:var(--muted);margin-top:3px}
+
+/* ダッシュボード */
+.dash{padding:30px 0 70px}
+.dash-head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:24px}
+.dash-head .store-name{font-size:26px;color:var(--pine);font-weight:700}
+.dash-head .store-meta{font-size:13px;color:var(--muted);margin-top:4px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px 20px}
+.kpi .label{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px}
+.kpi .value{font-size:34px;font-weight:700;color:var(--pine);font-family:"Cormorant Garamond",serif;line-height:1}
+.kpi .value .unit{font-size:14px;color:var(--muted);font-family:"Noto Sans JP";font-weight:500;margin-left:3px}
+.kpi.alert .value{color:var(--red)}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:7px}
+
+.panel{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:26px;margin-bottom:22px}
+.panel h2{font-size:16px;color:var(--pine);margin-bottom:4px}
+.panel .panel-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+
+/* 項目別バー */
+.metric-row{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:14px;margin-bottom:14px}
+.metric-row .m-label{font-size:13px;font-weight:500}
+.bar{height:9px;background:var(--soft);border-radius:999px;overflow:hidden}
+.bar > span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--mint),#1ea487)}
+.bar.low > span{background:linear-gradient(90deg,#f0a04b,var(--red))}
+.m-score{font-size:14px;font-weight:700;text-align:right}
+
+/* 改善点 (非公開) */
+.private-tag{display:inline-block;font-size:10px;font-weight:700;background:var(--pine);color:#fff;padding:3px 9px;border-radius:999px;letter-spacing:.04em;margin-left:8px;vertical-align:middle}
+.neg-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.neg-chip{background:var(--red-soft);color:var(--red);border:1px solid #f3c9bd;font-size:12px;font-weight:700;padding:6px 13px;border-radius:999px}
+.neg-chip .cnt{background:var(--red);color:#fff;border-radius:999px;padding:1px 7px;margin-left:6px;font-size:11px}
+.neg-comment{border-left:3px solid var(--red);background:var(--red-soft);padding:11px 15px;border-radius:0 10px 10px 0;font-size:13px;margin-bottom:10px;line-height:1.7}
+.neg-comment .when{font-size:11px;color:var(--muted);margin-top:5px}
+
+/* 口コミ */
+.review{border-bottom:1px solid var(--line);padding:16px 0}
+.review:last-child{border-bottom:none}
+.review .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.review .stars{color:var(--gold);font-size:14px;letter-spacing:1px}
+.review .when{font-size:11px;color:var(--muted)}
+.review .text{font-size:14px;line-height:1.7}
+.review .tier{display:inline-block;font-size:10px;background:var(--mint-soft);color:var(--pine);padding:2px 8px;border-radius:999px;margin-left:8px;font-weight:700}
+
+.empty{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty .ico{font-size:40px;margin-bottom:12px}
+.empty .ttl{font-weight:700;color:var(--ink);margin-bottom:6px;font-family:"Noto Serif JP"}
+
+.spinner{width:34px;height:34px;border:3px solid var(--mint-soft);border-top-color:var(--mint);border-radius:50%;animation:spin .8s linear infinite;margin:60px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hidden{display:none!important}
+
+/* 通知設定 */
+.notify-row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:16px 0;border-bottom:1px solid var(--line)}
+.notify-row:last-of-type{border-bottom:none}
+.notify-label{flex:1}
+.notify-title{font-size:14px;font-weight:700;margin-bottom:4px}
+.notify-desc{font-size:12px;color:var(--muted);line-height:1.7}
+.toggle{display:flex;align-items:center;cursor:pointer;flex-shrink:0;margin-top:2px}
+.toggle input{display:none}
+.toggle-track{width:44px;height:24px;background:#cdd5d2;border-radius:999px;position:relative;transition:.25s}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.toggle input:checked ~ .toggle-track{background:var(--mint)}
+.toggle input:checked ~ .toggle-track .toggle-thumb{left:23px}
+
+@media(max-width:768px){
+  .kpis{grid-template-columns:1fr 1fr}
+  .dash-head .store-name{font-size:22px}
+  .metric-row{grid-template-columns:96px 1fr 44px;gap:10px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap head-in">
+    <a href="./owner.html" class="logo">Kirein <span class="seal">店舗管理</span></a>
+    <div id="headRight"></div>
+  </div>
+</header>
+
+<!-- ① ログイン前 -->
+<div id="viewLogin" class="center-stage hidden">
+  <div class="card auth-card">
+    <div class="mark">🔑</div>
+    <h1>店舗ダッシュボード</h1>
+    <p>お客様の匿名フィードバックを確認するには、<br>店舗オーナー様の Google アカウントでログインしてください。</p>
+    <button class="btn btn-google" style="width:100%" onclick="loginGoogle()">
+      <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Google でログイン
+    </button>
+    <p class="muted-note">まだ契約していない店舗の方は<br><a href="./owner.html" style="color:var(--mint);font-weight:700">サービス紹介ページ</a>をご覧ください。</p>
+  </div>
+</div>
+
+<!-- ② 店舗登録 (ログイン済・未紐付け) -->
+<div id="viewClaim" class="center-stage hidden">
+  <div class="card claim-card">
+    <h1>店舗を登録する</h1>
+    <p class="sub">あなたのお店を検索して選択してください。ここで選んだ店舗に集まったお客様の評価が、ダッシュボードに表示されます。</p>
+    <label class="field-label">店舗名で検索（Google マップ）</label>
+    <input id="storeSearch" class="input" type="text" placeholder="例：矢場とん 栄本店" autocomplete="off" />
+    <div id="pickedStore" class="picked-store">
+      <div class="name" id="pickedName"></div>
+      <div class="addr" id="pickedAddr"></div>
+    </div>
+    <button id="claimBtn" class="btn btn-mint" style="width:100%;margin-top:22px" onclick="saveStore()" disabled>この店舗を登録する</button>
+    <p class="muted-note">登録後はダッシュボードからいつでも変更できます。</p>
+  </div>
+</div>
+
+<!-- ③ ダッシュボード -->
+<div id="viewDash" class="dash hidden">
+  <div class="wrap">
+    <div class="dash-head">
+      <div>
+        <div class="store-name" id="dashStoreName">—</div>
+        <div class="store-meta" id="dashStoreMeta"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="changeStore()">店舗を変更</button>
+    </div>
+
+    <div id="dashLoading"><div class="spinner"></div></div>
+
+    <div id="dashContent" class="hidden">
+      <div class="kpis" id="kpis"></div>
+
+      <div class="panel">
+        <h2>項目別の評価</h2>
+        <div class="panel-sub">お客様が投稿した5項目の平均スコア（5点満点）</div>
+        <div id="metrics"></div>
+      </div>
+
+      <div class="panel">
+        <h2>改善が必要な点<span class="private-tag">非公開 · 店舗のみ閲覧</span></h2>
+        <div class="panel-sub">お客様が指摘したネガティブ項目とコメント。一般には公開されません。</div>
+        <div id="negSection"></div>
+      </div>
+
+      <div class="panel">
+        <h2>お客様の声（公開口コミ）</h2>
+        <div class="panel-sub">サービス上で公開されているコメント付きの投稿</div>
+        <div id="reviews"></div>
+      </div>
+
+    </div>
+
+    <div id="dashEmpty" class="panel hidden">
+      <div class="empty">
+        <div class="ico">📭</div>
+        <div class="ttl">まだお客様の投稿がありません</div>
+        <div>トイレや店頭にキレインのQR・案内を掲示すると、来店したお客様が評価を投稿してくれます。<br>投稿が集まると、ここに清潔さの評価・改善点・口コミが表示されます。</div>
+      </div>
+    </div>
+
+    <!-- 改善報告パネル -->
+    <div class="panel hidden" id="improvePanel">
+      <h2>✅ 改善報告</h2>
+      <div class="panel-sub">お客様の指摘を改善したことをキレインユーザーにお知らせできます。モーダルに「改善済み」として表示されます。</div>
+      <div id="improveHistory" style="margin-bottom:16px"></div>
+      <div id="improveFormWrap">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <textarea id="improveNote" rows="2" placeholder="例：トイレを全面リニューアルしました。清掃を1日3回に増やしました。" style="flex:1;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:13px;resize:vertical;outline:none"></textarea>
+          <button class="btn btn-mint btn-sm" id="improveSaveBtn" onclick="saveImprovement()" style="white-space:nowrap;margin-top:2px">報告する</button>
+        </div>
+        <span id="improveSaved" style="font-size:12px;color:var(--mint);display:none;margin-top:6px;display:none">✓ 報告しました！ユーザーアプリに表示されます</span>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="notifyPanel">
+      <h2>メール通知の設定</h2>
+      <div class="panel-sub">通知先・ON/OFFを変更するとすぐに反映されます</div>
+      <div class="notify-row">
+        <div class="notify-label">
+          <div class="notify-title">通知先メールアドレス</div>
+          <div class="notify-desc">複数登録可（1行に1アドレス）。複数登録時は同時送信。未入力ならGoogleアカウントのメールに送信。</div>
+        </div>
+        <div style="max-width:300px;width:100%">
+          <textarea id="notifyEmails" class="input" rows="3"
+            placeholder="owner@example.com&#10;manager@example.com"
+            style="width:100%;resize:vertical;font-size:13px;font-family:inherit;line-height:1.6"></textarea>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">1行に1アドレス・最大5件まで</div>
+        </div>
+      </div>
+      <div class="notify-row">
+        <div class="notify-label">
+          <div class="notify-title">🚨 緊急通報</div>
+          <div class="notify-desc">深刻な評価（足切り項目・ネガ指摘・ネガコメントあり）が投稿されたら5分以内にメール</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="notifyEmergency" />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+      </div>
+      <div class="notify-row">
+        <div class="notify-label">
+          <div class="notify-title">📋 日次レポート</div>
+          <div class="notify-desc">前日の全投稿をまとめて翌朝9時台にメール（投稿がなかった日は送信しない）</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="notifyDaily" />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+      </div>
+      <div style="text-align:right;margin-top:20px">
+        <button class="btn btn-mint btn-sm" id="notifySaveBtn" onclick="saveNotifySettings()">設定を保存</button>
+        <span id="notifySaved" style="font-size:12px;color:var(--mint);margin-left:12px;display:none">✓ 保存しました</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 項目ラベル（index.html の投稿フォームと対応）===== */
+const METRICS = [
+  { key:'cleanliness_rating', label:'便座の清潔さ' },
+  { key:'air_rating',         label:'におい' },
+  { key:'amenity_rating',     label:'手洗い場' },
+  { key:'sink_rating',        label:'床' },
+  { key:'child_rating',       label:'子ども対応' },
+];
+const TIER_LABEL = { simple:'かんたん', detail:'くわしく', photo:'写真つき' };
+
+let CURRENT_USER = null;
+
+/* ===== 認証 ===== */
+function loginGoogle(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt:'select_account' });
+  window.auth.signInWithPopup(provider).catch(err=>{
+    console.warn('ログイン失敗', err.code, err.message);
+    alert('ログインに失敗しました。ポップアップがブロックされていないかご確認ください。');
+  });
+}
+function logout(){
+  if(confirm('ログアウトしますか？')) window.auth.signOut();
+}
+
+function showView(id){
+  ['viewLogin','viewClaim','viewDash'].forEach(v=>{
+    document.getElementById(v).classList.toggle('hidden', v!==id);
+  });
+}
+
+window.auth.onAuthStateChanged(async (user)=>{
+  CURRENT_USER = user;
+  const hr = document.getElementById('headRight');
+  if(!user){
+    hr.innerHTML = '';
+    showView('viewLogin');
+    return;
+  }
+  hr.innerHTML = `<div class="user-chip">
+      ${user.photoURL?`<img src="${user.photoURL}" alt="">`:''}
+      <span>${user.displayName||user.email||'オーナー'}</span>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">ログアウト</button>
+    </div>`;
+
+  // 既に店舗を紐付けているか確認
+  try{
+    const doc = await window.db.collection('stores').doc(user.uid).get();
+    if(doc.exists && doc.data().place_id){
+      showView('viewDash');
+      loadDashboard(doc.data());
+    } else {
+      showView('viewClaim');
+    }
+  }catch(e){
+    console.error('店舗情報の取得に失敗', e);
+    showView('viewClaim');
+  }
+});
+
+/* ===== 店舗登録 ===== */
+let pickedPlace = null;
+function initStoreAutocomplete(){
+  if(!window.google || !google.maps?.places){ setTimeout(initStoreAutocomplete, 300); return; }
+  const input = document.getElementById('storeSearch');
+  const ac = new google.maps.places.Autocomplete(input, {
+    fields:['place_id','name','formatted_address'],
+    componentRestrictions:{ country:'jp' }
+  });
+  ac.addListener('place_changed', ()=>{
+    const p = ac.getPlace();
+    if(!p || !p.place_id){ return; }
+    pickedPlace = { place_id:p.place_id, name:p.name, address:p.formatted_address||'' };
+    document.getElementById('pickedName').textContent = p.name;
+    document.getElementById('pickedAddr').textContent = p.formatted_address||'';
+    document.getElementById('pickedStore').style.display = 'block';
+    document.getElementById('claimBtn').disabled = false;
+  });
+}
+initStoreAutocomplete();
+
+async function saveStore(){
+  if(!pickedPlace || !CURRENT_USER) return;
+  const btn = document.getElementById('claimBtn');
+  btn.disabled = true; btn.textContent = '登録中…';
+  try{
+    await window.db.collection('stores').doc(CURRENT_USER.uid).set({
+      uid:        CURRENT_USER.uid,
+      email:      CURRENT_USER.email || '',
+      place_id:   pickedPlace.place_id,
+      shop_name:  pickedPlace.name,
+      address:    pickedPlace.address,
+      is_paid:    false,                                          // ← Stripe 決済状況（デフォルト false）
+      stripe_customer_id: null,                                   // ← Stripe 顧客ID（決済完了時に設定）
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      created_at: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge:true });
+    showView('viewDash');
+    loadDashboard(pickedPlace.place_id ? { place_id:pickedPlace.place_id, shop_name:pickedPlace.name, address:pickedPlace.address } : {});
+  }catch(e){
+    console.error('店舗登録に失敗', e);
+    alert('登録に失敗しました。時間をおいて再度お試しください。');
+    btn.disabled = false; btn.textContent = 'この店舗を登録する';
+  }
+}
+function changeStore(){
+  pickedPlace = null;
+  document.getElementById('storeSearch').value = '';
+  document.getElementById('pickedStore').style.display = 'none';
+  document.getElementById('claimBtn').disabled = true;
+  document.getElementById('claimBtn').textContent = 'この店舗を登録する';
+  showView('viewClaim');
+}
+
+/* ===== ダッシュボード描画 ===== */
+function toDate(ts){
+  if(!ts) return null;
+  if(typeof ts.toDate === 'function') return ts.toDate();      // Firestore Timestamp
+  const d = new Date(ts); return isNaN(d) ? null : d;          // ISO 文字列
+}
+function fmtDate(d){
+  if(!d) return '';
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+}
+function avg(nums){
+  const v = nums.filter(n=>typeof n==='number' && n>0);
+  return v.length ? v.reduce((a,b)=>a+b,0)/v.length : 0;
+}
+function stars(score){
+  const full = Math.round(score);
+  return '★★★★★'.slice(0,full) + '☆☆☆☆☆'.slice(0,5-full);
+}
+
+async function loadDashboard(store){
+  document.getElementById('dashStoreName').textContent = store.shop_name || 'あなたの店舗';
+  document.getElementById('dashStoreMeta').textContent = store.address || '';
+  document.getElementById('dashLoading').classList.remove('hidden');
+  document.getElementById('dashContent').classList.add('hidden');
+  document.getElementById('dashEmpty').classList.add('hidden');
+  document.getElementById('improvePanel').classList.add('hidden');
+  document.getElementById('notifyPanel').classList.add('hidden');
+
+  let posts = [];
+  try{
+    const snap = await window.db.collection('posts')
+      .where('place_id','==', String(store.place_id)).get();
+    posts = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+  }catch(e){
+    console.error('投稿の取得に失敗', e);
+  }
+  // 新しい順
+  posts.sort((a,b)=>(toDate(b.created_at)?.getTime()||0) - (toDate(a.created_at)?.getTime()||0));
+
+  document.getElementById('dashLoading').classList.add('hidden');
+
+  document.getElementById('improvePanel').classList.remove('hidden');
+  loadImprovements();
+
+  document.getElementById('notifyPanel').classList.remove('hidden');
+  loadNotifySettings(store);
+
+  if(posts.length === 0){
+    document.getElementById('dashEmpty').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('dashContent').classList.remove('hidden');
+
+  renderKpis(posts);
+  renderMetrics(posts);
+  renderNegatives(posts);
+  renderReviews(posts);
+}
+
+function loadNotifySettings(store){
+  // 複数アドレス（新形式）or 単一アドレス（後方互換）を読み込む
+  const emails = Array.isArray(store.notify_emails) && store.notify_emails.length
+    ? store.notify_emails
+    : (store.notify_email ? [store.notify_email] : []);
+  document.getElementById('notifyEmails').value      = emails.join('\n');
+  document.getElementById('notifyEmergency').checked = store.notify_emergency !== false; // デフォルトON
+  document.getElementById('notifyDaily').checked     = store.notify_daily     !== false; // デフォルトON
+}
+
+async function saveNotifySettings(){
+  const user = CURRENT_USER || window.auth?.currentUser;
+  if(!user) return;
+  CURRENT_USER = user;
+  const btn = document.getElementById('notifySaveBtn');
+  const saved = document.getElementById('notifySaved');
+  btn.disabled = true;
+  try{
+    // 複数アドレスを配列に変換（空行・@なしは除外・最大5件）
+    const emailList = document.getElementById('notifyEmails').value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s && s.includes('@'))
+      .slice(0, 5);
+    await window.db.collection('stores').doc(user.uid).set({
+      notify_emails:    emailList,
+      notify_emergency: document.getElementById('notifyEmergency').checked,
+      notify_daily:     document.getElementById('notifyDaily').checked,
+      updated_at:       firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    saved.style.display = 'inline';
+    setTimeout(()=>{ saved.style.display='none'; }, 3000);
+  }catch(e){
+    console.error('通知設定の保存に失敗', e);
+    alert('保存に失敗しました。時間をおいて再度お試しください。');
+  }
+  btn.disabled = false;
+}
+
+// ========== 改善報告 ==========
+async function loadImprovements(){
+  const user = CURRENT_USER || window.auth?.currentUser;
+  if(!user) return;
+  const el = document.getElementById('improveHistory');
+  if(!el) return;
+  try{
+    const doc = await window.db.collection('stores').doc(user.uid).get();
+    const improvements = doc.data()?.improvements || [];
+    if(improvements.length === 0){
+      el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">まだ改善報告はありません</div>';
+      return;
+    }
+    el.innerHTML = improvements.slice().reverse().map(imp => `
+      <div style="background:var(--mint-soft);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:16px;margin-top:2px">✅</span>
+        <div style="flex:1">
+          <div style="font-size:13px;color:var(--pine);font-weight:600">${imp.note}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">${new Date(imp.date).toLocaleDateString('ja-JP')} に報告</div>
+        </div>
+      </div>`).join('');
+  }catch(e){
+    console.error('改善報告の取得に失敗', e);
+  }
+}
+
+async function saveImprovement(){
+  const user = CURRENT_USER || window.auth?.currentUser;
+  if(!user) return;
+  const note = document.getElementById('improveNote').value.trim();
+  if(!note){ alert('内容を入力してください'); return; }
+  const btn = document.getElementById('improveSaveBtn');
+  const saved = document.getElementById('improveSaved');
+  btn.disabled = true;
+  try{
+    await window.db.collection('stores').doc(user.uid).update({
+      improvements: firebase.firestore.FieldValue.arrayUnion({
+        note,
+        date: new Date().toISOString()
+      }),
+      last_improved_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('improveNote').value = '';
+    saved.style.display = 'inline';
+    setTimeout(()=>{ saved.style.display = 'none'; }, 4000);
+    loadImprovements(); // 一覧を再描画
+  }catch(e){
+    console.error('改善報告の保存に失敗', e);
+    alert('保存に失敗しました。時間をおいて再度お試しください。');
+  }
+  btn.disabled = false;
+}
+
+function renderKpis(posts){
+  const now = Date.now();
+  const recent = posts.filter(p=>{ const d=toDate(p.created_at); return d && (now-d.getTime()) < 30*864e5; });
+  // 総合平均 = 各投稿の有効スコア平均をさらに平均
+  const overall = avg(posts.map(p=>avg(METRICS.map(m=>p[m.key]))));
+  const negCount = posts.filter(p=>(p.negative_items?.length||0)>0 || (p.negative_comment||'').trim()).length;
+
+  const cards = [
+    { label:'総投稿数', value:posts.length, unit:'件' },
+    { label:'総合評価', value:overall?overall.toFixed(1):'–', unit:'/5.0', sub:stars(overall) },
+    { label:'直近30日', value:recent.length, unit:'件' },
+    { label:'改善の指摘', value:negCount, unit:'件', alert:negCount>0 },
+  ];
+  document.getElementById('kpis').innerHTML = cards.map(c=>`
+    <div class="kpi${c.alert?' alert':''}">
+      <div class="label">${c.label}</div>
+      <div class="value">${c.value}<span class="unit">${c.unit}</span></div>
+      ${c.sub?`<div class="sub" style="color:var(--gold);font-size:14px;letter-spacing:1px">${c.sub}</div>`:''}
+    </div>`).join('');
+}
+
+function renderMetrics(posts){
+  document.getElementById('metrics').innerHTML = METRICS.map(m=>{
+    const score = avg(posts.map(p=>p[m.key]));
+    const pct = score/5*100;
+    const low = score>0 && score<3;
+    return `<div class="metric-row">
+      <div class="m-label">${m.label}</div>
+      <div class="bar${low?' low':''}"><span style="width:${pct}%"></span></div>
+      <div class="m-score" style="${low?'color:var(--red)':''}">${score?score.toFixed(1):'–'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderNegatives(posts){
+  const counts = {};
+  posts.forEach(p=>(p.negative_items||[]).forEach(it=>{ counts[it]=(counts[it]||0)+1; }));
+  const chips = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const comments = posts
+    .filter(p=>(p.negative_comment||'').trim())
+    .map(p=>({ text:p.negative_comment.trim(), when:fmtDate(toDate(p.created_at)) }));
+
+  let html = '';
+  if(chips.length){
+    html += `<div class="neg-chips">${chips.map(([k,v])=>`<span class="neg-chip">${k}<span class="cnt">${v}</span></span>`).join('')}</div>`;
+  }
+  if(comments.length){
+    html += comments.map(c=>`<div class="neg-comment">${escapeHtml(c.text)}<div class="when">${c.when}</div></div>`).join('');
+  }
+  if(!html){
+    html = `<div class="empty" style="padding:20px"><div class="ico">✨</div><div class="ttl">指摘はありません</div><div>お客様からネガティブな指摘は届いていません。良い状態が保たれています。</div></div>`;
+  }
+  document.getElementById('negSection').innerHTML = html;
+}
+
+function renderReviews(posts){
+  const withComment = posts.filter(p=>(p.comment||'').trim());
+  if(!withComment.length){
+    document.getElementById('reviews').innerHTML = `<div class="empty" style="padding:20px"><div class="ico">💬</div><div>コメント付きの口コミはまだありません。</div></div>`;
+    return;
+  }
+  document.getElementById('reviews').innerHTML = withComment.map(p=>{
+    const score = avg(METRICS.map(m=>p[m.key]));
+    return `<div class="review">
+      <div class="top">
+        <div><span class="stars">${stars(score)}</span><span class="tier">${TIER_LABEL[p.tier]||p.tier||''}</span></div>
+        <div class="when">${fmtDate(toDate(p.created_at))}</div>
+      </div>
+      <div class="text">${escapeHtml(p.comment.trim())}</div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜実装ロードマップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1000px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:8px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0}
+  th,td{border:1px solid var(--line);padding:12px;text-align:left}
+  th{background:var(--soft);font-weight:700}
+  .phase{background:var(--pine);color:#fff;border-radius:12px;padding:16px;margin:16px 0}
+  .phase h2{color:#fff;margin:0}
+  .impl{background:var(--soft);border-left:4px solid var(--mint);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0}
+  code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>実装ロードマップ v1.0</h1>
+<p style="color:var(--mint);font-weight:700">Phase A/B/C並行実装 — 初月5,000件投稿達成のための完全チェックリスト</p>
+
+<h2>実装対象ファイル</h2>
+<ul>
+<li><b>clear-map/index.html</b>（消費者サイト）→ 投稿フォーム＋マイページ＋Lv自動判定 追加</li>
+<li><b>clear-lp/index.html</b>（店舗LP）→ キャンペーン期間中フラグ追加（不要）</li>
+<li><b>新規：kirein-campaign/index.html</b>→ TikTok / Instagram用LP（シェアページ）</li>
+</ul>
+
+<h2>Phase A：ポイント・Lv自動判定システム（バックエンド相当）</h2>
+
+<div class="phase">
+<h2>📊 クライアント側ロジック実装</h2>
+<p>LocalStorage でユーザーデータを管理（バックエンド不要）</p>
+
+<table>
+<tr><th>機能</th><th>実装内容</th><th>優先度</th></tr>
+<tr><td><b>ユーザー認証</b></td><td>LINE / 電話番号 → nickname + user_id 生成</td><td>★★★</td></tr>
+<tr><td><b>投稿データ保存</b></td><td>店舗, 評価(2項目), 感想 → posts[] 配列に追加</td><td>★★★</td></tr>
+<tr><td><b>ポイント計算</b></td><td>投稿 = 50pt（通常）or 150pt（キャンペーン中）</td><td>★★★</td></tr>
+<tr><td><b>Lv自動判定</b></td><td>total_points >= 500 → Lv.1自動昇格 + DM通知</td><td>★★★</td></tr>
+<tr><td><b>整合度スコア</b></td><td>ユーザー評価 vs プロ評価 の一致率（ダミーで開始）</td><td>★★</td></tr>
+<tr><td><b>キャンペーン時間制限</b></td><td>local datetime チェック → 3倍ポイント自動適用</td><td>★★★</td></tr>
+</table>
+</div>
+
+<div class="impl">
+<b>LocalStorage 設計</b><br>
+<code>kirein_user = { user_id, nickname, total_points, current_lv, post_count, verified, created_at }</code><br>
+<code>kirein_posts = [{ post_id, shop_id, cleanliness_rating, air_rating, comment, points_earned, created_at }, ...]</code><br>
+<code>kirein_campaign = { start_date, end_date, multiplier: 3 }</code>
+</div>
+
+<h2>Phase B：消費者サイト UI実装</h2>
+
+<div class="phase">
+<h2>🎨 投稿フロー + マイページ</h2>
+
+<table>
+<tr><th>UI要素</th><th>実装内容</th><th>状態</th></tr>
+<tr><td>【ヘッダー】<br>投稿ボタン</td><td>「このトイレ、評価する」 → モーダルオープン</td><td>新規追加</td></tr>
+<tr><td>【モーダル】<br>投稿フォーム</td><td>Step1: 店選択 / Step2: ★評価 / Step3: 完了</td><td>新規追加</td></tr>
+<tr><td>【ヘッダー】<br>マイページリンク</td><td>ユーザーニックネーム＋Lvバッジ表示</td><td>新規追加</td></tr>
+<tr><td>【専用ページ】<br>/mypage</td><td>ポイント + Lvプログレス + 投稿歴 + 整合度</td><td>新規ページ</td></tr>
+<tr><td>【自動トリガー】<br>Lv.1達成画面</td><td>アニメーション＋DM通知サミュレーション</td><td>新規追加</td></tr>
+<tr><td>【投稿完了】<br>ポイント表示</td><td>「+150pt 獲得！」＋プログレスバー更新</td><td>新規追加</td></tr>
+</table>
+</div>
+
+<div class="impl">
+<b>モーダル設計</b><br>
+<code>&lt;div id="postModal"&gt; ... Step1/2/3を条件分岐で表示</code><br>
+<code>form#postForm → onSubmit で投稿を posts[] に追加 → ポイント計算 → Lv自動判定</code>
+</div>
+
+<h2>Phase C：キャンペーン施策・SNS連携</h2>
+
+<div class="phase">
+<h2>📱 TikTok / Instagram シェアページ</h2>
+
+<table>
+<tr><th>施策</th><th>実装内容</th><th>納期</th></tr>
+<tr><td><b>キャンペーンLP</b></td><td>/campaign → 30秒スクロール動画 + CTA「今すぐ投稿」</td><td>Week 1</td></tr>
+<tr><td><b>シェアボタン</b></td><td>投稿完了後「友達を紹介」 → LINE / Twitter / WhatsApp</td><td>Week 1</td></tr>
+<tr><td><b>期間制限フラグ</b></td><td>2026-06-03 ~ 2026-06-30 の間、3倍ポイント自動適用</td><td>Week 1</td></tr>
+<tr><td><b>引用リンク</b></td><td>TikTok / Instagram → キレインサイトへ流入追跡用 UTM</td><td>Week 2</td></tr>
+</table>
+</div>
+
+<h2>実装順序（全部同時で進める）</h2>
+
+<h3>Day 1-2：基盤完成</h3>
+<ul>
+<li>✅ LocalStorage データモデル定義</li>
+<li>✅ ユーザー認証フロー（仮）</li>
+<li>✅ ポイント＋Lv自動計算ロジック</li>
+<li>✅ 投稿フォームUI（HTML/CSS）</li>
+</ul>
+
+<h3>Day 3-4：消費者向けUI完成</h3>
+<ul>
+<li>✅ 投稿フォームのStep1/2/3実装</li>
+<li>✅ マイページ（ポイント表示 + Lv進度 + 投稿歴）</li>
+<li>✅ Lv.1到達時のアニメーション＋DM表示</li>
+<li>✅ キャンペーン期間中の3倍ポイント表示</li>
+</ul>
+
+<h3>Day 5：キャンペーン・テスト</h3>
+<ul>
+<li>✅ キャンペーンLP作成</li>
+<li>✅ 全フロー E2E テスト（ユーザー登録→投稿→Lv.1達成）</li>
+<li>✅ デバイス（SP/PC）動作確認</li>
+</ul>
+
+<h2>技術スタック</h2>
+<ul>
+<li><b>フレームワーク</b>：Vanilla JS（jQuery 不要）</li>
+<li><b>状態管理</b>：LocalStorage + JSON</li>
+<li><b>リアルタイム機能</b>：ブラウザ通知（Notification API）</li>
+<li><b>アニメーション</b>：CSS transitions / anime.js 不要</li>
+<li><b>ルーティング</b>：hash-based routing（/mypage, /campaign）</li>
+</ul>
+
+<h2>テスト項目</h2>
+<table>
+<tr><th>テスト</th><th>期待値</th><th>実装後チェック</th></tr>
+<tr><td>新規ユーザー登録</td><td>LINEで認証 → user_id生成 → localStorage保存</td><td>□</td></tr>
+<tr><td>投稿フロー</td><td>店選択 → ★評価 → 完了 → ポイント表示</td><td>□</td></tr>
+<tr><td>ポイント計算</td><td>通常50pt、キャンペーン中150pt</td><td>□</td></tr>
+<tr><td>Lv.1自動昇格</td><td>500pt達成 → Lv.1 → 通知表示</td><td>□</td></tr>
+<tr><td>マイページ表示</td><td>ポイント/Lv/投稿歴/整合度 すべて表示</td><td>□</td></tr>
+<tr><td>キャンペーン期限</td><td>2026-06-30 過ぎたら3倍→50ptに戻る</td><td>□</td></tr>
+<tr><td>SP対応</td><td>iPhone SE / Android 標準ブラウザで動作</td><td>□</td></tr>
+</table>
+
+</div>
+</body>
+</html>

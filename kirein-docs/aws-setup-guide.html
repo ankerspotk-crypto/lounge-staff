@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜AWS セットアップガイド</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1000px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px;background:var(--soft);padding:8px 12px;border-radius:4px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{border:1px solid var(--line);padding:10px;text-align:left}
+  th{background:var(--soft);font-weight:700}
+  code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+  .callout{background:#e6f5f1;border-left:4px solid var(--mint);padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0}
+  .critical{background:#ffe6e6;border-left:4px solid #dc3545;padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0}
+  .pricing{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:16px;margin:16px 0}
+  .free-tier{color:#28a745;font-weight:700}
+  .paid{color:#dc3545;font-weight:700}
+  .highlight{background:linear-gradient(120deg,#fff3cd,transparent);padding:2px 4px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>AWS セットアップガイド</h1>
+<p style="color:var(--mint);font-weight:700">キレイン向けの最小構成。結論：「AWS フリープラン」で十分。</p>
+
+<h2>🎯 結論</h2>
+
+<div class="callout">
+<b>「Free Tier（フリープラン）」を選んでください。</b><br>
+<br>
+AWS 新規アカウント＆クレジットカード登録で、<b>12ヶ月間は大部分のサービスが無料</b>。<br>
+キレインの初期段階（Month 1-3）は、<b>ほぼ料金 ¥0</b> で運用可能。
+</div>
+
+---
+
+<h2>1. 契約フロー</h2>
+
+<h3>Step 1：AWS アカウント開設（5分）</h3>
+<ol>
+<li>AWS 公式サイト（<code>aws.amazon.com/jp</code>）にアクセス</li>
+<li>「アカウント作成」をクリック</li>
+<li>メールアドレス + パスワード登録</li>
+<li>クレジットカード登録（審査なし、即座に完了）</li>
+<li>電話番号確認（SMS）</li>
+<li>完了：フリープラン自動適用</li>
+</ol>
+
+<h3>Step 2：サポートプラン選択</h3>
+
+<table>
+<tr><th>プラン</th><th>料金</th><th>推奨</th></tr>
+<tr><td><b>Basic（無料）</b></td><td>¥0</td><td>✓ 初期段階向け</td></tr>
+<tr><td>Developer</td><td>月 ¥29</td><td>-</td></tr>
+<tr><td>Business</td><td>月 ¥500+</td><td>-</td></tr>
+<tr><td>Enterprise</td><td>月 ¥15,000+</td><td>-</td></tr>
+</table>
+
+<div class="callout">
+<b>→ 「Basic（無料）」を選択してください。</b><br>
+Month 1-6 は Basic で十分。エラー時は AWS Documentation や Stack Overflow で十分解決できます。
+</div>
+
+---
+
+<h2>2. キレインに必要な AWS サービス（最小構成）</h2>
+
+<h3>2.1 実際に使うサービス</h3>
+
+<table>
+<tr><th>サービス</th><th>用途</th><th>無料枠</th><th>超過時の月額</th></tr>
+<tr><td><b>Lambda</b></td><td>投稿トリガーで自動実行（Google Places API呼び出し＆メール配信キュー）</td><td>100万呼び出し/月</td><td>¥0.0000002/呼び出し</td></tr>
+<tr><td><b>DynamoDB</b></td><td>ユーザー・投稿・店舗データ保存</td><td>25GB/月</td><td>¥0.88/GB</td></tr>
+<tr><td><b>CloudWatch</b></td><td>ログ・エラーモニタリング</td><td>5GB/月</td><td>¥0.5/GB</td></tr>
+<tr><td><b>IAM</b></td><td>ユーザー・権限管理</td><td>無制限</td><td>¥0</td></tr>
+</table>
+
+<h3>2.2 使わなくていいサービス（初期段階）</h3>
+
+<ul>
+<li>❌ EC2（仮想サーバー）→ Lambda でOK</li>
+<li>❌ RDS（関係型DB）→ DynamoDB でOK</li>
+<li>❌ S3（ストレージ）→ 将来の画像投稿時に追加</li>
+<li>❌ CloudFront（CDN）→ 不要</li>
+</ul>
+
+---
+
+<h2>3. 月額コスト予測</h2>
+
+<h3>3.1 無料枠内での運用（Month 1-3）</h3>
+
+<table>
+<tr><th>サービス</th><th>使用量（Month 1）</th><th>無料枠</th><th>超過額</th></tr>
+<tr><td>Lambda</td><td>150万呼び出し（投稿＆Google API）</td><td>100万/月</td><td>50万 × ¥0.0000002 = ¥10</td></tr>
+<tr><td>DynamoDB</td><td>3GB（ユーザー・投稿データ）</td><td>25GB/月</td><td>¥0</td></tr>
+<tr><td>CloudWatch</td><td>1GB（ログ）</td><td>5GB/月</td><td>¥0</td></tr>
+<tr style="background:#f0f0f0"><td><b>月額計</b></td><td></td><td></td><td><b>¥10-50</b></td></tr>
+</table>
+
+<h3>3.2 成長時の月額コスト（Month 4-6）</h3>
+
+<table>
+<tr><th>サービス</th><th>使用量（Month 6）</th><th>月額コスト</th></tr>
+<tr><td>Lambda</td><td>300万呼び出し（投稿増加 + メール配信）</td><td>¥60</td></tr>
+<tr><td>DynamoDB</td><td>10GB（投稿＆店舗データ蓄積）</td><td>¥0（無料枠内）</td></tr>
+<tr><td>CloudWatch</td><td>3GB</td><td>¥0（無料枠内）</td></tr>
+<tr style="background:#f0f0f0"><td><b>月額計</b></td><td></td><td><b>¥60-100</b></td></tr>
+</table>
+
+<div class="callout">
+<b>結論：AWS は月 ¥0-100 で運用可能</b><br>
+<br>
+SendGrid（メール配信：月 ¥1,000-2,000） の方が圧倒的にコストがかかる。
+</div>
+
+---
+
+<h2>4. アカウント開設後のセットアップ（チェックリスト）</h2>
+
+<h3>4.1 セキュリティ設定（必須）</h3>
+
+<ul>
+<li>☐ 2 要素認証（2FA）を有効化</li>
+<li>☐ IAM ユーザーを作成（ルートアカウントは使わない）</li>
+<li>☐ IAM ユーザーに以下の権限を付与：
+  <ul>
+  <li>Lambda：完全アクセス</li>
+  <li>DynamoDB：完全アクセス</li>
+  <li>CloudWatch：完全アクセス</li>
+  <li>IAM：読み取りのみ</li>
+  </ul>
+</li>
+<li>☐ AWS Budgets で「月 ¥1,000」のアラート設定（超過防止）</li>
+</ul>
+
+<h3>4.2 サービス設定</h3>
+
+<ol>
+<li><b>Lambda 関数の作成</b>
+  <ul>
+  <li>関数名：<code>kirein-post-trigger</code></li>
+  <li>ランタイム：Node.js 18.x（または Python 3.11）</li>
+  <li>トリガー：API Gateway or DynamoDB Stream</li>
+  </ul>
+</li>
+<li><b>DynamoDB テーブルの作成</b>
+  <ul>
+  <li>テーブル 1：<code>users</code>（ユーザー情報）</li>
+  <li>テーブル 2：<code>posts</code>（投稿データ）</li>
+  <li>テーブル 3：<code>stores</code>（店舗情報）</li>
+  <li>課金モード：オンデマンド（自動スケーリング）</li>
+  </ul>
+</li>
+<li><b>CloudWatch ダッシュボード</b>
+  <ul>
+  <li>Lambda エラー率</li>
+  <li>DynamoDB の読み取り / 書き込み数</li>
+  <li>API レスポンスタイム</li>
+  </ul>
+</li>
+</ol>
+
+---
+
+<h2>5. 代替案：「AWS 不要」の選択肢</h2>
+
+<div class="critical">
+<b>⚠️ 実は「AWS なしで始める」という選択肢もあります</b><br>
+<br>
+<b>代替案：Firebase（Google）を使う</b><br>
+<br>
+✓ セットアップが簡単（5分で完了）<br>
+✓ 無料枠が充実（年間¥0～¥10,000まで無料）<br>
+✓ データベース + 認証 + ホスティング一体型<br>
+✗ カスタマイズ性が劣る<br>
+<br>
+<b>Firebase を選ぶ場合：</b><br>
+Firestore（NoSQL DB）+ Cloud Functions（サーバーレス） + Authentication
+</div>
+
+---
+
+<h2>6. 推奨：AWS か Firebase か</h2>
+
+<table>
+<tr><th>観点</th><th>AWS</th><th>Firebase</th></tr>
+<tr><td>セットアップ時間</td><td>30分</td><td>5分</td></tr>
+<tr><td>月額コスト</td><td>¥0-100</td><td>¥0-500</td></tr>
+<tr><td>スケーラビリティ</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td></tr>
+<tr><td>カスタマイズ性</td><td>高</td><td>中</td></tr>
+<tr><td>学習コスト</td><td>高</td><td>低</td></tr>
+<tr><td>推奨</td><td><b>✓ 推奨</b></td><td>-</td></tr>
+</table>
+
+<div class="callout">
+<b>→ AWS を推奨します。理由：</b><br>
+<br>
+1. 自社開発のエンジニアがいれば AWS の方が柔軟<br>
+2. 長期的なスケーリングを考えると AWS が安い<br>
+3. Google Places API 連携が簡単<br>
+</div>
+
+---
+
+<h2>7. AWS 開設後の「やることリスト」</h2>
+
+<div class="critical">
+<b>開設当日にやること（30分）</b><br>
+<br>
+① ルートアカウント + 2FA 設定<br>
+② IAM ユーザー作成（開発用）<br>
+③ AWS Budgets で月 ¥1,000 アラート設定<br>
+④ Lambda コンソールへのアクセス確認<br>
+⑤ DynamoDB コンソールへのアクセス確認
+</div>
+
+<h3>Week 1 内にやること</h3>
+
+<ul>
+<li>☐ Lambda 関数 1 つ作成（投稿トリガーテスト）</li>
+<li>☐ DynamoDB テーブル 3 つ作成</li>
+<li>☐ CloudWatch ダッシュボード作成</li>
+<li>☐ テストデータを Lambda で投稿 → DynamoDB に保存できるか確認</li>
+</ul>
+
+---
+
+<h2>8. 無料枠をオーバーする場合の対策</h2>
+
+<table>
+<tr><th>シナリオ</th><th>対策</th></tr>
+<tr><td>Lambda 呼び出しが 200万超過</td><td>DynamoDB Stream で効率化（非同期処理）</td></tr>
+<tr><td>DynamoDB が 25GB を超える</td><td>S3 へのアーカイブ or テーブル分割</td></tr>
+<tr><td>CloudWatch ログが 5GB 超</td><td>ログ保持期間を 7 日に短縮</td></tr>
+</table>
+
+<div class="callout">
+<b>実際には Month 1-6 で超過する可能性は低い</b><br>
+<br>
+投稿データは 1 件 = 1KB程度なので、20,000 件投稿しても 20GB にしかならない（無料枠内）。
+</div>
+
+---
+
+<h2>9. 支払い方法</h2>
+
+<ul>
+<li>クレジットカード（推奨）：VISAPowered / MasterCard / AmEx</li>
+<li>振替払い：日本向けオプション（手数料なし）</li>
+<li>AWS Credits：スタートアップ向け無料クレジット（申請で ¥50,000 相当）</li>
+</ul>
+
+<div class="callout">
+<b>AWS Activate に申し込む</b><br>
+<br>
+スタートアップ対象企業なら、¥50,000 相当の AWS Credits がもらえる。<br>
+（キレインは新しい事業なので対象になる可能性あり）<br>
+<br>
+申請 URL：<code>aws.amazon.com/activate</code>
+</div>
+
+---
+
+<h2>10. 結論：何を契約すればいいか</h2>
+
+<div class="callout">
+<b>✓ AWS アカウント開設</b><br>
+<b>✓ 「Free Tier（フリープラン）」を選択</b><br>
+<b>✓ Basic サポートプラン（無料）</b><br>
+<b>✓ クレジットカード登録</b><br>
+<br>
+→ これだけで月 ¥0-100 で運用可能。
+</div>
+
+</div>
+</body>
+</html>

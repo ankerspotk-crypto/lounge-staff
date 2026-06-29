@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜トイレが汚かった。ちゃんと言っていい。</title>
+<meta property="og:title" content="トイレが汚かった。ちゃんと言っていい。" />
+<meta property="og:description" content="匿名で投稿するだけ。あなたの声が、次の人を守る。お店には言いにくい、でも我慢するのも違う。キレインなら、ちゃんと届く。" />
+<meta property="og:image" content="https://kireinip.github.io/kirein/logo.png" />
+<meta property="og:url" content="https://kireinip.github.io/kirein/campaign.html" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:image" content="https://kireinip.github.io/kirein/logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.7}
+  h1,h2{font-weight:700}
+  a{color:inherit;text-decoration:none}
+  .wrap{width:min(1000px,94vw);margin-inline:auto}
+  .btn{display:inline-flex;align-items:center;justify-content:center;padding:16px 32px;border-radius:12px;font-size:16px;font-weight:700;border:none;cursor:pointer;transition:.2s}
+  .btn.primary{background:var(--mint);color:#062019}
+  .btn.primary:hover{background:#1ea487;transform:translateY(-2px)}
+  .btn.secondary{background:var(--pine);color:#fff}
+
+  /* ヒーロー */
+  header{background:linear-gradient(150deg,#061a17,var(--pine));color:#fff;padding:64px 0 56px;text-align:center}
+  header h1{font-size:clamp(28px,6vw,52px);line-height:1.3;margin-bottom:20px;letter-spacing:-.01em}
+  header h1 em{font-style:normal;color:var(--mint)}
+  header p.sub{font-size:16px;color:#bcd2cb;max-width:28em;margin:0 auto 36px;line-height:1.9}
+
+  /* 3つの壁 */
+  .walls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:32px 0 0}
+  .wall{background:rgba(255,255,255,.08);border-radius:12px;padding:20px;text-align:left}
+  .wall .icon{font-size:24px;margin-bottom:8px}
+  .wall .label{font-size:13px;color:#9ed1c5;font-weight:700;margin-bottom:6px}
+  .wall p{font-size:13px;color:#bcd2cb;line-height:1.7}
+
+  /* セクション */
+  .section{background:#fff;border-radius:16px;padding:36px;margin:24px auto;max-width:800px;box-shadow:0 4px 16px -4px rgba(0,0,0,.08)}
+  .section h2{font-size:20px;color:var(--pine);margin-bottom:20px;display:flex;align-items:center;gap:10px}
+  .section h2::before{content:"";display:inline-block;width:4px;height:24px;background:var(--mint);border-radius:2px}
+
+  /* 対比 */
+  .versus{display:grid;grid-template-columns:1fr 1fr;gap:0;border-radius:12px;overflow:hidden;border:1px solid var(--line);margin:20px 0}
+  .vs-col{padding:20px}
+  .vs-col.bad{background:#fff8f6;border-right:1px solid var(--line)}
+  .vs-col.good{background:var(--soft)}
+  .vs-col .title{font-size:13px;font-weight:700;margin-bottom:12px}
+  .vs-col.bad .title{color:#c0392b}
+  .vs-col.good .title{color:var(--pine)}
+  .vs-row{font-size:13px;color:var(--muted);padding:6px 0;border-bottom:1px solid var(--line);line-height:1.6}
+  .vs-row:last-child{border-bottom:none}
+
+  /* ステップ */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-top:20px}
+  .step{background:var(--soft);border-radius:12px;padding:20px;text-align:center}
+  .step .num{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;background:var(--mint);color:#fff;border-radius:50%;font-weight:700;font-size:18px;margin-bottom:12px}
+  .step .title{font-weight:700;color:var(--pine);margin-bottom:6px;font-size:14px}
+  .step p{font-size:12px;color:var(--muted)}
+
+  /* CTA */
+  .cta-block{text-align:center;margin:32px 0 0}
+  .cta-block .main-btn{font-size:18px;padding:20px 48px;border-radius:14px;background:#06C755;color:#fff;font-weight:700;display:inline-flex;align-items:center;gap:10px;transition:.2s}
+  .cta-block .main-btn:hover{background:#05b34c;transform:translateY(-2px);box-shadow:0 10px 28px rgba(6,199,85,.3)}
+  .cta-block .note{font-size:12px;color:var(--muted);margin-top:12px}
+
+  /* ポイント */
+  .point-box{background:linear-gradient(135deg,var(--mint),#1a9e83);color:#fff;border-radius:14px;padding:24px;text-align:center;margin:20px 0}
+  .point-box .pt{font-size:42px;font-weight:700;line-height:1}
+  .point-box small{font-size:13px;opacity:.85}
+
+  footer{background:var(--pine);color:#9fb6af;padding:32px 0 20px;text-align:center;font-size:12px;margin-top:40px}
+
+  @media(max-width:640px){
+    .section{padding:22px}
+    .versus{grid-template-columns:1fr}
+    .vs-col.bad{border-right:none;border-bottom:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>トイレが汚かった。<br><em>ちゃんと言っていい。</em></h1>
+    <p class="sub">
+      お店には言いにくい。<br>
+      SNSに書くのも、なんか違う。<br>
+      でも、我慢するのも違う。
+    </p>
+    <a href="https://lin.ee/ObAs4yD" class="btn primary" style="font-size:18px;padding:18px 40px;background:#06C755;color:#fff">
+      🟢 LINEで今すぐ言う
+    </a>
+    <p style="font-size:12px;color:#7eada4;margin-top:12px">匿名・無料・30秒で投稿できます</p>
+
+    <!-- 3つの壁 -->
+    <div class="walls" style="max-width:680px;margin:40px auto 0">
+      <div class="wall">
+        <div class="icon">😶</div>
+        <div class="label">お店に直接は言えない</div>
+        <p>クレーマーと思われたくない。気まずくなりたくない。</p>
+      </div>
+      <div class="wall">
+        <div class="icon">📱</div>
+        <div class="label">SNSに書くのも違う</div>
+        <p>晒しにしたいわけじゃない。でも誰かに伝えたい。</p>
+      </div>
+      <div class="wall">
+        <div class="icon">😮‍💨</div>
+        <div class="label">我慢して終わり、が続く</div>
+        <p>また汚いまま。次のお客さんも同じ思いをする。</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- キレインとは -->
+  <div class="section" style="margin-top:32px;text-align:center;background:linear-gradient(135deg,var(--pine),#0b2c27);color:#fff">
+    <p style="font-size:22px;font-weight:700;line-height:1.6;color:#fff">
+      キレインは、<br>
+      <span style="color:var(--mint)">あなたの声が届く場所</span>です。
+    </p>
+    <p style="font-size:14px;color:#bcd2cb;margin-top:16px;line-height:1.9">
+      匿名で投稿 → お店だけに届く → お店が改善する<br>
+      あなたの一言が、次に来るお客さんを守ります。
+    </p>
+  </div>
+
+  <!-- キレインvs今まで -->
+  <div class="section">
+    <h2>今までとの違い</h2>
+    <div class="versus">
+      <div class="vs-col bad">
+        <div class="title">❌ 今まで</div>
+        <div class="vs-row">気持ち悪かったけど、何も言えなかった</div>
+        <div class="vs-row">SNSに書いたら晒しになりそう</div>
+        <div class="vs-row">直接言ったら気まずくなった</div>
+        <div class="vs-row">結局、我慢して終わった</div>
+      </div>
+      <div class="vs-col good">
+        <div class="title">✅ キレインなら</div>
+        <div class="vs-row">匿名で投稿。名前は一切出ない</div>
+        <div class="vs-row">声はお店だけに届く。一般には非公開</div>
+        <div class="vs-row">お店が改善して、次のお客さんが守られる</div>
+        <div class="vs-row">投稿するだけでポイントがもらえる</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 使い方 -->
+  <div class="section">
+    <h2>3ステップで声をあげる</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <div class="title">LINEを追加</div>
+        <p>キレイン公式LINEを友達追加するだけ</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div class="title">投稿する</div>
+        <p>リッチメニューから30秒で評価を送信</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div class="title">お店が変わる</div>
+        <p>あなたの声がお店に届き、改善に繋がる</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ポイント特典 -->
+  <div class="section">
+    <h2>しかも、ポイントまでもらえる</h2>
+    <div class="point-box">
+      <small>1投稿につき（キャンペーン中）</small>
+      <div class="pt" style="margin:8px 0">150 pt</div>
+      <small>通常時 50pt → 今だけ3倍！（〜12月末）</small>
+    </div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.9;margin-top:16px">
+      投稿を続けるとレベルアップ。Lv.2以上は<b>報告書報酬</b>として現金収入も。<br>
+      声をあげながら、ポイントも貯まる。
+    </p>
+  </div>
+
+  <!-- 最終CTA -->
+  <div class="section" style="text-align:center;padding:48px 36px">
+    <p style="font-size:22px;font-weight:700;color:var(--pine);line-height:1.6;margin-bottom:8px">
+      我慢は、もうやめよう。
+    </p>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:28px;line-height:1.9">
+      あなたの一言が、次の人を守ります。
+    </p>
+    <div class="cta-block">
+      <a href="https://lin.ee/ObAs4yD" class="main-btn">
+        🟢 LINEで今すぐ始める
+      </a>
+      <p class="note">匿名・完全無料・30秒で投稿</p>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p style="margin-bottom:8px">トイレが汚かった。ちゃんと言っていい。</p>
+    <p style="margin-bottom:12px">あなたの声が、お店を変える。</p>
+    <p>© 2026 Kirein（キレイン）</p>
+  </div>
+</footer>
+
+<script>
+const LINE_ADD_URL = 'https://lin.ee/ObAs4yD';
+if (document.referrer.includes('tiktok') || document.referrer.includes('instagram')) {
+  setTimeout(() => {
+    const lineBtn = document.querySelector('.main-btn');
+    if (lineBtn) lineBtn.scrollIntoView({ behavior: 'smooth' });
+  }, 500);
+}
+</script>
+
+</body>
+</html>

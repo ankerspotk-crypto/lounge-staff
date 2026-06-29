@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>IEYAS POS</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0d0d14; color: #fff; min-height: 100vh; }
+
+header {
+  background: #16162a;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid #2a2a40;
+}
+header h1 { font-size: 17px; letter-spacing: .5px; }
+#refresh-btn { background: #2a2a40; border: none; color: #ccc; padding: 8px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; }
+#refresh-btn:active { background: #3a3a55; }
+#last-updated { font-size: 11px; color: #777; text-align: center; padding: 4px 0 0; }
+
+.floors-wrapper { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 68px); overflow: hidden; }
+.floor-section { overflow-y: auto; padding: 10px 8px; border-right: 1px solid #1c1c2a; }
+.floor-section:last-child { border-right: none; }
+.floor-label { font-size: 12px; color: #ddd; font-weight: bold; letter-spacing: 2px; padding: 0 2px 8px; border-bottom: 1px solid #222; margin-bottom: 8px; }
+
+.seat-grid { display: grid; gap: 7px; margin-bottom: 8px; }
+.seat-grid.counter { grid-template-columns: 1fr 1fr; }
+.seat-grid.box     { grid-template-columns: 1fr; }
+
+.pos-seat {
+  background: #1a1a2a;
+  border: 1px solid #2a2a3e;
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  user-select: none;
+}
+.pos-seat:active { opacity: .7; }
+.pos-seat.occupied { background: #0a1a2e; border-color: #1e3e5e; }
+.pos-seat-name { font-size: 12px; color: #aaa; margin-bottom: 4px; }
+.pos-seat.occupied .pos-seat-name { color: #5599cc; }
+.pos-seat-status { font-size: 14px; color: #777; }
+.pos-seat-cust { font-size: 15px; font-weight: 700; color: #fff; }
+.pos-seat-pax { font-size: 11px; color: #789; margin-top: 2px; }
+
+#overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; backdrop-filter: blur(2px); }
+#sheet {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #1a1a2a;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px env(safe-area-inset-bottom, 16px);
+  z-index: 51;
+  max-height: 82vh;
+  overflow-y: auto;
+  animation: slideUp .2s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.sheet-handle { width: 40px; height: 4px; background: #444; border-radius: 2px; margin: 0 auto 16px; }
+.sheet-title { font-size: 15px; font-weight: bold; color: #ccc; margin-bottom: 14px; text-align: center; }
+
+#cancel-btn { width: 100%; background: #1a1a2a; border: 1px solid #333; color: #999; padding: 12px; border-radius: 10px; font-size: 13px; cursor: pointer; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍽 IEYAS POS</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a href="<?= GAS_URL ?>" style="background:#1a1a2a;border:1px solid #3a3a66;color:#aab0ff;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer;text-decoration:none">🏯 軍師へ</a>
+    <button id="refresh-btn" onclick="loadAll()">↻ 更新</button>
+  </div>
+</header>
+<div id="last-updated"></div>
+<div id="content"><div style="text-align:center;padding:30px 0;color:#777">読み込み中...</div></div>
+
+<div id="overlay"></div>
+<div id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title" id="sheet-title"></div>
+  <div id="sheet-body"></div>
+</div>
+
+<script>
+var seats = [];
+
+var TS_TABLES = [
+  {f:'2F',n:'カウンター1'},{f:'2F',n:'カウンター2'},{f:'2F',n:'カウンター3'},{f:'2F',n:'カウンター4'},
+  {f:'2F',n:'ボックス1'},{f:'2F',n:'ボックス2'},{f:'2F',n:'ボックス3'},
+  {f:'5F',n:'カウンター1'},{f:'5F',n:'カウンター2'},{f:'5F',n:'カウンター3'},
+  {f:'5F',n:'カウンター4'},{f:'5F',n:'カウンター5'},{f:'5F',n:'カウンター6'},
+  {f:'5F',n:'ボックス1'},{f:'5F',n:'ボックス2'}
+];
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+function tableNameToSeatCodeJs_(name) {
+  var m = String(name || '').match(/^(2F|5F)\s+(カウンター|ボックス)(\d+)$/);
+  if (!m) return null;
+  return m[1] + '-' + (m[2] === 'カウンター' ? 'C' : 'B') + m[3];
+}
+function seatCodeToTableNameJs_(code) {
+  var m = String(code || '').match(/^(2F|5F)-(C|B)(\d+)$/);
+  if (!m) return null;
+  return m[1] + ' ' + (m[2] === 'C' ? 'カウンター' : 'ボックス') + m[3];
+}
+
+var checkedInReservations = [];
+
+function loadAll() { loadSeats(); }
+
+function loadSeats() {
+  document.getElementById('refresh-btn').textContent = '…';
+  google.script.run
+    .withSuccessHandler(function(list) {
+      checkedInReservations = list || [];
+      google.script.run
+        .withSuccessHandler(function(data) {
+          document.getElementById('refresh-btn').textContent = '↻ 更新';
+          seats = data;
+          render(data);
+          var now = new Date();
+          document.getElementById('last-updated').textContent =
+            now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ' 更新';
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('refresh-btn').textContent = '↻ 更新';
+          document.getElementById('content').innerHTML =
+            '<div style="color:#cc5555;text-align:center;padding:30px 0">読み込みエラー<br><small style="color:#888">' +
+            (err && err.message ? err.message : '通信エラー') + '</small></div>';
+        })
+        .getSekiJokyouData();
+    })
+    .withFailureHandler(function() {
+      checkedInReservations = [];
+      google.script.run.withSuccessHandler(function(data) { seats = data; render(data); }).getSekiJokyouData();
+    })
+    .getTodayCheckedInReservations();
+}
+
+function render(data) {
+  var floors = ['2F', '5F'];
+  var html = '<div class="floors-wrapper">';
+  floors.forEach(function(f) {
+    var counters = data.filter(function(s){ return s.floor === f && s.type === 'C'; });
+    var boxes    = data.filter(function(s){ return s.floor === f && s.type === 'B'; });
+    html += '<div class="floor-section">';
+    html += '<div class="floor-label">' + f + '</div>';
+    if (counters.length) {
+      html += '<div class="seat-grid counter">' + counters.map(posSeatHtml).join('') + '</div>';
+    }
+    if (boxes.length) {
+      html += '<div class="seat-grid box">' + boxes.map(posSeatHtml).join('') + '</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('content').innerHTML = html;
+}
+
+// 席コードに対応する本日の来店済み予約を返す（ドッキング中の複数席は同じ予約を共有）
+function findReservationForSeat_(code) {
+  for (var i = 0; i < checkedInReservations.length; i++) {
+    var r = checkedInReservations[i];
+    var codes = String(r.table || '').split('、').map(function(t){ return tableNameToSeatCodeJs_(t.trim()); }).filter(Boolean);
+    if (codes.indexOf(code) >= 0) return r;
+  }
+  return null;
+}
+
+function posSeatHtml(s) {
+  var id = 'pseat-' + s.code.replace(/[^a-zA-Z0-9]/g,'_');
+  var occupied = !!s.rsrv;
+  var body;
+  if (occupied) {
+    var r = findReservationForSeat_(s.code);
+    var codes = r ? String(r.table || '').split('、').map(function(t){ return tableNameToSeatCodeJs_(t.trim()); }).filter(Boolean) : [];
+    var isParent = codes.length === 0 || codes[0] === s.code;
+    if (isParent) {
+      var seatFee = (r && r.seatFee != null) ? r.seatFee : 13000;
+      var dohanFee = (r && r.dohanFee != null) ? r.dohanFee : (r && r.dohanCast ? 3000 : 0);
+      body = '<div class="pos-seat-cust">' + esc(s.rsrv.customer) + '様</div>'
+        + '<div class="pos-seat-pax">' + s.rsrv.pax + '名　¥' + (seatFee + dohanFee).toLocaleString() + '</div>';
+    } else {
+      body = '<div class="pos-seat-cust">' + esc(s.rsrv.customer) + '様</div>'
+        + '<div class="pos-seat-pax" style="color:#567">ドッキング中</div>';
+    }
+  } else {
+    body = '<div class="pos-seat-status">空席</div>';
+  }
+  return '<div class="pos-seat' + (occupied ? ' occupied' : '') + '" id="' + id + '" onclick="tapPosSeat(\'' + s.code + '\')">'
+    + '<div class="pos-seat-name">' + esc(s.short) + '</div>' + body + '</div>';
+}
+
+function tapPosSeat(code) {
+  var seat = seats.find(function(s){ return s.code === code; });
+  if (!seat) return;
+  if (seat.rsrv) { openSeatDetail(seat); } else { openTableSetup(seatCodeToTableNameJs_(code)); }
+}
+
+function closeSheet() {
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('sheet').style.display   = 'none';
+}
+document.getElementById('overlay').addEventListener('click', closeSheet);
+
+// ---- 席詳細（来店中） ----
+
+function openSeatDetail(seat) {
+  document.getElementById('sheet-title').textContent = esc(seat.short) + '（来店中）';
+  document.getElementById('sheet-body').innerHTML = '<div style="text-align:center;padding:20px 0;color:#777">読み込み中...</div>';
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('sheet').style.display   = 'block';
+  google.script.run
+    .withSuccessHandler(function(r) { renderSeatDetail(seat, r); })
+    .withFailureHandler(function() {
+      document.getElementById('sheet-body').innerHTML = '<div style="color:#cc5555;text-align:center;padding:20px 0">読み込みエラー</div>';
+    })
+    .getReservationBySeat(seat.code);
+}
+
+function renderSeatDetail(seat, r) {
+  var html = '';
+  if (!r) {
+    html += '<div style="color:#999;text-align:center;padding:10px 0 16px">予約データが見つかりませんでした</div>';
+  } else {
+    html += '<div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:4px">' + esc(r.customer) + '様　' + r.pax + '名</div>';
+    html += '<div style="font-size:12px;color:#789;margin-bottom:14px">' + esc(r.table || '') + '</div>';
+    if (r.tantouCast) html += '<div style="font-size:13px;color:#ddbb55;margin-bottom:4px">担当: ' + esc(r.tantouCast) + '</div>';
+    if (r.dohanCast)  html += '<div style="font-size:13px;color:#ffaa66;margin-bottom:4px">同伴: ' + esc(r.dohanCast) + '</div>';
+    if (r.yoyakuCast) html += '<div style="font-size:13px;color:#7ab0f0;margin-bottom:4px">予約: ' + esc(r.yoyakuCast) + '</div>';
+    if (r.subCustomers && r.subCustomers.length) {
+      html += '<div style="font-size:12px;color:#999;margin:6px 0 4px">サブのお客様:</div>';
+      r.subCustomers.forEach(function(sc) {
+        html += '<div style="font-size:12px;color:#aab;margin-left:8px;margin-bottom:2px">・' + sc.pax + '名　予約: ' + esc(sc.yoyakuCast || '未定') + '</div>';
+      });
+    }
+
+    var seatFee = (r.seatFee != null) ? r.seatFee : 13000;
+    var dohanFee = (r.dohanFee != null) ? r.dohanFee : (r.dohanCast ? 3000 : 0);
+    html += '<div style="background:#14141f;border:1px solid #2a2a40;border-radius:8px;padding:12px;margin:14px 0">';
+    html += '<div style="font-size:12px;color:#ccc;margin-bottom:10px">会計</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      + '<span style="font-size:13px;color:#aaa">席料</span>'
+      + '<input type="number" id="bill-seat-fee" value="' + seatFee + '" style="width:100px;text-align:right;background:#1a1a2e;border:1px solid #333;color:#fff;padding:6px 8px;border-radius:6px;font-size:13px">'
+      + '</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      + '<span style="font-size:13px;color:#aaa">同伴料</span>'
+      + '<input type="number" id="bill-dohan-fee" value="' + dohanFee + '" style="width:100px;text-align:right;background:#1a1a2e;border:1px solid #333;color:#fff;padding:6px 8px;border-radius:6px;font-size:13px">'
+      + '</div>';
+    html += '<div style="display:flex;justify-content:space-between;border-top:1px solid #2a2a40;padding-top:8px;margin-top:4px">'
+      + '<span style="font-size:13px;color:#ccc;font-weight:700">合計</span>'
+      + '<span id="bill-total" style="font-size:15px;color:#fff;font-weight:700">¥' + (seatFee + dohanFee).toLocaleString() + '</span>'
+      + '</div>';
+    html += '<button id="bill-save-btn" style="width:100%;margin-top:10px;background:#0e1e2e;border:1px solid #1e3e5e;color:#5599cc;padding:9px;border-radius:8px;font-size:12px;cursor:pointer">保存</button>';
+    html += '</div>';
+    html += '<div style="background:#14141f;border:1px dashed #2a2a40;color:#667;font-size:11px;padding:8px 12px;border-radius:8px;margin-bottom:14px;text-align:center">🍽 ドリンク・フード等の注文機能は近日対応予定</div>';
+  }
+  html += '<button id="checkout-btn" style="width:100%;background:#2a1010;border:1px solid #6a2a2a;color:#ee8888;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">退店（チェックアウト）</button>';
+  html += '<button id="cancel-btn">閉じる</button>';
+  document.getElementById('sheet-body').innerHTML = html;
+
+  var feeInput = document.getElementById('bill-seat-fee');
+  var dohanInput = document.getElementById('bill-dohan-fee');
+  if (feeInput && dohanInput) {
+    var recalc = function() {
+      var sf = Number(feeInput.value) || 0;
+      var df = Number(dohanInput.value) || 0;
+      document.getElementById('bill-total').textContent = '¥' + (sf + df).toLocaleString();
+    };
+    feeInput.oninput = recalc;
+    dohanInput.oninput = recalc;
+    var billSaveBtn = document.getElementById('bill-save-btn');
+    billSaveBtn.onclick = function() {
+      var sf = Number(feeInput.value) || 0;
+      var df = Number(dohanInput.value) || 0;
+      billSaveBtn.disabled = true;
+      billSaveBtn.textContent = '保存中...';
+      google.script.run
+        .withSuccessHandler(function() {
+          billSaveBtn.disabled = false;
+          billSaveBtn.textContent = '保存しました';
+          setTimeout(function() { billSaveBtn.textContent = '保存'; }, 1500);
+        })
+        .withFailureHandler(function(err) {
+          billSaveBtn.disabled = false;
+          billSaveBtn.textContent = '保存';
+          alert('保存エラー: ' + (err && err.message ? err.message : err));
+        })
+        .updateSeatCharges(r.rowIdx, sf, df);
+    };
+  }
+
+  var coBtn = document.getElementById('checkout-btn');
+  if (coBtn) coBtn.onclick = function() {
+    if (!confirm(esc(r ? r.customer : '') + '様を退店処理します。よろしいですか？')) return;
+    coBtn.disabled = true;
+    coBtn.textContent = '処理中...';
+    google.script.run
+      .withSuccessHandler(function() { closeSheet(); loadSeats(); })
+      .withFailureHandler(function(err) {
+        coBtn.disabled = false;
+        coBtn.textContent = '退店（チェックアウト）';
+        alert('退店処理エラー: ' + (err && err.message ? err.message : err));
+      })
+      .checkOutBySeat(seat.code);
+  };
+  document.getElementById('cancel-btn').onclick = closeSheet;
+}
+
+// ---- 🪑 テーブル設定（新規来店・予約から来店） ----
+
+var tableSetupState = null;
+
+function openTableSetup(presetTable) {
+  tableSetupState = {
+    step: 'docking',
+    tables: presetTable ? [presetTable] : [], mode: null, pendingList: [], selectedRsvIdx: null,
+    customer: '', memberId: '', pax: 1, tantou: [], dohan: [], yoyaku: '',
+    tantouTouched: false, custTantou: '', castList: [], subCustomers: []
+  };
+  document.getElementById('sheet-title').textContent = '🪑 テーブル設定';
+  document.getElementById('sheet-body').innerHTML = '<div style="text-align:center;padding:30px 0;color:#777">読み込み中...</div>';
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('sheet').style.display   = 'block';
+  google.script.run
+    .withSuccessHandler(function(list) {
+      tableSetupState.castList = list || [];
+      google.script.run
+        .withSuccessHandler(function(pending) { tableSetupState.pendingList = pending || []; renderTableSetupStep(); })
+        .withFailureHandler(function() { tableSetupState.pendingList = []; renderTableSetupStep(); })
+        .getTodayPendingReservations();
+    })
+    .withFailureHandler(function() { tableSetupState.castList = []; renderTableSetupStep(); })
+    .getCastNamesForTableSetup();
+}
+
+function renderTableSetupStep() {
+  if (tableSetupState.step === 'form') renderTableSetupForm(); else renderDockingStep();
+}
+
+// ステップ1: ドッキングするテーブルを選ぶ（複数可）
+function renderDockingStep() {
+  var st = tableSetupState;
+  var prevFloor = '';
+  var tableChips = TS_TABLES.map(function(t) {
+    var val = t.f + ' ' + t.n;
+    var sel = st.tables.indexOf(val) >= 0;
+    var code = tableNameToSeatCodeJs_(val);
+    var seatObj = seats.find(function(s){ return s.code === code; });
+    var occupied = !!(seatObj && seatObj.rsrv) && !sel;
+    var floorLabel = '';
+    if (t.f !== prevFloor) {
+      floorLabel = '<div style="width:100%;font-size:10px;color:#667;margin:' + (prevFloor ? '8' : '0') + 'px 0 3px">' + t.f + '</div>';
+      prevFloor = t.f;
+    }
+    return floorLabel + '<button type="button" class="dk-table-chip" data-val="' + esc(val) + '"' + (occupied ? ' disabled' : '') + ' style="padding:7px 11px;border-radius:8px;font-size:12px;cursor:' + (occupied ? 'not-allowed' : 'pointer') + ';background:'
+      + (sel ? '#0e1e2e' : '#1a1a2e') + ';border:1px solid ' + (sel ? '#1e3e5e' : '#333') + ';color:' + (sel ? '#5599cc' : occupied ? '#444' : '#aaa') + ';opacity:' + (occupied ? '.5' : '1') + '">' + esc(t.n)
+      + (occupied ? '<span style="color:#ff6666;margin-left:3px">●</span>' : '') + '</button>';
+  }).join('');
+
+  var html = '<div style="font-size:13px;color:#ccc;margin-bottom:4px">ドッキングするテーブルを選ぶ</div>';
+  html += '<div style="font-size:11px;color:#789;margin-bottom:12px">同じお客様で使う席をすべて選んでください（複数選択可）</div>';
+  html += '<div id="dk-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px">' + tableChips + '</div>';
+  html += '<button id="dk-next-btn" style="width:100%;background:#0e1e2e;border:1px solid #1e3e5e;color:#5599cc;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">次へ</button>';
+  html += '<button id="cancel-btn">キャンセル</button>';
+
+  document.getElementById('sheet-body').innerHTML = html;
+  bindTableSetupEvents_();
+}
+
+function renderCastChipsHtml_(list, selArr, cls) {
+  if (!list || list.length === 0) return '<span style="font-size:12px;color:#666">キャストが登録されていません</span>';
+  return list.map(function(c) {
+    var sel = selArr.indexOf(c) >= 0;
+    return '<button type="button" class="' + cls + '" data-val="' + esc(c) + '" style="padding:6px 12px;border-radius:10px;font-size:12px;cursor:pointer;background:'
+      + (sel ? '#2a2210' : '#1a1a2e') + ';border:1px solid ' + (sel ? '#886622' : '#333') + ';color:' + (sel ? '#ddbb55' : '#aaa') + '">' + esc(c) + '</button>';
+  }).join('');
+}
+
+function renderTableSetupForm() {
+  var st = tableSetupState;
+  var html = '<div style="background:#14141f;border:1px solid #2a2a40;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+    + '<div style="font-size:12px;color:#ccc">席: ' + st.tables.map(esc).join('、') + '</div>'
+    + '<span id="dk-back-link" style="font-size:11px;color:#5599cc;cursor:pointer;white-space:nowrap;margin-left:8px">変更する</span>'
+    + '</div>';
+
+  html += '<div style="display:flex;gap:8px;margin-bottom:12px">'
+    + '<button type="button" class="ts-mode-btn" data-mode="existing" style="flex:1;padding:10px;border-radius:8px;font-size:12px;cursor:pointer;background:'
+    + (st.mode === 'existing' ? '#0e1e2e' : '#1a1a2e') + ';border:1px solid ' + (st.mode === 'existing' ? '#1e3e5e' : '#333') + ';color:' + (st.mode === 'existing' ? '#5599cc' : '#aaa') + '">📅 予約から選ぶ</button>'
+    + '<button type="button" class="ts-mode-btn" data-mode="new" style="flex:1;padding:10px;border-radius:8px;font-size:12px;cursor:pointer;background:'
+    + (st.mode === 'new' ? '#0d2010' : '#1a1a2e') + ';border:1px solid ' + (st.mode === 'new' ? '#1a5020' : '#333') + ';color:' + (st.mode === 'new' ? '#66cc88' : '#aaa') + '">✨ 新規（直接来店）</button>'
+    + '</div>';
+
+  if (st.mode === 'existing') {
+    if (st.pendingList.length === 0) {
+      html += '<div style="font-size:12px;color:#777;padding:10px 0;text-align:center">本日の未来店予約はありません</div>';
+    } else {
+      html += '<div id="ts-rsv-list" style="margin-bottom:14px">' + st.pendingList.map(function(r, i) {
+        var sel = st.selectedRsvIdx === i;
+        return '<div class="ts-rsv-row" data-i="' + i + '" style="padding:9px 10px;border-radius:8px;margin-bottom:5px;cursor:pointer;background:'
+          + (sel ? '#14241a' : '#14141f') + ';border:1px solid ' + (sel ? '#2a6a3a' : '#2a2a40') + '">'
+          + '<div style="font-size:12px;color:#fff">' + esc(r.time) + '　' + esc(r.customer) + '様　' + r.pax + '名</div>'
+          + '<div style="font-size:11px;color:#789">' + esc(r.table || '未定') + (r.tantouCast ? '　担当:' + esc(r.tantouCast) : '') + '</div>'
+          + '</div>';
+      }).join('') + '</div>';
+    }
+  }
+
+  if (st.mode) {
+    html += '<div style="font-size:11px;color:#889;margin-bottom:6px">お客様名</div>';
+    html += '<input type="text" id="ts-customer" value="' + esc(st.customer) + '" placeholder="山田 貴志 様" style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;margin-bottom:10px;box-sizing:border-box">';
+
+    html += '<div style="font-size:11px;color:#889;margin-bottom:6px">人数</div>';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+      + '<button type="button" id="ts-pax-minus" style="width:30px;height:30px;border-radius:50%;border:1px solid #444;background:#1a1a2e;color:#ccc;cursor:pointer">−</button>'
+      + '<span id="ts-pax-val" style="font-size:15px;color:#fff;min-width:30px;text-align:center">' + st.pax + '名</span>'
+      + '<button type="button" id="ts-pax-plus" style="width:30px;height:30px;border-radius:50%;border:1px solid #444;background:#1a1a2e;color:#ccc;cursor:pointer">＋</button>'
+      + '</div>';
+
+    html += '<div style="font-size:11px;color:#889;margin-bottom:6px">担当キャスト（複数選択可）'
+      + (st.custTantou ? '<span style="color:#789;margin-left:6px">顧客マスタ登録: ' + esc(st.custTantou) + '</span>' : '') + '</div>';
+    html += '<div id="ts-tantou-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">' + renderCastChipsHtml_(st.castList, st.tantou, 'ts-tantou-chip') + '</div>';
+
+    html += '<div style="font-size:11px;color:#889;margin-bottom:6px">同伴キャスト（複数選択可）</div>';
+    html += '<div id="ts-dohan-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">' + renderCastChipsHtml_(st.castList, st.dohan, 'ts-dohan-chip') + '</div>';
+
+    html += '<div style="font-size:11px;color:#889;margin-bottom:6px">予約キャスト</div>';
+    html += '<select id="ts-yoyaku" style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;margin-bottom:16px">'
+      + '<option value="">-- 未定 --</option>'
+      + '<option value="直接来店"' + (st.yoyaku === '直接来店' ? ' selected' : '') + '>直接来店</option>'
+      + st.castList.map(function(c){ return '<option value="' + esc(c) + '"' + (c === st.yoyaku ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('')
+      + '</select>';
+
+    html += '<div style="border:1px dashed #2a2a40;border-radius:8px;padding:10px 12px;margin-bottom:16px">';
+    html += '<div style="font-size:12px;color:#999;margin-bottom:2px">サブのお客様（任意）</div>';
+    html += '<div style="font-size:10px;color:#667;margin-bottom:8px">途中合流や同伴で別の予約キャストに紐づく人がいる場合に追加</div>';
+    st.subCustomers.forEach(function(sc, i) {
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        + '<button type="button" class="ts-sub-pax-minus" data-i="' + i + '" style="width:26px;height:26px;border-radius:50%;border:1px solid #444;background:#1a1a2e;color:#ccc;cursor:pointer;font-size:13px">−</button>'
+        + '<span style="font-size:13px;color:#ddd;min-width:34px;text-align:center">' + sc.pax + '名</span>'
+        + '<button type="button" class="ts-sub-pax-plus" data-i="' + i + '" style="width:26px;height:26px;border-radius:50%;border:1px solid #444;background:#1a1a2e;color:#ccc;cursor:pointer;font-size:13px">＋</button>'
+        + '<select class="ts-sub-yoyaku" data-i="' + i + '" style="flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:7px;border-radius:8px;font-size:12px">'
+        + '<option value="">-- 未定 --</option>'
+        + st.castList.map(function(c){ return '<option value="' + esc(c) + '"' + (c === sc.yoyakuCast ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('')
+        + '</select>'
+        + '<button type="button" class="ts-sub-remove" data-i="' + i + '" style="background:none;border:none;color:#665;font-size:14px;cursor:pointer">✕</button>'
+        + '</div>';
+    });
+    html += '<button type="button" id="ts-sub-add-btn" style="width:100%;background:#1a1a2e;border:1px dashed #3a3a55;color:#88aadd;padding:8px;border-radius:8px;font-size:12px;cursor:pointer">＋ サブのお客様を追加</button>';
+    html += '</div>';
+
+    html += '<button id="ts-submit-btn" style="width:100%;background:#0f2010;border:1px solid #1a5020;color:#66cc88;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">この内容で来店登録する</button>';
+  }
+  html += '<button id="cancel-btn">キャンセル</button>';
+
+  document.getElementById('sheet-body').innerHTML = html;
+  bindTableSetupEvents_();
+}
+
+function bindTableSetupEvents_() {
+  var st = tableSetupState;
+  var body = document.getElementById('sheet-body');
+
+  // ステップ1: ドッキングするテーブル選択
+  Array.prototype.forEach.call(body.querySelectorAll('.dk-table-chip'), function(b) {
+    if (b.disabled) return;
+    b.onclick = function() {
+      var v = b.getAttribute('data-val');
+      var i = st.tables.indexOf(v);
+      if (i >= 0) st.tables.splice(i, 1); else st.tables.push(v);
+      renderDockingStep();
+    };
+  });
+  var dkNext = document.getElementById('dk-next-btn');
+  if (dkNext) dkNext.onclick = function() {
+    if (st.tables.length === 0) { alert('席を選択してください'); return; }
+    st.step = 'form';
+    renderTableSetupStep();
+  };
+  var dkBack = document.getElementById('dk-back-link');
+  if (dkBack) dkBack.onclick = function() {
+    st.step = 'docking';
+    renderTableSetupStep();
+  };
+
+  // ステップ2: 予約/新規・客情報・キャスト選択
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-mode-btn'), function(b) {
+    b.onclick = function() {
+      st.mode = b.getAttribute('data-mode');
+      renderTableSetupForm();
+    };
+  });
+
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-rsv-row'), function(b) {
+    b.onclick = function() {
+      var i = parseInt(b.getAttribute('data-i'));
+      st.selectedRsvIdx = i;
+      var r = st.pendingList[i];
+      st.customer = r.customer;
+      st.memberId = r.memberId || '';
+      st.pax = r.pax || 1;
+      st.tantou = r.tantouCast ? r.tantouCast.split('、').filter(Boolean) : [];
+      st.dohan  = r.dohanCast  ? r.dohanCast.split('、').filter(Boolean)  : [];
+      st.yoyaku = r.yoyakuCast || '';
+      st.subCustomers = (r.subCustomers || []).map(function(sc) { return { pax: sc.pax || 1, yoyakuCast: sc.yoyakuCast || '' }; });
+      st.tantouTouched = true; // 予約データに既に入っている値なので自動上書きしない
+      if (r.table && r.table !== '未定') st.tables = r.table.split('、').filter(Boolean);
+      renderTableSetupForm();
+    };
+  });
+
+  var custInput = document.getElementById('ts-customer');
+  if (custInput) {
+    custInput.oninput = function() { st.customer = custInput.value; };
+    custInput.onblur = function() { lookupCustomerTantou_(); };
+  }
+
+  var paxMinus = document.getElementById('ts-pax-minus');
+  if (paxMinus) paxMinus.onclick = function() { st.pax = Math.max(1, st.pax - 1); renderTableSetupForm(); };
+  var paxPlus = document.getElementById('ts-pax-plus');
+  if (paxPlus) paxPlus.onclick = function() { st.pax = st.pax + 1; renderTableSetupForm(); };
+
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-tantou-chip'), function(b) {
+    b.onclick = function() {
+      var v = b.getAttribute('data-val');
+      st.tantouTouched = true;
+      var i = st.tantou.indexOf(v);
+      if (i >= 0) st.tantou.splice(i, 1); else st.tantou.push(v);
+      renderTableSetupForm();
+    };
+  });
+
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-dohan-chip'), function(b) {
+    b.onclick = function() {
+      var v = b.getAttribute('data-val');
+      var i = st.dohan.indexOf(v);
+      if (i >= 0) st.dohan.splice(i, 1); else st.dohan.push(v);
+      renderTableSetupForm();
+    };
+  });
+
+  var yoyakuSel = document.getElementById('ts-yoyaku');
+  if (yoyakuSel) {
+    yoyakuSel.onchange = function() {
+      st.yoyaku = yoyakuSel.value;
+      if (!st.tantouTouched && st.yoyaku && st.yoyaku !== '直接来店' && (!st.custTantou || st.custTantou === '店担当')) {
+        st.tantou = [st.yoyaku];
+      }
+      renderTableSetupForm();
+    };
+  }
+
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-sub-pax-minus'), function(b) {
+    b.onclick = function() {
+      var i = parseInt(b.getAttribute('data-i'));
+      st.subCustomers[i].pax = Math.max(1, st.subCustomers[i].pax - 1);
+      renderTableSetupForm();
+    };
+  });
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-sub-pax-plus'), function(b) {
+    b.onclick = function() {
+      var i = parseInt(b.getAttribute('data-i'));
+      st.subCustomers[i].pax = st.subCustomers[i].pax + 1;
+      renderTableSetupForm();
+    };
+  });
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-sub-yoyaku'), function(sel) {
+    sel.onchange = function() {
+      var i = parseInt(sel.getAttribute('data-i'));
+      st.subCustomers[i].yoyakuCast = sel.value;
+    };
+  });
+  Array.prototype.forEach.call(body.querySelectorAll('.ts-sub-remove'), function(b) {
+    b.onclick = function() {
+      var i = parseInt(b.getAttribute('data-i'));
+      st.subCustomers.splice(i, 1);
+      renderTableSetupForm();
+    };
+  });
+  var subAddBtn = document.getElementById('ts-sub-add-btn');
+  if (subAddBtn) subAddBtn.onclick = function() {
+    st.subCustomers.push({ pax: 1, yoyakuCast: '' });
+    renderTableSetupForm();
+  };
+
+  var submitBtn = document.getElementById('ts-submit-btn');
+  if (submitBtn) submitBtn.onclick = submitTableSetup;
+
+  var cancelBtn = document.getElementById('cancel-btn');
+  if (cancelBtn) cancelBtn.onclick = closeSheet;
+}
+
+function lookupCustomerTantou_() {
+  var st = tableSetupState;
+  var q = (st.customer || '').trim();
+  if (!q) return;
+  google.script.run
+    .withSuccessHandler(function(results) {
+      if (!results || results.length === 0) return;
+      var match = results[0];
+      st.custTantou = match.tantou || '';
+      if (!st.tantouTouched) {
+        if (match.tantou && match.tantou !== '店担当') {
+          st.tantou = [match.tantou];
+        } else if (st.yoyaku && st.yoyaku !== '直接来店') {
+          st.tantou = [st.yoyaku];
+        }
+      }
+      if (!st.memberId && match.no) st.memberId = match.no;
+      renderTableSetupForm();
+    })
+    .searchCustomersForTableSetup(q);
+}
+
+function submitTableSetup() {
+  var st = tableSetupState;
+  if (st.tables.length === 0) { alert('席を選択してください'); return; }
+  if (!st.customer.trim()) { alert('お客様名を入力してください'); return; }
+  var btn = document.getElementById('ts-submit-btn');
+  btn.disabled = true;
+  btn.textContent = '登録中...';
+  var payload = {
+    rowIdx: st.selectedRsvIdx !== null ? st.pendingList[st.selectedRsvIdx].rowIdx : 0,
+    tables: st.tables, customer: st.customer.trim(), memberId: st.memberId,
+    pax: st.pax, tantouCast: st.tantou, dohanCast: st.dohan, yoyakuCast: st.yoyaku,
+    subCustomers: st.subCustomers
+  };
+  google.script.run
+    .withSuccessHandler(function() { closeSheet(); loadSeats(); })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'この内容で来店登録する';
+      alert('登録エラー: ' + (err && err.message ? err.message : err));
+    })
+    .setupTableSession(payload);
+}
+
+loadAll();
+setInterval(loadSeats, 30000);
+</script>
+</body>
+</html>

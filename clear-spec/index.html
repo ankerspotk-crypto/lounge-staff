@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜企画仕様メモ（v0.4）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --pine:#0e3a33; --mint:#25b598; --mint-soft:#e6f5f1; --gold:#c2a25f;
+    --ink:#1a2521; --muted:#5d6b66; --line:#e4eae7; --bg:#ffffff; --soft:#f6f9f8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.85;-webkit-font-smoothing:antialiased}
+  .doc{max-width:880px;margin:0 auto;background:#fff;padding:clamp(28px,5vw,64px);box-shadow:0 10px 40px -20px rgba(14,58,51,.25)}
+  h1,h2,h3{font-family:"Noto Serif JP",serif;line-height:1.4}
+  .en{font-family:"Cormorant Garamond",serif}
+  .cover{border-bottom:3px solid var(--pine);padding-bottom:22px;margin-bottom:10px}
+  .cover .brand{font-family:"Cormorant Garamond",serif;font-size:15px;letter-spacing:.22em;color:var(--mint);font-weight:600}
+  .cover h1{font-size:clamp(26px,4vw,36px);margin:6px 0 4px}
+  .cover .sub{color:var(--muted);font-size:14px}
+  .cover .meta{margin-top:14px;font-size:12.5px;color:var(--muted)}
+  h2{font-size:21px;margin:42px 0 6px;padding-top:18px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  h2 .no{font-family:"Cormorant Garamond",serif;color:var(--mint);font-size:26px}
+  h3{font-size:15.5px;margin:20px 0 6px;color:var(--pine)}
+  p{margin:6px 0}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:3px 0}
+  strong{color:var(--pine)}
+  .lead{color:var(--muted);font-size:14px;margin-top:4px}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:var(--soft);font-weight:700;color:var(--pine)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;letter-spacing:.04em}
+  .t-ok{background:#e3f3ec;color:#1c7d5f}
+  .t-dir{background:#eef4fb;color:#3a6ea5}
+  .t-q{background:#fbf0e3;color:#a8702c}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 0;font-size:12px;color:var(--muted)}
+  .callout{background:var(--mint-soft);border-left:4px solid var(--mint);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:13.5px}
+  .callout.gold{background:#f7f1e2;border-color:var(--gold)}
+  .flow{background:var(--pine);color:#dff0ea;border-radius:12px;padding:16px 18px;font-size:13px;margin:14px 0;font-family:"Cormorant Garamond",monospace}
+  .flow b{color:#fff}
+  .open li{margin:6px 0}
+  .open b{color:var(--ink)}
+  code{background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12.5px}
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+  .toc{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin:20px 0;font-size:13.5px}
+  .toc b{display:block;margin-bottom:6px;color:var(--pine)}
+  .toc a{color:var(--ink);text-decoration:none}
+  .toc a:hover{color:var(--mint)}
+  .toc ol{margin-left:20px}
+  @media print{body{background:#fff}.doc{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <div class="cover">
+    <div class="brand">KIREIN ／ キレイン</div>
+    <h1>企画仕様メモ <span class="en" style="font-size:18px;color:var(--muted)">v0.4</span></h1>
+    <div class="sub">飲食店・夜職店舗の「清潔さ／空間品質」を可視化する認証＆検索サービス</div>
+    <div class="meta">作成：2026-06-03 ／ ステータス：企画・プロトタイプ段階 ／ このメモは議論のたたき台です</div>
+  </div>
+
+  <div class="legend">
+    <span><span class="tag t-ok">決定</span> 合意済み</span>
+    <span><span class="tag t-dir">方向OK</span> 方向性は合意・数値や細部は未確定</span>
+    <span><span class="tag t-q">要検討</span> これから決める</span>
+  </div>
+
+  <div class="toc">
+    <b>目次</b>
+    <ol>
+      <li><a href="#s1">サービス概要とポジショニング</a></li>
+      <li><a href="#s2">ブランド構成</a></li>
+      <li><a href="#s3">評価モデル（コア）</a></li>
+      <li><a href="#s4">認証ランク</a></li>
+      <li><a href="#s5">いたずら・不正対策</a></li>
+      <li><a href="#s6">QRその場評価</a></li>
+      <li><a href="#s7">報酬・貢献ランク</a></li>
+      <li><a href="#s8">ビジネスモデル（フライホイール）</a></li>
+      <li><a href="#s9">グループ／チェーン／FC本部向け</a></li>
+      <li><a href="#s10">横展開（業態拡大）</a></li>
+      <li><a href="#s11">ドメイン・商標メモ</a></li>
+      <li><a href="#s12">既存の成果物</a></li>
+      <li><a href="#s13">未決リスト（要決定）</a></li>
+    </ol>
+  </div>
+
+  <!-- 1 -->
+  <h2 id="s1"><span class="no">01</span> サービス概要とポジショニング</h2>
+  <p>お客様からの<strong>匿名フィードバック</strong>と<strong>プロの覆面衛生調査</strong>で、店舗の「空間品質（清潔さ・におい・トイレ・接客衛生）」を可視化する。基準を満たした店に<strong>キレイン認証</strong>を付与し、消費者は「安心して入れる店」を検索できる。</p>
+  <h3>立ち位置（第三の信頼）</h3>
+  <table>
+    <tr><th>サービス</th><th>評価軸</th><th>弱点</th></tr>
+    <tr><td>ミシュラン</td><td>味（プロのみ）</td><td>頻度が低い</td></tr>
+    <tr><td>食べログ</td><td>口コミ（客のみ）</td><td>操作されやすい</td></tr>
+    <tr><td><strong>キレイン</strong></td><td><strong>清潔さ（プロ×客の一致）</strong></td><td>—（両者の長所を統合）</td></tr>
+  </table>
+  <div class="callout">基本思想：<strong>「晒すサービス」ではなく「改善支援サービス」。</strong>公開されるのはポジティブ評価と認証だけ。改善が必要な声は店舗にだけ非公開で届く。<span class="tag t-ok">決定</span></div>
+  <div class="callout">消費者向けキャッチ：メイン<strong>「トイレきれいかな？ ― その不安、消します。」</strong>／ サブ「トイレが“目的”になる店を探す。」<span class="tag t-ok">決定</span></div>
+
+  <!-- 2 -->
+  <h2 id="s2"><span class="no">02</span> ブランド構成 <span class="tag t-ok" style="margin-left:6px">決定</span></h2>
+  <ul>
+    <li>ブランド名は<strong>キレイン（Kirein）に統一</strong>（B2C・B2B共通）</li>
+    <li>表記ルール：ロゴ＝英字 <code>Kirein</code> ／ 本文・認証＝<code>キレイン</code></li>
+    <li>店舗が掲げる認証＝<strong>キレイン認証</strong>（旧仮称 CLEAR は廃止）</li>
+  </ul>
+
+  <!-- 3 -->
+  <h2 id="s3"><span class="no">03</span> 評価モデル（コア） <span class="tag t-dir" style="margin-left:6px">方向OK</span></h2>
+  <p>この企画の心臓部。2つの評価ソースを組み合わせ、操作に強い総合点を出す。</p>
+
+  <h3>2つの評価ソース</h3>
+  <table>
+    <tr><th>評価</th><th>強み</th><th>弱み</th><th>役割</th></tr>
+    <tr><td>覆面調査員</td><td>公平・基準準拠</td><td>頻度が低い</td><td><strong>アンカー（真値）＝認証の土台</strong></td></tr>
+    <tr><td>客評価</td><td>リアル・常時・大量</td><td>ノイズ・いたずら</td><td>常時モニタリング・劣化検知</td></tr>
+    <tr><td>2つの差異</td><td colspan="2">— 信頼度メーター＆再調査トリガー —</td><td><strong>整合スコア（W認証）</strong></td></tr>
+  </table>
+
+  <h3>項目別★採点</h3>
+  <p>各項目を ★1〜5 で採点：<strong>におい・空気／トイレ／客席・設備／接客衛生</strong>。（「女性満足度」「維持・清掃体制」の追加は要検討）</p>
+
+  <h3>総合点の作り方（操作に強い形）</h3>
+  <div class="flow">
+    <b>総合 = 調査員 70% + 客 30%</b><br>
+    ただし 客の寄与は「調査員 ±0.5★」までにクリップ<br>
+    → 超える乖離は“異常”として総合に効かせず、再調査フラグを立てる
+  </div>
+  <p>このクリップが<strong>両方向のズルを同時に止める</strong>：嫌がらせで良店を沈められない／サクラで悪店を盛れない（客は調査員を天井に超えられない）。</p>
+
+  <h3>足切りライン</h3>
+  <p>総合点が高くても、<strong>1項目でも基準を下回ると上のランクに上がれない</strong>（＝清潔感は最弱項目で決まる）。「設備キレイ・でも激臭」の店を正しく弾く装置。</p>
+
+  <h3>判定例</h3>
+  <table>
+    <tr><th>店</th><th>におい</th><th>トイレ</th><th>客席</th><th>接客</th><th>平均</th><th>判定</th></tr>
+    <tr><td>A. 優良店</td><td>★5</td><td>★5</td><td>★4.5</td><td>★4.5</td><td>4.75</td><td>🟢 最上位</td></tr>
+    <tr><td>B. 設備◎・激臭</td><td>★2</td><td>★4.5</td><td>★4.5</td><td>★4</td><td>3.75</td><td>🔸 未認証（あと一歩）</td></tr>
+    <tr><td>C. 標準的に良い</td><td>★4</td><td>★4</td><td>★3.5</td><td>★4</td><td>3.88</td><td>🟢 入門ランク</td></tr>
+  </table>
+  <div class="callout gold">B は平均3.75あるが、におい★2が足切りで未認証 →「設備は★4.5なのに、においで損してる」と内訳で見える → <strong>消臭・排水洗浄の売り場</strong>になる（落とすことが収益に）。</div>
+
+  <h3>横断の属性バッジ（清潔ランクとは別軸）</h3>
+  <p>清潔ランク（体感）とは独立して、設備・対象者ベースのバッジを付与。<strong>軸を混ぜないのが要点</strong>。</p>
+  <ul>
+    <li><strong>👶 子ども安心</strong>：おむつ替え台・ベビーチェア・床/便座の清潔・危険物が手の届かない 等をチェック（既存「子連れOK」タグを検証バッジへ格上げ）</li>
+    <li>無臭／女性安心／高級感 等も同様に横断バッジ化できる</li>
+  </ul>
+
+  <!-- 4 -->
+  <h2 id="s4"><span class="no">04</span> 認証ランク（体感＋貴金属系） <span class="tag t-ok" style="margin-left:6px">決定</span></h2>
+  <p>抽象語はやめ、<strong>「トイレを使いたいか」という体感</strong>でランク付け。バッジは<strong>貴金属系で視覚的に段階化</strong>：シルバー/ゴールド/プラチナ/ブラック。一番下「我慢してでも使いたくない」は未認証＝公開しない（ネガ非公開原則と一致）。</p>
+  <table>
+    <tr><th>Lv</th><th>バッジ</th><th>体感（消費者に見せる言葉）</th><th>総合（平均★）</th><th>足切り（全項目）</th><th>特徴</th></tr>
+    <tr><td>—</td><td>—</td><td>😣 我慢してでも使いたくない</td><td>未認証</td><td>非公開</td><td>—</td></tr>
+    <tr><td><strong>1</strong></td><td><strong>シルバー</strong></td><td>🙂 ためらわず使える</td><td>★3.5+</td><td>★3.0</td><td>基本クリア</td></tr>
+    <tr><td><strong>2</strong></td><td><strong>ゴールド</strong></td><td>😊 気持ちよく使える</td><td>★4.2+</td><td>★3.5</td><td>標準的に優秀</td></tr>
+    <tr><td><strong>3</strong></td><td><strong>プラチナ</strong></td><td>😍 わざわざ使いたい</td><td>★4.6+ ＋維持</td><td>★4.0</td><td>最上位の体験</td></tr>
+    <tr><td><strong>4</strong></td><td><strong>ブラック</strong></td><td>👑 毎日プロが守る</td><td>★4.8+ ＋継続</td><td>全項目★4.5+</td><td><strong>毎日清掃必須</strong></td></tr>
+  </table>
+  <p class="lead">体感フレーズは「翻訳」。裏では項目別★＋総合点＋足切りで機械判定 → 人間の言葉に変換。※ブラック層は別項（09）参照。</p>
+
+  <!-- 5 -->
+  <h2 id="s5"><span class="no">05</span> いたずら・不正対策 <span class="tag t-dir" style="margin-left:6px">方向OK</span></h2>
+  <ul>
+    <li><strong>本人確認／来店証明</strong>：投稿に位置情報・予約連携・QR（→06）を要求し、行ってない人の嫌がらせを排除</li>
+    <li><strong>異常検知</strong>：短時間の低評価集中／新規・同一端末の連発を自動保留</li>
+    <li><strong>トリム平均</strong>：上下の極端をカット</li>
+    <li><strong>ネガは非公開設計</strong>：晒し被害が構造的に出ない。ネガは店への内部シグナルのみ</li>
+    <li><strong>調査員アンカー</strong>：客側がどれだけ操作しても、認証ランクは調査員基準で揺らがない</li>
+  </ul>
+
+  <!-- 6 -->
+  <h2 id="s6"><span class="no">06</span> QRその場評価 <span class="tag t-dir" style="margin-left:6px">方向OK</span></h2>
+  <p><strong>トイレにQRを貼り、その場で評価をサイトに送れる。</strong>1つのQRに3つの価値が乗る：</p>
+  <ol>
+    <li><strong>鮮度と文脈</strong>：トイレにいる瞬間に評価＝精度が跳ね上がる</li>
+    <li><strong>来店証明そのもの</strong>：店ごとQRを現地で読む＝行った証拠（不正対策と両取り）</li>
+    <li><strong>集客の入口</strong>：参加店のQRは全部キレインの看板</li>
+  </ol>
+  <div class="flow"><b>QRピッ → アプリ不要でWebが開く</b> → ★タップ3つ → 良かった点をワンタップ → 送信・ポイント付与（所要10秒）</div>
+  <ul>
+    <li><strong>動的QR</strong>（店／トイレごと・更新可）＋位置情報で二重の来店証明、レート制限でスパム抑制</li>
+    <li><strong>運用ツール化</strong>：評価低下でスタッフに即アラート＝店にとっては監視でなく「現場が見えるダッシュボード」</li>
+  </ul>
+
+  <!-- 7 -->
+  <h2 id="s7"><span class="no">07</span> 報酬・貢献ランク <span class="tag t-dir" style="margin-left:6px">方向OK</span></h2>
+  <p>狙い：<strong>事業最大のコスト（プロ調査員）を、ユーザー基盤が自給する</strong>パイプライン。</p>
+  <table>
+    <tr><th>Lv</th><th>呼称</th><th>上がる条件</th><th>バック</th><th>評価の役割</th></tr>
+    <tr><td>0</td><td>ビジター</td><td>誰でも投稿OK</td><td>少額ポイント</td><td>客評価（標準）</td></tr>
+    <tr><td>1</td><td>認定レポーター</td><td>来店証明つき投稿＋整合度が高い</td><td>ポイント増・限定機能・バッジ</td><td>客評価（重め）</td></tr>
+    <tr><td>2</td><td>見習い調査員</td><td>講習＋判定テスト＋COI登録</td><td>調査依頼（報酬／無料招待）</td><td>準アンカー（監督つき）</td></tr>
+    <tr><td>3</td><td>公認覆面調査員</td><td>実績＋精度の維持</td><td>報酬・優先依頼</td><td><strong>アンカー（公式認証）</strong></td></tr>
+  </table>
+  <div class="callout"><strong>線引き：</strong>Lv0–1は客評価の枠内（重みが上がるだけ）。アンカーに触れるLv2–3は“バッジ”でなく“仕事”（講習・テスト・本人確認・COI必須）。これを緩めると認証の信頼が崩壊する。</div>
+  <p><strong>昇格判定は整合スコアを再利用：</strong>プロと一致し続ける人＝信頼できる人。「あなたの評価、プロと98%一致。調査員になりませんか?」と自動スカウト。</p>
+  <p><strong>報酬の輪：</strong>ポイントは加盟店（＝キレイな店）で使える → レビュアーが認証店に通う → 店に客が増え、レビューも増える。</p>
+  <p class="lead">注意：COI（自店・競合は調査不可）／調査員の匿名性／報酬を払うなら業務委託の整理。</p>
+
+  <!-- 8 -->
+  <h2 id="s8"><span class="no">08</span> ビジネスモデル（フライホイール）</h2>
+  <div class="flow">
+    消費者サイト（無料・SEO集客）<br>
+    　↓ 「うちも載りたい／認証ほしい」<br>
+    <b>店舗が加盟・キレイン認証（課金）← ここで儲ける</b><br>
+    　↓ 覆面調査データ<br>
+    消費者サイトのコンテンツが増える → さらに集客
+  </div>
+  <h3>料金プラン（仮）</h3>
+  <table>
+    <tr><th>プラン</th><th>月額</th><th>内容</th></tr>
+    <tr><td>LIGHT</td><td>¥1,000</td><td>匿名フィードバック受信・加盟表示・簡易レポート</td></tr>
+    <tr><td>PRO</td><td>¥5,000</td><td>＋詳細スコア・改善提案・女性調査員評価・ランク管理</td></tr>
+    <tr><td>AUDIT</td><td>¥30,000〜/回</td><td>覆面衛生調査スポット／定期（B2B即収益の入口）</td></tr>
+    <tr><td><strong>BLACK</strong></td><td>¥10,000/月</td><td>毎日清掃契約＋Lv.4認証。提携業者の紹介手数料（月額の15〜20%）が本命収益</td></tr>
+    <tr><td><strong>GROUP / 本部</strong></td><td>店舗数×単価＋本部費</td><td>全店ダッシュボード・グループ内ランキング・アラート・業界ベンチマーク・一括業者手配</td></tr>
+  </table>
+  <p class="lead">＋ 清掃・消臭・空調業者への送客手数料（におい足切りで落ちた店が見込み客）。</p>
+
+  <h3>ブラック層（Lv.4）の収益エンジン</h3>
+  <p><strong>毎日清掃必須 → 提携業者の紹介 → 継続課金＝最高のLTV</strong></p>
+  <div class="flow">
+    店舗が「ブラック認証を取りたい」<br>
+    　↓<br>
+    「毎日清掃が必須」という条件を見る<br>
+    　↓<br>
+    <b>キレインが提携業者を紹介</b><br>
+    　↓<br>
+    店舗：月額¥10,000（BLACK月額）＋清掃費（例：月¥30,000）<br>
+    キレイン：月額¥1,000（BLACK）＋手数料（月¥4,500〜6,000 = 15〜20%）
+  </div>
+  <p class="lead">個店への単発送客より、清掃業者との継続提携が本命。「毎日プロが守る」は単なるセールストークでなく、ビジネス構造に組み込まれた保証。</p>
+
+  <!-- 9 -->
+  <h2 id="s9"><span class="no">09</span> グループ／チェーン／FC本部向け <span class="tag t-dir" style="margin-left:6px">方向OK</span></h2>
+  <p>売り先を「個店」から<strong>「本部（チェーン・FC運営会社）」</strong>に広げる。事業の天井が一段上がる、本命のB2B。</p>
+  <h3>なぜ本部向けが強いか</h3>
+  <table>
+    <tr><th></th><th>個店に売る</th><th>本部に売る</th></tr>
+    <tr><td>1契約の重み</td><td>1店舗</td><td><strong>数十〜数百店舗</strong></td></tr>
+    <tr><td>営業効率</td><td>1軒ずつ</td><td><strong>1回で全店導入</strong></td></tr>
+    <tr><td>解約しにくさ</td><td>低い</td><td><strong>高い（全店オペに組込）</strong></td></tr>
+    <tr><td>客単価(ACV)</td><td>月1,000〜5,000円</td><td><strong>桁が変わる</strong></td></tr>
+  </table>
+  <h3>本部の痛み＝需要</h3>
+  <p>本部は「<strong>全店の衛生を見きれない</strong>」。特にFCは、1店舗の「汚い店」がバズると<strong>ブランド全体が傷つく</strong>。自主点検は店が巡回日を知っていてガバガバ。キレインは<strong>覆面客＋QRの抜き打ち・常時・客観</strong>データで、ブランド保護／品質標準化／FC衛生条項のエンフォース／臨店コスト削減に効く。</p>
+  <h3>グループ内ランキング＝行動エンジン</h3>
+  <ul>
+    <li>月次で全店をキレイン総合点でランキング。<strong>店長の競争心</strong>で全店の衛生が勝手に上がる（賞罰でなく順位）</li>
+    <li>最も改善した店(MVP)表彰、エリア別サブランキング</li>
+    <li><strong>本部ダッシュボード</strong>：全店一覧・外れ値検出・弱い項目までドリルダウン</li>
+  </ul>
+  <div class="callout gold"><strong>隠れた最大の効能：</strong>チェーン1社契約で、認証済みのキレイな店が地図に一気に並ぶ → <strong>B2Cのコールドスタート（口コミゼロ問題）を収益と同時に解決</strong>。</div>
+  <h3>ガードレール</h3>
+  <ul>
+    <li>グループ内ランキングは<strong>本部限定の非公開ツール</strong>。公開面は従来通りポジティブ認証だけ（下位店を晒さない＝既存原則と一致）</li>
+    <li>店舗規模・業態が違うと不公平 → <strong>正規化</strong>して同条件で比較</li>
+    <li>FCは加盟店が監視を嫌うため、本部が契約で必須化＋「<strong>監視でなく改善支援</strong>」と位置づけ</li>
+  </ul>
+
+  <!-- 10 -->
+  <h2 id="s10"><span class="no">10</span> 横展開（業態拡大） <span class="tag t-q" style="margin-left:6px">将来</span></h2>
+  <p>飲食店は入口。<strong>「清潔さ × 第三者の常時監視」が効く業態</strong>は他にも多い。評価モデル（項目別★＋調査員アンカー＋客＋QR）はそのまま流用でき、<strong>評価項目だけ業態別に差し替える</strong>。</p>
+  <table>
+    <tr><th>業態</th><th>清潔さが効く理由</th></tr>
+    <tr><td>ジム／フィットネス</td><td>シャワー・更衣室・マシンの清潔が死活。退会理由の上位</td></tr>
+    <tr><td>コンビニ</td><td>トイレ・店内の清潔。FC本部の標準化ニーズと相性◎</td></tr>
+    <tr><td>ホテル／宿・サウナ／温浴</td><td>水回り・におい・客室の清潔がレビュー直結</td></tr>
+    <tr><td>美容・サロン／クリニック待合</td><td>衛生イメージがそのまま信用になる</td></tr>
+    <tr><td>オフィス・コワーキング 等</td><td>共用部・トイレの清潔が満足度を左右</td></tr>
+  </table>
+  <p class="lead">戦略：まず飲食×夜職で型（評価モデル・QR・認証）を完成 → 横展開。チェーン業態が多く、本部向け(09)とも噛み合う。</p>
+
+  <!-- 11 -->
+  <h2 id="s11"><span class="no">11</span> ドメイン・商標メモ</h2>
+  <ul>
+    <li><strong>kirein.jp ＝ 空き</strong>（取得推奨・早い者勝ち）。.co.jp/.net/.app/.tokyo/.io も空き</li>
+    <li>kirein.com ＝ Afternicで売出し中（買える可能性／有料）</li>
+    <li><strong>商標</strong>：必要な第9類（アプリ）・第35類（店舗情報/広告）・第43類（飲食店情報）は<strong>空き</strong></li>
+    <li>既存「KIREIN／キレイン」は化粧品ブランド（F&Sデザイン・第3類）等。区分が違うため共存登録の見込み。※正式確認はJ-PlatPat</li>
+  </ul>
+
+  <!-- 12 -->
+  <h2 id="s12"><span class="no">12</span> 既存の成果物</h2>
+  <ul>
+    <li><strong>店舗向けLP</strong>：<code>clear-lp/index.html</code>（キレイン認証の訴求・料金・認証ランク・覆面調査）</li>
+    <li><strong>消費者向け検索プロト</strong>：<code>clear-map/index.html</code>（エリア/属性で絞込・地図連動・★スコア・口コミ投稿モーダル・動作する）</li>
+    <li><strong>本メモ</strong>：<code>clear-spec/index.html</code></li>
+  </ul>
+  <p class="lead">※ フォルダ名は仮（clear-*）。後で kirein-* にリネーム予定。</p>
+
+  <!-- 13 -->
+  <h2 id="s13"><span class="no">13</span> 未決リスト（要決定）</h2>
+  <ol class="open">
+    <li><b>ブラック実装の詳細</b>：月額¥10,000、提携業者の手数料率（15〜20%）、契約条件、全エリアでの業者確保戦略</li>
+    <li><b>総合点の重み</b>：7:3か、初期は客データが薄いので 9:1スタート→徐々に3割か</li>
+    <li><b>クリップ幅</b>：±0.5★で妥当か</li>
+    <li><b>足切りライン</b>：★3.0 / 3.5 / 4.0 の厳しさ</li>
+    <li><b>におい重み</b>：におい項目だけ重み2倍にして点数にも“臭い重視”を効かせるか</li>
+    <li><b>評価項目</b>：「女性満足度」「維持・清掃体制」を入れるか</li>
+    <li><b>W認証（整合度）</b>：認証ランクと別バッジで出すか、統合するか</li>
+    <li><b>報酬</b>：ポイント原資・加盟店クーポンの設計</li>
+    <li><b>調査員昇格の閾値</b>：報告件数・整合度ライン</li>
+    <li><b>ドメイン取得・商標出願</b>のタイミング</li>
+    <li><b>グループ内ランキングの正規化</b>方法（店舗規模・業態差の補正）</li>
+    <li><b>GROUP／本部プランの価格設計</b>（店舗数×単価＋本部費）</li>
+    <li><b>横展開の順序</b>（次はジム？コンビニ？）と業態別の評価項目</li>
+  </ol>
+
+  <footer>
+    キレイン 企画仕様メモ v0.4 ／ 2026-06-03 作成・更新 ／ 内容はすべてたたき台・要協議。<br>
+    次の候補：(A) このメモを叩いて確定 → (B) QRその場評価画面を作る → (C) マイページ（貢献ランク）を作る → (D) 評価モデルの数値を仮置きして自動判定を実装
+  </footer>
+
+</div>
+</body>
+</html>

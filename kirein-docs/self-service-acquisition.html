@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜完全セルフサービス店舗獲得モデル</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1200px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{border:1px solid var(--line);padding:10px;text-align:right}
+  th{background:var(--soft);font-weight:700;text-align:left}
+  td:first-child{text-align:left}
+  .flow-box{background:var(--pine);color:#fff;border-radius:12px;padding:16px;margin:16px 0;font-size:13px;line-height:1.9}
+  .flow-box b{color:#fff}
+  .callout{background:#e6f5f1;border-left:4px solid var(--mint);padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0}
+  .comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+  .comp-box{background:var(--soft);border-left:4px solid var(--mint);padding:16px;border-radius:8px}
+  .comp-box h4{color:var(--pine);margin-bottom:8px;font-size:14px}
+  .positive{color:#28a745;font-weight:700}
+  .highlight{background:#fffacd;padding:2px 4px;border-radius:2px}
+  code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>完全セルフサービス店舗獲得モデル</h1>
+<p style="color:var(--mint);font-weight:700">投稿データが自動で店舗に通知される → セルフサービス契約 → 営業チーム 0</p>
+
+<h2>1. 基本フロー（営業なし）</h2>
+
+<div class="flow-box">
+<b>Step 1：投稿があると自動検出</b><br>
+ユーザーが「鮨 清水」をキレインに評価投稿<br>
+↓<br>
+<b>Step 2：店舗情報を自動抽出</b><br>
+店舗名から Google Maps のデータを引っ張る<br>
+→ 店舗メールアドレス / 電話番号 取得<br>
+↓<br>
+<b>Step 3：自動メール送信</b><br>
+「あなたのお店が 150 人に評価されました」<br>
+「現在の評価：Lv.2 ゴールド | トイレ清潔度 4.5★」<br>
+「ダッシュボードで詳細を見る →」（リンク）<br>
+↓<br>
+<b>Step 4：無料トライアル体験</b><br>
+メールをクリック → Kirein ダッシュボード表示（7日無料）<br>
+「今月の評価」「改善提案」「競合比較」を表示<br>
+↓<br>
+<b>Step 5：セルフサービス契約</b><br>
+ダッシュボード内の「有料プランへ」ボタン<br>
+→ クレジット決済（Stripe）で月 ¥1,000 契約<br>
+→ 即座に全機能アンロック<br>
+↓<br>
+<b>✅ 完全自動化完了（営業時間 0）</b>
+</div>
+
+<h2>2. 仕組みの詳細</h2>
+
+<h3>2.1 自動通知のトリガー</h3>
+
+<table>
+<tr><th>条件</th><th>アクション</th><th>タイミング</th></tr>
+<tr><td>新しい投稿</td><td>リアルタイム通知（メール + SMS）</td><td>投稿直後</td></tr>
+<tr><td>累計 10 件投稿達成</td><td>「データが溜まりました」通知</td><td>10 件達成時</td></tr>
+<tr><td>月次レポート</td><td>「先月の評価サマリー」メール配信</td><td>毎月 1 日</td></tr>
+<tr><td>評価が大きく変動</td><td>「最近、トイレ清潔度が上がってます」</td><td>変化検出時</td></tr>
+<tr><td>初回コンタクト後 7 日</td><td>「無料トライアルまもなく終了」リマインド</td><td>7 日後</td></tr>
+</table>
+
+<h3>2.2 Google Maps との連携</h3>
+
+```
+【毎日の自動処理】
+1. 新規投稿から店舗名を抽出（自然言語処理）
+2. Google Places API で店舗情報検索
+3. メールアドレス / 電話番号を取得
+4. メール配信キューに登録
+5. SendGrid で一括送信（¥0.01/通）
+```
+
+<div class="callout">
+<b>技術的な実装</b><br>
+- <code>Google Places API</code>：店舗検索 & メール取得<br>
+- <code>SendGrid / Mailgun</code>：メール配信（月 ¥0-30）<br>
+- <code>Stripe</code>：決済処理（手数料 2.9% + ¥30/取引）<br>
+- <code>Lambda + CloudWatch</code>：自動実行（月 ¥0-10）
+</div>
+
+<h2>3. 営業型 vs セルフサービス型の比較</h2>
+
+<div class="comparison">
+<div class="comp-box">
+<h4>営業型（従来）</h4>
+<ul style="font-size:13px;line-height:1.8">
+<li>営業担当 1 人採用 → 月 ¥30K</li>
+<li>電話 / 訪問営業</li>
+<li>成約率 5-10%</li>
+<li>1 社あたり 1-2 時間</li>
+<li>月 20 社獲得（営業 1 人）</li>
+<li>CAC ¥1,500/店</li>
+<li>スケール限界：営業人数に依存</li>
+</ul>
+</div>
+<div class="comp-box">
+<h4>セルフサービス型（新）</h4>
+<ul style="font-size:13px;line-height:1.8">
+<li>営業担当 0 人 → ¥0</li>
+<li>自動メール通知のみ</li>
+<li>成約率 5-15%（自動だから低め）</li>
+<li>1 社あたり 0 時間（自動）</li>
+<li>月 1,000 件通知（自動）</li>
+<li>CAC ¥5/店（メール配信費のみ）</li>
+<li>スケール無制限：投稿が増える = 自動スケール</li>
+</ul>
+</div>
+</div>
+
+<h2>4. 6ヶ月事業計画（セルフサービス版）</h2>
+
+<h3>4.1 月別の店舗契約数推移</h3>
+
+<table>
+<tr><th>月</th><th>投稿数</th><th>掲載店舗</th><th>自動通知</th><th>CV率</th><th>新規契約</th><th>累計契約</th><th>月額売上</th></tr>
+<tr><td>M1</td><td>4,500</td><td>800</td><td>800</td><td>3%</td><td>24</td><td>24</td><td>¥24,000</td></tr>
+<tr><td>M2</td><td>3,500</td><td>1,100</td><td>300（新）</td><td>5%</td><td>15</td><td>39</td><td>¥39,000</td></tr>
+<tr><td>M3</td><td>3,200</td><td>1,350</td><td>250（新）</td><td>7%</td><td>18</td><td>57</td><td>¥57,000</td></tr>
+<tr><td>M4</td><td>3,000</td><td>1,500</td><td>150（新）</td><td>8%</td><td>12</td><td>69</td><td>¥69,000</td></tr>
+<tr><td>M5</td><td>2,800</td><td>1,650</td><td>150（新）</td><td>10%</td><td>15</td><td>84</td><td>¥84,000</td></tr>
+<tr><td>M6</td><td>2,700</td><td>1,750</td><td>100（新）</td><td>12%</td><td>12</td><td>96</td><td>¥96,000</td></tr>
+<tr style="background:#f0f0f0"><td><b>計</b></td><td><b>19,700</b></td><td><b>1,750</b></td><td><b>1,750</b></td><td><b>7.5%</b></td><td><b>96</b></td><td><b>96</b></td><td><b>¥369,000</b></td></tr>
+</table>
+
+<div class="callout">
+<b>🎯 重要：投稿数の増加 = 自動的に店舗通知数が増加</b><br>
+営業活動ゼロで、Month 6 に 96 店舗の有料契約獲得
+</div>
+
+<h3>4.2 セルフサービス版の収支</h3>
+
+<table>
+<tr><th>月</th><th>店舗LP売上</th><th>調査員報酬</th><th>売上計</th><th>メール配信費</th><th>決済手数料</th><th>インフラ</th><th>支出計</th><th>営業人件費</th><th>月間CF</th></tr>
+<tr><td>M1</td><td>¥24,000</td><td>¥150,000</td><td>¥174,000</td><td>¥500</td><td>¥700</td><td>¥15,000</td><td>¥16,200</td><td>¥0</td><td>¥157,800</td></tr>
+<tr><td>M2</td><td>¥39,000</td><td>¥200,000</td><td>¥239,000</td><td>¥800</td><td>¥1,200</td><td>¥15,000</td><td>¥17,000</td><td>¥0</td><td>¥222,000</td></tr>
+<tr><td>M3</td><td>¥57,000</td><td>¥300,000</td><td>¥357,000</td><td>¥1,000</td><td>¥1,800</td><td>¥15,000</td><td>¥17,800</td><td>¥0</td><td>¥339,200</td></tr>
+<tr><td>M4</td><td>¥69,000</td><td>¥400,000</td><td>¥469,000</td><td>¥1,200</td><td>¥2,200</td><td>¥15,000</td><td>¥18,400</td><td>¥0</td><td>¥450,600</td></tr>
+<tr><td>M5</td><td>¥84,000</td><td>¥500,000</td><td>¥584,000</td><td>¥1,500</td><td>¥2,600</td><td>¥15,000</td><td>¥19,100</td><td>¥0</td><td>¥564,900</td></tr>
+<tr><td>M6</td><td>¥96,000</td><td>¥600,000</td><td>¥696,000</td><td>¥1,800</td><td>¥3,000</td><td>¥15,000</td><td>¥19,800</td><td>¥0</td><td>¥676,200</td></tr>
+<tr style="background:#f0f0f0"><td><b>計</b></td><td><b>¥369,000</b></td><td><b>¥2,150,000</b></td><td><b>¥2,519,000</b></td><td><b>¥6,800</b></td><td><b>¥11,500</b></td><td><b>¥90,000</b></td><td><b>¥108,300</b></td><td><b>¥0</b></td><td><b>¥2,410,700</b></td></tr>
+</table>
+
+<div class="callout">
+<b>🎉 衝撃：営業人件費を削減した結果、6ヶ月で +¥2,410,700 のプラスキャッシュフロー</b><br>
+<br>
+営業型との差：営業人件費 ¥180,000（6ヶ月）+ 成約率低下分<br>
+セルフサービス版の方が <b>¥300,000 以上有利</b>
+</div>
+
+<h2>5. ダッシュボード UX（無料トライアル → 有料化）</h2>
+
+<h3>5.1 無料トライアル（7日）で見せる画面</h3>
+
+<table>
+<tr><th>セクション</th><th>表示内容</th><th>目的</th></tr>
+<tr><td><b>評価サマリー</b></td><td>Lv.2 ゴールド | 総合 4.5★ | トイレ清潔度 4.6★ | 空気・無臭 4.4★</td><td>「うちの評価が可視化されてる」</td></tr>
+<tr><td><b>月別推移グラフ</b></td><td>「先月比 +0.3★ で改善してます」</td><td>改善実感</td></tr>
+<tr><td><b>ユーザーレビュー</b></td><td>「トイレが広くてきれい」「接客態度も良い」</td><td>具体的なフィードバック</td></tr>
+<tr><td><b>競合比較</b></td><td>「同じ地域の飲食店 20 店舗と比較」</td><td>自分たちのポジション把握</td></tr>
+<tr><td><b>改善提案</b></td><td>「空気・無臭が若干低いです」→ 対策案</td><td>アクションプラン</td></tr>
+<tr><td><b>CTA</b></td><td>「今のうちに有料プランで毎月レポート受取」ボタン</td><td>購買</td></tr>
+</table>
+
+<h3>5.2 無料トライアル終了時のメール</h3>
+
+```
+件名：「あなたのお店の評価が改善してます」
+
+本文：
+こんにちは、□□焼鳥 様
+
+先週見ていただいた Kirein ダッシュボード、いかがでしたか？
+
+【あなたのお店の評価推移】
+- 先月：Lv.1 シルバー（4.2★）
+- 今月：Lv.2 ゴールド（4.5★）
+
+実は、あなたのお店は「改善中」のお店です。
+このモメンタムを逃さないために...
+
+【月 ¥1,000 LIGHT プラン のメリット】
+✓ 毎月の詳細レポート（PDF）が自動配信
+✓ 「あと何をすれば Lv.3 に上がる？」が分かる
+✓ 競合店との比較で、自分たちの強みが見える
+
+→ 今すぐ有料プランへ ¥1,000/月で始める
+
+---
+※無料トライアルは 2026年6月10日に終了します
+```
+
+<div class="callout">
+<b>仕組み</b><br>
+1. 無料で「価値」を十分に体験させる<br>
+2. 無料終了時に「改善実感」を与える<br>
+3. その瞬間に「更なる価値」の CTA → コンバージョン
+</div>
+
+<h2>6. スケーリング（自動拡大）</h2>
+
+<h3>6.1 投稿数と店舗通知の関係</h3>
+
+```
+投稿増加 = 自動的に新規店舗への通知増加
+↓
+通知増加 = 自動的に新規契約増加
+↓
+営業部隊なし・人件費なし・スケール無限
+```
+
+<table>
+<tr><th>投稿数/月</th><th>掲載店舗数</th><th>新規通知数</th><th>月額売上（CV5%）</th><th>営業人件費</th></tr>
+<tr><td>5,000</td><td>1,500</td><td>500</td><td>¥25,000</td><td>¥0</td></tr>
+<tr><td>10,000</td><td>2,500</td><td>1,000</td><td>¥50,000</td><td>¥0</td></tr>
+<tr><td>20,000</td><td>4,500</td><td>2,000</td><td>¥100,000</td><td>¥0</td></tr>
+<tr><td>50,000</td><td>10,000</td><td>5,000</td><td>¥250,000</td><td>¥0</td></tr>
+</table>
+
+<h2>7. 実装ロードマップ</h2>
+
+<table>
+<tr><th>フェーズ</th><th>時期</th><th>実装内容</th><th>優先度</th></tr>
+<tr><td><b>Phase 1</b></td><td>Month 1</td><td>Google Places API 連携 / 店舗メール自動取得</td><td>最高</td></tr>
+<tr><td><b>Phase 2</b></td><td>Month 1</td><td>SendGrid メール自動配信 / テンプレート設計</td><td>最高</td></tr>
+<tr><td><b>Phase 3</b></td><td>Month 2</td><td>無料ダッシュボード UI / 7 日トライアル機能</td><td>高</td></tr>
+<tr><td><b>Phase 4</b></td><td>Month 2</td><td>Stripe 決済統合 / 有料プラン有効化</td><td>高</td></tr>
+<tr><td><b>Phase 5</b></td><td>Month 3</td><td>月次レポート自動生成 / PDF 配信</td><td>中</td></tr>
+</table>
+
+<h2>8. コスト構造の劇的改善</h2>
+
+<div class="comparison">
+<div class="comp-box">
+<h4>営業型（従来）</h4>
+<ul style="font-size:13px">
+<li>営業担当：月 ¥30K</li>
+<li>広告予算：月 ¥50K</li>
+<li>インフラ：月 ¥15K</li>
+<li><b>月額計：¥95,000</b></li>
+<li>6ヶ月：¥570,000</li>
+</ul>
+</div>
+<div class="comp-box">
+<h4>セルフサービス型（新）</h4>
+<ul style="font-size:13px">
+<li>営業担当：¥0</li>
+<li>メール配信：¥100-300</li>
+<li>インフラ：月 ¥15K</li>
+<li><b>月額計：¥15,400</b></li>
+<li>6ヶ月：¥92,400</li>
+</ul>
+</div>
+</div>
+
+<p style="text-align:center;margin-top:16px;color:var(--positive);font-weight:700;font-size:16px">
+月額コスト 84% 削減 / 6ヶ月 ¥477,600 削減
+</p>
+
+<h2>9. 最終的な 6 ヶ月完全予測（セルフサービス版）</h2>
+
+<table>
+<tr><th>指標</th><th>6ヶ月累計</th><th>Month 6</th><th>vs 通常型</th></tr>
+<tr><td>投稿数</td><td>19,700 件</td><td>月 2,700 件</td><td>同等</td></tr>
+<tr><td>ユーザー数</td><td>2,200 人</td><td>Lv.1 ユーザー</td><td>同等</td></tr>
+<tr><td>調査員数</td><td>50 人</td><td>Lv.2/3</td><td>同等</td></tr>
+<tr><td><span class="highlight">店舗契約数</span></td><td><span class="highlight">96 店</span></td><td><span class="highlight">月 12 新規</span></td><td><span class="highlight">営業なし達成</span></td></tr>
+<tr><td><span class="highlight">店舗向け売上</span></td><td><span class="highlight">¥369,000</span></td><td><span class="highlight">月 ¥96,000</span></td><td><span class="highlight">営業人件費 ¥0</span></td></tr>
+<tr><td>調査員報酬</td><td>¥2,150,000</td><td>月 ¥600,000</td><td>同等</td></tr>
+<tr><td><span class="highlight">営業人件費</span></td><td><span class="highlight">¥0</span></td><td><span class="highlight">¥0</span></td><td><span class="highlight">-¥180,000</span></td></tr>
+<tr><td><span class="highlight">6ヶ月CF</span></td><td><span class="highlight">+¥2,410,700</span></td><td></td><td><span class="highlight">+¥477,600 有利</span></td></tr>
+</table>
+
+<div class="callout">
+<b>🚀 セルフサービス版の完全勝利</b><br>
+<br>
+✅ 営業チーム不要（人件費 ¥0）<br>
+✅ 6ヶ月で 96 店舗の有料契約獲得<br>
+✅ 月額 ¥96,000 の安定収入<br>
+✅ メール配信費だけで自動スケーリング<br>
+✅ 営業型より ¥477,600 以上有利<br>
+✅ 投稿が増える = 自動的に売上も増える
+</div>
+
+<h2>10. まとめ：完全セルフサービスモデルの優位性</h2>
+
+<div class="callout">
+<b>❌ 営業型の課題</b><br>
+- 営業担当を雇わないと店舗数が増えない<br>
+- 1 人で月 20 店舗が限界<br>
+- スケール = 人数を増やす = 固定費増加<br>
+- 営業の質に左右される<br>
+<br>
+<b>✅ セルフサービス型の優位性</b><br>
+- 投稿が増える = 自動で店舗に通知される<br>
+- 通知数は無制限（メール配信費は月 ¥100-300）<br>
+- スケール = 投稿数に比例（人件費不要）<br>
+- 完全に自動化（質が一定）<br>
+- 6ヶ月で +¥2.4M のプラスキャッシュフロー
+</div>
+
+</div>
+</body>
+</html>

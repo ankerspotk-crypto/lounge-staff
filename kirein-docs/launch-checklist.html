@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜実行開始ロードマップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1200px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3,h4{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px;background:var(--soft);padding:8px 12px;border-radius:4px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:4px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+  th,td{border:1px solid var(--line);padding:10px;text-align:left}
+  th{background:var(--soft);font-weight:700}
+  .phase-header{background:var(--pine);color:#fff;padding:12px;border-radius:4px;margin:20px 0 12px;font-weight:700}
+  .checklist{list-style:none;margin:12px 0 0 0}
+  .checklist li{margin:8px 0;padding-left:30px;position:relative}
+  .checklist li::before{content:"☐";position:absolute;left:0;font-size:18px;color:var(--mint)}
+  .todo{background:#fffacd;padding:12px;border-left:4px solid var(--mint);margin:12px 0;border-radius:0 4px 4px 0}
+  .budget{background:#e6f5f1;padding:12px;border-left:4px solid var(--mint);margin:12px 0;border-radius:0 4px 4px 0}
+  .critical{background:#ffe6e6;padding:12px;border-left:4px solid #dc3545;margin:12px 0;border-radius:0 4px 4px 0}
+  code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+  .success{color:#28a745;font-weight:700}
+  .highlight{background:linear-gradient(120deg,#fff3cd,transparent);padding:2px 4px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>キレイン 実行開始ロードマップ</h1>
+<p style="color:var(--mint);font-weight:700;font-size:16px">来週からのサービスローンチ。完全チェックリスト版。</p>
+
+<h2>🎯 大方針</h2>
+
+<div class="critical">
+<b>重要：スモールスタート戦略</b><br>
+<br>
+完璧を目指さない。<b>MVP（Minimum Viable Product）</b> でローンチして、<b>投稿数が目印</b>になったら機能を追加する。<br>
+<br>
+初月目標：<b>5,000 件投稿達成</b><br>
+期限：<b>6 月末まで（残り 27 日）</b><br>
+スタッフ：<b>1-2 人で開始</b>
+</div>
+
+<h2>🚀 Week 1（今週）：準備フェーズ</h2>
+
+<div class="phase-header">必ずこの週に完了させることリスト</div>
+
+<h3>1. インフラ・決済系の準備</h3>
+<ul class="checklist">
+<li>AWS アカウント開設（Lambda + DynamoDB）→ 担当：エンジニア</li>
+<li>Stripe 法人アカウント開設（決済処理）→ 担当：営業 / 経営</li>
+<li>SendGrid メール配信アカウント開設 → 担当：エンジニア</li>
+<li>Google Cloud Console で Places API を有効化 → 担当：エンジニア</li>
+<li>Line Business アカウント準備（今後用）→ 担当：営業</li>
+</ul>
+
+<h3>2. clear-map の最小修正（既存サイト活用）</h3>
+<ul class="checklist">
+<li>「投稿する」ボタンを常に表示（ヘッダーに追加）</li>
+<li>ユーザー認証フロー実装（LINE or 電話番号）</li>
+<li>投稿フォーム実装（トイレ清潔★ / 空気・無臭★）</li>
+<li>ポイント計算 + Lv.1 自動昇格ロジック</li>
+<li>マイページ実装（#/mypage ルート）</li>
+<li>キャンペーン3倍ポイント設定（6/3-6/30）</li>
+<li><code>LocalStorage</code> で投稿データ永続化</li>
+</ul>
+
+<div class="todo">
+<b>🎯 今週の成功基準</b><br>
+clear-map で「投稿 → ポイント獲得 → Lv進度表示」がすべて動く
+</div>
+
+<h3>3. SNS アカウント準備</h3>
+<ul class="checklist">
+<li>TikTok アカウント開設（または既存ラウンジ家康アカウントを活用）</li>
+<li>Instagram アカウント開設（<code>@kirein_jp</code> など）</li>
+<li>キャンペーン動画シナリオ確定（campaign-marketing-plan.html 参照）</li>
+<li>投稿テンプレート作成：「無料で調査員になれる」「ポイント3倍」</li>
+</ul>
+
+<h3>4. ドキュメント・利用規約</h3>
+<ul class="checklist">
+<li>プライバシーポリシー作成</li>
+<li>利用規約作成（特に投稿内容 / データ利用について）</li>
+<li>見習い調査員の業務委託契約テンプレート</li>
+</ul>
+
+<h3>5. 初期データセット</h3>
+<ul class="checklist">
+<li>clear-map の 10 店舗ダミーデータ確認</li>
+<li>ラウンジ家康を Kirein に追加掲載</li>
+<li>周辺 5-10 店舗を手作業でリスト化（営業営材用）</li>
+</ul>
+
+<div class="budget">
+<b>💰 Week 1 の予算</b><br>
+AWS：¥0（無料枠）<br>
+Stripe：¥0（手数料は後払い）<br>
+SendGrid：¥0（無料枠 5,000 通/月）<br>
+<b>合計：¥0（人件費のみ）</b>
+</div>
+
+<h2>📱 Week 2-3：テスト＆ローンチ</h2>
+
+<div class="phase-header">投稿開始までの準備</div>
+
+<h3>1. 機能テスト</h3>
+<ul class="checklist">
+<li>自分たちで 10 件以上投稿して動作確認</li>
+<li>スマホ（iPhone / Android）での動作確認</li>
+<li>投稿後にポイントが正しく加算されるか</li>
+<li>Lv.1 到達時に通知が出るか</li>
+<li>マイページでポイント進度が表示されるか</li>
+</ul>
+
+<h3>2. Google クロスポスト導入（優先度：高）</h3>
+<ul class="checklist">
+<li>Google Places API を使った店舗名自動抽出（実装完了）</li>
+<li>メール配信テスト（SendGrid で 5-10 件のメール送信）</li>
+<li>無料ダッシュボード UI の確認</li>
+</ul>
+
+<h3>3. TikTok キャンペーン素材の作成</h3>
+<ul class="checklist">
+<li>「無料で調査員になれる」30 秒動画（スマホで撮影可）</li>
+<li>「ポイント 3 倍」告知動画</li>
+<li>ハッシュタグ確定：<code>#キレイン #トイレ #無料 #調査員</code></li>
+</ul>
+
+<h3>4. プレローンチ告知</h3>
+<ul class="checklist">
+<li>ラウンジ家康スタッフ / 常連客への試行利用呼びかけ</li>
+<li>「明日からキレイン始まります」LINEグループ通知</li>
+<li>関係者 20-30 人でプレテスト投稿（目標：50 件）</li>
+</ul>
+
+<div class="todo">
+<b>🎯 Week 2-3 の成功基準</b><br>
+投稿 100 件達成 + エラーなし + モバイル動作確認完了
+</div>
+
+---
+
+<h2>🎉 6月3日（Month 1 開始）：正式ローンチ</h2>
+
+<div class="phase-header">投稿獲得のアクセル</div>
+
+<h3>Day 1-3：告知・認知</h3>
+<ul class="checklist">
+<li>TikTok / Instagram で「キャンペーン開始」動画投稿</li>
+<li>3 日間で 5-10 本の動画連投</li>
+<li>ハッシュタグ活用（#キレイン #無料 #調査員）</li>
+<li>インフルエンサー（食べ歩きアカウント）へのシェア依頼</li>
+</ul>
+
+<h3>Day 4-7：継続投稿 + データ蓄積</h3>
+<ul class="checklist">
+<li>毎日 TikTok 2-3 本投稿</li>
+<li>投稿ユーザーからの「Lv.1 達成」スクショを UGC として再投稿</li>
+<li>投稿数が増えるに従い、Google 通知も増加開始</li>
+<li>目標：Week 1 で 1,000-1,500 件投稿</li>
+</ul>
+
+<div class="critical">
+<b>⚠️ 重要：Month 1 の目標</b><br>
+<br>
+投稿数：<b>5,000 件以上</b><br>
+ユーザー数：<b>3,000-4,000 人</b><br>
+Lv.1 到達者：<b>500-1,000 人</b><br>
+<br>
+この数字に到達しないと、以降の店舗営業が弱い。<b>全力で投稿数を追う。</b>
+</div>
+
+---
+
+<h2>📊 Month 2-6：運用フェーズ</h2>
+
+<div class="phase-header">店舗営業の自動化 + 調査員育成</div>
+
+<h3>Month 2（7月）：Google 通知＆自動メール本格化</h3>
+<ul class="checklist">
+<li>Google My Business API 本格運用（月 1,000+ 通の自動メール配信）</li>
+<li>無料ダッシュボードの CV 率測定開始</li>
+<li>最初の店舗 20-30 社が LIGHT プラン契約開始</li>
+<li>Lv.2 見習い調査員の第一期選抜（5-10 人）</li>
+</ul>
+
+<h3>Month 3-6：スケーリング</h3>
+<ul class="checklist">
+<li>Google 通知 + 自動メール + 3 段階フロー完全運用</li>
+<li>Lv.2 調査員の増加（Month 3: 30 人 → Month 6: 320 人）</li>
+<li>店舗向け PRO / AUDIT プランの営業開始（Month 5-）</li>
+<li>チーム拡大（CS 1 名追加、エンジニア 1 名追加）</li>
+</ul>
+
+---
+
+<h2>👥 スタッフ体制</h2>
+
+<table>
+<tr><th>期間</th><th>役割</th><th>人数</th><th>主な業務</th></tr>
+<tr><td><b>Week 1-2</b></td><td>エンジニア</td><td>1</td><td>インフラ + 機能実装</td></tr>
+<tr><td></td><td>経営 / 営業</td><td>1</td><td>SNS + プレ告知</td></tr>
+<tr><td></td><td>合計</td><td><b>2</b></td><td>-</td></tr>
+<tr><td><b>Month 1</b></td><td>エンジニア</td><td>1</td><td>バグフィックス + Google API</td></tr>
+<tr><td></td><td>営業 / SNS</td><td>1</td><td>TikTok / Instagram 投稿</td></tr>
+<tr><td></td><td>合計</td><td><b>2</b></td><td>-</td></tr>
+<tr><td><b>Month 2-3</b></td><td>エンジニア</td><td>1</td><td>自動メール実装</td></tr>
+<tr><td></td><td>CS</td><td>1</td><td>ユーザー対応</td></tr>
+<tr><td></td><td>営業</td><td>0.5</td><td>店舗対応（まだ少ない）</td></tr>
+<tr><td></td><td>合計</td><td><b>2.5</b></td><td>-</td></tr>
+<tr><td><b>Month 4-6</b></td><td>エンジニア</td><td>1.5</td><td>ダッシュボード拡張</td></tr>
+<tr><td></td><td>CS</td><td>1</td><td>調査員 / 店舗対応</td></tr>
+<tr><td></td><td>営業</td><td>1</td><td>店舗営業本格化</td></tr>
+<tr><td></td><td>合計</td><td><b>3.5</b></td><td>-</td></tr>
+</table>
+
+<div class="todo">
+<b>💼 重要：初期体制</b><br>
+<br>
+Week 1-2：兼務でいい。<br>
+Month 1：TikTok 毎日投稿が必須 → 専任 1 名確保。<br>
+Month 2：CS 対応が増える → CS 1 名採用必須。
+</div>
+
+---
+
+<h2>💰 初期投資＆月別予算</h2>
+
+<h3>初期投資（一度きり）</h3>
+
+<table>
+<tr><th>項目</th><th>金額</th><th>備考</th></tr>
+<tr><td>インフラ構築（エンジニア給与）</td><td>¥200,000</td><td>2 週間の開発</td></tr>
+<tr><td>ドメイン / SSL</td><td>¥3,000</td><td>1 年間</td></tr>
+<tr><td>ロゴ / UI 微調整</td><td>¥50,000</td><td>フリーランス</td></tr>
+<tr><td><b>初期投資計</b></td><td><b>¥253,000</b></td><td></td></tr>
+</table>
+
+<h3>月別運用費</h3>
+
+<table>
+<tr><th>月</th><th>インフラ</th><th>メール</th><th>人件費（推定）</th><th>その他</th><th>合計</th></tr>
+<tr><td>M1</td><td>¥15,000</td><td>¥500</td><td>¥400,000</td><td>¥10,000</td><td>¥425,500</td></tr>
+<tr><td>M2</td><td>¥15,000</td><td>¥1,000</td><td>¥450,000</td><td>¥10,000</td><td>¥476,000</td></tr>
+<tr><td>M3-6</td><td>¥15,000</td><td>¥2,000</td><td>¥500,000</td><td>¥10,000</td><td>¥527,000</td></tr>
+<tr><td><b>6ヶ月計</b></td><td><b>¥90,000</b></td><td><b>¥9,000</b></td><td><b>¥2,300,000</b></td><td><b>¥50,000</b></td><td><b>¥2,449,000</b></td></tr>
+</table>
+
+<div class="budget">
+<b>💰 結論：初期資金の目安</b><br>
+<br>
+<b>必要額：¥500,000-600,000</b><br>
+<br>
+初期投資 ¥253,000<br>
++ Month 1 赤字バッファ ¥250,000<br>
+= ¥503,000<br>
+<br>
+（Month 2 以降は投稿数が売上に転換していく予定）
+</div>
+
+---
+
+<h2>📈 成功の KPI</h2>
+
+<h3>Week 1-2 の判定基準</h3>
+
+<table>
+<tr><th>KPI</th><th>目標</th><th>判定</th></tr>
+<tr><td>機能テスト成功率</td><td>100%</td><td>☑ / ✗</td></tr>
+<tr><td>スマホ動作確認</td><td>iPhone / Android OK</td><td>☑ / ✗</td></tr>
+<tr><td>プレテスト投稿数</td><td>50 件以上</td><td>☑ / ✗</td></tr>
+</table>
+
+<h3>Month 1 の判定基準</h3>
+
+<table>
+<tr><th>KPI</th><th>目標</th><th>現状トラック</th></tr>
+<tr><td>投稿数</td><td>5,000 件</td><td>-</td></tr>
+<tr><td>新規ユーザー</td><td>3,000-4,000 人</td><td>-</td></tr>
+<tr><td>Lv.1 到達</td><td>500-1,000 人</td><td>-</td></tr>
+<tr><td>DAU（日次アクティブユーザー）</td><td>月 1,000-1,500 人</td><td>-</td></tr>
+<tr><td>TikTok フォロワー</td><td>5,000-10,000 人</td><td>-</td></tr>
+</table>
+
+<div class="critical">
+<b>⚠️ Month 1 で 5,000 件投稿に到達しない場合</b><br>
+<br>
+以降のスケーリング（店舗営業・調査員育成）の基盤が弱くなる。<br>
+Week 3-4 で強制的に施策を追加する（インフルエンサー起用、広告投下など）。
+</div>
+
+---
+
+<h2>🔄 週次ミーティングのアジェンダ</h2>
+
+<h3>毎週月曜 10:00（30 分）</h3>
+
+<ul>
+<li>前週の投稿数（目標 vs 実績）</li>
+<li>ユーザー増加数</li>
+<li>エラー / バグ報告</li>
+<li>SNS 施策の反応</li>
+<li>今週の重点項目</li>
+</ul>
+
+---
+
+<h2>📋 チェックリスト（印刷推奨）</h2>
+
+<h3>Week 1 終了時チェック</h3>
+<ul class="checklist">
+<li>AWS / Stripe / SendGrid アカウント開設</li>
+<li>Google Places API 有効化</li>
+<li>clear-map で投稿フロー完成</li>
+<li>ポイント / Lv.1 機能動作確認</li>
+<li>TikTok / Instagram アカウント作成</li>
+<li>利用規約作成</li>
+</ul>
+
+<h3>Week 3（ローンチ前）終了時チェック</h3>
+<ul class="checklist">
+<li>スマホ全キャリア動作確認</li>
+<li>プレテスト投稿 50 件以上</li>
+<li>キャンペーン動画 3 本以上作成</li>
+<li>SNS 投稿スケジュール決定</li>
+<li>Google 通知メール テスト送信完了</li>
+</ul>
+
+<h3>6月3日（ローンチ日）チェック</h3>
+<ul class="checklist">
+<li>clear-map が公開可能な状態</li>
+<li>TikTok 動画 1 本以上公開済み</li>
+<li>Kirein ハッシュタグ用意</li>
+<li>メール配信キュー確認</li>
+<li>エラーモニタリング稼働</li>
+</ul>
+
+---
+
+<h2>🎯 Day 1 のやることリスト</h2>
+
+<div class="todo">
+<b>6月3日（月）朝</b><br>
+<br>
+08:00 - システムヘルスチェック（エラーなし確認）<br>
+09:00 - TikTok「キャンペーン開始」動画投稿<br>
+09:30 - Instagram / Twitter にも同時投稿<br>
+10:00 - ラウンジ家康スタッフに通知（試行投稿開始）<br>
+11:00 - 関係者 20 人に「投稿チャレンジ」呼びかけ<br>
+14:00 - 投稿状況確認（目標：50 件）<br>
+17:00 - 初日レビュー + 翌日施策確認
+</div>
+
+---
+
+<h2>🚀 成功のための心構え</h2>
+
+<div class="critical">
+<b>絶対守ること 3 つ</b><br>
+<br>
+1. <b>投稿数が全て</b> — 最初の 1 ヶ月は、投稿数 5,000 件達成が唯一の KPI。品質は後。<br>
+<br>
+2. <b>毎日 TikTok 投稿</b> — 誰かが毎日 1-2 本、最低でも投稿し続ける。ハッシュタグを使う。<br>
+<br>
+3. <b>ユーザーの声を聞く</b> — バグ報告・要望が来たら、24 時間以内に返信。信頼が増す。
+</div>
+
+<div class="success">
+<b>✨ 成功したら次のステップ</b><br>
+<br>
+投稿 5,000 件達成 → Google 通知メール本格化<br>
+↓<br>
+Month 2：店舗 20-30 社の LIGHT 契約<br>
+↓<br>
+Month 3：Lv.2 見習い調査員 30 人稼働<br>
+↓<br>
+Month 6：完全黒字化（月額売上 ¥150K-200K）
+</div>
+
+</div>
+</body>
+</html>

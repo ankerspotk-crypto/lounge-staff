@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜UI・フロー設計書</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1000px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:4px 0}
+  .mockup{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:20px;margin:16px 0}
+  .mockup-title{font-weight:700;margin-bottom:12px;color:var(--pine)}
+  .flow-box{background:var(--pine);color:#fff;border-radius:8px;padding:16px;margin:12px 0;font-size:13px}
+  .callout{background:#e6f5f1;border-left:4px solid var(--mint);padding:12px 16px;margin:14px 0}
+  code{background:var(--soft);padding:2px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>UI・フロー設計書 v1.0</h1>
+<p style="color:var(--mint);font-weight:700">消費者サイト（キレインマップ）への投稿・Lv表示機能</p>
+
+<h2>1. 投稿フロー（ユーザー体験）</h2>
+
+<div class="flow-box">
+<b>START：キレインマップを開く</b><br>
+↓<br>
+投稿ボタン「このトイレ、評価する」タップ<br>
+↓<br>
+店名を検索 or QRコード（トイレに貼ったQR）スキャン<br>
+↓<br>
+【評価入力】<br>
+- トイレ清潔：★1〜5<br>
+- 空気・無臭：★1〜5<br>
+- 総合：★1〜5 (自動or手動)<br>
+- 感想：自由記述（任意）<br>
+- 位置情報：自動 or 手動<br>
+↓<br>
+「投稿する」ボタン<br>
+↓<br>
+<b>✓ 投稿完了画面</b><br>
+「+150pt獲得！（キャンペーン中は3倍）」<br>
+「現在のポイント：XXXpt / Lv.1まで XXXpt」<br>
+「次のレベルまで あと YY投稿」<br>
+↓<br>
+【オプション】<br>
+- 「友達に紹介」シェアボタン<br>
+- 「他の店も評価する」（継続投稿誘導）
+</div>
+
+<h2>2. マイページデザイン</h2>
+
+<div class="mockup">
+<div class="mockup-title">📊 マイページ レイアウト</div>
+
+<pre style="background:#fff;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:12px">
+【ヘッダー】
+┌─────────────────────────────┐
+│ こんにちは、▲▲▲さん       │
+│ Lv.0 ビジター               │
+└─────────────────────────────┘
+
+【ポイント・Lvプログレス】
+┌─────────────────────────────┐
+│ 💎 あなたのポイント           │
+│ 250pt / 500pt (50%)         │
+│ ████░░░░░░░░░░░░░░ 50%      │
+│                             │
+│ 🚀 次のレベルまで            │
+│ あと 250pt = あと 2投稿     │
+│ （キャンペーン中なら3投稿） │
+└─────────────────────────────┘
+
+【投稿歴】
+┌─────────────────────────────┐
+│ 📝 投稿した店 (3件)         │
+│ ① ラウンジ家康 (Lv.2)      │
+│   投稿日：2026-06-03        │
+│   ★★★ / 150pt             │
+│                             │
+│ ② ○○カフェ (Lv.1)        │
+│   投稿日：2026-06-02        │
+│   ★★☆ / 50pt              │
+│                             │
+│ ③ □□焼鳥 (Lv.2)         │
+│   投稿日：2026-06-01        │
+│   ★★★ / 100pt             │
+└─────────────────────────────┘
+
+【整合度スコア】
+┌─────────────────────────────┐
+│ 📈 あなたの整合度             │
+│ プロの評価と一致度            │
+│ ████████░░ 82%               │
+│ （Lv.2昇格には90%必要）      │
+└─────────────────────────────┘
+
+【Lv.2昇格状況】
+┌─────────────────────────────┐
+│ 🎯 見習い調査員への道         │
+│ ✓ ポイント：500pt クリア      │
+│ ✓ 投稿数：20件以上           │
+│ ✗ 整合度：82% (必要90%)     │
+│ ✓ 本人確認：完了              │
+│                             │
+│ ⏳ あと整合度8%で昇格！     │
+└─────────────────────────────┘
+
+【アクション】
+┌─────────────────────────────┐
+│ [今すぐ投稿する]            │
+│ [友達を招待]                │
+│ [設定・ヘルプ]              │
+└─────────────────────────────┘
+</pre>
+
+</div>
+
+<h2>3. 投稿フォーム詳細UI</h2>
+
+<div class="mockup">
+<div class="mockup-title">📍 投稿フォーム</div>
+
+<pre style="background:#fff;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:12px">
+【Step 1：店舗選択】
+┌─────────────────────────────┐
+│ 🔍 どのお店？                │
+│ [検索フィールド]            │
+│ "ラウンジ" と入力...        │
+│                             │
+│ 🏪 検索結果                  │
+│ ① ラウンジ家康 (六本木)      │
+│ ② ラウンジ RÊVE (銀座)       │
+│ ③ ...                       │
+│                             │
+│ または QRスキャン            │
+│ [📷 QRコード読込]            │
+└─────────────────────────────┘
+
+【Step 2：評価入力】
+┌─────────────────────────────┐
+│ ラウンジ家康 に投票          │
+│ 📍 六本木                    │
+│                             │
+│ 🚻 トイレ清潔               │
+│ ★☆☆☆☆ ← ★★★★★       │
+│ (タップで選択)              │
+│                             │
+│ 💨 空気・無臭               │
+│ ★☆☆☆☆ ← ★★★★★       │
+│                             │
+│ 📊 総合評価（自動計算）      │
+│ ★★★ (3.5/5)                │
+│ [手動で変更することも可]   │
+│                             │
+│ 📝 感想（任意）              │
+│ [テキストフィールド]        │
+│ "トイレがきれい！"          │
+│                             │
+│ 🏞️ 写真を追加（任意）       │
+│ [カメラ / ギャラリー選択]  │
+│                             │
+│ 📍 位置情報                  │
+│ ☑ 自動取得 / ☐ 手動        │
+│                             │
+│ [投稿する]                  │
+└─────────────────────────────┘
+
+【Step 3：完了画面】
+┌─────────────────────────────┐
+│ ✅ 投稿完了！                │
+│                             │
+│ 🎉 +150pt 獲得！             │
+│ （通常50pt、キャンペーン中） │
+│                             │
+│ 💎 あなたのポイント          │
+│ 250pt → 400pt               │
+│ Lv.0 → まで 100pt残り       │
+│                             │
+│ 🚀 あと1投稿で Lv.1!        │
+│                             │
+│ [他の店も評価する]          │
+│ [ホームに戻る]              │
+│ [シェアする]                │
+└─────────────────────────────┘
+</pre>
+
+</div>
+
+<h2>4. Lv.1到達時のUX</h2>
+
+<div class="callout">
+<b>【自動トリガー】</b><br>
+ユーザーが500ptに達した瞬間：<br>
+① ポイント画面にアニメーション表示「Lv.1 認定レポーター！」<br>
+② LINE / アプリのプッシュDM：「おめでとうございます！あなたは認定レポーターに認定されました」<br>
+③ マイページの「Lv.1」バッジ が表示される<br>
+④ プロフィール欄に「認定レポーター」タグが自動付与<br>
+⑤ 投稿時のポイント表示が変わる（「+150pt（レポーター）」）
+</div>
+
+<h2>5. Lv.2（見習い調査員）昇格フロー</h2>
+
+<div class="mockup">
+<div class="mockup-title">見習い調査員への昇格</div>
+
+<pre style="background:#fff;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:12px">
+【月1回のバッチ処理で、以下を満たすユーザーに DM】
+
+DM 内容：
+┌─────────────────────────────┐
+│ 📬 朗報！あなたはLv.2選抜   │
+│ (見習い調査員)対象です      │
+│                             │
+│ あなたの成績：              │
+│ ✓ 投稿数：35件              │
+│ ✓ 整合度：92%               │
+│ ✓ 評価：高い信頼性         │
+│                             │
+│ 📋 見習い調査員の特典：      │
+│ ✓ 1件¥1,000の報告書報酬    │
+│ ✓ 指定フォーマットで報告    │
+│ ✓ 月2-3件で月¥2K-3K稼ぐ   │
+│ ✓ 正式契約後は公認調査員へ │
+│                             │
+│ 🎯 月2〜3件の調査を      │
+│ お任せします（強制ではなし）│
+│                             │
+│ [詳細を見る]                │
+│ [応募する]                  │
+│ [あとで]                    │
+└─────────────────────────────┘
+
+【応募時フロー】
+1. 本人確認（電話番号確認or身分証）
+2. 利用規約同意
+3. 業務委託契約書送付（PDF）
+4. 署名 → 完了
+5. 「Lv.2 見習い調査員」正式認定
+6. 初月月額¥5,000支給
+7. 専用ダッシュボード access 付与
+</pre>
+
+</div>
+
+<h2>6. 将来拡張機能（Phase 2）</h2>
+
+<ul>
+<li>📸 写真投稿でのボーナスポイント</li>
+<li>🎖️ ランキング表示（「今月のトップ投稿者」）</li>
+<li>👥 フレンド招待機能（ポイント獲得）</li>
+<li>🏆 バッジシステム（「100件投稿達成」等）</li>
+<li>💬 コメント機能（他ユーザーの投稿に反応）</li>
+<li>📱 モバイルアプリ化</li>
+</ul>
+
+</div>
+</body>
+</html>

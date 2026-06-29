@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>タイムテーブル</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0d0d14; color: #fff; min-height: 100vh; overflow-x: hidden; }
+
+header {
+  background: #16162a;
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid #2a2a40;
+}
+header h1 { font-size: 16px; letter-spacing: .5px; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+#now-label { font-size: 11px; color: #888; }
+.btn-sm {
+  background: #2a2a40; border: none; color: #ccc;
+  padding: 7px 12px; border-radius: 16px; font-size: 12px; cursor: pointer;
+}
+.btn-sm:active { background: #3a3a55; }
+
+/* floor divider */
+.floor-row { display: flex; align-items: stretch; }
+.floor-heading {
+  font-size: 10px; color: #aaa; font-weight: bold; letter-spacing: 2px;
+  padding: 0 8px; background: #111120; border-bottom: 1px solid #22223a;
+  height: 26px; display: flex; align-items: center; width: 62px; flex-shrink: 0;
+}
+.floor-heading-bar { background: #111120; border-bottom: 1px solid #22223a; height: 26px; }
+
+/* seat label */
+.seat-label {
+  height: 44px; display: flex; align-items: center; padding: 0 8px;
+  font-size: 11px; color: #999; border-bottom: 1px solid #16161e;
+  white-space: nowrap; width: 62px; flex-shrink: 0;
+}
+.seat-label.f2 { color: #66aadd; }
+.seat-label.f5 { color: #aa88dd; }
+
+/* time axis */
+.axis-tick {
+  position: absolute; top: 0; transform: translateX(-50%);
+  font-size: 10px; color: #444; padding-top: 9px; white-space: nowrap;
+}
+.axis-tick.major { color: #888; }
+
+/* row canvas */
+.row-canvas {
+  position: relative; height: 44px; border-bottom: 1px solid #16161e;
+}
+.grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: #1c1c2a; }
+.grid-line.half { background: #151520; }
+
+/* current time line */
+.now-line {
+  position: absolute; top: 0; bottom: 0; width: 2px;
+  background: rgba(255,255,80,.75); z-index: 5; pointer-events: none;
+}
+.now-line::before {
+  content: ''; position: absolute; top: -3px; left: -3px;
+  width: 8px; height: 8px; background: #ffff55; border-radius: 50%;
+}
+
+/* bar */
+.bar {
+  position: absolute; top: 7px; height: 30px; border-radius: 6px;
+  display: flex; align-items: center; padding: 0 6px;
+  font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  cursor: pointer; min-width: 6px;
+}
+.bar .bar-name { overflow: hidden; text-overflow: ellipsis; }
+.bar .bar-dur  { font-size: 9px; font-weight: 400; margin-left: 4px; opacity: .8; flex-shrink: 0; }
+.bar.active    { box-shadow: 0 0 7px currentColor; }
+.bar.done      { opacity: .5; }
+
+/* 8色 */
+.c0 { background:#1a3a5a; color:#88ccff; border:1px solid #2a5a8a; }
+.c1 { background:#1a3a2a; color:#88ffaa; border:1px solid #2a6a44; }
+.c2 { background:#3a1a3a; color:#ffaaff; border:1px solid #6a2a6a; }
+.c3 { background:#3a2a1a; color:#ffccaa; border:1px solid #7a5a2a; }
+.c4 { background:#1a3a3a; color:#aaffee; border:1px solid #2a6a66; }
+.c5 { background:#3a1a1a; color:#ffaaaa; border:1px solid #7a2a2a; }
+.c6 { background:#2a2a1a; color:#eeffaa; border:1px solid #5a5a2a; }
+.c7 { background:#1a2a3a; color:#aabbff; border:1px solid #2a4a7a; }
+
+#loading { text-align:center; padding:60px 20px; color:#777; font-size:14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 タイムテーブル</h1>
+  <div class="header-right">
+    <span id="now-label"></span>
+    <button class="btn-sm" onclick="loadData()">↻ 更新</button>
+    <button class="btn-sm" onclick="goBack()">← IEYAS軍師</button>
+  </div>
+</header>
+
+<div id="root"><div id="loading">読み込み中...</div></div>
+
+<script>
+// ---- 設定 ----
+var START_H = 19, START_M = 0;  // タイムライン開始 19:00
+var END_H   = 3,  END_M   = 0;  // タイムライン終了 翌03:00
+var PX_PER_MIN = 3;
+
+var TOTAL_MIN = (END_H + 24) * 60 + END_M - (START_H * 60 + START_M); // 480
+var CANVAS_W  = TOTAL_MIN * PX_PER_MIN;
+
+var castColorMap = {};
+var colorIdx = 0;
+
+function goBack() {
+  window.location.href = window.location.href.split('?')[0];
+}
+
+function toMin(hhmm) {
+  var p = hhmm.split(':');
+  var h = Number(p[0]), m = Number(p[1]);
+  if (h < 6) h += 24;
+  return (h * 60 + m) - (START_H * 60 + START_M);
+}
+
+function nowMin() {
+  var now = new Date();
+  var h = now.getHours(), m = now.getMinutes();
+  if (h < 6) h += 24;
+  return Math.max(0, Math.min(TOTAL_MIN, (h * 60 + m) - (START_H * 60 + START_M)));
+}
+
+function castColor(name) {
+  if (!castColorMap[name]) castColorMap[name] = 'c' + ((colorIdx++) % 8);
+  return castColorMap[name];
+}
+
+function render(data) {
+  // 待機・黒服はタイムラインに表示しない
+  var seats = data.seats.filter(function(s){ return s.type !== 'W' && s.type !== 'K'; });
+  var logs  = data.logs;
+
+  var nm    = nowMin();
+  var nowPx = nm * PX_PER_MIN;
+
+  // ヘッダー時刻
+  var now = new Date();
+  document.getElementById('now-label').textContent =
+    now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ' 現在';
+
+  // キャスト色を安定させるためログ順に事前登録
+  castColorMap = {}; colorIdx = 0;
+  logs.forEach(function(l){ castColor(l.cast); });
+
+  // 席ごとにログをまとめる
+  var logMap = {};
+  logs.forEach(function(l){
+    if (!logMap[l.code]) logMap[l.code] = [];
+    logMap[l.code].push(l);
+  });
+
+  // ---- 時刻軸 ----
+  var axisHtml = '<div style="position:relative;height:28px;width:' + CANVAS_W + 'px">';
+  for (var tm = 0; tm <= TOTAL_MIN; tm += 30) {
+    var totalM = START_H * 60 + START_M + tm;
+    var dispH  = Math.floor(totalM / 60) % 24;
+    var dispM  = totalM % 60;
+    var label  = dispH + ':' + String(dispM).padStart(2,'0');
+    axisHtml  += '<div class="axis-tick' + (dispM === 0 ? ' major' : '') + '" style="left:' + (tm * PX_PER_MIN) + 'px">' + label + '</div>';
+  }
+  axisHtml += '</div>';
+
+  // ---- 席行 ----
+  var rowsHtml = '';
+  var prevFloor = '';
+
+  seats.forEach(function(s) {
+    if (s.floor !== prevFloor) {
+      rowsHtml += '<div class="floor-row">'
+        + '<div class="floor-heading">' + s.floor + '</div>'
+        + '<div class="floor-heading-bar" style="width:' + CANVAS_W + 'px"></div>'
+        + '</div>';
+      prevFloor = s.floor;
+    }
+
+    var sLogs = logMap[s.code] || [];
+    var floorClass = s.floor === '2F' ? 'f2' : 'f5';
+
+    // グリッド線
+    var inner = '';
+    for (var t2 = 0; t2 <= TOTAL_MIN; t2 += 30) {
+      inner += '<div class="grid-line' + (t2 % 60 === 0 ? '' : ' half') + '" style="left:' + (t2 * PX_PER_MIN) + 'px"></div>';
+    }
+    // 現在時刻線
+    if (nm > 0 && nm < TOTAL_MIN) {
+      inner += '<div class="now-line" style="left:' + nowPx + 'px"></div>';
+    }
+    // バー
+    sLogs.forEach(function(l) {
+      var startMin = toMin(l.start);
+      if (isNaN(startMin) || startMin > TOTAL_MIN) return;
+      var endMin   = l.end ? toMin(l.end) : nm;
+      endMin       = Math.min(endMin, TOTAL_MIN);
+      var left     = startMin * PX_PER_MIN;
+      var width    = Math.max(6, (endMin - startMin) * PX_PER_MIN);
+      var isActive = !l.end;
+      var dur      = (endMin - startMin) + '分';
+      inner += '<div class="bar ' + castColor(l.cast) + (isActive ? ' active' : ' done')
+             + '" style="left:' + left + 'px;width:' + width + 'px">'
+             + '<span class="bar-name">' + l.cast + '</span>'
+             + (width > 50 ? '<span class="bar-dur">' + dur + '</span>' : '')
+             + '</div>';
+    });
+
+    rowsHtml += '<div class="floor-row">'
+      + '<div class="seat-label ' + floorClass + '">' + s.short + '</div>'
+      + '<div class="row-canvas" style="width:' + CANVAS_W + 'px">' + inner + '</div>'
+      + '</div>';
+  });
+
+  // ---- 描画 ----
+  document.getElementById('root').innerHTML =
+    '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch" id="scroll-area">'
+    + '<div style="display:inline-block;min-width:' + (CANVAS_W + 62) + 'px;width:100%">'
+    + '<div style="display:flex;background:#13131f;border-bottom:1px solid #2a2a40;position:sticky;top:49px;z-index:20">'
+    + '  <div style="width:62px;flex-shrink:0;border-right:1px solid #1a1a28;font-size:10px;color:#444;display:flex;align-items:flex-end;padding:0 6px 6px">時刻</div>'
+    + '  <div style="flex:1;min-width:0">' + axisHtml + '</div>'
+    + '</div>'
+    + rowsHtml
+    + '</div>'
+    + '</div>';
+
+  // 現在時刻付近にスクロール
+  var scrollEl = document.getElementById('scroll-area');
+  if (scrollEl) {
+    scrollEl.scrollLeft = Math.max(0, nowPx - scrollEl.clientWidth / 2 + 62);
+  }
+}
+
+function loadData() {
+  if (!document.getElementById('loading')) {
+    document.getElementById('root').innerHTML = '<div id="loading">読み込み中...</div>';
+  }
+  google.script.run
+    .withSuccessHandler(render)
+    .withFailureHandler(function(err) {
+      document.getElementById('root').innerHTML =
+        '<div style="text-align:center;padding:60px 20px;color:#cc5555;font-size:14px">'
+        + '読み込みエラー<br>'
+        + '<small style="color:#888">' + (err && err.message ? err.message : '通信エラー') + '</small><br><br>'
+        + '<button onclick="loadData()" style="background:#2a2a40;border:1px solid #444;color:#ccc;padding:10px 20px;border-radius:10px;font-size:14px;cursor:pointer">再読み込み</button>'
+        + '</div>';
+    })
+    .getTimelineData();
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>

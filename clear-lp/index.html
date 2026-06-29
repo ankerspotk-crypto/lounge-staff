@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜女性が、また来たくなる店へ。空間品質認証サービス</title>
+<meta name="description" content="キレインは、お客様からの匿名フィードバックと覆面衛生調査で店舗の“空間品質”を可視化する認証サービス。臭い・清潔感・トイレ・接客衛生を見える化し、改善まで支援します。" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@500;600;700&family=Cormorant+Garamond:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --pine: #0e3a33;
+    --pine-deep: #082722;
+    --mint: #25b598;
+    --mint-soft: #e6f5f1;
+    --gold: #c2a25f;
+    --gold-soft: #f3ecdc;
+    --ink: #182320;
+    --muted: #5d6b66;
+    --line: #e4eae7;
+    --bg: #ffffff;
+    --bg-soft: #f6f9f8;
+    --radius: 16px;
+    --shadow: 0 18px 50px -24px rgba(14, 58, 51, .35);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Noto Sans JP", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.8;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, .serif { font-family: "Noto Serif JP", serif; line-height: 1.45; }
+  .en { font-family: "Cormorant Garamond", serif; letter-spacing: .04em; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { width: min(1120px, 90vw); margin-inline: auto; }
+  section { position: relative; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: .18em;
+    color: var(--mint); text-transform: uppercase; margin-bottom: 18px;
+  }
+  .eyebrow::before { content: ""; width: 26px; height: 1px; background: var(--mint); }
+
+  /* ---------- Header ---------- */
+  header {
+    position: fixed; inset: 0 0 auto 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px clamp(20px, 5vw, 56px);
+    transition: background .3s, box-shadow .3s, padding .3s;
+  }
+  header.scrolled {
+    background: rgba(255,255,255,.92); backdrop-filter: blur(12px);
+    box-shadow: 0 1px 0 var(--line); padding-block: 12px;
+  }
+  .logo { display: flex; align-items: baseline; gap: 8px; font-weight: 700; }
+  .logo .mark { font-family: "Cormorant Garamond", serif; font-size: 26px; letter-spacing: .14em; color: var(--pine); font-weight: 600; }
+  .logo .sub { font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+  header.scrolled .logo .mark { color: var(--pine); }
+  .nav { display: flex; align-items: center; gap: 30px; }
+  .nav a.link { font-size: 13px; font-weight: 500; color: var(--ink); opacity: .8; transition: opacity .2s; }
+  .nav a.link:hover { opacity: 1; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    background: var(--pine); color: #fff; border: 1px solid var(--pine);
+    transition: transform .2s, box-shadow .2s, background .2s; cursor: pointer;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); background: var(--pine-deep); }
+  .btn.ghost { background: transparent; color: var(--pine); }
+  .btn.ghost:hover { background: var(--mint-soft); box-shadow: none; }
+  .btn.gold { background: var(--gold); border-color: var(--gold); }
+  .btn.gold:hover { background: #ab8d4d; }
+  .menu-toggle { display: none; background: none; border: 0; cursor: pointer; flex-direction: column; gap: 5px; }
+  .menu-toggle span { width: 24px; height: 2px; background: var(--ink); border-radius: 2px; transition: .3s; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; min-height: 100vh; display: flex; align-items: center;
+    padding: 140px 0 90px;
+    background:
+      radial-gradient(120% 90% at 85% 0%, #103f37 0%, #0b2c27 55%, #082420 100%);
+    color: #fff; overflow: hidden;
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(60% 60% at 80% 75%, rgba(37,181,152,.22), transparent 70%);
+    pointer-events: none;
+  }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr .85fr; gap: 48px; align-items: center; position: relative; z-index: 2; }
+  .hero .eyebrow { color: var(--mint); }
+  .hero h1 { font-size: clamp(34px, 5vw, 60px); font-weight: 700; letter-spacing: .01em; }
+  .hero h1 .accent { color: var(--mint); }
+  .hero p.lead { margin-top: 24px; font-size: clamp(15px, 1.6vw, 17px); color: #d8e6e1; max-width: 30em; }
+  .hero .cta-row { margin-top: 38px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .hero .btn { padding: 15px 30px; font-size: 14px; }
+  .hero .btn.primary { background: var(--mint); border-color: var(--mint); color: #062019; }
+  .hero .btn.primary:hover { background: #1ea487; }
+  .hero .btn.line { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.3); color: #fff; }
+  .hero .btn.line:hover { background: rgba(255,255,255,.16); }
+  .hero .mini-note { margin-top: 22px; font-size: 12.5px; color: #9fb6af; }
+
+  /* certification badge visual */
+  .badge-card {
+    position: relative; aspect-ratio: 1/1.12; border-radius: 24px;
+    background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    border: 1px solid rgba(255,255,255,.16);
+    backdrop-filter: blur(6px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; box-shadow: 0 40px 90px -40px rgba(0,0,0,.6);
+  }
+  .seal {
+    width: 168px; height: 168px; border-radius: 50%;
+    display: grid; place-items: center; position: relative;
+    background: radial-gradient(circle at 50% 35%, #2ec7a6, #128c73);
+    box-shadow: 0 0 0 8px rgba(37,181,152,.18), inset 0 -8px 20px rgba(0,0,0,.25);
+  }
+  .seal::before {
+    content: ""; position: absolute; inset: 12px; border-radius: 50%;
+    border: 2px dashed rgba(255,255,255,.55);
+  }
+  .seal .rank { font-family: "Cormorant Garamond", serif; font-size: 40px; color: #fff; font-weight: 600; letter-spacing: .05em; line-height: 1; }
+  .seal .rank small { display: block; font-family: "Noto Sans JP"; font-size: 10px; letter-spacing: .3em; margin-top: 6px; }
+  .badge-card .bc-title { font-family: "Cormorant Garamond", serif; font-size: 24px; letter-spacing: .18em; color: #fff; }
+  .badge-card .bc-sub { font-size: 12px; color: #bcd2cb; letter-spacing: .08em; }
+  .badge-card .stars { color: var(--gold); letter-spacing: 4px; font-size: 15px; }
+
+  /* ---------- generic section ---------- */
+  .section-pad { padding: clamp(72px, 10vw, 120px) 0; }
+  .section-head { max-width: 640px; margin-bottom: 54px; }
+  .section-head.center { margin-inline: auto; text-align: center; }
+  .section-head h2 { font-size: clamp(26px, 3.4vw, 38px); font-weight: 700; }
+  .section-head p { margin-top: 16px; color: var(--muted); font-size: 15.5px; }
+
+  /* ---------- Pains ---------- */
+  .pains { background: var(--bg-soft); }
+  .pain-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .pain {
+    background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px 26px; transition: transform .25s, box-shadow .25s;
+  }
+  .pain:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+  .pain .ic { font-size: 22px; }
+  .pain h3 { font-size: 16px; margin: 12px 0 6px; }
+  .pain p { font-size: 13.5px; color: var(--muted); }
+
+  /* ---------- How it works ---------- */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; position: relative; }
+  .step { position: relative; }
+  .step .num { font-family: "Cormorant Garamond", serif; font-size: 56px; color: var(--mint); line-height: 1; opacity: .85; }
+  .step h3 { font-size: 19px; margin: 10px 0 10px; }
+  .step p { font-size: 14px; color: var(--muted); }
+  .step .arrow { position: absolute; top: 22px; right: -22px; color: var(--line); font-size: 26px; }
+
+  /* ---------- Ranks ---------- */
+  .ranks { background: linear-gradient(180deg, #0b2c27, #0e3a33); color: #fff; }
+  .ranks .section-head h2, .ranks .section-head p { color: #fff; }
+  .ranks .section-head p { color: #b9cec8; }
+  .rank-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .rank-card {
+    border: 1px solid rgba(255,255,255,.14); border-radius: 20px; padding: 34px 28px;
+    background: rgba(255,255,255,.03); text-align: center; transition: transform .25s, border-color .25s;
+  }
+  .rank-card:hover { transform: translateY(-6px); border-color: var(--mint); }
+  .rank-card.featured { background: linear-gradient(180deg, rgba(194,162,95,.18), rgba(255,255,255,.02)); border-color: var(--gold); }
+  .rank-medal { width: 70px; height: 70px; border-radius: 50%; margin: 0 auto 16px; display: grid; place-items: center; font-family: "Cormorant Garamond", serif; font-size: 26px; color: #11241f; font-weight: 600; }
+  .m-silver { background: linear-gradient(150deg, #e6ebef, #aab4bb); }
+  .m-gold { background: linear-gradient(150deg, #f0d790, #c2a25f); }
+  .m-platinum { background: linear-gradient(150deg, #e8d9f0, #d4b5e8); }
+  .m-black { background: linear-gradient(150deg, #2a2a2a, #0a0a0a); }
+  .rank-card h3 { font-family: "Cormorant Garamond", serif; font-size: 24px; letter-spacing: .12em; }
+  .rank-card .jp { font-size: 13px; color: #bcd2cb; margin-bottom: 14px; }
+  .rank-card p { font-size: 13.5px; color: #d5e4df; }
+  .rank-card .tag { display: inline-block; margin-bottom: 14px; font-size: 11px; letter-spacing: .15em; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px; padding: 3px 12px; }
+
+  /* ---------- Benefits ---------- */
+  .ben-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 40px; }
+  .ben {
+    display: flex; gap: 16px; padding: 22px 4px; border-bottom: 1px solid var(--line);
+  }
+  .ben .check {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; background: var(--mint-soft);
+    color: var(--mint); display: grid; place-items: center; font-weight: 700;
+  }
+  .ben h3 { font-size: 15.5px; }
+  .ben p { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- Mystery audit feature ---------- */
+  .audit { background: var(--bg-soft); }
+  .audit .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .audit-visual {
+    background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 30px; box-shadow: var(--shadow);
+  }
+  .audit-visual .rep-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 16px; }
+  .audit-visual .rep-head b { font-size: 14px; }
+  .audit-visual .rep-head span { font-size: 11px; color: var(--muted); }
+  .meter { margin-bottom: 14px; }
+  .meter .ml { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+  .meter .ml span:last-child { color: var(--pine); font-weight: 700; }
+  .bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--mint), #1d9d87); transform-origin: left; }
+  .audit ul.feat { margin-top: 24px; display: grid; gap: 12px; }
+  .audit ul.feat li { list-style: none; display: flex; gap: 10px; font-size: 14.5px; }
+  .audit ul.feat li::before { content: "✓"; color: var(--mint); font-weight: 700; }
+
+  /* ---------- Pricing ---------- */
+  .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: stretch; }
+  .price {
+    border: 1px solid var(--line); border-radius: 20px; padding: 34px 30px; display: flex; flex-direction: column;
+    transition: transform .25s, box-shadow .25s;
+  }
+  .price:hover { transform: translateY(-5px); box-shadow: var(--shadow); }
+  .price.pop { border: 2px solid var(--pine); position: relative; }
+  .price.pop::before { content: "人気"; position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--pine); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .1em; padding: 4px 16px; border-radius: 99px; }
+  .price .pname { font-family: "Cormorant Garamond", serif; font-size: 22px; letter-spacing: .12em; color: var(--pine); }
+  .price .pdesc { font-size: 12.5px; color: var(--muted); margin: 4px 0 18px; min-height: 36px; }
+  .price .amt { font-size: 38px; font-weight: 700; font-family: "Noto Serif JP"; }
+  .price .amt small { font-size: 14px; color: var(--muted); font-weight: 400; }
+  .price ul { list-style: none; margin: 22px 0 28px; display: grid; gap: 11px; }
+  .price ul li { font-size: 13.5px; display: flex; gap: 9px; color: #36433f; }
+  .price ul li::before { content: "✓"; color: var(--mint); font-weight: 700; }
+  .price .btn { width: 100%; justify-content: center; margin-top: auto; }
+  .price-note { text-align: center; margin-top: 22px; font-size: 12.5px; color: var(--muted); }
+
+  /* ---------- Philosophy ---------- */
+  .philo { background: linear-gradient(160deg, #0e3a33, #082722); color: #fff; text-align: center; }
+  .philo h2 { font-size: clamp(24px, 3.6vw, 36px); font-weight: 600; max-width: 18em; margin-inline: auto; }
+  .philo h2 .accent { color: var(--mint); }
+  .philo p { margin-top: 22px; color: #c4d6d0; max-width: 36em; margin-inline: auto; font-size: 15px; }
+
+  /* ---------- CTA / form ---------- */
+  .cta { background: var(--bg-soft); }
+  .cta .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .cta h2 { font-size: clamp(26px, 3.4vw, 36px); }
+  .cta p { color: var(--muted); margin-top: 16px; }
+  .cta .points { margin-top: 26px; display: grid; gap: 12px; }
+  .cta .points div { display: flex; gap: 10px; font-size: 14px; }
+  .cta .points div::before { content: "›"; color: var(--mint); font-weight: 700; }
+  form {
+    background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 34px; box-shadow: var(--shadow);
+  }
+  form .fld { margin-bottom: 16px; }
+  form label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 7px; }
+  form input, form select, form textarea {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    font-family: inherit; font-size: 14px; background: #fcfdfd; transition: border-color .2s;
+  }
+  form input:focus, form select:focus, form textarea:focus { outline: none; border-color: var(--mint); }
+  form .btn { width: 100%; justify-content: center; margin-top: 6px; font-size: 14.5px; padding: 15px; }
+  form .priv { font-size: 11px; color: var(--muted); margin-top: 12px; text-align: center; }
+
+  /* ---------- Footer ---------- */
+  footer { background: var(--pine-deep); color: #aebfb9; padding: 56px 0 30px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  footer .logo .mark { color: #fff; }
+  footer .logo .sub { color: #88a097; }
+  footer .fnav { display: flex; gap: 28px; flex-wrap: wrap; font-size: 13px; }
+  footer .fnav a:hover { color: #fff; }
+  footer .copy { width: 100%; border-top: 1px solid rgba(255,255,255,.1); margin-top: 30px; padding-top: 22px; font-size: 12px; color: #7e958d; }
+
+  /* reveal animation */
+  .reveal { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 880px) {
+    .nav .link { display: none; }
+    .menu-toggle { display: flex; }
+    .hero .wrap, .audit .wrap, .cta .wrap { grid-template-columns: 1fr; }
+    .badge-card { max-width: 320px; margin-inline: auto; }
+    .pain-grid, .steps, .rank-grid, .price-grid, .ben-grid { grid-template-columns: 1fr; }
+    .step .arrow { display: none; }
+    .mobile-menu.open { display: flex; }
+  }
+  .mobile-menu {
+    display: none; position: fixed; inset: 0; z-index: 99; background: rgba(8,39,34,.98);
+    flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  }
+  .mobile-menu a { color: #fff; font-size: 20px; }
+  .mobile-menu .btn { margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<header id="header">
+  <a href="#top" class="logo">
+    <span class="mark">Kirein</span>
+    <span class="sub">空間品質認証</span>
+  </a>
+  <nav class="nav">
+    <a class="link" href="#problem">課題</a>
+    <a class="link" href="#how">仕組み</a>
+    <a class="link" href="#rank">認証</a>
+    <a class="link" href="#price">料金</a>
+    <a class="btn" href="#contact">無料診断を申し込む</a>
+    <button class="menu-toggle" id="menuToggle" aria-label="メニュー"><span></span><span></span><span></span></button>
+  </nav>
+</header>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#problem">課題</a>
+  <a href="#how">仕組み</a>
+  <a href="#rank">認証</a>
+  <a href="#price">料金</a>
+  <a class="btn" href="#contact">無料診断を申し込む</a>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="eyebrow">Spatial Quality Certification</span>
+      <h1>女性が、<br>また来たくなる<span class="accent">店へ。</span></h1>
+      <p class="lead">キレインは、お客様からの匿名フィードバックと覆面衛生調査で、お店の“空間品質”を見える化する認証サービス。臭い・清潔感・トイレ・接客衛生を可視化し、改善まで伴走します。</p>
+      <div class="cta-row">
+        <a href="#contact" class="btn primary">10店舗限定・無料診断 →</a>
+        <a href="#how" class="btn line">仕組みを見る</a>
+      </div>
+      <p class="mini-note">※ キレインは「臭いを晒すサービス」ではありません。店舗の価値を高める“改善支援”サービスです。</p>
+    </div>
+    <div class="reveal">
+      <div class="badge-card">
+        <div class="seal"><div class="rank">4<small>ブラック</small></div></div>
+        <div style="text-align:center">
+          <div class="bc-title">Kirein CERTIFIED</div>
+          <div class="bc-sub">Lv.4｜毎日プロが守るプレミアム</div>
+          <div class="stars">★★★★★</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="section-pad pains" id="problem">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">こんなお悩みありませんか</span>
+      <h2>その「におい」、<br>常連になるほど気づけません。</h2>
+      <p>排水臭・タバコ臭・厨房臭・汗臭・生乾き臭——。毎日いると感覚は麻痺します。そして女性客ほど、黙って二度と来なくなります。</p>
+    </div>
+    <div class="pain-grid">
+      <div class="pain reveal"><div class="ic">📉</div><h3>女性客のリピートが減った</h3><p>理由を言ってもらえないまま、静かに離れていく。</p></div>
+      <div class="pain reveal"><div class="ic">👃</div><h3>店内の臭いに気づけない</h3><p>毎日いるスタッフほど、変化に鈍感になる。</p></div>
+      <div class="pain reveal"><div class="ic">👔</div><h3>スタッフの清潔感管理が難しい</h3><p>制服・口臭・タバコ臭は本人に言いづらい。</p></div>
+      <div class="pain reveal"><div class="ic">🚻</div><h3>トイレ・空調・排水が追いつかない</h3><p>気づいた時には評価を落としている。</p></div>
+      <div class="pain reveal"><div class="ic">👀</div><h3>オーナーが毎日現場を見れない</h3><p>人手不足で、衛生チェックまで手が回らない。</p></div>
+      <div class="pain reveal"><div class="ic">🍷</div><h3>高単価業態ほど致命的</h3><p>ラウンジ・接待・デート利用は“空気”が売上直結。</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section class="section-pad" id="how">
+  <div class="wrap">
+    <div class="section-head center reveal">
+      <span class="eyebrow">How it works</span>
+      <h2>見える化し、改善し、選ばれる。</h2>
+      <p>3つのステップで、お店の空間品質を資産に変えます。</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal">
+        <div class="num">01</div>
+        <h3>匿名で集める</h3>
+        <p>お客様が「空気感・臭い・清潔感・トイレ・接客衛生」を匿名で簡単評価。覆面調査員によるプロ評価も実施します。</p>
+        <div class="arrow">→</div>
+      </div>
+      <div class="step reveal">
+        <div class="num">02</div>
+        <h3>レポートで気づく</h3>
+        <p>改善ポイントを月次レポートで可視化。スコア低下は即通知し、最適な清掃・消臭業者を加盟店価格でご提案します。</p>
+        <div class="arrow">→</div>
+      </div>
+      <div class="step reveal">
+        <div class="num">03</div>
+        <h3>認証で選ばれる</h3>
+        <p>基準を満たした店舗に「キレイン認証」を付与。店頭・予約サイトに掲示でき、女性客の“安心”を可視化できます。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RANKS -->
+<section class="section-pad ranks" id="rank">
+  <div class="wrap">
+    <div class="section-head center reveal">
+      <span class="eyebrow" style="color:var(--gold)">Certification</span>
+      <h2>キレイン認証ランク（4段階）</h2>
+      <p>第三者評価をクリアした店舗だけが掲示できる、4段階の信頼の証。</p>
+    </div>
+    <div class=”rank-grid”>
+      <div class=”rank-card reveal”>
+        <div class=”rank-medal m-silver”>1</div>
+        <h3>Lv.1 シルバー</h3>
+        <div class=”jp”>ためらわず使える</div>
+        <p>においの基準をクリア。安心して入れるトイレの証。</p>
+      </div>
+      <div class=”rank-card reveal”>
+        <div class=”rank-medal m-gold”>2</div>
+        <h3>Lv.2 ゴールド</h3>
+        <div class=”jp”>気持ちよく使える</div>
+        <p>設備まで清潔。快適で、また来たくなるトイレ。</p>
+      </div>
+      <div class=”rank-card featured reveal”>
+        <span class=”tag”>MOST POPULAR</span>
+        <div class=”rank-medal m-platinum”>3</div>
+        <h3>Lv.3 プラチナ</h3>
+        <div class=”jp”>わざわざ使いたい</div>
+        <p>”トイレが目的になる”。空間そのものがブランドになる。</p>
+      </div>
+      <div class=”rank-card reveal”>
+        <div class=”rank-medal m-black” style=”color:#fff”>4</div>
+        <h3>Lv.4 ブラック</h3>
+        <div class=”jp”>毎日プロが守るプレミアム</div>
+        <p>専門業者が毎日1度は清掃。”変わらない清潔”を保証する最高峰。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BENEFITS -->
+<section class="section-pad" id="benefit">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow">Membership Benefits</span>
+      <h2>加盟店の7つの特典</h2>
+      <p>キレインは評価して終わりではなく、改善まで“使える”サービスです。</p>
+    </div>
+    <div class="ben-grid">
+      <div class="ben reveal"><div class="check">✓</div><div><h3>匿名フィードバック受信</h3><p>お客様の本音を、角を立てずに収集。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>キレイン認証バッジ掲載</h3><p>店頭・SNS・予約サイトで安心を訴求。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>月次スコアレポート</h3><p>空間品質の推移をデータで管理。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>女性客満足度チェック</h3><p>女性目線の評価を専用指標で可視化。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>清掃・消臭業者の加盟店価格</h3><p>提携業者を通常より割安に手配。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>緊急スポット清掃対応</h3><p>排水臭・嘔吐・空調臭など即時手配。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>スコア低下アラート</h3><p>評価が落ちる前に通知し、改善を提案。</p></div></div>
+      <div class="ben reveal"><div class="check">✓</div><div><h3>認証ランク維持サポート</h3><p>再評価まで伴走し、ランクを守る。</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- MYSTERY AUDIT -->
+<section class="section-pad audit" id="audit">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="eyebrow">Mystery Audit｜覆面衛生調査</span>
+      <h2 class="serif" style="font-size:clamp(24px,3.2vw,34px)">プロの目で、<br>お客様より先に気づく。</h2>
+      <p style="color:var(--muted);margin-top:16px">覆面調査員が一般客として来店し、臭気・清潔・接客衛生をチェック。具体的な改善提案つきのレポートをお渡しします。夜職・高級業態の現場感を熟知したチームが担当します。</p>
+      <ul class="feat">
+        <li>体臭・タバコ臭・汗臭の臭気チェック</li>
+        <li>厨房・排水・グラス・空調のカビ臭診断</li>
+        <li>トイレ清掃頻度・客席のベタつき確認</li>
+        <li>制服・爪・髪・口臭など接客衛生の評価</li>
+        <li>Before / After 改善事例レポート</li>
+      </ul>
+    </div>
+    <div class="reveal">
+      <div class="audit-visual">
+        <div class="rep-head"><b>空間品質スコアレポート</b><span>2026.05｜A-WING店</span></div>
+        <div class="meter"><div class="ml"><span>空気・臭気</span><span>4.6</span></div><div class="bar"><i style="width:92%"></i></div></div>
+        <div class="meter"><div class="ml"><span>トイレ清潔</span><span>3.4</span></div><div class="bar"><i style="width:68%"></i></div></div>
+        <div class="meter"><div class="ml"><span>接客衛生</span><span>4.8</span></div><div class="bar"><i style="width:96%"></i></div></div>
+        <div class="meter"><div class="ml"><span>客席・空調</span><span>4.1</span></div><div class="bar"><i style="width:82%"></i></div></div>
+        <div class="meter" style="margin-bottom:0"><div class="ml"><span>女性満足度</span><span>4.5</span></div><div class="bar"><i style="width:90%"></i></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section-pad" id="price">
+  <div class="wrap">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Plans</span>
+      <h2>料金プラン</h2>
+      <p>まずは無料診断から。続けるかどうかは、レポートを見てからで構いません。</p>
+    </div>
+    <div class="price-grid">
+      <div class="price reveal">
+        <div class="pname">LIGHT</div>
+        <div class="pdesc">まず認証と顧客の声から始めたい店舗に。</div>
+        <div class="amt">¥1,000<small> /月</small></div>
+        <ul>
+          <li>匿名フィードバック受信</li>
+          <li>キレイン加盟表示</li>
+          <li>月次簡易レポート</li>
+        </ul>
+        <a href="#contact" class="btn ghost">このプランで相談</a>
+      </div>
+      <div class="price pop reveal">
+        <div class="pname">PRO</div>
+        <div class="pdesc">改善まで本気で取り組みたい店舗に。</div>
+        <div class="amt">¥5,000<small> /月</small></div>
+        <ul>
+          <li>LIGHTの全機能</li>
+          <li>詳細スコア分析・改善提案</li>
+          <li>女性調査員評価</li>
+          <li>認証ランク管理・維持サポート</li>
+          <li>提携業者の加盟店価格</li>
+        </ul>
+        <a href="#contact" class="btn">このプランで相談</a>
+      </div>
+      <div class="price reveal">
+        <div class="pname">AUDIT</div>
+        <div class="pdesc">覆面衛生調査をスポット／定期で。</div>
+        <div class="amt">¥30,000<small> /回〜</small></div>
+        <ul>
+          <li>覆面調査員の来店診断</li>
+          <li>臭気・清潔・接客衛生の総合評価</li>
+          <li>Before/After 改善レポート</li>
+          <li>定期契約で割引あり</li>
+        </ul>
+        <a href="#contact" class="btn gold">このプランで相談</a>
+      </div>
+    </div>
+    <p class="price-note">※ 価格は仮設定です。複数店舗・グループ加盟は別途お見積りいたします。</p>
+  </div>
+</section>
+
+<!-- PHILOSOPHY -->
+<section class="section-pad philo">
+  <div class="wrap reveal">
+    <span class="eyebrow" style="color:var(--mint);justify-content:center;display:flex">Our Belief</span>
+    <h2>私たちが売るのは「清掃」ではなく、<br><span class="accent">女性客を逃さない空間</span>です。</h2>
+    <p>店名を晒すことも、個人を攻撃することもしません。キレインがするのは、第三者の目で気づき、改善し、お店の価値を一段引き上げること。緊張感が、お店を変えます。</p>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="section-pad cta" id="contact">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="eyebrow">Free Diagnosis</span>
+      <h2>10店舗限定。<br>無料の空間品質診断。</h2>
+      <p>まずは1回、プロの目でお店をチェックします。レポートを見て、価値を感じたら続けてください。</p>
+      <div class="points">
+        <div>初回診断は無料（先着10店舗）</div>
+        <div>夜職・高級業態の現場を熟知したチームが対応</div>
+        <div>しつこい営業は一切いたしません</div>
+      </div>
+    </div>
+    <div class="reveal">
+      <form id="leadForm">
+        <div class="fld">
+          <label>店舗名 / 屋号</label>
+          <input type="text" name="store" placeholder="例）ラウンジ家康" required />
+        </div>
+        <div class="fld">
+          <label>業態</label>
+          <select name="type">
+            <option>ラウンジ / クラブ</option>
+            <option>バー</option>
+            <option>飲食店 / レストラン</option>
+            <option>カフェ</option>
+            <option>その他</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label>お名前</label>
+          <input type="text" name="name" placeholder="山田 太郎" required />
+        </div>
+        <div class="fld">
+          <label>連絡先（電話 / LINE / メール）</label>
+          <input type="text" name="contact" placeholder="つながりやすい連絡先" required />
+        </div>
+        <div class="fld">
+          <label>ご相談内容（任意）</label>
+          <textarea name="msg" rows="3" placeholder="気になっている点があればご記入ください"></textarea>
+        </div>
+        <button type="submit" class="btn">無料診断を申し込む</button>
+        <p class="priv">送信いただいた情報は診断のご案内のみに使用します。</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <a href="#top" class="logo">
+      <span class="mark">Kirein</span>
+      <span class="sub">空間品質認証</span>
+    </a>
+    <div class="fnav">
+      <a href="#problem">課題</a>
+      <a href="#how">仕組み</a>
+      <a href="#rank">認証ランク</a>
+      <a href="#benefit">特典</a>
+      <a href="#price">料金</a>
+      <a href="#contact">無料診断</a>
+    </div>
+    <div class="copy">© 2026 Kirein（キレイン） — 女性が、また来たくなる店へ。 ／ ※本ページはデモです。価格は仮設定です。</div>
+  </div>
+</footer>
+
+<script>
+  // header scroll state
+  const header = document.getElementById('header');
+  const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 30);
+  onScroll();
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  // mobile menu
+  const toggle = document.getElementById('menuToggle');
+  const menu = document.getElementById('mobileMenu');
+  toggle.addEventListener('click', () => menu.classList.toggle('open'));
+  menu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => menu.classList.remove('open')));
+
+  // reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach((el, i) => {
+    el.style.transitionDelay = (i % 3) * 80 + 'ms';
+    io.observe(el);
+  });
+
+  // demo form
+  document.getElementById('leadForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    alert('お申し込みありがとうございます。（これはデモ画面です。実装時はメール送信・LINE連携などに接続します）');
+  });
+</script>
+</body>
+</html>

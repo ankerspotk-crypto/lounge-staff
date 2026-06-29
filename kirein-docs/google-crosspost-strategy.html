@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜Google Maps クロスポスト戦略</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--pine:#0e3a33; --mint:#25b598; --ink:#182320; --muted:#5d6b66; --line:#e4eae7; --bg:#fff; --soft:#f6f9f8;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--soft);line-height:1.8}
+  .doc{max-width:1000px;margin:0 auto;background:#fff;padding:clamp(20px,5vw,50px);box-shadow:0 10px 40px -20px rgba(0,0,0,.1)}
+  h1,h2,h3{font-weight:700}
+  h1{font-size:28px;margin:30px 0 10px;border-bottom:3px solid var(--pine);padding-bottom:10px}
+  h2{font-size:20px;margin:24px 0 8px;color:var(--pine)}
+  h3{font-size:15px;margin:16px 0 6px}
+  p{margin:8px 0;color:var(--muted)}
+  ul,ol{margin:8px 0 8px 22px}
+  li{margin:6px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0}
+  th,td{border:1px solid var(--line);padding:10px;text-align:left}
+  th{background:var(--soft);font-weight:700}
+  .flow{background:var(--pine);color:#fff;border-radius:12px;padding:16px;margin:16px 0;font-size:13px;line-height:1.9}
+  .flow b{color:#fff}
+  .callout{background:#e6f5f1;border-left:4px solid var(--mint);padding:12px 16px;margin:14px 0;border-radius:0 8px 8px 0}
+  .comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+  .comp-box{background:var(--soft);border-left:4px solid var(--mint);padding:16px;border-radius:8px}
+  .comp-box h4{color:var(--pine);margin-bottom:8px}
+  code{background:#fff;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:12px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>Google Maps クロスポスト戦略</h1>
+<p style="color:var(--mint);font-weight:700">既存の Google レビュアーを Kirein へ自然流入させる仕組み</p>
+
+<h2>1. 戦略概要</h2>
+
+<div class="callout">
+<b>コンセプト</b><br>
+「Google Maps で既に評価している人」に対して、Kirein への投稿を促す。<br>
+<br>
+<b>メリット</b><br>
+✓ Google レビュアー = 既に "きれいさ" に関心のあるユーザー層<br>
+✓ 一度のレビュー作業で両方に投稿 = 摩擦が少ない<br>
+✓ Google のデータ = 信頼性が高い<br>
+✓ 友達紹介より CAC が低い可能性
+</div>
+
+<h2>2. ユーザーフロー</h2>
+
+<div class="flow">
+<b>Scenario A: Google → Kirein（推奨）</b><br>
+1. ユーザーが Google Maps で飲食店のレビュー投稿を完了<br>
+2. 投稿直後に CTA：「Kirein でもこのお店を評価してトイレの清潔さを記録する」<br>
+3. Google のレビュー内容を一部コピーして Kirein に投稿<br>
+4. ★評価（トイレ・空気）を入力して完了<br>
+5. ポイント 150pt 獲得（キャンペーン中）
+</div>
+
+<div class="flow" style="margin-top:16px">
+<b>Scenario B: Kirein の投稿から Google への誘導</b><br>
+1. ユーザーが Kirein で投稿完了<br>
+2. 完了画面に「Google Maps でもこのお店をレビューして評判を広める」CTA<br>
+3. Google Maps の店舗ページへのリンク<br>
+4. Google でのレビュー投稿数 ↑ → Kirein のデータ信頼性向上
+</div>
+
+<h2>3. 実装方法</h2>
+
+<h3>3.1 Google Maps API との連携</h3>
+<table>
+<tr><th>実装項目</th><th>内容</th><th>難易度</th></tr>
+<tr><td>店舗自動同期</td><td>Kirein に掲載されている店舗が Google Maps に存在するか自動確認</td><td>中</td></tr>
+<tr><td>Google レビュー取得</td><td>Place Details API で Google レビュー平均点を Kirein に表示</td><td>中</td></tr>
+<tr><td>クロスポスト CTA</td><td>投稿完了後に「Google でもレビュー」ボタンを表示</td><td>易</td></tr>
+<tr><td>デバイス間連携</td><td>ユーザーが投稿した内容を一時保存 → Google モバイルアプリへ自動遷移</td><td>中</td></tr>
+</table>
+
+<h3>3.2 技術スタック</h3>
+<ul>
+<li><code>Google Maps Platform</code> - Places API（店舗検索・レビュー取得）</li>
+<li><code>Google Search Console API</code> - Kirein サイトが Google で どう見えているか</li>
+<li><code>Universal Links / App Links</code> - iOS/Android デバイスで Google Maps アプリへシームレス遷移</li>
+<li><code>Open Graph Tags</code> - Kirein 投稿を Google+ / SNS にシェア可能に</li>
+</ul>
+
+<div class="callout">
+<b>注意：Google の規約</b><br>
+- Kirein → Google への自動投稿は <b>NG</b>（Google が自動投稿を禁止）<br>
+- ユーザーが手動で Google にリンク遷移 → 投稿する のは OK<br>
+- Google レビュー内容の引用・コピペ表示は OK（ただし著作権に配慮）
+</div>
+
+<h2>4. ユーザー体験</h2>
+
+<h3>4.1 Google から Kirein へのクロスポスト（推奨フロー）</h3>
+
+<table>
+<tr><th>ステップ</th><th>画面/テキスト</th></tr>
+<tr><td><b>1. Google 投稿完了</b></td><td>ユーザーが Google Maps で「鮨 清水 ★★★★★」と評価投稿</td></tr>
+<tr><td><b>2. ポップアップ表示</b></td><td>「Kirein でもこのお店を評価しませんか？ 150pt ボーナス！」</td></tr>
+<tr><td><b>3. リンククリック</b></td><td>→ Kirein アプリ/サイトに自動遷移、店舗は「鮨 清水」が自動選択済み</td></tr>
+<tr><td><b>4. 評価入力</b></td><td>Google での総合評価 ★★★★★ を参考に、「トイレ清潔 ★★★★☆」「空気・無臭 ★★★★★」を入力</td></tr>
+<tr><td><b>5. コメント入力</b></td><td>Google での「カウンターも手洗いも気持ちいいくらい清潔。接待に最適です。」をそのまま引用</td></tr>
+<tr><td><b>6. 投稿完了</b></td><td>「+150pt 獲得！」 & Google でのレビューが Kirein にも記録される</td></tr>
+</table>
+
+<h2>5. 6ヶ月事業計画への影響</h2>
+
+<h3>5.1 Google クロスポスト導入による投稿数の増加</h3>
+
+<table>
+<tr><th>月</th><th>通常予測</th><th>Google CPA 導入後</th><th>増加率</th><th>流入源</th></tr>
+<tr><td>Month 1</td><td>5,000件</td><td>6,500件</td><td>+30%</td><td>TikTok + Google</td></tr>
+<tr><td>Month 2</td><td>3,500件</td><td>5,000件</td><td>+43%</td><td>継続 + 新規</td></tr>
+<tr><td>Month 3</td><td>3,000件</td><td>4,500件</td><td>+50%</td><td>Google クロスポスト拡大</td></tr>
+<tr><td>Month 4</td><td>2,800件</td><td>4,200件</td><td>+50%</td><td>自然成長 + Google</td></tr>
+<tr><td>Month 5</td><td>2,600件</td><td>3,900件</td><td>+50%</td><td>安定期</td></tr>
+<tr><td>Month 6</td><td>2,500件</td><td>3,750件</td><td>+50%</td><td>定常化</td></tr>
+<tr style="background:#f0f0f0"><td><b>6ヶ月計</b></td><td><b>19,400件</b></td><td><b>27,850件</b></td><td><b>+43%</b></td><td></td></tr>
+</table>
+
+<h3>5.2 修正後の 6ヶ月売上・利益</h3>
+
+<table>
+<tr><th>項目</th><th>通常予測</th><th>Google CPA 導入後</th><th>差分</th></tr>
+<tr><td>累計投稿数</td><td>19,400件</td><td>27,850件</td><td>+8,450件</td></tr>
+<tr><td>Lv.1 ユーザー数</td><td>3,200人</td><td>4,500人</td><td>+1,300人</td></tr>
+<tr><td>見習い調査員（Lv.2）</td><td>320人</td><td>450人</td><td>+130人</td></tr>
+<tr><td>Lv.2 報酬（6ヶ月計）</td><td>¥2,052,000</td><td>¥2,800,000</td><td>+¥748,000</td></tr>
+<tr><td>Lv.3 報酬（6ヶ月計）</td><td>¥1,470,000</td><td>¥2,100,000</td><td>+¥630,000</td></tr>
+<tr><td>店舗向けプラン売上</td><td>¥150,000</td><td>¥200,000</td><td>+¥50,000</td></tr>
+<tr style="background:#f0f0f0"><td><b>累計売上</b></td><td><b>¥6,237,000</b></td><td><b>¥8,037,000</b></td><td><b>+¥1,800,000</b></td></tr>
+<tr style="background:#f0f0f0"><td><b>累計コスト</b></td><td><b>¥8,607,000</b></td><td><b>¥9,637,000</b></td><td><b>+¥1,030,000</b></td></tr>
+<tr style="background:#fff3cd"><td><b>営業損益</b></td><td><b>-¥2,370,000</b></td><td><b>-¥1,600,000</b></td><td><b>+¥770,000</b></td></tr>
+</table>
+
+<div class="callout">
+<b>🎯 Impact</b><br>
+Google クロスポスト導入により、6ヶ月の赤字を <b>32% 削減</b>。<br>
+Month 8 での黒字化が Month 9 ではなく Month 7-8 に前倒し可能。
+</div>
+
+<h2>6. CAC（顧客獲得コスト）の改善</h2>
+
+<table>
+<tr><th>チャネル</th><th>CAC（通常）</th><th>CAC（Google CPA後）</th><th>改善度</th></tr>
+<tr><td>TikTok / Instagram</td><td>¥500</td><td>¥500</td><td>-</td></tr>
+<tr><td>Google Maps クロスポスト</td><td>-</td><td>¥150</td><td>新規チャネル</td></tr>
+<tr><td>口コミ・紹介</td><td>¥300</td><td>¥250</td><td>-17%</td></tr>
+<tr style="background:#f0f0f0"><td><b>加重平均 CAC</b></td><td><b>¥450</b></td><td><b>¥280</b></td><td><b>-38%</b></td></tr>
+</table>
+
+<h2>7. 実装ロードマップ</h2>
+
+<table>
+<tr><th>フェーズ</th><th>時期</th><th>実装内容</th><th>優先度</th></tr>
+<tr><td><b>Phase 1</b></td><td>Month 1-2</td><td>Google Maps API 統合 / 店舗リスト自動同期</td><td>高</td></tr>
+<tr><td><b>Phase 2</b></td><td>Month 2-3</td><td>クロスポスト CTA UI 実装 / Kirein 投稿画面に Google リンク</td><td>高</td></tr>
+<tr><td><b>Phase 3</b></td><td>Month 3-4</td><td>Universal Links / App Links 設定（モバイル遷移最適化）</td><td>中</td></tr>
+<tr><td><b>Phase 4</b></td><td>Month 4-</td><td>Google レビュー スコア表示 / Kirein との並列表示</td><td>中</td></tr>
+<tr><td><b>Phase 5</b></td><td>Month 6-</td><td>Google マップから Kirein への流入分析 / ABテスト</td><td>低</td></tr>
+</table>
+
+<h2>8. リスク・制約</h2>
+
+<table>
+<tr><th>リスク</th><th>影響</th><th>対策</th></tr>
+<tr><td>Google API 費用増加</td><td>月 +¥50,000</td><td>キャッシュ戦略で API 呼び出し最小化</td></tr>
+<tr><td>Google の規約変更</td><td>中</td><td>月1回、Google Workspace Community で情報収集</td></tr>
+<tr><td>ユーザーの "二重投稿" 疲れ</td><td>中</td><td>「コピペ可能」な UI で摩擦を最小化</td></tr>
+<tr><td>Google データと Kirein データの不一致</td><td>低</td><td>紐付けロジックで自動対応 / 手動マージ機能</td></tr>
+</table>
+
+<h2>9. 競合との差別化</h2>
+
+<table>
+<tr><th>競合</th><th>アプローチ</th><th>Kirein の優位性</th></tr>
+<tr><td>食べログ</td><td>単体プラットフォーム</td><td><b>Google との連携で既存レビュアーを取込</b></td></tr>
+<tr><td>Google Maps</td><td>トイレ情報なし</td><td><b>「トイレの清潔さ」に特化 + 報告書報酬で深掘り</b></td></tr>
+<tr><td>Retty</td><td>SNS連携</td><td><b>Google クロスポストで、より多くのレビュアーへリーチ</b></td></tr>
+</table>
+
+<h2>10. まとめ</h2>
+
+<div class="callout">
+<b>Google Maps クロスポスト戦略のまとめ</b><br>
+<br>
+✅ 既存の Google レビュアー（月 50万人+） を Kirein へ自然流入<br>
+✅ CAC を ¥450 → ¥280 へ 38% 削減<br>
+✅ 6ヶ月の赤字を 32% 削減 → ¥770,000 の追加利益<br>
+✅ 黒字化時期を Month 9 → Month 7-8 に前倒し<br>
+✅ Google との連携は「店舗向けプラン」の差別化ポイントに<br>
+<br>
+<b>実装優先度：高（Phase 1-2 は Month 1-3 に必ず完了）</b>
+</div>
+
+</div>
+</body>
+</html>

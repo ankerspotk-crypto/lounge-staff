@@ -1,0 +1,3467 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>IEYASLOUNGE PORTAL</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #0a0e1a; color: #e8f0ff; min-height: 100vh; }
+
+header {
+  background: #111b2e; padding: 14px 16px 0;
+  border-bottom: 1px solid #1e3050; position: sticky; top: 0; z-index: 10;
+}
+.header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+header h1 { font-size: 17px; font-weight: 600; }
+.user-name { font-size: 13px; color: #a0c0e0; }
+
+.tabs { display: flex; gap: 4px; }
+.tab {
+  flex: 1; padding: 10px 4px; text-align: center; font-size: 13px; font-weight: 500;
+  border-bottom: 2px solid transparent; cursor: pointer; color: #6a8ab0;
+}
+.tab.active { color: #7ab0f0; border-bottom-color: #7ab0f0; }
+.tab.coming-soon { color: #44455a; cursor: default; position: relative; }
+.tab.coming-soon::after { content: '近日公開'; font-size: 9px; display: block; color: #554; margin-top: 1px; }
+
+.content { padding: 16px; }
+
+.loading { text-align: center; color: #6a8ab0; padding: 60px 0; font-size: 14px; }
+.err { text-align: center; color: #cc5555; padding: 40px 16px; font-size: 14px; line-height: 1.7; }
+.err small { color: #7a9cc8; font-size: 11px; }
+
+/* month selector */
+.month-bar {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px;
+  scrollbar-width: none;
+}
+.month-bar::-webkit-scrollbar { display: none; }
+.month-chip {
+  flex-shrink: 0; padding: 5px 14px; border-radius: 20px; font-size: 13px;
+  background: #141d30; border: 1px solid #1e3050; color: #8aabcc; cursor: pointer;
+}
+.month-chip.active { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
+
+/* card */
+.card {
+  background: #111b2e; border: 1px solid #1e3050; border-radius: 12px;
+  padding: 16px; margin-bottom: 12px;
+}
+.card-title { font-size: 12px; color: #6a8ab0; margin-bottom: 10px; letter-spacing: .5px; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #162848; }
+.row:last-child { border-bottom: none; }
+.row-label { font-size: 13px; color: #8aabcc; }
+.row-val { font-size: 14px; font-weight: 500; }
+.row-val.accent { color: #88ffcc; }
+.row-val.sub { color: #cc8844; }
+.row-val.minus { color: #cc5555; }
+
+.total-card {
+  background: #0a1020; border: 1px solid #1a4499; border-radius: 12px;
+  padding: 18px; text-align: center; margin-bottom: 16px;
+}
+.total-label { font-size: 12px; color: #3a80cc; margin-bottom: 6px; }
+.total-val { font-size: 28px; font-weight: 700; color: #7ab0f0; }
+
+/* シフトカレンダー */
+.shift-month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.shift-month-label { font-size: 16px; font-weight: 600; }
+.nav-btn {
+  background: #1e3050; border: none; color: #c0d4f0;
+  width: 36px; height: 36px; border-radius: 50%; font-size: 18px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; margin-bottom: 4px; }
+.weekday { font-size: 11px; color: #6a8ab0; padding: 4px 0; }
+.weekday.sun { color: #884444; }
+.weekday.sat { color: #445588; }
+.days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.day {
+  aspect-ratio: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; padding: 2px;
+}
+.day .num { font-size: 14px; font-weight: 500; line-height: 1; }
+.day .shift-dot { width: 6px; height: 6px; border-radius: 50%; background: #7ab0f0; margin-top: 4px; }
+.day.empty { pointer-events: none; }
+.day.past { opacity: 0.3; pointer-events: none; }
+.day.sun .num { color: #cc6666; }
+.day.sat .num { color: #4a80cc; }
+.day.today .num { color: #ffdd44; font-weight: 700; }
+.day.selected { background: #0f2040; border-color: #2a60bb; }
+.day.selected .num { color: #88ccff; }
+.day.selected .shift-dot { background: #88ffcc; }
+.day.kyukin { background: #2a1515; border-color: #bb4444; }
+.day.kyukin .num { color: #ff8888; }
+.day.kyukin .kyukin-label { font-size: 9px; color: #ff8888; margin-top: 2px; }
+.day .shift-time { font-size: 8px; margin-top: 2px; line-height: 1.1; text-align: center; }
+.day.scheduled { background: #152a1a; border-color: #336633; }
+.day.scheduled .num { color: #88ffaa; }
+.day.scheduled .shift-time { color: #66cc88; }
+.day.selected .shift-time { color: #66aadd; }
+.day.pending-shift { background: #2a1f0a; border-color: #886622; }
+.day.pending-shift .num { color: #ffcc66; }
+.day.pending-shift .shift-time { color: #ccaa44; }
+.day .shift-status-label { font-size: 8px; margin-top: 1px; line-height: 1.1; text-align: center; }
+.day.pending-shift .shift-status-label { color: #ccaa44; }
+.day.scheduled .shift-status-label { color: #66cc88; }
+.seatreq-rsv-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.seatreq-rsv-card.sel { background: #0f2040; border-color: #2a60bb; }
+
+/* picker overlay */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; }
+.overlay.show { display: flex; align-items: flex-end; }
+.picker { background: #111b2e; border-radius: 18px 18px 0 0; width: 100%; padding: 18px 16px 36px; border-top: 1px solid #1e3050; }
+.picker-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: #aaccff; }
+.time-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.time-opt {
+  background: #141d30; border: 1px solid #1e3050; color: #c0d4f0;
+  padding: 13px 8px; border-radius: 10px; font-size: 14px; text-align: center;
+  cursor: pointer;
+}
+.time-opt:active, .time-opt.chosen { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
+.time-opt.off { color: #cc6666; border-color: #3a2020; background: #1a1010; }
+.time-opt.full { grid-column: span 2; background: #1a3020; border-color: #336644; color: #88ffaa; font-weight: 600; }
+.time-opt.full:active { background: #1e3a26; }
+.picker-step { font-size: 11px; color: #6a8ab0; margin-bottom: 10px; }
+.picker-back {
+  width: 100%; background: none; border: 1px solid #1e3050;
+  color: #5080aa; padding: 10px; border-radius: 10px; font-size: 13px; cursor: pointer;
+  margin-bottom: 10px;
+}
+.picker-cancel {
+  margin-top: 10px; width: 100%; background: none; border: 1px solid #1e3050;
+  color: #6a8ab0; padding: 12px; border-radius: 10px; font-size: 14px; cursor: pointer;
+}
+
+.submit-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #111b2e; border-top: 1px solid #1e3050; padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.submit-btn {
+  width: 100%; background: #1a4499; border: none; color: #e8f0ff;
+  padding: 16px; border-radius: 12px; font-size: 16px; font-weight: 600;
+  cursor: pointer;
+}
+.submit-btn:active { background: #1a337f; }
+.submit-btn:disabled { background: #1e3050; color: #6a8ab0; }
+.shift-spacer { height: 80px; }
+
+/* ロール選択 */
+.role-toggle { display: flex; gap: 6px; padding: 12px 0 4px; }
+.role-btn {
+  flex: 1; padding: 9px 4px; border-radius: 10px; border: 1px solid #1e3050;
+  background: #141d30; color: #7a9cc8; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.role-btn.active { background: #0f2040; border-color: #3a60bb; color: #7ab0f0; }
+
+/* 管理者キャスト選択 */
+.admin-bar {
+  background: #141d30; border-bottom: 1px solid #1e3050;
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+}
+.admin-label { font-size: 12px; color: #8aabcc; white-space: nowrap; }
+.cast-select {
+  flex: 1; background: #1e3050; border: 1px solid #3a3a55; color: #c0d4f0;
+  padding: 8px 12px; border-radius: 8px; font-size: 14px;
+  -webkit-appearance: none; appearance: none;
+}
+.cast-select:focus { outline: none; border-color: #3a6aaa; }
+.admin-badge { font-size: 10px; background: #553300; color: #ffaa44; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+.shift-count { text-align: center; font-size: 13px; color: #6a8ab0; margin-top: 10px; }
+
+/* 申請管理 */
+.req-card { background: #111b2e; border: 1px solid #1e3050; border-radius: 12px; padding: 14px; margin-bottom: 10px; }
+.req-card.approved { border-color: #336633; }
+.req-card.rejected { border-color: #663333; opacity: .6; }
+.req-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.req-name { font-size: 15px; font-weight: 600; }
+.req-time { font-size: 12px; color: #6a8ab0; }
+.req-detail { font-size: 14px; color: #a0c0e0; margin-bottom: 10px; }
+.req-actions { display: flex; gap: 8px; }
+.req-btn { flex: 1; padding: 10px; border-radius: 8px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+.req-btn.approve { background: #1a3a22; color: #88ffaa; border: 1px solid #336633; }
+.req-btn.reject  { background: #3a1a1a; color: #ffaa88; border: 1px solid #663333; }
+.req-btn.approve:active { background: #1e4228; }
+.req-btn.reject:active  { background: #421e1e; }
+.req-status { text-align: center; font-size: 13px; padding: 6px 0; }
+.req-status.ok  { color: #88ffaa; }
+.req-status.off { color: #ff8866; }
+.req-empty { text-align: center; color: #6a8ab0; padding: 40px 0; font-size: 14px; }
+.req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
+.req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #1e3050; background: #141d30; color: #8aabcc; font-size: 13px; cursor: pointer; }
+.req-filter-btn.active { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
+.req-confirm-btn { display: block; width: 100%; margin-bottom: 14px; padding: 13px; background: #0f3060; color: #7ab0f0; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .03em; }
+.req-confirm-btn:active { background: #2a4a8a; }
+.req-confirm-btn:disabled { opacity: .5; }
+.notif-list { display: flex; flex-direction: column; gap: 8px; }
+.notif-card { background: #141d30; border-radius: 10px; overflow: hidden; transition: opacity .2s; }
+.notif-card-header { display: flex; align-items: center; gap: 10px; padding: 11px 12px; cursor: pointer; user-select: none; }
+.notif-mid { flex: 1; min-width: 0; }
+.notif-label { font-size: 13px; font-weight: 600; color: #d0e4f8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-group-tag { font-size: 11px; color: #7a9cc8; margin-top: 1px; }
+.notif-time { background: #0d1828; color: #a0c0e0; border: 1px solid #1e3050; border-radius: 6px; padding: 5px 6px; font-size: 13px; width: 82px; flex-shrink: 0; }
+.notif-chevron { color: #6a8ab0; font-size: 18px; transition: transform .2s; flex-shrink: 0; line-height: 1; }
+.notif-toggle { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
+.notif-toggle input { opacity: 0; width: 0; height: 0; }
+.notif-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #1e3050; border-radius: 24px; transition: .3s; }
+.notif-slider:before { position: absolute; content: ''; height: 18px; width: 18px; left: 3px; bottom: 3px; background: #8aabcc; border-radius: 50%; transition: .3s; }
+.notif-toggle input:checked + .notif-slider { background: #1a4a8a; }
+.notif-toggle input:checked + .notif-slider:before { transform: translateX(18px); background: #7ab0f0; }
+.notif-expand { padding: 0 12px 12px; border-top: 1px solid #162848; }
+.notif-expand-label { font-size: 10px; color: #7a9cc8; margin: 10px 0 4px; letter-spacing: .05em; text-transform: uppercase; }
+.notif-days-row { display: flex; gap: 5px; }
+.notif-day-box { position: relative; }
+.notif-day-box input { position: absolute; opacity: 0; width: 0; height: 0; }
+.notif-day-box span { display: inline-block; width: 30px; height: 30px; line-height: 30px; text-align: center; border-radius: 50%; background: #0d1520; color: #7a9cc8; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid #222238; transition: .15s; }
+.notif-day-box input:checked + span { background: #0f3060; color: #7ab0f0; border-color: #2a5aaa; }
+.notif-msg-area { width: 100%; box-sizing: border-box; background: #0d1828; color: #b0c8e8; border: 1px solid #1e3050; border-radius: 6px; padding: 8px; font-size: 11px; resize: vertical; font-family: monospace; line-height: 1.5; min-height: 60px; }
+.notif-msg-auto { font-size: 11px; color: #6a8ab0; padding: 4px 0; font-style: italic; }
+.notif-group-sel { background: #0d1828; color: #a0c0e0; border: 1px solid #1e3050; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 100%; }
+.notif-del-btn { margin-top: 12px; padding: 7px 14px; background: #1e0f0f; color: #d66; border: 1px solid #3a1a1a; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.notif-add-btn { display: block; width: 100%; margin-top: 10px; margin-bottom: 6px; padding: 11px; background: transparent; color: #7a9cc8; border: 1px dashed #1e3050; border-radius: 10px; font-size: 13px; cursor: pointer; }
+.notif-add-form { background: #0d1520; border: 1px solid #1e3050; border-radius: 10px; padding: 14px; margin-top: 8px; margin-bottom: 8px; }
+.notif-add-input { width: 100%; box-sizing: border-box; background: #0d1828; color: #c0d4f0; border: 1px solid #1e3050; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+.notif-save-btn { display: block; width: 100%; margin-top: 12px; padding: 13px; background: #0f3060; color: #7ab0f0; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: .05em; }
+.notif-save-btn:active { background: #2a4a8a; }
+.cashset-card { background: #141d30; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.cashset-floor { font-size: 13px; font-weight: 700; color: #d0e4f8; margin-bottom: 8px; }
+.cashset-denom-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cashset-denom-label { width: 52px; flex-shrink: 0; font-size: 12px; color: #8aabcc; }
+.cashset-field { flex: 1; display: flex; align-items: center; gap: 4px; }
+.cashset-field span { font-size: 10px; color: #7a9cc8; flex-shrink: 0; }
+.cashset-input { width: 100%; box-sizing: border-box; background: #0d1828; color: #c0d4f0; border: 1px solid #1e3050; border-radius: 6px; padding: 6px 8px; font-size: 13px; text-align: center; }
+
+/* ---- 予約管理 ---- */
+.yoyaku-date-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.yoyaku-date-nav button { background: #141d30; border: 1px solid #1e3050; color: #7ab0f0; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 14px; }
+.yoyaku-date-text { font-size: 15px; font-weight: 700; color: #e8f0ff; flex: 1; text-align: center; }
+.yoyaku-today-btn { font-size: 10px; background: #0f2040; color: #7ab0f0; border: 1px solid #1a50a0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.yoyaku-stats { display: flex; gap: 8px; margin-bottom: 12px; }
+.yoyaku-stat { flex: 1; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; padding: 6px; text-align: center; }
+.yoyaku-stat .num { font-size: 16px; font-weight: 700; }
+.yoyaku-stat .lbl { font-size: 9px; color: #7a9cc8; margin-top: 1px; }
+.yoyaku-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.yoyaku-card .yc-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.yoyaku-card .yc-time { font-size: 14px; font-weight: 700; color: #7ab0f0; width: 44px; flex-shrink: 0; }
+.yoyaku-card .yc-name { font-size: 14px; font-weight: 600; color: #e8f0ff; flex: 1; min-width: 0; }
+.yoyaku-card .yc-cast-row { display: flex; flex-wrap: wrap; gap: 5px; padding-left: 50px; margin-bottom: 4px; }
+.yc-cast { font-size: 11px; padding: 2px 7px; border-radius: 8px; white-space: nowrap; }
+.yc-cast.dohan  { background: #281200; color: #ffaa44; border: 1px solid #553300; }
+.yc-cast.tantou { background: #0a1e0a; color: #88cc44; border: 1px solid #2a5a1a; }
+.yc-cast.yoyaku { background: #1a1500; color: #ffcc66; border: 1px solid #554400; }
+.yoyaku-card .yc-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 50px; margin-bottom: 3px; }
+.yoyaku-card .yc-note { font-size: 11px; color: #7a9cc8; padding-left: 50px; }
+.yb { font-size: 10px; padding: 2px 8px; border-radius: 7px; font-weight: 600; }
+.yb-seat { background: #0a1428; color: #7ab0f0; border: 1px solid #1e3a6a; }
+.yb-pax  { background: #141d30; color: #a0c0e0; border: 1px solid #1e3050; }
+.yb-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
+.tantou-chip { padding:5px 12px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.tantou-chip.sel { background:#1a2a0a;color:#88cc44;border-color:#446622;font-weight:700; }
+.dohan-chip { padding:5px 12px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:20px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.dohan-chip.sel { background:#2a1800;color:#ffaa44;border-color:#884400;font-weight:700; }
+.table-chip { padding:5px 10px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:8px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
+.table-chip.sel { background:#0f2040;color:#7ab0f0;border-color:#1a50a0;font-weight:700; }
+.yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
+.yb-pend { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
+/* 顧客検索 */
+.ycust-search { width: 100%; background: #0d1520; border: 1px solid #1e3050; border-radius: 9px; padding: 10px 12px; color: #e8f0ff; font-size: 13px; outline: none; margin-bottom: 10px; }
+.ycust-row { display: flex; align-items: flex-start; justify-content: space-between; padding: 10px 12px; background: #141d30; border: 1px solid #1e3050; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: .15s; }
+.ycust-row:hover { border-color: #1e3050; }
+.ycust-row.selected { border-color: #7ab0f0; background: #0a1428; }
+.ycust-name { font-size: 13px; font-weight: 600; color: #e8f0ff; }
+.ycust-sub { font-size: 10px; color: #7a9cc8; margin-top: 2px; }
+.ycust-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.ycm { font-size: 9px; padding: 1px 6px; border-radius: 5px; }
+.ycm-bottle { background: #1a2a10; color: #88cc55; border: 1px solid #336622; }
+.ycm-bday   { background: #1a1040; color: #9988ee; border: 1px solid #4433aa; }
+.ycm-note   { background: #141428; color: #8aabcc; border: 1px solid #1e3050; }
+/* 予約フォーム */
+.yform-sec { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 13px; margin-top: 10px; }
+.yform-sec .selected-name { font-size: 14px; font-weight: 600; color: #7ab0f0; margin-bottom: 12px; }
+.yform-label { font-size: 11px; color: #7ab0f0; margin: 10px 0 5px; letter-spacing: .4px; font-weight: 600; }
+.yform-input { width: 100%; box-sizing: border-box; background: #1c2a42; border: 1px solid #2a4068; border-radius: 8px; padding: 10px 12px; color: #e8f0ff; -webkit-text-fill-color: #e8f0ff; font-size: 14px; outline: none; -webkit-appearance: none; appearance: none; }
+.yform-input::placeholder { color: #4a6888; -webkit-text-fill-color: #4a6888; }
+.yform-row { display: flex; gap: 8px; }
+.yform-row .yform-input { margin: 0; }
+.yform-toggles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.ytbtn { padding: 7px 10px; border-radius: 7px; border: 1px solid #1e3050; background: #0d1828; color: #7a9cc8; font-size: 12px; cursor: pointer; }
+.ytbtn.on { border-color: #7ab0f0; background: #0a1428; color: #7ab0f0; }
+.yreq-card.cast { border-color: #2a1a3a; }
+.yreq-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.yreq-from { font-size: 12px; font-weight: 600; color: #e8f0ff; }
+.yreq-tag { font-size: 9px; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
+.yrt-cust { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
+.yrt-cast { background: #1a0d2e; color: #bb99ff; border: 1px solid #3a1a6a; }
+.yreq-body { font-size: 12px; color: #8aabcc; line-height: 1.5; }
+.yreq-time { font-size: 10px; color: #6a8ab0; margin-top: 3px; }
+.yreq-acts { display: flex; gap: 6px; margin-top: 8px; }
+.yra { flex: 1; padding: 7px; border-radius: 7px; font-size: 11px; cursor: pointer; text-align: center; }
+.yra-ok { background: #0d2010; border: 1px solid #1a4a22; color: #66cc88; }
+.yra-ng { background: #141428; border: 1px solid #1e3050; color: #7a9cc8; }
+/* カレンダービュー */
+.ycal-month-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ycal-month-nav button { background: #141d30; border: 1px solid #1e3050; color: #7ab0f0; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: 14px; }
+.ycal-month-title { font-size: 15px; font-weight: 700; color: #e8f0ff; flex: 1; text-align: center; }
+.ycal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.ycal-dow { text-align: center; font-size: 10px; font-weight: 700; padding: 6px 0; }
+.ycal-dow.sun { color: #ee6666; }
+.ycal-dow.sat { color: #6688ee; }
+.ycal-day { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; padding: 6px 2px; min-height: 50px; cursor: pointer; position: relative; }
+.ycal-day:hover { background: #141d30; }
+.ycal-day.today { background: #0f2040; border: 1px solid #1a50a0; }
+.ycal-day.today .ycal-num { color: #7ab0f0; }
+.ycal-day.other { opacity: 0.25; pointer-events: none; }
+.ycal-day.sunday .ycal-num { color: #ee6666; }
+.ycal-day.saturday .ycal-num { color: #6688ee; }
+.ycal-num { font-size: 15px; font-weight: 600; color: #ddd; line-height: 1; }
+.ycal-pax { font-size: 10px; color: #7ab0f0; font-weight: 700; margin-top: 3px; }
+.ycal-dot { width: 6px; height: 6px; background: #ddaa44; border-radius: 50%; position: absolute; top: 5px; right: 5px; }
+/* スケジュールグリッド */
+.ysched-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ysched-inner { display: flex; min-width: max-content; }
+.ysched-left { flex-shrink: 0; width: 70px; position: sticky; left: 0; z-index: 2; background: #0d1520; }
+.ysched-right { flex-shrink: 0; }
+.ysched-hdr { display: flex; background: #141d30; border-bottom: 1px solid #1e3050; }
+.ysched-tbl-hdr { width: 70px; padding: 7px 6px; font-size: 9px; color: #7a9cc8; border-right: 1px solid #1e3050; flex-shrink: 0; background: #141d30; }
+.ysched-time-hdr { display: flex; }
+.ysched-time-cell { font-size: 10px; color: #7ab0f0; text-align: center; border-right: 1px solid #0d1830; padding: 7px 4px; }
+.ysched-floor-div { height: 5px; background: #0d1520; border-bottom: 1px solid #1e3050; }
+.ysched-name-cell { height: 52px; padding: 4px 6px; border-bottom: 1px solid #162848; border-right: 1px solid #1e3050; display: flex; flex-direction: column; justify-content: center; }
+.ysched-name-main { font-size: 11px; font-weight: 600; color: #b0c8e8; }
+.ysched-name-cap { font-size: 9px; color: #6a8ab0; }
+.ysched-row { height: 52px; position: relative; border-bottom: 1px solid #162848; }
+.ysched-row-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; }
+.ysched-hour-cell { border-right: 1px solid #0d1830; height: 100%; }
+.yrsv-blk { position: absolute; top: 5px; bottom: 5px; border-radius: 6px; padding: 2px 6px; cursor: pointer; display: flex; flex-direction: column; justify-content: center; overflow: hidden; min-width: 30px; }
+.yrsv-blk:hover { filter: brightness(1.15); }
+.yrsv-name { font-size: 10px; font-weight: 700; color: #aaccff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yrsv-pax { font-size: 9px; color: #4466aa; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <h1>IEYASLOUNGE PORTAL</h1>
+    <span class="user-name" id="user-name">読み込み中...</span>
+  </div>
+  <div class="tabs">
+    <div class="tab" id="tab-stats" onclick="switchTab('stats')">売上・給与</div>
+    <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
+    <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
+    <div class="tab active" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
+    <div class="tab" id="tab-seatreq" onclick="switchTab('seatreq')">席リクエスト</div>
+    <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
+    <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
+    <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
+  </div>
+</header>
+
+<div class="content" id="content">
+  <div class="loading">読み込み中...</div>
+</div>
+
+<div class="overlay" id="picker-overlay" onclick="closePicker()">
+  <div class="picker" onclick="event.stopPropagation()">
+    <div class="picker-title" id="picker-title"></div>
+    <div class="time-grid" id="picker-grid"></div>
+    <button class="picker-cancel" onclick="closePicker()">キャンセル</button>
+  </div>
+</div>
+
+<div class="submit-bar" id="submit-bar" style="display:none">
+  <button class="submit-btn" id="submit-btn" onclick="doSubmit()">シフトを提出する</button>
+  <div class="shift-count" id="shift-count"></div>
+</div>
+
+<script>
+var LIFF_ID = '2010376677-EDF5MZuq';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+
+var userId = '', userName = '', portalData = null;
+var currentTab = 'yoyaku', currentMonth = '';
+var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
+var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
+var staffRole = 'キャスト';
+var pendingShifts = {};
+
+function fmt(n) {
+  if (n === '' || n === null || n === undefined) return '—';
+  var num = Number(String(n).replace(/,/g,''));
+  if (isNaN(num)) return String(n);
+  return num.toLocaleString('ja-JP') + '円';
+}
+
+// ---- タイムアウト付き fetch ヘルパー ----
+function gasFetch(url, options, timeoutMs) {
+  var ms = timeoutMs || 28000;
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, ms) : null;
+  var opts = Object.assign({}, options || {});
+  if (ctrl) opts.signal = ctrl.signal;
+  return fetch(url, opts).then(function(r) {
+    if (timer) clearTimeout(timer);
+    return r;
+  }, function(e) {
+    if (timer) clearTimeout(timer);
+    if (e && e.name === 'AbortError') throw new Error('タイムアウト（サーバー応答なし）');
+    throw e;
+  });
+}
+
+function retryBtn_(fn) {
+  return '<br><button onclick="' + fn + '()" style="margin-top:14px;padding:10px 24px;background:#1a3a6a;color:#7ab0f0;border:1px solid #2a5aaa;border-radius:8px;font-size:14px;cursor:pointer">再試行</button>';
+}
+
+// ---- LIFF init ----
+var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
+
+var initTimer = setTimeout(function() {
+  showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>' + retryBtn_('location.reload'));
+}, 15000);
+
+if (_devUid) {
+  clearTimeout(initTimer);
+  userId = _devUid;
+  document.getElementById('user-name').textContent = '読み込み中...';
+  loadPortal();
+} else {
+  try {
+    liff.init({ liffId: LIFF_ID }).then(function() {
+      clearTimeout(initTimer);
+      if (!liff.isLoggedIn()) {
+        setContent('<div class="loading">LINEログイン中...</div>');
+        liff.login();
+        return null;
+      }
+      return liff.getProfile();
+    }).then(function(p) {
+      if (!p) return; // login redirect pending
+      userId   = p.userId;
+      userName = p.displayName;
+      document.getElementById('user-name').textContent = p.displayName;
+      loadPortal();
+    }).catch(function(e) {
+      clearTimeout(initTimer);
+      showErr('ログインエラー<br><small>' + (e && e.message || JSON.stringify(e)) + '</small>' + retryBtn_('location.reload'));
+    });
+  } catch(e) {
+    clearTimeout(initTimer);
+    showErr('起動エラー: ' + e.message + retryBtn_('location.reload'));
+  }
+}
+
+function loadPortal(month) {
+  setContent('<div class="loading">データ取得中...</div>');
+  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId);
+  if (month) url += '&month=' + encodeURIComponent(month);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) {
+        if (d.error === 'unregistered') {
+          showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
+        } else {
+          showErr('エラー: ' + d.error + retryBtn_('loadPortal'));
+        }
+        return;
+      }
+      // 管理者で castList が返ってきた場合 → 申請管理タブをデフォルト表示
+      if (d.isAdmin && d.castList && !adminViewAs) {
+        isAdmin = true;
+        adminCastList = d.castList;
+        adminCastRoles = d.castRoles || {};
+        initAdminUI(d.castList);
+        return;
+      }
+      isAdmin = d.isAdmin || false;
+      if (d.staffRole) staffRole = d.staffRole;
+      if (isAdmin) showAdminTab();
+      var isKuro = staffRole === '黒服社員' || staffRole === '黒服バイト';
+      if (isKuro || isAdmin) showGunshiLink();
+      if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
+      portalData = d;
+      if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
+      updateAdminBar(adminCastList);
+      renderTab(currentTab);
+    })
+    .catch(function(e) {
+      showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
+    });
+}
+
+function initAdminUI(castList) {
+  showAdminTab();
+  if (!document.getElementById('admin-bar')) {
+    var bar = document.createElement('div');
+    bar.id = 'admin-bar';
+    bar.className = 'admin-bar';
+    bar.innerHTML = '<span class="admin-label">キャスト:</span>'
+      + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
+      + '<option value="">-- 選択 --</option>'
+      + '</select>'
+      + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#7ab0f0;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
+      + '<span class="admin-badge">管理者</span>';
+    document.querySelector('header').insertAdjacentElement('afterend', bar);
+  }
+  updateAdminBar(castList);
+  // 申請管理タブをデフォルト選択
+  switchTabActive('requests');
+  loadRequests();
+}
+
+function adminChange(name) {
+  adminViewAs = name;
+  currentMonth = '';
+  portalData = null;
+  if (name) staffRole = adminCastRoles[name] || 'キャスト';
+  if (!name) {
+    switchTabActive('requests');
+    loadRequests();
+    return;
+  }
+  currentTab = 'yoyaku';
+  switchTabActive('yoyaku');
+  loadPortal();
+}
+
+
+function switchTabActive(tab) {
+  currentTab = tab;
+  ['stats','shift','hair','yoyaku','seatreq','requests','notif','cashset'].forEach(function(t) {
+    var el = document.getElementById('tab-'+t);
+    if (el) el.classList.toggle('active', t === tab);
+  });
+  document.getElementById('submit-bar').style.display = tab === 'shift' ? 'block' : 'none';
+}
+
+function updateAdminBar(castList) {
+  var sel = document.getElementById('admin-viewas-sel');
+  if (!sel || !castList) return;
+  sel.innerHTML = '<option value="">-- 選択 --</option>';
+  castList.forEach(function(n) {
+    var opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    if (n === adminViewAs) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function switchTab(tab) {
+  contentTargetId = 'content';
+  switchTabActive(tab);
+  if (tab === 'stats') { renderStats(); return; }
+  if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
+  if (tab === 'requests') { loadRequests(); return; }
+  if (tab === 'notif') { loadNotifSettings(); return; }
+  if (tab === 'cashset') { loadCashThresholds(); return; }
+  if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
+  if (tab === 'hair') { loadHairReceipts(); return; }
+  if (isAdmin && !adminViewAs) {
+    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    return;
+  }
+  if (portalData) renderTab(tab);
+  else loadPortal();
+}
+
+function renderTab(tab) {
+  if (tab === 'stats') { renderStats(); return; }
+  if (isAdmin && !adminViewAs) {
+    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    return;
+  }
+  if (tab === 'shift') renderShiftCal();
+  else if (tab === 'hair') loadHairReceipts();
+  else if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); }
+}
+
+// ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
+var statsSubTab = 'sales';
+
+function renderStats() {
+  var labels = { sales: '売上明細', pay: '給与明細', ranking: 'ランキング' };
+  var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
+    + ['sales', 'pay', 'ranking'].map(function(t) {
+        return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:12px;cursor:pointer;border-radius:7px;'
+          + (statsSubTab === t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
+          + '" onclick="statsSubSwitch(\'' + t + '\')">' + labels[t] + '</div>';
+      }).join('')
+    + '</div>';
+
+  contentTargetId = 'content';
+  setContent('<div style="padding:14px">' + subtabs + '<div id="stats-body"><div class="loading">読み込み中...</div></div></div>');
+  contentTargetId = 'stats-body';
+
+  if (statsSubTab === 'ranking') { loadRanking(); return; }
+  // 売上明細・給与明細は管理者がキャストを選んでいないと表示できない
+  if (isAdmin && !adminViewAs) {
+    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    return;
+  }
+  if (!portalData) { loadPortal(); return; }
+  if (statsSubTab === 'sales') renderSales();
+  else if (statsSubTab === 'pay') renderPay();
+}
+
+function statsSubSwitch(t) {
+  statsSubTab = t;
+  renderStats();
+}
+
+function showGunshiLink() {
+  if (document.getElementById('gunshi-bar')) return;
+  var bar = document.createElement('div');
+  bar.id = 'gunshi-bar';
+  bar.style.cssText = 'background:#0f1a10;border-bottom:1px solid #1a3a1a;padding:8px 16px;display:flex;align-items:center;gap:10px';
+  bar.innerHTML = '<a href="' + GAS_URL + '" style="padding:6px 16px;background:#1a2a0a;color:#88cc44;border:1px solid #446622;border-radius:8px;font-size:13px;font-weight:700;text-decoration:none">🏯 軍師システムを開く</a>';
+  document.querySelector('header').insertAdjacentElement('afterend', bar);
+}
+
+// 管理者タブを表示
+function showAdminTab() {
+  var el = document.getElementById('tab-requests');
+  if (el) el.style.display = '';
+  var el2 = document.getElementById('tab-notif');
+  if (el2) el2.style.display = '';
+  var el3 = document.getElementById('tab-cashset');
+  if (el3) el3.style.display = '';
+}
+
+// ---- 売上明細 ----
+function renderSales() {
+  var sales = portalData && portalData.sales;
+  if (!sales || Object.keys(sales).length === 0) {
+    setContent('<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">データなし</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.7">今月の売上データはまだ取得されていません。<br>毎日深夜に自動更新されます。</div>'
+      + '</div>');
+    return;
+  }
+
+  var months = Object.keys(sales).sort().reverse();
+  var sel = currentMonth && sales[currentMonth] ? currentMonth : months[0];
+  var row = sales[sel];
+
+  function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
+  function num(v) { return parseInt(v) || 0; }
+
+  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
+    .reduce(function(s, k) { return s + num(row[k]); }, 0);
+
+  var h = '<div style="padding:14px">';
+
+  // 月タブ
+  if (months.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
+    months.forEach(function(m) {
+      var act = m === sel;
+      h += '<button onclick="switchSalesMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#4488ee' : '#1a2e50') + ';background:' + (act ? '#0f2040' : 'transparent')
+        + ';color:' + (act ? '#7ab0f0' : '#7a9cc8') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+    });
+    h += '</div>';
+  }
+
+  // カード
+  h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px">';
+  var salesDates = (portalData && portalData.salesDataDates) || {};
+  var asOf = salesDates[sel] || '';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  h += '<span style="font-size:10px;color:#6a8ab0;letter-spacing:0.5px">' + sel + ' TRUSTデータ'
+    + (asOf ? '　<span style="color:#7ab0f0;font-weight:600">' + asOf + '時点</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>') + '</span>';
+  if (isAdmin) {
+    h += '<span style="font-size:10px;color:#7a9cc8;cursor:pointer;text-decoration:underline" onclick="salesSetDate(\'' + sel + '\')">'
+      + (asOf ? '変更' : '取込日を設定') + '</span>';
+  }
+  h += '</div>';
+
+  function item(label, val, color, sub) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #181828">'
+      + '<span style="font-size:13px;color:#778">' + label + (sub ? '<br><span style="font-size:10px;color:#7a9cc8">' + sub + '</span>' : '') + '</span>'
+      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#b0c8e8') + '">' + val + '</span>'
+      + '</div>';
+  }
+
+  h += item('担当売上', yen(row['担当小計']), '#7ab0f0');
+  if (num(row['同伴小計']) > 0) h += item('同伴売上', yen(row['同伴小計']), '#7799cc');
+  h += item('勤務日数', num(row['勤務日数']) + '日', '#a0c0e0');
+  h += item('時間報酬', yen(row['時間報酬']));
+
+  if (backTotal > 0) {
+    var backLines = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
+      .filter(function(k) { return num(row[k]) > 0; })
+      .map(function(k) { return k + ' ' + yen(row[k]); }).join(' / ');
+    h += item('バック合計', yen(backTotal), '#66cc88', backLines);
+  }
+
+  if (num(row['ボーナス']) > 0) h += item('ボーナス', yen(row['ボーナス']), '#ffcc44');
+  if (num(row['入店祝い金']) > 0) h += item('入店祝い金', yen(row['入店祝い金']), '#ffcc44');
+  h += item('源泉徴収', '−' + yen(row['源泉徴収']), '#cc6666');
+  if (num(row['日払']) > 0) h += item('日払控除', '−' + yen(row['日払']), '#cc6666');
+  if (num(row['マイナス']) > 0) h += item('マイナス', '−' + yen(row['マイナス']), '#cc6666');
+
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0">'
+    + '<span style="font-size:14px;font-weight:600;color:#c0d4f0">残り支給額</span>'
+    + '<span style="font-size:20px;font-weight:700;color:#7ab0f0">' + yen(row['残り支給額']) + '</span>'
+    + '</div>';
+
+  var hairTotals = portalData.hairTotals || {};
+  var hairAmt = hairTotals[sel] || 0;
+  if (hairAmt > 0) {
+    h += '<div style="margin-top:4px;padding:10px 0;border-top:1px solid #1a2e50">';
+    h += item('ヘアサロン立替', '＋' + yen(hairAmt), '#66dd88', '領収書登録分・源泉対象外');
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;margin-top:2px;border-top:1px solid #1a2e50">'
+      + '<span style="font-size:14px;font-weight:600;color:#c0d4f0">最終支給額</span>'
+      + '<span style="font-size:20px;font-weight:700;color:#66dd88">' + yen(num(row['残り支給額']) + hairAmt) + '</span>'
+      + '</div>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+
+  h += '<div style="font-size:10px;color:#6a8ab0;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
+  h += '</div>';
+
+  // ---- バック率メーター（煽りあり） ----
+  var tantoK_s = num(row['担当小計']);
+  var jikanH_s = num(row['時間報酬']);
+  if (tantoK_s > 0 && jikanH_s > 0) {
+    var bairitu_s  = tantoK_s / jikanH_s;
+    var curRate_s  = bairitu_s < 2 ? 10 : (bairitu_s < 3 ? 15 : 20);
+    var nextRate_s = bairitu_s < 2 ? 15 : (bairitu_s < 3 ? 20 : null);
+    var nextThr_s  = bairitu_s < 2 ? 2  : (bairitu_s < 3 ? 3  : null);
+    var barPct_s   = Math.min(bairitu_s / 3, 1) * 100;
+    var barColor_s = curRate_s === 10 ? '#e08000' : (curRate_s === 15 ? '#c8a800' : '#44bb66');
+
+    h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px 16px;margin-top:10px">';
+    h += '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;letter-spacing:0.5px">担当バック率メーター</div>';
+
+    // バー
+    h += '<div style="position:relative;height:28px;margin-bottom:4px">';
+    h += '<div style="position:absolute;top:10px;left:0;width:66.7%;height:8px;background:#2a1800;border-radius:4px 0 0 4px"></div>';
+    h += '<div style="position:absolute;top:10px;left:66.7%;right:0;height:8px;background:#1a2a00;border-radius:0 4px 4px 0"></div>';
+    h += '<div style="position:absolute;top:10px;left:0;width:' + barPct_s.toFixed(1) + '%;height:8px;background:' + barColor_s + ';border-radius:4px"></div>';
+    h += '<div style="position:absolute;top:6px;left:66.7%;width:2px;height:16px;background:#444;transform:translateX(-1px)"></div>';
+    h += '<div style="position:absolute;top:6px;right:0;width:2px;height:16px;background:#444"></div>';
+    h += '<div style="position:absolute;top:8px;left:' + barPct_s.toFixed(1) + '%;width:12px;height:12px;background:' + barColor_s + ';border:2px solid #e8f0ff;border-radius:50%;transform:translateX(-6px)"></div>';
+    h += '</div>';
+
+    // 目盛り
+    h += '<div style="position:relative;height:28px;font-size:10px;color:#7a9cc8">';
+    h += '<span style="position:absolute;left:0">0倍<br><span style="color:#cc6644">10%</span></span>';
+    h += '<span style="position:absolute;left:66.7%;transform:translateX(-50%);text-align:center">2倍<br><span style="color:#bbaa00">15%</span></span>';
+    h += '<span style="position:absolute;right:0;text-align:right">3倍<br><span style="color:#44bb66">20%</span></span>';
+    h += '</div>';
+
+    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #162848">';
+    h += '<div style="font-size:13px;font-weight:600;color:#c0d4f0">倍率 ' + bairitu_s.toFixed(2) + '倍 → <span style="color:' + barColor_s + '">バック率 ' + curRate_s + '%</span></div>';
+
+    if (nextRate_s) {
+      var needed_s = Math.ceil(nextThr_s * jikanH_s - tantoK_s);
+      var neededW  = Math.ceil(needed_s / 10000);
+      // 煽りメッセージ
+      var cheers = curRate_s === 10
+        ? ['あと', '担当売上 ', '¥' + needed_s.toLocaleString(), ' (' + neededW + '万円)で15%へ！', '勢いに乗っていこう🔥']
+        : ['ラストスパート！あと', '担当売上 ', '¥' + needed_s.toLocaleString(), ' (' + neededW + '万円)で20%達成！', '今日が変わり目💪'];
+      h += '<div style="font-size:12px;color:#8aabcc;margin-top:4px">' + cheers[0]
+        + '<span style="color:#7ab0f0;font-weight:600">' + cheers[2] + '</span>'
+        + cheers[3] + '</div>';
+      h += '<div style="font-size:12px;color:' + barColor_s + ';margin-top:4px;font-weight:600">' + cheers[4] + '</div>';
+    } else {
+      h += '<div style="font-size:13px;color:#44bb66;margin-top:4px;font-weight:600">今月も最高バック率20%達成！さすが！🎉</div>';
+    }
+    h += '</div>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  setContent(h);
+}
+
+function switchSalesMonth(m) { currentMonth = m; renderSales(); }
+
+function salesSetDate(month) {
+  var cur = ((portalData && portalData.salesDataDates) || {})[month] || '';
+  var d = prompt(month + ' の取込日を入力（例: 6月15日 または 2026-06-15）', cur);
+  if (d === null) return;
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'setSalesDataDate', userId:userId, month:month, date:d.trim() }) })
+    .then(function(r){ return r.json(); })
+    .then(function(res) {
+      if (!res.ok) { alert('エラー: ' + (res.error||'')); return; }
+      if (!portalData.salesDataDates) portalData.salesDataDates = {};
+      portalData.salesDataDates[month] = d.trim();
+      renderSales();
+    });
+}
+
+// ---- 給与明細（TRUST明細書形式） ----
+function renderPay() {
+  var sales = (portalData && portalData.sales) || {};
+  var hairTotals = (portalData && portalData.hairTotals) || {};
+  var salesMonths = Object.keys(sales);
+  var hairMonths  = Object.keys(hairTotals).filter(function(m) { return !salesMonths.includes(m); });
+  var allMonths   = salesMonths.concat(hairMonths).sort().reverse();
+
+  if (allMonths.length === 0) {
+    setContent('<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">データなし</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
+      + '</div>');
+    return;
+  }
+
+  var pay = portalData && portalData.pay;
+  var months = allMonths;
+  var sel = (currentMonth && (sales[currentMonth] || hairTotals[currentMonth])) ? currentMonth : months[0];
+
+  // 公開チェック（非管理者は未公開月を表示しない）
+  var payPublished = portalData.payPublished || {};
+
+  function monthTabsHtml(selectedM) {
+    if (months.length <= 1) return '';
+    var t = '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
+    months.forEach(function(m) {
+      var act = m === selectedM;
+      var pub = payPublished[m];
+      var label = m + (isAdmin && !pub ? ' 🔒' : '');
+      t += '<button onclick="switchPayMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#4488ee' : '#1a2e50') + ';background:' + (act ? '#0f2040' : 'transparent')
+        + ';color:' + (act ? '#7ab0f0' : '#7a9cc8') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
+    });
+    t += '</div>';
+    return t;
+  }
+
+  var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
+  if (!isAdmin && !payPublished[sel] && !isHairOnlyMonth) {
+    var hLock = '<div style="padding:14px">' + monthTabsHtml(sel)
+      + '<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.8">' + esc(sel) + ' の給与明細は確認中です。<br>公開されるまでお待ちください。</div>'
+      + '</div></div>';
+    setContent(hLock);
+    return;
+  }
+
+  var s = (sales && sales[sel]) ? sales[sel] : {};
+  var p = pay && pay[sel] ? pay[sel] : {};
+
+  function n(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; }
+  function yen(v) { return '¥' + (parseInt(v) || 0).toLocaleString(); }
+
+  // 売上データなし・領収書のみの月
+  var hairTotals = portalData.hairTotals || {};
+  var hairOnly = Object.keys(s).length === 0;
+  if (hairOnly && hairTotals[sel]) {
+    var hairAmt = hairTotals[sel];
+    var reiwaOnly = sel;
+    var partsO = sel.split('/');
+    if (partsO.length === 2) reiwaOnly = '令和' + (parseInt(partsO[0]) - 2018) + '年' + parseInt(partsO[1]) + '月分';
+    var hOnly = '<div style="padding:14px">' + monthTabsHtml(sel);
+    if (isAdmin) {
+      var isPubO = !!payPublished[sel];
+      hOnly += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+      hOnly += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">給与明細 公開状態</div>';
+      hOnly += '<div style="font-size:13px;font-weight:600;color:' + (isPubO ? '#44bb66' : '#cc8844') + '">' + (isPubO ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
+      hOnly += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPubO ? 'unpublishPay' : 'publishPay') + '\')" style="padding:8px 16px;background:' + (isPubO ? '#2a1010' : '#102a10') + ';border:1px solid ' + (isPubO ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPubO ? '#ff8888' : '#66dd66') + ';font-size:13px;font-weight:700;cursor:pointer">' + (isPubO ? '非公開に戻す' : '公開する') + '</button>';
+      hOnly += '</div>';
+
+      hOnly += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+      hOnly += '<div style="font-size:10px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
+      hOnly += '<div style="display:flex;gap:8px;align-items:center">';
+      hOnly += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
+        + 'style="width:80px;background:#0d0d18;border:1px solid #2a2a40;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
+      hOnly += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
+      hOnly += 'CSVファイルを選択';
+      hOnly += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
+      hOnly += '</label>';
+      hOnly += '</div>';
+      hOnly += '<div id="payroll-csv-status" style="font-size:11px;color:#7a9cc8;margin-top:6px"></div>';
+      hOnly += '</div>';
+    }
+    hOnly += '<div style="background:#e8f0ff;color:#111;border-radius:12px;padding:16px 14px">';
+    hOnly += '<div style="text-align:center;border-bottom:2px solid #6a8ab0;padding-bottom:10px;margin-bottom:12px">';
+    hOnly += '<div style="font-size:15px;font-weight:700">支払報酬明細書</div>';
+    hOnly += '<div style="font-size:11px;margin-top:3px">' + esc(reiwaOnly) + '</div>';
+    hOnly += '<div style="font-size:11px">ラウンジ 家康</div>';
+    hOnly += '<div style="font-size:17px;font-weight:700;margin-top:6px">' + esc(portalData.viewAs || portalData.name || '') + '</div>';
+    hOnly += '</div>';
+    hOnly += '<div style="margin-top:12px;border-top:1px solid #c0d4f0;padding-top:10px">';
+    hOnly += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#006600"><span>ヘアサロン立替代</span><span>＋¥' + hairAmt.toLocaleString() + '</span></div>';
+    hOnly += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #6a8ab0;font-size:15px;font-weight:700"><span>最終支給額</span><span style="color:#003399">¥' + hairAmt.toLocaleString() + '</span></div>';
+    hOnly += '</div></div></div>';
+    setContent(hOnly);
+    return;
+  }
+
+  var jikanH  = n(s['時間報酬']);
+  var tantoK  = n(s['担当小計']);
+  var tantoB  = n(s['担当バック']);
+  var yoyakuB = n(s['予約バック']);
+  var dohanB  = n(s['同伴バック']);
+  var drinkB  = n(s['ドリンクバック']);
+  var bottleB = n(s['ボトルバック']);
+  var foodB   = n(s['年会費バック']);
+  var bonus   = n(s['ボーナス']);
+  var nyutenB = n(s['入店祝い金']);
+  var shoBack = n(p['新バック']);
+  var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + nyutenB;
+
+  var gensen    = n(s['源泉徴収']);
+  var nichibara = n(s['日払']);
+  var minus     = n(s['マイナス']);
+  var kojo      = gensen + nichibara + minus;
+
+  var nokori    = n(s['残り支給額']);
+  var hairTotals = portalData.hairTotals || {};
+  var hairReceipt = hairTotals[sel] || 0;
+  var hairManual  = n(p['ヘアサロン立替(手入力)']);
+  var hair        = hairReceipt > 0 ? hairReceipt : hairManual;
+  var finalPay    = nokori + hair;
+
+  // 令和変換
+  var parts = sel.split('/');
+  var reiwaStr = sel;
+  if (parts.length === 2) {
+    var reiwa = parseInt(parts[0]) - 2018;
+    reiwaStr = '令和' + reiwa + '年' + parseInt(parts[1]) + '月分';
+  }
+
+  var h = '<div style="padding:14px">';
+
+  h += monthTabsHtml(sel);
+
+  // 管理者用：公開管理バー
+  if (isAdmin) {
+    var isPub = !!payPublished[sel];
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+    h += '<div>';
+    h += '<div style="font-size:10px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:4px">給与明細 公開状態</div>';
+    h += '<div style="font-size:13px;font-weight:600;color:' + (isPub ? '#44bb66' : '#cc8844') + '">'
+      + (isPub ? '✅ 公開中 — キャストが閲覧可能' : '🔒 未公開 — キャストには表示されません') + '</div>';
+    h += '</div>';
+    h += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPub ? 'unpublishPay' : 'publishPay') + '\')" '
+      + 'style="padding:8px 16px;background:' + (isPub ? '#2a1010' : '#102a10') + ';border:1px solid '
+      + (isPub ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPub ? '#ff8888' : '#66dd66')
+      + ';font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">'
+      + (isPub ? '非公開に戻す' : '公開する') + '</button>';
+    h += '</div>';
+
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+    h += '<div style="font-size:10px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
+    h += '<div style="display:flex;gap:8px;align-items:center">';
+    h += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
+      + 'style="width:80px;background:#0d0d18;border:1px solid #2a2a40;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
+    h += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
+    h += 'CSVファイルを選択';
+    h += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
+    h += '</label>';
+    h += '</div>';
+    h += '<div id="payroll-csv-status" style="font-size:11px;color:#7a9cc8;margin-top:6px"></div>';
+    h += '</div>';
+  }
+
+  // 受領確認状況・送信ボタン（管理者・キャスト共通）
+  var receiptStatus = (portalData.payReceipt && portalData.payReceipt[sel]) || '未送信';
+  var rcColor = receiptStatus === '確認済み' ? '#44bb66' : (receiptStatus === '送信済み・未確認' ? '#cc8844' : '#7a9cc8');
+  h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+  h += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">受領確認状況</div>';
+  h += '<div style="font-size:13px;font-weight:600;color:' + rcColor + '">' + esc(receiptStatus) + '</div></div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px">';
+  h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'現金\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">現金で受領確認を送信</button>';
+  h += '<button onclick="sendPayrollReceipt(\'' + esc(sel) + '\',\'銀行振込\')" style="flex:1;padding:8px;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;color:#7ab0f0;font-size:12px;font-weight:700;cursor:pointer">振込で受領確認を送信</button>';
+  h += '</div></div>';
+
+  // 明細書カード（白背景）
+  h += '<div style="background:#e8f0ff;color:#111;border-radius:12px;padding:16px 14px;font-family:sans-serif">';
+
+  // ヘッダー
+  h += '<div style="text-align:center;border-bottom:2px solid #6a8ab0;padding-bottom:10px;margin-bottom:12px">';
+  h += '<div style="font-size:15px;font-weight:700">支払報酬明細書</div>';
+  h += '<div style="font-size:11px;margin-top:3px">' + esc(reiwaStr) + '</div>';
+  h += '<div style="font-size:11px">ラウンジ 家康</div>';
+  h += '<div style="font-size:17px;font-weight:700;margin-top:6px">' + esc(portalData.name || '') + '</div>';
+  h += '</div>';
+
+  function tr(label, val, section) {
+    var bg = section === 'shikyu' ? '#eef2ff' : section === 'kojo' ? '#fff0f0' : '';
+    var fw = section === 'total' ? 'font-weight:700;' : '';
+    return '<tr>'
+      + '<td style="padding:5px 8px;border:1px solid #c0d4f0;font-size:12px;' + fw + (bg?'background:'+bg+';':'') + '">' + label + '</td>'
+      + '<td style="padding:5px 8px;border:1px solid #c0d4f0;font-size:12px;text-align:right;' + fw + (bg?'background:'+bg+';':'') + '">' + val + '</td>'
+      + '</tr>';
+  }
+  function trHead(label) {
+    return '<tr><td colspan="2" style="padding:4px 8px;border:1px solid #c0d4f0;font-size:11px;font-weight:700;background:#e8eaf6;color:#6a8ab0">' + label + '</td></tr>';
+  }
+
+  h += '<table style="width:100%;border-collapse:collapse">';
+  h += trHead('支給対象');
+  h += tr('基本給（時給）', yen(jikanH), 'shikyu');
+  if (shoBack > 0) h += tr('小計バック', yen(shoBack), 'shikyu');
+  if (tantoB  > 0) h += tr('担当小計バック', yen(tantoB),  'shikyu');
+  if (yoyakuB > 0) h += tr('予約給',         yen(yoyakuB), 'shikyu');
+  if (dohanB  > 0) h += tr('同伴給',          yen(dohanB),  'shikyu');
+  if (drinkB  > 0) h += tr('ドリンクバック',  yen(drinkB),  'shikyu');
+  if (bottleB > 0) h += tr('ボトルバック',    yen(bottleB), 'shikyu');
+  if (foodB   > 0) h += tr('年会費バック',    yen(foodB),   'shikyu');
+  if (bonus   > 0) h += tr('運営手当',        yen(bonus),   'shikyu');
+  if (nyutenB > 0) h += tr('入店祝い金',      yen(nyutenB), 'shikyu');
+  h += tr('合計', yen(shikyu), 'total');
+
+  h += trHead('控除対象');
+  h += tr('源泉徴収', yen(gensen), 'kojo');
+  if (nichibara > 0) h += tr('日払', yen(nichibara), 'kojo');
+  if (minus     > 0) h += tr('マイナス', yen(minus), 'kojo');
+  h += tr('合計', yen(kojo), 'total');
+  h += '</table>';
+
+  // フッター
+  h += '<div style="margin-top:12px;border-top:1px solid #c0d4f0;padding-top:10px">';
+  h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px">'
+    + '<span>差引支給額</span><span style="font-weight:700">' + yen(nokori) + '</span></div>';
+
+  if (hair > 0) {
+    h += '<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#005500">'
+      + '<span>ヘアサロン立替代</span><span>＋' + yen(hair) + '</span></div>';
+    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #6a8ab0;font-size:15px;font-weight:700">'
+      + '<span>最終支給額</span><span style="color:#003399">' + yen(finalPay) + '</span></div>';
+  } else {
+    h += '<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:6px;border-top:2px solid #6a8ab0;font-size:15px;font-weight:700">'
+      + '<span>最終支給額</span><span style="color:#003399">' + yen(nokori) + '</span></div>';
+  }
+  h += '</div>';
+
+  h += '</div>';  // white card
+
+  // ---- バック率メーター ----
+  if (tantoK > 0 && jikanH > 0) {
+    var bairitu = tantoK / jikanH;
+    var curRate  = bairitu < 2 ? 10 : (bairitu < 3 ? 15 : 20);
+    var nextRate = bairitu < 2 ? 15 : (bairitu < 3 ? 20 : null);
+    var nextThr  = bairitu < 2 ? 2  : (bairitu < 3 ? 3  : null);
+    // 0〜3倍スケールで位置を計算（3倍超えは100%）
+    var barPct   = Math.min(bairitu / 3, 1) * 100;
+    var barColor = curRate === 10 ? '#e08000' : (curRate === 15 ? '#c8a800' : '#44bb66');
+    var bgZone1  = curRate === 10 ? '#2a1a00' : '#1a1a00';
+
+    h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px 16px;margin-top:10px">';
+    h += '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;letter-spacing:0.5px">バック率メーター</div>';
+
+    // バー本体
+    h += '<div style="position:relative;height:28px;margin-bottom:4px">';
+    // 背景ゾーン（0〜2x: 10%帯、2〜3x: 15%帯）
+    h += '<div style="position:absolute;top:10px;left:0;width:66.7%;height:8px;background:#2a1800;border-radius:4px 0 0 4px"></div>';
+    h += '<div style="position:absolute;top:10px;left:66.7%;right:0;height:8px;background:#1a2a00;border-radius:0 4px 4px 0"></div>';
+    // 進捗バー
+    h += '<div style="position:absolute;top:10px;left:0;width:' + barPct.toFixed(1) + '%;height:8px;background:' + barColor + ';border-radius:4px;transition:width 0.5s"></div>';
+    // 2x境界線
+    h += '<div style="position:absolute;top:6px;left:66.7%;width:2px;height:16px;background:#444;transform:translateX(-1px)"></div>';
+    // 3x境界線（右端）
+    h += '<div style="position:absolute;top:6px;right:0;width:2px;height:16px;background:#444"></div>';
+    // 現在地ドット
+    h += '<div style="position:absolute;top:8px;left:' + barPct.toFixed(1) + '%;width:12px;height:12px;background:' + barColor + ';border:2px solid #e8f0ff;border-radius:50%;transform:translateX(-6px)"></div>';
+    h += '</div>';
+
+    // 目盛りラベル
+    h += '<div style="position:relative;height:28px;font-size:10px;color:#7a9cc8">';
+    h += '<span style="position:absolute;left:0">0倍<br><span style="color:#cc6644">10%</span></span>';
+    h += '<span style="position:absolute;left:66.7%;transform:translateX(-50%);text-align:center">2倍<br><span style="color:#bbaa00">15%</span></span>';
+    h += '<span style="position:absolute;right:0;text-align:right">3倍<br><span style="color:#44bb66">20%</span></span>';
+    h += '</div>';
+
+    // 現在の状態テキスト
+    h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #162848">';
+    h += '<div style="font-size:13px;font-weight:600;color:#c0d4f0">倍率 ' + bairitu.toFixed(2) + '倍 → <span style="color:' + barColor + '">バック率 ' + curRate + '%</span></div>';
+    if (nextRate) {
+      var needed = Math.ceil(nextThr * jikanH - tantoK);
+      h += '<div style="font-size:12px;color:#8aabcc;margin-top:4px">'
+        + '<span style="color:#7ab0f0;font-weight:600">' + nextRate + '%</span> まであと担当売上 '
+        + '<span style="color:#7ab0f0;font-weight:600">¥' + needed.toLocaleString() + '</span></div>';
+    } else {
+      h += '<div style="font-size:12px;color:#44bb66;margin-top:4px">最高バック率（20%）達成！</div>';
+    }
+    h += '</div>';
+    h += '</div>';  // meter card
+  }
+
+  h += '</div>';
+  setContent(h);
+}
+
+function switchPayMonth(m) { currentMonth = m; renderPay(); }
+
+function handlePayrollCsv(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var monthEl = document.getElementById('payroll-csv-month');
+  var month = monthEl ? monthEl.value.trim() : '';
+  var statusEl = document.getElementById('payroll-csv-status');
+  if (!month) {
+    if (statusEl) statusEl.textContent = '⚠️ 対象月を入力してください（例: 2026/06）';
+    input.value = '';
+    return;
+  }
+  if (statusEl) statusEl.textContent = '読み込み中...';
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var csvText = e.target.result;
+    gasFetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'importPayrollCsv', userId: userId, month: month, csvText: csvText })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      input.value = '';
+      if (!d.ok) { if (statusEl) statusEl.textContent = '⚠️ ' + (d.error || 'エラー'); return; }
+      if (statusEl) statusEl.textContent = '✅ ' + d.count + '名分を取り込みました';
+      currentMonth = month;
+      loadPortal();
+    })
+    .catch(function() {
+      input.value = '';
+      if (statusEl) statusEl.textContent = '⚠️ 通信エラーが発生しました';
+    });
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function togglePayPublish(month, action) {
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: action, userId: userId, month: month })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      if (!portalData.payPublished) portalData.payPublished = {};
+      portalData.payPublished[month] = (action === 'publishPay');
+      renderPay();
+    } else {
+      alert('エラー: ' + (d.error || 'unknown'));
+    }
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+function sendPayrollReceipt(month, method) {
+  var s = (portalData.sales && portalData.sales[month]) || {};
+  var p = (portalData.pay && portalData.pay[month]) || {};
+  var num = function(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; };
+  var nokori = num(s['残り支給額']);
+  var hairTotals = portalData.hairTotals || {};
+  var hair = (hairTotals[month] || 0) > 0 ? hairTotals[month] : num(p['ヘアサロン立替(手入力)']);
+  var amount = nokori + hair;
+
+  if (!confirm(method + 'で給与受領確認をLINEに送信します。よろしいですか？')) return;
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'sendPayrollReceipt', userId: userId, month: month, targetName: portalData.viewAs || portalData.name, amount: amount, method: method })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) { alert('送信しました'); loadPortal(); }
+    else alert('エラー: ' + (d.error || 'unknown'));
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+// ---- ランキング ----
+
+var rankingMonths = [];
+
+function loadRanking(m) {
+  setContent('<div style="text-align:center;padding:60px 20px">'
+    + '<div style="font-size:36px;margin-bottom:14px">🛠️</div>'
+    + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">ランキングは現在表示を停止しています</div>'
+    + '</div>');
+  return;
+  // 以下、表示停止中のため未実行（再開する場合は上のreturnを削除）
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&tab=ranking&userId=' + encodeURIComponent(userId)
+    + (m ? '&month=' + encodeURIComponent(m) : '');
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      rankingMonths = d.availMonths || [];
+      renderRanking(d);
+    })
+    .catch(function() { setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function renderRanking(d) {
+  var rd = d.rankData || {};
+  var selMonth = rd.month || '';
+  var myName = d.name || '';
+  var rankPublished = d.rankPublished || {};
+
+  var h = '<div style="padding:14px">';
+
+  // 月タブ
+  if (rankingMonths.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px">';
+    rankingMonths.forEach(function(m) {
+      var act = m === selMonth;
+      var pub = rankPublished[m];
+      var label = m + (isAdmin && !pub ? ' 🔒' : '');
+      h += '<button onclick="loadRanking(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#4488ee' : '#1a2e50') + ';background:' + (act ? '#0f2040' : 'transparent')
+        + ';color:' + (act ? '#7ab0f0' : '#7a9cc8') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
+    });
+    h += '</div>';
+  }
+
+  // 管理者：公開管理バー
+  if (isAdmin) {
+    var isPub = !!rankPublished[selMonth];
+    h += '<div style="background:#141d30;border:1px solid #1e3050;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
+    h += '<div><div style="font-size:10px;color:#7a9cc8;margin-bottom:4px">ランキング 公開状態</div>';
+    h += '<div style="font-size:13px;font-weight:600;color:' + (isPub ? '#44bb66' : '#cc8844') + '">'
+      + (isPub ? '✅ 公開中' : '🔒 未公開') + '</div></div>';
+    h += '<button onclick="toggleRankingPublish(\'' + selMonth + '\',\'' + (isPub ? 'unpublishRanking' : 'publishRanking') + '\')" '
+      + 'style="padding:8px 16px;background:' + (isPub ? '#2a1010' : '#102a10') + ';border:1px solid '
+      + (isPub ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPub ? '#ff8888' : '#66dd66')
+      + ';font-size:13px;font-weight:700;cursor:pointer">'
+      + (isPub ? '非公開に戻す' : '公開する') + '</button>';
+    h += '</div>';
+  }
+
+  // 非管理者・未公開ならロック画面
+  if (!isAdmin && !rankPublished[selMonth]) {
+    h += '<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#7ab0f0;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#7a9cc8">' + esc(selMonth) + ' のランキングは集計中です。</div>'
+      + '</div></div>';
+    setContent(h);
+    return;
+  }
+
+  var medals = ['🥇', '🥈', '🥉'];
+
+  function rankCard(title, list, valueKey, isCount) {
+    var c = '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px;margin-bottom:14px">';
+    c += '<div style="font-size:12px;font-weight:700;color:#7ab0f0;margin-bottom:12px;letter-spacing:0.5px">' + title + '</div>';
+    if (!list || list.length === 0) {
+      c += '<div style="text-align:center;color:#7a9cc8;font-size:13px;padding:20px 0">データなし</div>';
+    } else {
+      list.forEach(function(item, idx) {
+        var isMe = item.name === myName;
+        var val = isCount ? ((item[valueKey] || 0) + '組') : '';
+        c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828;'
+          + (isMe ? 'background:#0f201a;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius:6px;' : '') + '">';
+        c += '<span style="font-size:18px;width:28px;flex-shrink:0">' + (idx < 3 ? medals[idx] : '') + '</span>';
+        if (idx >= 3) c += '<span style="font-size:12px;color:#7a9cc8;width:20px;flex-shrink:0">' + (idx + 1) + '</span>';
+        c += '<span style="flex:1;font-size:13px;font-weight:' + (isMe ? '700' : '400') + ';color:' + (isMe ? '#66dd88' : '#b0c8e8') + '">'
+          + esc(item.name) + (isMe ? ' ◀ あなた' : '') + '</span>';
+        if (val) c += '<span style="font-size:13px;font-weight:600;color:#a0c0e0">' + val + '</span>';
+        c += '</div>';
+      });
+    }
+    c += '</div>';
+    return c;
+  }
+
+  h += rankCard('売上ランキング', rd.tanto,  'tanto',     false);
+  h += rankCard('同伴ランキング', rd.dohan,  'dohanCnt',  true);
+  h += rankCard('予約ランキング', rd.yoyaku, 'yoyakuCnt', true);
+  h += '<div style="font-size:10px;color:#6a8ab0;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
+
+  // 管理者：TRUST組数同期（ブックマークレット）
+  if (isAdmin) {
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #162848">';
+    h += '<div style="font-size:11px;color:#88aacc;font-weight:600;margin-bottom:8px">🔄 TRUST 組数を同期する</div>';
+    h += '<div style="font-size:11px;color:#8aabcc;line-height:1.7;margin-bottom:10px">'
+       + '① 下のリンクをブックマークバーにドラッグ<br>'
+       + '② TRUSTを開いてそのブックマークをクリック<br>'
+       + '③ 自動で今月分の同伴・予約組数が反映される'
+       + '</div>';
+    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 TRUSТSync ← ドラッグしてブックマーク登録</a>';
+    h += '</div>';
+
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #162848">';
+    h += '<div style="font-size:11px;color:#ccaa66;font-weight:600;margin-bottom:8px">💴 現金チェック用 日払い・経費を取得</div>';
+    h += '<div style="font-size:11px;color:#8aabcc;line-height:1.7;margin-bottom:10px">'
+       + '① 下のリンクをブックマークバーにドラッグ<br>'
+       + '② 営業後、TRUSTを開いてそのブックマークをクリック<br>'
+       + '③ 当日の日払い合計・経費合計を自動取得して記録'
+       + '</div>';
+    h += '<a id="trust-cash-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 現金Sync ← ドラッグしてブックマーク登録</a>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  setContent(h);
+  setupBookmarklet_();
+  setupCashBookmarklet_();
+}
+
+function setupBookmarklet_() {
+  var el = document.getElementById('trust-bookmarklet');
+  if (!el) return;
+  var secret = 'lounge-sync-2026';
+  var gas = GAS_URL;
+
+  // TRUSTの合計行(62列)から全データを抽出するヘルパーをブックマークレット内に埋め込む
+  // 列マッピング (実測):
+  //  1=残り支給額, 3=担当小計, 5=同伴小計, 6=給率%, 7=勤務日数
+  //  20=時間報酬計, 29=担当バック金額, 30=予約組数, 32=予約バック金額
+  //  33=同伴組数, 35=同伴バック金額, 39=ドリンクバック金額
+  //  43=ボトルバック金額, 47=年会費バック金額, 54=源泉徴収, 55=日払, 61=マイナス計
+  var code = 'javascript:(function(){'
+    + 'var G=' + JSON.stringify(gas) + ';'
+    + 'var S=' + JSON.stringify(secret) + ';'
+    + 'var now=new Date();var yr=now.getFullYear();var mo=now.getMonth()+1;'
+    + 'var mk=yr+"/"+(("0"+mo).slice(-2));'
+    + 'var show=function(t){var e=document.getElementById("_lsm");if(!e){e=document.createElement("div");e.id="_lsm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#182a3a",border:"1px solid #3a80cc",borderRadius:"10px",padding:"12px 16px",color:"#aaddff",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+    + 'function pv(s){if(!s||s==="--")return null;var n=parseFloat(s.replace(/[￥,]/g,""));return isNaN(n)?null:n;}'
+    + 'function extractCast(html,name){'
+    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
+    +   'var tot=null;'
+    +   'doc.querySelectorAll("tr").forEach(function(tr){var c=tr.querySelectorAll("td");if(c.length===62&&c[0].textContent.trim()==="合計")tot=c;});'
+    +   'if(!tot)return null;'
+    +   'function v(i){return pv(tot[i].textContent.trim());}'
+    +   'return{name:name,nokori:v(1),tanto:v(3),dohan:v(5),kyuritsu:v(6),kinmu:v(7),'
+    +     'jikan:v(20),tantoBk:v(29),yoyakuCnt:v(30),yoyakuBk:v(32),'
+    +     'dohanCnt:v(33),dohanBk:v(35),drinkBk:v(39),bottleBk:v(43),'
+    +     'foodBk:v(47),gensen:v(54),hizuke:v(55),minus:v(61)};'
+    + '}'
+    + 'show("① キャスト一覧を取得中...");'
+    + 'fetch("/cast/index/"+yr+"/"+mo+"/0").then(function(r){return r.text();})'
+    + '.then(function(html){'
+    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
+    +   'var links=doc.querySelectorAll("a[href*=\\"/cast/detail/\\"]");'
+    +   'var um={};links.forEach(function(a){var n=a.textContent.trim();var h=a.getAttribute("href");if(n&&h&&!um[n])um[n]=h;});'
+    +   'var names=Object.keys(um);'
+    +   'if(!names.length){show("❌ キャストURLが取得できません");return null;}'
+    +   'show("② "+names.length+"名の詳細を取得中...");'
+    +   'var done=0;'
+    +   'return Promise.all(names.map(function(name){'
+    +     'return fetch(um[name]).then(function(r){return r.text();}).then(function(h2){'
+    +       'done++;show("② "+done+"/"+names.length+"名 取得中...");'
+    +       'return extractCast(h2,name);'
+    +     '});'
+    +   '}));'
+    + '})'
+    + '.then(function(casts){'
+    +   'if(!casts)return null;'
+    +   'casts=casts.filter(function(c){return c!==null;});'
+    +   'show("③ GASにデータ送信中 ("+casts.length+"名)...");'
+    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustAll",syncSecret:S,monthKey:mk,casts:casts})}).then(function(r){return r.json();});'
+    + '})'
+    + '.then(function(res){'
+    +   'if(!res)return;'
+    +   'if(res.ok)show("✅ "+mk+" の売上データを同期しました<br><small>"+res.updated+"名分 完了</small>");'
+    +   'else show("❌ "+(res.error||"エラー"));'
+    +   'setTimeout(function(){var e=document.getElementById("_lsm");if(e)e.remove();},8000);'
+    + '})'
+    + '.catch(function(e){show("❌ "+(e.message||e));});'
+    + '})();';
+  el.href = code;
+}
+
+function setupCashBookmarklet_() {
+  var el = document.getElementById('trust-cash-bookmarklet');
+  if (!el) return;
+  var secret = 'lounge-sync-2026';
+  var gas = GAS_URL;
+
+  // TRUST「日報登録」(/report/index/{年}/{月}/{日}) から当日の日払い合計・経費合計を抽出する
+  // 実測で確認済み:
+  //  table#timecard (cast用・staff用の2つ) 内の input[name="1"] = 各人の日払い額 → 全行を合計
+  //  table#logCostOut の各行: select[name="cost_id"] の選択中option文字 = 経費カテゴリ名, input[name="price"] = 金額
+  //  営業は深夜に及ぶため、当日午前6時より前にクリックした場合は前日を営業日とみなす
+  var code = 'javascript:(function(){'
+    + 'var G=' + JSON.stringify(gas) + ';'
+    + 'var S=' + JSON.stringify(secret) + ';'
+    + 'var now=new Date();var biz=new Date(now);if(now.getHours()<6)biz.setDate(biz.getDate()-1);'
+    + 'var yr=biz.getFullYear();var mo=biz.getMonth()+1;var dy=biz.getDate();'
+    + 'function pad(n){return ("0"+n).slice(-2);}'
+    + 'var dateKey=yr+"-"+pad(mo)+"-"+pad(dy);'
+    + 'var path="/report/index/"+yr+"/"+pad(mo)+"/"+pad(dy);'
+    + 'var show=function(t){var e=document.getElementById("_lcm");if(!e){e=document.createElement("div");e.id="_lcm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#2a2210",border:"1px solid #aa8822",borderRadius:"10px",padding:"12px 16px",color:"#ddbb55",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+    + 'function pv(s){var n=parseFloat(String(s).replace(/[￥,]/g,""));return isNaN(n)?0:n;}'
+    + 'show("① "+dateKey+" の日報を取得中...");'
+    + 'fetch(path).then(function(r){return r.text();})'
+    + '.then(function(html){'
+    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
+    +   'var dayPayTotal=0;'
+    +   'doc.querySelectorAll("table#timecard input[name=\\"1\\"]").forEach(function(inp){dayPayTotal+=pv(inp.value);});'
+    +   'var costOutTotal=0;var costOutDetail=[];'
+    +   'doc.querySelectorAll("table#logCostOut tr").forEach(function(tr){'
+    +     'var sel=tr.querySelector("select[name=\\"cost_id\\"]");'
+    +     'var priceInp=tr.querySelector("input[name=\\"price\\"]");'
+    +     'if(!sel||!priceInp)return;'
+    +     'var label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:"";'
+    +     'var amount=pv(priceInp.value);'
+    +     'costOutTotal+=amount;'
+    +     'costOutDetail.push({label:label,amount:amount});'
+    +   '});'
+    +   'show("② GASに送信中...<br><small>日払い合計 ¥"+dayPayTotal.toLocaleString()+" / 経費合計 ¥"+costOutTotal.toLocaleString()+"</small>");'
+    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustDailyCash",syncSecret:S,dateKey:dateKey,dayPayTotal:dayPayTotal,costOutTotal:costOutTotal,costOutDetail:costOutDetail})}).then(function(r){return r.json();});'
+    + '})'
+    + '.then(function(res){'
+    +   'if(res.ok)show("✅ "+dateKey+" の現金データを記録しました<br><small>日払い合計 ¥"+res.dayPayTotal.toLocaleString()+" / 経費合計 ¥"+res.costOutTotal.toLocaleString()+"</small>");'
+    +   'else show("❌ "+(res.error||"エラー"));'
+    +   'setTimeout(function(){var e=document.getElementById("_lcm");if(e)e.remove();},8000);'
+    + '})'
+    + '.catch(function(e){show("❌ "+(e.message||e));});'
+    + '})();';
+  el.href = code;
+}
+
+function toggleRankingPublish(month, action) {
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: action, userId: userId, month: month })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) loadRanking(month);
+    else alert('エラー: ' + (d.error || 'unknown'));
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+// ---- ヘアサロン領収書 ----
+
+var receiptPhotoBase64 = '';
+var receiptPhotoMime   = 'image/jpeg';
+
+function loadHairReceipts() {
+  var targetName = isAdmin ? adminViewAs : '';
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&tab=hair&userId=' + encodeURIComponent(userId)
+    + (targetName ? '&viewAs=' + encodeURIComponent(targetName) : '');
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      renderHairTab(d);
+    })
+    .catch(function() { setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function renderHairTab(d) {
+  var receipts = d.receipts || [];
+  var targetName = d.viewAs || d.name || '';
+  var h = '<div style="padding:14px">';
+
+  // ── 登録フォーム（管理者が特定キャストを選択中 or 一般キャスト） ──
+  var showForm = !isAdmin || (isAdmin && adminViewAs);
+  if (showForm) {
+    h += '<div style="background:#111b2e;border:1px solid #1e3050;border-radius:12px;padding:14px;margin-bottom:16px">';
+    h += '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:6px">サロン代領収書登録する</div>';
+    h += '<div style="font-size:12px;color:#aa8833;background:#1a1500;border:1px solid #3a2e00;border-radius:8px;padding:8px 10px;margin-bottom:14px">⚠️ 原本は翌月月初に黒服に提出してください</div>';
+
+    // 写真プレビュー
+    h += '<div style="margin-bottom:12px">';
+    h += '<label style="font-size:11px;color:#7a9cc8;display:block;margin-bottom:6px">写真</label>';
+    h += '<div id="photo-preview" style="width:100%;max-width:280px;height:160px;background:#0d0d1a;border:2px dashed #1e3050;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative" onclick="document.getElementById(\'photo-input\').click()">';
+    h += '<span id="photo-hint" style="font-size:12px;color:#7a9cc8">タップして写真を選択</span>';
+    h += '</div>';
+    h += '<input type="file" id="photo-input" accept="image/*" style="display:none" onchange="previewPhoto(this)">';
+    h += '<button onclick="clearPhoto()" style="margin-top:6px;font-size:11px;color:#665;background:none;border:none;cursor:pointer">写真をクリア</button>';
+    h += '</div>';
+
+    // 日付・金額
+    h += '<div style="display:flex;gap:10px;margin-bottom:12px">';
+    h += '<div style="flex:1"><label style="font-size:11px;color:#7a9cc8;display:block;margin-bottom:4px">日付</label>';
+    h += '<input type="date" id="receipt-date" style="width:100%;background:#1a1a30;border:1px solid #1e3050;border-radius:8px;color:#c0d4f0;font-size:14px;padding:8px 10px"></div>';
+    h += '<div style="flex:1"><label style="font-size:11px;color:#7a9cc8;display:block;margin-bottom:4px">金額（円）</label>';
+    h += '<input type="number" id="receipt-amount" placeholder="5000" style="width:100%;background:#1a1a30;border:1px solid #1e3050;border-radius:8px;color:#c0d4f0;font-size:14px;padding:8px 10px"></div>';
+    h += '</div>';
+
+    h += '<button onclick="submitReceipt()" style="width:100%;padding:11px;background:#0f2040;border:1px solid #3355aa;border-radius:10px;color:#7ab0f0;font-size:14px;font-weight:700;cursor:pointer">登録する</button>';
+    h += '<div id="receipt-msg" style="font-size:12px;color:#44bb66;margin-top:8px;min-height:16px"></div>';
+    h += '</div>';
+  }
+
+  // ── 一覧 ──
+  h += '<div style="font-size:11px;color:#7a9cc8;letter-spacing:0.5px;margin-bottom:8px">登録済みの領収書' + (targetName ? '（' + esc(targetName) + '）' : '') + '</div>';
+  if (receipts.length === 0) {
+    h += '<div style="text-align:center;color:#7a9cc8;padding:30px 0;font-size:13px">領収書がまだ登録されていません</div>';
+  } else {
+    var total = receipts.reduce(function(s, r) { return s + r.amount; }, 0);
+    h += '<div style="font-size:12px;color:#7ab0f0;margin-bottom:10px">合計: ¥' + total.toLocaleString() + '（' + receipts.length + '件）</div>';
+    receipts.forEach(function(r) {
+      h += '<div style="background:#111b2e;border:1px solid #162848;border-radius:10px;padding:12px 14px;margin-bottom:8px">';
+      h += '<div style="display:flex;align-items:flex-start;justify-content:space-between">';
+      h += '<div>';
+      h += '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:3px">¥' + r.amount.toLocaleString() + '</div>';
+      h += '<div style="font-size:12px;color:#7a9cc8">' + esc(r.date) + (r.month ? '  （' + esc(r.month) + '分）' : '') + '</div>';
+      if (isAdmin) h += '<div style="font-size:11px;color:#7a9cc8;margin-top:2px">' + esc(r.name) + '</div>';
+      h += '<div style="font-size:10px;color:#6a8ab0;margin-top:4px">登録: ' + esc(r.registeredAt) + '</div>';
+      h += '</div>';
+      h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">';
+      if (r.photoUrl) {
+        h += '<a href="' + esc(r.photoUrl) + '" target="_blank" style="font-size:11px;color:#7ab0f0;text-decoration:none;background:#0f2040;border:1px solid #3355aa;padding:4px 10px;border-radius:8px">写真を見る</a>';
+      }
+      if (isAdmin || !d.isAdmin) {
+        h += '<button onclick="deleteReceipt(' + r.rowIdx + ')" style="font-size:11px;color:#cc6666;background:#1a0f0f;border:1px solid #663333;padding:4px 10px;border-radius:8px;cursor:pointer">削除</button>';
+      }
+      h += '</div></div></div>';
+    });
+  }
+  h += '</div>';
+  setContent(h);
+}
+
+function previewPhoto(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  var img = new Image();
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    img.onload = function() {
+      var MAX = 1000;
+      var w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      receiptPhotoBase64 = dataUrl.split(',')[1];
+      receiptPhotoMime   = 'image/jpeg';
+      // プレビュー表示
+      var prev = document.getElementById('photo-preview');
+      if (prev) {
+        prev.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px">';
+      }
+      var hint = document.getElementById('photo-hint');
+      if (hint) hint.style.display = 'none';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPhoto() {
+  receiptPhotoBase64 = '';
+  receiptPhotoMime   = 'image/jpeg';
+  var prev = document.getElementById('photo-preview');
+  if (prev) prev.innerHTML = '<span id="photo-hint" style="font-size:12px;color:#7a9cc8">タップして写真を選択</span>';
+  var inp = document.getElementById('photo-input');
+  if (inp) inp.value = '';
+}
+
+function submitReceipt() {
+  var date   = (document.getElementById('receipt-date') || {}).value || '';
+  var amount = parseInt((document.getElementById('receipt-amount') || {}).value) || 0;
+  var msg    = document.getElementById('receipt-msg');
+  if (!date)   { if (msg) msg.style.color = '#f88'; if (msg) msg.textContent = '日付を入力してください'; return; }
+  if (!amount) { if (msg) msg.style.color = '#f88'; if (msg) msg.textContent = '金額を入力してください'; return; }
+  var btn = document.querySelector('button[onclick="submitReceipt()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '送信中…'; }
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'submitHairReceipt',
+      userId: userId,
+      date: date,
+      amount: amount,
+      photo: receiptPhotoBase64,
+      mime: receiptPhotoMime
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = '登録する'; }
+    if (d.ok) {
+      if (msg) { msg.style.color = '#44bb66'; msg.textContent = '登録しました！'; }
+      receiptPhotoBase64 = '';
+      receiptPhotoMime   = 'image/jpeg';
+      setTimeout(function() { loadHairReceipts(); }, 800);
+    } else {
+      if (msg) { msg.style.color = '#f88'; msg.textContent = 'エラー: ' + (d.error || 'unknown'); }
+    }
+  })
+  .catch(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '登録する'; }
+    if (msg) { msg.style.color = '#f88'; msg.textContent = '通信エラーが発生しました'; }
+  });
+}
+
+function deleteReceipt(rowIdx) {
+  if (!confirm('この領収書を削除しますか？')) return;
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'deleteHairReceipt', userId: userId, rowIdx: rowIdx })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) loadHairReceipts();
+    else alert('削除エラー: ' + (d.error || 'unknown'));
+  })
+  .catch(function() { alert('通信エラーが発生しました'); });
+}
+
+// ---- シフト提出 ----
+
+function genTimes(startH, startM, endH, endM) {
+  var list = [];
+  for (var h = startH; h <= endH; h++) {
+    for (var m = 0; m < 60; m += 30) {
+      if (h === endH && m > endM) break;
+      if (h === startH && m < startM) continue;
+      list.push(h + ':' + (m === 0 ? '00' : '30'));
+    }
+  }
+  return list;
+}
+
+function renderShiftCal() {
+  var now = new Date();
+  if (!viewYear) { viewYear = now.getFullYear(); viewMonth = now.getMonth(); }
+  setContent(calHtml() + '<div class="shift-spacer"></div>');
+  document.getElementById('submit-bar').style.display = 'block';
+  updateSubmitBar();
+}
+
+function calHtml() {
+  var today = new Date(); today.setHours(0,0,0,0);
+  var firstWday = new Date(viewYear, viewMonth, 1).getDay();
+  var daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  var WDAYS = ['日','月','火','水','木','金','土'];
+
+  var h = '<div class="shift-month-nav">'
+    + '<button class="nav-btn" onclick="shiftViewMonth(-1)">‹</button>'
+    + '<div class="shift-month-label">' + viewYear + '年' + (viewMonth+1) + '月</div>'
+    + '<button class="nav-btn" onclick="shiftViewMonth(1)">›</button>'
+    + '</div>';
+  h += '<div class="weekdays">'
+    + WDAYS.map(function(d,i) {
+        return '<div class="weekday'+(i===0?' sun':i===6?' sat':'')+'">'+d+'</div>';
+      }).join('')
+    + '</div><div class="days">';
+
+  for (var i=0; i<firstWday; i++) h += '<div class="day empty"></div>';
+
+  for (var d=1; d<=daysInMonth; d++) {
+    var dt = new Date(viewYear, viewMonth, d); dt.setHours(0,0,0,0);
+    var wday = dt.getDay();
+    var key = (viewMonth+1)+'/'+d;
+    var past = dt < today;
+    var isToday = dt.getTime() === today.getTime();
+    var sel = shiftSelections[key];
+    var existShift = portalData && portalData.shifts && portalData.shifts[key];
+    var isPending = pendingShifts[key];
+    var isKyukin = sel === '欠勤' || (!sel && existShift === '休み');
+    var role = portalData && portalData.staffRole;
+    var isKurofukuRole = role === '黒服社員' || role === '黒服バイト';
+    var isConfirmed = portalData && portalData.confirmedShifts && portalData.confirmedShifts.indexOf(key) !== -1;
+    // 黒服のみ「申請中(未確定)」と「確定済み」を区別する。それ以外の役職は従来通りscheduled扱い
+    var notYetConfirmed = isKurofukuRole && existShift && !isKyukin && !isConfirmed;
+    var cls = 'day';
+    if (wday===0) cls += ' sun';
+    if (wday===6) cls += ' sat';
+    if (past) cls += ' past';
+    if (isToday) cls += ' today';
+    if (isKyukin) cls += ' kyukin';
+    else if (sel) cls += ' selected';
+    else if (isPending || notYetConfirmed) cls += ' pending-shift';
+    else if (existShift) cls += ' scheduled';
+    var displayTime = sel || isPending || existShift || '';
+    var timeLabel = '';
+    if (!isKyukin && displayTime && displayTime !== '休み') {
+      var tm = displayTime.match(/^(\d+):(\d+)/);
+      if (tm) timeLabel = tm[1] + ':' + tm[2] + '~';
+      else if (displayTime === '予約出勤') timeLabel = '予約';
+    }
+    var statusLabel = '';
+    if (isKurofukuRole && existShift && !isKyukin && !sel) {
+      statusLabel = isConfirmed ? '確定' : '申請中';
+    }
+    h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
+      + '<div class="num">'+d+'</div>'
+      + (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : '')
+      + (isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
+      + (statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
+      + '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function shiftViewMonth(dir) {
+  viewMonth += dir;
+  if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  renderShiftCal();
+}
+
+var pickerKey = '', pickerStart = '';
+
+function openPicker(key) {
+  pickerKey = key;
+  pickerStart = '';
+  showStartPicker();
+  document.getElementById('picker-overlay').classList.add('show');
+}
+
+function makePickerStep(text) {
+  var d = document.createElement('div');
+  d.className = 'picker-step';
+  d.style.gridColumn = 'span 2';
+  d.textContent = text;
+  return d;
+}
+
+function makeTimeRow(sr, er, role) {
+  // sr=[startH,startM,maxStartH,maxStartM] er=[minEndH,minEndM,endH,endM]
+  var row = document.createElement('div');
+  row.style.cssText = 'grid-column:span 2;display:flex;gap:6px;align-items:center';
+  var selStyle = 'flex:1;padding:9px 4px;background:#1a2a3a;color:#e8f0ff;border:1px solid #6a8ab0;border-radius:8px;font-size:13px';
+
+  var startSel = document.createElement('select');
+  startSel.style.cssText = selStyle;
+  genTimes(sr[0], sr[1], sr[2], sr[3]).forEach(function(t) {
+    var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
+    startSel.appendChild(opt);
+  });
+
+  var sep = document.createElement('span');
+  sep.textContent = '～'; sep.style.cssText = 'color:#8aabcc;flex-shrink:0';
+
+  var endSel = document.createElement('select');
+  endSel.style.cssText = selStyle;
+  var allEndTimes = genTimes(er[0], er[1], er[2], er[3]);
+
+  function updateEnds() {
+    endSel.innerHTML = '';
+    var sp = startSel.value.split(':');
+    var startMins = parseInt(sp[0]) * 60 + parseInt(sp[1]);
+    allEndTimes.forEach(function(t) {
+      var ep = t.split(':');
+      if (parseInt(ep[0]) * 60 + parseInt(ep[1]) <= startMins) return;
+      var opt = document.createElement('option'); opt.value = t; opt.textContent = t;
+      endSel.appendChild(opt);
+    });
+  }
+  updateEnds();
+  startSel.onchange = updateEnds;
+
+  var r = role;
+  var submitBtn = document.createElement('button');
+  submitBtn.textContent = '提出';
+  submitBtn.style.cssText = 'padding:9px 12px;background:#1a5c2a;color:#e8f0ff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0';
+  submitBtn.onclick = function() { pickTime(pickerKey, startSel.value + '～' + endSel.value, r); };
+
+  row.appendChild(startSel); row.appendChild(sep); row.appendChild(endSel); row.appendChild(submitBtn);
+  return row;
+}
+
+function showStartPicker() {
+  document.getElementById('picker-title').textContent = pickerKey + ' のシフト';
+  var g = document.getElementById('picker-grid');
+  g.innerHTML = '';
+
+  // 欠勤申請（既登録日のみ）
+  var hasShift = portalData && portalData.shifts && portalData.shifts[pickerKey];
+  if (hasShift) {
+    var kyukinBtn = document.createElement('button');
+    kyukinBtn.className = 'time-opt' + (shiftSelections[pickerKey] === '欠勤' ? ' chosen' : '');
+    kyukinBtn.style.cssText = 'background:#2a1515;border-color:#bb4444;color:#ff8888;grid-column:span 2';
+    kyukinBtn.textContent = '欠勤申請';
+    kyukinBtn.onclick = function() { pickTime(pickerKey, '欠勤', 'キャスト'); };
+    g.appendChild(kyukinBtn);
+  }
+
+  if (staffRole === 'キャスト') {
+    var castTopRow = document.createElement('div');
+    castTopRow.style.cssText = 'grid-column:span 2;display:flex;gap:8px';
+
+    var castFullBtn = document.createElement('button');
+    castFullBtn.className = 'time-opt full';
+    castFullBtn.style.flex = '2';
+    castFullBtn.textContent = 'キャストフル　20:00 ～ 24:00';
+    castFullBtn.onclick = function() { pickTime(pickerKey, '20:00～24:00', 'キャスト'); };
+
+    var yoyakuBtn = document.createElement('button');
+    yoyakuBtn.className = 'time-opt';
+    yoyakuBtn.style.cssText = 'flex:1;background:#1a2035;border-color:#886633;color:#ffcc66;font-weight:600;font-size:13px';
+    yoyakuBtn.textContent = '予約出勤';
+    yoyakuBtn.onclick = function() { pickTime(pickerKey, '予約出勤', 'キャスト'); };
+
+    castTopRow.appendChild(castFullBtn);
+    castTopRow.appendChild(yoyakuBtn);
+    g.appendChild(castTopRow);
+    g.appendChild(makePickerStep('時間指定の場合'));
+    g.appendChild(makeTimeRow([20,0,23,30], [20,30,24,0], 'キャスト'));
+
+  } else if (staffRole === '黒服社員') {
+    var kuroEmpBtn = document.createElement('button');
+    kuroEmpBtn.className = 'time-opt full';
+    kuroEmpBtn.style.background = '#0f201a';
+    kuroEmpBtn.style.borderColor = '#448844';
+    kuroEmpBtn.style.color = '#88cc88';
+    kuroEmpBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
+    kuroEmpBtn.onclick = function() { pickTime(pickerKey, '18:00～26:00', '黒服社員'); };
+    g.appendChild(kuroEmpBtn);
+
+  } else { // 黒服バイト
+    var kuroPartBtn = document.createElement('button');
+    kuroPartBtn.className = 'time-opt full';
+    kuroPartBtn.style.background = '#0f201a';
+    kuroPartBtn.style.borderColor = '#448844';
+    kuroPartBtn.style.color = '#88cc88';
+    kuroPartBtn.textContent = '黒服フル　18:00 ～ 翌2:00';
+    kuroPartBtn.onclick = function() { pickTime(pickerKey, '18:00～26:00', '黒服バイト'); };
+    g.appendChild(kuroPartBtn);
+    g.appendChild(makePickerStep('時間指定の場合'));
+    g.appendChild(makeTimeRow([18,0,25,30], [18,30,26,0], '黒服バイト'));
+  }
+
+  addClearBtn(g);
+}
+
+function addClearBtn(g) {
+  if (!shiftSelections[pickerKey]) return;
+  var off = document.createElement('button');
+  off.className = 'time-opt off';
+  off.style.gridColumn = 'span 2';
+  off.textContent = 'クリア';
+  off.onclick = function() { pickTime(pickerKey, null); };
+  g.appendChild(off);
+}
+
+function selectStart(t) {
+  pickerStart = t;
+  document.getElementById('picker-title').textContent = t + '〜 終了時間を選択';
+  var g = document.getElementById('picker-grid');
+  g.innerHTML = '<div class="picker-step">' + pickerKey + ' | スタート: ' + t + '</div>';
+
+  // 戻るボタン
+  var back = document.createElement('button');
+  back.className = 'picker-back';
+  back.textContent = '← スタートを変更';
+  back.onclick = showStartPicker;
+  g.appendChild(back);
+
+  // 終了時間 (スタートの30分後〜26:00)
+  var sh = parseInt(t.split(':')[0]);
+  var sm = parseInt(t.split(':')[1]);
+  var startMins = sh * 60 + sm;
+  genTimes(18, 30, 26, 0).forEach(function(e) {
+    var eh = parseInt(e.split(':')[0]);
+    var em = parseInt(e.split(':')[1]);
+    if (eh * 60 + em <= startMins) return;
+    var btn = document.createElement('button');
+    btn.className = 'time-opt';
+    btn.textContent = e;
+    btn.onclick = function() { pickTime(pickerKey, t + '～' + e); };
+    g.appendChild(btn);
+  });
+}
+
+function pickTime(key, t, role) {
+  if (t) {
+    shiftSelections[key] = t;
+    shiftRoles[key] = role || 'キャスト';
+  } else {
+    delete shiftSelections[key];
+    delete shiftRoles[key];
+  }
+  closePicker();
+  renderShiftCal();
+}
+
+function closePicker() {
+  document.getElementById('picker-overlay').classList.remove('show');
+}
+
+function updateSubmitBar() {
+  var count = Object.keys(shiftSelections).length;
+  document.getElementById('shift-count').textContent = count > 0 ? count + '日分選択中' : '';
+  document.getElementById('submit-btn').disabled = count === 0;
+}
+
+function doSubmit() {
+  var btn = document.getElementById('submit-btn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = '提出中...';
+
+  var shifts = [];
+  var sortedKeys = Object.keys(shiftSelections).sort(function(a, b) {
+    var ap = a.split('/'), bp = b.split('/');
+    var am = parseInt(ap[0]), ad = parseInt(ap[1]);
+    var bm = parseInt(bp[0]), bd = parseInt(bp[1]);
+    return am !== bm ? am - bm : ad - bd;
+  });
+  var submittedTimes = {};
+  sortedKeys.forEach(function(k) {
+    submittedTimes[k] = shiftSelections[k];
+    shifts.push({ date: k, time: shiftSelections[k], role: shiftRoles[k] || 'キャスト' });
+  });
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'submitShift', userId: userId, shifts: shifts })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      btn.textContent = '✓ 提出しました';
+      btn.style.background = '#1a4422';
+      var autoSet = {};
+      (d.autoApproved || []).forEach(function(date) { autoSet[date] = true; });
+      Object.keys(submittedTimes).forEach(function(k) {
+        var t = submittedTimes[k];
+        if (autoSet[k]) {
+          if (!portalData) portalData = {};
+          if (!portalData.shifts) portalData.shifts = {};
+          portalData.shifts[k] = (t === '欠勤') ? '休み' : t;
+        } else {
+          pendingShifts[k] = t;
+        }
+      });
+      shiftSelections = {}; shiftRoles = {};
+      renderShiftCal();
+      setTimeout(function() {
+        btn.textContent = 'シフトを提出する';
+        btn.style.background = '';
+        btn.disabled = true;
+      }, 2000);
+    } else {
+      alert('エラー: ' + (d.error || '不明'));
+      btn.disabled = false;
+      btn.textContent = 'シフトを提出する';
+    }
+  })
+  .catch(function(e) {
+    alert('通信エラー: ' + (e && e.message || ''));
+    btn.disabled = false;
+    btn.textContent = 'シフトを提出する';
+  });
+}
+
+// ---- helpers ----
+function monthBar(months) {
+  if (!months || months.length === 0) return '';
+  var h = '<div class="month-bar">';
+  months.forEach(function(m) {
+    h += '<div class="month-chip' + (m === currentMonth ? ' active' : '') + '" onclick="selectMonth(\'' + m + '\')">' + m + '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function selectMonth(m) {
+  currentMonth = m;
+  renderTab(currentTab);
+}
+
+function row(label, val, cls) {
+  return '<div class="row"><span class="row-label">' + esc(label) + '</span>'
+    + '<span class="row-val' + (cls ? ' '+cls : '') + '">' + (val !== undefined && val !== null ? esc(String(val)) : '—') + '</span></div>';
+}
+
+// ---- 申請管理 ----
+var reqFilter = 'pending';
+
+function loadRequests() {
+  setContent('<div class="loading">申請を読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId) + '&tab=requests';
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      renderRequests(d.requests || []);
+    })
+    .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderRequests(list) {
+  var filters = [
+    { key: 'pending', label: '未処理' },
+    { key: 'all',     label: 'すべて' },
+  ];
+  var filterHtml = '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
+    + buildWeekOptionsHtml_() + '</select>'
+    + '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
+    + '📅 シフト確定→黒服に通知</button>'
+    + '<div class="req-filter">'
+    + filters.map(function(f) {
+        return '<button class="req-filter-btn' + (reqFilter === f.key ? ' active' : '')
+          + '" onclick="setReqFilter(\'' + f.key + '\')">' + f.label + '</button>';
+      }).join('')
+    + '</div>';
+
+  var filtered = list.filter(function(r) {
+    return reqFilter === 'all' || r.status === 'pending';
+  });
+
+  if (filtered.length === 0) {
+    setContent(filterHtml + '<div class="req-empty">'
+      + (reqFilter === 'pending' ? '未処理の申請はありません' : '申請がありません') + '</div>');
+    return;
+  }
+
+  var html = filterHtml;
+  filtered.forEach(function(r) {
+    var isDone = r.status !== 'pending';
+    html += '<div class="req-card' + (r.status === '承諾' ? ' approved' : r.status === '休み' ? ' rejected' : '') + '">'
+      + '<div class="req-head">'
+      + '<span class="req-name">' + esc(r.name) + '</span>'
+      + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
+      + '</div>'
+      + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time)
+      + (r.role ? '　👤 ' + esc(r.role) : '') + '</div>';
+
+    if (isDone) {
+      html += '<div class="req-status ' + (r.status === '承諾' ? 'ok' : 'off') + '">'
+        + (r.status === '承諾' ? '✓ 承諾済み' : '✗ 休み決定') + '</div>';
+    } else {
+      html += '<div class="req-actions">'
+        + '<button class="req-btn approve" onclick="processReq(event,' + r.rowIdx + ',\''
+          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 承諾</button>'
+        + '<button class="req-btn reject" onclick="processReq(event,' + r.rowIdx + ',\''
+          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休み</button>'
+        + '</div>';
+    }
+    html += '</div>';
+  });
+  setContent(html);
+}
+
+function setReqFilter(f) {
+  reqFilter = f;
+  loadRequests();
+}
+
+function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
+
+// 今週を含む直近6週分の「月曜始まり」週リストをoptionタグとして返す
+function buildWeekOptionsHtml_() {
+  var today = new Date();
+  var dow = today.getDay(); // 0=日...6=土
+  var diffToMon = (dow === 0) ? -6 : (1 - dow);
+  var monday = new Date(today);
+  monday.setDate(today.getDate() + diffToMon);
+  monday.setHours(0, 0, 0, 0);
+
+  var opts = '';
+  for (var i = 0; i < 6; i++) {
+    var start = new Date(monday);
+    start.setDate(monday.getDate() + i * 7);
+    var end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    var val = start.getFullYear() + '-' + pad2_(start.getMonth() + 1) + '-' + pad2_(start.getDate());
+    var label = (start.getMonth() + 1) + '/' + start.getDate() + '〜' + (end.getMonth() + 1) + '/' + end.getDate() + '週';
+    opts += '<option value="' + val + '">' + label + '</option>';
+  }
+  return opts;
+}
+
+function confirmKurofukuShift(ev) {
+  var weekSel = document.getElementById('shift-confirm-week');
+  var weekStart = weekSel ? weekSel.value : '';
+  var weekLabel = weekSel ? weekSel.options[weekSel.selectedIndex].textContent : '';
+  if (!confirm(weekLabel + 'の確定シフトを黒服全員にLINEで個別通知します。よろしいですか？')) return;
+  var btn = document.getElementById('shift-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'notifyKurofukuShiftConfirmed', userId: userId, weekStart: weekStart })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (btn) { btn.disabled = false; btn.textContent = '📅 シフト確定→黒服に通知'; }
+    if (d.ok) {
+      var msg = d.sent + '名に通知しました。';
+      if (d.skipped && d.skipped.length) msg += '\n\nスキップ:\n' + d.skipped.join('\n');
+      alert(msg);
+    } else {
+      alert('エラー: ' + (d.error || '不明'));
+    }
+  })
+  .catch(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '📅 シフト確定→黒服に通知'; }
+    alert('通信エラー');
+  });
+}
+
+// ---- 席リクエスト（NG／着席希望、本日限りで黒服LINEに即時通知） ----
+var seatReqType = 'NG';
+var seatReqMode = 'rsv';   // 'rsv' = 本日の予約から選ぶ / 'store' = 店全体へのリクエスト
+var seatReqRsvs = null;    // 本日の予約一覧（タブを開くたびに再取得）
+var seatReqSelected = [];  // 選択中の予約 rowIdx 配列
+
+function renderSeatRequest() {
+  if (seatReqRsvs === null) {
+    setContent('<div class="loading">本日の予約を読み込み中...</div>');
+    gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + yoyakuDateStr(yoyakuDate))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        seatReqRsvs = (d.ok && d.reservations) ? d.reservations.filter(function(r) { return r.status !== 'キャンセル'; }) : [];
+        renderSeatRequest();
+      })
+      .catch(function() { seatReqRsvs = []; renderSeatRequest(); });
+    return;
+  }
+
+  var html = '<div style="font-size:13px;color:#8aabcc;margin-bottom:14px">本日限りのリクエストです。送信すると黒服LINEグループに即時通知されます。</div>';
+
+  html += '<div class="req-filter">'
+    + '<button class="req-filter-btn' + (seatReqType === 'NG' ? ' active' : '') + '" onclick="setSeatReqType(\'NG\')">🚫 NG</button>'
+    + '<button class="req-filter-btn' + (seatReqType === '希望' ? ' active' : '') + '" onclick="setSeatReqType(\'希望\')">🙋 着席希望</button>'
+    + '<button class="req-filter-btn' + (seatReqType === 'キャスト希望' ? ' active' : '') + '" onclick="setSeatReqType(\'キャスト希望\')">✋ キャスト希望</button>'
+    + '</div>';
+
+  if (seatReqType === 'キャスト希望') {
+    html += '<div style="font-size:12px;color:#7a9cc8;margin:8px 0">この子（自分）を担当につけてほしい予約を選んでください</div>';
+  } else {
+    html += '<div class="req-filter" style="margin-top:8px">'
+      + '<button class="req-filter-btn' + (seatReqMode === 'rsv' ? ' active' : '') + '" onclick="setSeatReqMode(\'rsv\')">予約から選ぶ</button>'
+      + '<button class="req-filter-btn' + (seatReqMode === 'store' ? ' active' : '') + '" onclick="setSeatReqMode(\'store\')">店全体へ</button>'
+      + '</div>';
+  }
+
+  if (seatReqMode === 'rsv' || seatReqType === 'キャスト希望') {
+    html += '<div style="font-size:12px;color:#7a9cc8;margin:14px 0 6px">対象の予約を選択（複数可）</div>';
+    if (seatReqRsvs.length === 0) {
+      html += '<div style="text-align:center;color:#6a8ab0;padding:20px 0;font-size:13px">本日の予約はありません</div>';
+    } else {
+      var sorted = seatReqRsvs.slice().sort(function(a, b) { return (a.time || '').localeCompare(b.time || ''); });
+      html += sorted.map(function(r) {
+        var sel = seatReqSelected.indexOf(r.rowIdx) >= 0;
+        return '<div class="seatreq-rsv-card' + (sel ? ' sel' : '') + '" onclick="toggleSeatReqRsv(' + r.rowIdx + ')">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+          + '<span style="font-weight:700;color:#d0e4f8">' + esc(r.time) + '　' + esc(r.customer) + '様</span>'
+          + '<span style="font-size:16px;flex-shrink:0">' + (sel ? '✅' : '⬜') + '</span>'
+          + '</div>'
+          + '<div style="font-size:12px;color:#8aabcc;margin-top:4px">' + esc(r.table || '未定') + '　' + r.pax + '名</div>'
+          + '</div>';
+      }).join('');
+    }
+  }
+
+  html += '<div style="font-size:12px;color:#7a9cc8;margin:16px 0 6px">コメント（任意）</div>'
+    + '<textarea id="seatreq-comment" class="notif-msg-area" style="min-height:50px;width:100%;box-sizing:border-box" placeholder="例：今日は体調が悪いので…"></textarea>';
+
+  html += '<button class="req-confirm-btn" style="margin-top:16px" onclick="submitSeatRequest()">📣 黒服に送信</button>';
+
+  setContent(html);
+}
+
+function setSeatReqMode(m) { seatReqMode = m; renderSeatRequest(); }
+
+function toggleSeatReqRsv(rowIdx) {
+  var idx = seatReqSelected.indexOf(rowIdx);
+  if (idx >= 0) seatReqSelected.splice(idx, 1);
+  else seatReqSelected.push(rowIdx);
+  renderSeatRequest();
+}
+
+function setSeatReqType(t) {
+  seatReqType = t;
+  if (t === 'キャスト希望') seatReqMode = 'rsv';
+  renderSeatRequest();
+}
+
+function submitSeatRequest() {
+  var commentEl = document.getElementById('seatreq-comment');
+  var comment = commentEl ? commentEl.value.trim() : '';
+  var typeLabel = seatReqType === 'NG' ? '🚫 NG' : seatReqType === 'キャスト希望' ? '✋ キャスト希望' : '🙋 着席希望';
+  var storeWide = seatReqType !== 'キャスト希望' && seatReqMode === 'store';
+  var targets = [];
+  var confirmLines = [];
+
+  if (!storeWide) {
+    if (seatReqSelected.length === 0) { alert('対象の予約を選択するか、「店全体へ」を選んでください'); return; }
+    var picked = seatReqRsvs.filter(function(r) { return seatReqSelected.indexOf(r.rowIdx) >= 0; });
+    targets = picked.map(function(r) { return { rowIdx: r.rowIdx, time: r.time, customer: r.customer, table: r.table || '未定' }; });
+    confirmLines = picked.map(function(r) { return r.time + ' ' + r.customer + '様（' + (r.table || '未定') + '）'; });
+  }
+
+  var confirmMsg = storeWide
+    ? (typeLabel + '：店全体へのリクエストを黒服に送信します。よろしいですか？')
+    : (typeLabel + '：\n' + confirmLines.join('\n') + '\nを黒服に送信します。よろしいですか？');
+  if (!confirm(confirmMsg)) return;
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'sendCastSeatRequest', userId: userId, type: seatReqType, targets: targets, storeWide: storeWide, comment: comment })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      alert('送信しました');
+      seatReqSelected = [];
+      renderSeatRequest();
+    } else {
+      alert('エラー: ' + (d.error || '不明'));
+    }
+  })
+  .catch(function() { alert('通信エラー'); });
+}
+
+function processReq(ev, rowIdx, name, date, time, decision) {
+  var card = ev && ev.target ? ev.target.closest('.req-card') : null;
+  if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
+
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'approveShift', userId: userId, rowIdx: rowIdx,
+                           name: name, date: date, time: time, decision: decision })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) { loadRequests(); }
+    else {
+      if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
+      alert('エラー: ' + (d.error || '不明'));
+    }
+  })
+  .catch(function() {
+    if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
+    alert('通信エラー');
+  });
+}
+
+var contentTargetId = 'content';
+function setContent(html) {
+  var el = document.getElementById(contentTargetId);
+  if (el) el.innerHTML = html;
+}
+
+function showErr(msg) {
+  document.getElementById('user-name').textContent = '';
+  setContent('<div class="err">' + msg + '</div>');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ---- 通知設定タブ ----
+var notifSettings = null;
+var BUILTIN_NOTIF_KEYS = ['ieyas_url','kaiten_check','lineup','kinsen_mae','soganbansen','dohan_check','okuri_summary',
+                           'okuri_confirm','seki_check','shoumei','kinsen_go','oshibori'];
+var DAY_LABELS = ['月','火','水','木','金','土','日'];
+
+function loadNotifSettings() {
+  setContent('<div class="loading">通知設定を読み込み中...</div>');
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getNotifSettings', userId: userId })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      notifSettings = d.settings;
+      renderNotif(notifSettings);
+    })
+    .catch(function() { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function buildNotifRow(k, s) {
+  var isCustom = k.startsWith('custom_');
+  var days = s.days || [1,2,3,4,5,6];
+  var enabled = s.enabled !== false;
+  var time = s.time || '00:00';
+  var msgEditable = isCustom || s.msgEditable;
+
+  var dayBoxes = DAY_LABELS.map(function(d, i) {
+    var dayNum = i + 1;
+    var chk = days.indexOf(dayNum) >= 0 ? 'checked' : '';
+    return '<label class="notif-day-box">'
+      + '<input type="checkbox" ' + chk + ' onchange="notifDayChange(\'' + k + '\',' + dayNum + ',this.checked)">'
+      + '<span>' + d + '</span></label>';
+  }).join('');
+
+  var msgVal = s.message != null ? s.message : (s.defaultMsg || '');
+  var msgHtml = msgEditable
+    ? '<textarea class="notif-msg-area" rows="4" placeholder="メッセージ（空欄=デフォルト）" onchange="notifMsgChange(\'' + k + '\',this.value)">' + esc(msgVal) + '</textarea>'
+    : '<div class="notif-msg-auto">自動生成（編集不可）</div>';
+
+  var staffMsgHtml = '';
+  if (s.staffMsgEditable) {
+    var staffMsgVal = s.staffMessage != null ? s.staffMessage : (s.defaultStaffMsg || '');
+    staffMsgHtml = '<div class="notif-expand-label">スタッフへのメッセージ（同時送信）</div>'
+      + '<textarea class="notif-msg-area" rows="4" placeholder="メッセージ（空欄=デフォルト）" onchange="notifStaffMsgChange(\'' + k + '\',this.value)">' + esc(staffMsgVal) + '</textarea>';
+  }
+
+  var groupSel = isCustom
+    ? ('<div class="notif-expand-label">送信先</div><select class="notif-group-sel" onchange="notifGroupChange(\'' + k + '\',this.value)">'
+       + ['staff','kurofuku','both'].map(function(v) {
+           var lbl = v==='staff'?'スタッフ':v==='kurofuku'?'黒服':'両方';
+           return '<option value="' + v + '"' + ((s.groupKey||'staff')===v?' selected':'') + '>' + lbl + '</option>';
+         }).join('') + '</select>')
+    : '';
+
+  var delBtn = isCustom
+    ? '<button class="notif-del-btn" onclick="deleteNotif(\'' + k + '\')">🗑 削除</button>'
+    : '';
+
+  return '<div class="notif-card" id="ncard-' + k + '" style="' + (enabled?'':'opacity:.45') + '">'
+    + '<div class="notif-card-header" onclick="toggleNotifExpand(\'' + k + '\')">'
+    +   '<label class="notif-toggle" onclick="event.stopPropagation()">'
+    +     '<input type="checkbox" id="ntog-' + k + '" ' + (enabled?'checked':'') + ' onchange="notifToggle(\'' + k + '\')">'
+    +     '<span class="notif-slider"></span></label>'
+    +   '<div class="notif-mid">'
+    +     '<div class="notif-label">' + esc(s.label || k) + '</div>'
+    +     '<div class="notif-group-tag">' + esc(s.group || '') + '</div>'
+    +   '</div>'
+    +   '<input type="time" class="notif-time" id="ntime-' + k + '" value="' + esc(time) + '" '
+    +     'onclick="event.stopPropagation()" onchange="notifTimeChange(\'' + k + '\')">'
+    +   '<span class="notif-chevron" id="nchev-' + k + '">›</span>'
+    + '</div>'
+    + '<div class="notif-expand" id="nexp-' + k + '" style="display:none">'
+    +   '<div class="notif-expand-label">曜日</div>'
+    +   '<div class="notif-days-row">' + dayBoxes + '</div>'
+    +   groupSel
+    +   '<div class="notif-expand-label">メッセージ</div>'
+    +   msgHtml
+    +   staffMsgHtml
+    +   delBtn
+    + '</div>'
+    + '</div>';
+}
+
+function buildAddForm() {
+  var dayBoxes = DAY_LABELS.map(function(d, i) {
+    return '<label class="notif-day-box"><input type="checkbox" checked id="nadd-day-' + (i+1) + '"><span>' + d + '</span></label>';
+  }).join('');
+  return '<div id="notif-add-area" style="display:none"><div class="notif-add-form">'
+    + '<div class="notif-expand-label">通知名</div>'
+    + '<input type="text" class="notif-add-input" id="nadd-label" placeholder="例: 発注確認">'
+    + '<div class="notif-expand-label">時刻</div>'
+    + '<input type="time" class="notif-time" id="nadd-time" value="12:00">'
+    + '<div class="notif-expand-label">曜日</div>'
+    + '<div class="notif-days-row">' + dayBoxes + '</div>'
+    + '<div class="notif-expand-label">送信先</div>'
+    + '<select class="notif-group-sel" id="nadd-group">'
+    +   '<option value="staff">スタッフ</option>'
+    +   '<option value="kurofuku">黒服</option>'
+    +   '<option value="both">両方</option>'
+    + '</select>'
+    + '<div class="notif-expand-label">メッセージ</div>'
+    + '<textarea class="notif-msg-area" rows="3" id="nadd-msg" placeholder="送信するメッセージ"></textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:12px">'
+    +   '<button class="notif-save-btn" style="flex:1;margin-top:0" onclick="confirmAddNotif()">追加する</button>'
+    +   '<button class="notif-save-btn" style="flex:0;width:80px;margin-top:0;background:#1e0f0f;color:#d66" onclick="cancelAddNotif()">キャンセル</button>'
+    + '</div></div></div>';
+}
+
+function renderNotif(settings) {
+  var customKeys = Object.keys(settings).filter(function(k) { return k.startsWith('custom_'); });
+  var rows = BUILTIN_NOTIF_KEYS.concat(customKeys).map(function(k) {
+    return settings[k] ? buildNotifRow(k, settings[k]) : '';
+  }).join('');
+
+  var html = '<div style="padding:14px">'
+    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">LINE通知設定</div>'
+    + '<div class="notif-list">' + rows + '</div>'
+    + buildAddForm()
+    + '<button class="notif-add-btn" id="notif-add-btn" onclick="openAddNotifForm()">＋ 通知を追加</button>'
+    + '<button class="notif-save-btn" onclick="saveNotifSettings()">保存する</button>'
+    + '<div id="notif-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
+    + '</div>';
+  setContent(html);
+}
+
+function toggleNotifExpand(k) {
+  var exp = document.getElementById('nexp-' + k);
+  var chev = document.getElementById('nchev-' + k);
+  if (!exp) return;
+  var open = exp.style.display === 'none';
+  exp.style.display = open ? 'block' : 'none';
+  if (chev) chev.style.transform = open ? 'rotate(90deg)' : '';
+}
+
+function notifToggle(k) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].enabled = document.getElementById('ntog-' + k).checked;
+  var card = document.getElementById('ncard-' + k);
+  if (card) card.style.opacity = notifSettings[k].enabled ? '1' : '0.45';
+}
+
+function notifTimeChange(k) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].time = document.getElementById('ntime-' + k).value;
+}
+
+function notifDayChange(k, day, checked) {
+  if (!notifSettings || !notifSettings[k]) return;
+  var days = notifSettings[k].days || [];
+  if (checked && days.indexOf(day) < 0) days.push(day);
+  if (!checked) days = days.filter(function(d) { return d !== day; });
+  notifSettings[k].days = days;
+}
+
+function notifMsgChange(k, val) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].message = val.trim() || null;
+}
+
+function notifStaffMsgChange(k, val) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].staffMessage = val.trim() || null;
+}
+
+function notifGroupChange(k, val) {
+  if (!notifSettings || !notifSettings[k]) return;
+  notifSettings[k].groupKey = val;
+  notifSettings[k].group = val === 'staff' ? 'スタッフ' : val === 'kurofuku' ? '黒服' : '両方';
+}
+
+function openAddNotifForm() {
+  var area = document.getElementById('notif-add-area');
+  var btn = document.getElementById('notif-add-btn');
+  if (area) area.style.display = 'block';
+  if (btn) btn.style.display = 'none';
+}
+
+function cancelAddNotif() {
+  var area = document.getElementById('notif-add-area');
+  var btn = document.getElementById('notif-add-btn');
+  if (area) area.style.display = 'none';
+  if (btn) btn.style.display = 'block';
+}
+
+function confirmAddNotif() {
+  var label = (document.getElementById('nadd-label').value || '').trim();
+  if (!label) { alert('通知名を入力してください'); return; }
+  var time = document.getElementById('nadd-time').value || '12:00';
+  var group = document.getElementById('nadd-group').value || 'staff';
+  var msg = (document.getElementById('nadd-msg').value || '').trim();
+  var days = [1,2,3,4,5,6,7].filter(function(d) {
+    var el = document.getElementById('nadd-day-' + d);
+    return el && el.checked;
+  });
+  var key = 'custom_' + Date.now();
+  notifSettings[key] = {
+    label: label, time: time, enabled: true,
+    group: group==='staff'?'スタッフ':group==='kurofuku'?'黒服':'両方',
+    groupKey: group, days: days, message: msg || null, custom: true
+  };
+  renderNotif(notifSettings);
+  setTimeout(function() { toggleNotifExpand(key); }, 30);
+}
+
+function deleteNotif(k) {
+  var name = notifSettings[k] && notifSettings[k].label || k;
+  if (!confirm('「' + name + '」を削除しますか？')) return;
+  delete notifSettings[k];
+  renderNotif(notifSettings);
+}
+
+function saveNotifSettings() {
+  var btn = document.querySelector('.notif-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'saveNotifSettings', userId: userId, settings: notifSettings })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      var msg = document.getElementById('notif-save-msg');
+      if (msg) { msg.style.display = 'block'; setTimeout(function(){ msg.style.display='none'; }, 2500); }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      alert('通信エラー');
+    });
+}
+
+// ---- 現金設定タブ（レジ・金庫の枚数しきい値） ----
+var cashThresholds = null;
+var CASHSET_DENOMS = [['m10000','1万円'], ['m5000','5千円'], ['m1000','千円']];
+
+function loadCashThresholds() {
+  setContent('<div class="loading">現金設定を読み込み中...</div>');
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getCashThresholds', userId: userId })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
+      cashThresholds = d.thresholds;
+      renderCashThresholds(cashThresholds);
+    })
+    .catch(function() { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function cashsetFloorCard(floor, label) {
+  var rows = CASHSET_DENOMS.map(function(pair) {
+    var key = pair[0], denomLabel = pair[1];
+    var t = cashThresholds.till[floor][key] || {};
+    var s = cashThresholds.safe[floor][key] || {};
+    return '<div class="cashset-denom-row">'
+      + '<div class="cashset-denom-label">' + denomLabel + '</div>'
+      + '<div class="cashset-field"><span>レジ最少</span><input type="number" inputmode="numeric" class="cashset-input" '
+      +   'value="' + (t.min != null ? t.min : '') + '" onchange="cashsetTillChange(\'' + floor + '\',\'' + key + '\',\'min\',this.value)"></div>'
+      + '<div class="cashset-field"><span>レジ最大</span><input type="number" inputmode="numeric" class="cashset-input" '
+      +   'value="' + (t.max != null ? t.max : '') + '" onchange="cashsetTillChange(\'' + floor + '\',\'' + key + '\',\'max\',this.value)"></div>'
+      + '<div class="cashset-field"><span>金庫最少</span><input type="number" inputmode="numeric" class="cashset-input" '
+      +   'value="' + (s.min != null ? s.min : '') + '" onchange="cashsetSafeChange(\'' + floor + '\',\'' + key + '\',this.value)"></div>'
+      + '</div>';
+  }).join('');
+  return '<div class="cashset-card"><div class="cashset-floor">' + label + '</div>' + rows + '</div>';
+}
+
+function renderCashThresholds(thresholds) {
+  var html = '<div style="padding:14px">'
+    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">現金設定（レジ・金庫の枚数しきい値）</div>'
+    + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;line-height:1.6">レジの枚数が最少を下回る/最大を超える場合や、金庫の枚数が最少を下回る場合に、閉店チェック時に補充・移動の指示が自動表示されます。</div>'
+    + cashsetFloorCard('f5', '5F')
+    + cashsetFloorCard('f2', '2F')
+    + '<button class="notif-save-btn" onclick="saveCashThresholds()">保存する</button>'
+    + '<div id="cashset-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
+    + '<div class="cashset-card" style="margin-top:18px">'
+    +   '<div class="cashset-floor">本日の申請をリセット</div>'
+    +   '<div style="font-size:11px;color:#669;margin-bottom:10px;line-height:1.6">提出済みの申請を削除し、未提出の状態に戻します。リセットすると黒服グループLINEに自動通知されます。</div>'
+    +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetOpeningCheck\',\'本日の開店チェック\')">🌅 開店チェックをリセット</button>'
+    +   '<button class="notif-del-btn" style="width:100%;margin-top:0;margin-bottom:8px" onclick="resetCashAction(\'resetCashCheck\',\'本日の閉店チェック\')">🌙 閉店チェックをリセット</button>'
+    +   '<button class="notif-del-btn" style="width:100%;margin-top:0" onclick="resetCashAction(\'resetSafeWithdrawalLog\',\'本日の金庫出金ログ\')">🔓 金庫出金ログをリセット</button>'
+    + '</div>'
+    + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a2a5a">'
+    +   '<div class="cashset-floor" style="color:#cc99ff">🪑 テーブルステータスリセット</div>'
+    +   '<div style="font-size:11px;color:#8aabcc;margin-bottom:12px;line-height:1.6">席割り当て・NGキャスト・席タグをクリアします。通知設定など他の設定は保持されます。</div>'
+    +   '<button onclick="resetGunshiSeating()" style="width:100%;padding:12px;background:#1a0f2a;color:#cc99ff;border:1px solid #443366;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🪑 席ステータスをリセット</button>'
+    +   '<button onclick="syncRsrvWithReservations()" style="width:100%;padding:12px;background:#0f1f2a;color:#66ccff;border:1px solid #1a4a66;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔄 予約と整合・ゾンビ客名をクリア</button>'
+    +   '<div id="sync-rsrv-msg" style="display:none;text-align:center;font-size:12px;margin-top:8px"></div>'
+    + '</div>'
+    + '<div class="cashset-card" style="margin-top:18px;border:1px solid #3a1a1a">'
+    +   '<div class="cashset-floor" style="color:#ff8888">⚠️ 軍師システム 全設定リセット</div>'
+    +   '<div style="font-size:11px;color:#8aabcc;margin-bottom:12px;line-height:1.6">通知設定・現金しきい値・給与公開フラグ・スタッフ活動ログなど、LINE/グループIDを除く全スクリプトプロパティを削除します。元に戻せません。</div>'
+    +   '<button onclick="resetGunshiAll()" style="width:100%;padding:12px;background:#2a0f0f;color:#ff7777;border:1px solid #552222;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🔴 全設定を削除してリセット</button>'
+    +   '<div id="gunshi-reset-msg" style="display:none;text-align:center;font-size:12px;color:#ff8888;margin-top:8px"></div>'
+    + '</div>'
+    + '</div>';
+  setContent(html);
+}
+
+function syncRsrvWithReservations() {
+  if (!confirm('予約システムと整合を取り、来店済み予約のない席の客名をクリアします。\n実行しますか？')) return;
+  var msg = document.getElementById('sync-rsrv-msg');
+  if (msg) { msg.style.display = 'block'; msg.style.color = '#8aabcc'; msg.textContent = '処理中...'; }
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'syncRsrvWithReservations', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (msg) { msg.style.color = '#ff6666'; msg.textContent = 'エラー: ' + (d.error || ''); } return; }
+      if (msg) { msg.style.color = '#66ccff'; msg.textContent = 'クリア完了（' + d.cleared + '件削除、有効席: ' + (d.validSeats && d.validSeats.length ? d.validSeats.join(', ') : 'なし') + '）'; }
+    })
+    .catch(function() { if (msg) { msg.style.color = '#ff6666'; msg.textContent = '通信エラー'; } });
+}
+
+function resetGunshiSeating() {
+  if (!confirm('テーブルのステータス（席割り当て・NGキャスト・席タグ）をリセットします。\nシステム設定（通知・現金しきい値等）は保持されます。\n\n実行しますか？')) return;
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'resetGunshiSeating', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      alert('✅ 席ステータスをリセットしました');
+    })
+    .catch(function() { alert('通信エラー'); });
+}
+
+function resetGunshiAll() {
+  if (!confirm('⚠️ 軍師システムの全設定を削除します。\nLINEトークン・グループIDは保持されますが、通知設定・現金しきい値・給与公開フラグなどは全て消去されます。\n\n本当に実行しますか？')) return;
+  var msg = document.getElementById('gunshi-reset-msg');
+  if (msg) { msg.style.display = 'block'; msg.textContent = '実行中...'; }
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'resetGunshiSettings', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (msg) msg.textContent = 'エラー: ' + (d.error||''); return; }
+      if (msg) msg.textContent = '✅ リセット完了。ページを再読み込みしてください。';
+    })
+    .catch(function() { if (msg) msg.textContent = '通信エラー'; });
+}
+
+function cashsetTillChange(floor, key, field, val) {
+  if (!cashThresholds) return;
+  var n = val === '' ? null : Number(val);
+  cashThresholds.till[floor][key][field] = n;
+}
+
+function cashsetSafeChange(floor, key, val) {
+  if (!cashThresholds) return;
+  var n = val === '' ? null : Number(val);
+  cashThresholds.safe[floor][key].min = n;
+}
+
+function saveCashThresholds() {
+  var btn = document.querySelector('.notif-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中...'; }
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'saveCashThresholds', userId: userId, thresholds: cashThresholds })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      var msg = document.getElementById('cashset-save-msg');
+      if (msg) { msg.style.display = 'block'; setTimeout(function(){ msg.style.display='none'; }, 2500); }
+    })
+    .catch(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '保存する'; }
+      alert('通信エラー');
+    });
+}
+
+// ---- 予約管理タブ ----
+var yoyakuDate = (function(){ var d = new Date(); return d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; })();
+var yoyakuRsvs = [];
+var yoyakuCastList = [];
+var yoyakuCustResults = [];
+var yoyakuSelectedCust = null;
+var yoyakuSubTab = 'list'; // list / sched / add / cal
+var yoyakuListFilter = ''; // 廃止（各カードにインラインボタン）
+var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
+var yoyakuCalMonth = null;  // 'YYYY-MM' カレンダー表示月
+var yoyakuCustMode = '';    // '' = 未選択 / 'search' = 既存検索 / 'new' = 新規
+var staffName = '';         // GASから取得したスタッフ名（予約担当者表示用）
+var yoyakuRsvDate = '';       // 予約追加カレンダー選択日 YYYY-MM-DD
+var yoyakuRsvCalMonth = '';   // 予約追加カレンダー表示月 YYYY-MM
+var yoyakuRsvTime = '';       // 予約追加時間選択 HH:MM
+var yoyakuRsvCustManual = ''; // 再描画時に保持: お客様名
+var yoyakuRsvYoubou = '';    // 再描画時に保持: 要望・備考
+var yoyakuRsvPax = 0;        // 再描画時に保持: 人数（0=デフォルト3名）
+var yoyakuRsvTable = '';     // 再描画時に保持: 席
+var yoyakuRsvTantou = '';    // 再描画時に保持: 担当キャスト
+var yoyakuRsvYoyakuCast = ''; // 再描画時に保持: 予約キャスト
+var yoyakuRsvDohan = '';     // 再描画時に保持: 同伴キャスト
+var yoyakuEditRsv = null;    // 編集中の予約オブジェクト（null=新規追加モード）
+var yoyakuSubmitBusy = false; // 予約追加/変更の二重送信防止フラグ
+var yoyakuRsvMode = '本予約'; // '本予約' or '仮予約'（仮予約は席・フロア指定なしの仮押さえ）
+
+var YOYAKU_TABLES = [
+  {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
+  {f:'2F',n:'ボックス1',cap:3},{f:'2F',n:'ボックス2',cap:6},{f:'2F',n:'ボックス3',cap:2},
+  {f:'5F',n:'カウンター1',cap:1},{f:'5F',n:'カウンター2',cap:1},{f:'5F',n:'カウンター3',cap:1},
+  {f:'5F',n:'カウンター4',cap:1},{f:'5F',n:'カウンター5',cap:1},{f:'5F',n:'カウンター6',cap:1},
+  {f:'5F',n:'ボックス1',cap:3},{f:'5F',n:'ボックス2',cap:3}
+];
+
+function yoyakuDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function yoyakuDateDisplay(d) {
+  var dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  return (d.getMonth()+1) + '/' + d.getDate() + '（' + dow + '）';
+}
+
+function loadYoyaku() {
+  yoyakuSelectedCust = null;
+  setContent('<div class="loading">読み込み中...</div>');
+  gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + yoyakuDateStr(yoyakuDate))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + retryBtn_('loadYoyaku') + '</div>'); return; }
+      staffName = d.name || '';
+      yoyakuRsvs = d.reservations || [];
+      yoyakuCastList = d.casts || [];
+      yoyakuCustMode = '';
+      yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
+      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
+      yoyakuEditRsv = null;
+      renderYoyaku();
+    })
+    .catch(function(e){ setContent('<div class="err">通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadYoyaku') + '</div>'); });
+}
+
+function renderYoyaku() {
+  var dateNav = '<div class="yoyaku-date-nav">'
+    + '<button onclick="yoyakuChangeDate(-1)">‹</button>'
+    + '<span class="yoyaku-today-btn" onclick="yoyakuToday()">今日</span>'
+    + '<span class="yoyaku-date-text">' + yoyakuDateDisplay(yoyakuDate) + '</span>'
+    + '<button onclick="yoyakuChangeDate(1)">›</button>'
+    + '</div>';
+
+  var tabList = canEditYoyaku() ? ['cal','list','sched','add'] : ['cal','list','sched'];
+  var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
+    + tabList.map(function(t) {
+      var labels = {cal:'カレンダー', list:'リスト', sched:'スケジュール', add:'予約追加'};
+      return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
+        + (yoyakuSubTab===t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
+        + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
+    }).join('')
+    + '</div>';
+
+  var body = '';
+  if (yoyakuSubTab === 'cal')        { loadYoyakuCal(dateNav + subtabs); return; }
+  else if (yoyakuSubTab === 'list')  body = renderYoyakuList();
+  else if (yoyakuSubTab === 'sched') body = renderYoyakuSched();
+  else if (yoyakuSubTab === 'add')   body = renderYoyakuAdd();
+
+  setContent('<div style="padding:14px">' + dateNav + subtabs + body + '</div>');
+  afterYoyakuRender();
+}
+
+function yoyakuSubSwitch(t) {
+  yoyakuSubTab = t;
+  if (t === 'cal') loadYoyakuCal(null);
+  else renderYoyaku();
+}
+
+function loadYoyakuCal(headerHtml) {
+  if (!yoyakuCalMonth) {
+    var d = new Date();
+    yoyakuCalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+  if (!headerHtml) {
+    // subtabsだけ再生成
+    var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
+      + ['cal','list','sched','add'].map(function(t) {
+        var labels = {cal:'カレンダー',list:'リスト',sched:'スケジュール',add:'予約追加'};
+        return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:11px;cursor:pointer;border-radius:7px;'
+          + (t==='cal'?'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;':'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
+          + '" onclick="yoyakuSubSwitch(\''+t+'\')">' + labels[t] + '</div>';
+      }).join('') + '</div>';
+    headerHtml = '' + subtabs;
+  }
+  setContent('<div style="padding:14px">' + headerHtml + '<div class="loading">カレンダー読み込み中...</div></div>');
+  gasFetch(GAS_URL + '?action=portal&tab=yoyakuMonth&userId=' + encodeURIComponent(userId) + '&month=' + yoyakuCalMonth)
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">エラー: '+esc(d.error||'')+'</div>'); return; }
+      setContent('<div style="padding:14px">' + headerHtml + renderYoyakuCal(d.summary || {}) + '</div>');
+    })
+    .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderYoyakuCal(summary) {
+  var parts = yoyakuCalMonth.split('-');
+  var year = parseInt(parts[0]), month = parseInt(parts[1]);
+  var firstDay = new Date(year, month-1, 1).getDay(); // 0=日
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var today = new Date();
+  var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+  var monthNav = '<div class="ycal-month-nav">'
+    + '<button onclick="yoyakuCalChangeMonth(-1)">‹</button>'
+    + '<div class="ycal-month-title">'+year+'年'+month+'月</div>'
+    + '<button onclick="yoyakuCalChangeMonth(1)">›</button>'
+    + '</div>';
+
+  var dows = ['日','月','火','水','木','金','土'];
+  var dowHdr = '<div class="ycal-grid">' + dows.map(function(d,i){
+    return '<div class="ycal-dow'+(i===0?' sun':i===6?' sat':'')+'">' + d + '</div>';
+  }).join('') + '</div>';
+
+  var cells = '<div class="ycal-grid">';
+  // 月初の空白
+  for (var b = 0; b < firstDay; b++) cells += '<div class="ycal-day other"><span class="ycal-num"></span></div>';
+
+  for (var day = 1; day <= daysInMonth; day++) {
+    var dateKey = year + '-' + String(month).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+    var dow = (firstDay + day - 1) % 7;
+    var cls = 'ycal-day';
+    if (dateKey === todayStr) cls += ' today';
+    if (dow === 0) cls += ' sunday';
+    if (dow === 6) cls += ' saturday';
+    var s = summary[dateKey];
+    var paxHtml = s ? '<div class="ycal-pax">'+s.pax+'名</div>' : '';
+    var dotHtml = ''; // 将来：仮予約バッジ用
+    cells += '<div class="'+cls+'" onclick="yoyakuCalGo(\''+dateKey+'\')">'
+      + dotHtml
+      + '<div class="ycal-num">'+day+'</div>'
+      + paxHtml
+      + '</div>';
+  }
+  cells += '</div>';
+
+  return monthNav + dowHdr + cells;
+}
+
+function yoyakuCalChangeMonth(diff) {
+  var parts = yoyakuCalMonth.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1])-1+diff, 1);
+  yoyakuCalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  loadYoyakuCal(null);
+}
+
+function yoyakuCalGo(dateKey) {
+  var parts = dateKey.split('-');
+  yoyakuDate = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  yoyakuSubTab = 'list';
+  loadYoyaku();
+}
+
+function yoyakuChangeDate(d) {
+  yoyakuDate = new Date(yoyakuDate.getTime() + d * 86400000);
+  loadYoyaku();
+}
+function yoyakuToday() { var d = new Date(); yoyakuDate = d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; loadYoyaku(); }
+
+function renderYoyakuList() {
+  var all = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
+  var pax = all.reduce(function(s,r){ return s+(r.pax||0); }, 0);
+  var stats = '<div class="yoyaku-stats">'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#7ab0f0">'+all.length+'</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
+    + '</div>';
+  if (all.length === 0) return stats + '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  var cards = all.map(function(r) {
+    var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
+    var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
+    var canEdit = canEditYoyaku();
+    var statusBtns = r.status === '仮予約'
+      ? '<span style="margin-left:auto;font-size:10px;font-weight:700;color:#ffcc66;background:#2a1800;border:1px solid #553300;border-radius:6px;padding:3px 7px;flex-shrink:0">仮予約</span>'
+      : canEdit
+      ? '<span style="margin-left:auto;display:flex;gap:3px;flex-shrink:0" onclick="event.stopPropagation()">'
+        + [
+          {k:'来店前', s:'確定'},
+          {k:'来店済', s:'来店済み'},
+          {k:'退店済', s:'退店済み'}
+        ].map(function(btn) {
+          var active = r.status === btn.s;
+          return '<button onclick="yoyakuSetStatus('+r.rowIdx+',\''+btn.k+'\')" style="padding:3px 7px;font-size:10px;border-radius:6px;cursor:pointer;border:1px solid '
+            + (active ? '#1a50a0;background:#0f2040;color:#7ab0f0;font-weight:700' : '#1e3050;background:#141d30;color:#6a8ab0')
+            + '">'+btn.k+'</button>';
+        }).join('')
+        + '</span>'
+      : '<span style="margin-left:auto;font-size:10px;color:#6a8ab0">'
+        + (r.status === '来店済み' ? '来店済' : r.status === '退店済み' ? '退店済' : '来店前')
+        + '</span>';
+    var castTags = '';
+    if (r.dohanCast)  castTags += '<span class="yc-cast dohan">同伴 '+esc(r.dohanCast)+'</span>';
+    if (r.tantouCast) castTags += '<span class="yc-cast tantou">担当 '+esc(r.tantouCast)+'</span>';
+    if (r.yoyakuCast) castTags += '<span class="yc-cast yoyaku">予約 '+esc(r.yoyakuCast)+'</span>';
+    var castRow = castTags ? '<div class="yc-cast-row">'+castTags+'</div>' : '';
+    return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#7a9cc8">'+esc(r.memberId)+'</span>':'')+'</span>'+statusBtns+'</div>'
+      + castRow
+      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span></div>'
+      + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
+      + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約担当: '+esc(r.regBy)+'</div>' : '')
+      + '</div>';
+  }).join('');
+  return stats + cards;
+}
+
+function renderAvailability_(all) {
+  var minToTime = function(m) {
+    var h = Math.floor(m / 60) % 24, mm = m % 60;
+    return h + ':' + (mm < 10 ? '0' : '') + mm;
+  };
+
+  // 退店済み以外の予約だけをテーブルにマッピング
+  var tableRsvMap = {};
+  all.forEach(function(r) {
+    if (r.status === '退店済み') return;
+    (r.table || '').split('、').forEach(function(tbl) {
+      var key = tbl.trim();
+      if (!key || key === '未定') return;
+      if (!tableRsvMap[key]) tableRsvMap[key] = [];
+      tableRsvMap[key].push(r);
+    });
+  });
+
+  var getInfo = function(key) {
+    var rsvs = tableRsvMap[key] || [];
+    if (rsvs.length === 0) return { isFree: true, label: '空き', color: '#66cc88' };
+    var latestEnd = 0;
+    rsvs.forEach(function(r) {
+      var pts = (r.time || '20:00').split(':');
+      var sh = parseInt(pts[0]) || 20;
+      if (sh < 6) sh += 24;
+      var em = sh * 60 + (parseInt(pts[1]) || 0) + 120;
+      if (em > latestEnd) latestEnd = em;
+    });
+    var isIn = rsvs.some(function(r){ return r.status === '来店済み'; });
+    return { isFree: false, label: isIn ? '来店中' : '来店前', color: isIn ? '#ff8866' : '#ffcc44' };
+  };
+
+  var sections = {};
+  YOYAKU_TABLES.forEach(function(t) {
+    var key = t.f + ' ' + t.n;
+    if (!sections[t.f]) sections[t.f] = { counters: [], boxes: [] };
+    var info = getInfo(key);
+    if (t.n.indexOf('カウンター') >= 0) {
+      sections[t.f].counters.push({ n: t.n, cap: t.cap, info: info });
+    } else {
+      sections[t.f].boxes.push({ n: t.n, cap: t.cap, info: info });
+    }
+  });
+
+  var rows = '';
+  Object.keys(sections).sort().forEach(function(f) {
+    var sec = sections[f];
+    var freeC = sec.counters.filter(function(c){ return c.info.isFree; });
+    var freeB = sec.boxes.filter(function(b){ return b.info.isFree; });
+    if (freeC.length === 0 && freeB.length === 0) return;
+    rows += '<div style="font-size:10px;color:#5a7a9a;font-weight:700;margin:6px 0 3px">'+f+'</div>';
+    if (freeC.length > 0) {
+      rows += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
+        + '<span style="font-size:11px;color:#8aabcc;flex:1">カウンター</span>'
+        + '<span style="font-size:11px;font-weight:700;color:#66cc88">'+freeC.length+'席空き</span>'
+        + '</div>';
+    }
+    freeB.forEach(function(b) {
+      rows += '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0f1828">'
+        + '<span style="font-size:11px;color:#8aabcc;flex:1">'+b.n+'</span>'
+        + '<span style="font-size:11px;font-weight:700;color:#66cc88">空き</span>'
+        + '<span style="font-size:10px;color:#5a7a9a">定員'+b.cap+'名</span>'
+        + '</div>';
+    });
+  });
+
+  if (!rows) rows = '<div style="font-size:11px;color:#6a8ab0;padding:4px 0">現在空き席はありません</div>';
+
+  return '<div style="background:#0e1624;border:1px solid #1a2a40;border-radius:8px;padding:10px;margin-bottom:12px">'
+    + '<div style="font-size:11px;color:#6a8ab0;font-weight:700;margin-bottom:4px">📋 空き席</div>'
+    + rows
+    + '</div>';
+}
+
+function renderYoyakuSched() {
+  var HW = 52, SH = 19, EH = 26, TW = (EH-SH)*HW, RH = 52, FD = 5;
+  var prevF = '';
+
+  // テーブルキー → インデックス、行Y座標マップを事前計算
+  var tblIdxMap = {}, rowYMap = {};
+  var yOff = 0, lastFloor = '';
+  YOYAKU_TABLES.forEach(function(tt, idx) {
+    tblIdxMap[(tt.f+tt.n).replace(/\s/g,'')] = idx;
+    if (lastFloor && tt.f !== lastFloor) yOff += FD;
+    rowYMap[idx] = yOff;
+    yOff += RH;
+    lastFloor = tt.f;
+  });
+
+  var leftHtml = '<div class="ysched-tbl-hdr">テーブル</div>';
+  var rightHdr = '<div class="ysched-hdr"><div style="width:'+TW+'px;display:flex">';
+  for (var h = SH; h < EH; h++) rightHdr += '<div class="ysched-time-cell" style="width:'+HW+'px">'+(h<24?h:h-24)+':00</div>';
+  rightHdr += '</div></div>';
+  var rowsHtml = ''; // 背景グリッドのみ
+  var overlayHtml = ''; // 全予約ブロック（背景の上に重ねる）
+
+  YOYAKU_TABLES.forEach(function(t, i) {
+    if (t.f !== prevF && prevF !== '') {
+      leftHtml += '<div class="ysched-floor-div"></div>';
+      rowsHtml  += '<div class="ysched-floor-div" style="width:'+TW+'px"></div>';
+    }
+    prevF = t.f;
+    leftHtml += '<div class="ysched-name-cell"><div class="ysched-name-main">'+t.f+' '+t.n.replace('カウンター','カウ').replace('ボックス','ボックス')+'</div></div>';
+    var rowBg = '';
+    for (var c = 0; c < (EH-SH); c++) {
+      rowBg += '<div class="ysched-hour-cell" style="width:'+HW+'px;display:flex">'
+        + '<div style="flex:1;border-right:1px solid #0f0f20"></div>'
+        + '<div style="flex:1;border-right:1px solid #0f0f20"></div>'
+        + '<div style="flex:1;border-right:1px solid #0f0f20"></div>'
+        + '<div style="flex:1"></div>'
+        + '</div>';
+    }
+    rowsHtml += '<div class="ysched-row" style="width:'+TW+'px;cursor:crosshair" data-tidx="'+i+'" onclick="yoyakuGridClick('+i+',event,'+SH+','+HW+')">'
+      + '<div class="ysched-row-bg">'+rowBg+'</div></div>';
+
+    // 予約ブロックはオーバーレイ層に描画（行をまたぐバー対応）
+    var curKey = (t.f+t.n).replace(/\s/g,'');
+    yoyakuRsvs.forEach(function(r) {
+      var tables = (r.table||'').split('、').map(function(s){ return s.trim(); });
+      if (tables[0].replace(/\s/g,'') !== curKey) return;
+      var span = 1;
+      for (var k = 1; k < tables.length; k++) {
+        if (tblIdxMap[tables[k].replace(/\s/g,'')] === i + k) span++; else break;
+      }
+      var pts = (r.time||'20:00').split(':');
+      var sh = parseInt(pts[0]); if (isNaN(sh)) sh = 20;
+      var sm = sh * 60 + (parseInt(pts[1]) || 0);
+      var lx = ((sm - SH*60) / 60) * HW, wx = ((120) / 60) * HW - 3;
+      if (lx < 0) { wx += lx; lx = 0; }
+      var topY = rowYMap[i] + 5, bh = span * RH - 10;
+      var colors = ['background:#162848;border:1px solid #1a4080','background:#0d2820;border:1px solid #1a5038','background:#20163a;border:1px solid #402870','background:#281800;border:1px solid #503010'];
+      overlayHtml += '<div class="yrsv-blk" style="position:absolute;left:'+lx+'px;top:'+topY+'px;width:'+wx+'px;height:'+bh+'px;'+colors[i%4]+'" onclick="event.stopPropagation()">'
+        + '<div class="yrsv-pax">'+r.pax+'名</div><div class="yrsv-name">'+esc(r.customer)+'様</div></div>';
+    });
+  });
+
+  var rowsWrapper = '<div style="position:relative">'
+    + rowsHtml
+    + '<div style="position:absolute;top:0;left:0;pointer-events:none;z-index:10">'
+    + overlayHtml
+    + '</div></div>';
+  return '<div class="ysched-wrap"><div class="ysched-inner"><div class="ysched-left">'+leftHtml+'</div><div class="ysched-right">'+rightHdr+rowsWrapper+'</div></div></div>';
+}
+
+function renderYoyakuAdd() {
+  var preset = yoyakuGridPreset || {};
+  var presetTime  = preset.time  || '20:00';
+  if (!yoyakuRsvDate) yoyakuRsvDate = yoyakuDateStr(yoyakuDate);
+  if (!yoyakuRsvCalMonth) yoyakuRsvCalMonth = yoyakuRsvDate.slice(0, 7);
+  if (!yoyakuRsvTime) yoyakuRsvTime = presetTime;
+  var presetTable = yoyakuRsvTable || preset.table || '未定';
+  // 選択日時と被る予約済み席を取得（リスト日付と一致する場合のみ）
+  var bookedTables = {};
+  if (yoyakuRsvDate === yoyakuDateStr(yoyakuDate) && yoyakuRsvTime) {
+    var selMin = (function(t){ var p=t.split(':'),h=parseInt(p[0]),m=parseInt(p[1])||0; if(h<6)h+=24; return h*60+m; })(yoyakuRsvTime);
+    yoyakuRsvs.forEach(function(r) {
+      if (!r.table || r.table === '未定') return;
+      var eMin = (function(t){ var p=(t||'20:00').split(':'),h=parseInt(p[0]),m=parseInt(p[1])||0; if(h<6)h+=24; return h*60+m; })(r.time);
+      if (Math.abs(selMin - eMin) < 120) r.table.split('、').forEach(function(tbl){ bookedTables[tbl.replace(/\s/g,'')] = r.customer; });
+    });
+  }
+  // 初期選択席を決定
+  var initTables = (yoyakuRsvTable && yoyakuRsvTable !== '未定') ? yoyakuRsvTable.split('、') : [];
+  if (initTables.length === 0 && preset.table && preset.table !== '未定') initTables = [preset.table];
+  var prevFloor = '';
+  var tableChips = YOYAKU_TABLES.map(function(t) {
+    var val = t.f + ' ' + t.n;
+    var isSel = initTables.indexOf(val) >= 0;
+    var booked = bookedTables[(t.f+t.n).replace(/\s/g,'')];
+    var floorLabel = t.f !== prevFloor ? (function(){ prevFloor = t.f; return '<div style="width:100%;font-size:10px;color:#6a8ab0;margin-top:'+(prevFloor===t.f?'0':'6')+'px;margin-bottom:2px">'+t.f+'</div>'; })() : '';
+    return floorLabel + '<button type="button" class="table-chip'+(isSel?' sel':'')+'" data-val="'+esc(val)+'" onclick="toggleTableChip(this)">'+esc(t.n)+(booked?'<span style="color:#ff6666;font-size:9px;margin-left:2px">●</span>':'')+'</button>';
+  }).join('');
+  var presetBanner = preset.table
+    ? '<div style="font-size:12px;background:#0f201a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<span>📅 <b>'+esc(preset.table)+'</b>　'+esc(presetTime)+'〜（デフォルト2時間）を選択中</span>'
+      + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer" onclick="yoyakuGridPreset=null;renderYoyaku()">✕ クリア</span></div>'
+    : '';
+
+  var tantouCast = (yoyakuSelectedCust && yoyakuSelectedCust.tantou) ? yoyakuSelectedCust.tantou : '';
+  var custSection;
+  if (yoyakuEditRsv) {
+    custSection = '<div style="background:#1a1400;border:1px solid #554400;border-radius:8px;padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><span style="font-size:11px;color:#ddaa44">✏️ 編集中</span><span style="font-size:13px;font-weight:600;color:#e8f0ff;margin-left:8px">'+esc(yoyakuEditRsv.customer)+'様</span></div>'
+      + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer" onclick="yoyakuCancelEdit()">← キャンセル</span>'
+      + '</div>';
+  } else if (yoyakuSelectedCust) {
+    custSection = '<div style="background:#0a1428;border:1px solid #7ab0f0;border-radius:8px;padding:9px 11px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<div><div style="font-size:13px;font-weight:600;color:#7ab0f0">'+esc(yoyakuSelectedCust.name||yoyakuSelectedCust.card||'')+'様</div>'
+      + (tantouCast ? '<div style="font-size:11px;color:#bb99ff;margin-top:3px">担当: '+esc(tantouCast)+'</div>' : '')
+      + '</div>'
+      + '<span style="font-size:11px;color:#7a9cc8;cursor:pointer;white-space:nowrap;margin-left:8px" onclick="yoyakuClearCust()">変更</span>'
+      + '</div>';
+  } else if (yoyakuCustMode === 'search') {
+    custSection = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      + '<span style="font-size:12px;color:#7a9cc8;cursor:pointer" onclick="yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
+      + '<span style="font-size:12px;color:#7ab0f0">既存のお客様を検索</span>'
+      + '</div>'
+      + '<input type="text" class="ycust-search" id="ycust-q" placeholder="顧客名・会員番号で検索" oninput="yoyakuSearch(this.value)" style="margin-bottom:6px">'
+      + '<div id="ycust-results"></div>';
+  } else if (yoyakuCustMode === 'new') {
+    custSection = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+      + '<span style="font-size:12px;color:#7a9cc8;cursor:pointer" onclick="yoyakuRsvCustManual=\'\';yoyakuCustMode=\'\';renderYoyaku()">← 戻る</span>'
+      + '<span style="font-size:12px;color:#66cc88">✨ 新規のお客様</span>'
+      + '</div>';
+  } else {
+    custSection = '<div style="display:flex;gap:8px;margin-bottom:12px">'
+      + '<div style="flex:1;padding:11px 8px;text-align:center;background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;cursor:pointer;font-size:12px;color:#7ab0f0" onclick="yoyakuCustMode=\'search\';renderYoyaku()">🔍 既存のお客様</div>'
+      + '<div style="flex:1;padding:11px 8px;text-align:center;background:#0d2010;border:1px solid #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88" onclick="yoyakuCustMode=\'new\';renderYoyaku()">＋ 新規のお客様</div>'
+      + '</div>';
+  }
+
+  var showModeToggle = !yoyakuEditRsv || yoyakuEditRsv.status === '確定' || yoyakuEditRsv.status === '仮予約';
+  var modeToggle = !showModeToggle ? '' :
+    '<div style="display:flex;gap:6px;margin-bottom:10px">'
+    + ['本予約','仮予約'].map(function(m) {
+        var active = yoyakuRsvMode === m;
+        return '<div onclick="yoyakuSetRsvMode(\''+m+'\')" style="flex:1;text-align:center;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;'
+          + (active
+              ? (m === '仮予約' ? 'background:#2a1800;color:#ffcc66;border:1px solid #aa7700' : 'background:#0f2040;color:#7ab0f0;border:1px solid #1a55bb')
+              : 'background:#141d30;color:#6a8ab0;border:1px solid #1e3050')
+          + '">' + m + '</div>';
+      }).join('')
+    + '</div>'
+    + (yoyakuRsvMode === '仮予約'
+        ? '<div style="font-size:11px;color:#aa8833;background:#1a1400;border:1px solid #443300;border-radius:7px;padding:7px 10px;margin-bottom:10px">仮予約は席・フロアの指定なしで仮押さえできます。来店が決まったら「本予約」に切り替えて席を選んでください。</div>'
+        : '');
+
+  return presetBanner + custSection
+    + '<div class="yform-sec" id="yform">'
+    + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:10px">予約担当者: <span style="color:#7ab0f0">'+esc(staffName||'')+'</span></div>'
+    + modeToggle
+    + (yoyakuEditRsv || (!yoyakuSelectedCust && yoyakuCustMode === 'new') ?
+        '<div class="yform-label">お客様名</div>'
+        + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" value="'+esc(yoyakuRsvCustManual)+'" style="margin-bottom:8px">'
+      : '')
+    + '<div class="yform-label">来店日</div>'
+    + renderRsvCal()
+    + '<div class="yform-label">時間</div>'
+    + renderRsvTimeSel()
+    + '<div class="yform-label">人数</div>'
+    + (function(){
+        var curPax = yoyakuRsvPax || 3;
+        var opts = [1,2,3,4,5].map(function(n){ return '<option'+(n===curPax?' selected':'')+'>'+n+'名</option>'; }).join('');
+        opts += '<option'+(curPax>5?' selected':'')+'>6名+</option>';
+        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px">'+opts+'</select>';
+      })()
+    + (yoyakuRsvMode === '仮予約' ? '' :
+        '<div class="yform-label">席<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
+        + '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>')
+    + '<div class="yform-label">同伴キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
+    + (function(){
+        var defVal = yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : '');
+        var selArr = defVal ? defVal.split('、') : [];
+        var chips = yoyakuCastList.map(function(c){
+          return '<button type="button" class="dohan-chip'+(selArr.indexOf(c)>=0?' sel':'')+'" data-val="'+esc(c)+'" onclick="toggleDohanChip(this)">'+esc(c)+'</button>';
+        }).join('');
+        return '<div id="yrsv-dohan-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
+      })()
+    + (yoyakuRsvTime === '同伴'
+        ? '<div class="yform-label">予約キャスト</div>'
+          + '<div style="font-size:12px;color:#aa8833;background:#2a1800;border:1px solid #553300;border-radius:8px;padding:9px;margin-bottom:8px">同伴のため予約キャストは設定できません</div>'
+        : '<div class="yform-label" style="display:flex;align-items:center;gap:8px">予約キャスト<button type="button" onclick="setYoyakuCastDirect()" style="font-size:10px;padding:2px 8px;background:#1a1a0a;color:#ddcc55;border:1px solid #665500;border-radius:6px;cursor:pointer">直接来店</button></div>'
+          + (function(){
+              var cur = yoyakuRsvYoyakuCast || (yoyakuEditRsv ? yoyakuEditRsv.yoyakuCast||'' : '');
+              var opts = '<option value="">-- 未定 --</option><option value="直接来店"'+(cur==='直接来店'?' selected':'')+'>直接来店</option>';
+              yoyakuCastList.forEach(function(c){ opts += '<option value="'+esc(c)+'"'+(c===cur?' selected':'')+'>'+esc(c)+'</option>'; });
+              return '<select class="yform-input" id="yrsv-yoyaku-cast" style="margin-bottom:8px">'+opts+'</select>';
+            })()
+      )
+    + '<div class="yform-label">担当キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
+    + (function(){
+        var defVal = yoyakuRsvTantou || (yoyakuSelectedCust ? yoyakuSelectedCust.tantou||'' : '') || (yoyakuEditRsv ? yoyakuEditRsv.tantouCast||'' : '');
+        var selArr = defVal ? defVal.split('、') : [];
+        var chips = yoyakuCastList.map(function(c){
+          return '<button type="button" class="tantou-chip'+(selArr.indexOf(c)>=0?' sel':'')+'" data-val="'+esc(c)+'" onclick="toggleTantouChip(this)">'+esc(c)+'</button>';
+        }).join('');
+        return '<div id="yrsv-tantou-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
+      })()
+    + '<div class="yform-label">要望・備考</div>'
+    + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
+    + (canEditYoyaku() ? '<div class="notif-save-btn" id="yrsv-submit-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : (yoyakuRsvMode === '仮予約' ? '仮予約として登録する' : '予約を確定する'))+'</div>' : '')
+    + (canEditYoyaku() && yoyakuEditRsv ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
+    + '<div id="yrsv-status" style="font-size:12px;color:#8aabcc;text-align:center;margin-top:6px"></div>'
+    + '</div>';
+}
+
+
+function afterYoyakuRender() {}
+
+function saveFormInputs() {
+  var el;
+  el = document.getElementById('yrsv-cust-manual'); if (el) yoyakuRsvCustManual = el.value;
+  el = document.getElementById('yrsv-youbou');      if (el) yoyakuRsvYoubou = el.value;
+  el = document.getElementById('yrsv-pax');         if (el) yoyakuRsvPax = parseInt(el.value) || 3;
+  (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); yoyakuRsvTable = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } })();
+  (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); yoyakuRsvTantou = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
+  (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); yoyakuRsvDohan = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
+  el = document.getElementById('yrsv-yoyaku-cast'); if (el) yoyakuRsvYoyakuCast = el.value;
+}
+function yoyakuSetRsvMode(m) {
+  saveFormInputs();
+  yoyakuRsvMode = m;
+  renderYoyaku();
+}
+function yoyakuRsvCalNav(diff) {
+  saveFormInputs();
+  var p = yoyakuRsvCalMonth.split('-');
+  var d = new Date(parseInt(p[0]), parseInt(p[1]) - 1 + diff, 1);
+  yoyakuRsvCalMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  renderYoyaku();
+}
+function yoyakuRsvSelectDate(ds) {
+  saveFormInputs();
+  yoyakuRsvDate = ds;
+  renderYoyaku();
+}
+function yoyakuRsvSelectTime(t) {
+  saveFormInputs();
+  yoyakuRsvTime = t;
+  renderYoyaku();
+}
+
+function renderRsvCal() {
+  var p = yoyakuRsvCalMonth.split('-');
+  var year = parseInt(p[0]), month = parseInt(p[1]);
+  var firstDow = new Date(year, month - 1, 1).getDay();
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var today = yoyakuDateStr(new Date());
+  var h = '<div style="background:#13132a;border:1px solid #1e3050;border-radius:8px;overflow:hidden;margin-bottom:10px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #1e3050">'
+    + '<div onclick="yoyakuRsvCalNav(-1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#7ab0f0;line-height:1">‹</div>'
+    + '<div style="font-size:13px;font-weight:600;color:#c0d4f0">' + year + '年' + month + '月</div>'
+    + '<div onclick="yoyakuRsvCalNav(1)" style="cursor:pointer;padding:2px 10px;font-size:18px;color:#7ab0f0;line-height:1">›</div>'
+    + '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);padding:6px 6px 2px">';
+  ['日','月','火','水','木','金','土'].forEach(function(d, i) {
+    h += '<div style="text-align:center;font-size:10px;font-weight:600;color:' + (i===0?'#ff7766':i===6?'#7799ff':'#7a9cc8') + '">' + d + '</div>';
+  });
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(7,1fr);padding:2px 6px 8px;gap:2px">';
+  for (var i = 0; i < firstDow; i++) h += '<div></div>';
+  for (var d = 1; d <= daysInMonth; d++) {
+    var ds = year + '-' + String(month).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var dow = new Date(year, month - 1, d).getDay();
+    var isSel = ds === yoyakuRsvDate, isToday = ds === today;
+    h += '<div onclick="yoyakuRsvSelectDate(\'' + ds + '\')" style="text-align:center;padding:5px 2px;border-radius:5px;cursor:pointer;font-size:12px;'
+      + (isSel ? 'background:#1a55bb;color:#e8f0ff;font-weight:700'
+               : isToday ? 'background:#0f2040;color:#7ab0f0;font-weight:700'
+               : dow===0 ? 'color:#ff8877' : dow===6 ? 'color:#8899ff' : 'color:#a0c0e0')
+      + '">' + d + '</div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function renderRsvTimeSel() {
+  var times = ['同伴','20:00','20:30','21:00','21:30','22:00','22:30','23:00','23:30'];
+  var h = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">';
+  times.forEach(function(t) {
+    var sel = t === yoyakuRsvTime;
+    var isDouhan = t === '同伴';
+    h += '<div onclick="yoyakuRsvSelectTime(\'' + t + '\')" style="padding:7px 11px;border-radius:6px;font-size:13px;cursor:pointer;min-width:60px;text-align:center;'
+      + (sel
+          ? (isDouhan ? 'background:#664400;color:#ffcc66;border:1px solid #aa7700;font-weight:700'
+                      : 'background:#1a55bb;color:#e8f0ff;border:1px solid #3a80cc;font-weight:700')
+          : (isDouhan ? 'background:#2a1800;color:#aa7733;border:1px solid #553300'
+                      : 'background:#141d30;color:#8aabcc;border:1px solid #1e3050'))
+      + '">' + t + '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function yoyakuGridClick(tableIdx, e, SH, HW) {
+  var row = e.currentTarget;
+  var rect = row.getBoundingClientRect();
+  var clickX = e.clientX - rect.left;
+  var minutesFromStart = (clickX / HW) * 60;
+  var startMins = SH * 60 + Math.floor(minutesFromStart / 15) * 15; // 15分単位に丸める
+  var hour = Math.floor(startMins / 60);
+  var min = startMins % 60;
+  var timeStr = String(hour).padStart(2,'0') + ':' + String(min).padStart(2,'0');
+  var t = YOYAKU_TABLES[tableIdx];
+  if (!t) return;
+  yoyakuGridPreset = { table: t.f + ' ' + t.n, time: timeStr };
+  yoyakuRsvTime = timeStr;
+  yoyakuRsvTable = t.f + ' ' + t.n;
+  yoyakuSelectedCust = null;
+  yoyakuSubTab = 'add';
+  renderYoyaku();
+}
+
+var _searchTimer;
+function yoyakuSearch(q) {
+  q = (q||'').trim();
+  var res = document.getElementById('ycust-results');
+  if (!res) return;
+  if (q.length < 1) { res.innerHTML = ''; clearTimeout(_searchTimer); return; }
+  res.innerHTML = '<div style="font-size:11px;color:#7a9cc8;padding:4px 0">検索中...</div>';
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(function() {
+  gasFetch(GAS_URL + '?action=portal&tab=yoyakuCustomers&userId=' + encodeURIComponent(userId) + '&q=' + encodeURIComponent(q))
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok || !d.customers || !d.customers.length) { res.innerHTML = '<div style="font-size:11px;color:#6a8ab0;padding:4px 0">見つかりませんでした</div>'; return; }
+      yoyakuCustResults = d.customers;
+      res.innerHTML = d.customers.map(function(c, i) {
+        var badges = '';
+        if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶ボトルあり</span>';
+        if (c.bday && String(c.bday).trim()) badges += '<span class="ycm ycm-bday">🎂'+esc(c.bday)+'</span>';
+        if (c.note) badges += '<span class="ycm ycm-note">📝メモあり</span>';
+        return '<div class="ycust-row" data-cidx="'+i+'" onclick="yoyakuSelectCust('+i+')">'
+          + '<div><div class="ycust-name">'+esc(c.name||c.card||'')+'様</div>'
+          + '<div class="ycust-sub">'+(c.no?'会員'+c.no:'')+' '+(c.tantou?'担当:'+c.tantou:'')+'</div>'
+          + (badges?'<div class="ycust-badges">'+badges+'</div>':'')+'</div></div>';
+      }).join('');
+    }).catch(function(){ res.innerHTML = '<div style="font-size:11px;color:#7a9cc8">通信エラー</div>'; });
+  }, 400);
+}
+
+function yoyakuSelectCust(i) {
+  yoyakuSelectedCust = yoyakuCustResults[i];
+  yoyakuSubTab = 'add';
+  renderYoyaku();
+}
+
+
+function toggleTantouChip(el) { el.classList.toggle('sel'); }
+function toggleDohanChip(el) { el.classList.toggle('sel'); }
+function toggleTableChip(el) { el.classList.toggle('sel'); }
+
+function canEditYoyaku() {
+  return isAdmin || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === 'キャスト' || staffName === 'りく';
+}
+
+function setYoyakuCastDirect() {
+  var sel = document.getElementById('yrsv-yoyaku-cast');
+  if (sel) sel.value = '直接来店';
+}
+
+function yoyakuClearCust() {
+  yoyakuSelectedCust = null;
+  yoyakuCustMode = '';
+  renderYoyaku();
+}
+
+function yoyakuOpenEdit(rowIdx) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  if (!rsv) return;
+  yoyakuEditRsv = rsv;
+  yoyakuSelectedCust = null;
+  yoyakuCustMode = '';
+  yoyakuRsvDate = rsv.date;
+  yoyakuRsvCalMonth = rsv.date.slice(0, 7);
+  yoyakuRsvTime = rsv.time || '20:00';
+  yoyakuRsvCustManual = rsv.customer || '';
+  yoyakuRsvYoubou = rsv.youbou || '';
+  yoyakuRsvPax = rsv.pax || 3;
+  yoyakuRsvTable = rsv.table || '未定';
+  yoyakuRsvTantou = rsv.tantouCast || '';
+  yoyakuRsvYoyakuCast = rsv.yoyakuCast || '';
+  yoyakuRsvDohan = rsv.dohanCast || '';
+  yoyakuRsvMode = rsv.status === '仮予約' ? '仮予約' : '本予約';
+  yoyakuSubTab = 'add';
+  renderYoyaku();
+}
+
+// 楽観的UI更新: ローカル状態を即時変更してレンダリング、APIはバックグラウンドで実行
+function yoyakuStatusOptimistic_(rowIdx, newStatus, payload) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var prev = rsv ? rsv.status : '';
+  if (rsv) rsv.status = newStatus;
+  renderYoyaku();
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (rsv) { rsv.status = prev; renderYoyaku(); } alert('エラー: ' + (d.error || '')); }
+    })
+    .catch(function() { if (rsv) { rsv.status = prev; renderYoyaku(); } alert('通信エラー'); });
+}
+
+function yoyakuCheckIn(rowIdx) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : 'お客様';
+  if (!confirm(esc(name) + '様の来店を記録しますか？')) return;
+  yoyakuStatusOptimistic_(rowIdx, '来店済み', { action: 'checkInReservation', userId: userId, rowIdx: rowIdx });
+}
+
+function yoyakuCheckOut(rowIdx) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : 'お客様';
+  if (!confirm(esc(name) + '様の退店を記録しますか？')) return;
+  yoyakuStatusOptimistic_(rowIdx, '退店済み', { action: 'checkOutReservation', userId: userId, rowIdx: rowIdx });
+}
+
+function yoyakuSetStatus(rowIdx, status) {
+  if (status === '来店済') { yoyakuCheckIn(rowIdx); return; }
+  if (status === '退店済') { yoyakuCheckOut(rowIdx); return; }
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : 'お客様';
+  if (!confirm(esc(name) + '様を来店前（確定）に戻しますか？')) return;
+  yoyakuStatusOptimistic_(rowIdx, '確定', { action: 'setReservationStatus', rowIdx: rowIdx, status: '確定', userId: userId });
+}
+
+function yoyakuCancelReservation(rowIdx) {
+  var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
+  var name = rsv ? rsv.customer : '選択中の予約';
+  if (!confirm('「' + name + '様」の予約をキャンセルしますか？')) return;
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'cancelReservation', userId: userId, rowIdx: rowIdx }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error || '')); return; }
+      yoyakuCancelEdit();
+      loadYoyaku();
+    })
+    .catch(function() { alert('通信エラー'); });
+}
+
+function yoyakuCancelEdit() {
+  yoyakuEditRsv = null;
+  yoyakuRsvDate = '';
+  yoyakuRsvCalMonth = '';
+  yoyakuRsvTime = '';
+  yoyakuRsvCustManual = '';
+  yoyakuRsvYoubou = '';
+  yoyakuRsvPax = 0;
+  yoyakuRsvTable = '';
+  yoyakuRsvTantou = '';
+  yoyakuRsvYoyakuCast = '';
+  yoyakuRsvDohan = '';
+  yoyakuRsvMode = '本予約';
+  yoyakuSubTab = 'list';
+  renderYoyaku();
+}
+
+function yoyakuSubmitRsv() {
+  if (yoyakuSubmitBusy) return; // 二重送信防止（連打・通信が遅い時の多重タップ対策）
+  var stat = document.getElementById('yrsv-status');
+  var manualEl = document.getElementById('yrsv-cust-manual');
+  var custName = yoyakuSelectedCust
+    ? (yoyakuSelectedCust.name || yoyakuSelectedCust.card || '')
+    : (manualEl ? manualEl.value.trim() : '');
+  if (!custName) {
+    if (stat) stat.textContent = '⚠️ お客様を選択または名前を入力してください';
+    return;
+  }
+  var paxEl = document.getElementById('yrsv-pax');
+  var payload = {
+    action: yoyakuEditRsv ? 'updateReservation' : 'addReservation',
+    userId: userId,
+    date: yoyakuRsvDate,
+    time: yoyakuRsvTime,
+    customer: custName,
+    memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : (yoyakuEditRsv ? (yoyakuEditRsv.memberId || '') : ''),
+    pax: parseInt(paxEl ? paxEl.value : '1') || 1,
+    table: yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })(),
+    tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
+    yoyakuCast: yoyakuRsvTime === '同伴' ? '' : (document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : ''),
+    dohanCast: (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : ''); })(),
+    youbou: document.getElementById('yrsv-youbou').value,
+    status: yoyakuEditRsv
+      ? (yoyakuRsvMode === '仮予約' ? '仮予約' : (yoyakuEditRsv.status === '仮予約' ? '確定' : (yoyakuEditRsv.status || '確定')))
+      : (yoyakuRsvMode === '仮予約' ? '仮予約' : '確定'),
+    rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
+  };
+  yoyakuSubmitBusy = true;
+  var btn = document.getElementById('yrsv-submit-btn');
+  if (btn) { btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+  if (stat) stat.textContent = '送信中...';
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify(payload) })
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      yoyakuSubmitBusy = false;
+      if (!d.ok) {
+        if (stat) stat.textContent = '⚠️ ' + (d.error||'エラー');
+        if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+        return;
+      }
+      yoyakuSelectedCust = null;
+      yoyakuCustMode = '';
+      yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
+      yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
+      yoyakuRsvMode = '本予約';
+      yoyakuEditRsv = null;
+      yoyakuSubTab = 'list';
+      loadYoyaku();
+    }).catch(function(){
+      yoyakuSubmitBusy = false;
+      if (stat) stat.textContent = '⚠️ 通信エラー';
+      if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+    });
+}
+
+
+function resetCashAction(action, label) {
+  if (!confirm(label + 'を削除し、未提出の状態に戻します。よろしいですか？')) return;
+  gasFetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: action, userId: userId })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      alert(label + 'をリセットしました');
+    })
+    .catch(function() { alert('通信エラー'); });
+}
+</script>
+</body>
+</html>

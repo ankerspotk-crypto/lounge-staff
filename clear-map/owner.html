@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>キレイン｜店舗オーナーの方へ｜月3,000円で、お客様がトイレを常時チェック</title>
+<meta name="description" content="形式だけのチェックシートに意味はない。お客様が常時チェックしてくれるキレインの匿名フィードバックで、機会損失を防ぐ。月3,000円。" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --pine:#0e3a33;--pine-deep:#082722;--mint:#25b598;--mint-soft:#e6f5f1;
+  --gold:#c2a25f;--ink:#182320;--muted:#5d6b66;--line:#e4eae7;
+  --bg:#fff;--soft:#f6f9f8;--radius:16px;--shadow:0 16px 44px -22px rgba(14,58,51,.3);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:"Noto Sans JP",system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.7;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Noto Serif JP",serif}
+a{color:inherit;text-decoration:none}
+.wrap{width:min(1100px,94vw);margin-inline:auto}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;border:none;transition:.2s;font-family:inherit}
+.btn-mint{background:var(--mint);color:#062019}.btn-mint:hover{background:#1ea487;transform:translateY(-2px);box-shadow:0 8px 24px rgba(37,181,152,.3)}
+.btn-pine{background:var(--pine);color:#fff}.btn-pine:hover{background:var(--pine-deep);transform:translateY(-2px)}
+.btn-ghost{background:transparent;color:var(--pine);border:2px solid var(--pine)}.btn-ghost:hover{background:var(--mint-soft)}
+
+header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.head-in{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+.logo{display:flex;align-items:center;gap:8px;font-family:"Cormorant Garamond",serif;font-size:22px;color:var(--pine);font-weight:600}
+.logo svg{width:22px;height:22px}
+.head-nav{display:flex;align-items:center;gap:20px;font-size:13px}
+.head-nav a{color:var(--muted)}.head-nav a:hover{color:var(--pine)}
+
+.hero{background:linear-gradient(150deg,var(--pine-deep),#0b2c27 50%,#0e3a33);color:#fff;padding:80px 0 70px;position:relative;overflow:hidden}
+.hero-bg{position:absolute;inset:0;background-image:url('https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=1400&auto=format&fit=crop&q=60');background-size:cover;background-position:center;opacity:0.1}
+.hero .wrap{position:relative;z-index:1}
+.hero-tag{display:inline-block;background:rgba(37,181,152,.25);color:var(--mint);font-size:12px;font-weight:700;padding:6px 14px;border-radius:999px;margin-bottom:20px;letter-spacing:.06em}
+.hero h1{font-size:clamp(26px,4vw,46px);font-weight:700;line-height:1.35;margin-bottom:20px}
+.hero .ac{color:var(--mint)}
+.hero p.lead{font-size:16px;color:#bcd2cb;max-width:40em;line-height:1.9;margin-bottom:36px}
+
+.sec{padding:80px 0}
+.sec-tag{font-size:12px;font-weight:700;color:var(--mint);letter-spacing:.1em;margin-bottom:12px}
+.sec-title{font-size:clamp(22px,3vw,34px);font-weight:700;color:var(--pine);line-height:1.4;margin-bottom:14px}
+.sec-lead{font-size:15px;color:var(--muted);max-width:40em;line-height:1.9}
+
+/* コスト比較 */
+.cost-vs{display:grid;grid-template-columns:1fr 1fr;gap:0;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:40px 0}
+.cost-col{padding:32px}
+.cost-col.bad{background:#fff5f5;border-right:1px solid #fdd}
+.cost-col.good{background:var(--mint-soft)}
+.cost-col h3{font-size:16px;font-weight:700;margin-bottom:18px}
+.cost-col.bad h3{color:#c0392b}
+.cost-col.good h3{color:var(--pine)}
+.cost-item{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;font-size:13px;line-height:1.7}
+.cost-item .ic{font-size:18px;flex-shrink:0;margin-top:1px}
+
+/* 機会損失計算 */
+.calc-box{background:var(--soft);border-radius:var(--radius);padding:40px;margin:40px 0}
+.calc-row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--line);font-size:14px}
+.calc-row:last-child{border-bottom:none;font-size:17px;font-weight:700;color:var(--pine);padding-top:20px}
+.calc-row .label{color:var(--muted)}
+.calc-row .val{font-weight:700;color:var(--ink)}
+.calc-row.total .val{color:#e74c3c;font-size:20px}
+.calc-row.kirein .val{color:var(--mint)}
+
+/* タイムライン（チェックシートの問題） */
+.timeline{display:grid;gap:0;margin:40px 0}
+.tl-item{display:grid;grid-template-columns:120px 1fr;gap:20px;padding:20px 0;border-bottom:1px solid var(--line)}
+.tl-time{font-size:13px;font-weight:700;color:var(--muted);padding-top:3px}
+.tl-body .title{font-size:14px;font-weight:700;margin-bottom:4px}
+.tl-body .desc{font-size:13px;color:var(--muted);line-height:1.7}
+.tl-body .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:6px}
+.badge-red{background:#fdd;color:#c0392b}
+.badge-green{background:var(--mint-soft);color:var(--pine)}
+
+/* 2プラン */
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:40px;max-width:740px;margin-left:auto;margin-right:auto}
+.plan{border-radius:var(--radius);padding:36px;border:1px solid var(--line)}
+.plan.featured{border:2px solid var(--mint);position:relative;box-shadow:0 24px 60px -20px rgba(37,181,152,.25)}
+.plan .badge-plan{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--mint);color:#062019;font-size:11px;font-weight:700;padding:4px 16px;border-radius:999px;white-space:nowrap}
+.plan-name{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.1em;margin-bottom:10px}
+.plan-price{font-size:42px;font-weight:700;color:var(--pine);font-family:"Cormorant Garamond",serif;line-height:1}
+.plan-price span{font-size:14px;color:var(--muted);font-family:"Noto Sans JP",sans-serif}
+.plan-day{font-size:12px;color:var(--mint);font-weight:700;margin:6px 0 12px}
+.plan-desc{font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:22px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.plan-features{list-style:none;display:grid;gap:11px;margin-bottom:26px}
+.plan-features li{font-size:13px;display:flex;align-items:flex-start;gap:8px;line-height:1.6}
+.plan-features li.on::before{content:"✓";color:var(--mint);font-weight:700;flex-shrink:0;margin-top:2px}
+.plan-features li.off{color:#bbb}
+.plan-features li.off::before{content:"–";color:#ccc;flex-shrink:0;margin-top:2px}
+
+/* フィードバック例 */
+.preview-box{background:#fff;border-radius:var(--radius);padding:32px;box-shadow:var(--shadow);max-width:640px;margin:40px auto 0}
+.fb-item{padding:14px 16px;border-radius:10px;margin-bottom:10px;font-size:13px;line-height:1.7}
+.fb-pos{background:var(--mint-soft);border-left:3px solid var(--mint)}
+.fb-neg{background:#fff5f5;border-left:3px solid #f05;filter:blur(4px);user-select:none}
+.lock-layer{text-align:center;padding:24px;background:#fff;border-radius:var(--radius);border:2px dashed var(--line);margin-top:-30px;position:relative;z-index:2}
+
+/* FAQ */
+.faq-list{max-width:700px;margin:40px auto 0;display:grid;gap:12px}
+.faq-item{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.faq-q{padding:18px 20px;font-weight:700;font-size:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#fff}
+.faq-q:hover{background:var(--soft)}
+.faq-a{padding:0 20px;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s;font-size:13px;color:var(--muted);line-height:1.9}
+.faq-item.open .faq-a{max-height:300px;padding:0 20px 18px}
+.faq-arrow{transition:transform .3s;font-size:11px;color:var(--muted)}
+.faq-item.open .faq-arrow{transform:rotate(180deg)}
+
+.cta{background:linear-gradient(150deg,var(--pine-deep),#0b2c27);color:#fff;padding:80px 0;text-align:center}
+.cta h2{font-size:clamp(22px,3vw,36px);margin-bottom:14px}
+.cta p{color:#bcd2cb;font-size:15px;margin-bottom:36px;line-height:1.9}
+
+footer{background:#061a17;color:#7eada4;padding:36px 0 20px;font-size:12px}
+.ft{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
+.copy{width:100%;border-top:1px solid rgba(255,255,255,.08);margin-top:20px;padding-top:16px;text-align:center}
+
+@media(max-width:768px){
+  .cost-vs,.plans{grid-template-columns:1fr}
+  .cost-col.bad{border-right:none;border-bottom:1px solid #fdd}
+  .tl-item{grid-template-columns:80px 1fr}
+  .hero h1{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="wrap head-in">
+    <a href="./index.html" class="logo">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s7-6.2 7-12A7 7 0 0 0 5 10c0 5.8 7 12 7 12Z" fill="#25b598"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg>
+      Kirein <span style="font-family:'Noto Sans JP';font-size:14px;font-weight:700;margin-left:4px">キレイン</span>
+    </a>
+    <div class="head-nav">
+      <a href="./index.html">ユーザー向けサービス</a>
+      <a href="#pricing">料金プラン</a>
+      <a href="./store.html">店舗ログイン</a>
+      <a href="#contact" class="btn btn-mint" style="padding:9px 18px;font-size:12px">無料で始める</a>
+    </div>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="wrap">
+    <div class="hero-tag">🏪 STORE OWNER</div>
+    <h1>お客様が<span class="ac">常にチェック</span>してくれる。<br>それが月3,000円の価値です。</h1>
+    <p class="lead">
+      形式だけのチェックシートに、もう意味はありません。<br>
+      キレインは、実際に来店したお客様がリアルタイムでトイレを評価します。<br>
+      早期発見・早期改善で、機会損失を防ぎましょう。
+    </p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <a href="#pricing" class="btn btn-mint" style="font-size:15px;padding:16px 32px">月3,000円で始める →</a>
+      <a href="#cost" class="btn" style="background:rgba(255,255,255,.15);color:#fff;font-size:15px;padding:16px 32px">コストを試算する</a>
+    </div>
+    <div style="font-size:12px;color:#7eada4;margin-top:16px">※ まず無料プランから始められます。クレジットカード不要。</div>
+  </div>
+</section>
+
+<!-- チェックシートの問題 -->
+<section class="sec" style="background:var(--soft)">
+  <div class="wrap">
+    <div class="sec-tag">THE PROBLEM</div>
+    <h2 class="sec-title">「毎時チェック済み」のハンコ。<br>本当に確認していますか？</h2>
+    <p class="sec-lead" style="margin-bottom:40px">チェックシートは、忙しい時間帯には形式的なものになりがちです。スタッフは問題を上司に報告しにくく、お客様が不快な思いをしていても気づけません。</p>
+
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-time">11:00 開店</div>
+        <div class="tl-body">
+          <div class="badge badge-green">✓ チェック済</div>
+          <div class="title">開店前の清掃・チェック完了</div>
+          <div class="desc">このタイミングはきれい。問題なし。</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">12:30 ランチ混雑</div>
+        <div class="tl-body">
+          <div class="badge badge-red">⚠ 未チェック</div>
+          <div class="title">30人が来店。トイレも頻繁に使用。</div>
+          <div class="desc">スタッフは接客で手が離せず、トイレの確認ができない。このタイミングで異臭・汚れが発生していても誰も気づかない。</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">13:00 記録</div>
+        <div class="tl-body">
+          <div class="badge badge-red">❌ 形式的</div>
+          <div class="title">チェックシートに「確認済」のハンコを押す</div>
+          <div class="desc">実際には確認できていないが、記録上は「問題なし」になる。この間に2名のお客様が不快な思いをして帰った。</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">翌日以降</div>
+        <div class="tl-body">
+          <div class="badge badge-red">😱 手遅れ</div>
+          <div class="title">SNSやグルメサイトに口コミが投稿される</div>
+          <div class="desc">「トイレが汚かった。もう行かない」という口コミが広まった後では、取り返しがつきません。</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border-radius:var(--radius);padding:24px;border-left:4px solid var(--mint);margin-top:32px">
+      <div style="font-size:14px;font-weight:700;color:var(--pine);margin-bottom:8px">💡 キレインがあれば</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.9">
+        12:45 にお客様がトイレを使用 → 「においが気になった」と投稿 → <b style="color:var(--pine)">即座にあなたに通知</b><br>
+        → 13:00 に改善対応 → 次のお客様には問題なし<br>
+        → 口コミに書かれる前に対処完了 ✅
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 機会損失の計算 -->
+<section class="sec" id="cost">
+  <div class="wrap">
+    <div class="sec-tag">OPPORTUNITY COST</div>
+    <h2 class="sec-title">1人の常連を失うと、<br>いくら損していますか？</h2>
+    <p class="sec-lead" style="margin-bottom:0">トイレが原因でリピーターを失う機会損失を試算してみましょう。</p>
+
+    <div class="calc-box">
+      <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:16px">📊 試算モデル（居酒屋・平均的な例）</div>
+      <div class="calc-row">
+        <span class="label">1人あたりの平均客単価</span>
+        <span class="val">¥3,500</span>
+      </div>
+      <div class="calc-row">
+        <span class="label">リピーターの来店頻度</span>
+        <span class="val">月2回</span>
+      </div>
+      <div class="calc-row">
+        <span class="label">1人の常連が生む年間売上</span>
+        <span class="val">¥84,000</span>
+      </div>
+      <div class="calc-row">
+        <span class="label">さらに口コミで伝わる人数</span>
+        <span class="val">× 5〜10人</span>
+      </div>
+      <div class="calc-row total">
+        <span class="label">1件の悪い体験による機会損失（推計）</span>
+        <span class="val">¥84,000〜420,000</span>
+      </div>
+      <div class="calc-row kirein" style="border-top:2px solid var(--mint);margin-top:12px;padding-top:20px">
+        <span style="color:var(--pine);font-weight:700">キレイン スタンダードプランの年間費用</span>
+        <span class="val">¥36,000 / 年</span>
+      </div>
+    </div>
+
+    <div style="text-align:center;background:linear-gradient(120deg,var(--mint-soft),#fff);border-radius:var(--radius);padding:28px;border:1px solid var(--mint)">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px">常連1人を失う機会損失の</div>
+      <div style="font-size:36px;font-weight:700;color:var(--pine);font-family:'Cormorant Garamond',serif">わずか <span style="color:var(--mint)">4%</span></div>
+      <div style="font-size:13px;color:var(--muted);margin-top:8px">それがキレインの年間費用です。</div>
+    </div>
+  </div>
+</section>
+
+<!-- vs チェックシート -->
+<section class="sec" style="background:var(--soft)">
+  <div class="wrap">
+    <div class="sec-tag">COMPARISON</div>
+    <h2 class="sec-title">従来の方法との比較</h2>
+    <div class="cost-vs">
+      <div class="cost-col bad">
+        <h3>❌ 従来の方法</h3>
+        <div class="cost-item"><span class="ic">📋</span><div>チェックシートは形式化しやすく、実態を反映しない</div></div>
+        <div class="cost-item"><span class="ic">👀</span><div>スタッフによる目視確認は、混雑時に省略されがち</div></div>
+        <div class="cost-item"><span class="ic">😶</span><div>スタッフは問題を報告しにくい。上司に言いにくい</div></div>
+        <div class="cost-item"><span class="ic">⏰</span><div>問題が発覚するのは、口コミが広まった後</div></div>
+        <div class="cost-item"><span class="ic">💸</span><div>パート1名の時給 ¥1,100〜 × 毎日 = 月3〜5万円の人件費</div></div>
+        <div style="margin-top:20px;padding:14px;background:#fdd;border-radius:8px;font-size:13px;color:#c0392b;font-weight:700">
+          結局、お客様が不満を持って帰るまで気づけない
+        </div>
+      </div>
+      <div class="cost-col good">
+        <h3>✅ キレイン スタンダードプラン</h3>
+        <div class="cost-item"><span class="ic">👥</span><div>実際に来店したお客様が、リアルな感覚で評価・報告</div></div>
+        <div class="cost-item"><span class="ic">🔒</span><div>匿名なので正直な声が届く。忖度なし</div></div>
+        <div class="cost-item"><span class="ic">⚡</span><div>フィードバックは即座に確認可能。早期対応ができる</div></div>
+        <div class="cost-item"><span class="ic">📊</span><div>項目別の分析で、何が問題かが一目でわかる</div></div>
+        <div class="cost-item"><span class="ic">💰</span><div>月額 <b>¥3,000</b>。1日あたり <b>¥100</b> の投資</div></div>
+        <div style="margin-top:20px;padding:14px;background:rgba(37,181,152,.2);border-radius:8px;font-size:13px;color:var(--pine);font-weight:700">
+          口コミに書かれる前に改善できる。リピーターを守れる
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- フィードバック例 -->
+<section class="sec" id="preview">
+  <div class="wrap" style="text-align:center">
+    <div class="sec-tag">FEEDBACK PREVIEW</div>
+    <h2 class="sec-title">届くフィードバックのイメージ</h2>
+    <p class="sec-lead" style="margin:0 auto">スタンダードプランで、こんな声がリアルタイムで届きます</p>
+    <div class="preview-box">
+      <div style="font-size:13px;font-weight:700;color:var(--pine);margin-bottom:14px;text-align:left">
+        📬 最新のフィードバック
+        <span style="font-size:11px;color:var(--muted);font-weight:normal;margin-left:8px">無料プランでは件数のみ表示</span>
+      </div>
+      <div class="fb-item fb-pos">
+        <b>✨ においが気にならない・便座も気持ちよく座れた</b><br>
+        <span style="color:var(--muted)">2026年6月4日 ・ 匿名ユーザー ・ 公開済み</span>
+      </div>
+      <div style="position:relative">
+        <div class="fb-item fb-neg">
+          <b>😨 においが気になった・床が汚れていた</b><br>
+          詳細：「ランチ後のトイレが気になりました。ペーパーも残り少なかった。」<br>
+          <span>2026年6月3日 ・ 匿名 ・ 非公開（店舗のみ）</span>
+        </div>
+        <div class="fb-item fb-neg" style="margin-top:8px">
+          <b>😤 石鹸が切れていた・アメニティ不足</b><br>
+          詳細：「ハンドソープが空でした。女性なので困りました。」<br>
+          <span>2026年6月2日 ・ 匿名 ・ 非公開（店舗のみ）</span>
+        </div>
+        <div class="lock-layer">
+          <div style="font-size:28px;margin-bottom:8px">🔒</div>
+          <div style="font-weight:700;font-size:15px;margin-bottom:8px">改善フィードバックが 2件 届いています</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.8;margin-bottom:18px">
+            スタンダードプランで内容を確認できます。<br>早期対応で、口コミに書かれる前に改善を。
+          </div>
+          <a href="#pricing" class="btn btn-mint">プランを見る →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING（2プランのみ） -->
+<section class="sec" id="pricing" style="background:var(--soft)">
+  <div class="wrap" style="text-align:center">
+    <div class="sec-tag">PRICING</div>
+    <h2 class="sec-title">シンプルな2プラン</h2>
+    <p class="sec-lead" style="margin:0 auto 0">まず無料で始めて、フィードバックが届き始めたらアップグレード</p>
+    <div class="plans">
+
+      <!-- 無料 -->
+      <div class="plan">
+        <div class="plan-name">FREE</div>
+        <div class="plan-price">¥0<span> / 月</span></div>
+        <div class="plan-day" style="color:var(--muted)">まずここから</div>
+        <div class="plan-desc">キレインに掲載されてお客様の声を集め始めましょう。フィードバックが届いたら通知します。</div>
+        <ul class="plan-features">
+          <li class="on">キレイン掲載（未認定）</li>
+          <li class="on">ポジティブ評価の公開</li>
+          <li class="on">フィードバックの<b>件数</b>だけ確認可能</li>
+          <li class="off">フィードバックの内容を確認</li>
+          <li class="off">項目別分析レポート</li>
+          <li class="off">キレイン認定バッジ</li>
+          <li class="off">緊急アラート（深刻な評価を即通知）</li>
+        </ul>
+        <a href="mailto:kirein.jp@gmail.com?subject=キレイン無料プラン登録" class="btn btn-ghost" style="width:100%;justify-content:center">無料で始める（メールで登録）</a>
+      </div>
+
+      <!-- スタンダード -->
+      <div class="plan featured">
+        <div class="badge-plan">🌟 おすすめ</div>
+        <div class="plan-name">STANDARD</div>
+        <div class="plan-price">¥3,000<span> / 月</span></div>
+        <div class="plan-day">1日あたり <b>¥100</b> の投資</div>
+        <div class="plan-desc">お客様の声を全て受け取り、口コミに書かれる前に改善できます。キレイン認定バッジで新規来客も増やせます。</div>
+        <ul class="plan-features">
+          <li class="on">無料プランの全機能</li>
+          <li class="on"><b>フィードバックの内容をすべて確認</b></li>
+          <li class="on"><b>項目別分析（においは？便座は？など）</b></li>
+          <li class="on"><b>月次サマリーレポート</b></li>
+          <li class="on"><b>キレイン認定バッジ（目立つ表示）</b></li>
+          <li class="on"><b>深刻な評価は即時メール通知</b></li>
+        </ul>
+        <a href="https://buy.stripe.com/6oUaEY5vpdQt5hc16n3Nm00" class="btn btn-mint" style="width:100%;justify-content:center">💳 今すぐ始める →</a>
+        <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:12px">14日間は無料。いつでも解約可能。</div>
+      </div>
+
+    </div>
+
+    <!-- 費用対効果まとめ -->
+    <div style="max-width:740px;margin:32px auto 0;background:#fff;border-radius:var(--radius);padding:28px;border:2px solid var(--mint);text-align:left">
+      <div style="font-size:13px;font-weight:700;color:var(--pine);margin-bottom:14px">💡 スタンダードプランの費用対効果</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">
+        <div>
+          <div style="font-size:28px;font-weight:700;color:var(--mint);font-family:'Cormorant Garamond',serif">¥100</div>
+          <div style="font-size:12px;color:var(--muted)">1日あたりのコスト</div>
+        </div>
+        <div>
+          <div style="font-size:28px;font-weight:700;color:var(--pine);font-family:'Cormorant Garamond',serif">4%</div>
+          <div style="font-size:12px;color:var(--muted)">常連1人の機会損失に対する割合</div>
+        </div>
+        <div>
+          <div style="font-size:28px;font-weight:700;color:var(--pine);font-family:'Cormorant Garamond',serif">24h</div>
+          <div style="font-size:12px;color:var(--muted)">お客様が常時チェックしてくれる</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="sec">
+  <div class="wrap">
+    <div style="text-align:center">
+      <div class="sec-tag">FAQ</div>
+      <h2 class="sec-title">よくある質問</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.closest('.faq-item').classList.toggle('open')">
+          ネガティブな評価は一般に公開されますか？<span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">いいえ。「気になった点」などのネガティブなフィードバックは、一般ユーザーには一切公開されません。店舗オーナーと運営にのみ共有され、改善の参考にされます。一般には評価スコアのみが表示されます。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.closest('.faq-item').classList.toggle('open')">
+          投稿者を特定することはできますか？<span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">できません。すべての投稿は匿名で処理されます。投稿者のニックネームも店舗には開示されません。匿名だからこそ、お客様が正直な声を投稿してくれます。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.closest('.faq-item').classList.toggle('open')">
+          フィードバックが届かない場合、費用は発生しますか？<span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">月額費用は発生します。ただし、投稿がない場合はキレイン運営が掲載ページをサポートし、投稿を促進する活動を行います。まずは無料プランで様子を見ることをおすすめします。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.closest('.faq-item').classList.toggle('open')">
+          いつでも解約できますか？<span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">はい。月額プランはいつでも解約可能です。解約後は自動的に無料プランに切り替わります。縛りや違約金は一切ありません。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="this.closest('.faq-item').classList.toggle('open')">
+          掲載に審査はありますか？<span class="faq-arrow">▼</span>
+        </div>
+        <div class="faq-a">無料プランは審査不要です。Google Map に登録されているお店であれば、ユーザーが投稿した時点で自動的に掲載されます。スタンダードプランへのアップグレードは即日対応可能です。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="contact">
+  <div class="wrap">
+    <h2>1日100円。口コミ炎上の前に、<br>お客様の声を受け取りませんか？</h2>
+    <p>
+      登録は5分。まず無料プランから始められます。<br>
+      フィードバックが届き始めたら、¥3,000のプランに切り替えるだけ。
+    </p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a href="https://buy.stripe.com/6oUaEY5vpdQt5hc16n3Nm00" class="btn btn-mint" style="font-size:15px;padding:16px 36px">
+        💳 今すぐ始める（¥3,000/月）
+      </a>
+      <a href="./index.html" class="btn" style="background:rgba(255,255,255,.15);color:#fff;font-size:15px;padding:16px 36px">
+        ユーザー向けサービスを見る
+      </a>
+    </div>
+    <div style="margin-top:20px;font-size:12px;color:#7eada4">
+      メールにて折り返しご連絡いたします（通常1営業日以内）<br>
+      kirein.jp@gmail.com
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="ft">
+      <div style="display:flex;align-items:center;gap:8px;font-family:'Cormorant Garamond',serif;font-size:20px;color:#bcd2cb">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 22s7-6.2 7-12A7 7 0 0 0 5 10c0 5.8 7 12 7 12Z" fill="#25b598"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg>
+        Kirein キレイン
+      </div>
+      <div style="display:flex;gap:24px">
+        <a href="./index.html">ユーザー向けサービス</a>
+        <a href="./terms.html">利用規約</a>
+        <a href="./privacy.html">プライバシーポリシー</a>
+        <a href="mailto:kirein.jp@gmail.com">お問い合わせ</a>
+      </div>
+    </div>
+    <div class="copy">© 2026 Kirein（キレイン） — トイレがきれいな店に、行こう。</div>
+  </div>
+</footer>
+
+</body>
+</html>
