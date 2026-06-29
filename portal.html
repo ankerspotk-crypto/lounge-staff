@@ -2647,6 +2647,7 @@ var yoyakuRsvYoyakuCast = ''; // 再描画時に保持: 予約キャスト
 var yoyakuRsvDohan = '';     // 再描画時に保持: 同伴キャスト
 var yoyakuEditRsv = null;    // 編集中の予約オブジェクト（null=新規追加モード）
 var yoyakuSubmitBusy = false; // 予約追加/変更の二重送信防止フラグ
+var yoyakuRsvMode = '本予約'; // '本予約' or '仮予約'（仮予約は席・フロア指定なしの仮押さえ）
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -2819,7 +2820,9 @@ function renderYoyakuList() {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
     var canEdit = canEditYoyaku();
-    var statusBtns = canEdit
+    var statusBtns = r.status === '仮予約'
+      ? '<span style="margin-left:auto;font-size:10px;font-weight:700;color:#ffcc66;background:#2a1800;border:1px solid #553300;border-radius:6px;padding:3px 7px;flex-shrink:0">仮予約</span>'
+      : canEdit
       ? '<span style="margin-left:auto;display:flex;gap:3px;flex-shrink:0" onclick="event.stopPropagation()">'
         + [
           {k:'来店前', s:'確定'},
@@ -3063,9 +3066,26 @@ function renderYoyakuAdd() {
       + '</div>';
   }
 
+  var showModeToggle = !yoyakuEditRsv || yoyakuEditRsv.status === '確定' || yoyakuEditRsv.status === '仮予約';
+  var modeToggle = !showModeToggle ? '' :
+    '<div style="display:flex;gap:6px;margin-bottom:10px">'
+    + ['本予約','仮予約'].map(function(m) {
+        var active = yoyakuRsvMode === m;
+        return '<div onclick="yoyakuSetRsvMode(\''+m+'\')" style="flex:1;text-align:center;padding:9px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;'
+          + (active
+              ? (m === '仮予約' ? 'background:#2a1800;color:#ffcc66;border:1px solid #aa7700' : 'background:#0f2040;color:#7ab0f0;border:1px solid #1a55bb')
+              : 'background:#141d30;color:#6a8ab0;border:1px solid #1e3050')
+          + '">' + m + '</div>';
+      }).join('')
+    + '</div>'
+    + (yoyakuRsvMode === '仮予約'
+        ? '<div style="font-size:11px;color:#aa8833;background:#1a1400;border:1px solid #443300;border-radius:7px;padding:7px 10px;margin-bottom:10px">仮予約は席・フロアの指定なしで仮押さえできます。来店が決まったら「本予約」に切り替えて席を選んでください。</div>'
+        : '');
+
   return presetBanner + custSection
     + '<div class="yform-sec" id="yform">'
     + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:10px">予約担当者: <span style="color:#7ab0f0">'+esc(staffName||'')+'</span></div>'
+    + modeToggle
     + (yoyakuEditRsv || (!yoyakuSelectedCust && yoyakuCustMode === 'new') ?
         '<div class="yform-label">お客様名</div>'
         + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" value="'+esc(yoyakuRsvCustManual)+'" style="margin-bottom:8px">'
@@ -3081,8 +3101,9 @@ function renderYoyakuAdd() {
         opts += '<option'+(curPax>5?' selected':'')+'>6名+</option>';
         return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px">'+opts+'</select>';
       })()
-    + '<div class="yform-label">席<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
-    + '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>'
+    + (yoyakuRsvMode === '仮予約' ? '' :
+        '<div class="yform-label">席<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
+        + '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>')
     + '<div class="yform-label">同伴キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
     + (function(){
         var defVal = yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : '');
@@ -3114,7 +3135,7 @@ function renderYoyakuAdd() {
       })()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
-    + (canEditYoyaku() ? '<div class="notif-save-btn" id="yrsv-submit-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : '予約を確定する')+'</div>' : '')
+    + (canEditYoyaku() ? '<div class="notif-save-btn" id="yrsv-submit-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : (yoyakuRsvMode === '仮予約' ? '仮予約として登録する' : '予約を確定する'))+'</div>' : '')
     + (canEditYoyaku() && yoyakuEditRsv ? '<button onclick="yoyakuCancelReservation('+yoyakuEditRsv.rowIdx+')" style="width:100%;margin-top:8px;padding:12px;background:#1a0808;color:#cc6666;border:1px dashed #663333;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">🚫 この予約をキャンセルする</button>' : '')
     + '<div id="yrsv-status" style="font-size:12px;color:#8aabcc;text-align:center;margin-top:6px"></div>'
     + '</div>';
@@ -3132,6 +3153,11 @@ function saveFormInputs() {
   (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); yoyakuRsvTantou = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
   (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); yoyakuRsvDohan = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
   el = document.getElementById('yrsv-yoyaku-cast'); if (el) yoyakuRsvYoyakuCast = el.value;
+}
+function yoyakuSetRsvMode(m) {
+  saveFormInputs();
+  yoyakuRsvMode = m;
+  renderYoyaku();
 }
 function yoyakuRsvCalNav(diff) {
   saveFormInputs();
@@ -3291,6 +3317,7 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvTantou = rsv.tantouCast || '';
   yoyakuRsvYoyakuCast = rsv.yoyakuCast || '';
   yoyakuRsvDohan = rsv.dohanCast || '';
+  yoyakuRsvMode = rsv.status === '仮予約' ? '仮予約' : '本予約';
   yoyakuSubTab = 'add';
   renderYoyaku();
 }
@@ -3358,6 +3385,7 @@ function yoyakuCancelEdit() {
   yoyakuRsvTantou = '';
   yoyakuRsvYoyakuCast = '';
   yoyakuRsvDohan = '';
+  yoyakuRsvMode = '本予約';
   yoyakuSubTab = 'list';
   renderYoyaku();
 }
@@ -3382,12 +3410,14 @@ function yoyakuSubmitRsv() {
     customer: custName,
     memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : (yoyakuEditRsv ? (yoyakuEditRsv.memberId || '') : ''),
     pax: parseInt(paxEl ? paxEl.value : '1') || 1,
-    table: (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })(),
+    table: yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })(),
     tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
     yoyakuCast: yoyakuRsvTime === '同伴' ? '' : (document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : ''),
     dohanCast: (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : ''); })(),
     youbou: document.getElementById('yrsv-youbou').value,
-    status: yoyakuEditRsv ? (yoyakuEditRsv.status || '確定') : '確定',
+    status: yoyakuEditRsv
+      ? (yoyakuRsvMode === '仮予約' ? '仮予約' : (yoyakuEditRsv.status === '仮予約' ? '確定' : (yoyakuEditRsv.status || '確定')))
+      : (yoyakuRsvMode === '仮予約' ? '仮予約' : '確定'),
     rowIdx: yoyakuEditRsv ? yoyakuEditRsv.rowIdx : undefined
   };
   yoyakuSubmitBusy = true;
@@ -3407,6 +3437,7 @@ function yoyakuSubmitRsv() {
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
+      yoyakuRsvMode = '本予約';
       yoyakuEditRsv = null;
       yoyakuSubTab = 'list';
       loadYoyaku();
