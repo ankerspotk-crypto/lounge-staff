@@ -3544,10 +3544,14 @@ function renderShiftMgmt() {
   // 黒服バイト・黒服社員・黒服 をまとめて「黒服」表示
   var displayGroups = [
     { label: 'キャスト', members: groups['キャスト'] },
-    { label: '体験',    members: groups['体験'] },
-    { label: '派遣',    members: groups['派遣'] },
+    { label: '体験',    members: groups['体験'],    scheduleOnly: true },
+    { label: '派遣',    members: groups['派遣'],    scheduleOnly: true },
     { label: '黒服',    members: (groups['黒服社員']||[]).concat(groups['黒服バイト']||[]).concat(groups['黒服']||[]) }
-  ].filter(function(g) { return g.members.length > 0; });
+  ].filter(function(g) {
+    if (!g.members.length) return false;
+    if (g.scheduleOnly) return g.members.some(function(r) { return Object.keys(r.cells).length > 0; });
+    return true;
+  });
 
   var thead = '<tr><th class="smgmt-name-col head">氏名</th>';
   headers.forEach(function(h) {
