@@ -3512,6 +3512,7 @@ function loadShiftMgmt() {
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d.ok) { setContent('<div class="err">' + (d.error||'エラー') + '</div>'); return; }
+      if (!d.shiftData) { setContent('<div class="err">Code.gsを最新版にデプロイしてください<br><small>getShiftMgmtData_が未定義</small></div>'); return; }
       smgmtData = d.shiftData;
       renderShiftMgmt();
     })
