@@ -349,6 +349,17 @@ function handleApiRequest_(body) {
     if (!body.dateKey) return { ok: false, error: 'dateKey required' };
     return writeTrustDailyCash_(body.dateKey, body.dayPayTotal || 0, body.costOutTotal || 0, body.costOutDetail || []);
   }
+  // ---- シフト管理（管理者専用）----
+  if (body.action === 'writeShiftCellPortal') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    return writeShiftCell_(String(body.name), String(body.date), String(body.value));
+  }
+  if (body.action === 'addShiftStaff') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    return addShiftStaff_(String(body.staffName || '').trim(), String(body.role || '派遣'), String(body.date || ''), String(body.timeVal || ''));
+  }
   return { ok: false, error: 'unknown action' };
 }
 
@@ -421,7 +432,15 @@ function handleEvent(event) {
     const name = text.replace(/^[#＃@＠]登録\s*/, '').trim();
     if (name) {
       registerStaff(userId, name, groupId);
-      reply(event.replyToken, name + ' さんを登録しました✅');
+      if (isStaffInShiftSheet_(name)) {
+        PropertiesService.getScriptProperties().deleteProperty('PENDING_REG_' + userId);
+        reply(event.replyToken, name + ' さんを登録しました✅');
+      } else {
+        setProp('PENDING_REG_' + userId, name);
+        reply(event.replyToken, name + ' さん、登録を受け付けました📩\n店舗側の登録が完了するまでお待ちください。');
+        const KF = prop('GROUP_KUROFUKU');
+        if (KF) push_(KF, '🆕【新規スタッフ登録待ち】\n' + name + ' さんが登録をリクエストしました。\n本日中にシフト表へ氏名と属性（ロール）を登録してください。');
+      }
     }
     return;
   }
@@ -1586,6 +1605,30 @@ function registerStaff(userId, name, groupId) {
   sh.appendRow([userId, name, groupId || '', new Date()]);
 }
 
+// シフト表（SHIFT_SHEET_ID）に氏名の行が既にあるかどうか
+// → これが無いとシフト提出が「のシフト行が見つかりません」で失敗するため、
+//   #登録時にこの行の有無で「即時登録」か「店舗側の登録待ち」かを振り分ける
+function isStaffInShiftSheet_(name) {
+  const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh || sh.getLastRow() < 2) return false;
+  const target = normalizeName_(name);
+  const names = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  return names.some(r => normalizeName_(String(r[0]).trim()) === target);
+}
+
+// 毎分実行: #登録待ちのスタッフがシフト表に追加されたら本人に完了通知を送る
+function checkPendingStaffRegistrations_() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  Object.keys(props).forEach(k => {
+    if (!k.startsWith('PENDING_REG_')) return;
+    const userId = k.slice('PENDING_REG_'.length);
+    const name = props[k];
+    if (!isStaffInShiftSheet_(name)) return;
+    push_(userId, name + ' さん、登録が完了しました🎉\nマイページからシフト提出などがご利用いただけます。');
+    PropertiesService.getScriptProperties().deleteProperty(k);
+  });
+}
+
 function checkUnregistered(event, groupId) {
   if (!groupId) { reply(event.replyToken, 'グループ内で送信してください'); return; }
   const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -1711,6 +1754,7 @@ function scheduledJobs() {
   // 毎分実行（日曜も継続）
   checkReminders();
   checkAtendou();
+  checkPendingStaffRegistrations_();
 
   // 毎日05:00: 古いプロパティ削除（日曜も継続）
   if (hhmm === '05:00') once('CLEANUP', cleanOldProperties);
@@ -3129,6 +3173,11 @@ function handlePortalApi_(e) {
   if (tab === 'yoyakuCustomers') {
     const q = (e.parameter.q || '').trim();
     return out({ ok: true, name, isAdmin, customers: q ? searchCustomersForYoyaku_(q) : [] });
+  }
+
+  // シフト管理（管理者のみ）
+  if (isAdmin && tab === 'shiftMgmt') {
+    return out({ ok: true, name, isAdmin, shiftData: getShiftMgmtData_() });
   }
 
   // スタッフ一覧（管理者のみ）
@@ -6340,6 +6389,70 @@ function addCustomer(payload) {
   set(cols.regDate, new Date());
   sh.appendRow(newRow);
   return { ok: true, rowIdx: sh.getLastRow() };
+}
+
+// ============================================================
+// シフト管理ポータル用
+// ============================================================
+
+// シフト表全データを返す（ポータル シフト管理タブ用）
+function getShiftMgmtData_() {
+  const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh) return { headers: [], rows: [] };
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return { headers: [], rows: [] };
+
+  const headers = data[0].map(v => {
+    if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
+    return String(v).trim();
+  });
+
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0]).trim();
+    const role = String(data[i][1]).trim();
+    if (!name) continue;
+    const cells = {};
+    for (let j = 2; j < headers.length; j++) {
+      const v = data[i][j];
+      const s = (v instanceof Date) ? Utilities.formatDate(v, TZ, 'HH:mm') : String(v).trim();
+      if (s) cells[headers[j]] = s;
+    }
+    rows.push({ name, role, cells });
+  }
+  return { headers: headers.slice(2), rows };
+}
+
+// 派遣・体験スタッフをシフト表に追加（既存行があれば今日の列だけ書き込む）
+function addShiftStaff_(staffName, role, date, timeVal) {
+  const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
+  if (!staffName) return { ok: false, error: '名前を入力してください' };
+
+  const data = sh.getDataRange().getValues();
+  const headers = data[0].map(v => {
+    if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
+    return String(v).trim();
+  });
+
+  // 既存行を探す
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === staffName) {
+      if (date && timeVal) return writeShiftCell_(staffName, date, timeVal);
+      return { ok: true, note: 'existing' };
+    }
+  }
+
+  // 新規行追加
+  const newRow = new Array(headers.length).fill('');
+  newRow[0] = staffName;
+  newRow[1] = role;
+  if (date && timeVal) {
+    const colIdx = headers.indexOf(date);
+    if (colIdx >= 0) newRow[colIdx] = timeVal;
+  }
+  sh.appendRow(newRow);
+  return { ok: true };
 }
 
 // 顧客情報編集（物理カード管理用の列「2年目更新/作成/受渡/重複チェック/名刺受領」は対象外＝触らない）
