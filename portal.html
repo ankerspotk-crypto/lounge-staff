@@ -340,6 +340,50 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yrsv-blk:hover { filter: brightness(1.15); }
 .yrsv-name { font-size: 10px; font-weight: 700; color: #aaccff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .yrsv-pax { font-size: 9px; color: #4466aa; }
+
+/* ---- シフト管理グリッド ---- */
+.smgmt-wrap { padding: 0 0 80px; }
+.smgmt-nav { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 16px 8px; }
+.smgmt-nav-btn { background: #141d30; border: 1px solid #1e3050; color: #7a9cc8; border-radius: 8px; padding: 6px 14px; font-size: 18px; cursor: pointer; }
+.smgmt-month-label { font-size: 15px; font-weight: 600; color: #e8f0ff; min-width: 100px; text-align: center; }
+.smgmt-grid-outer { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.smgmt-table { border-collapse: collapse; min-width: max-content; }
+.smgmt-table th, .smgmt-table td { border: 1px solid #1a2a44; text-align: center; font-size: 11px; }
+.smgmt-name-col { position: sticky; left: 0; z-index: 4; background: #0d1525; min-width: 58px; max-width: 58px; text-align: left !important; padding: 0 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smgmt-name-col.head { background: #0a0e1a; color: #6a8ab0; font-size: 10px; font-weight: 400; padding: 4px 5px; }
+.smgmt-day-head { min-width: 34px; padding: 3px 2px; color: #6a8ab0; background: #0d1525; font-size: 10px; }
+.smgmt-day-head.today { color: #7ab0f0; font-weight: 700; background: #0a1828; }
+.smgmt-day-head.sun { color: #cc7070; }
+.smgmt-day-head.sat { color: #7090cc; }
+.smgmt-role-row td { background: #0d1a30; color: #4a7aaa; font-size: 10px; font-weight: 600; text-align: left !important; padding: 3px 6px; position: sticky; left: 0; letter-spacing: 0.5px; }
+.smgmt-cell { cursor: pointer; padding: 2px 1px; min-width: 34px; height: 28px; font-size: 10px; color: #8aabcc; background: #0a0e1a; }
+.smgmt-cell:active { filter: brightness(1.3); }
+.smgmt-cell.c-de { background: #0a1f10; color: #55cc77; }
+.smgmt-cell.c-rest { background: #111520; color: #445566; }
+.smgmt-cell.c-partial { background: #1a1508; color: #cc9933; }
+.smgmt-cell.today-col { outline: 1.5px solid #2a5aaa; outline-offset: -1.5px; }
+.smgmt-actions { display: flex; gap: 8px; padding: 10px 16px; position: fixed; bottom: 0; left: 0; right: 0; background: #0a0e1a; border-top: 1px solid #1e3050; }
+.smgmt-actions button { flex: 1; border: 1px solid #1e3050; border-radius: 8px; background: #111b2e; color: #7a9cc8; padding: 9px 4px; font-size: 13px; cursor: pointer; }
+.smgmt-actions button.primary { background: #0f2040; border-color: #1a50a0; color: #7ab0f0; }
+.smgmt-sheet { position: fixed; bottom: 0; left: 0; right: 0; background: #111b2e; border-top: 1px solid #2a4060; border-radius: 16px 16px 0 0; padding: 18px 16px 32px; z-index: 100; transform: translateY(100%); transition: transform 0.25s ease; }
+.smgmt-sheet.open { transform: translateY(0); }
+.smgmt-sheet-title { font-size: 14px; font-weight: 600; color: #e8f0ff; margin-bottom: 14px; }
+.smgmt-sheet-title span { color: #7ab0f0; }
+.smgmt-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.smgmt-opt { border: 1px solid #1e3050; border-radius: 8px; padding: 10px 8px; background: #0d1525; cursor: pointer; font-size: 13px; text-align: center; color: #7a9cc8; }
+.smgmt-opt.sel { border-color: #2a5aaa; background: #0f2040; color: #7ab0f0; }
+.smgmt-time-row { margin-bottom: 12px; }
+.smgmt-time-row label { font-size: 12px; color: #6a8ab0; display: block; margin-bottom: 4px; }
+.smgmt-time-row input { width: 100%; border: 1px solid #1e3050; border-radius: 8px; padding: 8px 10px; font-size: 13px; background: #0d1525; color: #e8f0ff; }
+.smgmt-sheet-btns { display: flex; gap: 8px; }
+.smgmt-sheet-btns button { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #1e3050; font-size: 13px; cursor: pointer; }
+.smgmt-sheet-btns .save { background: #1a50a0; color: #fff; border: none; }
+.smgmt-sheet-btns .cancel { background: none; color: #6a8ab0; }
+.smgmt-sheet-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 99; }
+.smgmt-sheet-backdrop.open { display: block; }
+.smgmt-add-form { padding: 0 16px 12px; }
+.smgmt-add-form label { font-size: 12px; color: #6a8ab0; display: block; margin: 10px 0 4px; }
+.smgmt-add-form input, .smgmt-add-form select { width: 100%; border: 1px solid #1e3050; border-radius: 8px; padding: 8px 10px; font-size: 13px; background: #0d1525; color: #e8f0ff; margin-bottom: 2px; }
 </style>
 </head>
 <body>
@@ -358,6 +402,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
     <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
+    <div class="tab" id="tab-shiftmgmt" onclick="switchTab('shiftmgmt')" style="display:none">シフト管理</div>
   </div>
 </header>
 
@@ -533,7 +578,7 @@ function adminChange(name) {
 
 function switchTabActive(tab) {
   currentTab = tab;
-  ['stats','shift','hair','yoyaku','seatreq','requests','notif','cashset'].forEach(function(t) {
+  ['stats','shift','hair','yoyaku','seatreq','requests','notif','cashset','shiftmgmt'].forEach(function(t) {
     var el = document.getElementById('tab-'+t);
     if (el) el.classList.toggle('active', t === tab);
   });
@@ -560,6 +605,7 @@ function switchTab(tab) {
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
+  if (tab === 'shiftmgmt') { loadShiftMgmt(); return; }
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (isAdmin && !adminViewAs) {
@@ -631,6 +677,8 @@ function showAdminTab() {
   if (el2) el2.style.display = '';
   var el3 = document.getElementById('tab-cashset');
   if (el3) el3.style.display = '';
+  var el4 = document.getElementById('tab-shiftmgmt');
+  if (el4) el4.style.display = '';
 }
 
 // ---- 売上明細 ----
@@ -3448,6 +3496,258 @@ function yoyakuSubmitRsv() {
     });
 }
 
+
+// ============================================================
+// シフト管理タブ
+// ============================================================
+var smgmtData = null;
+var smgmtEditTarget = null; // {name, date, curVal}
+var smgmtAddRole = '';
+var DOW_JA = ['日','月','火','水','木','金','土'];
+var ROLE_ORDER = ['キャスト','体験','派遣','黒服社員','黒服バイト','黒服'];
+
+function loadShiftMgmt() {
+  setContent('<div class="loading">読み込み中...</div>');
+  gasFetch(GAS_URL + '?action=portal&tab=shiftMgmt&userId=' + encodeURIComponent(userId))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div class="err">' + (d.error||'エラー') + '</div>'); return; }
+      smgmtData = d.shiftData;
+      renderShiftMgmt();
+    })
+    .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function renderShiftMgmt() {
+  if (!smgmtData) { loadShiftMgmt(); return; }
+  var headers = smgmtData.headers || []; // ['6/1','6/2',...]
+  var rows = smgmtData.rows || [];
+  var today = new Date();
+  var todayStr = (today.getMonth()+1) + '/' + today.getDate();
+
+  // 月ラベルをヘッダーから推測
+  var monthLabel = '';
+  if (headers.length) {
+    var parts = headers[0].split('/');
+    if (parts.length === 2) monthLabel = parts[0] + '月';
+  }
+
+  // ロール別にグループ化（表示順: キャスト→体験→派遣→黒服系）
+  var groups = {};
+  ROLE_ORDER.forEach(function(r) { groups[r] = []; });
+  rows.forEach(function(row) {
+    var r = row.role || 'キャスト';
+    if (!groups[r]) groups[r] = [];
+    groups[r].push(row);
+  });
+  // 黒服バイト・黒服社員・黒服 をまとめて「黒服」表示
+  var displayGroups = [
+    { label: 'キャスト', members: groups['キャスト'] },
+    { label: '体験',    members: groups['体験'] },
+    { label: '派遣',    members: groups['派遣'] },
+    { label: '黒服',    members: (groups['黒服社員']||[]).concat(groups['黒服バイト']||[]).concat(groups['黒服']||[]) }
+  ].filter(function(g) { return g.members.length > 0; });
+
+  var thead = '<tr><th class="smgmt-name-col head">氏名</th>';
+  headers.forEach(function(h) {
+    var parts = h.split('/');
+    var d = parts.length === 2 ? parseInt(parts[1]) : 0;
+    var m = parts.length === 2 ? parseInt(parts[0]) : 0;
+    var isToday = h === todayStr;
+    var dow = d && m ? new Date(today.getFullYear(), m-1, d).getDay() : -1;
+    var cls = isToday ? 'today' : (dow === 0 ? 'sun' : dow === 6 ? 'sat' : '');
+    thead += '<th class="smgmt-day-head ' + cls + '">' + d + '<br><span style="font-size:9px">' + (dow >= 0 ? DOW_JA[dow] : '') + '</span></th>';
+  });
+  thead += '</tr>';
+
+  var tbody = '';
+  displayGroups.forEach(function(g) {
+    tbody += '<tr class="smgmt-role-row"><td colspan="' + (headers.length+1) + '">' + g.label + '</td></tr>';
+    g.members.forEach(function(row) {
+      tbody += '<tr><td class="smgmt-name-col" title="' + esc(row.name) + '">' + esc(row.name) + '</td>';
+      headers.forEach(function(h) {
+        var val = row.cells[h] || '';
+        var cls = smgmtCellClass(val);
+        var todayCls = h === todayStr ? ' today-col' : '';
+        tbody += '<td class="smgmt-cell ' + cls + todayCls + '" onclick="openShiftEdit(\'' + esc(row.name) + '\',\'' + h + '\',\'' + esc(val) + '\')">' + smgmtCellText(val) + '</td>';
+      });
+      tbody += '</tr>';
+    });
+  });
+
+  var html = '<div class="smgmt-wrap">'
+    + '<div class="smgmt-nav">'
+    + '<span class="smgmt-month-label">' + monthLabel + ' シフト</span>'
+    + '</div>'
+    + '<div class="smgmt-grid-outer" id="smgmt-grid-outer">'
+    + '<table class="smgmt-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>'
+    + '</div>'
+    + '<div class="smgmt-actions">'
+    + '<button class="primary" onclick="openAddStaff(\'派遣\')">＋ 派遣追加</button>'
+    + '<button onclick="openAddStaff(\'体験\')">＋ 体験追加</button>'
+    + '</div>'
+    + '</div>'
+    + '<div class="smgmt-sheet-backdrop" id="smgmt-backdrop" onclick="closeShiftEdit()"></div>'
+    + '<div class="smgmt-sheet" id="smgmt-sheet">'
+    + '<div class="smgmt-sheet-title" id="smgmt-sheet-title"></div>'
+    + '<div class="smgmt-opts" id="smgmt-opts"></div>'
+    + '<div class="smgmt-time-row" id="smgmt-time-row" style="display:none">'
+    + '<label>勤務時間</label>'
+    + '<input type="text" id="smgmt-time-input" placeholder="例: 20:00-24:00">'
+    + '</div>'
+    + '<div class="smgmt-sheet-btns">'
+    + '<button class="cancel" onclick="closeShiftEdit()">キャンセル</button>'
+    + '<button class="save" onclick="saveShiftCell()">保存</button>'
+    + '</div>'
+    + '</div>';
+
+  setContent(html);
+
+  // 今日の列へスクロール
+  setTimeout(function() {
+    var outer = document.getElementById('smgmt-grid-outer');
+    if (!outer) return;
+    var todayCell = outer.querySelector('.today-col');
+    if (todayCell) outer.scrollLeft = Math.max(0, todayCell.offsetLeft - 60);
+  }, 50);
+}
+
+function smgmtCellClass(val) {
+  if (!val) return '';
+  if (val === '休み' || val === '休') return 'c-rest';
+  var m = val.match(/(\d+):(\d+)-(\d+)/);
+  if (m) {
+    var h1 = parseInt(m[1]), h2 = parseInt(m[3]);
+    var dur = h2 > h1 ? h2 - h1 : h2 + 24 - h1;
+    return dur < 5 ? 'c-partial' : 'c-de';
+  }
+  return 'c-de';
+}
+
+function smgmtCellText(val) {
+  if (!val) return '';
+  if (val === '休み') return '休';
+  var m = val.match(/(\d+):(\d+)-(\d+)/);
+  if (m) return m[1] + '-' + m[3];
+  return val.length > 5 ? val.slice(0,5) : val;
+}
+
+function openShiftEdit(name, date, curVal) {
+  smgmtEditTarget = { name: name, date: date, curVal: curVal };
+  var titleEl = document.getElementById('smgmt-sheet-title');
+  if (titleEl) titleEl.innerHTML = '<span>' + esc(name) + '</span>　' + date;
+  var opts = [
+    { label: '出勤', val: 'de' },
+    { label: '時間指定', val: 'time' },
+    { label: '休み', val: 'rest' },
+    { label: '空白（未定）', val: 'empty' }
+  ];
+  var selVal = curVal === '休み' || curVal === '休' ? 'rest'
+    : !curVal ? 'empty'
+    : curVal.indexOf(':') >= 0 ? 'time'
+    : 'de';
+  var optsHtml = opts.map(function(o) {
+    return '<div class="smgmt-opt' + (selVal === o.val ? ' sel' : '') + '" onclick="smgmtSelectOpt(this,\'' + o.val + '\')">' + o.label + '</div>';
+  }).join('');
+  var optsEl = document.getElementById('smgmt-opts');
+  if (optsEl) optsEl.innerHTML = optsHtml;
+  var timeRow = document.getElementById('smgmt-time-row');
+  if (timeRow) timeRow.style.display = selVal === 'time' ? '' : 'none';
+  var timeInput = document.getElementById('smgmt-time-input');
+  if (timeInput) timeInput.value = (selVal === 'time' && curVal) ? curVal : '20:00-24:00';
+  var sheet = document.getElementById('smgmt-sheet');
+  var backdrop = document.getElementById('smgmt-backdrop');
+  if (sheet) sheet.classList.add('open');
+  if (backdrop) backdrop.classList.add('open');
+}
+
+function smgmtSelectOpt(el, val) {
+  document.querySelectorAll('.smgmt-opt').forEach(function(o) { o.classList.remove('sel'); });
+  el.classList.add('sel');
+  var timeRow = document.getElementById('smgmt-time-row');
+  if (timeRow) timeRow.style.display = val === 'time' ? '' : 'none';
+}
+
+function closeShiftEdit() {
+  var sheet = document.getElementById('smgmt-sheet');
+  var backdrop = document.getElementById('smgmt-backdrop');
+  if (sheet) sheet.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+  smgmtEditTarget = null;
+}
+
+function saveShiftCell() {
+  if (!smgmtEditTarget) return;
+  var selEl = document.querySelector('.smgmt-opt.sel');
+  if (!selEl) return;
+  var optText = selEl.textContent.trim();
+  var writeVal = '';
+  if (optText === '出勤') writeVal = '20:00-24:00';
+  else if (optText === '休み') writeVal = '休み';
+  else if (optText === '時間指定') {
+    var inp = document.getElementById('smgmt-time-input');
+    writeVal = inp ? inp.value.trim() : '';
+    if (!writeVal) { alert('時間を入力してください'); return; }
+  }
+  // empty → writeVal = '' (空白)
+
+  var payload = { action: 'writeShiftCellPortal', userId: userId, name: smgmtEditTarget.name, date: smgmtEditTarget.date, value: writeVal };
+  closeShiftEdit();
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      // ローカルデータを更新してグリッドを再描画
+      if (smgmtData) {
+        smgmtData.rows.forEach(function(row) {
+          if (row.name === smgmtEditTarget.name) {
+            if (writeVal) row.cells[smgmtEditTarget.date] = writeVal;
+            else delete row.cells[smgmtEditTarget.date];
+          }
+        });
+        smgmtEditTarget = null;
+        renderShiftMgmt();
+      }
+    })
+    .catch(function() { alert('通信エラー'); });
+}
+
+function openAddStaff(role) {
+  smgmtAddRole = role;
+  var today = new Date();
+  var todayMD = (today.getMonth()+1) + '/' + today.getDate();
+  var html = '<div class="smgmt-add-form">'
+    + '<div style="font-size:15px;font-weight:600;color:#e8f0ff;margin-bottom:12px">' + role + 'スタッフ追加</div>'
+    + '<label>名前</label>'
+    + '<input type="text" id="smgmt-add-name" placeholder="例: 田中（ルーア）">'
+    + '<label>日付（M/D形式）</label>'
+    + '<input type="text" id="smgmt-add-date" value="' + todayMD + '">'
+    + '<label>勤務時間</label>'
+    + '<input type="text" id="smgmt-add-time" value="20:00-24:00">'
+    + '<div style="display:flex;gap:8px;margin-top:14px">'
+    + '<button style="flex:1;padding:10px;border-radius:8px;border:1px solid #1e3050;background:none;color:#6a8ab0;font-size:13px;cursor:pointer" onclick="renderShiftMgmt()">キャンセル</button>'
+    + '<button style="flex:1;padding:10px;border-radius:8px;background:#1a50a0;color:#fff;border:none;font-size:13px;cursor:pointer" onclick="submitAddStaff()">追加</button>'
+    + '</div>'
+    + '</div>';
+  setContent(html);
+}
+
+function submitAddStaff() {
+  var name = (document.getElementById('smgmt-add-name')||{}).value || '';
+  var date = (document.getElementById('smgmt-add-date')||{}).value || '';
+  var time = (document.getElementById('smgmt-add-time')||{}).value || '';
+  name = name.trim(); date = date.trim(); time = time.trim();
+  if (!name) { alert('名前を入力してください'); return; }
+  var payload = { action: 'addShiftStaff', userId: userId, staffName: name, role: smgmtAddRole, date: date, timeVal: time };
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { alert('エラー: ' + (d.error||'')); return; }
+      smgmtData = null; // キャッシュ無効化して再読み込み
+      loadShiftMgmt();
+    })
+    .catch(function() { alert('通信エラー'); });
+}
 
 function resetCashAction(action, label) {
   if (!confirm(label + 'を削除し、未提出の状態に戻します。よろしいですか？')) return;
