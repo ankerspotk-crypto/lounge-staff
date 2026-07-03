@@ -2679,6 +2679,7 @@ var yoyakuRsvs = [];
 var yoyakuCastList = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
+var yoyakuMemberFeeMap = {};
 var yoyakuSubTab = 'list'; // list / sched / add / cal
 var yoyakuListFilter = ''; // 廃止（各カードにインラインボタン）
 var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
@@ -2725,6 +2726,7 @@ function loadYoyaku() {
       staffName = d.name || '';
       yoyakuRsvs = d.reservations || [];
       yoyakuCastList = d.casts || [];
+      yoyakuMemberFeeMap = d.memberFeeMap || {};
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
@@ -2893,8 +2895,26 @@ function renderYoyakuList() {
     if (r.tantouCast) castTags += '<span class="yc-cast tantou">担当 '+esc(r.tantouCast)+'</span>';
     if (r.yoyakuCast) castTags += '<span class="yc-cast yoyaku">予約 '+esc(r.yoyakuCast)+'</span>';
     var castRow = castTags ? '<div class="yc-cast-row">'+castTags+'</div>' : '';
+    var memberInfo = '';
+    if (r.memberId && yoyakuMemberFeeMap[r.memberId]) {
+      var mfi = yoyakuMemberFeeMap[r.memberId];
+      var mfParts = [];
+      if (mfi.memberSince) {
+        var msDate = new Date(mfi.memberSince);
+        var msToday = new Date(); msToday.setHours(0,0,0,0);
+        var msYears = msToday.getFullYear() - msDate.getFullYear();
+        var msAnniv = new Date(msDate); msAnniv.setFullYear(msToday.getFullYear());
+        if (msAnniv > msToday) msYears--;
+        mfParts.push((msYears + 1) + '年目');
+      }
+      if (mfi.annualFeeDate) {
+        var mfRenewal = new Date(mfi.annualFeeDate); mfRenewal.setFullYear(mfRenewal.getFullYear() + 1);
+        mfParts.push('期限' + (mfRenewal.getMonth()+1) + '月' + mfRenewal.getDate() + '日');
+      }
+      if (mfParts.length) memberInfo = ' <span style="font-size:9px;color:#bb9944;background:#1e1600;border:1px solid #443a00;border-radius:4px;padding:1px 5px">💳'+mfParts.join('　')+'</span>';
+    }
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
-      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#7a9cc8">'+esc(r.memberId)+'</span>':'')+'</span>'+statusBtns+'</div>'
+      + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#7a9cc8">'+esc(r.memberId)+'</span>'+memberInfo:'')+'</span>'+statusBtns+'</div>'
       + castRow
       + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span></div>'
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')

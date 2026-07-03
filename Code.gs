@@ -3172,7 +3172,8 @@ function handlePortalApi_(e) {
     return out({ ok: true, name, isAdmin, date,
       reservations: getYoyakuReservations_(date),
       requests: getYoyakuRequests_(null),
-      casts: getCastNamesForYoyaku_(ss) });
+      casts: getCastNamesForYoyaku_(ss),
+      memberFeeMap: getMemberFeeMap_() });
   }
   if (tab === 'yoyakuMonth') {
     const month = e.parameter.month || todayStr().slice(0, 7);
@@ -3880,6 +3881,38 @@ function getCastNamesForYoyaku_(ss) {
   return sh.getDataRange().getValues().slice(1)
     .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role); })
     .map(r => String(r[1]).trim());
+}
+
+// 会員番号 → { annualFeeDate, memberSince } のマップを返す（予約一覧の年会費情報表示用）
+function getMemberFeeMap_() {
+  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (!sheet) return {};
+  const values = sheet.getDataRange().getValues();
+  let h = -1;
+  for (let i = 0; i < Math.min(values.length, 6); i++) {
+    if (values[i].some(c => String(c).replace(/\s/g,'').indexOf('カード記載名') !== -1)) { h = i; break; }
+  }
+  if (h < 0) return {};
+  const headers = values[h].map(c => String(c).replace(/\s/g,''));
+  const idx = kw => headers.findIndex(x => x.indexOf(kw) !== -1);
+  const cE = idx('会員番号'), cA = idx('年会費'), cI = idx('入会');
+  if (cE < 0) return {};
+  const map = {};
+  for (let r = h + 1; r < values.length; r++) {
+    const row = values[r];
+    const no = String(row[cE] || '').trim();
+    if (!no) continue;
+    const feeRaw = cA >= 0 ? row[cA] : null;
+    const annualFeeDate = feeRaw instanceof Date
+      ? Utilities.formatDate(feeRaw, TZ, 'yyyy-MM-dd')
+      : String(feeRaw || '');
+    const sinceRaw = cI >= 0 ? row[cI] : null;
+    const memberSince = sinceRaw instanceof Date
+      ? Utilities.formatDate(sinceRaw, TZ, 'yyyy-MM-dd')
+      : String(sinceRaw || '');
+    if (annualFeeDate || memberSince) map[no] = { annualFeeDate, memberSince };
+  }
+  return map;
 }
 
 function searchCustomersForYoyaku_(query) {
