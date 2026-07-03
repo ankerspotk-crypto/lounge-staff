@@ -3175,6 +3175,10 @@ function handlePortalApi_(e) {
       casts: getCastNamesForYoyaku_(ss),
       memberFeeMap: getMemberFeeMap_() });
   }
+  if (tab === 'customers') {
+    return out({ ok: true, name, isAdmin,
+      customers: getCustomerList_({ q: e.parameter.q || '', filter: e.parameter.filter || '' }) });
+  }
   if (tab === 'yoyakuMonth') {
     const month = e.parameter.month || todayStr().slice(0, 7);
     return out({ ok: true, name, isAdmin, month, summary: getYoyakuMonthSummary_(month) });
@@ -3881,6 +3885,58 @@ function getCastNamesForYoyaku_(ss) {
   return sh.getDataRange().getValues().slice(1)
     .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role); })
     .map(r => String(r[1]).trim());
+}
+
+// 顧客管理タブ用：フィルター・テキスト検索付き顧客一覧
+// opts: { q, filter } / filter: '' | 'has_member' | 'has_bottle' | 'birthday_this_month'
+function getCustomerList_(opts) {
+  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (!sheet) return [];
+  const values = sheet.getDataRange().getValues();
+  let h = -1;
+  for (let i = 0; i < Math.min(values.length, 6); i++) {
+    if (values[i].some(c => String(c).replace(/\s/g,'').indexOf('カード記載名') !== -1)) { h = i; break; }
+  }
+  if (h < 0) return [];
+  const headers = values[h].map(c => String(c).replace(/\s/g,''));
+  const idx = kw => headers.findIndex(x => x.indexOf(kw) !== -1);
+  const val = (row, c) => (c >= 0 && row[c] != null) ? String(row[c]) : '';
+  const cG = idx('カード記載名'), cH = idx('氏名'), cE = idx('会員番号'), cN = idx('担当');
+  const cJ = idx('ボトル種類'), cM = idx('誕生日'), cS = idx('飲み方'), cT = idx('タバコ'), cP = idx('参考情報');
+  const cA = idx('年会費'), cI = idx('入会');
+  const q = (opts.q || '').replace(/\s/g,'');
+  const filter = opts.filter || '';
+  const thisMonth = Number(Utilities.formatDate(new Date(), TZ, 'M'));
+  const results = [];
+  for (let r = h + 1; r < values.length && results.length < 100; r++) {
+    const row = values[r];
+    const card = val(row, cG).replace(/\s/g,'');
+    const name = val(row, cH).replace(/\s/g,'');
+    const no   = val(row, cE).replace(/\s/g,'');
+    if (!card && !name) continue;
+    if (q && !card.includes(q) && !name.includes(q) && !no.includes(q)) continue;
+    if (filter === 'has_member' && !no) continue;
+    if (filter === 'has_bottle' && !val(row, cJ)) continue;
+    if (filter === 'birthday_this_month') {
+      const bdRaw = row[cM];
+      if (!bdRaw) continue;
+      const bdMonth = bdRaw instanceof Date
+        ? bdRaw.getMonth() + 1
+        : (m => m ? parseInt(m[1]) : -1)(String(bdRaw).match(/(\d{1,2})[\/\-月]/));
+      if (bdMonth !== thisMonth) continue;
+    }
+    const bdayRaw = row[cM];
+    const bday = bdayRaw instanceof Date ? fmtDate(bdayRaw) : String(bdayRaw || '');
+    const feeRaw = cA >= 0 ? row[cA] : null;
+    const annualFeeDate = feeRaw instanceof Date
+      ? Utilities.formatDate(feeRaw, TZ, 'yyyy-MM-dd') : String(feeRaw || '');
+    results.push({
+      card: val(row,cG), name: val(row,cH), no: val(row,cE), tantou: val(row,cN),
+      bottle: val(row,cJ), bday, drink: val(row,cS), tabaco: val(row,cT), note: val(row,cP),
+      annualFeeDate
+    });
+  }
+  return results;
 }
 
 // 会員番号 → { annualFeeDate, memberSince } のマップを返す（予約一覧の年会費情報表示用）

@@ -281,6 +281,17 @@ header h1 { font-size: 17px; font-weight: 600; }
 .ycm-note    { background: #141428; color: #8aabcc; border: 1px solid #1e3050; }
 .ycm-fee-warn{ background: #2a1800; color: #ffaa44; border: 1px solid #885500; }
 .ycm-fee-urg { background: #2a0a0a; color: #ff6666; border: 1px solid #882222; }
+/* 顧客管理タブ */
+.cust-filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.cust-filter-btn { padding: 5px 12px; border-radius: 14px; border: 1px solid #1e3050; background: #141d30; color: #7a9cc8; font-size: 12px; cursor: pointer; white-space: nowrap; transition: .15s; }
+.cust-filter-btn.active { background: #0a1e40; border-color: #4488cc; color: #7ab0f0; font-weight: 700; }
+.cust-search { width: 100%; box-sizing: border-box; background: #0d1520; border: 1px solid #1e3050; border-radius: 9px; padding: 10px 12px; color: #e8f0ff; font-size: 13px; outline: none; margin-bottom: 10px; }
+.cust-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 11px 13px; margin-bottom: 8px; }
+.cust-card-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cust-card-name { font-size: 14px; font-weight: 600; color: #e8f0ff; }
+.cust-card-no { font-size: 11px; color: #7a9cc8; }
+.cust-card-tantou { font-size: 11px; color: #bb99ff; }
+.cust-card-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
 /* 予約フォーム */
 .yform-sec { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 13px; margin-top: 10px; }
 .yform-sec .selected-name { font-size: 14px; font-weight: 600; color: #7ab0f0; margin-bottom: 12px; }
@@ -401,6 +412,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
     <div class="tab active" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
     <div class="tab" id="tab-seatreq" onclick="switchTab('seatreq')">席リクエスト</div>
+    <div class="tab" id="tab-customers" onclick="switchTab('customers')">顧客管理</div>
     <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
     <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
     <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
@@ -610,6 +622,7 @@ function switchTab(tab) {
   if (tab === 'shiftmgmt') { loadShiftMgmt(); return; }
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
+  if (tab === 'customers') { loadCustomers(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -1489,6 +1502,84 @@ function toggleRankingPublish(month, action) {
 
 var receiptPhotoBase64 = '';
 var receiptPhotoMime   = 'image/jpeg';
+
+// ---- 顧客管理タブ ----
+var custFilter = '';
+var custQuery  = '';
+var custList   = [];
+
+function loadCustomers(filter, q) {
+  if (filter !== undefined) custFilter = filter;
+  if (q      !== undefined) custQuery  = q;
+  renderCustomerShell_();
+  var url = GAS_URL + '?action=portal&tab=customers&userId=' + encodeURIComponent(userId)
+    + '&filter=' + encodeURIComponent(custFilter)
+    + '&q='      + encodeURIComponent(custQuery);
+  gasFetch(url).then(function(r){ return r.json(); }).then(function(d) {
+    if (!d.ok) { document.getElementById('cust-list').innerHTML = '<div class="err">エラー</div>'; return; }
+    custList = d.customers || [];
+    renderCustomerList_();
+  }).catch(function(){ document.getElementById('cust-list').innerHTML = '<div style="color:#7a9cc8;font-size:12px;padding:10px">通信エラー</div>'; });
+}
+
+function renderCustomerShell_() {
+  var thisMonth = new Date().getMonth() + 1;
+  var filters = [
+    { key: '',                   label: 'すべて' },
+    { key: 'has_member',         label: '💳 会員登録あり' },
+    { key: 'has_bottle',         label: '🍶 ボトルあり' },
+    { key: 'birthday_this_month',label: '🎂 今月誕生日（' + thisMonth + '月）' }
+  ];
+  var filterBtns = filters.map(function(f) {
+    return '<button class="cust-filter-btn' + (custFilter === f.key ? ' active' : '') + '" onclick="loadCustomers(\'' + f.key + '\', custQuery)">' + f.label + '</button>';
+  }).join('');
+  setContent('<div style="padding:14px">'
+    + '<div class="cust-filter-bar">' + filterBtns + '</div>'
+    + '<input class="cust-search" id="cust-q" type="text" placeholder="名前・会員番号で検索" value="' + esc(custQuery) + '" oninput="custQueryChange(this.value)">'
+    + '<div id="cust-list"><div style="color:#7a9cc8;font-size:12px;padding:10px 0">読み込み中...</div></div>'
+    + '</div>');
+}
+
+var _custSearchTimer;
+function custQueryChange(v) {
+  custQuery = v;
+  clearTimeout(_custSearchTimer);
+  _custSearchTimer = setTimeout(function(){ loadCustomers(custFilter, custQuery); }, 400);
+}
+
+function renderCustomerList_() {
+  var el = document.getElementById('cust-list');
+  if (!el) return;
+  if (!custList.length) {
+    el.innerHTML = '<div style="text-align:center;color:#6a8ab0;padding:30px 0;font-size:13px">該当する顧客が見つかりませんでした</div>';
+    return;
+  }
+  var today = new Date(); today.setHours(0,0,0,0);
+  el.innerHTML = custList.map(function(c) {
+    var badges = '';
+    if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶' + esc(c.bottle) + '</span>';
+    if (c.bday)   badges += '<span class="ycm ycm-bday">🎂 ' + esc(c.bday) + '</span>';
+    if (c.note)   badges += '<span class="ycm ycm-note">📝メモ</span>';
+    if (c.annualFeeDate) {
+      var renewal = new Date(c.annualFeeDate); renewal.setFullYear(renewal.getFullYear() + 1);
+      var daysLeft = Math.ceil((renewal - today) / 86400000);
+      var cls = daysLeft <= 7 ? 'ycm-fee-urg' : daysLeft <= 30 ? 'ycm-fee-warn' : 'ycm-note';
+      badges += '<span class="ycm ' + cls + '">💳 期限' + (renewal.getMonth()+1) + '月' + renewal.getDate() + '日（あと' + daysLeft + '日）</span>';
+    }
+    return '<div class="cust-card">'
+      + '<div class="cust-card-top">'
+      + '<span class="cust-card-name">' + esc(c.name || c.card || '') + '様</span>'
+      + (c.no ? '<span class="cust-card-no">会員 ' + esc(c.no) + '</span>' : '')
+      + (c.tantou ? '<span class="cust-card-tantou">担当: ' + esc(c.tantou) + '</span>' : '')
+      + '</div>'
+      + (badges ? '<div class="cust-card-badges">' + badges + '</div>' : '')
+      + (c.drink || c.tabaco ? '<div style="font-size:11px;color:#6a8ab0;margin-top:4px">'
+          + (c.drink ? '飲み方: ' + esc(c.drink) + '　' : '')
+          + (c.tabaco ? 'タバコ: ' + esc(c.tabaco) : '')
+          + '</div>' : '')
+      + '</div>';
+  }).join('');
+}
 
 function loadHairReceipts() {
   var targetName = isAdmin ? adminViewAs : '';
