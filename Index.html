@@ -1747,7 +1747,20 @@ function renderOpeningCheckForm(init) {
 
   if (init.locked) {
     html += cashBannerBox('#1f6040', '#5dcc88', '✅ 提出済み（修正不可）　報告者: ' + esc(init.reporterName));
-    html += '<div class="section-label">レジ現金内訳</div>';
+
+    // 前日閉店との比較
+    if (init.prevClosing) {
+      var prevDiff = Number(init.tillTotal) - Number(init.prevClosing.tillTotal);
+      var diffColor = prevDiff === 0 ? '#5dcc88' : (Math.abs(prevDiff) <= 500 ? '#ddcc44' : '#ff8888');
+      html += '<div class="section-label">前日閉店レジとの差異</div>';
+      html += '<div style="background:#111;border:1px solid #2a2a3a;border-radius:8px;padding:10px 12px;font-size:13px">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#888">前日（' + esc(init.prevClosing.dateKey) + '）閉店レジ</span><span style="color:#ccc">¥' + Number(init.prevClosing.tillTotal).toLocaleString() + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:#888">本日開店レジ</span><span style="color:#ccc">¥' + Number(init.tillTotal).toLocaleString() + '</span></div>';
+      html += '<div style="display:flex;justify-content:space-between;border-top:1px solid #2a2a3a;padding-top:6px;margin-top:4px"><span style="color:#aaa;font-weight:700">差異</span><span style="color:' + diffColor + ';font-weight:700">' + (prevDiff >= 0 ? '+' : '') + prevDiff.toLocaleString() + '円' + (prevDiff === 0 ? '（一致）' : '') + '</span></div>';
+      html += '</div>';
+    }
+
+    html += '<div class="section-label" style="margin-top:12px">レジ現金内訳</div>';
     html += '<div style="font-size:13px;color:#ccc;padding:6px 0">' + (esc(init.tillStr) || '（内訳なし）') + '</div>';
     html += '<div style="font-size:13px;color:#aaa">合計　¥' + Number(init.tillTotal).toLocaleString() + '</div>';
     if (init.keihiStr || init.keihiTotal > 0) {
@@ -2049,43 +2062,66 @@ function renderCashCheckForm() {
     var html = souvenirAlertHtml(init);
     html += '<div style="font-size:11px;color:#889;margin-bottom:8px">対象日：' + esc(init.dateKey) + '　報告者：' + esc(init.reporterName) + '</div>';
 
-    // 現金売上
-    html += '<div class="section-label">現金売上（手入力）</div>';
-    html += '<div style="font-size:14px;color:#ddd;padding:6px 0">¥' + Number(init.cashSalesInput || 0).toLocaleString() + '</div>';
+    // 現金の流れ（キャッシュフロー）
+    html += '<div class="section-label">現金の流れ</div>';
+    html += '<div style="background:#0d0d16;border:1px solid #2a2a40;border-radius:10px;padding:12px 14px;font-size:13px">';
 
-    // 照合チェック
-    html += '<div class="section-label">照合チェック（理論値 vs 実測）</div>';
+    // 開店レジ
+    html += '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1a1a2a">';
+    html += '<span style="color:#888">🌅 開店レジ残高</span><span style="color:#ddd">¥' + Number(init.openingTotal || 0).toLocaleString() + '</span></div>';
+
+    // 入金
+    if ((init.cashSalesInput || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0">';
+      html += '<span style="color:#55cc88">＋ 現金売上</span><span style="color:#55cc88">¥' + Number(init.cashSalesInput).toLocaleString() + '</span></div>';
+    }
+    if ((init.withdrawalTotal || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0">';
+      html += '<span style="color:#55cc88">＋ 金庫出金</span><span style="color:#55cc88">¥' + Number(init.withdrawalTotal).toLocaleString() + '</span></div>';
+    }
+
+    // 支出
+    if ((init.openingKeihiTotal || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0">';
+      html += '<span style="color:#ee8855">－ 開店経費</span><span style="color:#ee8855">¥' + Number(init.openingKeihiTotal).toLocaleString() + '</span></div>';
+    }
+    if ((init.slipTotal || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0">';
+      html += '<span style="color:#ee8855">－ 伝票出金</span><span style="color:#ee8855">¥' + Number(init.slipTotal).toLocaleString() + '</span></div>';
+    }
+    if ((init.keihiTotal || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;padding:4px 0">';
+      html += '<span style="color:#ee8855">－ 閉店経費</span><span style="color:#ee8855">¥' + Number(init.keihiTotal).toLocaleString() + '</span></div>';
+    }
+
+    // 理論値
+    if (init.theoreticalRemain !== null) {
+      html += '<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid #2a2a40;margin-top:4px">';
+      html += '<span style="color:#aaa;font-weight:700">＝ 理論値</span><span style="color:#ddd;font-weight:700">¥' + Number(init.theoreticalRemain).toLocaleString() + '</span></div>';
+    }
+    html += '</div>';
+
+    // 照合結果
+    html += '<div class="section-label" style="margin-top:12px">照合チェック</div>';
     if (init.theoreticalRemain === null) {
       html += cashBannerBox('#7a5a00', '#ffcc44', '⚠️ 開店チェック未提出のため理論値なし');
     } else {
       var d = init.diff;
       var dColor = d === 0 ? '#5dcc88' : '#ff8888';
       var dBorder = d === 0 ? '#1f6040' : '#882020';
-      html += cashBannerBox(dBorder, dColor,
-        '理論値　　¥' + Number(init.theoreticalRemain).toLocaleString()
-        + '　（開店¥' + Number(init.openingTotal || 0).toLocaleString()
-        + '＋売上¥' + Number(init.cashSalesInput || 0).toLocaleString()
-        + '＋出金¥' + Number(init.withdrawalTotal || 0).toLocaleString()
-        + '－伝票¥' + Number(init.slipTotal || 0).toLocaleString()
-        + '－経費¥' + Number(init.keihiTotal || 0).toLocaleString() + '）<br>'
-        + '実測合計　¥' + Number(init.actualTotal || 0).toLocaleString()
+      var actualStr = '実測合計　¥' + Number(init.actualTotal || 0).toLocaleString()
         + '　（レジ¥' + Number(init.actualTill || 0).toLocaleString()
-        + '＋金庫移動¥' + Number(init.safeTransferTotal || 0).toLocaleString() + '）<br>'
-        + '差額　　　¥' + Math.abs(d).toLocaleString() + (d === 0 ? '（一致）' : '（要確認）'));
+        + (init.safeTransferTotal ? '＋金庫移動¥' + Number(init.safeTransferTotal).toLocaleString() : '') + '）<br>';
+      html += cashBannerBox(dBorder, dColor,
+        actualStr
+        + '理論値　　¥' + Number(init.theoreticalRemain).toLocaleString() + '<br>'
+        + '差額　　　¥' + Math.abs(d).toLocaleString() + (d === 0 ? '　✅ 一致' : '　⚠️ 要確認'));
     }
 
-    // 金庫
-    if ((init.safeTransferTotal || 0) > 0 || init.safeFinalStr) {
-      html += '<div class="section-label" style="margin-top:12px">金庫</div>';
-      if ((init.safeTransferTotal || 0) > 0) html += '<div style="font-size:13px;color:#ccc;padding:2px 0">移動分　¥' + Number(init.safeTransferTotal).toLocaleString() + '</div>';
-      if (init.safeFinalStr) html += '<div style="font-size:13px;color:#ccc;padding:2px 0">最終　' + esc(init.safeFinalStr) + '</div>';
-    }
-
-    // 経費
-    if (init.keihiStr || (init.keihiTotal || 0) > 0) {
-      html += '<div class="section-label" style="margin-top:12px">経費（閉店）</div>';
-      html += '<div style="font-size:13px;color:#ccc;padding:4px 0">' + (esc(init.keihiStr) || '（内訳なし）') + '</div>';
-      html += '<div style="font-size:13px;color:#aaa">合計　¥' + Number(init.keihiTotal).toLocaleString() + '</div>';
+    // 金庫最終
+    if (init.safeFinalStr) {
+      html += '<div class="section-label" style="margin-top:12px">金庫 最終内訳</div>';
+      html += '<div style="font-size:13px;color:#ccc;padding:4px 0">' + esc(init.safeFinalStr) + '</div>';
     }
 
     // 承認セクション
@@ -2165,10 +2201,18 @@ function renderCashCheckForm() {
   var html = souvenirAlertHtml(init);
   html += '<div style="font-size:11px;color:#889;margin-bottom:8px">対象日：' + esc(init.dateKey) + '</div>';
   if (!init.openingSubmitted) {
-    html += cashBannerBox('#7a5a00', '#ffcc44', '🔶 開店チェックが未提出です（Check B の理論値なし）');
+    html += cashBannerBox('#7a5a00', '#ffcc44', '🔶 開店チェックが未提出です（理論値が計算できません）');
   } else {
-    html += '<div style="font-size:12px;color:#aaa;margin-bottom:6px">開店時レジ　¥' + Number(init.openingTotal).toLocaleString()
-      + '　／　金庫出金合計　¥' + Number(init.withdrawalTotal).toLocaleString() + '</div>';
+    html += '<div style="background:#111;border:1px solid #1e2a1e;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px">';
+    html += '<div style="color:#556;margin-bottom:4px">開店チェック情報</div>';
+    html += '<div style="display:flex;justify-content:space-between;color:#aaa;padding:2px 0"><span>🌅 開店レジ</span><span>¥' + Number(init.openingTotal).toLocaleString() + '</span></div>';
+    if ((init.openingKeihiTotal || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;color:#ee8855;padding:2px 0"><span>開店経費</span><span>¥' + Number(init.openingKeihiTotal).toLocaleString() + '</span></div>';
+    }
+    if ((init.withdrawalTotal || 0) > 0) {
+      html += '<div style="display:flex;justify-content:space-between;color:#55cc88;padding:2px 0"><span>金庫出金合計</span><span>¥' + Number(init.withdrawalTotal).toLocaleString() + '</span></div>';
+    }
+    html += '</div>';
   }
 
   var kfNames = staffList.filter(function(n){ return n.indexOf('黒服') === 0; }).map(function(n){ return n.slice(2); });

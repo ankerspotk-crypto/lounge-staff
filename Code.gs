@@ -5421,12 +5421,30 @@ function findOpeningCheckRow_(sh, dateKey) {
   return -1;
 }
 
+// 直前営業日の閉店チェック結果（レジ実測合計）を取得
+function getPrevClosingCheck_() {
+  const todayKey = bizDateStr_();
+  const sh = getCashCheckSheet_();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return null;
+  const data = sh.getRange(2, 1, lastRow - 1, 10).getValues();
+  for (let i = data.length - 1; i >= 0; i--) {
+    const row = data[i];
+    const dk = String(row[0]);
+    if (dk && dk < todayKey && row[9] !== '') {
+      return { dateKey: dk, tillTotal: Number(row[9]) || 0 };
+    }
+  }
+  return null;
+}
+
 // IEYAS軍師「開店チェック」画面の初期表示データ（提出済みなら内容を返す。未提出ならlocked:false）
 function getOpeningCheckInit() {
   const dateKey = bizDateStr_();
   const sh = getOpeningCheckSheet_();
   const rowIdx = findOpeningCheckRow_(sh, dateKey);
-  if (rowIdx < 0) return { dateKey, locked: false };
+  const prevClosing = getPrevClosingCheck_();
+  if (rowIdx < 0) return { dateKey, locked: false, prevClosing };
   const row = sh.getRange(rowIdx, 1, 1, OPENING_CHECK_HEADERS_.length).getValues()[0];
   return {
     dateKey,
@@ -5435,7 +5453,8 @@ function getOpeningCheckInit() {
     tillStr: String(row[2]),
     tillTotal: Number(row[3]) || 0,
     keihiStr: String(row[5] || ''),
-    keihiTotal: Number(row[6]) || 0
+    keihiTotal: Number(row[6]) || 0,
+    prevClosing
   };
 }
 
@@ -5461,6 +5480,13 @@ function submitOpeningCheck(payload) {
     if (tillStr) tillStr.split(' / ').forEach(s => lines.push(s));
     lines.push('レジ合計　¥' + tillTotal.toLocaleString());
     if (keihiStr || keihiTotal > 0) lines.push('経費　' + (keihiStr || '') + '　¥' + keihiTotal.toLocaleString());
+    const prev = getPrevClosingCheck_();
+    if (prev) {
+      const prevDiff = tillTotal - prev.tillTotal;
+      lines.push('');
+      lines.push('前日閉店レジ（' + prev.dateKey + '）　¥' + prev.tillTotal.toLocaleString());
+      lines.push('差異　' + (prevDiff >= 0 ? '+' : '') + prevDiff.toLocaleString() + '円' + (prevDiff === 0 ? '（一致）' : ''));
+    }
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
     return { ok: true, dateKey, tillTotal, keihiTotal };
@@ -5606,6 +5632,7 @@ function getCashCheckInit() {
     dateKey,
     openingSubmitted: openingInit.locked,
     openingTotal: openingInit.locked ? openingInit.tillTotal : null,
+    openingKeihiTotal: openingInit.locked ? (openingInit.keihiTotal || 0) : 0,
     withdrawalTotal: getSafeWithdrawalTotalToday_(dateKey),
     reportSubmitted: false,
     reporterName: '',
@@ -5698,13 +5725,13 @@ function submitCashCheck(payload) {
     const openingInit = getOpeningCheckInit();
     const withdrawalTotal = getSafeWithdrawalTotalToday_(dateKey);
 
-    // 理論値 = 開店残高 + 現金売上(手入力) + 金庫出金 - 伝票合計 - 経費
+    // 理論値 = 開店残高 + 現金売上(手入力) + 金庫出金 - 伝票合計 - 開店経費 - 閉店経費
     // 実測合計 = レジ実測 + 金庫移動分
     let theoreticalRemain = '';
     let actualTotal = '';
     let diff = '';
     if (openingInit.locked) {
-      theoreticalRemain = openingInit.tillTotal + withdrawalTotal + cashSalesInput - slipTotal - keihiTotal;
+      theoreticalRemain = openingInit.tillTotal + withdrawalTotal + cashSalesInput - slipTotal - (openingInit.keihiTotal || 0) - keihiTotal;
       actualTotal       = actualTill + safeTransferTotal;
       diff              = theoreticalRemain - actualTotal;
     }
@@ -5746,7 +5773,8 @@ function submitCashCheck(payload) {
         + '＋売上¥' + cashSalesInput.toLocaleString()
         + '＋出金¥' + withdrawalTotal.toLocaleString()
         + '－伝票¥' + slipTotal.toLocaleString()
-        + '－経費¥' + keihiTotal.toLocaleString() + '）');
+        + (openingInit.keihiTotal ? '－開店経費¥' + openingInit.keihiTotal.toLocaleString() : '')
+        + '－閉店経費¥' + keihiTotal.toLocaleString() + '）');
       lines.push('実測合計　¥' + actualTotal.toLocaleString()
         + '（レジ¥' + actualTill.toLocaleString()
         + '＋金庫移動¥' + safeTransferTotal.toLocaleString() + '）');
