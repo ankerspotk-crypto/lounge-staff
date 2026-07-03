@@ -1560,11 +1560,17 @@ function renderCustomerList_() {
     if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶' + esc(c.bottle) + '</span>';
     if (c.bday)   badges += '<span class="ycm ycm-bday">🎂 ' + esc(c.bday) + '</span>';
     if (c.note)   badges += '<span class="ycm ycm-note">📝メモ</span>';
-    if (c.annualFeeDate) {
-      var renewal = new Date(c.annualFeeDate); renewal.setFullYear(renewal.getFullYear() + 1);
-      var daysLeft = Math.ceil((renewal - today) / 86400000);
-      var cls = daysLeft <= 7 ? 'ycm-fee-urg' : daysLeft <= 30 ? 'ycm-fee-warn' : 'ycm-note';
-      badges += '<span class="ycm ' + cls + '">💳 期限' + (renewal.getMonth()+1) + '月' + renewal.getDate() + '日（あと' + daysLeft + '日）</span>';
+    if (c.annualFeeDate || c.memberYear) {
+      var yearLabel = c.memberYear ? c.memberYear + '年目' : '';
+      if (c.annualFeeDate) {
+        var renewal = new Date(c.annualFeeDate); renewal.setFullYear(renewal.getFullYear() + 1);
+        var daysLeft = Math.ceil((renewal - today) / 86400000);
+        var cls = daysLeft <= 7 ? 'ycm-fee-urg' : daysLeft <= 30 ? 'ycm-fee-warn' : 'ycm-note';
+        var countLabel = daysLeft <= 30 ? '（あと' + daysLeft + '日）' : '';
+        badges += '<span class="ycm ' + cls + '">💳 ' + (yearLabel ? yearLabel + '　' : '') + '期限' + (renewal.getMonth()+1) + '月' + renewal.getDate() + '日' + countLabel + '</span>';
+      } else if (yearLabel) {
+        badges += '<span class="ycm ycm-note">💳 ' + yearLabel + '</span>';
+      }
     }
     return '<div class="cust-card">'
       + '<div class="cust-card-top">'
@@ -2990,14 +2996,7 @@ function renderYoyakuList() {
     if (r.memberId && yoyakuMemberFeeMap[r.memberId]) {
       var mfi = yoyakuMemberFeeMap[r.memberId];
       var mfParts = [];
-      if (mfi.memberSince) {
-        var msDate = new Date(mfi.memberSince);
-        var msToday = new Date(); msToday.setHours(0,0,0,0);
-        var msYears = msToday.getFullYear() - msDate.getFullYear();
-        var msAnniv = new Date(msDate); msAnniv.setFullYear(msToday.getFullYear());
-        if (msAnniv > msToday) msYears--;
-        mfParts.push((msYears + 1) + '年目');
-      }
+      if (mfi.memberYear) mfParts.push(mfi.memberYear + '年目');
       if (mfi.annualFeeDate) {
         var mfRenewal = new Date(mfi.annualFeeDate); mfRenewal.setFullYear(mfRenewal.getFullYear() + 1);
         mfParts.push('期限' + (mfRenewal.getMonth()+1) + '月' + mfRenewal.getDate() + '日');
@@ -3427,14 +3426,19 @@ function yoyakuSearch(q) {
         if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶ボトルあり</span>';
         if (c.bday && String(c.bday).trim()) badges += '<span class="ycm ycm-bday">🎂'+esc(c.bday)+'</span>';
         if (c.note) badges += '<span class="ycm ycm-note">📝メモあり</span>';
-        if (c.annualFeeDate) {
-          var feeD = new Date(c.annualFeeDate);
-          var renewal = new Date(feeD); renewal.setFullYear(renewal.getFullYear() + 1);
-          var today = new Date(); today.setHours(0,0,0,0);
-          var daysLeft = Math.ceil((renewal - today) / 86400000);
-          if (daysLeft <= 30) {
-            var cls = daysLeft <= 7 ? 'ycm-fee-urg' : 'ycm-fee-warn';
-            badges += '<span class="ycm '+cls+'">💳年会費更新まで'+daysLeft+'日</span>';
+        if (c.annualFeeDate || c.memberYear) {
+          var yearLabel = c.memberYear ? c.memberYear + '年目' : '';
+          if (c.annualFeeDate) {
+            var feeD = new Date(c.annualFeeDate);
+            var renewal = new Date(feeD); renewal.setFullYear(renewal.getFullYear() + 1);
+            var today = new Date(); today.setHours(0,0,0,0);
+            var daysLeft = Math.ceil((renewal - today) / 86400000);
+            var cls = daysLeft <= 7 ? 'ycm-fee-urg' : daysLeft <= 30 ? 'ycm-fee-warn' : 'ycm-note';
+            var dateLabel = '期限'+(renewal.getMonth()+1)+'月'+renewal.getDate()+'日';
+            var countLabel = daysLeft <= 30 ? '（あと'+daysLeft+'日）' : '';
+            badges += '<span class="ycm '+cls+'">💳'+(yearLabel?yearLabel+'　':'')+dateLabel+countLabel+'</span>';
+          } else if (yearLabel) {
+            badges += '<span class="ycm ycm-note">💳'+yearLabel+'</span>';
           }
         }
         return '<div class="ycust-row" data-cidx="'+i+'" onclick="yoyakuSelectCust('+i+')">'
