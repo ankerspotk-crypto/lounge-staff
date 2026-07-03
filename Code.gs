@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ラウンジ家康 LINE Bot — Code.gs（統合版）
 // ============================================================
 // スクリプトプロパティに以下を設定:
@@ -95,6 +95,14 @@ function doGet(e) {
         .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
     }
     if (e && e.parameter && e.parameter.page === 'kiosk') {
+      const kioskKey = prop('KIOSK_KEY');
+      if (kioskKey && e.parameter.key !== kioskKey) {
+        return HtmlService.createHtmlOutput(
+          '<html><body style="font-family:sans-serif;text-align:center;padding:60px;color:#555">' +
+          '<h2 style="color:#c00">エラーが発生しました</h2><p>ページを読み込めませんでした。(Error: invalid request)</p>' +
+          '</body></html>'
+        );
+      }
       const term = e.parameter.term === '2f' ? '2F端末' : '5F端末';
       const ktpl = HtmlService.createTemplateFromFile('Kiosk');
       ktpl.TERM_LABEL = term;
@@ -3888,6 +3896,7 @@ function searchCustomersForYoyaku_(query) {
   const val = (row, c) => (c >= 0 && row[c] != null) ? String(row[c]) : '';
   const cG = idx('カード記載名'), cH = idx('氏名'), cE = idx('会員番号'), cN = idx('担当');
   const cJ = idx('ボトル種類'), cM = idx('誕生日'), cS = idx('飲み方'), cT = idx('タバコ'), cP = idx('参考情報');
+  const cA = idx('年会費');
   const q = query.replace(/\s/g,'');
   const results = [];
   for (let r = h + 1; r < values.length && results.length < 12; r++) {
@@ -3899,9 +3908,14 @@ function searchCustomersForYoyaku_(query) {
     if (!card.includes(q) && !name.includes(q) && !no.includes(q)) continue;
     const bdayRaw = row[cM];
     const bday = bdayRaw instanceof Date ? fmtDate(bdayRaw) : String(bdayRaw || '');
+    const feeRaw = cA >= 0 ? row[cA] : null;
+    const annualFeeDate = feeRaw instanceof Date
+      ? Utilities.formatDate(feeRaw, TZ, 'yyyy-MM-dd')
+      : String(feeRaw || '');
     results.push({
       card: val(row,cG), name: val(row,cH), no: val(row,cE), tantou: val(row,cN),
-      bottle: val(row,cJ), bday, drink: val(row,cS), tabaco: val(row,cT), note: val(row,cP)
+      bottle: val(row,cJ), bday, drink: val(row,cS), tabaco: val(row,cT), note: val(row,cP),
+      annualFeeDate
       // NG行為・NGスタッフは含めない
     });
   }
@@ -6317,7 +6331,7 @@ function getNextAvailableMemberNo_(values, cols) {
     const n = parseInt(String(values[r][cols.no] || '').trim(), 10);
     if (!isNaN(n) && n > 0) used.add(n);
   }
-  let n = 1;
+  let n = 450;
   while (used.has(n)) n++;
   return String(n);
 }
@@ -6486,4 +6500,91 @@ function updateCustomer(rowIdx, payload) {
   set(cols.ng, String(payload.ng || '').trim());
   set(cols.ngStaff, String(payload.ngStaff || '').trim());
   return { ok: true };
+}
+
+// ============================================================
+// シフト管理ポータル用
+// ============================================================
+
+function getShiftMgmtData_() {
+  const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh) return { headers: [], rows: [] };
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return { headers: [], rows: [] };
+  const headers = data[0].map(v => {
+    if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
+    return String(v).trim();
+  });
+  const rows = [];
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0]).trim();
+    const role = String(data[i][1]).trim();
+    if (!name) continue;
+    const cells = {};
+    for (let j = 2; j < headers.length; j++) {
+      const v = data[i][j];
+      const s = (v instanceof Date) ? Utilities.formatDate(v, TZ, 'HH:mm') : String(v).trim();
+      if (s) cells[headers[j]] = s;
+    }
+    rows.push({ name, role, cells });
+  }
+  return { headers: headers.slice(2), rows };
+}
+
+function writeShiftCell_(name, date, value) {
+  const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) return { ok: false, error: 'データなし' };
+  const headers = data[0].map(v => {
+    if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
+    return String(v).trim();
+  });
+  const colIdx = headers.indexOf(date);
+  if (colIdx < 0) return { ok: false, error: '日付列が見つかりません: ' + date };
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === name) {
+      sh.getRange(i + 1, colIdx + 1).setValue(value || '');
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: 'スタッフが見つかりません: ' + name };
+}
+
+function addShiftStaff_(staffName, role, date, timeVal) {
+  const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
+  if (!staffName) return { ok: false, error: '名前を入力してください' };
+  const data = sh.getDataRange().getValues();
+  const headers = data[0].map(v => {
+    if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
+    return String(v).trim();
+  });
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === staffName) {
+      if (date && timeVal) return writeShiftCell_(staffName, date, timeVal);
+      return { ok: true, note: 'existing' };
+    }
+  }
+  const newRow = new Array(headers.length).fill('');
+  newRow[0] = staffName;
+  newRow[1] = role;
+  if (date && timeVal) {
+    const colIdx = headers.indexOf(date);
+    if (colIdx >= 0) newRow[colIdx] = timeVal;
+  }
+  sh.appendRow(newRow);
+  return { ok: true };
+}
+// キオスクURLのシークレットキーをリセット（実行するたびに新URLが発行される）
+function resetKioskKey_() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let key = '';
+  for (let i = 0; i < 16; i++) key += chars[Math.floor(Math.random() * chars.length)];
+  PropertiesService.getScriptProperties().setProperty('KIOSK_KEY', key);
+  const base = ScriptApp.getService().getUrl();
+  Logger.log('【新キオスクURL】');
+  Logger.log('2F: ' + base + '?page=kiosk&term=2f&key=' + key);
+  Logger.log('5F: ' + base + '?page=kiosk&term=5f&key=' + key);
+  return key;
 }

@@ -276,9 +276,11 @@ header h1 { font-size: 17px; font-weight: 600; }
 .ycust-sub { font-size: 10px; color: #7a9cc8; margin-top: 2px; }
 .ycust-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 .ycm { font-size: 9px; padding: 1px 6px; border-radius: 5px; }
-.ycm-bottle { background: #1a2a10; color: #88cc55; border: 1px solid #336622; }
-.ycm-bday   { background: #1a1040; color: #9988ee; border: 1px solid #4433aa; }
-.ycm-note   { background: #141428; color: #8aabcc; border: 1px solid #1e3050; }
+.ycm-bottle  { background: #1a2a10; color: #88cc55; border: 1px solid #336622; }
+.ycm-bday    { background: #1a1040; color: #9988ee; border: 1px solid #4433aa; }
+.ycm-note    { background: #141428; color: #8aabcc; border: 1px solid #1e3050; }
+.ycm-fee-warn{ background: #2a1800; color: #ffaa44; border: 1px solid #885500; }
+.ycm-fee-urg { background: #2a0a0a; color: #ff6666; border: 1px solid #882222; }
 /* 予約フォーム */
 .yform-sec { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 13px; margin-top: 10px; }
 .yform-sec .selected-name { font-size: 14px; font-weight: 600; color: #7ab0f0; margin-bottom: 12px; }
@@ -2672,7 +2674,7 @@ function saveCashThresholds() {
 }
 
 // ---- 予約管理タブ ----
-var yoyakuDate = (function(){ var d = new Date(); return d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; })();
+var yoyakuDate = new Date();
 var yoyakuRsvs = [];
 var yoyakuCastList = [];
 var yoyakuCustResults = [];
@@ -2854,7 +2856,7 @@ function yoyakuChangeDate(d) {
   yoyakuDate = new Date(yoyakuDate.getTime() + d * 86400000);
   loadYoyaku();
 }
-function yoyakuToday() { var d = new Date(); yoyakuDate = d.getHours() < 3 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : d; loadYoyaku(); }
+function yoyakuToday() { yoyakuDate = new Date(); loadYoyaku(); }
 
 function renderYoyakuList() {
   var all = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
@@ -3314,6 +3316,16 @@ function yoyakuSearch(q) {
         if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶ボトルあり</span>';
         if (c.bday && String(c.bday).trim()) badges += '<span class="ycm ycm-bday">🎂'+esc(c.bday)+'</span>';
         if (c.note) badges += '<span class="ycm ycm-note">📝メモあり</span>';
+        if (c.annualFeeDate) {
+          var feeD = new Date(c.annualFeeDate);
+          var renewal = new Date(feeD); renewal.setFullYear(renewal.getFullYear() + 1);
+          var today = new Date(); today.setHours(0,0,0,0);
+          var daysLeft = Math.ceil((renewal - today) / 86400000);
+          if (daysLeft <= 30) {
+            var cls = daysLeft <= 7 ? 'ycm-fee-urg' : 'ycm-fee-warn';
+            badges += '<span class="ycm '+cls+'">💳年会費更新まで'+daysLeft+'日</span>';
+          }
+        }
         return '<div class="ycust-row" data-cidx="'+i+'" onclick="yoyakuSelectCust('+i+')">'
           + '<div><div class="ycust-name">'+esc(c.name||c.card||'')+'様</div>'
           + '<div class="ycust-sub">'+(c.no?'会員'+c.no:'')+' '+(c.tantou?'担当:'+c.tantou:'')+'</div>'
@@ -3503,19 +3515,37 @@ function yoyakuSubmitRsv() {
 var smgmtData = null;
 var smgmtEditTarget = null; // {name, date, curVal}
 var smgmtAddRole = '';
+var smgmtViewStart = -1; // -1=未初期化（初回は今日から）
 var DOW_JA = ['日','月','火','水','木','金','土'];
 var ROLE_ORDER = ['キャスト','体験','派遣','黒服社員','黒服バイト','黒服'];
 
 function loadShiftMgmt() {
+  smgmtViewStart = -1;
   setContent('<div class="loading">読み込み中...</div>');
   gasFetch(GAS_URL + '?action=portal&tab=shiftMgmt&userId=' + encodeURIComponent(userId))
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d.ok) { setContent('<div class="err">' + (d.error||'エラー') + '</div>'); return; }
+      if (!d.shiftData) { setContent('<div class="err">Code.gsを最新版にデプロイしてください<br><small>getShiftMgmtData_が未定義</small></div>'); return; }
       smgmtData = d.shiftData;
       renderShiftMgmt();
     })
     .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
+}
+
+function smgmtNavWeek(delta) {
+  var headers = smgmtData ? smgmtData.headers : [];
+  smgmtViewStart = Math.max(0, Math.min(headers.length - 1, smgmtViewStart + delta * 7));
+  renderShiftMgmt();
+}
+
+function smgmtGoToday() {
+  var headers = smgmtData ? smgmtData.headers : [];
+  var today = new Date();
+  var ts = (today.getMonth()+1) + '/' + today.getDate();
+  var idx = headers.indexOf(ts);
+  smgmtViewStart = idx >= 0 ? idx : 0;
+  renderShiftMgmt();
 }
 
 function renderShiftMgmt() {
@@ -3525,12 +3555,29 @@ function renderShiftMgmt() {
   var today = new Date();
   var todayStr = (today.getMonth()+1) + '/' + today.getDate();
 
-  // 月ラベルをヘッダーから推測
-  var monthLabel = '';
-  if (headers.length) {
-    var parts = headers[0].split('/');
-    if (parts.length === 2) monthLabel = parts[0] + '月';
+  // 初回: 今日のインデックスから開始
+  if (smgmtViewStart < 0) {
+    var tidx = headers.indexOf(todayStr);
+    smgmtViewStart = tidx >= 0 ? tidx : 0;
   }
+
+  // 週表示: 7日分スライス
+  var viewHeaders = headers.slice(smgmtViewStart, smgmtViewStart + 7);
+
+  // 日付範囲ラベル
+  var fmtH = function(h) {
+    var p = h.split('/'), m = parseInt(p[0]), d = parseInt(p[1]);
+    return m + '月' + d + '日（' + DOW_JA[new Date(today.getFullYear(), m-1, d).getDay()] + '）';
+  };
+  var rangeLabel = viewHeaders.length
+    ? fmtH(viewHeaders[0]) + ' 〜 ' + fmtH(viewHeaders[viewHeaders.length-1])
+    : '';
+
+  var todayIdx = headers.indexOf(todayStr);
+  var todayStart = todayIdx >= 0 ? todayIdx : 0;
+  var canPrev = smgmtViewStart > 0;
+  var canNext = smgmtViewStart + 7 < headers.length;
+  var atToday = smgmtViewStart === todayStart;
 
   // ロール別にグループ化（表示順: キャスト→体験→派遣→黒服系）
   var groups = {};
@@ -3540,16 +3587,19 @@ function renderShiftMgmt() {
     if (!groups[r]) groups[r] = [];
     groups[r].push(row);
   });
-  // 黒服バイト・黒服社員・黒服 をまとめて「黒服」表示
   var displayGroups = [
     { label: 'キャスト', members: groups['キャスト'] },
-    { label: '体験',    members: groups['体験'] },
-    { label: '派遣',    members: groups['派遣'] },
+    { label: '体験',    members: groups['体験'],    scheduleOnly: true },
+    { label: '派遣',    members: groups['派遣'],    scheduleOnly: true },
     { label: '黒服',    members: (groups['黒服社員']||[]).concat(groups['黒服バイト']||[]).concat(groups['黒服']||[]) }
-  ].filter(function(g) { return g.members.length > 0; });
+  ].filter(function(g) {
+    if (!g.members.length) return false;
+    if (g.scheduleOnly) return g.members.some(function(r) { return Object.keys(r.cells).length > 0; });
+    return true;
+  });
 
   var thead = '<tr><th class="smgmt-name-col head">氏名</th>';
-  headers.forEach(function(h) {
+  viewHeaders.forEach(function(h) {
     var parts = h.split('/');
     var d = parts.length === 2 ? parseInt(parts[1]) : 0;
     var m = parts.length === 2 ? parseInt(parts[0]) : 0;
@@ -3562,10 +3612,10 @@ function renderShiftMgmt() {
 
   var tbody = '';
   displayGroups.forEach(function(g) {
-    tbody += '<tr class="smgmt-role-row"><td colspan="' + (headers.length+1) + '">' + g.label + '</td></tr>';
+    tbody += '<tr class="smgmt-role-row"><td colspan="' + (viewHeaders.length+1) + '">' + g.label + '</td></tr>';
     g.members.forEach(function(row) {
       tbody += '<tr><td class="smgmt-name-col" title="' + esc(row.name) + '">' + esc(row.name) + '</td>';
-      headers.forEach(function(h) {
+      viewHeaders.forEach(function(h) {
         var val = row.cells[h] || '';
         var cls = smgmtCellClass(val);
         var todayCls = h === todayStr ? ' today-col' : '';
@@ -3577,7 +3627,12 @@ function renderShiftMgmt() {
 
   var html = '<div class="smgmt-wrap">'
     + '<div class="smgmt-nav">'
-    + '<span class="smgmt-month-label">' + monthLabel + ' シフト</span>'
+    + '<button class="smgmt-nav-btn" onclick="smgmtNavWeek(-1)"' + (canPrev ? '' : ' disabled style="opacity:.3"') + '>◀</button>'
+    + '<div style="text-align:center;flex:1">'
+    + '<div class="smgmt-month-label" style="font-size:13px">' + rangeLabel + '</div>'
+    + (!atToday ? '<button onclick="smgmtGoToday()" style="margin-top:4px;font-size:11px;background:none;border:1px solid #2a5aaa;color:#7ab0f0;border-radius:6px;padding:2px 10px;cursor:pointer">今週</button>' : '')
+    + '</div>'
+    + '<button class="smgmt-nav-btn" onclick="smgmtNavWeek(1)"' + (canNext ? '' : ' disabled style="opacity:.3"') + '>▶</button>'
     + '</div>'
     + '<div class="smgmt-grid-outer" id="smgmt-grid-outer">'
     + '<table class="smgmt-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>'
@@ -3602,14 +3657,6 @@ function renderShiftMgmt() {
     + '</div>';
 
   setContent(html);
-
-  // 今日の列へスクロール
-  setTimeout(function() {
-    var outer = document.getElementById('smgmt-grid-outer');
-    if (!outer) return;
-    var todayCell = outer.querySelector('.today-col');
-    if (todayCell) outer.scrollLeft = Math.max(0, todayCell.offsetLeft - 60);
-  }, 50);
 }
 
 function smgmtCellClass(val) {
