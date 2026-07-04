@@ -314,6 +314,20 @@ function ensureRsvList(cb) {
 }
 
 function softRefresh() {
+  // 強制ログアウトチェック
+  google.script.run.withSuccessHandler(function(r) {
+    if (r && r.ts && kioskSession && kioskSession.loginAt && r.ts > kioskSession.loginAt) {
+      localStorage.removeItem(kioskSessionKey());
+      kioskSession = null;
+      if (window._kioskInterval) { clearInterval(window._kioskInterval); window._kioskInterval = null; }
+      document.getElementById('kl-login-indicator').style.display = 'none';
+      document.querySelector('.kiosk-wrap').style.display = 'none';
+      document.getElementById('kl-term-sub').textContent = TERM_LABEL;
+      document.getElementById('kiosk-login-overlay').style.display = 'flex';
+      showLoginStep1();
+    }
+  }).withFailureHandler(function(){}).getKioskForceLogoutTs();
+
   if (subTab !== 'list') return;
   google.script.run.withSuccessHandler(function(list) {
     rsvList = list || [];
@@ -862,7 +876,7 @@ function saveKioskSession(name) {
   // 翌日3時まで有効（現在が3時以前ならその日の3時）
   if (now.getHours() >= 3) exp.setDate(exp.getDate() + 1);
   exp.setHours(3, 0, 0, 0);
-  var s = { name: name, expires: exp.getTime() };
+  var s = { name: name, expires: exp.getTime(), loginAt: Date.now() };
   localStorage.setItem(kioskSessionKey(), JSON.stringify(s));
   kioskSession = s;
 }

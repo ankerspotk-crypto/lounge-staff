@@ -263,6 +263,16 @@ function handleApiRequest_(body) {
     if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
     return { ok: true, mode: prop('OKURI_MODE') || 'driver' };
   }
+  if (body.action === 'kioskForceLogout') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    const ts = Date.now();
+    setProp('KIOSK_FORCE_LOGOUT_TS', String(ts));
+    return { ok: true, ts: ts };
+  }
+  if (body.action === 'getKioskForceLogoutTs') {
+    return { ok: true, ts: Number(prop('KIOSK_FORCE_LOGOUT_TS') || 0) };
+  }
   if (body.action === 'setOkuriMode') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
