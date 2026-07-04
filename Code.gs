@@ -6526,6 +6526,17 @@ function parseRenewalStr_(v) {
   return year + '-' + month + '-01';
 }
 
+// 備考欄の自由文から "R8.7月" / "R8年7月" のような令和表記を抽出（複数あれば最後=最新を採用）
+function extractRenewalFromNote_(v) {
+  if (!v) return '';
+  var matches = Array.from(String(v).matchAll(/R(\d+)[\.年](\d+)/gi));
+  if (!matches.length) return '';
+  var m = matches[matches.length - 1];
+  var year = 2018 + parseInt(m[1], 10);
+  var month = String(parseInt(m[2], 10)).padStart(2, '0');
+  return year + '-' + month + '-01';
+}
+
 // 顧客一覧取得（IEYAS軍師「顧客管理」一覧表示用）
 function getCustomerList() {
   const ss = getOrOpenSS_();
@@ -6554,7 +6565,7 @@ function getCustomerList() {
       tabaco: String(val(row, cols.tabaco)), ng: String(val(row, cols.ng)),
       ngStaff: String(val(row, cols.ngStaff)),
       memberSince: fmtDateFull_(val(row, cols.memberSince)),
-      feeDate: parseRenewalStr_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.feeDate)) || parseRenewalStr_(val(row, cols.renewal2)) || fmtDateFull_(val(row, cols.renewal2)),
+      feeDate: parseRenewalStr_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.feeDate)) || parseRenewalStr_(val(row, cols.renewal2)) || fmtDateFull_(val(row, cols.renewal2)) || extractRenewalFromNote_(val(row, cols.note)),
       lineReg: String(val(row, cols.lineReg))
     });
   }
