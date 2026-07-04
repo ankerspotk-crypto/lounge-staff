@@ -138,11 +138,7 @@ header h1 { font-size: 16px; letter-spacing: .5px; }
     </div>
   </div>
   <div class="kiosk-right">
-<?  if (KIOSK_USER_ID) { ?>
-    <iframe src="https://ankerspotk-crypto.github.io/lounge-staff/portal.html#u=<?= KIOSK_USER_ID ?>"></iframe>
-<?  } else { ?>
-    <div class="kr-nocfg">軍師を表示するには<br>ScriptPropertiesに<br><code>KIOSK_USER_ID</code>を設定してください</div>
-<?  } ?>
+    <iframe src="<?= GAS_URL ?>"></iframe>
   </div>
 </div>
 
