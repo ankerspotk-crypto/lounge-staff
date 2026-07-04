@@ -6515,7 +6515,7 @@ function fmtDateFull_(v) {
   return String(v || '');
 }
 
-// "○R7.7" / "R7年7月" 形式の令和テキストを yyyy-MM-dd に変換（日は01固定）
+// "○R7.7" / "R7年7月" 形式（先頭がR）の令和テキストを yyyy-MM-dd に変換
 function parseRenewalStr_(v) {
   if (!v) return '';
   var s = String(v).replace(/[○×〇●]/g, '').trim();
@@ -6526,7 +6526,7 @@ function parseRenewalStr_(v) {
   return year + '-' + month + '-01';
 }
 
-// 備考欄の自由文から "R8.7月" / "R8年7月" のような令和表記を抽出（複数あれば最後=最新を採用）
+// 任意テキスト中から "R8.7月" / "3年目更新済みR8.7月" のような令和表記を抽出（複数あれば最後=最新）
 function extractRenewalFromNote_(v) {
   if (!v) return '';
   var matches = Array.from(String(v).matchAll(/R(\d+)[\.年](\d+)/gi));
@@ -6535,6 +6535,13 @@ function extractRenewalFromNote_(v) {
   var year = 2018 + parseInt(m[1], 10);
   var month = String(parseInt(m[2], 10)).padStart(2, '0');
   return year + '-' + month + '-01';
+}
+
+// 更新日セル値を解決: Date → yyyy-MM-dd、"○R7.7"→解析、"3年目更新済みR8.7月"等→埋め込み表記抽出
+function resolveRenewal_(v) {
+  if (!v) return '';
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+  return parseRenewalStr_(v) || extractRenewalFromNote_(String(v));
 }
 
 // 顧客一覧取得（IEYAS軍師「顧客管理」一覧表示用）
@@ -6565,7 +6572,7 @@ function getCustomerList() {
       tabaco: String(val(row, cols.tabaco)), ng: String(val(row, cols.ng)),
       ngStaff: String(val(row, cols.ngStaff)),
       memberSince: fmtDateFull_(val(row, cols.memberSince)),
-      feeDate: parseRenewalStr_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.feeDate)) || parseRenewalStr_(val(row, cols.renewal2)) || fmtDateFull_(val(row, cols.renewal2)) || extractRenewalFromNote_(val(row, cols.note)),
+      feeDate: resolveRenewal_(val(row, cols.feeDate)) || resolveRenewal_(val(row, cols.renewal2)) || extractRenewalFromNote_(val(row, cols.note)),
       lineReg: String(val(row, cols.lineReg))
     });
   }
