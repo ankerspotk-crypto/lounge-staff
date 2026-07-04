@@ -2405,6 +2405,16 @@ var BUILTIN_NOTIF_KEYS = ['ieyas_url','kaiten_check','lineup','kinsen_mae','soga
                            'okuri_confirm','seki_check','shoumei','kinsen_go','oshibori'];
 var BUILTIN_AUTO_KEYS = ['rain_alert','driver_forward','kintai_detection','missing_shukkin','missing_taikin',
                           'early_taikin','driver_notice_1600','stocktake_reminder'];
+var AUTO_DEFAULTS = {
+  rain_alert:         { label: '☂️ 雨アラート',         enabled: true, group: '黒服',       desc: '雨が降り始める前に黒服へ通知（20:00〜00:30）' },
+  driver_forward:     { label: '🚗 ドライバー発言転送', enabled: true, group: '黒服',       desc: 'ドライバーグループの発言を黒服グループへ自動転送' },
+  kintai_detection:   { label: '👤 出退勤自動検知',     enabled: true, group: 'システム',   desc: 'LINEの「出勤」「退勤」発言から出退勤を自動記録' },
+  missing_shukkin:    { label: '⚠️ 未出勤リマインド',   enabled: true, group: '黒服',       desc: '21:00に未出勤スタッフを黒服に通知' },
+  missing_taikin:     { label: '⚠️ 未退勤リマインド',   enabled: true, group: '黒服',       desc: '01:00に未退勤スタッフを黒服に通知' },
+  early_taikin:       { label: '🕐 早退勤予告',         enabled: true, group: '黒服',       desc: '退勤時間が近いキャストを10分前に黒服へ通知' },
+  driver_notice_1600: { label: '🚗 16時ドライバー連絡', enabled: true, group: 'ドライバー', desc: '16:00にドライバーへ「本日もよろしく」通知' },
+  stocktake_reminder: { label: '📋 棚卸しリマインド',   enabled: true, group: '黒服',       desc: '毎週月曜19:00に黒服グループへ棚卸し通知' }
+};
 var DAY_LABELS = ['月','火','水','木','金','土','日'];
 
 function loadNotifSettings() {
@@ -2533,7 +2543,9 @@ function renderNotif(settings) {
     return settings[k] ? buildNotifRow(k, settings[k]) : '';
   }).join('');
   var autoRows = BUILTIN_AUTO_KEYS.map(function(k) {
-    return settings[k] ? buildAutoRow(k, settings[k]) : '';
+    var s = settings[k] || AUTO_DEFAULTS[k];
+    if (s && !notifSettings[k]) { notifSettings[k] = s; }
+    return s ? buildAutoRow(k, s) : '';
   }).join('');
 
   var html = '<div style="padding:14px">'
