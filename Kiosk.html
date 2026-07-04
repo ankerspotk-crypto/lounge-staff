@@ -171,7 +171,6 @@ var custMode = '';
 var editRsv = null;
 var gridPreset = null;
 var rsvDate = '', rsvCalMonth = '', rsvTime = '', rsvCustManual = '', rsvYoubou = '', rsvPax = 0, rsvTable = '', rsvTantou = '', rsvYoyakuCast = '', rsvDohan = '';
-var rsvSubCustomers = []; // [{pax:1, yoyakuCast:''}]
 
 function parseDateKey(s) {
   var p = s.split('-').map(Number);
@@ -231,7 +230,7 @@ function goToday() {
 function afterDateChange() {
   rsvListDate = null;
   selectedCust = null; custMode = ''; editRsv = null; gridPreset = null;
-  rsvDate = ''; rsvCalMonth = ''; rsvTime = ''; rsvCustManual = ''; rsvYoubou = ''; rsvPax = 0; rsvTable = ''; rsvTantou = ''; rsvYoyakuCast = ''; rsvDohan = ''; rsvSubCustomers = [];
+  rsvDate = ''; rsvCalMonth = ''; rsvTime = ''; rsvCustManual = ''; rsvYoubou = ''; rsvPax = 0; rsvTable = ''; rsvTantou = ''; rsvYoyakuCast = ''; rsvDohan = '';
   renderHeader();
   if (subTab === 'cal') return;
   document.getElementById('kiosk-body-area').innerHTML = '<div class="empty-msg">読み込み中...</div>';
@@ -308,15 +307,6 @@ function renderListBody() {
     if (r.tantouCast) badges += '<span class="rsv-badge">担当 ' + esc(r.tantouCast) + '</span>';
     if (r.dohanCast)  badges += '<span class="rsv-badge">同伴 ' + esc(r.dohanCast) + '</span>';
     if (r.yoyakuCast) badges += '<span class="rsv-badge">予約 ' + esc(r.yoyakuCast) + '</span>';
-    var subCustHtml = '';
-    if (r.subCustomers && r.subCustomers.length) {
-      subCustHtml = '<div style="font-size:10px;color:#8a9ec0;margin-top:5px;padding:4px 6px;background:#111a28;border-radius:5px;border:1px solid #1e2a40">'
-        + 'サブ: '
-        + r.subCustomers.map(function(sc) {
-            return sc.pax + '名' + (sc.yoyakuCast ? '（予約:' + esc(sc.yoyakuCast) + '）' : '');
-          }).join('　')
-        + '</div>';
-    }
     return '<div class="rsv-card" onclick="openEdit(' + r.rowIdx + ')">'
       + '<div class="rsv-row1">'
       +   '<span class="rsv-time">' + esc(r.time) + '</span>'
@@ -324,7 +314,6 @@ function renderListBody() {
       +   statusBtnsHtml(r)
       + '</div>'
       + '<div class="rsv-badges">' + badges + '</div>'
-      + subCustHtml
       + (r.youbou ? '<div class="rsv-note">📝 ' + esc(r.youbou) + '</div>' : '')
       + '</div>';
   }).join('');
@@ -580,25 +569,6 @@ function renderAddBody() {
         }).join('');
         return '<div id="yrsv-tantou-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">' + (chips || '<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>') + '</div>';
       })()
-    + (function() {
-        var subHtml = '<div style="border:1px dashed #1e3050;border-radius:8px;padding:10px 12px;margin-bottom:12px">';
-        subHtml += '<div style="font-size:12px;color:#7a9cc8;margin-bottom:4px">サブのお客様（任意）</div>';
-        subHtml += '<div style="font-size:10px;color:#556;margin-bottom:8px">途中合流や別予約キャストに紐づく人がいる場合に追加</div>';
-        rsvSubCustomers.forEach(function(sc, i) {
-          var yoyakuOpts = '<option value="">-- 未定 --</option>';
-          castList.forEach(function(c) { yoyakuOpts += '<option value="' + esc(c) + '"' + (c === sc.yoyakuCast ? ' selected' : '') + '>' + esc(c) + '</option>'; });
-          subHtml += '<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">'
-            + '<button type="button" onclick="subPaxChange(' + i + ',-1)" style="width:26px;height:26px;border-radius:50%;border:1px solid #2a4068;background:#141d30;color:#ccc;cursor:pointer;font-size:13px">−</button>'
-            + '<span style="font-size:13px;color:#ddd;min-width:34px;text-align:center">' + sc.pax + '名</span>'
-            + '<button type="button" onclick="subPaxChange(' + i + ',1)" style="width:26px;height:26px;border-radius:50%;border:1px solid #2a4068;background:#141d30;color:#ccc;cursor:pointer;font-size:13px">＋</button>'
-            + '<select onchange="subYoyakuChange(' + i + ',this.value)" style="flex:1;background:#1c2a42;border:1px solid #2a4068;color:#e8f0ff;padding:7px;border-radius:8px;font-size:12px">' + yoyakuOpts + '</select>'
-            + '<button type="button" onclick="subRemove(' + i + ')" style="background:none;border:none;color:#556;font-size:14px;cursor:pointer">✕</button>'
-            + '</div>';
-        });
-        subHtml += '<button type="button" onclick="subAdd()" style="width:100%;background:#141d30;border:1px dashed #1e3050;color:#7ab0f0;padding:8px;border-radius:8px;font-size:12px;cursor:pointer">＋ サブのお客様を追加</button>';
-        subHtml += '</div>';
-        return subHtml;
-      })()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">' + esc(rsvYoubou) + '</textarea>'
     + '<div class="notif-save-btn" onclick="submitRsv()" style="cursor:pointer">' + (editRsv ? '変更を保存' : '予約を確定する') + '</div>'
@@ -679,25 +649,6 @@ function rsvSelectTime(t)  { saveFormInputs(); rsvTime = t; renderAddBody(); }
 
 function toggleChip(el) { el.classList.toggle('sel'); }
 
-function subAdd() {
-  saveFormInputs();
-  rsvSubCustomers.push({ pax: 1, yoyakuCast: '' });
-  renderAddBody();
-}
-function subRemove(i) {
-  saveFormInputs();
-  rsvSubCustomers.splice(i, 1);
-  renderAddBody();
-}
-function subPaxChange(i, delta) {
-  saveFormInputs();
-  rsvSubCustomers[i].pax = Math.max(1, (rsvSubCustomers[i].pax || 1) + delta);
-  renderAddBody();
-}
-function subYoyakuChange(i, val) {
-  rsvSubCustomers[i].yoyakuCast = val;
-}
-
 function setYoyakuCastDirect() {
   var sel = document.getElementById('yrsv-yoyaku-cast');
   if (sel) sel.value = '直接来店';
@@ -757,7 +708,6 @@ function openEdit(rowIdx) {
   rsvTantou = rsv.tantouCast || '';
   rsvYoyakuCast = rsv.yoyakuCast || '';
   rsvDohan = rsv.dohanCast || '';
-  rsvSubCustomers = (rsv.subCustomers || []).map(function(sc) { return { pax: sc.pax || 1, yoyakuCast: sc.yoyakuCast || '' }; });
   subTab = 'add';
   renderHeader();
   renderAddBody();
@@ -765,7 +715,7 @@ function openEdit(rowIdx) {
 
 function cancelEdit() {
   editRsv = null;
-  rsvDate = ''; rsvCalMonth = ''; rsvTime = ''; rsvCustManual = ''; rsvYoubou = ''; rsvPax = 0; rsvTable = ''; rsvTantou = ''; rsvYoyakuCast = ''; rsvDohan = ''; rsvSubCustomers = [];
+  rsvDate = ''; rsvCalMonth = ''; rsvTime = ''; rsvCustManual = ''; rsvYoubou = ''; rsvPax = 0; rsvTable = ''; rsvTantou = ''; rsvYoyakuCast = ''; rsvDohan = '';
   subTab = 'list';
   renderHeader();
   ensureRsvList(function() { renderListBody(); });
@@ -806,15 +756,14 @@ function submitRsv() {
     yoyakuCast: document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : '',
     dohanCast: dohanWrap ? Array.prototype.map.call(dohanWrap.querySelectorAll('.dohan-chip.sel'), function(c) { return c.getAttribute('data-val'); }).join('、') : (rsvDohan || ''),
     youbou: document.getElementById('yrsv-youbou').value,
-    status: editRsv ? (editRsv.status || '確定') : '確定',
-    subCustomers: rsvSubCustomers.filter(function(sc) { return sc.pax > 0; })
+    status: editRsv ? (editRsv.status || '確定') : '確定'
   };
   if (stat) stat.textContent = '送信中...';
 
   function done(d) {
     if (!d || !d.ok) { if (stat) stat.textContent = '⚠️ ' + (d && d.error || 'エラー'); return; }
     selectedCust = null; custMode = ''; editRsv = null; gridPreset = null;
-    rsvDate = ''; rsvCalMonth = ''; rsvTime = ''; rsvCustManual = ''; rsvYoubou = ''; rsvPax = 0; rsvTable = ''; rsvTantou = ''; rsvYoyakuCast = ''; rsvDohan = ''; rsvSubCustomers = [];
+    rsvDate = ''; rsvCalMonth = ''; rsvTime = ''; rsvCustManual = ''; rsvYoubou = ''; rsvPax = 0; rsvTable = ''; rsvTantou = ''; rsvYoyakuCast = ''; rsvDohan = '';
     subTab = 'list';
     renderHeader();
     rsvListDate = null;
