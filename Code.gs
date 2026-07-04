@@ -261,18 +261,15 @@ function handleApiRequest_(body) {
   if (body.action === 'getOkuriMode') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
-    const today = todayStr();
-    return { ok: true, mode: prop('OKURI_MODE_' + today) || 'driver' };
+    return { ok: true, mode: prop('OKURI_MODE') || 'driver' };
   }
   if (body.action === 'setOkuriMode') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
-    const today = todayStr();
     const mode = body.mode === 'jisha' ? 'jisha' : 'driver';
-    setProp('OKURI_MODE_' + today, mode);
-    if (mode === 'jisha') {
-      push_(prop('GROUP_DRIVER'), '本日は送りなしでおねがいします。よろしくお願いします🙏');
-    } else {
+    setProp('OKURI_MODE', mode);
+    // 自社送りモード時はドライバーへの通知を一切しない
+    if (mode === 'driver') {
       push_(prop('GROUP_DRIVER'), '本日の送りをお願いします。23:30に確定リストをお送りします🙏');
     }
     return { ok: true, mode: mode };
@@ -411,6 +408,15 @@ function getNotifSettings_() {
     shoumei:       { label: '照明消灯',                  time: '00:15', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: '2階及び5階ラウンジ入口照明を消灯してください' },
     kinsen_go:     { label: '現金チェック（終了）+退勤', time: '00:30', enabled: true, group: '黒服・スタッフ', days: D,     msgEditable: true,  defaultMsg: MSG_KINSEN_GO, staffMsgEditable: true, defaultStaffMsg: MSG_TAIKIN },
     oshibori:      { label: 'おしぼり発注（木・日）',   time: '00:50', enabled: true, group: '黒服',           days: [4,7], msgEditable: true,  defaultMsg: '今日の閉店後おしぼりを通路に出して発注数に紙を置いておくこと' },
+    // 自動トリガー・自動応答
+    rain_alert:         { label: '☂️ 雨アラート',         type: 'auto', enabled: true, group: '黒服',       desc: '雨が降り始める前に黒服へ通知（20:00〜00:30）' },
+    driver_forward:     { label: '🚗 ドライバー発言転送', type: 'auto', enabled: true, group: '黒服',       desc: 'ドライバーグループの発言を黒服グループへ自動転送' },
+    kintai_detection:   { label: '👤 出退勤自動検知',     type: 'auto', enabled: true, group: 'システム',   desc: 'LINEの「出勤」「退勤」発言から出退勤を自動記録' },
+    missing_shukkin:    { label: '⚠️ 未出勤リマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '21:00に未出勤スタッフを黒服に通知' },
+    missing_taikin:     { label: '⚠️ 未退勤リマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '01:00に未退勤スタッフを黒服に通知' },
+    early_taikin:       { label: '🕐 早退勤予告',         type: 'auto', enabled: true, group: '黒服',       desc: '退勤時間が近いキャストを10分前に黒服へ通知' },
+    driver_notice_1600: { label: '🚗 16時ドライバー連絡', type: 'auto', enabled: true, group: 'ドライバー', desc: '16:00にドライバーへ「本日もよろしく」通知（ドライバーモード時のみ）' },
+    stocktake_reminder: { label: '📋 棚卸しリマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '毎週月曜19:00に黒服グループへ棚卸し通知' },
   };
   const saved = prop('NOTIF_SETTINGS');
   if (!saved) return defaults;
@@ -426,6 +432,8 @@ function getNotifSettings_() {
         parsed[k].staffMsgEditable = defaults[k].staffMsgEditable;
         parsed[k].defaultStaffMsg  = defaults[k].defaultStaffMsg; // 常にシステム定義値
         if (!parsed[k].days) parsed[k].days = defaults[k].days;
+        parsed[k].type = defaults[k].type;
+        parsed[k].desc = defaults[k].desc;
       }
     });
     return parsed;
@@ -763,24 +771,28 @@ function handleKurofuku(event, text, userId) {
     return;
   }
 
-  // 出退勤記録（黒服グループでも受け付ける。「出勤」「退勤」を含む口語表現を広く許容）
-  if (/出勤/.test(text)) {
-    const name = getStaffName(userId);
-    if (name) recordKintai(name, '出勤');
-    return;
-  }
-  if (/退勤/.test(text)) {
-    const name = getStaffName(userId);
-    if (name) {
-      const role = getStaffRoleByName_(normalizeName_(name));
-      const isKuro = role === '黒服社員' || role === '黒服バイト';
-      if (isKuro && !isCashCheckPassed_(bizDateStr_())) {
-        push_(userId, '⚠️ 本日の現金チェックがまだ完了していません。\nIEYAS軍師の「現金管理」からチェック申請を行い、AIチェックに合格してから退勤報告をお願いします。');
-        return;
-      }
-      recordKintai(name, '退勤');
+  // 出退勤記録（黒服グループでも受け付ける）
+  if (getNotifSettings_()['kintai_detection']?.enabled !== false) {
+    // 「出勤」フレーズがあれば出勤扱い。ただし遅刻・遅れ系は除外
+    if (/出勤/.test(text) && !/遅れ|遅刻|できない|無理|行けない|来れない|欠勤|難し/.test(text)) {
+      const name = getStaffName(userId);
+      if (name) recordKintai(name, '出勤');
+      return;
     }
-    return;
+    // 「退勤」フレーズがあれば退勤扱い
+    if (/退勤/.test(text)) {
+      const name = getStaffName(userId);
+      if (name) {
+        const role = getStaffRoleByName_(normalizeName_(name));
+        const isKuro = role === '黒服社員' || role === '黒服バイト';
+        if (isKuro && !isCashCheckPassed_(bizDateStr_())) {
+          push_(userId, '⚠️ 本日の現金チェックがまだ完了していません。\nIEYAS軍師の「現金管理」からチェック申請を行い、AIチェックに合格してから退勤報告をお願いします。');
+          return;
+        }
+        recordKintai(name, '退勤');
+      }
+      return;
+    }
   }
 
   // 完了報告
@@ -847,20 +859,23 @@ function handleStaff(event, text, userId) {
     return;
   }
 
-  // 出退勤記録（「出勤」「退勤」を含む口語表現を広く許容）
-  if (/出勤/.test(text)) {
-    recordKintai(name, '出勤');
-    return;
-  }
-  if (/退勤/.test(text)) {
-    const role = getStaffRoleByName_(normalizeName_(name));
-    const isKuro = role === '黒服社員' || role === '黒服バイト';
-    if (isKuro && !isCashCheckPassed_(bizDateStr_())) {
-      push_(userId, '⚠️ 本日の現金チェックがまだ完了していません。\nIEYAS軍師の「現金管理」からチェック申請を行い、AIチェックに合格してから退勤報告をお願いします。');
+  // 「出勤」フレーズがあれば出勤扱い。ただし遅刻・遅れ系は除外
+  if (getNotifSettings_()['kintai_detection']?.enabled !== false) {
+    if (/出勤/.test(text) && !/遅れ|遅刻|できない|無理|行けない|来れない|欠勤|難し/.test(text)) {
+      recordKintai(name, '出勤');
       return;
     }
-    recordKintai(name, '退勤');
-    return;
+    // 「退勤」フレーズがあれば退勤扱い
+    if (/退勤/.test(text)) {
+      const role = getStaffRoleByName_(normalizeName_(name));
+      const isKuro = role === '黒服社員' || role === '黒服バイト';
+      if (isKuro && !isCashCheckPassed_(bizDateStr_())) {
+        push_(userId, '⚠️ 本日の現金チェックがまだ完了していません。\nIEYAS軍師の「現金管理」からチェック申請を行い、AIチェックに合格してから退勤報告をお願いします。');
+        return;
+      }
+      recordKintai(name, '退勤');
+      return;
+    }
   }
 
   // 完了報告
@@ -907,8 +922,10 @@ function handleDriver(event, text, userId) {
   if (/確認|承知|分かりました|わかりました/.test(text)) {
     const today = todayStr();
     setProp('DRIVER_CONFIRMED_' + today, '1');
-    const t = now_();
-    push_(prop('GROUP_KUROFUKU'), '✅ ドライバー確認済み（' + t + '）');
+  }
+  // ドライバーからのメッセージはすべて黒服グループに転送
+  if (getNotifSettings_()['driver_forward']?.enabled !== false) {
+    push_(prop('GROUP_KUROFUKU'), '🚗【ドライバー】' + text);
   }
 }
 
@@ -1116,7 +1133,7 @@ function nowMins() {
 function notifyDriverChange(type, name, dest, today) {
   const mins = nowMins();
   if (mins < 22 * 60 + 30) return; // 22:30前は通知しない
-  if ((prop('OKURI_MODE_' + today) || '') === 'jisha') return; // 自社送りモードはドライバーに通知しない
+  if ((prop('OKURI_MODE') || '') === 'jisha') return; // 自社送りモードはドライバーに通知しない
 
   const isConfirmed = mins >= 23 * 60 + 30;
   const label = isConfirmed ? '【送迎確定後変更】' : '【送迎変更】';
@@ -1217,8 +1234,12 @@ function getOkuriStatusToday() {
   try {
     const date = todayStr();
     const list = getOkuriList(date);
-    // スタッフマスタからキャスト一覧も返す（追加用）
-    const casts = getCastNamesForYoyaku_(getOrOpenSS_());
+    // 送り管理はキャスト＋黒服社員・バイトも対象（管理者のみ除外）
+    const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    const EXCLUDE = ['管理者'];
+    const casts = sh ? sh.getDataRange().getValues().slice(1)
+      .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !EXCLUDE.includes(role); })
+      .map(r => String(r[1]).trim()) : [];
     return { ok: true, date: date, list: list, casts: casts };
   } catch(e) { return { ok: false, error: e.message, list: [], casts: [] }; }
 }
@@ -1241,7 +1262,7 @@ function calcFare(list) {
 function jobOkuriSummary() {
   const today = todayStr();
   const list  = getOkuriList(today);
-  const mode  = prop('OKURI_MODE_' + today) || 'driver';
+  const mode  = prop('OKURI_MODE') || 'driver';
 
   if (list.length === 0) {
     push_(prop('GROUP_KUROFUKU'), '【22:30 送迎】本日の送迎依頼はありません');
@@ -1291,7 +1312,7 @@ function jobOkuriSummary() {
 function jobOkuriConfirm() {
   const today = todayStr();
   const list  = getOkuriList(today);
-  const mode  = prop('OKURI_MODE_' + today) || 'driver'; // 未回答はドライバー扱い
+  const mode  = prop('OKURI_MODE') || 'driver'; // 未設定はドライバー扱い
 
   if (list.length === 0) {
     if (mode !== 'jisha') {
@@ -1829,6 +1850,61 @@ function getStaffName(userId) {
 // ============================================================
 // 定時送信（毎分実行）
 // ============================================================
+// ☂️ 雨アラート（Open-Meteo 15分刻み降水予報）
+// ============================================================
+
+function checkRainAlert_() {
+  const RAIN_FLAG = 'RAIN_ALERT_ACTIVE';
+  const lat = 35.1715, lon = 136.9065; // 名古屋錦
+  try {
+    const url = 'https://api.open-meteo.com/v1/forecast'
+      + '?latitude=' + lat + '&longitude=' + lon
+      + '&minutely_15=precipitation,precipitation_probability'
+      + '&timezone=Asia%2FTokyo&forecast_days=1';
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return;
+    const d = JSON.parse(res.getContentText()).minutely_15;
+    if (!d) return;
+
+    // 現在時刻を15分単位に丸めてインデックス検索
+    const now     = new Date();
+    const rounded = new Date(Math.floor(now.getTime() / (15 * 60000)) * (15 * 60000));
+    const nowStr  = Utilities.formatDate(rounded, TZ, "yyyy-MM-dd'T'HH:mm");
+    const idx     = d.time.indexOf(nowStr);
+    if (idx < 0 || idx + 2 >= d.time.length) return;
+
+    const cur  = d.precipitation[idx]             || 0;
+    const p15  = d.precipitation[idx + 1]         || 0; // 15分後
+    const p30  = d.precipitation[idx + 2]         || 0; // 30分後
+    const pr15 = d.precipitation_probability[idx + 1] || 0;
+
+    // 雨がなければ通知フラグをリセット（次の雨に備える）
+    if (cur < 0.1 && p15 < 0.1 && p30 < 0.1) {
+      PropertiesService.getScriptProperties().deleteProperty(RAIN_FLAG);
+      return;
+    }
+
+    if (prop(RAIN_FLAG)) return; // 通知済み
+
+    // 今は降っていないが15〜30分以内に降り始める
+    const startingSoon = cur < 0.1 && (p15 >= 0.3 || (p30 >= 0.5 && pr15 >= 60));
+    if (!startingSoon) return;
+
+    const mins = p15 >= 0.3 ? 15 : 30;
+    const msg = [
+      '☂️【雨アラート】名古屋錦',
+      '約' + mins + '分後から雨の予報です（確率' + pr15 + '%）',
+      '',
+      'お客様への傘のご案内・お渡しをお忘れなく！'
+    ].join('\n');
+    push_(prop('GROUP_KUROFUKU'), msg);
+    setProp(RAIN_FLAG, '1');
+  } catch(e) {
+    console.error('checkRainAlert_ error:', e.message);
+  }
+}
+
+// ============================================================
 
 function scheduledJobs() {
   const hhmm = Utilities.formatDate(new Date(), TZ, 'HH:mm');
@@ -1872,7 +1948,9 @@ function scheduledJobs() {
 
   // 週次棚卸しリマインド: 毎週月曜19:00（消耗品＋賞味期限管理品が対象）
   if (dow === 1 && hhmm === '19:00') once('STOCKTAKE_REMINDER', () => {
-    push_(prop('GROUP_KUROFUKU'), '📋【棚卸しの日】\n本日は週次棚卸しの日です。軍師システムの「在庫発注管理」→「棚卸し」から実数の登録をお願いします。');
+    if (ns_['stocktake_reminder']?.enabled !== false) {
+      push_(prop('GROUP_KUROFUKU'), '📋【棚卸しの日】\n本日は週次棚卸しの日です。軍師システムの「在庫発注管理」→「棚卸し」から実数の登録をお願いします。');
+    }
   });
 
   // 日曜定休日: 以下の定時送信をすべてスキップ
@@ -1912,12 +1990,10 @@ function scheduledJobs() {
     push_(prop('GROUP_STAFF'), ns_['dohan_check'].message || MSG_DOHAN_CHECK);
   });
 
-  // 16:00 送迎モードをドライバーに通知
+  // 16:00 ドライバーモードのときのみドライバーに通知（自社送りモードは通知しない）
   if (hhmm >= '16:00' && hhmm <= '16:09') once('DRIVER_MODE_NOTICE_' + todayStr(), () => {
-    const mode = prop('OKURI_MODE_' + todayStr()) || 'driver';
-    if (mode === 'jisha') {
-      push_(prop('GROUP_DRIVER'), '本日は送りなしでおねがいします。よろしくお願いします🙏');
-    } else {
+    const mode = prop('OKURI_MODE') || 'driver';
+    if (mode !== 'jisha' && ns_['driver_notice_1600']?.enabled !== false) {
       push_(prop('GROUP_DRIVER'), '本日もよろしくお願いします。\n送りが発生する場合は23:30に確定リストをお送りします🙏');
     }
   });
@@ -1956,15 +2032,21 @@ function scheduledJobs() {
   });
 
   // 退勤時間が24時前のキャストに10分前予告
-  checkEarlyTaikin_(hhmm, once);
+  if (ns_['early_taikin']?.enabled !== false) checkEarlyTaikin_(hhmm, once);
 
   if (hhmm === '21:00') once('ST2100', () => {
-    checkMissingShukkin();
+    if (ns_['missing_shukkin']?.enabled !== false) checkMissingShukkin();
   });
 
   if (hhmm === '01:00') once('ST0100', () => {
-    checkMissingTaikin();
+    if (ns_['missing_taikin']?.enabled !== false) checkMissingTaikin();
   });
+
+  // ☂️ 雨アラート（10分ごと、20:00〜24:30）
+  const _mm = parseInt(Utilities.formatDate(new Date(), TZ, 'mm'));
+  if (_mm % 10 === 0 && (hhmm >= '20:00' || hhmm <= '00:30') && ns_['rain_alert']?.enabled !== false) {
+    once('RAIN_CHECK_' + Utilities.formatDate(new Date(), TZ, 'yyyyMMddHHmm'), checkRainAlert_);
+  }
 
 }
 
@@ -4180,6 +4262,27 @@ function getKioskCastNames() {
 // 端末キオスク用：顧客検索
 function searchKioskCustomers(query) {
   return searchCustomersForYoyaku_(String(query || '').trim());
+}
+
+// 端末キオスク用：黒服スタッフ名一覧（ログイン画面用）
+function getKioskStaffList() {
+  const sh = ss_().getSheetByName(STAFF_TAB);
+  if (!sh) return [];
+  return sh.getDataRange().getValues()
+    .filter(r => r[0] && ['黒服社員', '黒服バイト', '管理者'].includes(String(r[2]).trim()))
+    .map(r => String(r[1]).trim())
+    .filter(n => n);
+}
+
+// 端末キオスク用：PIN認証（名前 + PIN）
+function kioskVerifyPin(name, pin) {
+  const staffList = getKioskStaffList();
+  if (!staffList.includes(name)) return { ok: false, error: '名前が見つかりません' };
+  const masterPin = prop('KIOSK_PIN') || '1234';
+  const individualPin = prop('KIOSK_PIN_' + name.replace(/[\s　]/g, '_'));
+  const validPin = individualPin || masterPin;
+  if (String(pin).trim() !== String(validPin).trim()) return { ok: false, error: 'PINが違います' };
+  return { ok: true, name: name };
 }
 
 // 端末キオスク用：予約追加（登録者は端末名で記録）

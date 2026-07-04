@@ -123,9 +123,68 @@ header h1 { font-size: 16px; letter-spacing: .5px; }
 .yform-input { width: 100%; box-sizing: border-box; background: #1c2a42; border: 1px solid #2a4068; border-radius: 8px; padding: 10px 12px; color: #e8f0ff; font-size: 14px; outline: none; }
 .yform-input::placeholder { color: #4a6888; }
 .notif-save-btn { background: #0f2040; border: 1px solid #1a50a0; color: #7ab0f0; text-align: center; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; margin-top: 10px; }
+
+/* ログイン画面 */
+.kiosk-login-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: #0d0d14; z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px; transition: opacity .3s;
+}
+.kl-title { font-size: 24px; font-weight: 700; color: #e8f0ff; margin-bottom: 4px; letter-spacing: .5px; }
+.kl-sub   { font-size: 13px; color: #7ab0f0; margin-bottom: 28px; }
+.kl-name-grid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; max-width: 420px; width: 100%; }
+.kl-name-btn {
+  flex: 1 1 110px; min-width: 110px; max-width: 160px;
+  padding: 20px 8px; background: #141d30; border: 1px solid #1e3050;
+  border-radius: 14px; color: #c0d4f0; font-size: 16px; font-weight: 600;
+  cursor: pointer; text-align: center; -webkit-tap-highlight-color: rgba(122,176,240,.2);
+}
+.kl-name-btn:active { background: #0f2040; border-color: #1a50a0; color: #7ab0f0; }
+.kl-pin-wrap { text-align: center; width: 100%; max-width: 300px; }
+.kl-back { font-size: 13px; color: #7a9cc8; cursor: pointer; margin-bottom: 20px; text-align: left; padding: 4px 0; }
+.kl-selected-name { font-size: 20px; font-weight: 700; color: #7ab0f0; margin-bottom: 4px; }
+.kl-pin-prompt { font-size: 12px; color: #8aabcc; margin-bottom: 18px; }
+.kl-pin-dots { display: flex; gap: 14px; justify-content: center; margin-bottom: 24px; }
+.kl-pin-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #2a4068; background: transparent; transition: background .15s, border-color .15s; }
+.kl-pin-dot.filled { background: #7ab0f0; border-color: #7ab0f0; }
+.kl-numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.kl-num-btn {
+  padding: 20px 0; background: #141d30; border: 1px solid #1e3050;
+  border-radius: 12px; color: #e8f0ff; font-size: 22px; font-weight: 600;
+  cursor: pointer; text-align: center; -webkit-tap-highlight-color: rgba(122,176,240,.2);
+  user-select: none;
+}
+.kl-num-btn:active { background: #0f2040; }
+.kl-num-btn.clear { color: #cc7766; font-size: 15px; }
+.kl-num-btn.ok { background: #0f2040; border-color: #1a50a0; color: #7ab0f0; font-size: 15px; font-weight: 700; }
+.kl-num-btn.ok:active { background: #1a3a70; }
+.kl-error { font-size: 12px; color: #ee6644; margin-top: 12px; min-height: 18px; text-align: center; }
+.kl-loading { font-size: 13px; color: #8aabcc; text-align: center; padding: 20px; }
+.kl-login-indicator {
+  position: fixed; top: 10px; right: 12px; z-index: 999;
+  display: none; align-items: center; gap: 6px;
+  background: rgba(20,20,40,.85); border: 1px solid #2a2a40;
+  border-radius: 8px; padding: 5px 12px; cursor: pointer;
+  font-size: 11px; color: #7a9cc8; -webkit-tap-highlight-color: transparent;
+}
+.kl-login-indicator:active { background: rgba(30,30,60,.9); }
 </style>
 </head>
 <body>
+
+<!-- ログイン画面オーバーレイ -->
+<div id="kiosk-login-overlay" class="kiosk-login-overlay">
+  <div class="kl-title">⚡ キオスク ログイン</div>
+  <div class="kl-sub" id="kl-term-sub"></div>
+  <div id="kl-content"><div class="kl-loading">読み込み中...</div></div>
+</div>
+<!-- ログイン済みインジケーター（右上に表示） -->
+<div id="kl-login-indicator" class="kl-login-indicator" onclick="kioskLogout()">
+  <span id="kl-logged-name">--</span>
+  <span style="color:#ee7755;font-size:10px;margin-left:2px">ログアウト</span>
+</div>
+
 <div class="kiosk-wrap">
   <div class="kiosk-left">
     <header>
@@ -779,11 +838,167 @@ function submitRsv() {
   }
 }
 
+// ---- セッション管理 ----
+var kioskSession = null;
+var loginSelectedName = '';
+var loginPin = '';
+
+function kioskSessionKey() { return 'kioskSession_' + TERM_LABEL; }
+
+function loadKioskSession() {
+  try {
+    var raw = localStorage.getItem(kioskSessionKey());
+    if (!raw) return null;
+    var s = JSON.parse(raw);
+    if (s && s.expires && Date.now() < s.expires) return s;
+    localStorage.removeItem(kioskSessionKey());
+    return null;
+  } catch(e) { return null; }
+}
+
+function saveKioskSession(name) {
+  var now = new Date();
+  var exp = new Date(now);
+  // 翌日3時まで有効（現在が3時以前ならその日の3時）
+  if (now.getHours() >= 3) exp.setDate(exp.getDate() + 1);
+  exp.setHours(3, 0, 0, 0);
+  var s = { name: name, expires: exp.getTime() };
+  localStorage.setItem(kioskSessionKey(), JSON.stringify(s));
+  kioskSession = s;
+}
+
+function kioskLogout() {
+  var who = kioskSession ? kioskSession.name + ' さんを' : '';
+  if (!confirm(who + 'ログアウトしますか？')) return;
+  localStorage.removeItem(kioskSessionKey());
+  kioskSession = null;
+  document.getElementById('kl-login-indicator').style.display = 'none';
+  // キオスク本体を一旦隠す
+  document.querySelector('.kiosk-wrap').style.display = 'none';
+  if (window._kioskInterval) { clearInterval(window._kioskInterval); window._kioskInterval = null; }
+  kioskInit();
+}
+
+function kioskInit() {
+  kioskSession = loadKioskSession();
+  if (kioskSession) {
+    document.getElementById('kiosk-login-overlay').style.display = 'none';
+    var ind = document.getElementById('kl-login-indicator');
+    ind.style.display = 'flex';
+    document.getElementById('kl-logged-name').textContent = kioskSession.name;
+    startKiosk();
+  } else {
+    document.getElementById('kl-term-sub').textContent = TERM_LABEL;
+    document.getElementById('kiosk-login-overlay').style.display = 'flex';
+    showLoginStep1();
+  }
+}
+
+function startKiosk() {
+  document.querySelector('.kiosk-wrap').style.display = 'flex';
+  google.script.run.withSuccessHandler(function(list) { castList = list || []; }).getKioskCastNames();
+  renderHeader();
+  afterDateChange();
+  if (!window._kioskInterval) window._kioskInterval = setInterval(softRefresh, 30000);
+}
+
+// ---- ログイン Step1: 名前選択 ----
+function showLoginStep1() {
+  loginSelectedName = '';
+  loginPin = '';
+  var content = document.getElementById('kl-content');
+  content.innerHTML = '<div class="kl-loading">スタッフ情報を読み込み中...</div>';
+  google.script.run.withSuccessHandler(function(names) {
+    if (!names || !names.length) {
+      content.innerHTML = '<div class="kl-error">スタッフ情報を取得できませんでした</div>';
+      return;
+    }
+    var btns = names.map(function(n) {
+      return '<div class="kl-name-btn" onclick="selectLoginName(\'' + esc(n) + '\')">' + esc(n) + '</div>';
+    }).join('');
+    content.innerHTML = '<div class="kl-name-grid">' + btns + '</div>';
+  }).withFailureHandler(function() {
+    content.innerHTML = '<div class="kl-error">読み込みエラー。再読み込みしてください。</div>';
+  }).getKioskStaffList();
+}
+
+// ---- ログイン Step2: PIN入力 ----
+function selectLoginName(name) {
+  loginSelectedName = name;
+  loginPin = '';
+  renderPinStep();
+}
+
+function renderPinStep() {
+  var dots = [0,1,2,3].map(function(i) {
+    return '<div class="kl-pin-dot' + (i < loginPin.length ? ' filled' : '') + '"></div>';
+  }).join('');
+  document.getElementById('kl-content').innerHTML =
+    '<div class="kl-pin-wrap">'
+    + '<div class="kl-back" onclick="showLoginStep1()">← 戻る</div>'
+    + '<div class="kl-selected-name">' + esc(loginSelectedName) + '</div>'
+    + '<div class="kl-pin-prompt">🔑 PINを入力してください</div>'
+    + '<div class="kl-pin-dots">' + dots + '</div>'
+    + '<div class="kl-numpad">'
+    + [1,2,3,4,5,6,7,8,9].map(function(n) {
+        return '<div class="kl-num-btn" onclick="pinInput(\'' + n + '\')">' + n + '</div>';
+      }).join('')
+    + '<div class="kl-num-btn clear" onclick="pinClear()">C</div>'
+    + '<div class="kl-num-btn" onclick="pinInput(\'0\')">0</div>'
+    + '<div class="kl-num-btn ok" id="kl-ok-btn" onclick="pinSubmit()">OK</div>'
+    + '</div>'
+    + '<div class="kl-error" id="kl-pin-error"></div>'
+    + '</div>';
+}
+
+function pinInput(digit) {
+  if (loginPin.length >= 4) return;
+  loginPin += digit;
+  renderPinStep();
+  if (loginPin.length === 4) setTimeout(pinSubmit, 200);
+}
+
+function pinClear() {
+  loginPin = loginPin.slice(0, -1);
+  renderPinStep();
+}
+
+function pinSubmit() {
+  if (!loginPin) return;
+  var okBtn = document.getElementById('kl-ok-btn');
+  if (okBtn) okBtn.textContent = '...';
+  var pinToVerify = loginPin;
+  google.script.run.withSuccessHandler(function(result) {
+    if (result && result.ok) {
+      saveKioskSession(loginSelectedName);
+      var overlay = document.getElementById('kiosk-login-overlay');
+      overlay.style.opacity = '0';
+      setTimeout(function() {
+        overlay.style.display = 'none';
+        overlay.style.opacity = '';
+        var ind = document.getElementById('kl-login-indicator');
+        ind.style.display = 'flex';
+        document.getElementById('kl-logged-name').textContent = loginSelectedName;
+        startKiosk();
+      }, 300);
+    } else {
+      loginPin = '';
+      renderPinStep();
+      var errEl = document.getElementById('kl-pin-error');
+      if (errEl) errEl.textContent = (result && result.error) || 'PINが違います。もう一度入力してください。';
+    }
+  }).withFailureHandler(function() {
+    loginPin = '';
+    renderPinStep();
+    var errEl = document.getElementById('kl-pin-error');
+    if (errEl) errEl.textContent = '通信エラーが発生しました。';
+  }).kioskVerifyPin(loginSelectedName, pinToVerify);
+}
+
 // ---- 初期化 ----
-google.script.run.withSuccessHandler(function(list) { castList = list || []; }).getKioskCastNames();
-renderHeader();
-afterDateChange();
-setInterval(softRefresh, 30000);
+// キオスク本体は最初非表示（ログイン成功後にstartKioskで表示）
+document.querySelector('.kiosk-wrap').style.display = 'none';
+kioskInit();
 </script>
 </body>
 </html>
