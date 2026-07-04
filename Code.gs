@@ -253,6 +253,25 @@ function handleApiRequest_(body) {
     if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
     return syncRsrvWithReservations_();
   }
+  if (body.action === 'getOkuriMode') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    const today = todayStr();
+    return { ok: true, mode: prop('OKURI_MODE_' + today) || 'driver' };
+  }
+  if (body.action === 'setOkuriMode') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !ADMIN_NAMES_.includes(adminName)) return { ok: false, error: '権限がありません' };
+    const today = todayStr();
+    const mode = body.mode === 'jisha' ? 'jisha' : 'driver';
+    setProp('OKURI_MODE_' + today, mode);
+    if (mode === 'jisha') {
+      push_(prop('GROUP_DRIVER'), '本日は送りなしでおねがいします。よろしくお願いします🙏');
+    } else {
+      push_(prop('GROUP_DRIVER'), '本日の送りをお願いします。23:30に確定リストをお送りします🙏');
+    }
+    return { ok: true, mode: mode };
+  }
   // ---- 予約管理 ----
   if (body.action === 'addReservation') {
     const staffName = getStaffName(body.userId);
@@ -505,8 +524,6 @@ function handleKurofuku(event, text, userId) {
       '出勤しました　→ 出勤を記録',
       '退勤しました　→ 退勤を記録',
       '送り確認　　　→ 送りリストを確認',
-      'ドライバー　　→ 送り方法：ドライバーに依頼（22:30以降）',
-      '自社送り　　　→ 送り方法：自社で対応（22:30以降）',
       'シフト確認　　→ 本日のシフトを確認',
       '#休み承認 12　→ 当日欠勤申請(12行目)を承認',
       '#休み却下 12　→ 当日欠勤申請(12行目)を却下',
@@ -557,26 +574,6 @@ function handleKurofuku(event, text, userId) {
       reply(event.replyToken, '派遣スタッフを登録しました✅\n本日シフト表:\n' + names.map(n => '  ' + n).join('\n'));
     } else {
       reply(event.replyToken, 'シフト表が見つかりません');
-    }
-    return;
-  }
-
-  // 送り方法の選択: 「ドライバー」または「自社送り」
-  if (/^(ドライバー|driver)$/i.test(text.trim())) {
-    const today = todayStr();
-    if (!prop('OKURI_MODE_' + today) && getOkuriList(today).length > 0) {
-      handleOkuriModeSelect_(today, 'driver', event.replyToken);
-    } else {
-      reply(event.replyToken, '送り方法の変更対象がありません');
-    }
-    return;
-  }
-  if (/^自社送り$/.test(text.trim())) {
-    const today = todayStr();
-    if (!prop('OKURI_MODE_' + today) && getOkuriList(today).length > 0) {
-      handleOkuriModeSelect_(today, 'jisha', event.replyToken);
-    } else {
-      reply(event.replyToken, '送り方法の変更対象がありません');
     }
     return;
   }
@@ -1197,19 +1194,24 @@ function calcFare(list) {
   return { yen: 7000, note: '東海市あり・遠方なし（24:30前出発条件）' };
 }
 
-// 22:30 送迎集約 → 黒服に送り方法を確認
+// 22:30 送迎集約 → モードに応じてドライバー通知
 function jobOkuriSummary() {
   const today = todayStr();
   const list  = getOkuriList(today);
+  const mode  = prop('OKURI_MODE_' + today) || 'driver';
 
   if (list.length === 0) {
     push_(prop('GROUP_KUROFUKU'), '【22:30 送迎】本日の送迎依頼はありません');
+    if (mode !== 'jisha') {
+      push_(prop('GROUP_DRIVER'), '本日の送迎はなくなりました。お休みでお願いします。');
+    }
     return;
   }
 
   const lines = list.map((r, i) => (i + 1) + '. ' + r.name + ' → ' + r.dest);
+  const fare  = calcFare(list);
 
-  // スタッフグループ（確認用）
+  // スタッフグループ（キャスト確認用）
   push_(prop('GROUP_STAFF'), [
     '【送迎リスト確認 22:30】',
     lines.join('\n'),
@@ -1218,27 +1220,16 @@ function jobOkuriSummary() {
     'キャンセルは「送りキャンセル」と送信してください。'
   ].join('\n'));
 
-  // 黒服グループ：ドライバーか自社送りか選択を促す
-  setProp('OKURI_MODE_' + today, '');  // リセット（未回答状態）
+  // 黒服グループ（確認用）
   push_(prop('GROUP_KUROFUKU'), [
     '【22:30 送迎確認】本日の送りが必要なキャストです',
     lines.join('\n'),
     '',
-    '送り方法を選択してください：',
-    '「ドライバー」→ ドライバーに依頼',
-    '「自社送り」　→ 自社で対応（ドライバーには連絡しません）'
+    '全' + list.length + '名（' + (mode === 'jisha' ? '自社送り' : 'ドライバー手配済み') + '）'
   ].join('\n'));
-}
 
-// 黒服の送り方法選択を処理（handleKurofukuから呼ばれる）
-function handleOkuriModeSelect_(today, mode, replyToken) {
-  const list = getOkuriList(today);
-  const lines = list.map((r, i) => (i + 1) + '. ' + r.name + ' → ' + r.dest);
-  const fare  = calcFare(list);
-
-  if (mode === 'driver') {
-    setProp('OKURI_MODE_' + today, 'driver');
-    // ドライバーグループに予告
+  if (mode !== 'jisha') {
+    // ドライバーに22:30予告（リスト確定前の案内）
     push_(prop('GROUP_DRIVER'), [
       '【送迎予告】本日もよろしくお願いします',
       '',
@@ -1250,12 +1241,6 @@ function handleOkuriModeSelect_(today, mode, replyToken) {
       '',
       '※23:30に確定連絡します'
     ].join('\n'));
-    reply(replyToken, '✅ ドライバーに予告を送信しました\n23:30に確定連絡します');
-  } else {
-    setProp('OKURI_MODE_' + today, 'jisha');
-    // ドライバーに「本日なし」通知
-    push_(prop('GROUP_DRIVER'), '本日は送りなしでおねがいします。よろしくお願いします🙏');
-    reply(replyToken, '✅ 自社送りに設定しました\nドライバーに「送りなし」を連絡しました\n23:30に送りキャストの最終確認は続けます');
   }
 }
 

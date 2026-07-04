@@ -2647,6 +2647,7 @@ function loadCashThresholds() {
       if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
       cashThresholds = d.thresholds;
       renderCashThresholds(cashThresholds);
+      loadOkuriMode();
     })
     .catch(function() { setContent('<div class="err">通信エラー</div>'); });
 }
@@ -2671,6 +2672,7 @@ function cashsetFloorCard(floor, label) {
 
 function renderCashThresholds(thresholds) {
   var html = '<div style="padding:14px">'
+    + '<div id="okuri-mode-card" class="cashset-card" style="margin-bottom:18px;border:1px solid #1a3a2a"><div style="font-size:12px;color:#6a9c8a">送迎モードを読み込み中...</div></div>'
     + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">現金設定（レジ・金庫の枚数しきい値）</div>'
     + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;line-height:1.6">レジの枚数が最少を下回る/最大を超える場合や、金庫の枚数が最少を下回る場合に、閉店チェック時に補充・移動の指示が自動表示されます。</div>'
     + cashsetFloorCard('f5', '5F')
@@ -2699,6 +2701,43 @@ function renderCashThresholds(thresholds) {
     + '</div>'
     + '</div>';
   setContent(html);
+}
+
+function loadOkuriMode() {
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'getOkuriMode', userId: userId }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var card = document.getElementById('okuri-mode-card');
+      if (!card) return;
+      if (!d.ok) { card.innerHTML = '<div style="font-size:12px;color:#f88">送迎モード取得エラー</div>'; return; }
+      var mode = d.mode;
+      card.innerHTML = '<div class="cashset-floor" style="color:#88d4a8">🚗 本日の送迎モード</div>'
+        + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;line-height:1.6">ドライバーに頼むか自社送りかを設定します。切替時にドライバーLINEに即時通知されます。</div>'
+        + '<div style="display:flex;gap:8px;margin-bottom:10px">'
+        +   '<button id="okuri-btn-driver" onclick="setOkuriModeFromPortal(\'driver\')" style="flex:1;padding:12px 0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid ' + (mode==='driver'?'#44cc88':'#2a4a3a') + ';background:' + (mode==='driver'?'#0f3020':'#0a1a12') + ';color:' + (mode==='driver'?'#44cc88':'#4a8a6a') + '">🚗 ドライバー</button>'
+        +   '<button id="okuri-btn-jisha" onclick="setOkuriModeFromPortal(\'jisha\')" style="flex:1;padding:12px 0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:2px solid ' + (mode==='jisha'?'#cc8844':'#4a3a2a') + ';background:' + (mode==='jisha'?'#201008':'#120a04') + ';color:' + (mode==='jisha'?'#cc8844':'#8a6a4a') + '">🏠 自社送り</button>'
+        + '</div>'
+        + '<div id="okuri-mode-msg" style="font-size:12px;text-align:center;color:#88cc88;min-height:18px">'
+        +   (mode==='jisha' ? 'ドライバーに「送りなし」を連絡済み' : 'ドライバーに送りを依頼中') + '</div>';
+    })
+    .catch(function() {
+      var card = document.getElementById('okuri-mode-card');
+      if (card) card.innerHTML = '<div style="font-size:12px;color:#f88">通信エラー</div>';
+    });
+}
+
+function setOkuriModeFromPortal(mode) {
+  var label = mode === 'jisha' ? '自社送り（ドライバーに「送りなし」を通知）' : 'ドライバー（ドライバーに「送りあり」を通知）';
+  if (!confirm('送迎モードを「' + label + '」に変更しますか？\nドライバーLINEに即時通知されます。')) return;
+  var msg = document.getElementById('okuri-mode-msg');
+  if (msg) { msg.style.color = '#8aabcc'; msg.textContent = '変更中...'; }
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'setOkuriMode', userId: userId, mode: mode }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { if (msg) { msg.style.color = '#f88'; msg.textContent = 'エラー: ' + (d.error||''); } return; }
+      loadOkuriMode();
+    })
+    .catch(function() { if (msg) { msg.style.color = '#f88'; msg.textContent = '通信エラー'; } });
 }
 
 function syncRsrvWithReservations() {
