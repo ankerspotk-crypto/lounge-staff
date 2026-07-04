@@ -1589,7 +1589,7 @@ function openCustomerForm(rowIdx) {
     var dOpts = '<option value="">日</option>';
     for (var d = 1; d <= 31; d++) { var dd = String(d).padStart(2,'0'); dOpts += '<option value="' + dd + '"' + (dd === fd ? ' selected' : '') + '>' + d + '</option>'; }
     html += '<div style="margin-bottom:10px">'
-      + '<div style="font-size:11px;color:#888;margin-bottom:4px">2年目更新日</div>'
+      + '<div style="font-size:11px;color:#888;margin-bottom:4px">前回更新日</div>'
       + '<div style="display:flex;gap:6px">'
       + '<select id="cf-fd-y" style="' + selStyle + '">' + yOpts + '</select>'
       + '<select id="cf-fd-m" style="' + selStyle + '">' + mOpts + '</select>'

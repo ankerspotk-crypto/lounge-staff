@@ -6455,7 +6455,7 @@ function getCustomerMasterCols_(values) {
     bottle: idx('ボトル種類'), pos: idx('ボトル位置'), company: idx('会社名'), bday: idx('誕生日'),
     note: idx('参考情報'), neck: idx('ネック名'), drink: idx('飲み方'), tabaco: idx('タバコ'),
     ng: idx('NG行為'), ngStaff: idx('NGスタッフ'), regDate: idx('登録日'), oldTantou: idx('旧担当'),
-    memberSince: idx('登録日'), feeDate: idx('2年目更新'), lineReg: idx('ライン登録')
+    memberSince: idx('登録日'), feeDate: idx('3年目更新'), renewal2: idx('2年目更新'), lineReg: idx('ライン登録')
   };
 }
 
@@ -6543,7 +6543,7 @@ function getCustomerList() {
       tabaco: String(val(row, cols.tabaco)), ng: String(val(row, cols.ng)),
       ngStaff: String(val(row, cols.ngStaff)),
       memberSince: fmtDateFull_(val(row, cols.memberSince)),
-      feeDate: fmtDateFull_(val(row, cols.feeDate)),
+      feeDate: fmtDateFull_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.renewal2)),
       lineReg: String(val(row, cols.lineReg))
     });
   }
