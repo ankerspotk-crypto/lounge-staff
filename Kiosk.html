@@ -19,6 +19,7 @@ html, body { font-family: -apple-system, 'Helvetica Neue', sans-serif; backgroun
   background: #0d0d14;
 }
 .kiosk-right { flex: 1; height: 100%; overflow: hidden; }
+.kiosk-right iframe { width: 100%; height: 100%; border: none; }
 .kiosk-right .kr-nocfg { display: flex; align-items: center; justify-content: center; height: 100%; color: #6a8ab0; font-size: 13px; text-align: center; padding: 20px; }
 
 header {
@@ -137,7 +138,7 @@ header h1 { font-size: 16px; letter-spacing: .5px; }
     </div>
   </div>
   <div class="kiosk-right">
-    <?!= include('KioskRight') ?>
+    <iframe src="<?= GAS_URL ?>#u=<?= KIOSK_USER_ID ?>"></iframe>
   </div>
 </div>
 
