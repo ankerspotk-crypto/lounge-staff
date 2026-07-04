@@ -1869,6 +1869,16 @@ function scheduledJobs() {
     push_(prop('GROUP_STAFF'), ns_['dohan_check'].message || MSG_DOHAN_CHECK);
   });
 
+  // 16:00 送迎モードをドライバーに通知
+  if (hhmm >= '16:00' && hhmm <= '16:09') once('DRIVER_MODE_NOTICE_' + todayStr(), () => {
+    const mode = prop('OKURI_MODE_' + todayStr()) || 'driver';
+    if (mode === 'jisha') {
+      push_(prop('GROUP_DRIVER'), '本日は送りなしでおねがいします。よろしくお願いします🙏');
+    } else {
+      push_(prop('GROUP_DRIVER'), '本日もよろしくお願いします。\n送りが発生する場合は23:30に確定リストをお送りします🙏');
+    }
+  });
+
   notif_('okuri_summary', jobOkuriSummary);
 
   notif_('okuri_confirm', jobOkuriConfirm);
