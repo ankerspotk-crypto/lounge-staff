@@ -6454,7 +6454,8 @@ function getCustomerMasterCols_(values) {
     card: idx('カード記載名'), name: idx('氏名'), no: idx('会員番号'), tantou: idx('担当'),
     bottle: idx('ボトル種類'), pos: idx('ボトル位置'), company: idx('会社名'), bday: idx('誕生日'),
     note: idx('参考情報'), neck: idx('ネック名'), drink: idx('飲み方'), tabaco: idx('タバコ'),
-    ng: idx('NG行為'), ngStaff: idx('NGスタッフ'), regDate: idx('登録日'), oldTantou: idx('旧担当')
+    ng: idx('NG行為'), ngStaff: idx('NGスタッフ'), regDate: idx('登録日'), oldTantou: idx('旧担当'),
+    memberSince: idx('入会'), feeDate: idx('年会費'), lineReg: idx('ライン登録')
   };
 }
 
@@ -6540,7 +6541,10 @@ function getCustomerList() {
       bday: fmtDateFull_(val(row, cols.bday)), note: String(val(row, cols.note)),
       neck: String(val(row, cols.neck)), drink: String(val(row, cols.drink)),
       tabaco: String(val(row, cols.tabaco)), ng: String(val(row, cols.ng)),
-      ngStaff: String(val(row, cols.ngStaff))
+      ngStaff: String(val(row, cols.ngStaff)),
+      memberSince: fmtDateFull_(val(row, cols.memberSince)),
+      feeDate: fmtDateFull_(val(row, cols.feeDate)),
+      lineReg: String(val(row, cols.lineReg))
     });
   }
   return { customers: results, activeCasts };
@@ -6574,6 +6578,9 @@ function addCustomer(payload) {
   set(cols.ng, String(payload.ng || '').trim());
   set(cols.ngStaff, String(payload.ngStaff || '').trim());
   set(cols.regDate, new Date());
+  if (payload.memberSince) set(cols.memberSince, new Date(payload.memberSince));
+  if (payload.feeDate) set(cols.feeDate, new Date(payload.feeDate));
+  if (cols.lineReg >= 0) set(cols.lineReg, payload.lineReg ? '済' : '');
   sh.appendRow(newRow);
   return { ok: true, rowIdx: sh.getLastRow() };
 }
@@ -6672,6 +6679,9 @@ function updateCustomer(rowIdx, payload) {
   set(cols.tabaco, String(payload.tabaco || '').trim());
   set(cols.ng, String(payload.ng || '').trim());
   set(cols.ngStaff, String(payload.ngStaff || '').trim());
+  set(cols.memberSince, payload.memberSince ? new Date(payload.memberSince) : '');
+  set(cols.feeDate, payload.feeDate ? new Date(payload.feeDate) : '');
+  if (cols.lineReg >= 0) set(cols.lineReg, payload.lineReg ? '済' : '');
   return { ok: true };
 }
 

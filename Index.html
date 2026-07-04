@@ -1554,6 +1554,32 @@ function openCustomerForm(rowIdx) {
       + '<select id="cf-tantou" style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box">'
       + optHtml + '</select></div>';
   })();
+  // 会員開始日
+  (function() {
+    var raw = c ? String(c.memberSince || '') : '';
+    html += '<div style="margin-bottom:10px">'
+      + '<div style="font-size:11px;color:#888;margin-bottom:4px">会員開始日</div>'
+      + '<input type="date" id="cf-memberSince" value="' + raw + '" '
+      + 'style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box">'
+      + '</div>';
+  })();
+  // 会費をもらった日
+  (function() {
+    var raw = c ? String(c.feeDate || '') : '';
+    html += '<div style="margin-bottom:10px">'
+      + '<div style="font-size:11px;color:#888;margin-bottom:4px">会費をもらった日（新規・更新）</div>'
+      + '<input type="date" id="cf-feeDate" value="' + raw + '" '
+      + 'style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box">'
+      + '</div>';
+  })();
+  // 公式LINE登録
+  (function() {
+    var checked = c && (c.lineReg === '済' || c.lineReg === 'true' || c.lineReg === true);
+    html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="var cb=document.getElementById(\'cf-lineReg\');cb.checked=!cb.checked">'
+      + '<input type="checkbox" id="cf-lineReg" ' + (checked ? 'checked' : '') + ' style="width:18px;height:18px;accent-color:#5bc8af;cursor:pointer">'
+      + '<span style="font-size:13px;color:#cce">公式LINE登録済み</span>'
+      + '</div>';
+  })();
   html += field('ボトル種類', 'cf-bottle', v('bottle'));
   html += field('ボトル位置', 'cf-pos', v('pos'));
   (function() {
@@ -1598,7 +1624,10 @@ function saveCustomerForm(rowIdx) {
     card: g('cf-card'), name: g('cf-name'), no: g('cf-no'), tantou: g('cf-tantou'),
     bottle: g('cf-bottle'), pos: g('cf-pos'), bday: bday, drink: g('cf-drink'),
     tabaco: g('cf-tabaco'), neck: g('cf-neck'), company: g('cf-company'), note: g('cf-note'),
-    ng: g('cf-ng'), ngStaff: g('cf-ngStaff')
+    ng: g('cf-ng'), ngStaff: g('cf-ngStaff'),
+    memberSince: g('cf-memberSince'),
+    feeDate: g('cf-feeDate'),
+    lineReg: document.getElementById('cf-lineReg') ? document.getElementById('cf-lineReg').checked : false
   };
   if (!payload.card && !payload.name) { alert('カード記載名または氏名を入力してください'); return; }
   function onSaveFail(err) { alert('保存に失敗しました: ' + (err && err.message ? err.message : '通信エラー')); }
