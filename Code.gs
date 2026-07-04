@@ -6554,7 +6554,7 @@ function getCustomerList() {
       tabaco: String(val(row, cols.tabaco)), ng: String(val(row, cols.ng)),
       ngStaff: String(val(row, cols.ngStaff)),
       memberSince: fmtDateFull_(val(row, cols.memberSince)),
-      feeDate: fmtDateFull_(val(row, cols.feeDate)) || parseRenewalStr_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.renewal2)) || parseRenewalStr_(val(row, cols.renewal2)),
+      feeDate: parseRenewalStr_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.feeDate)) || parseRenewalStr_(val(row, cols.renewal2)) || fmtDateFull_(val(row, cols.renewal2)),
       lineReg: String(val(row, cols.lineReg))
     });
   }
