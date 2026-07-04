@@ -6515,6 +6515,17 @@ function fmtDateFull_(v) {
   return String(v || '');
 }
 
+// "○R7.7" / "R7年7月" 形式の令和テキストを yyyy-MM-dd に変換（日は01固定）
+function parseRenewalStr_(v) {
+  if (!v) return '';
+  var s = String(v).replace(/[○×〇●]/g, '').trim();
+  var m = s.match(/^R(\d+)[\.年](\d+)/i);
+  if (!m) return '';
+  var year = 2018 + parseInt(m[1], 10); // 令和1=2019
+  var month = String(parseInt(m[2], 10)).padStart(2, '0');
+  return year + '-' + month + '-01';
+}
+
 // 顧客一覧取得（IEYAS軍師「顧客管理」一覧表示用）
 function getCustomerList() {
   const ss = getOrOpenSS_();
@@ -6543,7 +6554,7 @@ function getCustomerList() {
       tabaco: String(val(row, cols.tabaco)), ng: String(val(row, cols.ng)),
       ngStaff: String(val(row, cols.ngStaff)),
       memberSince: fmtDateFull_(val(row, cols.memberSince)),
-      feeDate: fmtDateFull_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.renewal2)),
+      feeDate: fmtDateFull_(val(row, cols.feeDate)) || parseRenewalStr_(val(row, cols.feeDate)) || fmtDateFull_(val(row, cols.renewal2)) || parseRenewalStr_(val(row, cols.renewal2)),
       lineReg: String(val(row, cols.lineReg))
     });
   }
