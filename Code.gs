@@ -1254,7 +1254,7 @@ function handleOkuriModeSelect_(today, mode, replyToken) {
   } else {
     setProp('OKURI_MODE_' + today, 'jisha');
     // ドライバーに「本日なし」通知
-    push_(prop('GROUP_DRIVER'), '本日は自社送りになりました。送り依頼はありません。次回もよろしくお願いします🙏');
+    push_(prop('GROUP_DRIVER'), '本日は送りなしでおねがいします。よろしくお願いします🙏');
     reply(replyToken, '✅ 自社送りに設定しました\nドライバーに「送りなし」を連絡しました\n23:30に送りキャストの最終確認は続けます');
   }
 }
