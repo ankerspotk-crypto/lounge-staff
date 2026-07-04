@@ -1557,20 +1557,44 @@ function openCustomerForm(rowIdx) {
   // 会員開始日
   (function() {
     var raw = c ? String(c.memberSince || '') : '';
+    var parts = raw ? raw.split('-') : ['', '', ''];
+    var sy = parts[0] || '', sm = parts[1] || '', sd = parts[2] || '';
+    var curYear = new Date().getFullYear();
+    var selStyle = 'flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box';
+    var yOpts = '<option value="">年</option>';
+    for (var y = curYear; y >= curYear - 30; y--) yOpts += '<option value="' + y + '"' + (String(y) === sy ? ' selected' : '') + '>' + y + '</option>';
+    var mOpts = '<option value="">月</option>';
+    for (var m = 1; m <= 12; m++) { var mm = String(m).padStart(2,'0'); mOpts += '<option value="' + mm + '"' + (mm === sm ? ' selected' : '') + '>' + m + '</option>'; }
+    var dOpts = '<option value="">日</option>';
+    for (var d = 1; d <= 31; d++) { var dd = String(d).padStart(2,'0'); dOpts += '<option value="' + dd + '"' + (dd === sd ? ' selected' : '') + '>' + d + '</option>'; }
     html += '<div style="margin-bottom:10px">'
       + '<div style="font-size:11px;color:#888;margin-bottom:4px">会員開始日</div>'
-      + '<input type="date" id="cf-memberSince" value="' + raw + '" '
-      + 'style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box">'
-      + '</div>';
+      + '<div style="display:flex;gap:6px">'
+      + '<select id="cf-ms-y" style="' + selStyle + '">' + yOpts + '</select>'
+      + '<select id="cf-ms-m" style="' + selStyle + '">' + mOpts + '</select>'
+      + '<select id="cf-ms-d" style="' + selStyle + '">' + dOpts + '</select>'
+      + '</div></div>';
   })();
   // 会費をもらった日
   (function() {
     var raw = c ? String(c.feeDate || '') : '';
+    var parts = raw ? raw.split('-') : ['', '', ''];
+    var fy = parts[0] || '', fm = parts[1] || '', fd = parts[2] || '';
+    var curYear = new Date().getFullYear();
+    var selStyle = 'flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box';
+    var yOpts = '<option value="">年</option>';
+    for (var y = curYear; y >= curYear - 10; y--) yOpts += '<option value="' + y + '"' + (String(y) === fy ? ' selected' : '') + '>' + y + '</option>';
+    var mOpts = '<option value="">月</option>';
+    for (var m = 1; m <= 12; m++) { var mm = String(m).padStart(2,'0'); mOpts += '<option value="' + mm + '"' + (mm === fm ? ' selected' : '') + '>' + m + '</option>'; }
+    var dOpts = '<option value="">日</option>';
+    for (var d = 1; d <= 31; d++) { var dd = String(d).padStart(2,'0'); dOpts += '<option value="' + dd + '"' + (dd === fd ? ' selected' : '') + '>' + d + '</option>'; }
     html += '<div style="margin-bottom:10px">'
       + '<div style="font-size:11px;color:#888;margin-bottom:4px">会費をもらった日（新規・更新）</div>'
-      + '<input type="date" id="cf-feeDate" value="' + raw + '" '
-      + 'style="width:100%;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px;box-sizing:border-box">'
-      + '</div>';
+      + '<div style="display:flex;gap:6px">'
+      + '<select id="cf-fd-y" style="' + selStyle + '">' + yOpts + '</select>'
+      + '<select id="cf-fd-m" style="' + selStyle + '">' + mOpts + '</select>'
+      + '<select id="cf-fd-d" style="' + selStyle + '">' + dOpts + '</select>'
+      + '</div></div>';
   })();
   // 公式LINE登録
   (function() {
@@ -1625,8 +1649,8 @@ function saveCustomerForm(rowIdx) {
     bottle: g('cf-bottle'), pos: g('cf-pos'), bday: bday, drink: g('cf-drink'),
     tabaco: g('cf-tabaco'), neck: g('cf-neck'), company: g('cf-company'), note: g('cf-note'),
     ng: g('cf-ng'), ngStaff: g('cf-ngStaff'),
-    memberSince: g('cf-memberSince'),
-    feeDate: g('cf-feeDate'),
+    memberSince: (g('cf-ms-y') && g('cf-ms-m') && g('cf-ms-d')) ? (g('cf-ms-y') + '-' + g('cf-ms-m') + '-' + g('cf-ms-d')) : '',
+    feeDate: (g('cf-fd-y') && g('cf-fd-m') && g('cf-fd-d')) ? (g('cf-fd-y') + '-' + g('cf-fd-m') + '-' + g('cf-fd-d')) : '',
     lineReg: document.getElementById('cf-lineReg') ? document.getElementById('cf-lineReg').checked : false
   };
   if (!payload.card && !payload.name) { alert('カード記載名または氏名を入力してください'); return; }
