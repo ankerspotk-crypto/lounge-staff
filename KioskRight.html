@@ -1,0 +1,99 @@
+<style>
+.kr-wrap { height: 100%; display: flex; flex-direction: column; gap: 14px; padding: 14px; background: #0d0d14; }
+.kr-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #1e2038; flex-shrink: 0; }
+.kr-title { font-size: 15px; font-weight: 700; color: #e8f0ff; }
+.kr-refresh { font-size: 11px; color: #6a8ab0; cursor: pointer; }
+.kr-floors { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.kr-floor-label { font-size: 12px; font-weight: 700; color: #7ab0f0; background: #141d30; border-radius: 6px; padding: 3px 10px; display: inline-block; margin-bottom: 8px; }
+.kr-seats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.kr-seat { border-radius: 10px; padding: 10px 12px; border: 1px solid; min-height: 68px; }
+.kr-seat.kr-empty  { background: #141426; border-color: #1e2038; }
+.kr-seat.kr-rsrv   { background: #0f1a30; border-color: #1a3a60; }
+.kr-seat.kr-ok     { background: #0a2040; border-color: #1a5080; }
+.kr-seat.kr-warn   { background: #2a2010; border-color: #80700a; }
+.kr-seat.kr-over   { background: #2a0a0a; border-color: #80200a; }
+.kr-seat-name { font-size: 10px; color: #7a9cc8; font-weight: 700; margin-bottom: 5px; }
+.kr-status-empty { font-size: 12px; color: #3a4a60; }
+.kr-status-rsrv  { font-size: 11px; color: #5090d0; font-weight: 600; }
+.kr-cast  { font-size: 13px; font-weight: 600; color: #c8e0ff; line-height: 1.3; }
+.kr-cast.kr-warn-text { color: #f0c040; }
+.kr-cast.kr-over-text { color: #f06040; }
+.kr-time  { font-size: 10px; color: #6a8ab0; margin-top: 2px; }
+</style>
+
+<div class="kr-wrap">
+  <div class="kr-header">
+    <span class="kr-title">🎯 席状況</span>
+    <span class="kr-refresh" id="krRefreshLabel" onclick="krLoad()">読み込み中...</span>
+  </div>
+  <div class="kr-floors" id="krFloors">
+    <div style="text-align:center;color:#6a8ab0;padding:30px;font-size:13px;">読み込み中...</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var REFRESH_MS = 30000;
+  var timer;
+
+  window.krLoad = function() {
+    document.getElementById('krRefreshLabel').textContent = '更新中...';
+    google.script.run
+      .withSuccessHandler(krRender)
+      .withFailureHandler(function(e){
+        document.getElementById('krRefreshLabel').textContent = 'エラー（タップで再試行）';
+      })
+      .getSekiJokyouData();
+  };
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function krRender(seats) {
+    var floors = ['2F', '5F'];
+    var html = '';
+    floors.forEach(function(floor) {
+      var fs = seats.filter(function(s){ return s.floor === floor && (s.type === 'C' || s.type === 'B'); });
+      html += '<div>';
+      html += '<div class="kr-floor-label">' + floor + '</div>';
+      html += '<div class="kr-seats">';
+      fs.forEach(function(s) {
+        var cls, inner;
+        if (s.occupied) {
+          var st = s.status || 'ok';
+          cls = 'kr-seat kr-' + st;
+          inner = '<div class="kr-seat-name">' + esc(s.short) + '</div>';
+          s.casts.forEach(function(c) {
+            var textCls = c.status === 'ok' ? '' : ('kr-' + c.status + '-text');
+            inner += '<div class="kr-cast ' + textCls + '">' + esc(c.name) + '</div>';
+            var t = c.elapsed + '分';
+            if (c.setMins && c.setMins > 0) t += '/' + c.setMins + '分';
+            inner += '<div class="kr-time">' + t + '</div>';
+          });
+        } else if (s.rsrv || s.yrsrv) {
+          cls = 'kr-seat kr-rsrv';
+          var rsrv = s.rsrv || s.yrsrv;
+          inner = '<div class="kr-seat-name">' + esc(s.short) + '</div>';
+          inner += '<div class="kr-status-rsrv">' + (s.rsrv ? '来店済' : '予告') + '</div>';
+          if (rsrv.customer) inner += '<div class="kr-time">' + esc(rsrv.customer) + '</div>';
+        } else {
+          cls = 'kr-seat kr-empty';
+          inner = '<div class="kr-seat-name">' + esc(s.short) + '</div>';
+          inner += '<div class="kr-status-empty">空き</div>';
+        }
+        html += '<div class="' + cls + '">' + inner + '</div>';
+      });
+      html += '</div></div>';
+    });
+    document.getElementById('krFloors').innerHTML = html;
+    var now = new Date();
+    document.getElementById('krRefreshLabel').textContent =
+      '更新: ' + now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(krLoad, REFRESH_MS);
+  }
+
+  krLoad();
+})();
+</script>

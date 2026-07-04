@@ -135,6 +135,10 @@ function doGet(e) {
   }
 }
 
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
 function doPost(e) {
   try {
     if (!e || !e.postData) return ok_();
