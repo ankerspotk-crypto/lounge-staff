@@ -2403,6 +2403,8 @@ function esc(s) {
 var notifSettings = null;
 var BUILTIN_NOTIF_KEYS = ['ieyas_url','kaiten_check','lineup','kinsen_mae','soganbansen','dohan_check','okuri_summary',
                            'okuri_confirm','seki_check','shoumei','kinsen_go','oshibori'];
+var BUILTIN_AUTO_KEYS = ['rain_alert','driver_forward','kintai_detection','missing_shukkin','missing_taikin',
+                          'early_taikin','driver_notice_1600','stocktake_reminder'];
 var DAY_LABELS = ['月','火','水','木','金','土','日'];
 
 function loadNotifSettings() {
@@ -2509,17 +2511,39 @@ function buildAddForm() {
     + '</div></div></div>';
 }
 
+function buildAutoRow(k, s) {
+  var enabled = s.enabled !== false;
+  return '<div class="notif-card auto-card" id="ncard-' + k + '" style="' + (enabled ? '' : 'opacity:.45') + '">'
+    + '<div class="notif-card-header" style="cursor:default">'
+    +   '<label class="notif-toggle" onclick="event.stopPropagation()">'
+    +     '<input type="checkbox" id="ntog-' + k + '" ' + (enabled ? 'checked' : '') + ' onchange="notifToggle(\'' + k + '\')">'
+    +     '<span class="notif-slider"></span></label>'
+    +   '<div class="notif-mid">'
+    +     '<div class="notif-label">' + esc(s.label || k) + '</div>'
+    +     '<div class="notif-group-tag" style="font-size:10px;color:#7a9">' + esc(s.group || '') + '</div>'
+    +   '</div>'
+    +   '<div style="font-size:10px;color:#556;text-align:right;max-width:120px;line-height:1.4">' + esc(s.desc || '') + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
 function renderNotif(settings) {
   var customKeys = Object.keys(settings).filter(function(k) { return k.startsWith('custom_'); });
-  var rows = BUILTIN_NOTIF_KEYS.concat(customKeys).map(function(k) {
+  var scheduledRows = BUILTIN_NOTIF_KEYS.concat(customKeys).map(function(k) {
     return settings[k] ? buildNotifRow(k, settings[k]) : '';
+  }).join('');
+  var autoRows = BUILTIN_AUTO_KEYS.map(function(k) {
+    return settings[k] ? buildAutoRow(k, settings[k]) : '';
   }).join('');
 
   var html = '<div style="padding:14px">'
-    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">LINE通知設定</div>'
-    + '<div class="notif-list">' + rows + '</div>'
+    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin-bottom:10px;letter-spacing:.05em">⏰ 定時通知</div>'
+    + '<div class="notif-list">' + scheduledRows + '</div>'
     + buildAddForm()
     + '<button class="notif-add-btn" id="notif-add-btn" onclick="openAddNotifForm()">＋ 通知を追加</button>'
+    + '<div style="font-size:13px;font-weight:700;color:#a0c0e0;margin:18px 0 10px;letter-spacing:.05em">🤖 自動応答・トリガー</div>'
+    + '<div style="font-size:11px;color:#567;margin-bottom:10px">LINEメッセージの内容や時刻を条件に自動で動く機能です。OFFにすると完全に停止します。</div>'
+    + '<div class="notif-list">' + autoRows + '</div>'
     + '<button class="notif-save-btn" onclick="saveNotifSettings()">保存する</button>'
     + '<div id="notif-save-msg" style="text-align:center;font-size:13px;color:#6f9;margin-top:10px;display:none">保存しました</div>'
     + '</div>';
