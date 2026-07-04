@@ -438,6 +438,7 @@ header h1 { font-size: 17px; letter-spacing: .5px; }
     <button onclick="openSafeWithdrawal()" style="background:#221a2a;border:1px solid #553a88;color:#bb99ee;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🔓 金庫出金</button>
     <button onclick="openCashCheck()" style="background:#2a2210;border:1px solid #886622;color:#ddbb55;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">🌙 閉店チェック</button>
     <button onclick="openStockManager()" id="stock-btn" style="background:#1a2a10;border:1px solid #447722;color:#aadd66;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer;position:relative">📋 在庫発注管理<span id="stock-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ff7733;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700"></span></button>
+    <button onclick="openOkuriManager()" id="okuri-mgr-btn" style="background:#1a2830;border:1px solid #2a6080;color:#80d0f0;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer;position:relative">🚗 送り<span id="okuri-mgr-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#4090c0;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700"></span></button>
     <button onclick="openCustomerManager()" style="background:#14213a;border:1px solid #2a4a7a;color:#7ab0f0;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer">👤 顧客管理</button>
     <button onclick="openCastRequests()" id="cast-req-btn" style="background:#2a1010;border:1px solid #883333;color:#ff9999;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer;position:relative">📣 リクエスト<span id="cast-req-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#ff3333;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700"></span></button>
     <a href="<?= GAS_URL ?>?page=pos" style="background:#1a1a2a;border:1px solid #3a3a66;color:#aab0ff;padding:7px 12px;border-radius:16px;font-size:12px;cursor:pointer;text-decoration:none">🍽 POSへ</a>
@@ -1450,6 +1451,134 @@ function submitStocktakeForm() {
 
 // ---- 👤 顧客管理 ----
 
+// ========== 送り管理パネル ==========
+var okuriState = { list: [], castList: [], loading: false };
+
+function openOkuriManager() {
+  activeSeat = null; nextSeatTarget = null;
+  document.getElementById('sheet-title').textContent = '🚗 送り管理';
+  document.getElementById('sheet-body').onclick = null;
+  document.getElementById('sheet-body').innerHTML = '<div style="text-align:center;padding:30px 0;color:#777">読み込み中...</div>';
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('sheet').style.display   = 'block';
+  google.script.run
+    .withSuccessHandler(function(data) {
+      okuriState.list = data.list || [];
+      okuriState.castList = data.casts || data.castList || [];
+      renderOkuriPanel();
+    })
+    .withFailureHandler(function(e) {
+      document.getElementById('sheet-body').innerHTML = '<div style="color:#f88;padding:20px">エラー: ' + esc(String(e)) + '</div>';
+    })
+    .getOkuriStatusToday();
+}
+
+function renderOkuriPanel() {
+  var list = okuriState.list;
+  var today = new Date().toISOString().slice(0, 10);
+
+  var rows = list.length === 0
+    ? '<div style="color:#666;text-align:center;padding:20px">本日の送り予定はありません</div>'
+    : list.map(function(item, i) {
+        var binLabel = item.bin == 2 ? '<span style="font-size:10px;background:#1a3050;border:1px solid #336699;color:#7ab0f0;padding:1px 6px;border-radius:8px;margin-left:6px">2便</span>' : '';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0f1622;border-radius:8px;margin-bottom:6px">'
+          + '<div style="flex:1">'
+          + '<span style="font-weight:700;color:#e0e8ff;font-size:14px">' + esc(item.name) + '</span>' + binLabel
+          + '<span style="color:#888;font-size:12px;margin-left:8px">→</span>'
+          + '<span style="color:#a0d0f0;font-size:13px;margin-left:8px">' + esc(item.dest) + '</span>'
+          + (item.time ? '<span style="color:#666;font-size:11px;margin-left:6px">' + esc(item.time) + '</span>' : '')
+          + '</div>'
+          + '<button onclick="okuriToggleBin(' + i + ')" title="便切り替え" style="background:#1a2a40;border:1px solid #336699;color:#7ab0f0;padding:4px 8px;border-radius:8px;font-size:11px;cursor:pointer">'
+          + (item.bin == 2 ? '1便へ' : '2便へ') + '</button>'
+          + '<button onclick="okuriCancel(' + i + ')" style="background:#2a1010;border:1px solid #883333;color:#f88;padding:4px 8px;border-radius:8px;font-size:11px;cursor:pointer">取消</button>'
+          + '</div>';
+      }).join('');
+
+  var castOpts = okuriState.castList.map(function(c) {
+    return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+  }).join('');
+
+  var html = '<div style="padding:4px 0 12px">'
+    + '<div style="font-size:12px;color:#7ab0f0;margin-bottom:8px;font-weight:700">本日の送り予定 (' + list.length + '件)</div>'
+    + rows
+    + '</div>'
+    + '<div style="border-top:1px solid #1e2a40;padding-top:14px">'
+    + '<div style="font-size:12px;color:#aaa;margin-bottom:8px;font-weight:700">＋ 送りを追加</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px">'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '<label style="font-size:12px;color:#777;width:50px">名前</label>'
+    + '<select id="okuri-name" style="flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:7px;border-radius:8px;font-size:13px">'
+    + '<option value="">-- キャスト選択 --</option>'
+    + castOpts
+    + '</select>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '<label style="font-size:12px;color:#777;width:50px">行き先</label>'
+    + '<input type="text" id="okuri-dest" placeholder="例: 大治" style="flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:7px;border-radius:8px;font-size:13px">'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '<label style="font-size:12px;color:#777;width:50px">便</label>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button id="okuri-bin1" onclick="setOkuriBin(1)" style="padding:6px 16px;border-radius:8px;background:#1a3050;border:1px solid #7ab0f0;color:#7ab0f0;font-size:12px;cursor:pointer">1便</button>'
+    + '<button id="okuri-bin2" onclick="setOkuriBin(2)" style="padding:6px 16px;border-radius:8px;background:none;border:1px solid #444;color:#666;font-size:12px;cursor:pointer">2便</button>'
+    + '</div>'
+    + '</div>'
+    + '<button onclick="submitOkuri()" style="padding:9px;background:#1a3050;border:1px solid #2a6080;color:#80d0f0;border-radius:8px;font-size:13px;cursor:pointer;font-weight:700">送りを登録</button>'
+    + '</div>'
+    + '</div>';
+
+  document.getElementById('sheet-body').innerHTML = html;
+  window._okuriSelectedBin = 1;
+}
+
+function setOkuriBin(bin) {
+  window._okuriSelectedBin = bin;
+  var b1 = document.getElementById('okuri-bin1');
+  var b2 = document.getElementById('okuri-bin2');
+  if (bin === 1) {
+    b1.style.background = '#1a3050'; b1.style.borderColor = '#7ab0f0'; b1.style.color = '#7ab0f0';
+    b2.style.background = 'none';    b2.style.borderColor = '#444';    b2.style.color = '#666';
+  } else {
+    b2.style.background = '#1a3050'; b2.style.borderColor = '#7ab0f0'; b2.style.color = '#7ab0f0';
+    b1.style.background = 'none';    b1.style.borderColor = '#444';    b1.style.color = '#666';
+  }
+}
+
+function submitOkuri() {
+  var name = (document.getElementById('okuri-name').value || '').trim();
+  var dest = (document.getElementById('okuri-dest').value || '').trim();
+  var bin  = window._okuriSelectedBin || 1;
+  if (!name || !dest) { alert('名前と行き先を入力してください'); return; }
+  var today = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function() { openOkuriManager(); })
+    .withFailureHandler(function(e) { alert('エラー: ' + e); })
+    .adminSaveOkuri({ date: today, name: name, dest: dest, bin: bin });
+}
+
+function okuriCancel(i) {
+  var item = okuriState.list[i];
+  if (!item) return;
+  if (!confirm(item.name + '（' + item.dest + '）の送りを取り消しますか？')) return;
+  var today = new Date().toISOString().slice(0, 10);
+  google.script.run
+    .withSuccessHandler(function() { openOkuriManager(); })
+    .withFailureHandler(function(e) { alert('エラー: ' + e); })
+    .adminCancelOkuri({ date: today, name: item.name, bin: item.bin });
+}
+
+function okuriToggleBin(i) {
+  var item = okuriState.list[i];
+  if (!item) return;
+  var today = new Date().toISOString().slice(0, 10);
+  var newBin = item.bin == 2 ? 1 : 2;
+  google.script.run
+    .withSuccessHandler(function() { openOkuriManager(); })
+    .withFailureHandler(function(e) { alert('エラー: ' + e); })
+    .adminSaveOkuri({ date: today, name: item.name, dest: item.dest, bin: newBin });
+}
+// ========== /送り管理パネル ==========
+
 function openCustomerManager() {
   activeSeat = null;
   nextSeatTarget = null;
@@ -1475,22 +1604,53 @@ function openCustomerManager() {
 
 function renderCustomerList() {
   var st = customerState;
-  var html = '<div style="display:flex;gap:6px;margin-bottom:10px">'
+  var filterBtns = [
+    { key: 'all',        label: '全員' },
+    { key: 'no_line',    label: 'LINE未登録' },
+    { key: 'no_fee',     label: '更新日なし' },
+    { key: 'fee_old',    label: '更新切れ（1年超）' },
+  ].map(function(f) {
+    var active = (st.filter || 'all') === f.key;
+    return '<button onclick="setCustomerFilter(\'' + f.key + '\')" style="padding:5px 10px;border-radius:14px;border:1px solid '
+      + (active ? '#7ab0f0;background:#14213a;color:#7ab0f0' : '#444;background:none;color:#888')
+      + ';font-size:11px;cursor:pointer">' + f.label + '</button>';
+  }).join('');
+  var html = '<div style="display:flex;gap:6px;margin-bottom:8px">'
     + '<input type="text" id="customer-search" placeholder="名前・会員番号・担当で検索" value="' + esc(st.query || '') + '" '
     + 'style="flex:1;background:#1a1a2e;border:1px solid #333;color:#fff;padding:9px;border-radius:8px;font-size:13px" oninput="onCustomerSearchInput()">'
     + '<button onclick="openCustomerForm(null)" style="padding:9px 14px;background:#14213a;border:1px solid #2a4a7a;color:#7ab0f0;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap">＋新規</button>'
     + '</div>'
+    + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">' + filterBtns + '</div>'
     + '<div id="customer-count" style="font-size:11px;color:#777;margin-bottom:8px"></div>'
     + '<div id="customer-list"></div>';
   document.getElementById('sheet-body').innerHTML = html;
   updateCustomerResults();
 }
 
+function setCustomerFilter(key) {
+  customerState.filter = key;
+  renderCustomerList();
+}
+
 // 検索結果の再描画のみ行う（#customer-search自体は再生成しない＝IME変換中の入力欄を壊さない）
 function updateCustomerResults() {
   var st = customerState;
   var q = (st.query || '').trim();
-  var matched = !q ? st.list : st.list.filter(function(c) {
+  var now = new Date();
+  var ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+  var filterFn = {
+    all:     function() { return true; },
+    no_line: function(c) { return !c.lineReg || c.lineReg === 'false' || c.lineReg === 'FALSE'; },
+    no_fee:  function(c) { return !c.feeDate; },
+    fee_old: function(c) {
+      if (!c.feeDate) return false;
+      var d = new Date(c.feeDate);
+      return !isNaN(d) && (now - d) > ONE_YEAR_MS;
+    },
+  }[st.filter || 'all'] || function() { return true; };
+  var matched = st.list.filter(function(c) {
+    if (!filterFn(c)) return false;
+    if (!q) return true;
     return (c.card && c.card.indexOf(q) !== -1) || (c.name && c.name.indexOf(q) !== -1)
       || (c.no && c.no.indexOf(q) !== -1) || (c.tantou && c.tantou.indexOf(q) !== -1);
   });

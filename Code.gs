@@ -1141,34 +1141,41 @@ function notifyDriverChange(type, name, dest, today) {
 function detectOkuri(text) {
   const lines = text.split(/\n/);
   for (const line of lines) {
+    // パターン1: "○○まで送りお願いします"
     const m = line.match(/(.{2,15}?)まで(送り|送って)?(お願い|おねがい|よろしく|ほしい|欲しい|くださ|下さ)/);
     if (m) return m[1].trim();
+    // パターン2: "大治送りお願いします"（「まで」なし）
+    const m2 = line.match(/^(.{1,10}?)送り(お願い|おねがい|よろしく|ほしい|欲しい|くださ|下さ)/);
+    if (m2) return m2[1].replace(/[にをまでへ]+$/, '').trim();
   }
   return null;
 }
 
-function saveOkuri(date, name, dest) {
+function saveOkuri(date, name, dest, bin) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sh = ss.getSheetByName(OKURI_TAB);
   if (!sh) {
     sh = ss.insertSheet(OKURI_TAB);
-    sh.appendRow(['日付', '名前', '行き先', '時刻', '状態']);
+    sh.appendRow(['日付', '名前', '行き先', '時刻', '状態', '便']);
   }
-  deleteOkuriRow_(sh, date, name); // 同日同名は上書き
-  sh.appendRow([date, name, dest, now_(), '依頼']);
+  const binNo = bin || 1;
+  deleteOkuriRow_(sh, date, name, binNo);
+  sh.appendRow([date, name, dest, now_(), '依頼', binNo]);
 }
 
-function cancelOkuri(date, name) {
+function cancelOkuri(date, name, bin) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sh = ss.getSheetByName(OKURI_TAB);
-  if (sh) deleteOkuriRow_(sh, date, name);
+  if (sh) deleteOkuriRow_(sh, date, name, bin || 1);
 }
 
-function deleteOkuriRow_(sh, date, name) {
+function deleteOkuriRow_(sh, date, name, bin) {
   const vals = sh.getDataRange().getValues();
   for (let i = vals.length - 1; i >= 1; i--) {
     const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]);
-    if (d === date && String(vals[i][1]) === name) sh.deleteRow(i + 1);
+    const rowBin = Number(vals[i][5]) || 1;
+    const targetBin = bin ? Number(bin) : null;
+    if (d === date && String(vals[i][1]) === name && (!targetBin || rowBin === targetBin)) sh.deleteRow(i + 1);
   }
 }
 
@@ -1182,7 +1189,38 @@ function getOkuriList(date) {
       const d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]);
       return d === date && r[4] === '依頼';
     })
-    .map(r => ({ name: String(r[1]), dest: String(r[2]) }));
+    .map(r => ({ name: String(r[1]), dest: String(r[2]), bin: Number(r[5]) || 1 }));
+}
+
+// 軍師から送りを追加・更新（黒服用）
+function adminSaveOkuri(payload) {
+  try {
+    const date = todayStr();
+    saveOkuri(date, payload.name, payload.dest, payload.bin || 1);
+    notifyDriverChange('追加', payload.name, payload.dest, date);
+    return { ok: true };
+  } catch(e) { return { ok: false, error: e.message }; }
+}
+
+// 軍師から送りをキャンセル（黒服用）
+function adminCancelOkuri(payload) {
+  try {
+    const date = todayStr();
+    cancelOkuri(date, payload.name, payload.bin);
+    notifyDriverChange('キャンセル', payload.name, null, date);
+    return { ok: true };
+  } catch(e) { return { ok: false, error: e.message }; }
+}
+
+// 軍師向け：当日の送りリストを返す
+function getOkuriStatusToday() {
+  try {
+    const date = todayStr();
+    const list = getOkuriList(date);
+    // スタッフマスタからキャスト一覧も返す（追加用）
+    const casts = getCastNamesForYoyaku_(getOrOpenSS_());
+    return { ok: true, date: date, list: list, casts: casts };
+  } catch(e) { return { ok: false, error: e.message, list: [], casts: [] }; }
 }
 
 // 料金計算
