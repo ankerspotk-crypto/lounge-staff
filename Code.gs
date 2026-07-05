@@ -4276,7 +4276,7 @@ function searchKioskCustomers(query) {
 
 // 端末キオスク用：黒服スタッフ名一覧（ログイン画面用）
 function getKioskStaffList() {
-  const sh = ss_().getSheetByName(STAFF_TAB);
+  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return [];
   return sh.getDataRange().getValues()
     .filter(r => r[0] && ['黒服社員', '黒服バイト', '管理者'].includes(String(r[2]).trim()))
