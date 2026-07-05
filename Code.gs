@@ -4279,7 +4279,7 @@ function getKioskStaffList() {
   const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return [];
   return sh.getDataRange().getValues()
-    .filter(r => r[0] && ['黒服社員', '黒服バイト', '管理者'].includes(String(r[2]).trim()))
+    .filter(r => r[0] && ['黒服社員', '黒服バイト', '管理者', 'ドライバー'].includes(String(r[2]).trim()))
     .map(r => String(r[1]).trim())
     .filter(n => n);
 }
