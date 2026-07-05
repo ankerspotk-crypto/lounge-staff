@@ -46,8 +46,9 @@
       border: 1px solid #2a2a44; background: #1e1e30; color: #666;
       font-size: 12px; cursor: pointer; text-align: center; transition: all 0.15s;
     }
-    .role-btn.active-cast  { border-color: #3366cc; background: #1a2a4a; color: #88aaff; font-weight: 600; }
-    .role-btn.active-kuro  { border-color: #448844; background: #1a2a1a; color: #88cc88; font-weight: 600; }
+    .role-btn.active-cast   { border-color: #3366cc; background: #1a2a4a; color: #88aaff; font-weight: 600; }
+    .role-btn.active-kuro   { border-color: #448844; background: #1a2a1a; color: #88cc88; font-weight: 600; }
+    .role-btn.active-driver { border-color: #bb7722; background: #2a1e0d; color: #eeaa55; font-weight: 600; }
 
     .safe-row { margin-top: 8px; }
     .safe-btn {
@@ -176,10 +177,10 @@ function setHakenName(hakenName, storeName, id) {
 }
 
 function cardHtml(s, id) {
-  var roles = ['キャスト', '黒服社員', '黒服バイト'];
+  var roles = ['キャスト', '黒服社員', '黒服バイト', 'ドライバー'];
   var btns = roles.map(function(r) {
-    var isKuro = r !== 'キャスト';
-    var active = s.role === r ? (isKuro ? ' active-kuro' : ' active-cast') : '';
+    var activeCls = r === 'キャスト' ? 'active-cast' : (r === 'ドライバー' ? 'active-driver' : 'active-kuro');
+    var active = s.role === r ? ' ' + activeCls : '';
     return '<button class="role-btn' + active + '" '
       + 'onclick="setRole(\'' + escAttr(s.name) + '\',\'' + r + '\',this,\'card-' + id + '\')">'
       + r + '</button>';
@@ -204,9 +205,9 @@ function cardHtml(s, id) {
 function setRole(name, role, btn, cardId) {
   var card = document.getElementById(cardId);
   card.querySelectorAll('.role-btn').forEach(function(b) {
-    b.classList.remove('active-cast', 'active-kuro');
+    b.classList.remove('active-cast', 'active-kuro', 'active-driver');
   });
-  btn.classList.add(role === 'キャスト' ? 'active-cast' : 'active-kuro');
+  btn.classList.add(role === 'キャスト' ? 'active-cast' : (role === 'ドライバー' ? 'active-driver' : 'active-kuro'));
 
   fetch(GAS_URL, {
     method: 'POST',
