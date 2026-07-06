@@ -730,11 +730,37 @@ function homeRelLabel(d){
 }
 var homeWD = ['日','月','火','水','木','金','土'];
 
+// ヘルプ・呼び出しカード（キャスト・管理者とも共通で表示）
+function homeCallCard(){
+  var sbBtn = 'padding:13px 4px;background:#162848;color:#bcd6f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700;';
+  return '<div class="card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">ヘルプ・呼び出し</span>'
+    + '</div>'
+    + '<div id="home-myseat" style="font-size:12px;color:#7a90a8;margin-bottom:11px">現在の席：確認中...</div>'
+    + '<div id="home-callbtns">'
+    + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:13px;background:transparent;color:#e08794;border:1.5px solid #9c3341;border-radius:10px;font-size:16px;font-weight:700;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
+    +   '<span style="display:block;font-size:11px;font-weight:500;color:#a86b73;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+    +   '<button onclick="castCall(\'soda\',this)" style="' + sbBtn + '">🥤 炭酸</button>'
+    +   '<button onclick="castCall(\'ice\',this)" style="' + sbBtn + '">🧊 アイス</button>'
+    +   '<button onclick="castCall(\'oshibori\',this)" style="' + sbBtn + '">🧻 おしぼり</button>'
+    +   '<button onclick="castCall(\'hiyashibo\',this)" style="' + sbBtn + '">❄️ 冷しぼ</button>'
+    +   '<button onclick="castCall(\'denmoku\',this)" style="' + sbBtn + '">🎤 デンモク</button>'
+    +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
 function renderHome(){
   contentTargetId = 'content';
-  // 管理者でキャスト未選択 → 案内＋メニューのみ
+  // 管理者でキャスト未選択 → 呼び出し＋案内＋メニュー
   if (isAdmin && !adminViewAs) {
-    setContent('<div class="card" style="text-align:center;color:#8aabcc;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>' + homeMenu());
+    setContent(homeCallCard()
+      + '<div class="card" style="text-align:center;color:#8aabcc;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>'
+      + homeMenu());
+    loadMySeat();
     return;
   }
   var me = homeMyName();
@@ -768,31 +794,8 @@ function renderHome(){
       + '</div>';
   }
 
-  // --- ヘルプ・呼び出しカード ---
-  var sbBtn = 'padding:13px 4px;background:#162848;color:#bcd6f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700;';
-  var callCard =
-    '<div class="card">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-    +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">ヘルプ・呼び出し</span>'
-    + '</div>'
-    + '<div id="home-myseat" style="font-size:12px;color:#7a90a8;margin-bottom:11px">現在の席：確認中...</div>'
-    + '<div id="home-callbtns">'
-    + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:13px;background:transparent;color:#e08794;border:1.5px solid #9c3341;border-radius:10px;font-size:16px;font-weight:700;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
-    +   '<span style="display:block;font-size:11px;font-weight:500;color:#a86b73;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-    +   '<button onclick="castCall(\'soda\',this)" style="' + sbBtn + '">🥤 炭酸</button>'
-    +   '<button onclick="castCall(\'ice\',this)" style="' + sbBtn + '">🧊 アイス</button>'
-    +   '<button onclick="castCall(\'oshibori\',this)" style="' + sbBtn + '">🧻 おしぼり</button>'
-    +   '<button onclick="castCall(\'hiyashibo\',this)" style="' + sbBtn + '">❄️ 冷しぼ</button>'
-    +   '<button onclick="castCall(\'denmoku\',this)" style="' + sbBtn + '">🎤 デンモク</button>'
-    +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
-    + '</div>'
-    + '</div>'
-    + '</div>';
-  if (isAdmin) callCard = '';   // 管理者は呼び出しカードを出さない（本人のキャストのみ）
-
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める） ---
-  var html = shiftCard + callCard
+  var html = shiftCard + homeCallCard()
     + '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +     '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">今日の予約</span>'
@@ -804,8 +807,8 @@ function renderHome(){
     + homeMenu();
   setContent(html);
 
-  // --- 現在の席（軍師の付け回しとリンク）を取得（本人キャストのみ） ---
-  if (!isAdmin) loadMySeat();
+  // --- 現在の席（軍師の付け回しとリンク）を取得 ---
+  loadMySeat();
 
   // --- 今日の予約を取得 ---
   var now = new Date();
