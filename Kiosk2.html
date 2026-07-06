@@ -863,7 +863,8 @@ function seatHtml(s){
         +'<div class="cust" style="color:#bcd8ff">'+esc(s.rsv.cust)+'様</div>'
         +'<div class="rsv-meta"><span class="rt">📅 '+esc(rsvArrT(s.rsv))+'〜</span>'+(s.rsv.tantou?'　担当 '+esc(s.rsv.tantou):'')+'</div></div>';
     }
-    return '<div class="seat'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span></div><div class="empty">空席</div></div>';
+    var planB=(s.planList&&s.planList.length)?'<div class="rsv-meta" style="color:#c8a8f0;margin-top:3px">📋 予定 '+s.planList.map(esc).join('、')+'</div>':'';
+    return '<div class="seat'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span></div><div class="empty">空席</div>'+planB+'</div>';
   }
   var tags=(s.tags||[]).map(function(t){return '<span class="tg '+(TAGLABEL[t]?t:'')+'">'+(TAGLABEL[t]||esc(t))+'</span>';}).join('');
   var tantou=s.tantou;
@@ -1142,7 +1143,8 @@ function openSeat(idx){
   if(!s.casts||!s.casts.length){
     body='<div class="empty-msg" style="padding:24px 0">現在この席は空席です</div>';
     if(s.rsv) body+='<div class="kv"><span class="k">次の予約</span><span class="v" style="color:#ffcc55">'+esc(rsvArrT(s.rsv))+' '+esc(s.rsv.cust)+'様</span></div>';
-    body+='<div class="actions"><div class="act pri" onclick="openSeatSession('+idx+')">＋ 席設定する</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+    if(s.planList&&s.planList.length) body+='<div class="kv"><span class="k">予定キャスト</span><span class="v" style="color:#d8b8ff">📋 '+s.planList.map(esc).join('、')+'</span></div>';
+    body+='<div class="actions"><div class="act pri" onclick="openSeatSession('+idx+')">＋ 席設定する</div><div class="act" style="border-color:#6a4aa0;color:#d8b8ff" onclick="openPlanCast('+idx+')">📋 予定キャスト設定</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }else{
     var st=seatStatus(s);
     var stLabel=st==='over'?'<span style="color:#ee5a5a">🔴 時間超過</span>':st==='warn'?'<span style="color:#e6b23a">⏰ まもなく超過</span>':'<span style="color:#4dcc84">● 稼働中</span>';
@@ -1163,6 +1165,30 @@ function openSeat(idx){
       +'<div class="actions">'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }
   showSheet(title,body,false);
+}
+
+/* ============ 📋 予定キャスト（開店前の付け回し予定） ============ */
+var planSel=null;
+function openPlanCast(idx){ var s=SEATS[idx]; planSel={idx:idx, code:s.code, sel:(s.planList||[]).slice()}; renderPlanCast(); }
+function renderPlanCast(){
+  var s=SEATS[planSel.idx];
+  var pool=(WORKCASTS!=null)?WORKCASTS:CASTS;
+  var chips=(pool||[]).map(function(n){
+    var on=planSel.sel.indexOf(n)>=0;
+    return '<span onclick="togglePlanCast(\''+jsStr(n)+'\')" style="display:inline-block;margin:5px 7px 0 0;padding:9px 15px;border-radius:18px;font-size:15px;cursor:pointer;'
+      +(on?'background:#2a1a4a;color:#e0c8ff;border:1px solid #7a5ac0;font-weight:700':'background:var(--panel2);color:var(--sub);border:1px solid var(--line)')+'">'+(on?'✓ ':'')+esc(n)+'</span>';
+  }).join('')||'<div class="empty-msg" style="padding:14px 0;font-size:12px">出勤キャストが取得できていません</div>';
+  var body='<div style="font-size:13px;color:var(--sub);margin-bottom:12px;line-height:1.6">営業開始時にこの席へ座る予定のキャストを選びます。<br>実際にお客様が付くと自動で消えます。</div>'
+    +'<div style="line-height:2.4">'+chips+'</div>'
+    +'<div class="actions" style="margin-top:18px"><div class="act pri" onclick="savePlanCast()">保存</div><div class="act" onclick="closeSheet()">閉じる</div></div>';
+  showSheet('📋 予定キャスト（'+shortNm(s.name)+'）',body,false);
+}
+function togglePlanCast(n){ var i=planSel.sel.indexOf(n); if(i>=0)planSel.sel.splice(i,1); else planSel.sel.push(n); renderPlanCast(); }
+function savePlanCast(){
+  var code=planSel.code, sel=planSel.sel.slice(), s=SEATS[planSel.idx];
+  if(s) s.planList=sel;        // ローカル即反映
+  renderAll(); toast('📋 予定キャストを保存'); closeSheet();
+  if(IS_GAS) gsr('setSeatPlanCast',code,sel).then(loadAll).catch(function(){loadAll();});
 }
 
 /* ============ 🪑 席設定（テーブル設定：予約から / 飛び込み新規） ============ */
@@ -1420,7 +1446,8 @@ function renewStatus(fd){
 var NO_LINE_MEMBERS={'No.204':1,'No.156':1,'No.077':1,'No.410':1,'No.088':1};
 function isNoLine(c){ if(c.lineRegistered===false)return true; if(c.lineRegistered===true)return false; return !!NO_LINE_MEMBERS[c.member]; }
 // 実データ(searchKioskCustomersV2)→ 顧客カード用に変換
-function adaptCustomer(c){return {name:c.name||c.card||'', member:c.no||'', bottle:c.bottle||'', bottlePos:'', bday:c.bday||'', tantou:c.tantou||'', nomikata:c.drink||'', tabako:c.tabaco||'', ng:'', joined:c.memberSince||'', feeDate:c.annualFeeDate||'', lineRegistered:(c.lineRegistered!=null?c.lineRegistered:null)};}
+function adaptCustomer(c){return {name:c.name||c.card||'', card:c.card||'', member:c.no||'', bottle:c.bottle||'', bottlePos:'', bday:c.bday||'', tantou:c.tantou||'', nomikata:c.drink||'', tabako:c.tabaco||'', ng:'', note:c.note||'', joined:c.memberSince||'', feeDate:c.annualFeeDate||'', lineRegistered:(c.lineRegistered!=null?c.lineRegistered:null)};}
+var custDetailList=[]; // 検索結果を保持（詳細表示のタップ用）
 var MENU_TILES=[
   {group:'開店・閉店 / 現金', items:[
     {ic:'🌅', t:'開店チェック',   act:"openOpeningCheck()"},
@@ -1486,8 +1513,9 @@ function renderCustResults(){
   el.innerHTML=custResultsHtml(list);
 }
 function custResultsHtml(list){
+  custDetailList=list||[];
   if(!list.length) return '<div class="empty-msg">見つかりませんでした</div>';
-  return list.map(function(c){
+  return list.map(function(c,ci){
     var rs=renewStatus(c.feeDate);
     var rb=rs==='expired'?'<span class="cbd exp">🔴 更新切れ</span>':rs==='soon'?'<span class="cbd soon">🟡 まもなく更新</span>':rs==='ok'?'<span class="cbd okr">🟢 有効</span>':'<span class="cbd">更新日なし</span>';
     if(isNoLine(c)) rb+='<span class="cbd noline">📵 公式LINE未登録</span>';
@@ -1498,10 +1526,35 @@ function custResultsHtml(list){
     if(c.nomikata) b+='<span class="cbd">'+esc(c.nomikata)+'</span>';
     if(c.tabako) b+='<span class="cbd">🚬'+esc(c.tabako)+'</span>';
     if(c.ng) b+='<span class="cbd ng">🚫NG '+esc(c.ng)+'</span>';
-    return '<div class="cust-card'+(rs==='expired'?' exp':'')+'"><div class="cc-top"><span class="cc-nm">'+esc(c.name)+' 様</span><span class="cc-mem">'+esc(c.member||'—')+'</span>'+rb+'</div>'
+    return '<div class="cust-card'+(rs==='expired'?' exp':'')+'" onclick="openCustDetail('+ci+')" style="cursor:pointer"><div class="cc-top"><span class="cc-nm">'+esc(c.name)+' 様</span><span class="cc-mem">'+esc(c.member||'—')+'</span>'+rb+'</div>'
       +'<div class="cc-meta">入会 '+esc(c.joined||'—')+'　・　前回更新 '+esc(c.feeDate||'—')+'</div>'
       +(b?'<div class="cc-badges">'+b+'</div>':'')+'</div>';
   }).join('');
+}
+
+// 顧客詳細（カードをタップ → 全項目表示）
+function openCustDetail(i){
+  var c=custDetailList[i]; if(!c)return;
+  var rs=renewStatus(c.feeDate);
+  var rsLabel=rs==='expired'?'🔴 更新切れ':rs==='soon'?'🟡 まもなく更新':rs==='ok'?'🟢 有効':'—';
+  var lineTxt=c.lineRegistered===false?'📵 未登録':(c.lineRegistered===true?'✅ 登録済み':'—');
+  function row(k,v){ return v?('<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--dim);font-size:13px">'+esc(k)+'</span><span style="flex:1;font-size:15px;color:var(--txt)">'+esc(v)+'</span></div>'):''; }
+  var bottle=c.bottle?(c.bottle+(c.bottlePos?'（'+c.bottlePos+'）':'')):'';
+  var html='<div style="padding:6px 4px">'
+    +'<div style="font-size:22px;font-weight:800;color:var(--txt);margin-bottom:2px">'+esc(c.name)+' 様</div>'
+    +'<div style="font-size:13px;color:var(--dim);margin-bottom:14px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+'</div>'
+    +row('担当', c.tantou)
+    +row('ボトル', bottle)
+    +row('誕生日', c.bday)
+    +row('飲み方', c.nomikata)
+    +row('タバコ', c.tabako)
+    +row('入会日', c.joined)
+    +'<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--dim);font-size:13px">年会費更新</span><span style="flex:1;font-size:15px;color:var(--txt)">'+esc(c.feeDate||'—')+'　'+rsLabel+'</span></div>'
+    +'<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--dim);font-size:13px">公式LINE</span><span style="flex:1;font-size:15px;color:var(--txt)">'+lineTxt+'</span></div>'
+    +row('NG', c.ng)
+    +(c.note?'<div style="margin-top:14px"><div style="color:var(--dim);font-size:13px;margin-bottom:5px">📝 メモ / 参考情報</div><div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;line-height:1.6;white-space:pre-wrap;color:var(--txt)">'+esc(c.note)+'</div></div>':'')
+    +'</div>';
+  showSheet('👤 顧客情報', html, 'full');
 }
 
 /* ============ キャストリクエスト ============ */
@@ -1903,6 +1956,20 @@ function adaptHall(data){
   return arr;
 }
 function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null};});}
+// 同じお客様の予約が複数テーブルに跨る場合、その席同士を1組(結合表示)にまとめる。
+// 手動結合が既にある席は尊重してスキップ。キャンセル/退店済み・未定は対象外。
+function applyRsvGrouping(){
+  if(!SEATS||!RSV) return;
+  var byCode={}; SEATS.forEach(function(o,i){byCode[o.code]=i;});
+  RSV.forEach(function(r){
+    if(r.status==='キャンセル'||r.status==='退店済み'||!r.table||r.table==='未定') return;
+    var idxs=String(r.table).split('、').map(function(t){return byCode[tblToCode(t)];}).filter(function(x){return x!=null;});
+    if(idxs.length<2) return;
+    if(idxs.some(function(i){return SEATS[i].mergedTo!=null||(SEATS[i].mergeWith&&SEATS[i].mergeWith.length);})) return; // 既存結合を尊重
+    var pi=idxs[0];
+    idxs.slice(1).forEach(function(oi){ (SEATS[pi].mergeWith=SEATS[pi].mergeWith||[]).push(oi); SEATS[oi].mergedTo=pi; });
+  });
+}
 function adaptRot(list){return (list||[]).map(function(c){return {cast:c.cast, interval:c.interval||15, tables:(c.tables||[]).map(function(t){return {key:t.label, code:t.code, cust:(t.cust||'')+(t.cust?'様':''), cur:!!t.current, min:0, wait:t.awayMin||0};})};});}
 function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー'};});}
 function adaptReq(list){return (list||[]).map(function(r){var store=/店全体|全体/.test(r.target||'');return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCust:store?'':custKey(r.target), comment:r.comment||'', handled:!!r.handled};});}
@@ -1919,6 +1986,7 @@ function loadAll(){
     gsr('getKioskWorkingCasts').catch(function(){return null;})
   ]).then(function(r){
     SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS);
+    applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
     BOOTED=true; renderAll();
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
 }
