@@ -812,6 +812,7 @@ function floorHtml(fl){
     +'</div>';
 }
 var selCast=null, moveMode=false, combineMode=false, combinePrimary=null;
+var tableMoveMode=false, tableMoveFrom=null;
 var CAST_PALETTE=['#7ab0f0','#66cc88','#e6b23a','#e08ad0','#8fb0ff','#6fd0c0','#f0a060','#b090f0','#f08a8a','#9d90ee','#7cd0a0','#d0b060'];
 function castColor(n){var s=0;for(var i=0;i<n.length;i++)s+=n.charCodeAt(i);return CAST_PALETTE[s%CAST_PALETTE.length];}
 function castHere(s,name){return name&&(s.casts||[]).some(function(c){return c.n===name;});}
@@ -845,7 +846,7 @@ function seatHtml(s){
   var isPrimary=s.mergeWith&&s.mergeWith.length;
   var dispNm=isPrimary?nm+'＋'+s.mergeWith.map(function(mi){return shortNm(SEATS[mi].name);}).join('＋'):nm;
   var grpBadge=isPrimary?'<span class="grp-badge">🔗'+(s.mergeWith.length+1)+'席</span>':'';
-  var mt=moveMode?' movetarget':'';
+  var mt=(moveMode||tableMoveMode)?' movetarget':'';
   var self=(moveMode&&selCast&&selCast.si===idx)?' moveself':'';
   var ct=(combineMode&&idx!==combinePrimary)?' combinetarget':'';
   var cprim=(combineMode&&idx===combinePrimary)?' combineprimary':'';
@@ -892,8 +893,30 @@ function seatHtml(s){
 function onSeatClick(idx){
   if(moveMode){ placeCast(idx); return; }
   if(combineMode){ mergeSeat(idx); return; }
+  if(tableMoveMode){ doTableMove(idx); return; }
   var s=SEATS[idx]; if(s.mergedTo!=null){ openSeat(s.mergedTo); return; }
   openSeat(idx);
+}
+/* ---- テーブルチェンジ（客ごと別テーブルへ移動） ---- */
+function startTableMove(idx){ closeSheet(); tableMoveMode=true; tableMoveFrom=idx; renderHall(); showTableMoveBar(); }
+function showTableMoveBar(){
+  var p=SEATS[tableMoveFrom]; var b=document.getElementById('combinebar');
+  b.className='castbar movemode show';
+  b.innerHTML='<div class="cb-info">🔀 '+esc(p.floor+' '+shortNm(p.name))+(p.cust?'（'+esc(p.cust)+'）':'')+' の<b>移動先の空席</b>をタップ</div><div class="cb-btns"><button class="cb x" onclick="cancelTableMove()">キャンセル</button></div>';
+}
+function cancelTableMove(){ tableMoveMode=false; tableMoveFrom=null; hideCombineBar(); renderHall(); }
+function doTableMove(destIdx){
+  if(destIdx===tableMoveFrom){ return; }
+  var from=SEATS[tableMoveFrom], to=SEATS[destIdx];
+  if(to.type==='W'||to.type==='K'){ toast('待機/黒服席へは移動できません'); return; }
+  var occupied=to.occupied||to.cust||(to.casts&&to.casts.length)||to.mergedTo!=null||(to.mergeWith&&to.mergeWith.length)||to.rsv;
+  if(occupied){ toast('移動先は空席を選んでください'); return; }
+  if(!confirm(from.floor+' '+shortNm(from.name)+(from.cust?'（'+from.cust+'）':'')+' を\n'+to.floor+' '+shortNm(to.name)+' へ移動します。よろしいですか？')) return;
+  var fromCode=from.code, toCode=to.code;
+  tableMoveMode=false; tableMoveFrom=null; hideCombineBar();
+  toast('🔀 テーブルを移動しました');
+  if(IS_GAS) gsr('kioskChangeTable',fromCode,toCode).then(function(r){ if(r&&r.ok===false){ toast('移動失敗: '+(r.error||'')); } loadAll(); }).catch(function(){ toast('移動に失敗'); loadAll(); });
+  else renderAll();
 }
 /* ---- 席の結合 / 分割 ---- */
 function startCombine(idx){ closeSheet(); combineMode=true; combinePrimary=idx; renderHall(); showCombineBar(); }
@@ -1137,7 +1160,7 @@ function openSeat(idx){
       +'<div class="kv"><span class="k">状態</span><span class="v" style="color:#ffbf6a">⚠ 担当不在（接客者なし）</span></div>'
       +(s.tantou?'<div class="kv"><span class="k">担当</span><span class="v">👤 '+esc(s.tantou)+' <span style="color:#ffbf6a;font-size:11px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span></span></div>':'')
       +rotPickerHtml(idx)
-      +'<div class="actions">'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions"><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
     showSheet(title,body,false); return;
   }
   if(!s.casts||!s.casts.length){
@@ -1162,7 +1185,7 @@ function openSeat(idx){
       +'<div style="font-size:11px;color:#8a9ac0;margin:14px 0 4px;font-weight:700">担当キャストと残り時間</div>'
       +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast"><span style="font-weight:700">'+esc(c.n)+'</span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span></div>';}).join('')
       +rotPickerHtml(idx)
-      +'<div class="actions">'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions"><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }
   showSheet(title,body,false);
 }
