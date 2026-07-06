@@ -525,6 +525,8 @@ function loadPortal(month) {
       if (!d.ok) {
         if (d.error === 'unregistered') {
           showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
+        } else if (d.error === 'forbidden') {
+          showErr('🚫 アクセスできません<br><small>' + (d.message || 'このアカウントではポータルをご利用いただけません。') + '</small>');
         } else {
           showErr('エラー: ' + d.error + retryBtn_('loadPortal'));
         }
@@ -541,8 +543,7 @@ function loadPortal(month) {
       isAdmin = d.isAdmin || false;
       if (d.staffRole) staffRole = d.staffRole;
       if (isAdmin) showAdminTab();
-      var isKuro = staffRole === '黒服社員' || staffRole === '黒服バイト';
-      if (isKuro || isAdmin) showGunshiLink();
+      // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
       if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
       portalData = d;
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
@@ -564,7 +565,6 @@ function initAdminUI(castList) {
       + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
       + '<option value="">-- 選択 --</option>'
       + '</select>'
-      + '<button onclick="location.href=\'./staff.html?u=\'+userId" style="padding:4px 10px;background:#1a2a3a;color:#7ab0f0;border:1px solid #3355aa;border-radius:6px;font-size:12px;cursor:pointer">スタッフ管理</button>'
       + '<span class="admin-badge">管理者</span>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
