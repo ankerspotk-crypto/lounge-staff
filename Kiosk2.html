@@ -1839,7 +1839,7 @@ function okCard(name){
     h+='<div class="ok-bin-row">'+[1,2].map(function(bn){return '<button class="ok-bin'+(bin===bn?' sel':'')+'" onclick="okBin(\''+jsStr(name)+'\','+bn+')">'+bn+'便</button>';}).join('')+'</div>';
     h+='<div class="ok-form-btns"><button class="ok-btn add" onclick="okSave(\''+jsStr(name)+'\')">保存</button><button class="ok-btn edit" onclick="okuriState.edit=null;renderOkuriGrid()">閉じる</button></div></div>';
   } else if(on){
-    h+='<div class="ok-form-btns"><button class="ok-btn edit" onclick="okOpenEdit(\''+jsStr(name)+'\')">変更</button><button class="ok-btn cancel" onclick="okCancel(\''+jsStr(name)+'\')">自便に戻す</button></div>';
+    h+='<div class="ok-form-btns"><button class="ok-btn edit" onclick="okOpenEdit(\''+jsStr(name)+'\')">変更</button><button class="ok-btn cancel" onclick="okCancel(\''+jsStr(name)+'\')">キャンセル</button></div>';
   } else {
     h+='<button class="ok-btn add" onclick="okOpenEdit(\''+jsStr(name)+'\')">🚗 送りを追加</button>';
   }
@@ -1868,7 +1868,7 @@ function okSave(name){
   }).catch(function(){alert('送りの保存に失敗');});
 }
 function okCancel(name){
-  if(!confirm(name+' さんの送りを取消して「自便」に戻します。よろしいですか？'))return;
+  if(!confirm(name+' さんの送りをキャンセルします。よろしいですか？'))return;
   gsr('kioskCancelOkuriEntry',name,null).then(function(res){
     if(res&&res.ok) openOkuriManager(); else alert('エラー: '+((res&&res.error)||''));
   }).catch(function(){alert('取消に失敗');});
