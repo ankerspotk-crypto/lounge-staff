@@ -478,6 +478,22 @@ function retryBtn_(fn) {
 
 // ---- LIFF init ----
 var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
+var _kt = new URLSearchParams(location.search).get('kt'); // 軍師QRログインのトークン
+
+// 軍師QRログイン: 本人のuserIdでトークンを認証
+function doKioskAuth(uid, kt) {
+  setContent('<div class="loading">軍師にログイン中...</div>');
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'kioskAuthConfirm', userId: uid, token: kt }) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.ok) {
+        setContent('<div style="text-align:center;padding:56px 20px"><div style="font-size:52px">✅</div><h2 style="color:#7be0a8;margin:10px 0 4px">' + (d.name || '') + ' さん</h2><p style="color:#9ab0c8">軍師にログインしました。<br>店舗端末の画面が切り替わります。</p><p style="color:#5a7088;font-size:12px;margin-top:22px">この画面は閉じてOKです</p></div>');
+      } else {
+        setContent('<div style="text-align:center;padding:56px 20px"><div style="font-size:52px">🚫</div><h2 style="color:#e0a0b0;margin:10px 0 4px">ログインできません</h2><p style="color:#9ab0c8">' + (d.error || '') + '</p></div>');
+      }
+    })
+    .catch(function(e) { showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>'); });
+}
 
 var initTimer = setTimeout(function() {
   showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>' + retryBtn_('location.reload'));
@@ -486,8 +502,8 @@ var initTimer = setTimeout(function() {
 if (_devUid) {
   clearTimeout(initTimer);
   userId = _devUid;
-  document.getElementById('user-name').textContent = '読み込み中...';
-  loadPortal();
+  if (_kt) { doKioskAuth(userId, _kt); }
+  else { document.getElementById('user-name').textContent = '読み込み中...'; loadPortal(); }
 } else {
   try {
     liff.init({ liffId: LIFF_ID }).then(function() {
@@ -502,6 +518,7 @@ if (_devUid) {
       if (!p) return; // login redirect pending
       userId   = p.userId;
       userName = p.displayName;
+      if (_kt) { doKioskAuth(userId, _kt); return; }
       document.getElementById('user-name').textContent = p.displayName;
       loadPortal();
     }).catch(function(e) {
