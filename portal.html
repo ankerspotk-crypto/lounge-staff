@@ -772,13 +772,10 @@ function renderHome(){
     var d = ns.date;
     var rel = homeRelLabel(d);
     var isToday = rel === '本日';
-    var badge = ns.confirmed
-      ? '<span style="font-size:11px;font-weight:700;color:#0a1f16;background:#88ffcc;padding:3px 9px;border-radius:20px">確定</span>'
-      : '<span style="font-size:11px;font-weight:700;color:#3a2a08;background:#e0a848;padding:3px 9px;border-radius:20px">申請中</span>';
     shiftCard =
       '<div class="card" style="background:linear-gradient(135deg,#132a44,#111b2e);border-color:#2a5aaa">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-      +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">次の出勤</span>' + badge
+      + '<div style="margin-bottom:10px">'
+      +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">次の出勤</span>'
       + '</div>'
       + '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">'
       +   '<span style="font-size:34px;font-weight:700;color:' + (isToday?'#88ffcc':'#e8f0ff') + ';line-height:1">' + rel + '</span>'
