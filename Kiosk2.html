@@ -742,7 +742,7 @@ function goToday(){curDate=TODAY;renderAll();}
 /* ============ ALERT BAR ============ */
 function nowBizMin(){var n=new Date();var h=n.getHours();if(h<6)h+=24;return h*60+n.getMinutes();}
 // 同伴予約は20:30来店として扱う（顧客名に「同伴」を含む予約が対象）
-function rsvArrT(r){return /同伴/.test(r.cust||'')?'20:30':r.time;}
+function rsvArrT(r){return /同伴/.test(r.cust||r.customer||'')?'20:30':(r.time||'');}
 function rsvLateMin(r){return nowBizMin()-tmin(rsvArrT(r));}
 function buildTimeline(){
   var t=[];
@@ -861,7 +861,7 @@ function seatHtml(s){
     if(s.rsv){
       return '<div class="seat reserved'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span><span class="rsv-tag">予約</span></div>'
         +'<div class="cust" style="color:#bcd8ff">'+esc(s.rsv.cust)+'様</div>'
-        +'<div class="rsv-meta"><span class="rt">📅 '+esc(s.rsv.time)+'〜</span>'+(s.rsv.tantou?'　担当 '+esc(s.rsv.tantou):'')+'</div></div>';
+        +'<div class="rsv-meta"><span class="rt">📅 '+esc(rsvArrT(s.rsv))+'〜</span>'+(s.rsv.tantou?'　担当 '+esc(s.rsv.tantou):'')+'</div></div>';
     }
     return '<div class="seat'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span></div><div class="empty">空席</div></div>';
   }
@@ -1026,7 +1026,7 @@ function rotateCast(ci,key){var c=ROT[ci];var cur=c.tables.find(function(t){retu
 
 /* ---- 予約リスト ---- */
 function renderRsv(){
-  var list=RSV.slice().sort(function(a,b){return a.time.localeCompare(b.time);});
+  var list=RSV.slice().sort(function(a,b){return rsvArrT(a).localeCompare(rsvArrT(b));});
   var nextId=(list.filter(function(r){return r.status==='確定';})[0]||{}).id;
   var head='<div class="rsv-toolbar"><span class="rcnt">'+list.length+'組 '+list.reduce(function(a,r){return a+r.pax;},0)+'名（'+list.filter(function(r){return r.status==='来店済み';}).length+'組来店済）</span><span style="flex:1"></span><button class="mini-btn" onclick="openSchedule()">🗓 予定表</button><button class="mini-btn add" onclick="openAdd()">＋ 予約を追加</button></div>';
   setHtml('rsvArea',head+(list.length?'<div class="rlist">'+list.map(function(r){return rcardHtml(r,r.id===nextId);}).join('')+'</div>':'<div class="empty-msg">この日の予約はありません</div>'));
@@ -1058,7 +1058,7 @@ function rcardHtml(r,isNext){
   if(r.dohan) badges+='<span class="rb d">同伴 '+esc(r.dohan)+'</span>';
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
   return '<div class="rcard'+(done?' done':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
-    +'<div class="rtop"><span class="rtime">'+esc(r.time)+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+statusBtns(r)+'</div>'
+    +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+statusBtns(r)+'</div>'
     +'<div class="rbadges">'+badges+'</div>'+(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
 }
 var UNDO_WINDOW_MS=10*60*1000; /* 来店から10分以内のみ来店前に戻せる */
@@ -1141,7 +1141,7 @@ function openSeat(idx){
   }
   if(!s.casts||!s.casts.length){
     body='<div class="empty-msg" style="padding:24px 0">現在この席は空席です</div>';
-    if(s.rsv) body+='<div class="kv"><span class="k">次の予約</span><span class="v" style="color:#ffcc55">'+esc(s.rsv.time)+' '+esc(s.rsv.cust)+'様</span></div>';
+    if(s.rsv) body+='<div class="kv"><span class="k">次の予約</span><span class="v" style="color:#ffcc55">'+esc(rsvArrT(s.rsv))+' '+esc(s.rsv.cust)+'様</span></div>';
     body+='<div class="actions"><div class="act pri" onclick="openSeatSession('+idx+')">＋ 席設定する</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }else{
     var st=seatStatus(s);
@@ -1200,7 +1200,7 @@ function ssCustSection(){
     return '<div class="flabel">お客様</div><div class="af-picked"><div class="af-picked-nm"><span class="cc-nm">'+esc(ss.customer)+' 様</span> '+mem+' '+tag+'</div><button class="af-change" onclick="ssReset()">変更</button></div>';
   }
   if(ss.mode==='rsv'){
-    var rows=ss.pending.length?ss.pending.map(function(r){return '<div class="af-res" onclick="ssPickRsv('+r.rowIdx+')"><div class="af-res-top"><span class="cc-nm">'+esc(r.customer)+' 様</span> <span class="cc-mem">'+esc(r.memberId||'—')+'</span> <span class="rb">'+esc(r.time)+'</span> <span class="rb">'+r.pax+'名</span></div>'+(r.table&&r.table!=='未定'?'<div class="cc-meta">予約席 '+esc(r.table)+(r.tantouCast?'・担当 '+esc(r.tantouCast):'')+'</div>':(r.tantouCast?'<div class="cc-meta">担当 '+esc(r.tantouCast)+'</div>':''))+'</div>';}).join(''):'<div class="empty-msg" style="padding:14px;font-size:12px">本日の未来店予約はありません</div>';
+    var rows=ss.pending.length?ss.pending.map(function(r){return '<div class="af-res" onclick="ssPickRsv('+r.rowIdx+')"><div class="af-res-top"><span class="cc-nm">'+esc(r.customer)+' 様</span> <span class="cc-mem">'+esc(r.memberId||'—')+'</span> <span class="rb">'+esc(rsvArrT(r))+'</span> <span class="rb">'+r.pax+'名</span></div>'+(r.table&&r.table!=='未定'?'<div class="cc-meta">予約席 '+esc(r.table)+(r.tantouCast?'・担当 '+esc(r.tantouCast):'')+'</div>':(r.tantouCast?'<div class="cc-meta">担当 '+esc(r.tantouCast)+'</div>':''))+'</div>';}).join(''):'<div class="empty-msg" style="padding:14px;font-size:12px">本日の未来店予約はありません</div>';
     return '<div class="flabel">本日の予約から選ぶ</div><div class="af-results">'+rows+'</div><div class="af-switch"><button class="af-ms" onclick="ssMode(\'new\')">✨ 予約なし → 飛び込み・新規で席設定</button></div>';
   }
   if(ss.mode==='search'){
@@ -1381,10 +1381,10 @@ function openSchedule(){
       var full=fl+' '+tn,blk='';
       RSV.forEach(function(r){
         if(r.table!==full)return;
-        var p=r.time.split(':'),hh=parseInt(p[0]);if(hh<6)hh+=24;var mm=hh*60+(parseInt(p[1])||0);
+        var p=rsvArrT(r).split(':'),hh=parseInt(p[0]);if(hh<6)hh+=24;var mm=hh*60+(parseInt(p[1])||0);
         var l=((mm-SH*60)/((EH-SH)*60))*100,w=(120/((EH-SH)*60))*100;if(l<0){w+=l;l=0;}
         var col=r.status==='退店済み'?'background:#181828;border:1px solid #2a2a44':r.status==='来店済み'?'background:#0d2618;border:1px solid #2a6a44':'background:#12233f;border:1px solid #2a5590';
-        blk+='<div class="g-blk" style="left:'+l+'%;width:'+w+'%;'+col+'" onclick="editRsv('+r.id+')"><span class="bn">'+esc(r.cust)+'様</span><span class="bp">'+r.pax+'名 '+esc(r.time)+'</span></div>';
+        blk+='<div class="g-blk" style="left:'+l+'%;width:'+w+'%;'+col+'" onclick="editRsv('+r.id+')"><span class="bn">'+esc(r.cust)+'様</span><span class="bp">'+r.pax+'名 '+esc(rsvArrT(r))+'</span></div>';
       });
       var cells='';for(var c=0;c<(EH-SH);c++)cells+='<div class="g-cell"></div>';
       rows+='<div class="g-row"><div class="g-lbl">'+esc(tn.replace('カウンター','カウ'))+'</div><div class="g-track">'+cells+blk+'</div></div>';
