@@ -1443,6 +1443,27 @@ function renewStatus(fd){
   if(due-today<=2) return 'soon';
   return 'ok';
 }
+// 会員情報の算出（前バージョン踏襲）: ◯年目 / 会員期限(会費受領日+1年) / 会員切れアラート
+function membershipInfo(joined, feeDate){
+  var info={yearLabel:'', renewalStr:'', status:'none', daysLeft:null, statusLabel:''};
+  if(joined){ var jy=parseInt(String(joined).split(/[\/\-\.]/)[0]); if(jy>1900){ var y=(new Date()).getFullYear()-jy+1; if(y>=1) info.yearLabel=y+'年目'; } }
+  if(feeDate){
+    var p=String(feeDate).split(/[\/\-\.]/);
+    if(p.length>=2){
+      var ry=parseInt(p[0]), rm=parseInt(p[1]), rd=parseInt(p[2]||'1')||1;
+      if(ry>1900&&rm>=1){
+        var renewal=new Date(ry+1, rm-1, rd);
+        var today=new Date(); today.setHours(0,0,0,0);
+        var dl=Math.ceil((renewal-today)/86400000);
+        info.daysLeft=dl; info.renewalStr=renewal.getFullYear()+'/'+(renewal.getMonth()+1)+'/'+renewal.getDate();
+        if(dl<0){ info.status='expired'; info.statusLabel='🔴 会員切れ（期限を'+(-dl)+'日超過）'; }
+        else if(dl<=30){ info.status='soon'; info.statusLabel='🟡 まもなく更新（あと'+dl+'日）'; }
+        else { info.status='ok'; info.statusLabel='🟢 有効（あと'+dl+'日）'; }
+      }
+    }
+  }
+  return info;
+}
 var NO_LINE_MEMBERS={'No.204':1,'No.156':1,'No.077':1,'No.410':1,'No.088':1};
 function isNoLine(c){ if(c.lineRegistered===false)return true; if(c.lineRegistered===true)return false; return !!NO_LINE_MEMBERS[c.member]; }
 // 実データ(searchKioskCustomersV2)→ 顧客カード用に変換
@@ -1496,7 +1517,7 @@ function renderMenu(){
   }).join('');
 }
 function setCustFilter(f){ var q=((document.getElementById('cust-q')||{}).value||''); custFilter=f; renderMenu(); var inp=document.getElementById('cust-q'); if(inp){ inp.value=q; renderCustResults(); } }
-function custFilterFn(c){ if(custFilter==='expired'&&renewStatus(c.feeDate)!=='expired')return false; if(custFilter==='noline'&&!isNoLine(c))return false; return true; }
+function custFilterFn(c){ if(custFilter==='expired'&&membershipInfo(c.joined,c.feeDate).status!=='expired')return false; if(custFilter==='noline'&&!isNoLine(c))return false; return true; }
 function renderCustResults(){
   var q=((document.getElementById('cust-q')||{}).value||'').trim();
   custLastQ=q;
@@ -1519,8 +1540,9 @@ function custResultsHtml(list){
   custDetailList=list||[];
   if(!list.length) return '<div class="empty-msg">見つかりませんでした</div>';
   return list.map(function(c,ci){
-    var rs=renewStatus(c.feeDate);
-    var rb=rs==='expired'?'<span class="cbd exp">🔴 更新切れ</span>':rs==='soon'?'<span class="cbd soon">🟡 まもなく更新</span>':rs==='ok'?'<span class="cbd okr">🟢 有効</span>':'<span class="cbd">更新日なし</span>';
+    var mi=membershipInfo(c.joined,c.feeDate), rs=mi.status;
+    var rb=(mi.yearLabel?'<span class="cbd">'+mi.yearLabel+'</span>':'')
+      +(rs==='expired'?'<span class="cbd exp">🔴 会員切れ</span>':rs==='soon'?'<span class="cbd soon">🟡 まもなく('+mi.daysLeft+'日)</span>':rs==='ok'?'<span class="cbd okr">🟢 有効</span>':'<span class="cbd">更新日なし</span>');
     if(isNoLine(c)) rb+='<span class="cbd noline">📵 公式LINE未登録</span>';
     var b='';
     if(c.bottle) b+='<span class="cbd bottle">🍶'+esc(c.bottle)+(c.bottlePos?' '+esc(c.bottlePos):'')+'</span>';
@@ -1538,15 +1560,21 @@ function custResultsHtml(list){
 // 顧客詳細（カードをタップ → お客様管理シートの全列を表示）
 function openCustDetail(i){
   var c=custDetailList[i]; if(!c)return;
-  var rs=renewStatus(c.feeDate);
-  var rsLabel=rs==='expired'?'🔴 更新切れ':rs==='soon'?'🟡 まもなく更新':rs==='ok'?'🟢 有効':'';
+  var mi=membershipInfo(c.joined, c.feeDate);
   var lineTxt=c.lineRegistered===false?'📵 未登録':(c.lineRegistered===true?'✅ 登録済み':'');
-  var badges=(rsLabel?'<span style="font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px 10px;margin-right:8px">年会費 '+rsLabel+'</span>':'')
-    +(lineTxt?'<span style="font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px 10px">公式LINE '+lineTxt+'</span>':'');
+  var lineChip=lineTxt?'<span style="font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px 10px">公式LINE '+lineTxt+'</span>':'';
+  var mbBorder=mi.status==='expired'?'#7a2020':mi.status==='soon'?'#6a5000':'var(--line)';
+  var memBox=(c.joined||c.feeDate)?('<div style="background:var(--panel2);border:1px solid '+mbBorder+';border-radius:12px;padding:12px 14px;margin:4px 0 14px">'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:7px">💳 会員ステータス</div>'
+    +(c.joined?'<div style="font-size:14px;margin-bottom:3px">入会日　<b>'+esc(c.joined)+'</b>'+(mi.yearLabel?' <span style="color:var(--accent)">（'+mi.yearLabel+'）</span>':'')+'</div>':'')
+    +(c.feeDate?'<div style="font-size:14px;margin-bottom:3px">会費受領　<b>'+esc(c.feeDate)+'</b></div>':'')
+    +(mi.renewalStr?'<div style="font-size:14px;margin-bottom:3px">会員期限　<b>'+esc(mi.renewalStr)+'</b></div>':'')
+    +(mi.statusLabel?'<div style="font-size:15px;font-weight:800;margin-top:6px">'+mi.statusLabel+'</div>':'')
+    +'</div>'):'';
   var head='<div style="padding:6px 4px">'
     +'<div style="font-size:22px;font-weight:800;color:var(--txt);margin-bottom:2px">'+esc(c.name)+' 様</div>'
-    +'<div style="font-size:13px;color:var(--dim);margin-bottom:8px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+'</div>'
-    +(badges?'<div style="margin-bottom:12px">'+badges+'</div>':'')
+    +'<div style="font-size:13px;color:var(--dim);margin-bottom:10px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+(lineChip?'　'+lineChip:'')+'</div>'
+    +memBox
     +'<div id="cust-detail-body"><div class="empty-msg" style="padding:14px 0;font-size:13px">読み込み中...</div></div>'
     +'</div>';
   var back='<span class="menu-back" onclick="renderMenu()">← 検索に戻る</span>';
