@@ -778,6 +778,7 @@ function renderHome(){
     +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">ヘルプ・呼び出し</span>'
     + '</div>'
     + '<div id="home-myseat" style="font-size:12px;color:#7a90a8;margin-bottom:11px">現在の席：確認中...</div>'
+    + '<div id="home-callbtns">'
     + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:13px;background:transparent;color:#e08794;border:1.5px solid #9c3341;border-radius:10px;font-size:16px;font-weight:700;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
     +   '<span style="display:block;font-size:11px;font-weight:500;color:#a86b73;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
@@ -787,6 +788,7 @@ function renderHome(){
     +   '<button onclick="castCall(\'hiyashibo\',this)" style="' + sbBtn + '">❄️ 冷しぼ</button>'
     +   '<button onclick="castCall(\'denmoku\',this)" style="' + sbBtn + '">🎤 デンモク</button>'
     +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
+    + '</div>'
     + '</div>'
     + '</div>';
   if (isAdmin) callCard = '';   // 管理者は呼び出しカードを出さない（本人のキャストのみ）
@@ -850,12 +852,21 @@ function renderHomeRsv(list){
 }
 
 // 現在の席（軍師の付け回しデータとリンク）
-var homeMySeats = [], homeSelSeat = '';
+var homeMySeats = [], homeSelSeat = '', homeWorking = true;
 function loadMySeat(){
   gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'getCastSeats', userId: userId }) })
     .then(function(r){ return r.json(); })
-    .then(function(d){ homeMySeats = (d && d.seats) || []; renderMySeat(); })
+    .then(function(d){ homeMySeats = (d && d.seats) || []; homeWorking = !(d && d.working === false); renderMySeat(); applyWorkingGate(); })
     .catch(function(){ var el = document.getElementById('home-myseat'); if (el) el.textContent = '現在の席：取得できませんでした'; });
+}
+// 本日出勤していない人は呼び出しボタンを無効化（バックエンドでも拒否）
+function applyWorkingGate(){
+  var box = document.getElementById('home-callbtns');
+  if (!box) return;
+  box.style.opacity = homeWorking ? '' : '.4';
+  box.style.pointerEvents = homeWorking ? '' : 'none';
+  var seat = document.getElementById('home-myseat');
+  if (!homeWorking && seat) seat.innerHTML = '<span style="color:#c8925a">本日出勤のスタッフのみ呼び出しできます</span>';
 }
 function renderMySeat(){
   var el = document.getElementById('home-myseat');
@@ -882,6 +893,7 @@ function homePickSeat(label){ homeSelSeat = label; renderMySeat(); }
 
 // キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
 function castCall(kind, btn){
+  if (!homeWorking) { homeToast('本日出勤のスタッフのみ利用できます', false); return; }
   var seatMsg = homeSelSeat ? '（' + homeSelSeat + '）' : '（席不明）';
   if (kind === 'help' && !confirm('黒服にヘルプを送りますか？' + seatMsg + '\n（声をかけて一旦抜いてもらいます）')) return;
   if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
