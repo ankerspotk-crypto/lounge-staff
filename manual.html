@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>IEYAS軍師 操作ガイド</title>
+</head>
+<body>
+<style>
+  :root{
+    --ground:#eef1f7; --surface:#ffffff; --surface-2:#f7f9fd;
+    --ink:#151b2c; --muted:#5c6b88; --faint:#8b98b3; --line:#e0e6f1;
+    --navy:#16233f; --navy-2:#22375f; --accent:#2f63c9; --accent-soft:#e7effb;
+    --ok:#1c6b41; --ok-bg:#e6f6ee; --ok-line:#c2e6d1;
+    --amber:#8a5a10; --amber-bg:#fbf1df; --amber-line:#efdcb2;
+    --alert:#b23a3a; --alert-bg:#fdeded; --alert-line:#f3caca;
+    --gunshi:#2a5590; --gunshi-bg:#e7effb; --gunshi-line:#c6d9f3;
+    /* 端末UIの実配色（スクショ再現用） */
+    --k-bg:#0a0a12; --k-panel:#12121f; --k-panel2:#16162a; --k-line:#22223a; --k-line2:#2e2e4a;
+    --k-txt:#e8ecf6; --k-sub:#9aa6c4; --k-dim:#5a6688; --k-acc:#7aa2ff; --k-accbg:#12233f; --k-accln:#2a5590;
+    --k-ok:#7be0a8; --k-okbg:#0d2618; --k-okln:#2a6a44; --k-warn:#ffbf6a; --k-warnbg:#241800; --k-warnln:#7a5010;
+  }
+  *{box-sizing:border-box;}
+  .doc{font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;color:var(--ink);background:var(--ground);line-height:1.75;-webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1;}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px 90px;}
+  .num{font-variant-numeric:tabular-nums;}
+
+  .masthead{background:linear-gradient(160deg,#16233f 0%,#1d3157 60%,#22375f 100%);color:#eaf0fb;padding:42px 20px 36px;}
+  .masthead .inner{max-width:900px;margin:0 auto;}
+  .kicker{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:#8fb0e6;font-weight:700;}
+  .masthead h1{font-size:34px;line-height:1.2;margin:10px 0 6px;font-weight:800;text-wrap:balance;}
+  .masthead h1 .z{color:#7fb0ff;}
+  .masthead .lede{color:#b9c8e6;font-size:15px;max-width:60ch;margin:0;}
+  .metabar{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;}
+  .metabar .pill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#cdd9ee;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;}
+
+  .toc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:26px 0 8px;}
+  .toc h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0 0 10px;font-weight:800;}
+  .toc ol{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 18px;counter-reset:t;}
+  .toc a{display:flex;gap:10px;align-items:baseline;text-decoration:none;color:var(--ink);padding:6px 4px;border-radius:7px;font-weight:600;font-size:14.5px;}
+  .toc a:hover{background:var(--accent-soft);color:var(--accent);}
+  .toc a::before{counter-increment:t;content:counter(t,decimal-leading-zero);color:var(--accent);font-weight:800;font-size:12px;font-variant-numeric:tabular-nums;min-width:22px;}
+
+  section{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:26px 26px 24px;margin-top:22px;scroll-margin-top:14px;box-shadow:0 1px 2px rgba(20,30,60,.04);}
+  .sec-head{display:flex;align-items:center;gap:14px;margin:0 0 4px;}
+  .sec-no{flex:0 0 auto;width:38px;height:38px;border-radius:10px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;}
+  h2.sec-title{font-size:21px;font-weight:800;margin:0;}
+  .sec-sub{color:var(--muted);font-size:14px;margin:2px 0 18px 52px;}
+  @media(max-width:560px){.sec-sub{margin-left:0;}}
+
+  .split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start;}
+  @media(max-width:720px){.split{grid-template-columns:1fr;}}
+
+  h3{font-size:15.5px;font-weight:800;margin:20px 0 10px;color:var(--navy-2);display:flex;align-items:center;gap:8px;}
+  h3::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--accent);transform:rotate(45deg);}
+  p{margin:0 0 12px;} .lead{color:var(--muted);}
+
+  ol.steps{list-style:none;counter-reset:s;margin:6px 0 4px;padding:0;display:flex;flex-direction:column;gap:12px;}
+  ol.steps>li{counter-increment:s;position:relative;padding:2px 0 2px 44px;}
+  ol.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:29px;height:29px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;}
+  ol.steps ul{margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:14px;}
+  ol.steps ul li{margin:3px 0;}
+
+  .k{display:inline-flex;align-items:center;gap:4px;font-weight:800;font-size:12.5px;padding:2px 9px;border-radius:7px;border:1px solid var(--line);background:var(--surface-2);color:var(--navy-2);white-space:nowrap;}
+  .k.ok{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok);}
+  .k.amber{background:var(--amber-bg);border-color:var(--amber-line);color:var(--amber);}
+  .k.gunshi{background:var(--gunshi-bg);border-color:var(--gunshi-line);color:var(--gunshi);}
+  .k.alert{background:var(--alert-bg);border-color:var(--alert-line);color:var(--alert);}
+  .k.accent{background:var(--accent-soft);border-color:var(--gunshi-line);color:var(--accent);}
+
+  .note{border-radius:12px;padding:13px 16px;margin:14px 0;font-size:14px;border:1px solid;display:flex;gap:11px;align-items:flex-start;}
+  .note .ic{flex:0 0 auto;font-size:17px;}
+  .note.tip{background:var(--ok-bg);border-color:var(--ok-line);color:#155638;}
+  .note.warn{background:var(--amber-bg);border-color:var(--amber-line);color:#7a4e0c;}
+  .note.info{background:var(--accent-soft);border-color:var(--gunshi-line);color:#254e9b;}
+  .note b{font-weight:800;}
+
+  /* ===== スクショ（端末UI再現） ===== */
+  .shot{background:var(--k-bg);border:1px solid #26314d;border-radius:16px;overflow:hidden;box-shadow:0 14px 36px rgba(12,20,44,.22);color:var(--k-txt);font-size:12px;line-height:1.5;}
+  .shot .chrome{display:flex;align-items:center;gap:6px;padding:7px 12px;background:#07070d;border-bottom:1px solid #1a2036;}
+  .shot .chrome i{width:9px;height:9px;border-radius:50%;background:#2c3a5c;display:inline-block;}
+  .shot .chrome .u{margin-left:8px;color:#5f6f92;font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cap{font-size:12px;color:var(--faint);text-align:center;margin:9px 2px 4px;font-weight:600;}
+
+  .sh-pad{padding:12px;}
+  .sh-header{display:flex;align-items:center;gap:8px;padding:9px 11px;background:linear-gradient(180deg,#12101c,#0c0b14);border-bottom:1px solid var(--k-line);font-size:11px;}
+  .sh-brand{font-weight:800;}.sh-brand b{color:var(--k-acc);}
+  .sh-header .term{background:var(--k-accbg);border:1px solid var(--k-accln);color:var(--k-acc);border-radius:7px;padding:2px 7px;font-weight:700;font-size:10px;}
+  .sh-header .sp{flex:1;}
+  .sh-header .hbtn{color:var(--k-sub);font-weight:700;}
+
+  /* login qr */
+  .login{padding:26px 18px 24px;text-align:center;}
+  .login .lb{font-size:16px;font-weight:800;}.login .lb b{color:var(--k-acc);}
+  .login .lterm{color:var(--k-sub);font-size:10px;margin-top:2px;}
+  .login .lq{font-size:13px;font-weight:800;margin:16px 0 12px;}
+  .qr{width:118px;height:118px;margin:0 auto;background:#fff;border-radius:9px;padding:8px;}
+  .login .lh{color:var(--k-sub);font-size:10.5px;margin-top:12px;line-height:1.6;}
+  .login .lp{margin:16px auto 0;display:inline-block;color:var(--k-acc);font-weight:800;font-size:11px;border:1px dashed var(--k-accln);border-radius:9px;padding:8px 13px;}
+
+  /* alert bar */
+  .sh-alerts{display:flex;gap:7px;padding:9px 11px;background:linear-gradient(180deg,#14101c,#0d0b14);border-bottom:1px solid var(--k-line);overflow:hidden;}
+  .tkt{flex:0 0 auto;background:#1a1006;border:1px solid #4a2a1a;border-radius:9px;padding:7px 9px;min-width:112px;}
+  .tkt.red{background:#1e0b0b;border-color:#5a2020;} .tkt.rot{background:#0d1424;border-color:#26406a;}
+  .tkt .t{font-size:9px;color:#c98;font-weight:800;} .tkt.rot .t{color:#7fb0ff;}
+  .tkt .m{font-size:11px;font-weight:800;margin-top:1px;} .tkt .s{font-size:9px;color:#8a9ac0;margin-top:1px;}
+
+  /* hall grid */
+  .hallwrap{display:grid;grid-template-columns:1.5fr 1fr;gap:8px;padding:10px;}
+  @media(max-width:440px){.hallwrap{grid-template-columns:1fr;}}
+  .hall-col>.cl{font-size:9px;color:var(--k-dim);font-weight:800;letter-spacing:.1em;margin:2px 0 5px;}
+  .seatgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .seat{border:1px solid var(--k-line2);background:var(--k-panel2);border-radius:9px;padding:7px 8px;min-height:62px;position:relative;}
+  .seat .snm{font-size:9px;color:#c8d4ee;font-weight:800;display:flex;justify-content:space-between;}
+  .seat .cust{font-size:11px;font-weight:800;margin-top:3px;}
+  .seat .meta{font-size:8.5px;color:#9ab0d0;margin-top:1px;}
+  .seat .cst{margin-top:5px;display:flex;gap:3px;align-items:center;}
+  .ava{width:15px;height:15px;border-radius:50%;font-size:8px;font-weight:800;color:#0a0a12;display:flex;align-items:center;justify-content:center;}
+  .seat .tm{margin-left:auto;font-size:8.5px;font-weight:800;}
+  .seat.ok{background:#0e1a13;border-color:#2a6a44;}
+  .seat.over{background:#1e0b0b;border-color:#7a2424;}
+  .seat.warn{background:#1c1608;border-color:#6a5000;}
+  .seat.nocast{background:#1e1400;border-color:#6a5000;}
+  .seat.empty .cust{color:#5a6688;font-weight:700;}
+  .seat.rsv{border-style:dashed;border-color:#2a5590;}
+  .corner{position:absolute;top:6px;right:7px;font-size:8px;font-weight:800;}
+  .corner.a{color:#ffcf6a;} .corner.r{color:#ff8a8a;}
+
+  /* right panel */
+  .rpanel{background:var(--k-panel);border:1px solid var(--k-line);border-radius:11px;padding:8px;}
+  .rtabs{display:flex;gap:4px;margin-bottom:7px;}
+  .rtab{flex:1;text-align:center;font-size:9.5px;font-weight:800;padding:6px 0;border-radius:7px;border:1px solid var(--k-line2);color:var(--k-sub);}
+  .rtab.on{background:var(--k-accbg);border-color:var(--k-accln);color:var(--k-acc);}
+  .rcard{background:var(--k-panel2);border:1px solid var(--k-line);border-radius:9px;padding:7px 8px;margin-bottom:6px;}
+  .rc-top{display:flex;align-items:center;gap:6px;}
+  .rc-time{font-size:12px;font-weight:800;color:var(--k-acc);} .rc-nm{font-size:11px;font-weight:800;flex:1;}
+  .stp{font-size:9px;font-weight:800;padding:2px 6px;border-radius:6px;white-space:nowrap;}
+  .stp.wait{background:#12233f;border:1px solid #2a5590;color:#8fc0ff;}
+  .stp.seat{background:#0d2618;border:1px solid #2a6a44;color:#79e0a8;}
+  .sbtn{font-size:9px;font-weight:800;padding:3px 8px;border-radius:7px;white-space:nowrap;}
+  .sbtn.go{background:#0d2618;border:1px solid #2a6a44;color:#8ff0b0;}
+  .sbtn.out{background:#241800;border:1px solid #7a5010;color:#ffbf5a;}
+  .rc-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+  .rb{font-size:8.5px;padding:1px 6px;border-radius:6px;background:#191930;color:#a9bce0;border:1px solid var(--k-line2);}
+
+  /* sheet mock */
+  .sheet{max-width:330px;margin:0 auto;padding:14px;}
+  .sh-title{font-size:14px;font-weight:800;margin-bottom:12px;}
+  .choose{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .ch{border:1px solid #1e3a6a;background:#0a1428;border-radius:11px;padding:12px;text-align:center;color:var(--k-acc);}
+  .ch.new{border-color:#1a4a22;background:#0d2010;color:var(--k-ok);}
+  .ch .i{font-size:22px;} .ch .t{font-size:12px;font-weight:800;margin-top:4px;} .ch .s{font-size:9px;opacity:.75;margin-top:2px;}
+  .flabel{font-size:10px;color:var(--k-acc);font-weight:800;margin:12px 0 6px;}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;}
+  .chip{font-size:10px;font-weight:700;padding:5px 9px;border-radius:8px;border:1px solid var(--k-line2);background:var(--k-panel2);color:var(--k-sub);}
+  .chip.cast{position:relative;}.chip.loc{font-size:7.5px;color:#8fb8f0;background:#12233f;border-radius:4px;padding:0 4px;margin-left:3px;}
+  .savebtn{margin-top:12px;text-align:center;background:linear-gradient(180deg,#153a72,#0f2040);border:1px solid var(--k-accln);color:#dcecff;font-weight:800;font-size:12px;padding:11px;border-radius:10px;}
+
+  /* menu tiles */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px;max-width:360px;margin:0 auto;}
+  .tile{background:var(--k-panel2);border:1px solid var(--k-line2);border-radius:11px;padding:12px 6px;text-align:center;}
+  .tile .i{font-size:20px;} .tile .t{font-size:9.5px;font-weight:800;margin-top:5px;color:#dbe5f5;}
+
+  .legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 14px;margin:6px 0 2px;}
+  .legend .row{display:flex;gap:9px;align-items:center;font-size:13.5px;}
+  .swatch{flex:0 0 auto;width:16px;height:16px;border-radius:5px;border:1px solid rgba(0,0,0,.08);}
+
+  .foot{max-width:900px;margin:30px auto 0;padding:0 20px;color:var(--faint);font-size:12.5px;text-align:center;line-height:1.7;}
+</style>
+
+<div class="doc">
+  <header class="masthead">
+    <div class="inner">
+      <div class="kicker">店舗端末マニュアル</div>
+      <h1>IEYAS <span class="z">軍師</span> 操作ガイド</h1>
+      <p class="lede">ログインから当日の接客オペレーションまで。実際の画面イメージ付きで、iPad端末を触る黒服スタッフ向けにまとめました。</p>
+      <div class="metabar"><span class="pill">📱 QRログイン対応</span><span class="pill">2F / 5F 端末</span><span class="pill">画面イメージ付き</span></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav class="toc">
+      <h2>目次</h2>
+      <ol>
+        <li><a href="#s1">ログインする</a></li>
+        <li><a href="#s2">画面の見方</a></li>
+        <li><a href="#s3">お客様を席へ（席設定）</a></li>
+        <li><a href="#s4">キャストを付ける・付け回し</a></li>
+        <li><a href="#s5">来店・退店</a></li>
+        <li><a href="#s6">予約の追加・変更</a></li>
+        <li><a href="#s7">メニュー（現金・在庫ほか）</a></li>
+        <li><a href="#s8">ログアウト</a></li>
+      </ol>
+    </nav>
+
+    <!-- 1 -->
+    <section id="s1">
+      <div class="sec-head"><span class="sec-no num">1</span><h2 class="sec-title">ログインする</h2></div>
+      <p class="sec-sub">ログインできるのは「軍師」権限があるスタッフと管理者だけです。</p>
+      <div class="split">
+        <div>
+          <div class="shot">
+            <div class="chrome"><i></i><i></i><i></i><span class="u">…/exec?page=kiosk2&term=2f</span></div>
+            <div class="login">
+              <div class="lb">⚡IEYAS <b>軍師</b>システム</div>
+              <div class="lterm">2F端末</div>
+              <div class="lq">📱 LINEでQRを読み取ってログイン</div>
+              <div class="qr">
+                <svg viewBox="0 0 100 100" width="100%" height="100%" aria-label="QRサンプル">
+                  <rect width="100" height="100" fill="#fff"/>
+                  <g fill="#0a0a12">
+                    <path d="M6 6h22v22H6zM10 10v14h14V10z M13 13h8v8h-8z"/>
+                    <path d="M72 6h22v22H72zM76 10v14h14V10z M79 13h8v8h-8z"/>
+                    <path d="M6 72h22v22H6zM10 76v14h14V76z M13 79h8v8h-8z"/>
+                    <rect x="34" y="8" width="4" height="4"/><rect x="42" y="8" width="4" height="4"/><rect x="50" y="12" width="4" height="4"/><rect x="58" y="8" width="4" height="4"/>
+                    <rect x="8" y="34" width="4" height="4"/><rect x="16" y="42" width="4" height="4"/><rect x="8" y="50" width="4" height="4"/><rect x="16" y="58" width="4" height="4"/>
+                    <rect x="34" y="34" width="4" height="4"/><rect x="42" y="38" width="4" height="4"/><rect x="50" y="34" width="4" height="4"/><rect x="58" y="42" width="4" height="4"/><rect x="66" y="34" width="4" height="4"/>
+                    <rect x="38" y="46" width="4" height="4"/><rect x="46" y="50" width="4" height="4"/><rect x="54" y="46" width="4" height="4"/><rect x="62" y="54" width="4" height="4"/><rect x="70" y="46" width="4" height="4"/>
+                    <rect x="34" y="58" width="4" height="4"/><rect x="42" y="62" width="4" height="4"/><rect x="50" y="66" width="4" height="4"/><rect x="58" y="62" width="4" height="4"/><rect x="66" y="66" width="4" height="4"/>
+                    <rect x="72" y="34" width="4" height="4"/><rect x="80" y="42" width="4" height="4"/><rect x="88" y="34" width="4" height="4"/><rect x="72" y="50" width="4" height="4"/><rect x="80" y="58" width="4" height="4"/><rect x="88" y="50" width="4" height="4"/><rect x="72" y="66" width="4" height="4"/><rect x="88" y="66" width="4" height="4"/>
+                    <rect x="34" y="72" width="4" height="4"/><rect x="42" y="80" width="4" height="4"/><rect x="50" y="88" width="4" height="4"/><rect x="58" y="72" width="4" height="4"/><rect x="66" y="80" width="4" height="4"/><rect x="34" y="88" width="4" height="4"/>
+                  </g>
+                </svg>
+              </div>
+              <div class="lh">スマホのLINEでスキャン → 本人確認 → 自動でログイン</div>
+              <div class="lp">スマホがない場合は PINでログイン →</div>
+            </div>
+          </div>
+          <div class="cap">▲ ログイン画面（QRを自分のスマホのLINEで読む）</div>
+        </div>
+        <div>
+          <h3>基本：QRでログイン</h3>
+          <ol class="steps">
+            <li>画面の <b>QRコード</b> を、<b>自分のスマホのLINE</b> で読み取ります。</li>
+            <li>LINEが本人アカウントで開き、<b>本人確認</b>されます。</li>
+            <li>「〇〇さん、軍師にログインしました」→ <b>端末が自動でホームに切り替わります。</b></li>
+          </ol>
+          <div class="note info"><span class="ic">🔒</span><div><b>なりすまし防止。</b>名前を選ぶ必要はなく、スキャンするだけ。誰がログインしたか記録されます。</div></div>
+          <h3>スマホが無いとき：PIN</h3>
+          <p class="lead"><span class="k accent">PINでログイン →</span> → 自分の名前を選ぶ → 4桁PIN。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section id="s2">
+      <div class="sec-head"><span class="sec-no num">2</span><h2 class="sec-title">画面の見方</h2></div>
+      <p class="sec-sub">「上＝やること」「左＝ホール」「右＝予約・付け回し・シフト」の3ブロック。</p>
+      <div class="shot">
+        <div class="sh-header"><span class="sh-brand">⚡IEYAS <b>軍師</b></span><span class="term">2F端末</span><span class="sp"></span><span class="hbtn">👤顧客管理　☰メニュー</span></div>
+        <div class="sh-alerts">
+          <div class="tkt red"><div class="t">🔴 今</div><div class="m">5F BOX1 加藤様</div><div class="s">12分超過</div></div>
+          <div class="tkt"><div class="t">⚠️ 今</div><div class="m">2F カウ3 佐藤様</div><div class="s">担当不在 → 至急</div></div>
+          <div class="tkt rot"><div class="t">🔄 今</div><div class="m">まや → 5F BOX1</div><div class="s">付け回し</div></div>
+          <div class="tkt"><div class="t">🕘 今</div><div class="m">徳川様 来店30分超過</div><div class="s">担当に確認</div></div>
+        </div>
+        <div class="hallwrap">
+          <div class="hall-col">
+            <div class="cl">2F ／ ホール状況</div>
+            <div class="seatgrid">
+              <div class="seat ok"><div class="snm"><span>カウ1</span><span>1名</span></div><div class="cust">田中 様</div><div class="meta">🍶獺祭 ・ No.204</div><div class="cst"><span class="ava" style="background:#e0a04a">ま</span><span class="tm" style="color:#4dcc84">残22分</span></div></div>
+              <div class="seat nocast"><div class="corner a">⚠ 担当不在</div><div class="snm"><span>カウ3</span><span>1名</span></div><div class="cust" style="color:#ffcf9a">佐藤 様</div><div class="meta">🎂7/5</div></div>
+              <div class="seat over"><div class="corner r">超過</div><div class="snm"><span>BOX2</span><span>5名</span></div><div class="cust">高橋 様</div><div class="cst"><span class="ava" style="background:#c65">り</span><span class="tm" style="color:#ee5a5a">超4分</span></div></div>
+              <div class="seat rsv"><div class="snm"><span>カウ4</span><span>予約</span></div><div class="cust" style="color:#bcd8ff">山本 様</div><div class="meta">📅21:00〜 担当まや</div></div>
+            </div>
+          </div>
+          <div>
+            <div class="rpanel">
+              <div class="rtabs"><span class="rtab on">📋 予約</span><span class="rtab">🔄 付け回し</span><span class="rtab">🗒 シフト</span></div>
+              <div class="rcard"><div class="rc-top"><span class="rc-time">20:00</span><span class="rc-nm">鈴木様</span><span class="stp seat">🟢来店中</span></div><div class="rc-badges"><span class="rb">3名</span><span class="rb">BOX1</span><span class="rb">担当みれい</span></div></div>
+              <div class="rcard"><div class="rc-top"><span class="rc-time">20:30</span><span class="rc-nm">中村様</span><span class="stp wait">⏳来店前</span><span class="sbtn go">✅来店</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap">▲ ホーム画面（上＝対応タスク／左＝ホール／右＝予約タブ）</div>
+      <h3>席カードの色（凡例）</h3>
+      <div class="legend">
+        <div class="row"><span class="swatch" style="background:#e6f6ee;border-color:#c2e6d1"></span>緑 … 稼働中</div>
+        <div class="row"><span class="swatch" style="background:#fbf1df;border-color:#efdcb2"></span>黄 … まもなく超過</div>
+        <div class="row"><span class="swatch" style="background:#fdeded;border-color:#f3caca"></span>赤 … 時間超過</div>
+        <div class="row"><span class="swatch" style="background:#fbf3e0;border-color:#e6c887"></span>⚠ 担当不在</div>
+        <div class="row"><span class="swatch" style="background:#eef3fb;border:1px dashed #6f8fbf"></span>青の破線 … 予約席</div>
+        <div class="row"><span class="swatch" style="background:#f4f6fb;border-color:#dfe5f0"></span>グレー … 空席</div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section id="s3">
+      <div class="sec-head"><span class="sec-no num">3</span><h2 class="sec-title">お客様を席へ（席設定）</h2></div>
+      <p class="sec-sub">空席にお客様を着ける操作。予約客も飛び込み客もここから。</p>
+      <div class="split">
+        <div>
+          <div class="shot">
+            <div class="sh-header"><span class="sh-brand">🪑 2F カウ2 の席設定</span><span class="sp"></span><span class="hbtn">閉じる ✕</span></div>
+            <div class="sheet">
+              <div class="sh-title" style="font-size:11px;color:var(--k-sub)">設定する席　🪑 2F カウ2</div>
+              <div class="flabel">お客様</div>
+              <div class="choose">
+                <div class="ch"><div class="i">📋</div><div class="t">予約から席設定</div><div class="s">本日の予約客を選ぶ</div></div>
+                <div class="ch new"><div class="i">✨</div><div class="t">飛び込み・新規</div><div class="s">その場で受付</div></div>
+              </div>
+              <div class="flabel">人数</div>
+              <div class="chips"><span class="chip">1名</span><span class="chip" style="background:#12233f;border-color:#2a5590;color:#7aa2ff">3名</span><span class="chip">4名</span><span class="chip">5名</span></div>
+              <div class="savebtn">この席に設定する</div>
+            </div>
+          </div>
+          <div class="cap">▲ 空席をタップ →「＋席設定する」</div>
+        </div>
+        <div>
+          <ol class="steps">
+            <li>ホールの <b>空席をタップ</b> → <span class="k">＋ 席設定する</span>。</li>
+            <li>お客様を選ぶ：
+              <ul><li><b>📋 予約から</b> … 本日の予約客から選ぶ</li><li><b>✨ 飛び込み・新規</b> … 検索 or 新規名（未入力なら「フリー様」）</li></ul>
+            </li>
+            <li><b>人数</b>・（分かれば）<b>担当</b>を選び <span class="k accent">この席に設定する</span>。</li>
+          </ol>
+          <div class="note tip"><span class="ic">✅</span><div>設定すると席に <span class="k alert">⚠ 担当不在</span> でお客様が出ます。次に「キャストを付ける」へ。</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section id="s4">
+      <div class="sec-head"><span class="sec-no num">4</span><h2 class="sec-title">キャストを付ける・付け回し</h2></div>
+      <p class="sec-sub">黒服の一番の仕事。テーブルをタップして、キャストをワンタップで付ける／動かす。</p>
+      <div class="split">
+        <div>
+          <div class="shot">
+            <div class="sh-header"><span class="sh-brand">2F カウ2</span><span class="sp"></span><span class="hbtn">閉じる ✕</span></div>
+            <div class="sheet">
+              <div style="font-size:11px;color:#8a9ac0">お客様　徳川 様（3名）</div>
+              <div style="font-size:11px;color:#8a9ac0;margin-top:4px">担当キャストと残り時間</div>
+              <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:800;margin-top:4px;background:#16162a;border:1px solid #2e2e4a;border-radius:8px;padding:6px 9px"><span>まや</span><span style="color:#4dcc84">残り 30分</span></div>
+              <div class="flabel">🔄 付け回し（タップでこの席に付ける／動かす）</div>
+              <div class="chips">
+                <span class="chip cast">みれい<span class="loc">BOX1</span></span>
+                <span class="chip cast">のあ<span class="loc">カウ3</span></span>
+                <span class="chip cast">りお<span class="loc">BOX2</span></span>
+                <span class="chip cast">ゆき<span class="loc" style="background:#1e1430;color:#c0a0e0">待機</span></span>
+                <span class="chip cast">ここ<span class="loc">BOX1</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="cap">▲ 席をタップ → 付け回しのキャストをタップ</div>
+        </div>
+        <div>
+          <ol class="steps">
+            <li>キャストを付けたい <b>テーブルをタップ</b>。</li>
+            <li><b>🔄 付け回し</b> のキャストチップを <b>タップ</b>。
+              <ul><li>他の席にいれば <b>「移動」</b>、いなければ <b>「新規で配置」</b>（自動判別）</li><li>各チップに <b>今どこにいるか</b>（BOX1・カウ3・待機）が出ます</li></ul>
+            </li>
+            <li>付くと <b>稼働中</b>になり、残り時間のカウント開始。</li>
+          </ol>
+          <div class="note info"><span class="ic">👥</span><div>出るのは <b>本日出勤＋当日派遣</b> のキャストだけ。時間が来ると「残り5分」「超過」が <b>黒服LINEに自動通知</b>されます。</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 -->
+    <section id="s5">
+      <div class="sec-head"><span class="sec-no num">5</span><h2 class="sec-title">来店・退店</h2></div>
+      <p class="sec-sub">右パネル「📋 予約」タブの各カードで、来店状況をワンタップ切り替え。</p>
+      <div class="split">
+        <div>
+          <div class="shot"><div class="sh-pad">
+            <div class="rcard"><div class="rc-top"><span class="rc-time">20:30</span><span class="rc-nm">中村様</span><span class="stp wait">⏳来店前</span><span class="sbtn go">✅来店</span></div><div class="rc-badges"><span class="rb">2名</span><span class="rb">カウ4</span><span class="rb">担当ゆうか</span></div></div>
+            <div class="rcard"><div class="rc-top"><span class="rc-time">20:00</span><span class="rc-nm">鈴木様</span><span class="stp seat">🟢来店中</span><span class="sbtn out">🚪退店</span><span style="font-size:11px;color:#8a9ac0">↩</span></div><div class="rc-badges"><span class="rb">3名</span><span class="rb">BOX1</span></div></div>
+          </div></div>
+          <div class="cap">▲ 予約カードのボタンで来店 → 退店</div>
+        </div>
+        <div>
+          <ol class="steps">
+            <li>お客様が来たら <span class="k">⏳来店前</span> を <span class="k ok">✅ 来店</span> に → ホールの席に反映。</li>
+            <li>お帰りは <span class="k ok">🟢来店中</span> を <span class="k amber">🚪 退店</span> に → 席が空きます。</li>
+          </ol>
+          <div class="note warn"><span class="ic">↩️</span><div><b>間違えて来店にしたとき</b>は <span class="k">↩</span> で戻せます。ただし <b>来店から10分を過ぎると戻せません</b>。</div></div>
+        </div>
+      </div>
+      <h3>予約の追加・変更（この節に含む）</h3>
+      <p class="lead">「📋 予約」タブの <span class="k accent">＋ 予約を追加</span> → <b>🔍 既存のお客様</b>（検索）or <b>✨ 新規</b> → 時間・人数・席・担当を入れて <span class="k accent">予約を確定する</span>。既存予約は<b>カードをタップ</b>で編集／キャンセル。<span class="k">🗓 予定表</span>で時間帯の埋まりも確認できます。</p>
+    </section>
+
+    <!-- 6 -->
+    <section id="s6">
+      <div class="sec-head"><span class="sec-no num">6</span><h2 class="sec-title">その他の操作</h2></div>
+      <h3>席の結合／分割</h3>
+      <p class="lead">大人数のとき。席詳細で <span class="k">🔗 席を結合（広げる）</span> → 一緒にする席をタップ。解除は <span class="k">✂️ 結合を解除</span>。</p>
+      <h3>キャストリクエスト</h3>
+      <p class="lead">お客様の席に <span class="k">📣 リクエスト</span> が出たらタップ。時刻・キャスト・希望/NG・コメントを確認し、対応したら「対応済み」に。</p>
+      <h3>早上がり・送り（🗒 シフトタブ）</h3>
+      <p class="lead">出勤者が1人1行。<span class="k">🚪 早上がり</span>は時刻入力、<span class="k">🚗 送り</span>は有無と <b>🚙ドライバー / 🚶自便</b> を切り替え。</p>
+    </section>
+
+    <!-- 7 -->
+    <section id="s7">
+      <div class="sec-head"><span class="sec-no num">7</span><h2 class="sec-title">メニュー（現金・在庫ほか）</h2></div>
+      <p class="sec-sub">ヘッダー右の <span class="k">☰ メニュー</span> から各業務へ。</p>
+      <div class="split">
+        <div>
+          <div class="shot">
+            <div class="sh-header"><span class="sh-brand">☰ 各種メニュー</span><span class="sp"></span><span class="hbtn">閉じる ✕</span></div>
+            <div class="tiles">
+              <div class="tile"><div class="i">🌅</div><div class="t">開店チェック</div></div>
+              <div class="tile"><div class="i">🔓</div><div class="t">金庫出金</div></div>
+              <div class="tile"><div class="i">🌙</div><div class="t">閉店チェック</div></div>
+              <div class="tile"><div class="i">📋</div><div class="t">在庫発注管理</div></div>
+              <div class="tile"><div class="i">🚗</div><div class="t">送り管理</div></div>
+              <div class="tile"><div class="i">👤</div><div class="t">顧客管理</div></div>
+            </div>
+          </div>
+          <div class="cap">▲ ☰メニューのタイル</div>
+        </div>
+        <div>
+          <h3>現金管理</h3>
+          <ul style="margin:0 0 6px;padding-left:20px;color:var(--muted);font-size:14px;">
+            <li><b>🌅 開店チェック</b> … 開店時のレジ現金を紙幣別に入力</li>
+            <li><b>🔓 金庫出金</b> … 金庫からの出金を記録（金庫管理権限）</li>
+            <li><b>🌙 閉店チェック</b> … 閉店時の現金＋伝票写真、管理者承認まで</li>
+          </ul>
+          <h3>その他</h3>
+          <ul style="margin:0;padding-left:20px;color:var(--muted);font-size:14px;">
+            <li><b>📋 在庫発注管理</b> … 在庫の増減・発注依頼・納品確認</li>
+            <li><b>🚗 送り管理</b> … 送りモード・送り先の管理</li>
+            <li><b>👤 顧客管理</b> … お客様検索・会員情報（ヘッダーからも）</li>
+          </ul>
+          <div class="note warn"><span class="ic">🌙</span><div><b>閉店チェックが承認</b>されると、<b>約10分後に端末が自動でログアウト</b>します（全端末）。</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 -->
+    <section id="s8">
+      <div class="sec-head"><span class="sec-no num">8</span><h2 class="sec-title">ログアウト</h2></div>
+      <p class="lead">ヘッダーの <b>ログアウト</b> を押します。ログインは <b>翌朝3時まで</b> 自動で保持されるので、営業中は入り直し不要（画面を閉じてもOK）。<b>夜中3時</b>と<b>閉店チェック承認の約10分後</b>には自動でログアウトします。</p>
+      <div class="note info"><span class="ic">🔁</span><div>困ったら端末を <b>再読み込み</b>。直らなければ管理者へ。設定（軍師権限・PIN・端末URL）は <b>管理コンソール</b> から行います。</div></div>
+    </section>
+  </div>
+  <p class="foot">IEYAS 軍師 操作ガイド ・ ラウンジ家康 店舗端末（2F / 5F）<br>※画面イメージはサンプルです。操作や画面が変わったらこのガイドも更新します。</p>
+</div>
+
+</body>
+</html>
