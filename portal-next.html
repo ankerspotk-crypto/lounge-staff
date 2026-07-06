@@ -746,7 +746,10 @@ function renderHome(){
   var sbBtn = 'padding:13px 4px;background:#162848;color:#bcd6f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700;';
   var callCard =
     '<div class="card">'
-    + '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin-bottom:10px">ヘルプ・呼び出し</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">ヘルプ・呼び出し</span>'
+    + '</div>'
+    + '<div id="home-myseat" style="font-size:12px;color:#7a90a8;margin-bottom:11px">現在の席：確認中...</div>'
     + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:14px;background:#7a1526;color:#ffdfe4;border:1px solid #b53040;border-radius:10px;font-size:16px;font-weight:800;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
     +   '<span style="display:block;font-size:11px;font-weight:600;color:#f0b8c0;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
@@ -771,6 +774,9 @@ function renderHome(){
     +   '<button onclick="switchTab(\'yoyaku\')" style="flex:1;padding:13px;background:#162848;color:#7ab0f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700">🗓 予約管理</button>'
     + '</div>';
   setContent(html);
+
+  // --- 現在の席（軍師の付け回しとリンク）を取得 ---
+  loadMySeat();
 
   // --- 今日の予約を取得 ---
   var now = new Date();
@@ -814,14 +820,46 @@ function renderHomeRsv(list){
   }).join('');
 }
 
+// 現在の席（軍師の付け回しデータとリンク）
+var homeMySeats = [], homeSelSeat = '';
+function loadMySeat(){
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'getCastSeats', userId: userId }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ homeMySeats = (d && d.seats) || []; renderMySeat(); })
+    .catch(function(){ var el = document.getElementById('home-myseat'); if (el) el.textContent = '現在の席：取得できませんでした'; });
+}
+function renderMySeat(){
+  var el = document.getElementById('home-myseat');
+  if (!el) return;
+  if (!homeMySeats.length){
+    homeSelSeat = '';
+    el.innerHTML = '<span style="color:#7a90a8">現在の席：未設定 — 「席不明」で送信されます</span>';
+    return;
+  }
+  if (homeMySeats.length === 1){
+    homeSelSeat = homeMySeats[0].label;
+    el.innerHTML = '📍 現在の席：<b style="color:#bcd6f0">' + esc(homeSelSeat) + '</b>';
+    return;
+  }
+  // 掛け持ち → どの席からのリクエストか選択
+  if (!homeSelSeat || !homeMySeats.some(function(s){ return s.label === homeSelSeat; })) homeSelSeat = homeMySeats[0].label;
+  el.innerHTML = '📍 どの席から？：' + homeMySeats.map(function(s){
+    var on = s.label === homeSelSeat;
+    return '<span onclick="homePickSeat(this.dataset.l)" data-l="' + esc(s.label) + '" style="display:inline-block;margin:4px 6px 0 0;padding:5px 12px;border-radius:16px;font-size:12px;cursor:pointer;'
+      + (on ? 'background:#1a50a0;color:#fff;border:1px solid #2a5aaa' : 'background:#162848;color:#a0c0e0;border:1px solid #24406a') + '">' + esc(s.label) + '</span>';
+  }).join('');
+}
+function homePickSeat(label){ homeSelSeat = label; renderMySeat(); }
+
 // キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
 function castCall(kind, btn){
-  if (kind === 'help' && !confirm('黒服にヘルプを送りますか？\n（声をかけて一旦抜いてもらいます）')) return;
+  var seatMsg = homeSelSeat ? '（' + homeSelSeat + '）' : '（席不明）';
+  if (kind === 'help' && !confirm('黒服にヘルプを送りますか？' + seatMsg + '\n（声をかけて一旦抜いてもらいます）')) return;
   if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castCall', userId: userId, kind: kind }) })
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castCall', userId: userId, kind: kind, table: homeSelSeat }) })
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (d && d.ok) homeToast('黒服に送信しました', true);
+      if (d && d.ok) homeToast('黒服に送信しました' + (d.table ? '（' + d.table + '）' : ''), true);
       else homeToast('送信に失敗しました' + (d && d.error ? '：' + d.error : ''), false);
     })
     .catch(function(){ homeToast('通信エラー', false); });
