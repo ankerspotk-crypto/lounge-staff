@@ -406,18 +406,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <h1>IEYASLOUNGE PORTAL</h1>
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
-  <div class="tabs">
-    <div class="tab" id="tab-stats" onclick="switchTab('stats')">売上・給与</div>
-    <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
-    <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
-    <div class="tab active" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
-    <div class="tab" id="tab-seatreq" onclick="switchTab('seatreq')">席リクエスト</div>
-    <div class="tab" id="tab-customers" onclick="switchTab('customers')">顧客管理</div>
-    <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
-    <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
-    <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
-    <div class="tab" id="tab-shiftmgmt" onclick="switchTab('shiftmgmt')" style="display:none">シフト管理</div>
-  </div>
+  <div class="navbar" id="navbar" style="display:none;align-items:center;justify-content:space-between;padding:4px 2px 12px"></div>
 </header>
 
 <div class="content" id="content">
@@ -442,7 +431,7 @@ var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
 
 var userId = '', userName = '', portalData = null;
-var currentTab = 'yoyaku', currentMonth = '';
+var currentTab = 'home', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
 var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
 var staffRole = 'キャスト';
@@ -587,9 +576,10 @@ function initAdminUI(castList) {
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
   updateAdminBar(castList);
-  // 申請管理タブをデフォルト選択
-  switchTabActive('requests');
-  loadRequests();
+  // ホーム（管理者メニュー）を表示
+  currentTab = 'home';
+  switchTabActive('home');
+  renderHome();
 }
 
 function adminChange(name) {
@@ -597,24 +587,62 @@ function adminChange(name) {
   currentMonth = '';
   portalData = null;
   if (name) staffRole = adminCastRoles[name] || 'キャスト';
-  if (!name) {
-    switchTabActive('requests');
-    loadRequests();
-    return;
-  }
-  currentTab = 'yoyaku';
-  switchTabActive('yoyaku');
+  currentTab = 'home';
+  switchTabActive('home');
+  if (!name) { renderHome(); return; }
   loadPortal();
 }
 
 
+// セクション名（戻るバー・メニュー用）
+var SECTIONS = {
+  shift:    { t:'シフト提出',   i:'📅' },
+  yoyaku:   { t:'予約管理',     i:'🗓' },
+  stats:    { t:'売上・給与',   i:'💰' },
+  hair:     { t:'領収書提出',   i:'🧾' },
+  seatreq:  { t:'席リクエスト', i:'💺' },
+  customers:{ t:'顧客管理',     i:'👥' },
+  requests: { t:'申請管理',     i:'📥' },
+  shiftmgmt:{ t:'シフト管理',   i:'🗂' },
+  notif:    { t:'通知設定',     i:'🔔' },
+  cashset:  { t:'軍師設定',     i:'⚙️' }
+};
+
 function switchTabActive(tab) {
   currentTab = tab;
-  ['stats','shift','hair','yoyaku','seatreq','requests','notif','cashset','shiftmgmt'].forEach(function(t) {
-    var el = document.getElementById('tab-'+t);
-    if (el) el.classList.toggle('active', t === tab);
-  });
+  updateNav(tab);
   document.getElementById('submit-bar').style.display = tab === 'shift' ? 'block' : 'none';
+}
+
+// タブ廃止に伴う「‹ ホーム」戻るバー。ホーム時は非表示
+function updateNav(tab) {
+  var nav = document.getElementById('navbar');
+  if (!nav) return;
+  if (tab === 'home' || !SECTIONS[tab]) { nav.innerHTML = ''; nav.style.display = 'none'; return; }
+  nav.style.display = 'flex';
+  nav.innerHTML =
+    '<button onclick="switchTab(\'home\')" style="background:none;border:none;color:#7ab0f0;font-size:15px;font-weight:700;cursor:pointer;padding:6px 2px;display:flex;align-items:center;gap:3px">‹ ホーム</button>'
+    + '<span style="font-size:15px;font-weight:600;color:#e8f0ff">' + SECTIONS[tab].i + ' ' + SECTIONS[tab].t + '</span>'
+    + '<span style="width:64px"></span>';
+}
+
+// ホームのメニュー（タブの代わりに全機能をボタン集約）
+function menuBtn(key) {
+  var s = SECTIONS[key];
+  return '<button onclick="switchTab(\'' + key + '\')" style="display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:#111b2e;border:1px solid #1e3050;border-radius:12px;text-align:left;cursor:pointer;width:100%">'
+    + '<span style="font-size:23px;line-height:1">' + s.i + '</span>'
+    + '<span style="font-size:14px;font-weight:700;color:#e8f0ff">' + s.t + '</span></button>';
+}
+function homeMenu() {
+  var castKeys = ['shift','yoyaku','stats','hair','seatreq','customers'];
+  var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
+  if (isAdmin) {
+    var admKeys = ['requests','shiftmgmt','notif','cashset'];
+    html += '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:20px 2px 10px">管理者メニュー</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + admKeys.map(menuBtn).join('') + '</div>';
+  }
+  return html;
 }
 
 function updateAdminBar(castList) {
@@ -632,6 +660,7 @@ function updateAdminBar(castList) {
 function switchTab(tab) {
   contentTargetId = 'content';
   switchTabActive(tab);
+  if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
@@ -650,6 +679,7 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
+  if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
@@ -658,6 +688,230 @@ function renderTab(tab) {
   if (tab === 'shift') renderShiftCal();
   else if (tab === 'hair') loadHairReceipts();
   else if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); }
+}
+
+// ==== ホーム（キャストが最初に見る画面：次の出勤 ＋ 今日の予約） ====
+function homePad2(n){ return (n<10?'0':'') + n; }
+// 同伴予約は20:30来店として扱う（軍師と統一）
+function homeRsvArr(r){ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
+function homeMyName(){ return (portalData && (portalData.viewAs || portalData.name)) || ''; }
+function homeIsMine(r){
+  var me = homeMyName(); if (!me) return false;
+  return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;
+}
+// portalData.shifts {"7/6":"20:00"...} / confirmedShifts から直近の出勤を求める
+function homeNextShift(){
+  var shifts = (portalData && portalData.shifts) || {};
+  var confirmed = (portalData && portalData.confirmedShifts) || [];
+  var now = new Date();
+  var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var best = null;
+  Object.keys(shifts).forEach(function(k){
+    var t = shifts[k];
+    if (!t || t === '休み' || t === '欠勤') return;
+    var mm = String(k).split('/'); if (mm.length < 2) return;
+    var mo = parseInt(mm[0],10), da = parseInt(mm[1],10);
+    if (!mo || !da) return;
+    var d = new Date(now.getFullYear(), mo-1, da);
+    if (d < today0 && (today0 - d) > 180*86400000) d = new Date(now.getFullYear()+1, mo-1, da); // 年跨ぎ
+    if (d < today0) return; // 過去は除外
+    if (!best || d < best.date) best = { date:d, key:k, time:t, confirmed: confirmed.indexOf(k) >= 0 };
+  });
+  return best;
+}
+function homeRelLabel(d){
+  var now = new Date();
+  var today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var diff = Math.round((d - today0) / 86400000);
+  if (diff <= 0) return '本日';
+  if (diff === 1) return '明日';
+  if (diff === 2) return '明後日';
+  return 'あと' + diff + '日';
+}
+var homeWD = ['日','月','火','水','木','金','土'];
+
+function renderHome(){
+  contentTargetId = 'content';
+  // 管理者でキャスト未選択 → 案内＋メニューのみ
+  if (isAdmin && !adminViewAs) {
+    setContent('<div class="card" style="text-align:center;color:#8aabcc;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>' + homeMenu());
+    return;
+  }
+  var me = homeMyName();
+  var ns = homeNextShift();
+
+  // --- 次の出勤カード ---
+  var shiftCard;
+  if (ns){
+    var d = ns.date;
+    var rel = homeRelLabel(d);
+    var isToday = rel === '本日';
+    var badge = ns.confirmed
+      ? '<span style="font-size:11px;font-weight:700;color:#0a1f16;background:#88ffcc;padding:3px 9px;border-radius:20px">確定</span>'
+      : '<span style="font-size:11px;font-weight:700;color:#3a2a08;background:#e0a848;padding:3px 9px;border-radius:20px">申請中</span>';
+    shiftCard =
+      '<div class="card" style="background:linear-gradient(135deg,#132a44,#111b2e);border-color:#2a5aaa">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">次の出勤</span>' + badge
+      + '</div>'
+      + '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">'
+      +   '<span style="font-size:34px;font-weight:700;color:' + (isToday?'#88ffcc':'#e8f0ff') + ';line-height:1">' + rel + '</span>'
+      +   '<span style="font-size:16px;color:#a0c0e0">' + (d.getMonth()+1) + '/' + d.getDate() + '（' + homeWD[d.getDay()] + '）</span>'
+      + '</div>'
+      + '<div style="margin-top:10px;font-size:15px;color:#e8f0ff">🕗 <b style="font-size:19px">' + ns.time + '</b></div>'
+      + '</div>';
+  } else {
+    shiftCard =
+      '<div class="card" style="text-align:center">'
+      + '<div style="font-size:13px;color:#8aabcc;margin-bottom:12px">出勤予定がまだありません</div>'
+      + '<button onclick="switchTab(\'shift\')" style="width:100%;padding:13px;background:#1a50a0;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700">シフトを提出する</button>'
+      + '</div>';
+  }
+
+  // --- ヘルプ・呼び出しカード ---
+  var sbBtn = 'padding:13px 4px;background:#162848;color:#bcd6f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700;';
+  var callCard =
+    '<div class="card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">ヘルプ・呼び出し</span>'
+    + '</div>'
+    + '<div id="home-myseat" style="font-size:12px;color:#7a90a8;margin-bottom:11px">現在の席：確認中...</div>'
+    + '<div id="home-callbtns">'
+    + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:13px;background:transparent;color:#e08794;border:1.5px solid #9c3341;border-radius:10px;font-size:16px;font-weight:700;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
+    +   '<span style="display:block;font-size:11px;font-weight:500;color:#a86b73;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+    +   '<button onclick="castCall(\'soda\',this)" style="' + sbBtn + '">🥤 炭酸</button>'
+    +   '<button onclick="castCall(\'ice\',this)" style="' + sbBtn + '">🧊 アイス</button>'
+    +   '<button onclick="castCall(\'oshibori\',this)" style="' + sbBtn + '">🧻 おしぼり</button>'
+    +   '<button onclick="castCall(\'hiyashibo\',this)" style="' + sbBtn + '">❄️ 冷しぼ</button>'
+    +   '<button onclick="castCall(\'denmoku\',this)" style="' + sbBtn + '">🎤 デンモク</button>'
+    +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
+    + '</div>'
+    + '</div>'
+    + '</div>';
+  if (isAdmin) callCard = '';   // 管理者は呼び出しカードを出さない（本人のキャストのみ）
+
+  // --- 今日の予約カード（枠だけ先に出して非同期で埋める） ---
+  var html = shiftCard + callCard
+    + '<div class="card">'
+    +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +     '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">今日の予約</span>'
+    +     '<span id="home-rsv-count" style="font-size:11px;color:#6a8ab0"></span>'
+    +   '</div>'
+    +   '<div id="home-rsv-list"><div style="color:#6a8ab0;font-size:13px;padding:14px 0;text-align:center">読み込み中...</div></div>'
+    + '</div>'
+    // --- メニュー（全機能ボタン） ---
+    + homeMenu();
+  setContent(html);
+
+  // --- 現在の席（軍師の付け回しとリンク）を取得（本人キャストのみ） ---
+  if (!isAdmin) loadMySeat();
+
+  // --- 今日の予約を取得 ---
+  var now = new Date();
+  var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
+  gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
+    .then(function(r){ return r.json(); })
+    .then(function(d){ renderHomeRsv((d && d.reservations) || []); })
+    .catch(function(){ var el=document.getElementById('home-rsv-list'); if(el) el.innerHTML='<div style="color:#cc5555;font-size:13px;padding:10px 0">予約の取得に失敗しました</div>'; });
+}
+
+function renderHomeRsv(list){
+  var listEl = document.getElementById('home-rsv-list');
+  var cntEl  = document.getElementById('home-rsv-count');
+  if (!listEl) return;
+  list = (list || []).filter(function(r){ return r.status !== 'キャンセル'; });
+  list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
+  var mine = list.filter(homeIsMine).length;
+  if (cntEl) cntEl.textContent = list.length + '件' + (mine ? '（自分 ' + mine + '件）' : '');
+  if (!list.length){
+    listEl.innerHTML = '<div style="color:#6a8ab0;font-size:13px;padding:14px 0;text-align:center">本日の予約はまだありません</div>';
+    return;
+  }
+  listEl.innerHTML = list.map(function(r){
+    var mineFlag = homeIsMine(r);
+    var arr = homeRsvArr(r);
+    var visited = r.status === '来店済み' || r.checkInAt;
+    var done = r.status === '退店済み';
+    var stColor = done ? '#6a8ab0' : (visited ? '#88ffcc' : '#a0c0e0');
+    var stTxt = done ? '退店' : (visited ? '来店済' : r.status);
+    var tantou = r.tantouCast ? '担当 ' + r.tantouCast : '担当未定';
+    return '<div style="display:flex;gap:11px;padding:10px 0;border-bottom:1px solid #162848;'
+      + (mineFlag ? 'border-left:3px solid #7ab0f0;margin-left:-8px;padding-left:8px;' : '') + '">'
+      + '<div style="font-size:16px;font-weight:700;color:#e8f0ff;min-width:44px">' + arr + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:14px;color:#e8f0ff">' + esc(r.customer) + '様 <span style="color:#8aabcc;font-size:12px">' + r.pax + '名</span>'
+      +     (mineFlag ? ' <span style="font-size:10px;font-weight:700;color:#0a1f2e;background:#7ab0f0;padding:1px 6px;border-radius:10px">自分</span>' : '') + '</div>'
+      +   '<div style="font-size:12px;color:#8aabcc;margin-top:2px">' + (r.table ? esc(r.table) + ' ・ ' : '') + tantou + '</div>'
+      + '</div>'
+      + '<div style="font-size:11px;color:' + stColor + ';white-space:nowrap;align-self:center">' + stTxt + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+// 現在の席（軍師の付け回しデータとリンク）
+var homeMySeats = [], homeSelSeat = '', homeWorking = true;
+function loadMySeat(){
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'getCastSeats', userId: userId }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ homeMySeats = (d && d.seats) || []; homeWorking = !(d && d.working === false); renderMySeat(); applyWorkingGate(); })
+    .catch(function(){ var el = document.getElementById('home-myseat'); if (el) el.textContent = '現在の席：取得できませんでした'; });
+}
+// 本日出勤していない人は呼び出しボタンを無効化（バックエンドでも拒否）
+function applyWorkingGate(){
+  var box = document.getElementById('home-callbtns');
+  if (!box) return;
+  box.style.opacity = homeWorking ? '' : '.4';
+  box.style.pointerEvents = homeWorking ? '' : 'none';
+  var seat = document.getElementById('home-myseat');
+  if (!homeWorking && seat) seat.innerHTML = '<span style="color:#c8925a">本日出勤のスタッフのみ呼び出しできます</span>';
+}
+function renderMySeat(){
+  var el = document.getElementById('home-myseat');
+  if (!el) return;
+  if (!homeMySeats.length){
+    homeSelSeat = '';
+    el.innerHTML = '<span style="color:#7a90a8">現在の席：未設定 — 「席不明」で送信されます</span>';
+    return;
+  }
+  if (homeMySeats.length === 1){
+    homeSelSeat = homeMySeats[0].label;
+    el.innerHTML = '📍 現在の席：<b style="color:#bcd6f0">' + esc(homeSelSeat) + '</b>';
+    return;
+  }
+  // 掛け持ち → どの席からのリクエストか選択
+  if (!homeSelSeat || !homeMySeats.some(function(s){ return s.label === homeSelSeat; })) homeSelSeat = homeMySeats[0].label;
+  el.innerHTML = '📍 どの席から？：' + homeMySeats.map(function(s){
+    var on = s.label === homeSelSeat;
+    return '<span onclick="homePickSeat(this.dataset.l)" data-l="' + esc(s.label) + '" style="display:inline-block;margin:4px 6px 0 0;padding:5px 12px;border-radius:16px;font-size:12px;cursor:pointer;'
+      + (on ? 'background:#1a50a0;color:#fff;border:1px solid #2a5aaa' : 'background:#162848;color:#a0c0e0;border:1px solid #24406a') + '">' + esc(s.label) + '</span>';
+  }).join('');
+}
+function homePickSeat(label){ homeSelSeat = label; renderMySeat(); }
+
+// キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
+function castCall(kind, btn){
+  if (!homeWorking) { homeToast('本日出勤のスタッフのみ利用できます', false); return; }
+  var seatMsg = homeSelSeat ? '（' + homeSelSeat + '）' : '（席不明）';
+  if (kind === 'help' && !confirm('黒服にヘルプを送りますか？' + seatMsg + '\n（声をかけて一旦抜いてもらいます）')) return;
+  if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castCall', userId: userId, kind: kind, table: homeSelSeat }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.ok) homeToast('黒服に送信しました' + (d.table ? '（' + d.table + '）' : ''), true);
+      else homeToast('送信に失敗しました' + (d && d.error ? '：' + d.error : ''), false);
+    })
+    .catch(function(){ homeToast('通信エラー', false); });
+}
+function homeToast(msg, ok){
+  var t = document.getElementById('home-toast');
+  if (!t){ t = document.createElement('div'); t.id = 'home-toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:' + (ok === false ? '#5a1020' : '#0d2a1a')
+    + ';color:#eafff2;border:1px solid ' + (ok === false ? '#b53040' : '#2a6a44')
+    + ';padding:12px 22px;border-radius:12px;font-size:14px;font-weight:700;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,.5);opacity:0;transition:.2s;pointer-events:none;max-width:88vw;text-align:center;';
+  requestAnimationFrame(function(){ t.style.opacity = '1'; });
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.style.opacity = '0'; }, 2200);
 }
 
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
