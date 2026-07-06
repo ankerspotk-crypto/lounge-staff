@@ -408,19 +408,7 @@ header h1 { font-size: 17px; font-weight: 600; }
     <h1>IEYASLOUNGE PORTAL</h1>
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
-  <div class="tabs">
-    <div class="tab active" id="tab-home" onclick="switchTab('home')">ホーム</div>
-    <div class="tab" id="tab-shift" onclick="switchTab('shift')">シフト提出</div>
-    <div class="tab" id="tab-yoyaku" onclick="switchTab('yoyaku')">予約管理</div>
-    <div class="tab" id="tab-stats" onclick="switchTab('stats')">売上・給与</div>
-    <div class="tab" id="tab-hair" onclick="switchTab('hair')">領収書提出</div>
-    <div class="tab" id="tab-seatreq" onclick="switchTab('seatreq')">席リクエスト</div>
-    <div class="tab" id="tab-customers" onclick="switchTab('customers')">顧客管理</div>
-    <div class="tab" id="tab-requests" onclick="switchTab('requests')" style="display:none">申請管理</div>
-    <div class="tab" id="tab-notif" onclick="switchTab('notif')" style="display:none">通知設定</div>
-    <div class="tab" id="tab-cashset" onclick="switchTab('cashset')" style="display:none">軍師設定</div>
-    <div class="tab" id="tab-shiftmgmt" onclick="switchTab('shiftmgmt')" style="display:none">シフト管理</div>
-  </div>
+  <div class="navbar" id="navbar" style="display:none;align-items:center;justify-content:space-between;padding:4px 2px 12px"></div>
 </header>
 
 <div class="content" id="content">
@@ -590,9 +578,10 @@ function initAdminUI(castList) {
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
   updateAdminBar(castList);
-  // 申請管理タブをデフォルト選択
-  switchTabActive('requests');
-  loadRequests();
+  // ホーム（管理者メニュー）を表示
+  currentTab = 'home';
+  switchTabActive('home');
+  renderHome();
 }
 
 function adminChange(name) {
@@ -600,24 +589,62 @@ function adminChange(name) {
   currentMonth = '';
   portalData = null;
   if (name) staffRole = adminCastRoles[name] || 'キャスト';
-  if (!name) {
-    switchTabActive('requests');
-    loadRequests();
-    return;
-  }
-  currentTab = 'yoyaku';
-  switchTabActive('yoyaku');
+  currentTab = 'home';
+  switchTabActive('home');
+  if (!name) { renderHome(); return; }
   loadPortal();
 }
 
 
+// セクション名（戻るバー・メニュー用）
+var SECTIONS = {
+  shift:    { t:'シフト提出',   i:'📅' },
+  yoyaku:   { t:'予約管理',     i:'🗓' },
+  stats:    { t:'売上・給与',   i:'💰' },
+  hair:     { t:'領収書提出',   i:'🧾' },
+  seatreq:  { t:'席リクエスト', i:'💺' },
+  customers:{ t:'顧客管理',     i:'👥' },
+  requests: { t:'申請管理',     i:'📥' },
+  shiftmgmt:{ t:'シフト管理',   i:'🗂' },
+  notif:    { t:'通知設定',     i:'🔔' },
+  cashset:  { t:'軍師設定',     i:'⚙️' }
+};
+
 function switchTabActive(tab) {
   currentTab = tab;
-  ['home','stats','shift','hair','yoyaku','seatreq','requests','notif','cashset','shiftmgmt'].forEach(function(t) {
-    var el = document.getElementById('tab-'+t);
-    if (el) el.classList.toggle('active', t === tab);
-  });
+  updateNav(tab);
   document.getElementById('submit-bar').style.display = tab === 'shift' ? 'block' : 'none';
+}
+
+// タブ廃止に伴う「‹ ホーム」戻るバー。ホーム時は非表示
+function updateNav(tab) {
+  var nav = document.getElementById('navbar');
+  if (!nav) return;
+  if (tab === 'home' || !SECTIONS[tab]) { nav.innerHTML = ''; nav.style.display = 'none'; return; }
+  nav.style.display = 'flex';
+  nav.innerHTML =
+    '<button onclick="switchTab(\'home\')" style="background:none;border:none;color:#7ab0f0;font-size:15px;font-weight:700;cursor:pointer;padding:6px 2px;display:flex;align-items:center;gap:3px">‹ ホーム</button>'
+    + '<span style="font-size:15px;font-weight:600;color:#e8f0ff">' + SECTIONS[tab].i + ' ' + SECTIONS[tab].t + '</span>'
+    + '<span style="width:64px"></span>';
+}
+
+// ホームのメニュー（タブの代わりに全機能をボタン集約）
+function menuBtn(key) {
+  var s = SECTIONS[key];
+  return '<button onclick="switchTab(\'' + key + '\')" style="display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:#111b2e;border:1px solid #1e3050;border-radius:12px;text-align:left;cursor:pointer;width:100%">'
+    + '<span style="font-size:23px;line-height:1">' + s.i + '</span>'
+    + '<span style="font-size:14px;font-weight:700;color:#e8f0ff">' + s.t + '</span></button>';
+}
+function homeMenu() {
+  var castKeys = ['shift','yoyaku','stats','hair','seatreq','customers'];
+  var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
+  if (isAdmin) {
+    var admKeys = ['requests','shiftmgmt','notif','cashset'];
+    html += '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:20px 2px 10px">管理者メニュー</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + admKeys.map(menuBtn).join('') + '</div>';
+  }
+  return html;
 }
 
 function updateAdminBar(castList) {
@@ -707,8 +734,9 @@ var homeWD = ['日','月','火','水','木','金','土'];
 
 function renderHome(){
   contentTargetId = 'content';
+  // 管理者でキャスト未選択 → 案内＋メニューのみ
   if (isAdmin && !adminViewAs) {
-    setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
+    setContent('<div class="card" style="text-align:center;color:#8aabcc;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>' + homeMenu());
     return;
   }
   var me = homeMyName();
@@ -750,14 +778,15 @@ function renderHome(){
     +   '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">ヘルプ・呼び出し</span>'
     + '</div>'
     + '<div id="home-myseat" style="font-size:12px;color:#7a90a8;margin-bottom:11px">現在の席：確認中...</div>'
-    + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:14px;background:#7a1526;color:#ffdfe4;border:1px solid #b53040;border-radius:10px;font-size:16px;font-weight:800;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
-    +   '<span style="display:block;font-size:11px;font-weight:600;color:#f0b8c0;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
+    + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:13px;background:transparent;color:#e08794;border:1.5px solid #9c3341;border-radius:10px;font-size:16px;font-weight:700;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
+    +   '<span style="display:block;font-size:11px;font-weight:500;color:#a86b73;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
     +   '<button onclick="castCall(\'soda\',this)" style="' + sbBtn + '">🥤 炭酸</button>'
     +   '<button onclick="castCall(\'ice\',this)" style="' + sbBtn + '">🧊 アイス</button>'
     +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
     + '</div>'
     + '</div>';
+  if (isAdmin) callCard = '';   // 管理者は呼び出しカードを出さない（本人のキャストのみ）
 
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める） ---
   var html = shiftCard + callCard
@@ -768,15 +797,12 @@ function renderHome(){
     +   '</div>'
     +   '<div id="home-rsv-list"><div style="color:#6a8ab0;font-size:13px;padding:14px 0;text-align:center">読み込み中...</div></div>'
     + '</div>'
-    // --- クイック導線 ---
-    + '<div style="display:flex;gap:10px;margin-top:4px">'
-    +   '<button onclick="switchTab(\'shift\')" style="flex:1;padding:13px;background:#1a50a0;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700">📅 シフト提出</button>'
-    +   '<button onclick="switchTab(\'yoyaku\')" style="flex:1;padding:13px;background:#162848;color:#7ab0f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700">🗓 予約管理</button>'
-    + '</div>';
+    // --- メニュー（全機能ボタン） ---
+    + homeMenu();
   setContent(html);
 
-  // --- 現在の席（軍師の付け回しとリンク）を取得 ---
-  loadMySeat();
+  // --- 現在の席（軍師の付け回しとリンク）を取得（本人キャストのみ） ---
+  if (!isAdmin) loadMySeat();
 
   // --- 今日の予約を取得 ---
   var now = new Date();
