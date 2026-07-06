@@ -1448,6 +1448,7 @@ function isNoLine(c){ if(c.lineRegistered===false)return true; if(c.lineRegister
 // 実データ(searchKioskCustomersV2)→ 顧客カード用に変換
 function adaptCustomer(c){return {name:c.name||c.card||'', card:c.card||'', member:c.no||'', bottle:c.bottle||'', bottlePos:'', bday:c.bday||'', tantou:c.tantou||'', nomikata:c.drink||'', tabako:c.tabaco||'', ng:'', note:c.note||'', joined:c.memberSince||'', feeDate:c.annualFeeDate||'', lineRegistered:(c.lineRegistered!=null?c.lineRegistered:null)};}
 var custDetailList=[]; // 検索結果を保持（詳細表示のタップ用）
+var custLastQ='';      // 直近の検索キーワード（詳細→検索に戻る時に復元）
 var MENU_TILES=[
   {group:'開店・閉店 / 現金', items:[
     {ic:'🌅', t:'開店チェック',   act:"openOpeningCheck()"},
@@ -1483,8 +1484,9 @@ function renderMenu(){
         +'<span class="cfil nol'+(custFilter==='noline'?' on':'')+'" onclick="setCustFilter(\'noline\')">📵 公式LINE未登録'+cnt(nol)+'</span>'
       +'</div>'
       +'<div id="cust-results" class="cust-results"></div>';
+    var inp=document.getElementById('cust-q'); if(inp) inp.value=custLastQ||'';
     renderCustResults();
-    var inp=document.getElementById('cust-q'); if(inp) inp.focus();
+    if(inp) inp.focus();
     return;
   }
   el.innerHTML=MENU_TILES.map(function(g){
@@ -1497,6 +1499,7 @@ function setCustFilter(f){ var q=((document.getElementById('cust-q')||{}).value|
 function custFilterFn(c){ if(custFilter==='expired'&&renewStatus(c.feeDate)!=='expired')return false; if(custFilter==='noline'&&!isNoLine(c))return false; return true; }
 function renderCustResults(){
   var q=((document.getElementById('cust-q')||{}).value||'').trim();
+  custLastQ=q;
   var el=document.getElementById('cust-results'); if(!el)return;
   if(IS_GAS){
     el.innerHTML='<div class="empty-msg">検索中...</div>';
@@ -1554,7 +1557,9 @@ function openCustDetail(i){
     +row('NG', c.ng)
     +(c.note?'<div style="margin-top:14px"><div style="color:var(--dim);font-size:13px;margin-bottom:5px">📝 メモ / 参考情報</div><div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;line-height:1.6;white-space:pre-wrap;color:var(--txt)">'+esc(c.note)+'</div></div>':'')
     +'</div>';
-  showSheet('👤 顧客情報', html, 'full');
+  // メニュー(z-index80)の裏にsheet(41)が隠れるため、メニュー内のサブ画面として描画する
+  var back='<span class="menu-back" onclick="renderMenu()">← 検索に戻る</span>';
+  var mb=document.getElementById('menu-body'); if(mb) mb.innerHTML=back+html;
 }
 
 /* ============ キャストリクエスト ============ */
