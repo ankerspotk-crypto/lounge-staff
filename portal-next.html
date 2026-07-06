@@ -742,8 +742,22 @@ function renderHome(){
       + '</div>';
   }
 
+  // --- ヘルプ・呼び出しカード ---
+  var sbBtn = 'padding:13px 4px;background:#162848;color:#bcd6f0;border:1px solid #2a5aaa;border-radius:10px;font-size:14px;font-weight:700;';
+  var callCard =
+    '<div class="card">'
+    + '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin-bottom:10px">ヘルプ・呼び出し</div>'
+    + '<button onclick="castCall(\'help\',this)" style="width:100%;padding:14px;background:#7a1526;color:#ffdfe4;border:1px solid #b53040;border-radius:10px;font-size:16px;font-weight:800;margin-bottom:9px">🆘 ヘルプ（黒服を呼ぶ）'
+    +   '<span style="display:block;font-size:11px;font-weight:600;color:#f0b8c0;margin-top:3px">声をかけて一旦抜いてもらいます</span></button>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+    +   '<button onclick="castCall(\'soda\',this)" style="' + sbBtn + '">🥤 炭酸</button>'
+    +   '<button onclick="castCall(\'ice\',this)" style="' + sbBtn + '">🧊 アイス</button>'
+    +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
+    + '</div>'
+    + '</div>';
+
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める） ---
-  var html = shiftCard
+  var html = shiftCard + callCard
     + '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +     '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">今日の予約</span>'
@@ -798,6 +812,29 @@ function renderHomeRsv(list){
       + '<div style="font-size:11px;color:' + stColor + ';white-space:nowrap;align-self:center">' + stTxt + '</div>'
       + '</div>';
   }).join('');
+}
+
+// キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
+function castCall(kind, btn){
+  if (kind === 'help' && !confirm('黒服にヘルプを送りますか？\n（声をかけて一旦抜いてもらいます）')) return;
+  if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castCall', userId: userId, kind: kind }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.ok) homeToast('黒服に送信しました', true);
+      else homeToast('送信に失敗しました' + (d && d.error ? '：' + d.error : ''), false);
+    })
+    .catch(function(){ homeToast('通信エラー', false); });
+}
+function homeToast(msg, ok){
+  var t = document.getElementById('home-toast');
+  if (!t){ t = document.createElement('div'); t.id = 'home-toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:' + (ok === false ? '#5a1020' : '#0d2a1a')
+    + ';color:#eafff2;border:1px solid ' + (ok === false ? '#b53040' : '#2a6a44')
+    + ';padding:12px 22px;border-radius:12px;font-size:14px;font-weight:700;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,.5);opacity:0;transition:.2s;pointer-events:none;max-width:88vw;text-align:center;';
+  requestAnimationFrame(function(){ t.style.opacity = '1'; });
+  clearTimeout(t._h); t._h = setTimeout(function(){ t.style.opacity = '0'; }, 2200);
 }
 
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
