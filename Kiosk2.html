@@ -742,7 +742,7 @@ function goToday(){curDate=TODAY;renderAll();}
 /* ============ ALERT BAR ============ */
 function nowBizMin(){var n=new Date();var h=n.getHours();if(h<6)h+=24;return h*60+n.getMinutes();}
 // 同伴予約は20:30来店として扱う（顧客名に「同伴」を含む予約が対象）
-function rsvArrT(r){return /同伴/.test(r.cust||r.customer||'')?'20:30':(r.time||'');}
+function rsvArrT(r){return /同伴/.test((r.cust||r.customer||'')+' '+(r.time||''))?'20:30':(r.time||'');}
 function rsvLateMin(r){return nowBizMin()-tmin(rsvArrT(r));}
 function buildTimeline(){
   var t=[];

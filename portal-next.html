@@ -695,7 +695,7 @@ function renderTab(tab) {
 // ==== ホーム（キャストが最初に見る画面：次の出勤 ＋ 今日の予約） ====
 function homePad2(n){ return (n<10?'0':'') + n; }
 // 同伴予約は20:30来店として扱う（軍師と統一）
-function homeRsvArr(r){ return /同伴/.test(r.customer||'') ? '20:30' : (r.time||''); }
+function homeRsvArr(r){ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
 function homeMyName(){ return (portalData && (portalData.viewAs || portalData.name)) || ''; }
 function homeIsMine(r){
   var me = homeMyName(); if (!me) return false;
