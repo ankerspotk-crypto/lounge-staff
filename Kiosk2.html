@@ -1535,31 +1535,51 @@ function custResultsHtml(list){
   }).join('');
 }
 
-// 顧客詳細（カードをタップ → 全項目表示）
+// 顧客詳細（カードをタップ → お客様管理シートの全列を表示）
 function openCustDetail(i){
   var c=custDetailList[i]; if(!c)return;
   var rs=renewStatus(c.feeDate);
-  var rsLabel=rs==='expired'?'🔴 更新切れ':rs==='soon'?'🟡 まもなく更新':rs==='ok'?'🟢 有効':'—';
-  var lineTxt=c.lineRegistered===false?'📵 未登録':(c.lineRegistered===true?'✅ 登録済み':'—');
-  function row(k,v){ return v?('<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--dim);font-size:13px">'+esc(k)+'</span><span style="flex:1;font-size:15px;color:var(--txt)">'+esc(v)+'</span></div>'):''; }
-  var bottle=c.bottle?(c.bottle+(c.bottlePos?'（'+c.bottlePos+'）':'')):'';
-  var html='<div style="padding:6px 4px">'
+  var rsLabel=rs==='expired'?'🔴 更新切れ':rs==='soon'?'🟡 まもなく更新':rs==='ok'?'🟢 有効':'';
+  var lineTxt=c.lineRegistered===false?'📵 未登録':(c.lineRegistered===true?'✅ 登録済み':'');
+  var badges=(rsLabel?'<span style="font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px 10px;margin-right:8px">年会費 '+rsLabel+'</span>':'')
+    +(lineTxt?'<span style="font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px 10px">公式LINE '+lineTxt+'</span>':'');
+  var head='<div style="padding:6px 4px">'
     +'<div style="font-size:22px;font-weight:800;color:var(--txt);margin-bottom:2px">'+esc(c.name)+' 様</div>'
-    +'<div style="font-size:13px;color:var(--dim);margin-bottom:14px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+'</div>'
-    +row('担当', c.tantou)
-    +row('ボトル', bottle)
-    +row('誕生日', c.bday)
-    +row('飲み方', c.nomikata)
-    +row('タバコ', c.tabako)
-    +row('入会日', c.joined)
-    +'<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--dim);font-size:13px">年会費更新</span><span style="flex:1;font-size:15px;color:var(--txt)">'+esc(c.feeDate||'—')+'　'+rsLabel+'</span></div>'
-    +'<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:96px;flex-shrink:0;color:var(--dim);font-size:13px">公式LINE</span><span style="flex:1;font-size:15px;color:var(--txt)">'+lineTxt+'</span></div>'
-    +row('NG', c.ng)
-    +(c.note?'<div style="margin-top:14px"><div style="color:var(--dim);font-size:13px;margin-bottom:5px">📝 メモ / 参考情報</div><div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;line-height:1.6;white-space:pre-wrap;color:var(--txt)">'+esc(c.note)+'</div></div>':'')
+    +'<div style="font-size:13px;color:var(--dim);margin-bottom:8px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+'</div>'
+    +(badges?'<div style="margin-bottom:12px">'+badges+'</div>':'')
+    +'<div id="cust-detail-body"><div class="empty-msg" style="padding:14px 0;font-size:13px">読み込み中...</div></div>'
     +'</div>';
-  // メニュー(z-index80)の裏にsheet(41)が隠れるため、メニュー内のサブ画面として描画する
   var back='<span class="menu-back" onclick="renderMenu()">← 検索に戻る</span>';
-  var mb=document.getElementById('menu-body'); if(mb) mb.innerHTML=back+html;
+  var mb=document.getElementById('menu-body'); if(mb) mb.innerHTML=back+head;
+  if(IS_GAS){
+    gsr('kioskGetCustomerDetail', c.member, c.name).then(function(d){
+      renderCustDetailFields((d&&d.ok&&d.fields&&d.fields.length)?d.fields:custFieldsFrom(c));
+    }).catch(function(){ renderCustDetailFields(custFieldsFrom(c)); });
+  }else{
+    renderCustDetailFields(custFieldsFrom(c));
+  }
+}
+// 検索結果オブジェクトからの基本フィールド（ローカル/フォールバック用）
+function custFieldsFrom(c){
+  var f=[];
+  function add(k,v){ if(v) f.push({k:k,v:v}); }
+  add('担当',c.tantou); add('ボトル',c.bottle?(c.bottle+(c.bottlePos?'（'+c.bottlePos+'）':'')):''); add('誕生日',c.bday);
+  add('飲み方',c.nomikata); add('タバコ',c.tabako); add('入会日',c.joined); add('年会費更新',c.feeDate); add('NG',c.ng); add('参考情報',c.note);
+  return f;
+}
+function renderCustDetailFields(fields){
+  var el=document.getElementById('cust-detail-body'); if(!el)return;
+  var memoRe=/参考|メモ|備考|要望|コメント|履歴/;
+  var rows='', memos='';
+  (fields||[]).forEach(function(f){
+    if(/氏名|カード記載名|会員番号/.test(f.k)) return; // ヘッダーで表示済み
+    if(memoRe.test(f.k)){
+      memos+='<div style="margin-top:14px"><div style="color:var(--dim);font-size:13px;margin-bottom:5px">📝 '+esc(f.k)+'</div><div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;line-height:1.6;white-space:pre-wrap;color:var(--txt)">'+esc(f.v)+'</div></div>';
+    }else{
+      rows+='<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:120px;flex-shrink:0;color:var(--dim);font-size:13px">'+esc(f.k)+'</span><span style="flex:1;font-size:15px;color:var(--txt);white-space:pre-wrap">'+esc(f.v)+'</span></div>';
+    }
+  });
+  el.innerHTML=(rows||memos)?(rows+memos):'<div class="empty-msg" style="padding:14px 0;font-size:12px">追加情報はありません</div>';
 }
 
 /* ============ キャストリクエスト ============ */
