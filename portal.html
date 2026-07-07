@@ -1897,6 +1897,7 @@ function renderCustomerList_() {
         badges += '<span class="ycm ycm-note">💳 ' + yearLabel + '</span>';
       }
     }
+    if (c.restricted) badges += '<span class="ycm ycm-note" style="opacity:.7">🔒 担当のみ詳細</span>';
     return '<div class="cust-card">'
       + '<div class="cust-card-top">'
       + '<span class="cust-card-name">' + esc(c.name || c.card || '') + '様</span>'
