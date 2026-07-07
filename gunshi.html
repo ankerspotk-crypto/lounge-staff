@@ -560,6 +560,7 @@ body{display:flex;flex-direction:column;height:100vh;}
 .menu-btn{background:var(--panel2);border:1px solid var(--line2);color:var(--accent);font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;}
 .menu-btn:active{background:var(--accent-bg);}
 .menu-btn.cust{background:#14213a;border-color:#2a4a7a;color:#8fb8f0;}
+.menu-btn.reload{background:#1a1220;border-color:#4a2c5a;color:#c69ae0;}
 .cust-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
 .cfil{font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;}
 .cfil.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
@@ -648,6 +649,7 @@ body{display:flex;flex-direction:column;height:100vh;}
   <div class="spacer"></div>
   <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
   <button class="menu-btn" onclick="openMenu()">☰ メニュー</button>
+  <button class="menu-btn reload" onclick="hardReload()" title="表示がおかしい時はここ">🔄 再読込</button>
   <div class="clock" id="clock"><b>--:--</b><br>更新 --:--</div>
   <div class="who" onclick="doLogout()">
     <span class="nm" id="whoName">りく</span>
@@ -2475,6 +2477,8 @@ function renderAll(){
   document.getElementById('dlabel').textContent=dateLabel(curDate);
   renderAlerts();renderHall();renderRight();
 }
+/* 表示がおかしい時のハード再読み込み（キャッシュ回避・現在のパラメータは維持） */
+function hardReload(){ try{ var u=new URL(location.href); u.searchParams.set('cb',Date.now()); location.replace(u.toString()); }catch(e){ location.reload(); } }
 tickClock();setInterval(tickClock,10000);
 /* ログイン後の本体起動 */
 function bootGunshi(){
