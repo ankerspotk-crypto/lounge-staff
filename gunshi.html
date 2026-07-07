@@ -82,6 +82,10 @@ body{display:flex;flex-direction:column;height:100vh;}
 .ticket.k-preview{border-style:dashed;} .ticket.k-preview .tk-time{background:#0c1c34;color:#9dc8ff;} .ticket.k-preview .tk-title{color:#bcd8ff;}
 .ticket.k-preview-cast{border-style:dashed;} .ticket.k-preview-cast .tk-time{background:#241428;color:#e0a0d0;} .ticket.k-preview-cast .tk-title{color:#e6b0d6;}
 .ticket.k-preview-task{border-style:dashed;} .ticket.k-preview-task .tk-time{background:#102a26;color:#8fe0c0;} .ticket.k-preview-task .tk-title{color:#8fe0c0;}
+/* 要対応キュー（時間タスク・呼び出し）: 押して完了 */
+.ticket.k-task{border-color:#2a6a9a;} .ticket.k-task .tk-time{background:#12283a;color:#7ac6ff;} .ticket.k-task .tk-title{color:#cfe4ff;}
+.ticket.k-task .tk-done{font-size:10px;font-weight:800;text-align:center;padding:3px;background:#12283a;color:#7ac6ff;border-top:1px solid #24405a;}
+.ticket.k-task:active{filter:brightness(1.25);}
 
 /* ---------- Dashboard split ---------- */
 .dash{flex:1;display:flex;gap:12px;padding:12px 15px;min-height:0;}
@@ -859,16 +863,32 @@ function buildTimeline(){
 /* 内容が変わった時だけinnerHTMLを更新（30秒ごとの無駄な再描画＝ちらつき・スクロールリセットを防止） */
 var _htmlCache={};
 function setHtml(id,html){var el=document.getElementById(id);if(!el||_htmlCache[id]===html)return;_htmlCache[id]=html;el.innerHTML=html;}
+var TASKS=[]; /* 要対応キュー（時間タスク＋呼び出し）。押して完了で消える */
+function completeTask(id,ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  TASKS=(TASKS||[]).filter(function(t){return t.id!==id;}); // 楽観的に除去
+  renderAlerts();
+  if(typeof toast==='function')toast('✅ 完了しました');
+  if(IS_GAS) gsr('completeKioskTask',id).catch(function(){ loadAll(); });
+}
 function renderAlerts(){
   var list=buildTimeline();
-  var nowCount=list.filter(function(x){return x.g<=1;}).length;
+  var q=TASKS||[];
+  var nowCount=list.filter(function(x){return x.g<=1;}).length + q.length;
   var lead='<div class="alert-lead '+(nowCount?'busy':'calm')+'"><div class="big">'+(nowCount||'0')+'</div><div class="cap">要対応</div></div>';
+  // キュー（時間タスク・呼び出し）を先頭に。押すと完了して消える
+  var qHtml=q.map(function(t){
+    return '<div class="ticket k-task" onclick="completeTask(\''+jsStr(t.id)+'\',event)">'
+      +'<div class="tk-time">'+esc(t.type==='call'?'呼出':(t.sub||''))+'</div>'
+      +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">'+esc(t.type==='call'?(t.sub||'席へ'):'タップで完了')+'</span></span></div>'
+      +'<div class="tk-done">✓完了</div></div>';
+  }).join('');
   var tickets=list.map(function(x){
     return '<div class="ticket k-'+x.kind+'"'+(x.act?' onclick="'+x.act+'"':'')+'>'
       +'<div class="tk-time">'+esc(x.time)+'</div>'
       +'<div class="tk-body"><span class="tk-ic">'+x.ic+'</span><span class="tk-tx"><span class="tk-title">'+esc(x.title)+'</span><span class="tk-sub">'+esc(x.sub)+'</span></span></div></div>';
   }).join('');
-  setHtml('alertbar',lead+'<div class="tl-scroll">'+(tickets||'<div class="alert-none">✓ タスクはありません</div>')+'</div>');
+  setHtml('alertbar',lead+'<div class="tl-scroll">'+((qHtml+tickets)||'<div class="alert-none">✓ タスクはありません</div>')+'</div>');
 }
 
 /* ============ HALL ============ */
@@ -2449,9 +2469,10 @@ function loadAll(){
     gsr('getKioskShiftBoard'),
     gsr('getCastRequestsToday'),
     gsr('getKioskCastNames'),
-    gsr('getKioskWorkingCasts').catch(function(){return null;})
+    gsr('getKioskWorkingCasts').catch(function(){return null;}),
+    gsr('getKioskTasks').catch(function(){return null;})
   ]).then(function(r){
-    SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS);
+    SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[];
     applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
     BOOTED=true; renderAll();
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
