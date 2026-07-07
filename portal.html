@@ -800,6 +800,14 @@ function renderHome(){
     +   '</div>'
     +   '<div id="home-rsv-list"><div style="color:#6a8ab0;font-size:13px;padding:14px 0;text-align:center">読み込み中...</div></div>'
     + '</div>'
+    // --- 空席状況カード ---
+    + '<div class="card">'
+    +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +     '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">🪑 空席状況</span>'
+    +     '<span id="home-vac-at" style="font-size:11px;color:#6a8ab0"></span>'
+    +   '</div>'
+    +   '<div id="home-vac-list"><div style="color:#6a8ab0;font-size:13px;padding:14px 0;text-align:center">読み込み中...</div></div>'
+    + '</div>'
     // --- メニュー（全機能ボタン） ---
     + homeMenu();
   setContent(html);
@@ -814,6 +822,38 @@ function renderHome(){
     .then(function(r){ return r.json(); })
     .then(function(d){ renderHomeRsv((d && d.reservations) || []); })
     .catch(function(){ var el=document.getElementById('home-rsv-list'); if(el) el.innerHTML='<div style="color:#cc5555;font-size:13px;padding:10px 0">予約の取得に失敗しました</div>'; });
+
+  // --- 空席状況を取得（60秒ごとに自動更新） ---
+  fetchVacancy();
+  if(window._vacTimer) clearInterval(window._vacTimer);
+  window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } fetchVacancy(); }, 60000);
+}
+function fetchVacancy(){
+  gasFetch(GAS_URL + '?action=portal&tab=vacancy&userId=' + encodeURIComponent(userId))
+    .then(function(r){ return r.json(); })
+    .then(function(d){ renderHomeVacancy((d && d.vacancy) || null); })
+    .catch(function(){ var el=document.getElementById('home-vac-list'); if(el) el.innerHTML='<div style="color:#cc5555;font-size:13px;padding:10px 0">空席の取得に失敗しました</div>'; });
+}
+function renderHomeVacancy(v){
+  var el = document.getElementById('home-vac-list'); if(!el) return;
+  if(!v || !v.floors){ el.innerHTML='<div style="color:#6a8ab0;font-size:13px;padding:10px 0">取得できませんでした</div>'; return; }
+  var at = document.getElementById('home-vac-at'); if(at) at.textContent = v.at ? (v.at + ' 時点') : '';
+  if(!v.floors.length){ el.innerHTML='<div style="color:#6a8ab0;font-size:13px;padding:10px 0">席情報がありません</div>'; return; }
+  el.innerHTML = v.floors.map(function(f){
+    var body;
+    if(!f.empty.length){ body = '<span style="color:#cc8877;font-size:12px;font-weight:700">満席</span>'; }
+    else {
+      body = '<div style="display:flex;flex-wrap:wrap;gap:6px">' + f.empty.map(function(t){
+        var up = t.upcoming, resv = up && (up.time || up.customer);
+        if(resv){
+          var note = '📅' + esc(up.time || '予約') + (up.customer ? ' ' + esc(up.customer) + '様' : '');
+          return '<span style="background:#2a2410;border:1px solid #6a5a20;color:#e8c877;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700">' + esc(t.name) + ' <span style="font-size:10px;font-weight:600;opacity:.9">' + note + '</span></span>';
+        }
+        return '<span style="background:#0f2a1a;border:1px solid #2a6a44;color:#7fe0a3;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700">' + esc(t.name) + '</span>';
+      }).join('') + '</div>';
+    }
+    return '<div style="margin-bottom:11px"><div style="font-size:12px;color:#7ab0f0;font-weight:800;margin-bottom:6px">' + esc(f.floor) + ' <span style="color:#6a8ab0;font-weight:500;font-size:11px">空き' + f.empty.length + '／使用中' + f.usedCount + '</span></div>' + body + '</div>';
+  }).join('');
 }
 
 function renderHomeRsv(list){
