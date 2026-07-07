@@ -1657,6 +1657,7 @@ function renderMenu(){
         +'<span class="cfil exp'+(custFilter==='expired'?' on':'')+'" onclick="setCustFilter(\'expired\')">🔴 更新切れ'+cnt(exp)+'</span>'
         +'<span class="cfil nol'+(custFilter==='noline'?' on':'')+'" onclick="setCustFilter(\'noline\')">📵 公式LINE未登録'+cnt(nol)+'</span>'
       +'</div>'
+      +'<button onclick="openAddCustomer()" style="width:100%;margin:2px 0 12px;padding:12px;border-radius:10px;border:1px solid #2a6a44;background:#0f2a1a;color:#7fe0a3;font-weight:800;font-size:14px;cursor:pointer">➕ 新規のお客様を追加</button>'
       +'<div id="cust-results" class="cust-results"></div>';
     var inp=document.getElementById('cust-q'); if(inp) inp.value=custLastQ||'';
     renderCustResults();
@@ -1670,6 +1671,40 @@ function renderMenu(){
   }).join('');
 }
 function setCustFilter(f){ var q=((document.getElementById('cust-q')||{}).value||''); custFilter=f; renderMenu(); var inp=document.getElementById('cust-q'); if(inp){ inp.value=q; renderCustResults(); } }
+/* 新規のお客様を追加（会員番号は自動採番・登録日=本日） */
+function openAddCustomer(){
+  var el=document.getElementById('menu-body'); if(!el)return;
+  document.getElementById('menuTitle').textContent='➕ 新規のお客様';
+  function fld(id,label,ph,type){ return '<div class="flabel">'+label+'</div><input id="nc-'+id+'" class="finput" type="'+(type||'text')+'" autocapitalize="off"'+(ph?' placeholder="'+ph+'"':'')+'>'; }
+  el.innerHTML='<span class="menu-back" onclick="menuView=\'customer\';renderMenu()">← 顧客管理に戻る</span>'
+    +'<div style="font-size:12px;color:var(--dim);margin:6px 2px 12px">会員番号は自動で採番、登録日は本日で登録されます。氏名かカード記載名のどちらかは必須です。</div>'
+    +fld('name','氏名（フルネーム）','例：山田 太郎')
+    +fld('card','カード記載名','カードに載せる名前')
+    +fld('tantou','担当')
+    +fld('bottle','ボトル種類')
+    +fld('pos','ボトル位置')
+    +fld('bday','誕生日','','date')
+    +fld('company','会社名（領収書名）')
+    +fld('drink','飲み方')
+    +fld('tabaco','タバコ')
+    +fld('neck','ネック名')
+    +fld('ng','NG行為')
+    +fld('ngStaff','NGスタッフ')
+    +'<div class="flabel">参考情報</div><textarea id="nc-note" class="finput" rows="3" style="resize:none"></textarea>'
+    +'<button class="savebtn" style="margin-top:16px" onclick="saveNewCustomer()">💾 この内容で登録</button>';
+}
+function saveNewCustomer(){
+  var g=function(id){ return ((document.getElementById('nc-'+id)||{}).value||'').trim(); };
+  var name=g('name'), card=g('card');
+  if(!name && !card){ alert('氏名またはカード記載名を入力してください'); return; }
+  var payload={ name:name, card:card, tantou:g('tantou'), bottle:g('bottle'), pos:g('pos'), bday:g('bday'), company:g('company'), drink:g('drink'), tabaco:g('tabaco'), neck:g('neck'), ng:g('ng'), ngStaff:g('ngStaff'), note:g('note') };
+  var btn=document.querySelector('#menu-body .savebtn'); if(btn){btn.disabled=true;btn.textContent='登録中...';}
+  if(!IS_GAS){ toast('（ローカル）登録: '+(name||card)); menuCustomer(); return; }
+  gsr('addCustomer',payload).then(function(res){
+    if(res&&res.ok){ toast('✅ お客様を登録しました'); custLastQ=name||card; menuCustomer(); }
+    else { alert('登録エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} }
+  }).catch(function(e){ alert('登録エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} });
+}
 function custFilterFn(c){ if(custFilter==='expired'&&membershipInfo(c.joined,c.feeDate).status!=='expired')return false; if(custFilter==='noline'&&!isNoLine(c))return false; return true; }
 function renderCustResults(){
   var q=((document.getElementById('cust-q')||{}).value||'').trim();
