@@ -1824,15 +1824,20 @@ var custList   = [];
 function loadCustomers(filter, q) {
   if (filter !== undefined) custFilter = filter;
   if (q      !== undefined) custQuery  = q;
-  renderCustomerShell_();
+  renderCustomerShell_(); // シェル（入力欄・フィルタ）を描画。※検索(入力)中は呼ばない
+  fetchCustomers_();
+}
+// 結果リストだけ取得・更新（入力欄は作り直さない＝IME・フォーカスを壊さない）
+function fetchCustomers_() {
   var url = GAS_URL + '?action=portal&tab=customers&userId=' + encodeURIComponent(userId)
     + '&filter=' + encodeURIComponent(custFilter)
     + '&q='      + encodeURIComponent(custQuery);
   gasFetch(url).then(function(r){ return r.json(); }).then(function(d) {
-    if (!d.ok) { document.getElementById('cust-list').innerHTML = '<div class="err">エラー</div>'; return; }
+    var el = document.getElementById('cust-list'); if (!el) return;
+    if (!d.ok) { el.innerHTML = '<div class="err">エラー</div>'; return; }
     custList = d.customers || [];
     renderCustomerList_();
-  }).catch(function(){ document.getElementById('cust-list').innerHTML = '<div style="color:#7a9cc8;font-size:12px;padding:10px">通信エラー</div>'; });
+  }).catch(function(){ var el = document.getElementById('cust-list'); if (el) el.innerHTML = '<div style="color:#7a9cc8;font-size:12px;padding:10px">通信エラー</div>'; });
 }
 
 function renderCustomerShell_() {
@@ -1862,7 +1867,7 @@ function custSearchInput(ev, fn) {
 function custQueryChange(v) {
   custQuery = v;
   clearTimeout(_custSearchTimer);
-  _custSearchTimer = setTimeout(function(){ loadCustomers(custFilter, custQuery); }, 400);
+  _custSearchTimer = setTimeout(function(){ fetchCustomers_(); }, 400); // 結果だけ更新（入力欄は再描画しない）
 }
 
 function renderCustomerList_() {
