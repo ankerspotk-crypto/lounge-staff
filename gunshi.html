@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<!-- 全画面キオスク用ラッパー: ホーム画面に追加して起動するとブラウザ枠が消える -->
+<!-- 全画面キオスク用ラッパー: ホーム画面に追加して起動するとブラウザ枠が消える。キーは端末に保存（リポジトリには入れない） -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -11,43 +11,69 @@
 <meta name="theme-color" content="#0a0e17">
 <title>IEYAS軍師（全画面）</title>
 <style>
-  html,body{margin:0;padding:0;height:100%;background:#0a0e17;overflow:hidden;-webkit-text-size-adjust:100%;}
-  /* 軍師iframe: セーフエリア（ノッチ/ステータスバー/ホームインジケータ）を避けて最大化 */
+  html,body{margin:0;padding:0;height:100%;background:#0a0e17;overflow:hidden;-webkit-text-size-adjust:100%;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;}
   #frame{position:fixed;top:env(safe-area-inset-top);left:env(safe-area-inset-left);
     right:env(safe-area-inset-right);bottom:env(safe-area-inset-bottom);width:auto;height:auto;border:0;display:block;background:#0a0e17;}
-  #setup{color:#c0d4f0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:520px;margin:0 auto;padding:48px 24px;line-height:1.7;}
-  #setup h1{font-size:22px;margin-bottom:6px;}
-  #setup p{font-size:14px;color:#9ab4d8;}
-  #setup code{background:#16233c;color:#8fc6ff;padding:2px 7px;border-radius:6px;font-size:13px;}
-  #setup .step{background:#111b2e;border:1px solid #1e3050;border-radius:12px;padding:14px 16px;margin:12px 0;}
-  #setup .n{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;background:#2a5a9a;border-radius:50%;color:#fff;font-weight:800;font-size:12px;margin-right:8px;}
+  /* 設定を開き直す小さな歯車（左下・半透明） */
+  #gear{position:fixed;left:calc(env(safe-area-inset-left) + 6px);bottom:calc(env(safe-area-inset-bottom) + 6px);
+    width:30px;height:30px;border-radius:50%;border:1px solid #24406a;background:rgba(12,20,36,.55);color:#6f93c0;
+    font-size:15px;line-height:28px;text-align:center;padding:0;z-index:10;opacity:.5;}
+  /* 設定画面 */
+  #setup{color:#dbe7fb;max-width:460px;margin:0 auto;padding:44px 22px;line-height:1.7;}
+  #setup h1{font-size:22px;margin:0 0 4px;}
+  #setup p{font-size:13px;color:#9ab4d8;margin:6px 0 18px;}
+  .slabel{font-size:12px;color:#8fb0d8;font-weight:700;margin:16px 0 7px;letter-spacing:.5px;}
+  .floor-row{display:flex;gap:10px;}
+  .floor-btn{flex:1;padding:14px;border-radius:12px;border:1px solid #21406e;background:#101d33;color:#8fb0d8;font-size:17px;font-weight:800;}
+  .floor-btn.sel{background:#14335c;border-color:#3f7ac0;color:#cfe4ff;}
+  .kinput{width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid #21406e;background:#101d33;color:#dbe7fb;font-size:16px;}
+  .go{width:100%;margin-top:20px;padding:15px;border-radius:12px;border:0;background:#2a63aa;color:#fff;font-size:16px;font-weight:800;}
+  .hint{font-size:12px;color:#6a8ab0;margin-top:16px;line-height:1.7;}
+  .hint code{background:#16233c;color:#8fc6ff;padding:2px 6px;border-radius:5px;}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 (function(){
-  // 本番デプロイ(ポータルbackend＋軍師 兼用)の /exec
   var BASE='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
   var q=new URLSearchParams(location.search);
-  var term=(q.get('term')||'').toLowerCase();
-  var key=q.get('key')||'';
   var app=document.getElementById('app');
-  if(!key){
-    app.innerHTML='<div id="setup"><h1>🛡 IEYAS軍師・全画面</h1>'
-      +'<p>このページを開くときは、末尾に <code>?term=5f&key=（軍師のキー）</code> を付けてください。フロアは <code>5f</code> か <code>2f</code>。</p>'
-      +'<div class="step"><span class="n">1</span>例：<code>…/gunshi.html?term=5f&key=XXXXXXXX</code> をSafariで開く</div>'
-      +'<div class="step"><span class="n">2</span>共有ボタン（□↑）→「<b>ホーム画面に追加</b>」</div>'
-      +'<div class="step"><span class="n">3</span>以後はホーム画面のアイコンから起動 → <b>ブラウザ枠なしの全画面</b>で軍師が開きます</div>'
-      +'<p style="margin-top:18px;color:#6a8ab0">5F端末・2F端末それぞれのiPadで、対応する <code>term</code> を付けたURLで一度ずつ追加してください。</p></div>';
-    return;
+  function ls(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); }catch(e){ return null; } }
+  function getCfg(){
+    return { key:(q.get('key')||ls('gunshi_key')||''), term:((q.get('term')||ls('gunshi_term')||'5f')).toLowerCase() };
   }
-  var src=BASE+'?page=kiosk2&term='+encodeURIComponent(term||'5f')+'&key='+encodeURIComponent(key);
-  var f=document.createElement('iframe');
-  f.id='frame'; f.src=src;
-  f.setAttribute('allow','fullscreen; clipboard-read; clipboard-write');
-  f.setAttribute('allowfullscreen','');
-  app.appendChild(f);
+  function launch(cfg){
+    ls('gunshi_key',cfg.key); ls('gunshi_term',cfg.term);
+    var src=BASE+'?page=kiosk2&term='+encodeURIComponent(cfg.term||'5f')+'&key='+encodeURIComponent(cfg.key);
+    app.innerHTML='';
+    var f=document.createElement('iframe'); f.id='frame'; f.src=src;
+    f.setAttribute('allow','fullscreen; clipboard-read; clipboard-write'); f.setAttribute('allowfullscreen','');
+    app.appendChild(f);
+    var g=document.createElement('button'); g.id='gear'; g.textContent='⚙';
+    g.onclick=function(){ showSetup(getCfg()); };
+    document.body.appendChild(g);
+  }
+  function showSetup(cur){
+    var G=document.getElementById('gear'); if(G) G.remove();
+    var term=(cur&&cur.term)||'5f';
+    app.innerHTML='<div id="setup"><h1>🛡 軍師・全画面</h1>'
+      +'<p>この端末のフロアと軍師キーを設定します。<br>一度保存すれば、次からはアイコン起動で自動的に全画面で開きます。</p>'
+      +'<div class="slabel">フロア</div>'
+      +'<div class="floor-row"><button class="floor-btn'+(term==='5f'?' sel':'')+'" id="f5" onclick="_sf(\'5f\')">5F 端末</button>'
+      +'<button class="floor-btn'+(term==='2f'?' sel':'')+'" id="f2" onclick="_sf(\'2f\')">2F 端末</button></div>'
+      +'<div class="slabel">軍師キー</div>'
+      +'<input class="kinput" id="kinput" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="今の軍師URLの key= の後ろの文字列" value="'+(cur&&cur.key?String(cur.key).replace(/"/g,"&quot;"):'')+'">'
+      +'<button class="go" onclick="_sgo()">保存して全画面で開く</button>'
+      +'<div class="hint">キーはこの端末内にのみ保存され、外部やサイトのソースには残りません。<br>キーが分からない時は、今使っている軍師のURLの <code>key=</code> の後ろをコピーしてください。</div></div>';
+    window._selTerm=term;
+  }
+  window._sf=function(t){ window._selTerm=t; var a=document.getElementById('f5'),b=document.getElementById('f2'); if(a)a.className='floor-btn'+(t==='5f'?' sel':''); if(b)b.className='floor-btn'+(t==='2f'?' sel':''); };
+  window._sgo=function(){ var k=(document.getElementById('kinput').value||'').trim(); if(!k){ alert('軍師キーを入力してください'); return; } launch({key:k,term:window._selTerm||'5f'}); };
+
+  var cfg=getCfg();
+  if(q.get('setup')==='1' || !cfg.key){ showSetup(cfg); }
+  else { launch(cfg); }
 })();
 </script>
 </body>
