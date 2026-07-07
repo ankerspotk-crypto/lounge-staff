@@ -221,6 +221,7 @@ body{display:flex;flex-direction:column;height:100vh;}
 .rploc{font-size:9px;font-weight:700;color:#8fb8f0;background:#12233f;border-radius:5px;padding:1px 5px;}
 .rploc.free{color:#c0a0e0;background:#1e1430;}
 .chip.dohan.sel{background:#241800;border-color:#7a5010;color:#ffbf5a;}
+.chip.yoyaku.sel{background:#0a1e2e;border-color:#2a5aaa;color:#7ab0f0;}
 .custpick{display:flex;gap:8px;margin-bottom:6px;}
 .custpick>div{flex:1;text-align:center;padding:13px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;}
 .cp-exist{background:#0a1428;border:1px solid #1e3a6a;color:var(--accent);}
@@ -1337,13 +1338,13 @@ function quickRotate(toIdx,castName){
   else toast('🔄 '+castName+' を付けました');
 }
 
-var addSel={tables:[],tantou:[],dohan:[],time:'20:00',pax:3};
-function openAdd(){addSel={tables:[],tantou:[],dohan:[],time:'20:00',pax:3,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false};showSheet('➕ 予約を追加',addFormHtml(),false);}
-function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
+var addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:3};
+function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:3,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false};showSheet('➕ 予約を追加',addFormHtml(),false);}
+function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
 function afToggle(kind,el,val,single){ if(single){var w=el.parentElement;w.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');});el.classList.add('sel');addSel[kind]=val;} else {el.classList.toggle('sel');var a=addSel[kind];var i=a.indexOf(val);if(i>=0)a.splice(i,1);else a.push(val);} }
 function addFormHtml(isEdit){
   var times=['同伴','20:00','20:30','21:00','21:30','22:00','22:30','23:00'];
-  var st=addSel.time,sp=String(addSel.pax),tb=addSel.tables,tn=addSel.tantou,dh=addSel.dohan;
+  var st=addSel.time,sp=String(addSel.pax),tb=addSel.tables,tn=addSel.tantou,dh=addSel.dohan,yk=addSel.yoyaku||[];
   return afCustSection()
     +'<div class="flabel">時間</div><div class="chips">'+times.map(function(t){return '<div class="chip'+(st===t?' sel':'')+'" onclick="afToggle(\'time\',this,\''+t+'\',1)">'+t+'</div>';}).join('')+'</div>'
     +'<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(sp===String(n)?' sel':'')+'" onclick="afToggle(\'pax\',this,\''+n+'\',1)">'+n+'名</div>';}).join('')+'</div>'
@@ -1351,6 +1352,7 @@ function addFormHtml(isEdit){
     +'<div style="font-size:10px;color:#5a6a90;margin:8px 0 4px">5F</div><div class="chips">'+TABLES_5F.map(function(t){return '<div class="chip'+(tb.indexOf('5F '+t)>=0?' sel':'')+'" onclick="afToggle(\'tables\',this,\'5F '+t+'\')">'+t+'</div>';}).join('')+'</div>'
     +'<div class="flabel">担当キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip cast'+(tn.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'tantou\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
     +'<div class="flabel">同伴キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip dohan'+(dh.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'dohan\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
+    +'<div class="flabel">予約キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip yoyaku'+(yk.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'yoyaku\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
     +'<div class="flabel">要望・備考</div><textarea id="af-note" class="finput" rows="3" style="resize:none" placeholder="VIP対応・誕生日・ボトル・席希望など...">'+esc(addSel.note||'')+'</textarea>'
     +'<div class="savebtn" onclick="submitRsv()">'+(isEdit?'変更を保存':'予約を確定する')+'</div>'
     +(isEdit?'<div class="act dng" style="margin-top:9px" onclick="cancelRsv()">🚫 この予約をキャンセル</div>':'');
@@ -1409,7 +1411,7 @@ function submitRsv(){
   var name=(addSel.name||'').replace(/\s*様\s*$/,'').trim();
   if(!name){ alert(addSel.custMode==='search'?'お客様を検索して選択してください':'既存のお客様を検索するか、新規のお名前を入力してください'); return; }
   var note=addSel.note||'';
-  var payload={date:curDate,time:addSel.time,customer:name,memberId:addSel.member||'',pax:parseInt(addSel.pax)||1,table:addSel.tables.length?addSel.tables.join('、'):'未定',tantouCast:addSel.tantou.join('、'),dohanCast:addSel.dohan.join('、'),yoyakuCast:'',youbou:note,status:'確定'};
+  var payload={date:curDate,time:addSel.time,customer:name,memberId:addSel.member||'',pax:parseInt(addSel.pax)||1,table:addSel.tables.length?addSel.tables.join('、'):'未定',tantouCast:addSel.tantou.join('、'),dohanCast:addSel.dohan.join('、'),yoyakuCast:(addSel.yoyaku||[]).join('、'),youbou:note,status:'確定'};
   if(!IS_GAS){ toast('（ローカル）予約を保存'); closeSheet(); return; }
   if(addSel._busy) return; addSel._busy=true;            // 二重送信ロック（連打で人数分入るのを防止）
   var btn=document.querySelector('#sheetBody .savebtn'); if(btn){ btn.textContent='保存中…'; btn.style.opacity='.55'; btn.style.pointerEvents='none'; }
