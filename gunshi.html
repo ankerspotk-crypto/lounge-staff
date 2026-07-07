@@ -927,8 +927,13 @@ function seatCustKey_(x){ return String(x||'').replace(/様/g,'').replace(/\s/g,
 function seatRsvFor(s){ if(!s.cust)return null; var k=seatCustKey_(s.cust); return (RSV||[]).find(function(r){return r.cust&&seatCustKey_(r.cust)===k;})||null; }
 function seatCastCtx(s){
   var parts=[], r=seatRsvFor(s);
-  if(r&&r.yoyaku) parts.push('<span class="sctx y">予約 '+esc(r.yoyaku)+'</span>');
-  if(s.tantou){ var here=castHere(s,s.tantou); parts.push('<span class="sctx t">担当 '+esc(s.tantou)+(here?'':'<span class="sctx-away"> 抜'+(s.awayMin!=null?s.awayMin:0)+'分</span>')+'</span>'); }
+  var yoyaku=r&&r.yoyaku?r.yoyaku:'';
+  if(yoyaku){
+    var yhere=castHere(s,yoyaku), away='';
+    if(!yhere){ var m=(s.recentLeft&&s.recentLeft[yoyaku]); away=(m!=null)?'<span class="sctx-away"> 抜'+m+'分</span>':'<span class="sctx-away"> 離席中</span>'; }
+    parts.push('<span class="sctx y">予約 '+esc(yoyaku)+away+'</span>');
+  }
+  if(s.tantou) parts.push('<span class="sctx t">担当 '+esc(s.tantou)+'</span>');
   return parts.length?'<div class="sctx-row">'+parts.join('')+'</div>':'';
 }
 function seatHtml(s){
@@ -2403,7 +2408,7 @@ function adaptHall(data){
     var o={code:s.code, floor:s.floor, type:s.type, name:s.short||s.label||s.code,
       pax:(s.rsrv&&s.rsrv.pax)||casts.length||1,
       tantou:(s.rsrv&&s.rsrv.tantouCast)||'',
-      casts:casts, tags:(s.tags||[]), ngList:s.ngCast||[], planList:s.planCast||[]};
+      casts:casts, tags:(s.tags||[]), ngList:s.ngCast||[], planList:s.planCast||[], recentLeft:s.recentLeft||{}};
     if(!isWK){
       if(s.occupied) o.cust=(s.rsrv&&s.rsrv.customer)?(s.rsrv.customer+' 様'):'ご来店';
       else if(s.rsrv&&s.rsrv.customer) o.cust=s.rsrv.customer+' 様';   // 来店済みだがキャスト未着＝担当不在で表示
