@@ -1418,7 +1418,17 @@ function submitRsv(){
   var p=addSel.rowIdx?gsr('updateKioskReservation',addSel.rowIdx,payload):gsr('addKioskReservation',payload,TERM+'端末');
   p.then(function(d){ if(d&&d.ok===false){ addSel._busy=false; if(btn){btn.textContent='予約を確定する';btn.style.opacity='';btn.style.pointerEvents='';} alert('エラー: '+(d.error||''));return;} toast(d&&d.duplicate?'この予約は既に入っています':'✅ 予約を保存しました'); closeSheet(); loadAll(); }).catch(function(){ addSel._busy=false; if(btn){btn.textContent='予約を確定する';btn.style.opacity='';btn.style.pointerEvents='';} alert('通信エラー'); });
 }
-function cancelRsv(){ if(!addSel.rowIdx)return; if(!confirm('この予約をキャンセルしますか？'))return; if(!IS_GAS){toast('（ローカル）キャンセル');closeSheet();return;} gsr('cancelKioskReservation',addSel.rowIdx).then(function(){toast('予約をキャンセルしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');}); }
+function cancelRsv(){
+  if(!addSel.rowIdx)return;
+  var r=RSV.find(function(x){return (x.rowIdx||x.id)===addSel.rowIdx;});
+  var seated=!!(r&&(r.status==='来店済み'||r.checkInAt));
+  var msg=seated
+    ? '⚠️ 来店済みのお客様です。\n\nキャンセルすると、ホールの席・キャスト（付け回し中も含む）がすべてリセットされます。\n本当にキャンセルしますか？'
+    : 'この予約をキャンセルしますか？';
+  if(!confirm(msg))return;
+  if(!IS_GAS){toast('（ローカル）キャンセル');closeSheet();return;}
+  gsr('cancelKioskReservation',addSel.rowIdx).then(function(){toast(seated?'キャンセル＆ホールをリセットしました':'予約をキャンセルしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');});
+}
 
 function openSchedule(){
   var SH=19,EH=26;
