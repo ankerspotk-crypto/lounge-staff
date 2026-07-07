@@ -836,11 +836,10 @@ function buildTimeline(){
   var t=[];
   // 今：来店予定を30分超過（確定・未来店）→ 担当に確認
   RSV.forEach(function(r){ if(r.status!=='確定')return; var late=rsvLateMin(r); if(late>=30) t.push({g:0,kind:'now-crit',ic:'🕘',time:'今',min:-1000-late,title:r.cust+'様 来店'+late+'分超過',sub:(r.tantou?'担当 '+r.tantou+' に来店確認':'担当に来店確認')+'（'+rsvArrT(r)+'予約）',act:'editRsv('+r.id+')'}); });
-  // 今：超過・担当不在
+  // 今：超過
   SEATS.forEach(function(s,idx){
     var st=seatStatus(s);
     if(st==='over') t.push({g:0,kind:'now-crit',ic:'🔴',time:'今',min:-overMins(s),title:s.floor+' '+shortNm(s.name)+' '+s.cust,sub:overMins(s)+'分超過',act:'openSeat('+idx+')'});
-    else if(st==='nocast') t.push({g:0,kind:'now-crit',ic:'⚠️',time:'今',min:0,title:s.floor+' '+shortNm(s.name)+' '+s.cust,sub:'担当不在 → 至急キャストを',act:'openSeat('+idx+')'});
   });
   // 今：付け回し要
   ROT.forEach(function(c){if(!isMulti(c))return;var w=worstWait(c),iv=rotInterval(c);if(w&&(w.alert||(w.wait||0)>=iv))t.push({g:1,kind:'now-rot',ic:'🔄',time:'今',min:-(w.wait||0),title:c.cast+' → '+w.key+' '+w.cust,sub:'抜けて'+(w.wait||0)+'分・付け回し',act:'switchRight(\'rot\')'});});
