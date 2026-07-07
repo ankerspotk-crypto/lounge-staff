@@ -1680,7 +1680,7 @@ function openAddCustomer(){
     +'<div style="font-size:12px;color:var(--dim);margin:6px 2px 12px">会員番号は自動で採番、登録日は本日で登録されます。氏名かカード記載名のどちらかは必須です。</div>'
     +fld('name','氏名（フルネーム）','例：山田 太郎')
     +fld('card','カード記載名','カードに載せる名前')
-    +fld('tantou','担当')
+    +'<div class="flabel">担当</div><select id="nc-tantou" class="finput"><option value="">（未設定）</option>'+(CASTS||[]).map(function(c){return '<option value="'+esc(c)+'">'+esc(c)+'</option>';}).join('')+'</select>'
     +fld('bottle','ボトル種類')
     +fld('pos','ボトル位置')
     +fld('bday','誕生日','','date')
