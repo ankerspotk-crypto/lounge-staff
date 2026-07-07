@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<!-- 家康ポータル ランチャー: ホーム画面に貼ってワンタップでLINE経由ポータルを開く -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="家康ポータル">
+<meta name="theme-color" content="#0a1424">
+<title>家康ポータル</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a1424;color:#e8f0ff;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;-webkit-text-size-adjust:100%;}
+  .wrap{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:calc(env(safe-area-inset-top) + 40px) 24px calc(env(safe-area-inset-bottom) + 40px);}
+  .logo{font-size:30px;font-weight:800;letter-spacing:1px;margin-bottom:8px;}
+  .logo .z{color:#7ab0f0;}
+  .sub{font-size:13px;color:#8aabcc;margin-bottom:34px;line-height:1.7;}
+  .open{display:inline-flex;align-items:center;gap:10px;background:#1a63c0;color:#fff;border:0;border-radius:16px;
+    padding:18px 40px;font-size:19px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(26,99,192,.35);}
+  .open:active{transform:translateY(1px);}
+  .hint{margin-top:30px;font-size:12px;color:#5a7699;line-height:1.9;max-width:340px;}
+  .hint b{color:#8aabcc;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">⚡家康<span class="z">ポータル</span></div>
+  <div class="sub">出勤予定・予約・シフト提出・給与など<br>スタッフ用ページです</div>
+  <button class="open" onclick="openPortal()">▶ ポータルを開く</button>
+  <div class="hint" id="addHint">
+    📌 <b>ホーム画面に追加</b>すると次からワンタップで開けます<br>
+    iPhone: 共有ボタン → ホーム画面に追加<br>
+    Android: メニュー(⋮) → ホーム画面に追加
+  </div>
+</div>
+<script>
+(function(){
+  var LIFF_URL='https://liff.line.me/2010376677-EDF5MZuq';
+  window.openPortal=function(){ location.href=LIFF_URL; };
+  // ホーム画面アイコンから起動（standalone）＝すぐポータルへ。Safari通常表示時はボタンで案内。
+  var standalone = (window.navigator.standalone===true) ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if(standalone){
+    var h=document.getElementById('addHint'); if(h) h.style.display='none';
+    setTimeout(function(){ location.href=LIFF_URL; }, 350); // ボタンは自動遷移が効かない時のフォールバック
+  }
+})();
+</script>
+</body>
+</html>
