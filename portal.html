@@ -790,6 +790,19 @@ function renderHome(){
     var d = ns.date;
     var rel = homeRelLabel(d);
     var isToday = rel === '本日';
+    // 本日の実効出勤（20:00→原則20:30 / 了承済み20:00 / 依頼中未返信は調整依頼あり / 同伴あり）
+    var ta = portalData && portalData.todayArrival;
+    var useTA = ta && ta.key === ns.key;
+    var timeHtml, dohanBadge = '';
+    if (useTA && ta.pending) {
+      timeHtml = '<b style="font-size:17px;color:#ffcc66">🕗 出勤時間調整依頼あり</b>'
+        + '<div style="font-size:12px;color:#c8a24a;margin-top:3px">黒服からの出勤時間の連絡をお待ちください</div>';
+    } else {
+      timeHtml = '🕗 <b style="font-size:19px">' + ((useTA ? ta.time : ns.time)) + '</b>';
+    }
+    if (useTA && ta.dohan) {
+      dohanBadge = '<span style="display:inline-block;margin-left:8px;padding:2px 10px;background:#3a2a10;color:#ffcc66;border:1px solid #8a6d20;border-radius:8px;font-size:12px;font-weight:700">🍽 同伴あり</span>';
+    }
     shiftCard =
       '<div class="card" style="background:linear-gradient(135deg,#132a44,#111b2e);border-color:#2a5aaa">'
       + '<div style="margin-bottom:10px">'
@@ -798,8 +811,9 @@ function renderHome(){
       + '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">'
       +   '<span style="font-size:34px;font-weight:700;color:' + (isToday?'#88ffcc':'#e8f0ff') + ';line-height:1">' + rel + '</span>'
       +   '<span style="font-size:16px;color:#a0c0e0">' + (d.getMonth()+1) + '/' + d.getDate() + '（' + homeWD[d.getDay()] + '）</span>'
+      +   dohanBadge
       + '</div>'
-      + '<div style="margin-top:10px;font-size:15px;color:#e8f0ff">🕗 <b style="font-size:19px">' + ns.time + '</b></div>'
+      + '<div style="margin-top:10px;font-size:15px;color:#e8f0ff">' + timeHtml + '</div>'
       + '</div>';
   } else {
     shiftCard =
