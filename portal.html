@@ -446,17 +446,27 @@ function fmt(n) {
 
 // ---- タイムアウト付き fetch ヘルパー ----
 function gasFetch(url, options, timeoutMs) {
-  var ms = timeoutMs || 28000;
-  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, ms) : null;
-  var opts = Object.assign({}, options || {});
-  if (ctrl) opts.signal = ctrl.signal;
-  return fetch(url, opts).then(function(r) {
-    if (timer) clearTimeout(timer);
-    return r;
-  }, function(e) {
-    if (timer) clearTimeout(timer);
-    if (e && e.name === 'AbortError') throw new Error('タイムアウト（サーバー応答なし）');
+  var fullMs = timeoutMs || 28000;
+  var isGet = !options || !options.method || String(options.method).toUpperCase() === 'GET';
+  function once(ms) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function() { ctrl.abort(); }, ms) : null;
+    var opts = Object.assign({}, options || {});
+    if (ctrl) opts.signal = ctrl.signal;
+    return fetch(url, opts).then(function(r) {
+      if (timer) clearTimeout(timer);
+      return r;
+    }, function(e) {
+      if (timer) clearTimeout(timer);
+      if (e && e.name === 'AbortError') { var te = new Error('タイムアウト（サーバー応答なし）'); te._timeout = true; throw te; }
+      throw e;
+    });
+  }
+  // POSTは二重送信を避けるため単発。GETはコールドスタート対策で「初回18sで見切り→ウォームになった状態で1回だけ再試行」
+  if (!isGet) return once(fullMs);
+  return once(Math.min(fullMs, 18000)).catch(function(e) {
+    var retryable = e && (e._timeout || (e.message && /Failed to fetch|NetworkError|Load failed|network/i.test(e.message)));
+    if (retryable) return once(fullMs);
     throw e;
   });
 }
