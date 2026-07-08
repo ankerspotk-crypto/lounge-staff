@@ -169,6 +169,11 @@ body{display:flex;flex-direction:column;height:100vh;}
 .rtime{font-size:14px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
 .rname{font-size:12px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rname .mem{font-size:10px;color:var(--sub);font-weight:600;margin-left:4px;}
+.rmemchip{font-size:10px;font-weight:800;padding:2px 7px;border-radius:9px;white-space:nowrap;flex-shrink:0;border:1px solid;}
+.rmemchip.exp{background:#2a0e0e;color:#ff9a9a;border-color:#7a2828;}
+.rmemchip.soon{background:#241a00;color:#ffcf6a;border-color:#6a5000;}
+.rmemchip.ok{background:#0d2216;color:#7fe0a3;border-color:#2a6a44;}
+.rmemchip.none{background:#20242e;color:#aab4c4;border-color:#3a4150;}
 .stbtns{display:flex;gap:5px;flex-shrink:0;align-items:center;}
 .stbtns .stact,.stbtns .stundo,.stbtns .stpill{flex-shrink:0;}
 .stpill{font-size:10px;font-weight:800;padding:3px 8px;border-radius:7px;white-space:nowrap;}
@@ -186,6 +191,11 @@ body{display:flex;flex-direction:column;height:100vh;}
 .rb.d{color:#ffbf6a;border-color:#5a4010;background:#1c1300;}
 .rb.undef{color:#ff9a6a;border-color:#7a3a1a;background:#241000;}
 .rnote{font-size:10px;color:var(--sub);margin-top:3px;background:#0f0f1c;border-radius:7px;padding:3px 7px;border:1px solid var(--line);}
+.rnextmemo{font-size:11px;color:#f0c66a;margin-top:4px;background:#2a2010;border-radius:7px;padding:5px 8px;border:1px solid #7a5a1a;font-weight:700;line-height:1.4;}
+.nmemo-box{background:#2a2010;border:1px solid #7a5a1a;border-radius:12px;padding:12px 14px;margin:4px 0 14px;}
+.nmemo-h{font-size:13px;color:#f0c66a;font-weight:800;margin-bottom:8px;}
+.nmemo-sub{font-size:11px;color:#b09050;font-weight:600;}
+.nmemo-save{margin-top:10px;width:100%;padding:11px;border-radius:9px;background:#3a2c12;border:1px solid #8a6a2a;color:#f0c66a;font-weight:800;font-size:14px;cursor:pointer;}
 
 /* ---------- Sheet (seat detail / add / schedule) ---------- */
 .scrim{position:fixed;inset:0;background:rgba(4,4,10,.55);opacity:0;pointer-events:none;transition:.2s;z-index:40;}
@@ -285,6 +295,67 @@ body{display:flex;flex-direction:column;height:100vh;}
 .stk-floor-btn{flex:1;padding:9px 0;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:700;cursor:pointer;text-align:center;}
 .stk-floor-btn.sel{background:#0d2233;border-color:#2a6a9a;color:#7ac8ff;}
 .stk-stocktake{margin:2px 12px 12px;text-align:center;padding:11px;border:1px dashed var(--line2);border-radius:10px;color:#b9a6ff;font-size:13px;font-weight:700;cursor:pointer;}
+/* 納品→在庫反映 */
+.dr-wrap{padding:14px 16px 90px;overflow-y:auto;height:100%;}
+.dr-slip{border:1px solid var(--line2);border-radius:12px;margin-bottom:16px;overflow:hidden;}
+.dr-slip-h{background:#12202c;color:#7ac6ff;font-weight:800;font-size:15px;padding:11px 14px;border-bottom:1px solid var(--line);}
+.dr-slip-meta{font-size:12px;color:var(--dim);font-weight:600;margin-left:6px;}
+.dr-item{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+.dr-item:last-child{border-bottom:none;}
+.dr-item-l{flex:1;min-width:180px;}
+.dr-nm{font-weight:700;font-size:14px;}
+.dr-vol{font-size:12px;color:var(--dim);font-weight:600;}
+.dr-sub{font-size:12px;color:var(--dim);margin-top:3px;}
+.dr-score{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:800;}
+.dr-score.hi{background:#14331a;color:#8be08b;}
+.dr-score.mid{background:#33280f;color:#e8c072;}
+.dr-score.lo{background:#331616;color:#e08b8b;}
+.dr-item-r{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:250px;}
+.dr-floorlbl{font-size:11px;color:var(--dim);font-weight:700;text-align:right;}
+.dr-floor{display:flex;gap:6px;justify-content:flex-end;}
+.dr-fbtn{flex:1;max-width:80px;padding:8px 0;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);color:var(--dim);font-weight:800;font-size:14px;cursor:pointer;}
+.dr-fbtn.sel{background:#12283a;border-color:#2a6a9a;color:#7ac6ff;}
+.dr-sel{min-width:250px;}
+.dr-score{align-self:flex-end;}
+.dr-new{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.dr-newlbl{font-size:11px;color:#e8c072;font-weight:700;}
+.dr-newbox:empty{display:none;}
+.dr-qtyl{font-size:12px;color:var(--dim);font-weight:700;display:flex;align-items:center;gap:6px;}
+.dr-qty{width:80px;text-align:center;}
+.dr-actions{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 40%);padding:14px 0 4px;}
+.dr-apply{background:#12283a;border-color:#2a6a9a;color:#7ac6ff;}
+/* 伝票管理 */
+.dp-wrap{padding:12px 14px 90px;overflow-y:auto;height:100%;}
+.dp-nav{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.dp-navbtn{padding:8px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);color:var(--sub);font-weight:700;font-size:13px;cursor:pointer;}
+.dp-navbtn.today{margin-left:auto;background:#12283a;border-color:#2a6a9a;color:#7ac6ff;}
+.dp-date{font-size:16px;font-weight:800;color:var(--txt);}
+.dp-sec{margin-bottom:18px;}
+.dp-sec-h{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:800;color:var(--txt);padding:8px 2px;border-bottom:2px solid var(--line2);margin-bottom:8px;}
+.dp-cnt{font-size:11px;color:var(--dim);font-weight:600;margin-left:4px;}
+.dp-total{font-size:14px;color:#f0c66a;font-weight:800;}
+.dp-card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.dp-card-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+.dp-nm{font-weight:800;font-size:15px;color:var(--txt);}
+.dp-amt{font-weight:800;font-size:16px;color:#e8f0ff;white-space:nowrap;}
+.dp-meta{font-size:12px;color:var(--sub);margin-top:4px;line-height:1.4;}
+.dp-card-b{display:flex;align-items:center;gap:8px;margin-top:9px;}
+.dp-img{font-size:12px;color:#7ac6ff;text-decoration:none;border:1px solid #2a5a7a;border-radius:7px;padding:4px 9px;background:#12202c;}
+.dp-acts{margin-left:auto;display:flex;gap:6px;}
+.dp-edit{font-size:12px;font-weight:700;padding:5px 11px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--sub);cursor:pointer;}
+.dp-del{font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid #5a2222;background:#2a1414;color:#e89090;cursor:pointer;}
+.dp-empty{color:var(--dim);font-size:12px;padding:10px 2px;}
+.dp-dgroup{border:1px solid var(--line2);border-radius:10px;margin-bottom:10px;overflow:hidden;}
+.dp-dhead{background:#12202c;color:#7ac6ff;font-weight:800;font-size:13px;padding:9px 11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.dp-dsub{font-size:11px;color:var(--dim);font-weight:600;}
+.dp-dline{display:flex;align-items:center;gap:8px;padding:8px 11px;border-top:1px solid var(--line);}
+.dp-dline-l{flex:1;min-width:0;}
+.dp-dnm{font-weight:700;font-size:13px;}
+.dp-dqty{font-size:12px;color:var(--sub);}
+.dp-refl{font-size:10px;color:#7fe0a3;margin-left:6px;font-weight:700;}
+.dp-damt{font-weight:800;font-size:14px;white-space:nowrap;}
+.dp-flabel{font-size:12px;color:var(--sub);font-weight:700;margin:12px 0 5px;}
+.dp-editform{padding:4px 2px;}
 .stk-main{flex:1;display:flex;flex-direction:column;min-width:0;}
 .stk-toolbar{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;flex-wrap:wrap;}
 .stk-toolbar .finput{flex:1;min-width:200px;}
@@ -516,6 +587,7 @@ body{display:flex;flex-direction:column;height:100vh;}
 .cbd.exp{background:#2a0e0e;color:#ff9a9a;border-color:#7a2828;}
 .cbd.soon{background:#241a00;color:#ffcf6a;border-color:#6a5000;}
 .cbd.okr{background:#0d2618;color:#79e0a8;border-color:#2a6a44;}
+.cbd.unmember{background:#20242e;color:#aab4c4;border-color:#3a4150;}
 .cc-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .cbd{font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;background:#191930;color:#a9bce0;border:1px solid var(--line2);}
 .cbd.bottle{background:#101d0c;color:#8fd06a;border-color:#2f5020;}
@@ -765,8 +837,7 @@ function buildTimeline(){
   RSV.forEach(function(r){if(r.status==='確定'&&r.table!=='未定'&&rsvLateMin(r)<30)t.push({g:3,kind:'preview',ic:'📅',time:rsvArrT(r),min:tmin(rsvArrT(r)),title:r.cust+'様 来店予定',sub:r.pax+'名 '+r.table,act:'editRsv('+r.id+')'});});
   // 予告：キャスト早上がり（実シフトデータ由来）
   SHIFT.forEach(function(s){if(s.hayaagari)t.push({g:3,kind:'preview-cast',ic:'🚪',time:s.hayaagari,min:tmin(s.hayaagari),title:s.name+' 早上がり',sub:'担当の引き継ぎ準備を',act:'switchRight(\'shift\')'});});
-  // 予告：送り予定（実シフト/送迎ログ由来）
-  SHIFT.forEach(function(s){if(s.okuri)t.push({g:3,kind:'preview-task',ic:'🚗',time:s.out,min:tmin(s.out)+1,title:s.name+' 送り',sub:(s.okuriMode||'ドライバー'),act:'switchRight(\'shift\')'});});
+  // 予告：送り予定チケットは撤去（送り管理ボード/LINE送りサマリで十分・要対応キューの水増し防止 2026-07-08）
   t.sort(function(a,b){return a.g!==b.g?a.g-b.g:(a.min||0)-(b.min||0);});
   return t;
 }
@@ -1082,9 +1153,13 @@ function rcardHtml(r,isNext){
   if(r.tantou) badges+='<span class="rb t">担当 '+esc(r.tantou)+'</span>';
   if(r.dohan) badges+='<span class="rb d">同伴 '+esc(r.dohan)+'</span>';
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
+  var ms=membershipInfo(r.joined,r.feeDate);
+  var mchip=ms.status==='expired'?'<span class="rmemchip exp">🔴更新切れ</span>':ms.status==='thismonth'?'<span class="rmemchip soon">🟡今月更新</span>':ms.status==='ok'?'<span class="rmemchip ok">🟢有効会員</span>':ms.status==='none'?'<span class="rmemchip none">未会員</span>':'';
   return '<div class="rcard'+(done?' done':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
-    +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+statusBtns(r)+'</div>'
-    +'<div class="rbadges">'+badges+'</div>'+(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
+    +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+mchip+statusBtns(r)+'</div>'
+    +'<div class="rbadges">'+badges+'</div>'
+    +(r.nextMemo?'<div class="rnextmemo">📌 次回対応: '+esc(r.nextMemo)+'</div>':'')
+    +(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
 }
 var UNDO_WINDOW_MS=10*60*1000; /* 来店から10分以内のみ来店前に戻せる */
 function canUndoCheckin(r){ return !r.checkInAt || (Date.now()-r.checkInAt)<UNDO_WINDOW_MS; }
@@ -1183,12 +1258,41 @@ function openSeat(idx){
       +(s.dohan?'<div class="kv"><span class="k">同伴</span><span class="v">'+esc(s.dohan)+'</span></div>':'')
       +'<div class="kv"><span class="k">状態</span><span class="v">'+stLabel+'</span></div>'
       +((s.tags||[]).length?'<div class="kv"><span class="k">タグ</span><span class="v">'+s.tags.map(function(t){return TAGLABEL[t];}).join(' / ')+'</span></div>':'')
-      +'<div style="font-size:11px;color:#8a9ac0;margin:14px 0 4px;font-weight:700">担当キャストと残り時間</div>'
-      +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast"><span style="font-weight:700">'+esc(c.n)+'</span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span></div>';}).join('')
+      +'<div style="font-size:11px;color:#8a9ac0;margin:14px 0 4px;font-weight:700">担当キャストと残り時間 <span style="color:#6a7a9a;font-weight:600">（タップで延長・抜く）</span></div>'
+      +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast" onclick="castAction('+idx+',\''+jsStr(c.n)+'\')" style="cursor:pointer"><span style="font-weight:700">'+esc(c.n)+'</span><span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span><span style="color:#5a6a8a;font-size:15px;margin-left:8px">›</span></span></div>';}).join('')
       +rotPickerHtml(idx)
       +'<div class="actions"><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }
   showSheet(title,body,false);
+}
+
+/* 席詳細でキャストをタップ → 延長 / 抜く を選択 */
+function castAction(idx,castName){
+  var s=SEATS[idx]; if(!s)return;
+  var c=(s.casts||[]).find(function(x){return x.n===castName;});
+  var remain=c?(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分'):'';
+  var body='<div style="text-align:center;margin:2px 0 4px"><div style="font-size:20px;font-weight:800;color:var(--txt)">'+esc(castName)+'</div><div style="color:var(--sub);font-size:13px;margin-top:4px">'+esc(shortNm(s.name))+(remain?'　/　'+remain:'')+'</div></div>'
+    +'<div style="font-size:12px;color:#8a9ac0;margin:18px 0 6px;font-weight:700">⏳ 延長する（現状に加算）</div>'
+    +'<div class="chips">'+[15,30].map(function(m){return '<div class="chip" style="border-color:#2a6a44;color:#8fe0b0" onclick="extendCast('+idx+',\''+jsStr(castName)+'\','+m+')">＋'+m+'分</div>';}).join('')+'</div>'
+    +'<div class="actions" style="margin-top:20px"><div class="act dng" onclick="removeCast('+idx+',\''+jsStr(castName)+'\')">🚪 この席から抜く</div><div class="act" onclick="openSeat('+idx+')">← 戻る</div></div>';
+  showSheet('キャスト操作',body,false);
+}
+function extendCast(idx,castName,mins){
+  var s=SEATS[idx]; if(!s)return;
+  var c=(s.casts||[]).find(function(x){return x.n===castName;});
+  if(c){ c.mins=(c.mins||0)+mins; c.status=(c.mins<0?'over':c.mins<=5?'warn':'ok'); }
+  renderAll();
+  toast('⏳ '+castName+' を +'+mins+'分 延長しました'+(c?'（残り '+c.mins+'分）':''));
+  openSeat(idx); // 席詳細に戻す（延長後の残り時間が見える）
+  if(IS_GAS) gsr('kioskExtendAtendouAtSeat',s.code,castName,mins).then(function(res){ if(res&&res.ok===false){toast('延長できませんでした: '+(res.error||'')); } loadAll(); }).catch(function(e){toast('延長エラー: '+((e&&e.message)||e));loadAll();});
+}
+function removeCast(idx,castName){
+  if(!confirm(castName+' さんをこの席から抜きますか？'))return;
+  var s=SEATS[idx]; if(!s)return;
+  s.casts=(s.casts||[]).filter(function(x){return x.n!==castName;});
+  renderAll();
+  if(IS_GAS) gsr('kioskEndAtendouAtSeat',s.code,castName).then(function(res){ if(res&&res.ok===false)toast('抜けませんでした: '+(res.error||'対象が見つかりません')); else toast('🚪 '+castName+' を抜きました'); loadAll(); openSeat(idx); }).catch(function(e){toast('抜くエラー: '+((e&&e.message)||e));loadAll();});
+  else { toast('🚪 '+castName+' を抜きました'); openSeat(idx); }
 }
 
 /* ============ 📋 予定キャスト（開店前の付け回し予定） ============ */
@@ -1282,7 +1386,7 @@ function ssSearch(){
 function ssResultsHtml(list){
   if(!list.length) return '<div class="empty-msg" style="padding:14px;font-size:12px">見つかりませんでした。<br>「新規（飛び込み）」でも登録できます。</div>';
   return list.map(function(c){
-    var rs=renewStatus(c.feeDate); var rb=rs==='expired'?'<span class="cbd exp">🔴更新切れ</span>':rs==='soon'?'<span class="cbd soon">🟡まもなく</span>':'';
+    var rs=renewStatus(c.feeDate); var rb=rs==='expired'?'<span class="cbd exp">🔴更新切れ</span>':rs==='thismonth'?'<span class="cbd soon">🟡今月更新</span>':rs==='ok'?'<span class="cbd okr">🟢有効会員</span>':rs==='none'?'<span class="cbd unmember">未会員</span>':'';
     var ex=(c.bottle?'🍶'+esc(c.bottle)+'　':'')+(c.tantou?'担当 '+esc(c.tantou):'');
     return '<div class="af-res" onclick="ssPickCust(\''+jsStr(c.name)+'\',\''+jsStr(c.member||'')+'\',\''+jsStr(c.tantou||'')+'\')"><div class="af-res-top"><span class="cc-nm">'+esc(c.name)+' 様</span> <span class="cc-mem">'+esc(c.member||'—')+'</span> '+rb+'</div>'+(ex?'<div class="cc-meta">'+ex+'</div>':'')+'</div>';
   }).join('');
@@ -1393,7 +1497,7 @@ function afCustResultsHtml(list){
   if(!list.length) return '<div class="empty-msg" style="padding:14px;font-size:12px">見つかりませんでした。<br>「新規のお客様として登録」もできます。</div>';
   return list.map(function(c){
     var rs=renewStatus(c.feeDate);
-    var rb=rs==='expired'?'<span class="cbd exp">🔴更新切れ</span>':rs==='soon'?'<span class="cbd soon">🟡まもなく</span>':'';
+    var rb=rs==='expired'?'<span class="cbd exp">🔴更新切れ</span>':rs==='thismonth'?'<span class="cbd soon">🟡今月更新</span>':rs==='ok'?'<span class="cbd okr">🟢有効会員</span>':rs==='none'?'<span class="cbd unmember">未会員</span>':'';
     if(isNoLine(c)) rb+='<span class="cbd noline">📵LINE未登録</span>';
     var ex=(c.bottle?'🍶'+esc(c.bottle)+'　':'')+(c.tantou?'担当 '+esc(c.tantou):'');
     return '<div class="af-res" onclick="afPickCust(\''+jsStr(c.name)+'\',\''+jsStr(c.member||'')+'\',\''+jsStr(c.tantou||'')+'\')"><div class="af-res-top"><span class="cc-nm">'+esc(c.name)+' 様</span> <span class="cc-mem">'+esc(c.member||'—')+'</span> '+rb+'</div>'+(ex?'<div class="cc-meta">'+ex+'</div>':'')+'</div>';
@@ -1471,32 +1575,35 @@ var CUSTOMERS=[
 ];
 function renewStatus(fd){
   if(!fd) return 'none';
-  var p=String(fd).split(/[\/\-]/); if(p.length<2)return 'none';
-  var due=parseInt(p[0])*12+parseInt(p[1])+12;
-  var n=new Date(); var today=n.getFullYear()*12+(n.getMonth()+1);
-  if(due<today) return 'expired';
-  if(due-today<=2) return 'soon';
+  var p=String(fd).split(/[\/\-\.]/); if(p.length<2)return 'none';
+  var fy=parseInt(p[0]), fm=parseInt(p[1]); if(!(fy>1900&&fm>=1))return 'none';
+  var n=new Date();
+  var ms=(n.getFullYear()*12+(n.getMonth()+1))-(fy*12+fm); // 前回更新からの経過月数
+  if(ms>=13) return 'expired';   // 13か月以上 → 会員更新切れ
+  if(ms>=12) return 'thismonth'; // 12か月ちょうど（更新月） → 今月更新
   return 'ok';
 }
-// 会員情報の算出（前バージョン踏襲）: ◯年目 / 会員期限(会費受領日+1年) / 会員切れアラート
+// 会員情報の算出（月単位）: ◯年目 / 会員期限(前回更新+1年) / ステータス
+//  前回更新からの経過月数で判定: 12か月ちょうど(＝更新月)=🟡今月更新 / 13か月以上=🔴会員更新切れ / それ未満=🟢有効
 function membershipInfo(joined, feeDate){
-  var info={yearLabel:'', renewalStr:'', status:'none', daysLeft:null, statusLabel:''};
+  var info={yearLabel:'', renewalStr:'', status:'none', monthsSince:null, statusLabel:'', shortLabel:''};
   if(joined){ var jy=parseInt(String(joined).split(/[\/\-\.]/)[0]); if(jy>1900){ var y=(new Date()).getFullYear()-jy+1; if(y>=1) info.yearLabel=y+'年目'; } }
   if(feeDate){
     var p=String(feeDate).split(/[\/\-\.]/);
     if(p.length>=2){
-      var ry=parseInt(p[0]), rm=parseInt(p[1]), rd=parseInt(p[2]||'1')||1;
+      var ry=parseInt(p[0]), rm=parseInt(p[1]);
       if(ry>1900&&rm>=1){
-        var renewal=new Date(ry+1, rm-1, rd);
-        var today=new Date(); today.setHours(0,0,0,0);
-        var dl=Math.ceil((renewal-today)/86400000);
-        info.daysLeft=dl; info.renewalStr=renewal.getFullYear()+'/'+(renewal.getMonth()+1)+'/'+renewal.getDate();
-        if(dl<0){ info.status='expired'; info.statusLabel='🔴 会員切れ（期限を'+(-dl)+'日超過）'; }
-        else if(dl<=30){ info.status='soon'; info.statusLabel='🟡 まもなく更新（あと'+dl+'日）'; }
-        else { info.status='ok'; info.statusLabel='🟢 有効（あと'+dl+'日）'; }
+        var today=new Date();
+        var ms=(today.getFullYear()*12+(today.getMonth()+1))-(ry*12+rm); // 経過月数
+        info.monthsSince=ms;
+        info.renewalStr=(ry+1)+'/'+rm; // 更新期限（前回更新+1年）
+        if(ms>=13){ info.status='expired'; info.statusLabel='🔴 会員更新切れ'; info.shortLabel='更新切れ'; }
+        else if(ms>=12){ info.status='thismonth'; info.statusLabel='🟡 今月更新'; info.shortLabel='今月更新'; }
+        else { info.status='ok'; info.statusLabel='🟢 有効会員'; info.shortLabel='有効会員'; }
       }
     }
   }
+  if(info.status==='none'){ info.statusLabel='⚪ 未会員'; info.shortLabel='未会員'; } // 会費・登録日なし＝未会員
   return info;
 }
 var NO_LINE_MEMBERS={'No.204':1,'No.156':1,'No.077':1,'No.410':1,'No.088':1};
@@ -1514,6 +1621,7 @@ var MENU_TILES=[
   {group:'管理', items:[
     {ic:'👤', t:'顧客管理',           act:"menuCustomer()"},
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
+    {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
     {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
     {ic:'🍽', t:'POS',               act:"alert('（プロト）POSへ')"}
@@ -1577,7 +1685,7 @@ function custResultsHtml(list){
   return list.map(function(c,ci){
     var mi=membershipInfo(c.joined,c.feeDate), rs=mi.status;
     var rb=(mi.yearLabel?'<span class="cbd">'+mi.yearLabel+'</span>':'')
-      +(rs==='expired'?'<span class="cbd exp">🔴 会員切れ</span>':rs==='soon'?'<span class="cbd soon">🟡 まもなく('+mi.daysLeft+'日)</span>':rs==='ok'?'<span class="cbd okr">🟢 有効</span>':'<span class="cbd">更新日なし</span>');
+      +(rs==='expired'?'<span class="cbd exp">🔴 会員更新切れ</span>':rs==='thismonth'?'<span class="cbd soon">🟡 今月更新</span>':rs==='ok'?'<span class="cbd okr">🟢 有効会員</span>':'<span class="cbd unmember">未会員</span>');
     if(isNoLine(c)) rb+='<span class="cbd noline">📵 公式LINE未登録</span>';
     var b='';
     if(c.bottle) b+='<span class="cbd bottle">🍶'+esc(c.bottle)+(c.bottlePos?' '+esc(c.bottlePos):'')+'</span>';
@@ -1598,29 +1706,52 @@ function openCustDetail(i){
   var mi=membershipInfo(c.joined, c.feeDate);
   var lineTxt=c.lineRegistered===false?'📵 未登録':(c.lineRegistered===true?'✅ 登録済み':'');
   var lineChip=lineTxt?'<span style="font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:4px 10px">公式LINE '+lineTxt+'</span>':'';
-  var mbBorder=mi.status==='expired'?'#7a2020':mi.status==='soon'?'#6a5000':'var(--line)';
+  var mbBorder=mi.status==='expired'?'#7a2020':mi.status==='thismonth'?'#6a5000':'var(--line)';
   var memBox=(c.joined||c.feeDate)?('<div style="background:var(--panel2);border:1px solid '+mbBorder+';border-radius:12px;padding:12px 14px;margin:4px 0 14px">'
     +'<div style="font-size:12px;color:var(--dim);margin-bottom:7px">💳 会員ステータス</div>'
     +(c.joined?'<div style="font-size:14px;margin-bottom:3px">入会日　<b>'+esc(c.joined)+'</b>'+(mi.yearLabel?' <span style="color:var(--accent)">（'+mi.yearLabel+'）</span>':'')+'</div>':'')
     +(c.feeDate?'<div style="font-size:14px;margin-bottom:3px">会費受領　<b>'+esc(c.feeDate)+'</b></div>':'')
     +(mi.renewalStr?'<div style="font-size:14px;margin-bottom:3px">会員期限　<b>'+esc(mi.renewalStr)+'</b></div>':'')
     +(mi.statusLabel?'<div style="font-size:15px;font-weight:800;margin-top:6px">'+mi.statusLabel+'</div>':'')
-    +'</div>'):'';
+    +'</div>'):'<div style="display:inline-block;background:#20242e;border:1px solid #3a4150;color:#aab4c4;border-radius:12px;padding:8px 14px;margin:4px 0 14px;font-weight:800">⚪ 未会員</div>';
   var head='<div style="padding:6px 4px">'
     +'<div style="font-size:22px;font-weight:800;color:var(--txt);margin-bottom:2px">'+esc(c.name)+' 様</div>'
     +'<div style="font-size:13px;color:var(--dim);margin-bottom:10px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+(lineChip?'　'+lineChip:'')+'</div>'
     +memBox
+    +'<div id="cust-nextmemo"></div>'
     +'<div id="cust-detail-body"><div class="empty-msg" style="padding:14px 0;font-size:13px">読み込み中...</div></div>'
     +'</div>';
   var back='<span class="menu-back" onclick="renderMenu()">← 検索に戻る</span>';
   var mb=document.getElementById('menu-body'); if(mb) mb.innerHTML=back+head;
+  custDetailCur=c;
+  renderNextMemo('');
   if(IS_GAS){
     gsr('kioskGetCustomerDetail', c.member, c.name).then(function(d){
       renderCustDetailFields((d&&d.ok&&d.fields&&d.fields.length)?d.fields:custFieldsFrom(c));
+      renderNextMemo((d&&d.ok)?(d.nextMemo||''):'');
     }).catch(function(){ renderCustDetailFields(custFieldsFrom(c)); });
   }else{
     renderCustDetailFields(custFieldsFrom(c));
   }
+}
+var custDetailCur=null;
+function renderNextMemo(memo){
+  var el=document.getElementById('cust-nextmemo'); if(!el)return;
+  el.innerHTML='<div class="nmemo-box"><div class="nmemo-h">📌 次回対応メモ <span class="nmemo-sub">謝ること・伝えること・話すこと など</span></div>'
+    +'<textarea id="nmemo-input" class="finput" rows="3" style="resize:none" placeholder="例：前回ボトルが用意できずお詫び／新しい担当を紹介／お子様のご入学おめでとうを伝える">'+esc(memo||'')+'</textarea>'
+    +'<button class="nmemo-save" onclick="saveNextMemo()">💾 メモを保存</button></div>';
+}
+function saveNextMemo(){
+  var c=custDetailCur; if(!c){alert('お客様が特定できません');return;}
+  var memo=((document.getElementById('nmemo-input')||{}).value||'');
+  var btn=document.querySelector('.nmemo-save'); if(btn){btn.disabled=true;btn.textContent='保存中...';}
+  if(IS_GAS){
+    gsr('kioskSaveNextVisitMemo',c.member||'',c.name||'',memo).then(function(res){
+      if(res&&res.ok){ toast('📌 次回対応メモを保存しました'); c.nextMemo=memo; }
+      else { alert('保存エラー: '+((res&&res.error)||'')); }
+      if(btn){btn.disabled=false;btn.textContent='💾 メモを保存';}
+    }).catch(function(e){ alert('保存エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 メモを保存';} });
+  }else{ toast('📌 保存（ローカル）'); if(btn){btn.disabled=false;btn.textContent='💾 メモを保存';} }
 }
 // 検索結果オブジェクトからの基本フィールド（ローカル/フォールバック用）
 function custFieldsFrom(c){
@@ -1854,6 +1985,7 @@ function renderStock(){
   // 左サイドバー: カテゴリ + フロア + 棚卸し
   var nav='<div class="stk-side"><div class="stk-side-sec">カテゴリ</div><div class="stk-nav">'+STOCK_CATS.map(function(c){var low=stkLowCount(c);return '<button class="stk-nav-btn'+(c===st.category?' sel':'')+'" onclick="stkCat(\''+c+'\')"><span>'+esc(c)+'</span><span class="cnt">'+(low?'<span style=color:#ff8a8a>在庫0×'+low+'</span> ':'')+stkCatCount(c)+'品</span></button>';}).join('')+'</div>';
   nav+='<div class="stk-side-sec">フロア</div><div class="stk-floor-row">'+STOCK_FLOORS.map(function(f){return '<button class="stk-floor-btn'+(f===st.floor?' sel':'')+'" onclick="stkFloor(\''+f+'\')">'+esc(f)+'</button>';}).join('')+'</div>';
+  nav+='<div class="stk-stocktake" onclick="openDeliveryReflect()" style="background:#12202c;border-color:#2a5a7a;color:#7ac6ff">🚚 納品を在庫に反映</div>';
   nav+='<div class="stk-stocktake" onclick="openStocktake()">📦 棚卸し</div></div>';
   // メイン
   var main='<div class="stk-main"><div class="stk-toolbar"><input id="stk-search" class="finput" placeholder="🔍 品名で検索（カテゴリ・フロア問わず）" oninput="stkListView()"><span id="stk-count" style="font-size:12px;color:var(--dim);font-weight:700"></span></div><div class="stk-scroll"><div id="stk-list"></div>';
@@ -1931,6 +2063,183 @@ function stkSubmitPurchase(rowIdx){
   gsr('registerStockPurchase',{userId:KIOSK_USER_ID,rowIdx:rowIdx,qty:qty,purchaseDate:pd}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('購入登録に失敗');});
 }
 function openStocktake(){ alert('📦 棚卸しは次のアップデートで対応します'); }
+
+/* ============ 🚚 納品→在庫反映（フロア振り分け＋候補マッチ） ============ */
+var deliveryState=null, drItems={};
+var DR_FLOORS=['5F','2F','共通'];
+function openDeliveryReflect(){
+  showSheet('🚚 納品を在庫に反映','<div class="empty-msg">読み込み中...</div>','full');
+  if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）本番のみ</div>'; return; }
+  gsr('kioskGetPendingDeliveries').then(function(r){ deliveryState=r||{slips:[],stock:[]}; drItems={}; renderDeliveryReflect(); })
+    .catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
+}
+/* 品名の類似マッチ（フロア指定。共通品も候補に含める） */
+function drNorm(s){return String(s||'').normalize('NFKC').toLowerCase().replace(/[\s　・,、。()（）「」【】\-ー_/／\\]/g,'');}
+function drBigrams(s){var a=[];if(s.length<=1){if(s)a.push(s);return a;}for(var i=0;i<s.length-1;i++)a.push(s.substr(i,2));return a;}
+function drSim(a,b){a=drNorm(a);b=drNorm(b);if(!a||!b)return 0;if(a===b)return 1;if(a.indexOf(b)>=0||b.indexOf(a)>=0)return 0.92;var ga=drBigrams(a),gb=drBigrams(b),mb={},hit=0;gb.forEach(function(g){mb[g]=(mb[g]||0)+1;});ga.forEach(function(g){if(mb[g]>0){mb[g]--;hit++;}});return (ga.length+gb.length)?2*hit/(ga.length+gb.length):0;}
+function drPool(floor){var st=(deliveryState&&deliveryState.stock)||[];return st.filter(function(i){return i.floor===floor||i.floor==='共通';});}
+function drBestMatch(name,floor){var best=null,bs=0;drPool(floor).forEach(function(it){var s=drSim(name,it.name);if(s>bs){bs=s;best=it;}});return{item:bs>=0.34?best:null,score:Math.round(bs*100)};}
+function drGuessFloor(name){ // 全フロアで最も近い候補のフロアを初期値に。無ければ5F
+  var st=(deliveryState&&deliveryState.stock)||[],best=null,bs=0;
+  st.forEach(function(it){var s=drSim(name,it.name);if(s>bs){bs=s;best=it;}});
+  return (best&&bs>=0.34&&(best.floor==='5F'||best.floor==='2F'))?best.floor:'5F';
+}
+function drOptions(floor,sel){
+  var o='<option value="0"'+(sel===0?' selected':'')+'>― 反映しない ―</option><option value="-1"'+(sel===-1?' selected':'')+'>➕ 新規マスタ登録（'+floor+'）</option>';
+  o+=drPool(floor).map(function(it){return '<option value="'+it.rowIdx+'"'+(it.rowIdx===sel?' selected':'')+'>'+esc(it.name)+' ['+esc(it.floor)+'] 在庫'+it.qty+'</option>';}).join('');
+  return o;
+}
+function drRight(id){
+  var it=drItems[id];
+  var m=drBestMatch(it.name,it.floor); it.matchRowIdx=m.item?m.item.rowIdx:0;
+  var conf=it.matchRowIdx?('<span class="dr-score '+(m.score>=70?'hi':(m.score>=45?'mid':'lo'))+'">候補一致 '+m.score+'%</span>'):'<span class="dr-score lo">候補なし・要選択</span>';
+  var toggle='<div class="dr-floor">'+DR_FLOORS.map(function(f){return '<button class="dr-fbtn'+(f===it.floor?' sel':'')+'" onclick="drSetFloor('+id+',\''+f+'\')">'+f+'</button>';}).join('')+'</div>';
+  var sel='<select class="finput dr-sel" id="dr-sel-'+id+'" onchange="drSelChange('+id+')">'+drOptions(it.floor,it.matchRowIdx)+'</select>';
+  var newbox='<div class="dr-newbox" id="dr-new-'+id+'"></div>';
+  var qty='<label class="dr-qtyl">加算 <input class="finput dr-qty" id="dr-qty-'+id+'" type="number" value="'+it.qty+'" min="0"></label>';
+  return '<div class="dr-floorlbl">振り分け先フロア</div>'+toggle+conf+sel+newbox+qty;
+}
+function renderDeliveryReflect(){
+  var st=deliveryState,b=document.getElementById('sheetBody'); if(!b)return;
+  if(!st.slips||!st.slips.length){ b.innerHTML='<div class="empty-msg" style="padding:40px 0">未反映の納品はありません 🎉<br><span style="font-size:12px;color:var(--dim)">黒服グループに納品書を送ると、ここに一覧が出ます</span></div>'; return; }
+  var h='<div class="dr-wrap">';
+  st.slips.forEach(function(sl){
+    h+='<div class="dr-slip"><div class="dr-slip-h">🚚 '+esc(sl.supplier||'仕入先不明')+' <span class="dr-slip-meta">伝票 '+esc(sl.slipNo)+(sl.date?' / '+esc(sl.date):'')+' / '+sl.items.length+'品目</span></div>';
+    sl.items.forEach(function(it){
+      var id=it.deliveryRowIdx;
+      if(!drItems[id]) drItems[id]={name:it.name,qty:it.qty,volume:it.volume,floor:drGuessFloor(it.name)};
+      h+='<div class="dr-item"><div class="dr-item-l"><div class="dr-nm">'+esc(it.name)+(it.volume?' <span class="dr-vol">'+esc(it.volume)+'</span>':'')+'</div><div class="dr-sub">納品 '+it.qty+'本</div></div>'
+        +'<div class="dr-item-r" id="dr-r-'+id+'">'+drRight(id)+'</div></div>';
+    });
+    h+='</div>';
+  });
+  h+='<div class="dr-actions"><button class="savebtn dr-apply" onclick="applyDeliveryReflect()">✅ 選択した内容で在庫に反映</button></div></div>';
+  b.innerHTML=h;
+}
+function drSetFloor(id,floor){ if(!drItems[id])return; drItems[id].floor=floor; var el=document.getElementById('dr-r-'+id); if(el)el.innerHTML=drRight(id); }
+function drSelChange(id){
+  var sel=document.getElementById('dr-sel-'+id), box=document.getElementById('dr-new-'+id); if(!sel||!box)return;
+  if(sel.value==='-1') box.innerHTML='<div class="dr-new"><span class="dr-newlbl">新規登録（'+drItems[id].floor+'）カテゴリ:</span><select class="finput" id="dr-nc-'+id+'">'+STOCK_CATS.map(function(c){return '<option'+(c==='ボトル'?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>';
+  else box.innerHTML='';
+}
+function applyDeliveryReflect(){
+  var rows=[];
+  Object.keys(drItems).forEach(function(id){
+    var sel=document.getElementById('dr-sel-'+id); if(!sel)return;
+    var mv=Number(sel.value); if(mv===0)return;
+    var qty=Number((document.getElementById('dr-qty-'+id)||{}).value)||0; if(qty<=0)return;
+    var row={deliveryRowIdx:Number(id),masterRowIdx:mv,qty:qty};
+    if(mv===-1){ row.newCategory=(document.getElementById('dr-nc-'+id)||{}).value||'ボトル'; row.newFloor=drItems[id].floor||'共通'; }
+    rows.push(row);
+  });
+  if(!rows.length){alert('反映する品目を1つ以上選んでください');return;}
+  if(!confirm(rows.length+'品目を在庫に反映します。よろしいですか？'))return;
+  var btn=document.querySelector('.dr-apply'); if(btn){btn.disabled=true;btn.textContent='反映中...';}
+  gsr('kioskApplyDelivery',{rows:rows}).then(function(res){
+    if(res&&res.ok){ alert('✅ '+res.applied+'品目を在庫に反映しました'+(res.created?'（新規登録 '+res.created+'件）':'')); openDeliveryReflect(); }
+    else { alert('エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='✅ 選択した内容で在庫に反映';} }
+  }).catch(function(){ alert('反映に失敗しました'); if(btn){btn.disabled=false;btn.textContent='✅ 選択した内容で在庫に反映';} });
+}
+
+/* ============ 🧾 伝票管理（一覧・修正・削除） ============ */
+var denpyoState=null;
+var DP_SHEET={daily:'日払い記録',receipt:'領収書記録',delivery:'納品記録'};
+var DP_FIELDS={
+  daily:[['受取人','text'],['伝票金額','num'],['現金合計','num'],['但し書き','text'],['伝票日付','text']],
+  receipt:[['発行元','text'],['金額','num'],['但し書き','text'],['伝票日付','text']],
+  delivery:[['商品名','text'],['容量','text'],['本数','num'],['単価','num'],['金額','num']]
+};
+function openDenpyoManager(dateStr){
+  closeMenu();
+  var d=dateStr||(denpyoState&&denpyoState.date)||TODAY;
+  showSheet('🧾 伝票管理','<div class="empty-msg">読み込み中...</div>','full');
+  if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）本番のみ</div>'; return; }
+  gsr('kioskGetDenpyoDay',d).then(function(r){
+    denpyoState=r||{date:d}; denpyoState.date=d;
+    try { renderDenpyo(); } catch(err){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">描画エラー: '+esc((err&&err.message)||err)+'</div>'; }
+  }).catch(function(e){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">通信エラー: '+esc((e&&e.message)||e)+'</div>'; });
+}
+function dpNav(n){ var dt=parseKey(denpyoState.date); dt.setDate(dt.getDate()+n); openDenpyoManager(fmtKey(dt)); }
+function dpV(sec,cells,name){ var i=sec.headers.indexOf(name); return i>=0?(cells[i]==null?'':cells[i]):''; }
+function dpImg(url){ return url?'<a href="'+esc(String(url))+'" target="_blank" class="dp-img">📷 画像</a>':''; }
+function renderDenpyo(){
+  var st=denpyoState,b=document.getElementById('sheetBody'); if(!b)return;
+  var nav='<div class="dp-nav"><button class="dp-navbtn" onclick="dpNav(-1)">◀ 前日</button>'
+    +'<div class="dp-date">'+esc(st.date)+(st.date===TODAY?' <span style="color:#7ac6ff;font-size:11px">(今日)</span>':'')+'</div>'
+    +'<button class="dp-navbtn" onclick="dpNav(1)">翌日 ▶</button><button class="dp-navbtn today" onclick="openDenpyoManager(TODAY)">今日</button></div>';
+  var h='<div class="dp-wrap">'+nav;
+  h+=dpSectionDaily(st.daily||{headers:[],rows:[],total:0});
+  h+=dpSectionReceipt(st.receipt||{headers:[],rows:[],total:0});
+  h+=dpSectionDelivery(st.delivery||{headers:[],rows:[],total:0});
+  h+='</div>';
+  b.innerHTML=h;
+}
+function dpHead(icon,title,count,total){
+  return '<div class="dp-sec-h"><span>'+icon+' '+title+' <span class="dp-cnt">'+count+'件</span></span>'+(total?'<span class="dp-total">計 ¥'+fmtYen(total)+'</span>':'')+'</div>';
+}
+function fmtYen(n){ return String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function dpRowActions(type,rowIdx){ return '<div class="dp-acts"><button class="dp-edit" onclick="editDenpyo(\''+type+'\','+rowIdx+')">✏️ 修正</button><button class="dp-del" onclick="delDenpyo(\''+type+'\','+rowIdx+')">🗑</button></div>'; }
+function dpSectionDaily(sec){
+  var body=sec.rows.length?sec.rows.map(function(r){
+    var c=r.cells, match=dpV(sec,c,'照合');
+    var mcol=match==='一致'?'#7fe0a3':match==='不一致'?'#ff9a9a':'#8a9ac0';
+    return '<div class="dp-card"><div class="dp-card-top"><span class="dp-nm">'+esc(dpV(sec,c,'受取人')||'（受取人不明）')+' 様</span><span class="dp-amt">¥'+fmtYen(dpV(sec,c,'伝票金額'))+'</span></div>'
+      +'<div class="dp-meta">現金 ¥'+fmtYen(dpV(sec,c,'現金合計'))+(match?' <span style="color:'+mcol+';font-weight:800">'+esc(match)+'</span>':'')
+      +(dpV(sec,c,'但し書き')?' ・ '+esc(dpV(sec,c,'但し書き')):'')+(dpV(sec,c,'伝票日付')?' ・ '+esc(dpV(sec,c,'伝票日付')):'')+'</div>'
+      +'<div class="dp-card-b">'+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('daily',r.rowIdx)+'</div></div>';
+  }).join(''):'<div class="dp-empty">この日の日払いはありません</div>';
+  return '<div class="dp-sec">'+dpHead('💴','日払い',sec.rows.length,sec.total)+body+'</div>';
+}
+function dpSectionReceipt(sec){
+  var body=sec.rows.length?sec.rows.map(function(r){
+    var c=r.cells;
+    return '<div class="dp-card"><div class="dp-card-top"><span class="dp-nm">'+esc(dpV(sec,c,'発行元')||'（発行元不明）')+'</span><span class="dp-amt">¥'+fmtYen(dpV(sec,c,'金額'))+'</span></div>'
+      +'<div class="dp-meta">'+(dpV(sec,c,'但し書き')?esc(dpV(sec,c,'但し書き')):'')+(dpV(sec,c,'伝票日付')?' ・ '+esc(dpV(sec,c,'伝票日付')):'')+'</div>'
+      +'<div class="dp-card-b">'+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('receipt',r.rowIdx)+'</div></div>';
+  }).join(''):'<div class="dp-empty">この日の領収書はありません</div>';
+  return '<div class="dp-sec">'+dpHead('🧾','領収書',sec.rows.length,sec.total)+body+'</div>';
+}
+function dpSectionDelivery(sec){
+  // 伝票No＋仕入先でグループ化
+  var groups={},order=[];
+  sec.rows.forEach(function(r){ var c=r.cells; var key=(dpV(sec,c,'仕入先'))+'|'+(dpV(sec,c,'伝票No')); if(!groups[key]){groups[key]={supplier:dpV(sec,c,'仕入先'),slip:dpV(sec,c,'伝票No'),date:dpV(sec,c,'伝票日付'),img:dpV(sec,c,'画像リンク'),rows:[]};order.push(key);} groups[key].rows.push(r); });
+  var body=order.length?order.map(function(k){ var g=groups[k];
+    var lines=g.rows.map(function(r){ var c=r.cells; var refl=dpV(sec,c,'在庫反映');
+      return '<div class="dp-dline"><div class="dp-dline-l"><span class="dp-dnm">'+esc(dpV(sec,c,'商品名'))+'</span> <span class="dp-dqty">×'+esc(dpV(sec,c,'本数'))+'</span>'+(refl?'<span class="dp-refl">✓在庫反映済</span>':'')+'</div><span class="dp-damt">¥'+fmtYen(dpV(sec,c,'金額'))+'</span>'+dpRowActions('delivery',r.rowIdx)+'</div>';
+    }).join('');
+    return '<div class="dp-dgroup"><div class="dp-dhead">🚚 '+esc(g.supplier||'仕入先不明')+' <span class="dp-dsub">伝票'+esc(g.slip)+(g.date?' / '+esc(g.date):'')+'</span>'+dpImg(g.img)+'</div>'+lines+'</div>';
+  }).join(''):'<div class="dp-empty">この日の納品はありません</div>';
+  return '<div class="dp-sec">'+dpHead('📦','納品',sec.rows.length,sec.total)+body+'</div>';
+}
+var dpEdit=null;
+function editDenpyo(type,rowIdx){
+  var sec=denpyoState[type]; if(!sec)return;
+  var row=sec.rows.find(function(r){return r.rowIdx===rowIdx;}); if(!row)return;
+  dpEdit={type:type,rowIdx:rowIdx};
+  var fields=DP_FIELDS[type]||[];
+  var form=fields.map(function(f){ var name=f[0],kind=f[1]; var v=dpV(sec,row.cells,name);
+    return '<div class="dp-flabel">'+esc(name)+'</div><input id="dpf-'+name+'" class="finput" type="'+(kind==='num'?'number':'text')+'" value="'+esc(String(v))+'">';
+  }).join('');
+  var body='<div class="dp-editform">'+form+'<div class="actions" style="margin-top:16px"><div class="act pri" onclick="saveDenpyoEdit()">💾 保存</div><div class="act" onclick="openDenpyoManager()">← 戻る</div></div></div>';
+  showSheet('✏️ 伝票を修正',body,false);
+}
+function saveDenpyoEdit(){
+  if(!dpEdit)return;
+  var fields=DP_FIELDS[dpEdit.type]||[]; var patch={};
+  fields.forEach(function(f){ var el=document.getElementById('dpf-'+f[0]); if(el)patch[f[0]]=el.value; });
+  var btn=document.querySelector('.dp-editform .act.pri'); if(btn){btn.style.pointerEvents='none';btn.textContent='保存中...';}
+  gsr('kioskUpdateDenpyo',DP_SHEET[dpEdit.type],dpEdit.rowIdx,patch).then(function(res){
+    if(res&&res.ok){ toast('✅ 修正しました'); openDenpyoManager(); }
+    else { alert('保存エラー: '+((res&&res.error)||'')); if(btn){btn.style.pointerEvents='';btn.textContent='💾 保存';} }
+  }).catch(function(e){ alert('保存エラー: '+((e&&e.message)||e)); if(btn){btn.style.pointerEvents='';btn.textContent='💾 保存';} });
+}
+function delDenpyo(type,rowIdx){
+  if(!confirm('この伝票行を削除しますか？（元に戻せません）'))return;
+  gsr('kioskDeleteDenpyo',DP_SHEET[type],rowIdx).then(function(res){
+    if(res&&res.ok){ toast('🗑 削除しました'); openDenpyoManager(); }
+    else { alert('削除エラー: '+((res&&res.error)||'')); }
+  }).catch(function(e){ alert('削除エラー: '+((e&&e.message)||e)); });
+}
 
 /* ============ 🚗 送り管理 ============ */
 var okuriState=null;
@@ -2043,7 +2352,7 @@ function adaptHall(data){
   Object.keys(comb).forEach(function(pc){var pi=byCode[pc]; if(pi==null)return; (comb[pc]||[]).forEach(function(oc){var oi=byCode[oc]; if(oi==null)return; (arr[pi].mergeWith=arr[pi].mergeWith||[]).push(oi); arr[oi].mergedTo=pi;});});
   return arr;
 }
-function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null};});}
+function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||''};});}
 // 同じお客様の予約が複数テーブルに跨る場合、その席同士を1組(結合表示)にまとめる。
 // 手動結合が既にある席は尊重してスキップ。キャンセル/退店済み・未定は対象外。
 function applyRsvGrouping(){

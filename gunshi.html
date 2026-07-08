@@ -866,8 +866,7 @@ function buildTimeline(){
   RSV.forEach(function(r){if(r.status==='確定'&&r.table!=='未定'&&rsvLateMin(r)<30)t.push({g:3,kind:'preview',ic:'📅',time:rsvArrT(r),min:tmin(rsvArrT(r)),title:r.cust+'様 来店予定',sub:r.pax+'名 '+r.table,act:'editRsv('+r.id+')'});});
   // 予告：キャスト早上がり（実シフトデータ由来）
   SHIFT.forEach(function(s){if(s.hayaagari)t.push({g:3,kind:'preview-cast',ic:'🚪',time:s.hayaagari,min:tmin(s.hayaagari),title:s.name+' 早上がり',sub:'担当の引き継ぎ準備を',act:'switchRight(\'shift\')'});});
-  // 予告：送り予定（実シフト/送迎ログ由来）
-  SHIFT.forEach(function(s){if(s.okuri)t.push({g:3,kind:'preview-task',ic:'🚗',time:s.out,min:tmin(s.out)+1,title:s.name+' 送り',sub:(s.okuriMode||'ドライバー'),act:'switchRight(\'shift\')'});});
+  // 予告：送り予定チケットは撤去（送り管理ボード/LINE送りサマリで十分・要対応キューの水増し防止 2026-07-08）
   t.sort(function(a,b){return a.g!==b.g?a.g-b.g:(a.min||0)-(b.min||0);});
   return t;
 }
