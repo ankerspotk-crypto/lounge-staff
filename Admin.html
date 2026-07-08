@@ -298,10 +298,14 @@ function drawShift(){
   }).join(''):'<div class="empty" style="padding:18px">承認待ちのリクエストはありません</div>';
 
   var H=shiftMgmt.headers||[], R=(shiftMgmt.rows||[]).filter(function(row){return shiftRoleMatch(row.role);});
-  // 属性でグループ化して、キャスト→体験→派遣→黒服→その他 の順。各グループ内は勤務日数(休み以外・申請中含む)が多い順。黒服がキャストの間に入らないようにする
-  function _scnt(row){ var c=0; H.forEach(function(d){ var v=row.cells&&row.cells[d]; if(v&&v!=='休み')c++; else if(row.pending&&row.pending[d])c++; }); return c; }
+  // 並び順: ①当日(参照日=先頭列)に出勤の人 → ②翌日以降にシフトが入ってる人 → ③シフト無し。各段の中で 役割順(キャスト→体験→派遣→黒服)→勤務日数が多い順→氏名
+  function _hasShift(row,day){ var v=row.cells&&row.cells[day]; if(v&&v!=='休み')return true; if(row.pending&&row.pending[day])return true; return false; }
+  function _scnt(row){ var c=0; H.forEach(function(d){ if(_hasShift(row,d))c++; }); return c; }
   function _roleRank(role){ role=String(role||''); if(role==='キャスト')return 0; if(role==='体験')return 1; if(role==='派遣')return 2; if(role.indexOf('黒服')>=0)return 3; return 4; }
-  R.sort(function(a,b){ return _roleRank(a.role)-_roleRank(b.role) || _scnt(b)-_scnt(a) || String(a.name).localeCompare(String(b.name)); });
+  var _todayStr=(function(){var d=new Date();if(d.getHours()<6)d.setDate(d.getDate()-1);return (d.getMonth()+1)+'/'+d.getDate();})();
+  var _todayKey=(H.indexOf(_todayStr)>=0)?_todayStr:(H[0]||''); // 当日列（無ければ先頭＝最も手前の日）
+  function _tier(row){ if(_todayKey&&_hasShift(row,_todayKey))return 0; return _scnt(row)>0?1:2; }
+  R.sort(function(a,b){ return _tier(a)-_tier(b) || _roleRank(a.role)-_roleRank(b.role) || _scnt(b)-_scnt(a) || String(a.name).localeCompare(String(b.name)); });
   var RFILT=['all','キャスト','黒服','派遣','体験'];
   var rchips=RFILT.map(function(f){return '<div class="chip'+(shiftRoleFilter===f?' on':'')+'" onclick="setShiftRole(\''+f+'\')">'+(f==='all'?'全て':f)+'</div>';}).join('');
   var thead='<tr><th style="text-align:left">名前</th><th>属性</th>'+H.map(function(d){return '<th>'+esc(d)+'</th>';}).join('')+'</tr>';
