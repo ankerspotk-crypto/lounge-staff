@@ -778,6 +778,7 @@ function renderHome(){
     setContent(homeCallCard()
       + '<div class="card" style="text-align:center;color:#8aabcc;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>'
       + homeMenu());
+    homeWorking = true; applyWorkingGate();
     loadMySeat();
     return;
   }
@@ -843,6 +844,9 @@ function renderHome(){
     // --- メニュー（全機能ボタン） ---
     + homeMenu();
   setContent(html);
+
+  // 本日シフトに入っているかで呼び出しボタンを即ゲート（非同期のgetCastSeats完了を待たない＝タイムアウトでも押せない）
+  homeWorking = homeOnShift(); applyWorkingGate();
 
   // --- 現在の席（軍師の付け回しとリンク）を取得 ---
   loadMySeat();
@@ -923,21 +927,25 @@ function renderHomeRsv(list){
 }
 
 // 現在の席（軍師の付け回しデータとリンク）
-var homeMySeats = [], homeSelSeat = '', homeWorking = true;
+var homeMySeats = [], homeSelSeat = '', homeWorking = false;
+// 本日シフトに入っているか（todayArrivalは本日出勤予定があるときだけ入る）。管理者は常に可
+function homeOnShift(){ return !!(isAdmin || (portalData && portalData.todayArrival)); }
 function loadMySeat(){
   gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'getCastSeats', userId: userId }) })
     .then(function(r){ return r.json(); })
-    .then(function(d){ homeMySeats = (d && d.seats) || []; homeWorking = !(d && d.working === false); renderMySeat(); applyWorkingGate(); })
+    // シフト判定を基本にしつつ、打刻済み(working===true)なら開放。取得失敗しても描画時のゲートは維持
+    .then(function(d){ homeMySeats = (d && d.seats) || []; homeWorking = homeOnShift() || (d && d.working === true); renderMySeat(); applyWorkingGate(); })
     .catch(function(){ var el = document.getElementById('home-myseat'); if (el) el.textContent = '現在の席：取得できませんでした'; });
 }
-// 本日出勤していない人は呼び出しボタンを無効化（バックエンドでも拒否）
+// 本日シフトに入っていない人は呼び出しボタンを無効化（バックエンドでも拒否）
 function applyWorkingGate(){
   var box = document.getElementById('home-callbtns');
   if (!box) return;
-  box.style.opacity = homeWorking ? '' : '.4';
+  box.style.opacity = homeWorking ? '' : '.35';
   box.style.pointerEvents = homeWorking ? '' : 'none';
+  box.style.filter = homeWorking ? '' : 'grayscale(1)';
   var seat = document.getElementById('home-myseat');
-  if (!homeWorking && seat) seat.innerHTML = '<span style="color:#c8925a">本日出勤のスタッフのみ呼び出しできます</span>';
+  if (!homeWorking && seat) seat.innerHTML = '<span style="color:#c8925a">🔒 本日シフトの方のみ呼び出しできます</span>';
 }
 function renderMySeat(){
   var el = document.getElementById('home-myseat');
@@ -964,7 +972,7 @@ function homePickSeat(label){ homeSelSeat = label; renderMySeat(); }
 
 // キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
 function castCall(kind, btn){
-  if (!homeWorking) { homeToast('本日出勤のスタッフのみ利用できます', false); return; }
+  if (!homeWorking) { homeToast('本日シフトの方のみ利用できます', false); return; }
   var seatMsg = homeSelSeat ? '（' + homeSelSeat + '）' : '（席不明）';
   if (kind === 'help' && !confirm('黒服にヘルプを送りますか？' + seatMsg + '\n（声をかけて一旦抜いてもらいます）')) return;
   if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
