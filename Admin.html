@@ -75,6 +75,11 @@ table.mtx td.cell.pending{background:#2a1f0a;color:#e0b84a;}
 table.mtx td.cell .pd{font-size:9px;background:#8a6d20;color:#fff;border-radius:3px;padding:0 3px;margin-right:2px;vertical-align:middle;}
 table.mtx tr.total-row td{background:#101a2e !important;color:#8fd0ff;font-weight:900;border-bottom:2px solid #2a5aaa;}
 table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
+#scm-wrap .scm-back{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:80;}
+#scm-wrap .scm{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:81;background:#141428;border:1px solid var(--line);border-radius:14px;padding:18px;width:min(340px,92vw);display:flex;flex-direction:column;gap:9px;box-shadow:0 12px 44px rgba(0,0,0,.55);}
+#scm-wrap .scm-t{font-weight:800;font-size:16px;color:#eef;}
+#scm-wrap .scm-sub{font-size:12px;color:var(--sub);margin:-4px 0 4px;}
+#scm-wrap .scm .btn{width:100%;padding:12px;font-size:14px;}
 .mtx-scroll table.mtx{min-width:520px;}
 .mtx-scroll .mtx th{position:sticky;top:0;z-index:1;}
 /* 名前列を左固定（横スクロールしても名前が見える） */
@@ -309,8 +314,10 @@ function drawShift(){
     return '<tr><td class="nm">'+esc(row.name)+'</td><td class="role">'+esc(row.role||'')+'</td>'+H.map(function(d){
       var v=(row.cells&&row.cells[d])||'';
       var p=(!v&&row.pending&&row.pending[d])||'';
+      var pr=(p&&row.pendingRow&&row.pendingRow[d])||0;
       var disp=v?esc(v):(p?'<span class="pd">申</span>'+esc(p):'');
-      return '<td class="cell'+(p?' pending':'')+'" onclick="editCell(\''+jstr(row.name)+'\',\''+jstr(d)+'\')">'+disp+'</td>';
+      var oc=p?('shiftCellMenu('+pr+',\''+jstr(row.name)+'\',\''+jstr(d)+'\',\''+jstr(p)+'\')'):('editCell(\''+jstr(row.name)+'\',\''+jstr(d)+'\')');
+      return '<td class="cell'+(p?' pending':'')+'" onclick="'+oc+'">'+disp+'</td>';
     }).join('')+'</tr>';
   }).join('');
   var dateOpts=H.map(function(d){return '<option value="'+esc(d)+'">'+esc(d)+'</option>';}).join('');
@@ -332,6 +339,30 @@ function editCell(name,date){
   var row=(shiftMgmt.rows||[]).find(function(x){return x.name===name;}); var cur=(row&&row.cells&&row.cells[date])||'';
   var v=prompt(name+' の '+date+'（時刻 / 休み / 空欄で消去）', cur); if(v===null)return;
   api('writeShiftCellPortal',{name:name,date:date,value:v.trim()}).then(function(r){ if(res(r,'更新しました'))renderShift(); });
+}
+/* 申請中セルのアクションメニュー：承諾 / 時間変更で承諾 / 却下 */
+function shiftCellMenu(rowIdx,name,date,time){
+  closeScm();
+  var w=document.createElement('div'); w.id='scm-wrap';
+  w.innerHTML='<div class="scm-back" onclick="closeScm()"></div><div class="scm">'
+    +'<div class="scm-t">'+esc(name)+' ・ '+esc(date)+'</div>'
+    +'<div class="scm-sub">申請中: '+esc(time)+'</div>'
+    +'<button class="btn ok" onclick="scmDo('+rowIdx+',\''+jstr(name)+'\',\''+jstr(date)+'\',\''+jstr(time)+'\',\'承諾\')">✓ 承諾（この時間で確定）</button>'
+    +'<button class="btn pri" onclick="scmChangeTime('+rowIdx+',\''+jstr(name)+'\',\''+jstr(date)+'\',\''+jstr(time)+'\')">🕐 時間を変更して承諾</button>'
+    +'<button class="btn dng" onclick="scmDo('+rowIdx+',\''+jstr(name)+'\',\''+jstr(date)+'\',\''+jstr(time)+'\',\'却下\')">✕ 却下</button>'
+    +'<button class="btn" onclick="closeScm()">キャンセル</button></div>';
+  document.body.appendChild(w);
+}
+function closeScm(){ var e=document.getElementById('scm-wrap'); if(e)e.remove(); }
+function scmDo(rowIdx,name,date,time,decision){
+  closeScm();
+  api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:decision}).then(function(r){ if(res(r,decision+'しました'))renderShift(); });
+}
+function scmChangeTime(rowIdx,name,date,time){
+  var nv=prompt(name+' '+date+' の時間を変更して承諾（例 20:00～24:00）', time);
+  if(nv===null)return; nv=nv.trim(); if(!nv){toast('時間を入力してください',true);return;}
+  closeScm();
+  api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:'承諾',newTime:nv}).then(function(r){ if(res(r,'時間変更で承諾しました'))renderShift(); });
 }
 function addShiftStaff(){
   var name=(document.getElementById('as-name').value||'').trim(); var role=document.getElementById('as-role').value;
@@ -459,7 +490,7 @@ function MOCK(){
 }
 function MOCKAPI(action,body){
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
-  if(action==='getShiftMgmt')return {ok:true,data:{headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'}}]}};
+  if(action==='getShiftMgmt')return {ok:true,data:{headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
   if(action==='getPublishStatus')return {ok:true,month:body.month,payPublished:false,rankPublished:true,salesDate:''};
   if(action==='getOkuriMode')return {ok:true,mode:'driver'};
