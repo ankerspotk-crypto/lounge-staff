@@ -86,6 +86,15 @@ table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
 .mtx-scroll .mtx td.nm{position:sticky;left:0;z-index:2;background:#0d0d1a;box-shadow:1px 0 0 var(--line);}
 .mtx-scroll .mtx tr:nth-child(even) td.nm{background:#111124;}
 .mtx-scroll .mtx th:first-child{left:0;z-index:3;}
+/* 役割ごとの行の色分け（キャスト=青 / 体験=緑 / 派遣=紫 / 黒服=琥珀）。名前固定列も同色に上書き */
+table.mtx tbody tr.rc-cast   td{background:#0e1c30;}
+table.mtx tbody tr.rc-taiken td{background:#0d2117;}
+table.mtx tbody tr.rc-haken  td{background:#1c1136;}
+table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
+.mtx-scroll .mtx tr.rc-cast   td.nm{background:#0e1c30;}
+.mtx-scroll .mtx tr.rc-taiken td.nm{background:#0d2117;}
+.mtx-scroll .mtx tr.rc-haken  td.nm{background:#1c1136;}
+.mtx-scroll .mtx tr.rc-kuro   td.nm{background:#2a1e08;}
 .shift-filter{margin:0 0 10px;}
 /* shift tab 2-col top */
 .shift-top{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
@@ -315,8 +324,9 @@ function drawShift(){
     R.forEach(function(row){ var v=row.cells&&row.cells[d]; if(v&&v!=='休み')cf++; else if(row.pending&&row.pending[d])pd++; });
     return '<td>'+cf+(pd?'<span class="tp"> +'+pd+'申</span>':'')+'</td>';
   }).join('')+'</tr>';
+  function _roleClass(role){ role=String(role||''); if(role==='キャスト')return 'rc-cast'; if(role==='体験')return 'rc-taiken'; if(role==='派遣')return 'rc-haken'; if(role.indexOf('黒服')>=0)return 'rc-kuro'; return ''; }
   var tbody=totalRow+R.map(function(row){
-    return '<tr><td class="nm">'+esc(row.name)+'</td><td class="role">'+esc(row.role||'')+'</td>'+H.map(function(d){
+    return '<tr class="'+_roleClass(row.role)+'"><td class="nm">'+esc(row.name)+'</td><td class="role">'+esc(row.role||'')+'</td>'+H.map(function(d){
       var v=(row.cells&&row.cells[d])||'';
       var p=(!v&&row.pending&&row.pending[d])||'';
       var pr=(p&&row.pendingRow&&row.pendingRow[d])||0;
