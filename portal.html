@@ -374,6 +374,11 @@ header h1 { font-size: 17px; font-weight: 600; }
 .smgmt-cell.c-de { background: #0a1f10; color: #55cc77; }
 .smgmt-cell.c-rest { background: #111520; color: #445566; }
 .smgmt-cell.c-partial { background: #1a1508; color: #cc9933; }
+.smgmt-cell.c-pending { background: #2a1f0a; color: #e0b84a; }
+.smgmt-cell .smgmt-pd { font-size: 7px; background: #8a6d20; color: #fff; border-radius: 2px; padding: 0 2px; margin-right: 1px; }
+.smgmt-total-row td { background: #101a2e; color: #8fd0ff; font-weight: 800; }
+.smgmt-total-row td.smgmt-name-col { background: #0c1526; color: #8fd0ff; }
+.smgmt-total-row .tp { color: #e0b84a; font-size: 8px; }
 .smgmt-cell.today-col { outline: 1.5px solid #2a5aaa; outline-offset: -1.5px; }
 .smgmt-actions { display: flex; gap: 8px; padding: 10px 16px; position: fixed; bottom: 0; left: 0; right: 0; background: #0a0e1a; border-top: 1px solid #1e3050; }
 .smgmt-actions button { flex: 1; border: 1px solid #1e3050; border-radius: 8px; background: #111b2e; color: #7a9cc8; padding: 9px 4px; font-size: 13px; cursor: pointer; }
@@ -4161,16 +4166,26 @@ function renderShiftMgmt() {
   });
   thead += '</tr>';
 
-  var tbody = '';
+  // 日別の出勤人数トータル（確定＋申請中）。「1日で何人でれるか」を承認待ち込みで把握
+  var tbody = '<tr class="smgmt-total-row"><td class="smgmt-name-col">👥人数</td>';
+  viewHeaders.forEach(function(h) {
+    var cf = 0, pd = 0;
+    rows.forEach(function(row) { var v = row.cells[h]; if (v && v !== '休み') cf++; else if (row.pending && row.pending[h]) pd++; });
+    var todayCls = h === todayStr ? ' today-col' : '';
+    tbody += '<td class="smgmt-cell' + todayCls + '" style="cursor:default">' + cf + (pd ? '<span class="tp">+' + pd + '</span>' : '') + '</td>';
+  });
+  tbody += '</tr>';
   displayGroups.forEach(function(g) {
     tbody += '<tr class="smgmt-role-row"><td colspan="' + (viewHeaders.length+1) + '">' + g.label + '</td></tr>';
     g.members.forEach(function(row) {
       tbody += '<tr><td class="smgmt-name-col" title="' + esc(row.name) + '">' + esc(row.name) + '</td>';
       viewHeaders.forEach(function(h) {
         var val = row.cells[h] || '';
-        var cls = smgmtCellClass(val);
+        var pend = (!val && row.pending && row.pending[h]) || '';
+        var cls = val ? smgmtCellClass(val) : (pend ? 'c-pending' : '');
         var todayCls = h === todayStr ? ' today-col' : '';
-        tbody += '<td class="smgmt-cell ' + cls + todayCls + '" onclick="openShiftEdit(\'' + esc(row.name) + '\',\'' + h + '\',\'' + esc(val) + '\')">' + smgmtCellText(val) + '</td>';
+        var txt = val ? smgmtCellText(val) : (pend ? '<span class="smgmt-pd">申</span>' + smgmtCellText(pend) : '');
+        tbody += '<td class="smgmt-cell ' + cls + todayCls + '" onclick="openShiftEdit(\'' + esc(row.name) + '\',\'' + h + '\',\'' + esc(val) + '\')">' + txt + '</td>';
       });
       tbody += '</tr>';
     });
