@@ -563,6 +563,9 @@ function loadPortal(month) {
       // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
       if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
       portalData = d;
+      // 黒服バイトの承認待ち(未確定)シフトをカレンダーに反映（リロードしても「申請中」が残る）
+      pendingShifts = {};
+      if (d.pendingShifts) Object.keys(d.pendingShifts).forEach(function(k){ pendingShifts[k] = d.pendingShifts[k]; });
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
       updateAdminBar(adminCastList);
       renderTab(currentTab);
@@ -2145,7 +2148,7 @@ function calHtml() {
     var sel = shiftSelections[key];
     var existShift = portalData && portalData.shifts && portalData.shifts[key];
     var isPending = pendingShifts[key];
-    var isKyukin = sel === '欠勤' || (!sel && existShift === '休み');
+    var isKyukin = sel === '欠勤' || (!sel && existShift === '休み') || (!sel && !existShift && isPending === '欠勤');
     var role = portalData && portalData.staffRole;
     var isKurofukuRole = role === '黒服社員' || role === '黒服バイト';
     var isConfirmed = portalData && portalData.confirmedShifts && portalData.confirmedShifts.indexOf(key) !== -1;
@@ -2170,6 +2173,8 @@ function calHtml() {
     var statusLabel = '';
     if (isKurofukuRole && existShift && !isKyukin && !sel) {
       statusLabel = isConfirmed ? '確定' : '申請中';
+    } else if (isPending && !existShift && !sel && !isKyukin) {
+      statusLabel = '申請中'; // 黒服バイトの承認待ち（シフト表未反映）
     }
     h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
       + '<div class="num">'+d+'</div>'
