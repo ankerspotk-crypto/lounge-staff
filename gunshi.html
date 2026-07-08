@@ -391,6 +391,16 @@ body{display:flex;flex-direction:column;height:100vh;}
 .stk-qtynum{min-width:40px;text-align:center;font-size:26px;font-weight:800;color:#dfe8ff;}
 .stk-qtynum.z{color:#ff8a8a;}
 .stk-qbtn{width:40px;height:40px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);color:var(--txt);font-size:22px;font-weight:800;cursor:pointer;line-height:1;}
+.stk-qbtn.xs{width:26px;height:26px;font-size:16px;border-radius:7px;}
+/* 合算ビュー */
+.stk-card.sum .stk-sumtot{font-size:13px;color:var(--sub);font-weight:700;white-space:nowrap;}
+.stk-card.sum .stk-sumtot b{font-size:20px;color:#8fe0a0;margin-left:2px;}
+.stk-flrow{display:flex;flex-direction:column;gap:6px;margin-top:9px;}
+.stk-flc{display:flex;align-items:center;gap:8px;padding:5px 9px;background:var(--panel);border:1px solid var(--line);border-radius:8px;}
+.stk-flc.empty{opacity:.4;color:var(--dim);font-size:12px;}
+.stk-flc-f{width:34px;font-size:12px;font-weight:800;color:#8fb8f0;}
+.stk-flc-q{flex:1;text-align:center;font-size:19px;font-weight:800;color:#dfe8ff;}
+.stk-flc-q.z{color:#ff8a8a;}
 .stk-mini{background:#1a2a10;border:1px solid #447722;color:#aadd66;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;width:100%;margin-bottom:6px;}
 .stk-order{display:flex;gap:6px;margin-top:4px;}
 .stk-order .finput{flex:1;padding:8px;font-size:14px;}
@@ -2098,13 +2108,13 @@ function redoCash(){ cashState.formMode=true; cashState.slips=[]; cashState.repo
 
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
-var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], STOCK_FLOORS=['共通','5F','2F'];
+var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], STOCK_FLOORS=['合算','2F','5F','共通'];
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
   Promise.all([gsr('getStockList').catch(function(){return[];}),gsr('getUndeliveredOrders').catch(function(){return[];})]).then(function(r){
     var pc=stockState?stockState.category:null,pf=stockState?stockState.floor:null;
-    stockState={list:r[0]||[],undelivered:r[1]||[],category:pc||STOCK_CATS[0],floor:pf||'共通'};
+    stockState={list:r[0]||[],undelivered:r[1]||[],category:pc||STOCK_CATS[0],floor:pf||'合算'};
     renderStock();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -2120,7 +2130,8 @@ function renderStock(){
   nav+='<div class="stk-stocktake" onclick="openStocktake()">📦 棚卸し</div></div>';
   // メイン
   var main='<div class="stk-main"><div class="stk-toolbar"><input id="stk-search" class="finput" placeholder="🔍 品名で検索（カテゴリ・フロア問わず）" oninput="stkListView()"><span id="stk-count" style="font-size:12px;color:var(--dim);font-weight:700"></span></div><div class="stk-scroll"><div id="stk-list"></div>';
-  main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><input id="stk-new-min" class="finput" style="width:130px" placeholder="最低在庫(参考)"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'（'+esc(st.floor)+'）に追加</div></div>';
+  var addFloorSel=st.floor==='合算'?'2F':st.floor;
+  main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F','共通'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
   main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#ffbf6a">🛒 マスタにない商品を発注依頼のみ送る</div><div style="display:flex;gap:6px"><input id="stk-free-name" class="finput" placeholder="品名"><input id="stk-free-qty" class="finput" style="width:90px" placeholder="数量"></div><div class="savebtn" style="background:#2a1a10;border-color:#885522;color:#ffaa66;margin-top:10px" onclick="stkFreeOrder()">発注依頼を送信</div></div></div>';
   main+='</div></div>';
   b.innerHTML='<div class="stk-wrap">'+undel+'<div class="stk-body">'+nav+main+'</div></div>'; stkListView();
@@ -2135,9 +2146,30 @@ function stkCat(c){stockState.category=c;renderStock();}
 function stkFloor(f){stockState.floor=f;renderStock();}
 function stkListView(){
   var st=stockState,q=((document.getElementById('stk-search')||{}).value||'').trim();
-  var items=q?st.list.filter(function(i){return i.name.indexOf(q)>=0;}):st.list.filter(function(i){return i.category===st.category&&i.floor===st.floor;});
-  var el=document.getElementById('stk-list'); if(el)el.innerHTML=stkRows(items,!!q);
-  var cnt=document.getElementById('stk-count'); if(cnt)cnt.textContent=items.length+'品'+(q?'（検索）':'');
+  var combined=(st.floor==='合算');
+  var items;
+  if(q) items=st.list.filter(function(i){return i.name.indexOf(q)>=0;});
+  else if(combined) items=st.list.filter(function(i){return i.category===st.category;});
+  else items=st.list.filter(function(i){return i.category===st.category&&i.floor===st.floor;});
+  var el=document.getElementById('stk-list'); if(el)el.innerHTML=combined?stkRowsCombined(items):stkRows(items,!!q);
+  var cnt=document.getElementById('stk-count');
+  if(cnt){ if(combined){ var nm={}; items.forEach(function(i){nm[i.name]=1;}); cnt.textContent=Object.keys(nm).length+'品（合算）'; } else cnt.textContent=items.length+'品'+(q?'（検索）':''); }
+}
+// 合算ビュー: 品名でまとめて 2F/5F/共通 の在庫と合計を表示（同じボトルが両店舗でどれだけあるか一目で分かる）
+function stkRowsCombined(items){
+  if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">品目がありません</div>';
+  var g={},order=[];
+  items.forEach(function(it){ if(!g[it.name]){g[it.name]={floors:{},total:0};order.push(it.name);} g[it.name].floors[it.floor]=it; g[it.name].total+=it.qty; });
+  order.sort(function(a,b){return a.localeCompare(b,'ja');});
+  return '<div class="stk-grid">'+order.map(function(nm){
+    var grp=g[nm];
+    var cells=['2F','5F','共通'].map(function(f){
+      var it=grp.floors[f];
+      if(!it) return '<div class="stk-flc empty">'+f+' <span class="stk-flc-q">—</span></div>';
+      return '<div class="stk-flc"><span class="stk-flc-f">'+f+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-flc-q'+(it.qty===0?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>';
+    }).join('');
+    return '<div class="stk-card sum'+(grp.total===0?' zero':'')+'"><div class="stk-card-top"><div class="stk-card-nm">'+esc(nm)+'</div><span class="stk-sumtot">合計 <b>'+grp.total+'</b></span></div><div class="stk-flrow">'+cells+'</div></div>';
+  }).join('')+'</div>';
 }
 function stkRows(items,showMeta){
   if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">品目がありません</div>';
@@ -2164,13 +2196,15 @@ function stkOrder(rowIdx){
 function stkAddNew(){
   var name=((document.getElementById('stk-new-name')||{}).value||'').trim(); if(!name){alert('品名を入力してください');return;}
   var min=((document.getElementById('stk-new-min')||{}).value||'').trim(); var exp=(document.getElementById('stk-new-exp')||{}).checked;
-  gsr('addStockItem',{name:name,category:stockState.category,floor:stockState.floor,minStock:min,expiryManaged:exp,qty:0}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('追加に失敗');});
+  var floor=((document.getElementById('stk-new-floor')||{}).value)||(stockState.floor==='合算'?'2F':stockState.floor);
+  gsr('addStockItem',{name:name,category:stockState.category,floor:floor,minStock:min,expiryManaged:exp,qty:0}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('追加に失敗');});
 }
 function stkFreeOrder(){
   var name=((document.getElementById('stk-free-name')||{}).value||'').trim(); var qty=((document.getElementById('stk-free-qty')||{}).value||'').trim();
   if(!name){alert('品名を入力してください');return;} if(!qty){alert('数量を入力してください');return;}
   if(!confirm(name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
-  gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:name,floor:stockState.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
+  var foFloor=stockState.floor==='合算'?'共通':stockState.floor;
+  gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:name,floor:foFloor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 function stkDelete(rowIdx){
   if(!confirm('この品目をマスタから削除しますか？'))return;
