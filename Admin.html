@@ -318,10 +318,10 @@ function drawShift(){
   var RFILT=['all','キャスト','黒服','派遣','体験'];
   var rchips=RFILT.map(function(f){return '<div class="chip'+(shiftRoleFilter===f?' on':'')+'" onclick="setShiftRole(\''+f+'\')">'+(f==='all'?'全て':f)+'</div>';}).join('');
   var thead='<tr><th style="text-align:left">名前</th><th>属性</th>'+H.map(function(d){return '<th>'+esc(d)+'</th>';}).join('')+'</tr>';
-  // 日付ごとの出勤人数トータル（確定＋申請中）。表示中の役割絞り込みに追従
-  var totalRow='<tr class="total-row"><td class="nm">👥 合計</td><td></td>'+H.map(function(d){
+  // 日付ごとの出勤人数トータル（確定＋申請中）。キャスト・体験・派遣のみ（黒服は除外）
+  var totalRow='<tr class="total-row"><td class="nm">👥 合計</td><td>キャスト系</td>'+H.map(function(d){
     var cf=0,pd=0;
-    R.forEach(function(row){ var v=row.cells&&row.cells[d]; if(v&&v!=='休み')cf++; else if(row.pending&&row.pending[d])pd++; });
+    R.forEach(function(row){ if(String(row.role||'').indexOf('黒服')>=0)return; var v=row.cells&&row.cells[d]; if(v&&v!=='休み')cf++; else if(row.pending&&row.pending[d])pd++; });
     return '<td>'+cf+(pd?'<span class="tp"> +'+pd+'申</span>':'')+'</td>';
   }).join('')+'</tr>';
   function _roleClass(role){ role=String(role||''); if(role==='キャスト')return 'rc-cast'; if(role==='体験')return 'rc-taiken'; if(role==='派遣')return 'rc-haken'; if(role.indexOf('黒服')>=0)return 'rc-kuro'; return ''; }
