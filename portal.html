@@ -2401,7 +2401,7 @@ function doSubmit() {
 
   gasFetch(GAS_URL, {
     method: 'POST',
-    body: JSON.stringify({ action: 'submitShift', userId: userId, shifts: shifts })
+    body: JSON.stringify({ action: 'submitShift', userId: userId, targetName: (portalData && (portalData.viewAs || portalData.name)) || '', shifts: shifts })
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
