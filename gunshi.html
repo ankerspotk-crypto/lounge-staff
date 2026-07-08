@@ -1808,10 +1808,11 @@ function openCustDetail(i){
     +'</div>';
   var back='<span class="menu-back" onclick="renderMenu()">← 検索に戻る</span>';
   var mb=document.getElementById('menu-body'); if(mb) mb.innerHTML=back+head;
-  custDetailCur=c;
+  custDetailCur=c; custDetailIdx=i; custDetailRowIdx=0; custDetailFields=[];
   renderNextMemo('');
   if(IS_GAS){
     gsr('kioskGetCustomerDetail', c.member, c.name).then(function(d){
+      if(d&&d.ok){ custDetailRowIdx=d.rowIdx||0; custDetailFields=d.fields||[]; }
       renderCustDetailFields((d&&d.ok&&d.fields&&d.fields.length)?d.fields:custFieldsFrom(c));
       renderNextMemo((d&&d.ok)?(d.nextMemo||''):'');
     }).catch(function(){ renderCustDetailFields(custFieldsFrom(c)); });
@@ -1819,7 +1820,7 @@ function openCustDetail(i){
     renderCustDetailFields(custFieldsFrom(c));
   }
 }
-var custDetailCur=null;
+var custDetailCur=null, custDetailIdx=-1, custDetailRowIdx=0, custDetailFields=[];
 function renderNextMemo(memo){
   var el=document.getElementById('cust-nextmemo'); if(!el)return;
   el.innerHTML='<div class="nmemo-box"><div class="nmemo-h">📌 次回対応メモ <span class="nmemo-sub">謝ること・伝えること・話すこと など</span></div>'
@@ -1858,7 +1859,52 @@ function renderCustDetailFields(fields){
       rows+='<div style="display:flex;gap:12px;padding:11px 2px;border-bottom:1px solid var(--line)"><span style="width:120px;flex-shrink:0;color:var(--dim);font-size:13px">'+esc(f.k)+'</span><span style="flex:1;font-size:15px;color:var(--txt);white-space:pre-wrap">'+esc(f.v)+'</span></div>';
     }
   });
-  el.innerHTML=(rows||memos)?(rows+memos):'<div class="empty-msg" style="padding:14px 0;font-size:12px">追加情報はありません</div>';
+  // 軍師のみ：行が特定できていれば編集ボタン
+  var editBtn=custDetailRowIdx?'<button class="menu-btn cust" style="width:100%;margin:4px 0 12px" onclick="startCustEdit()">✏️ 顧客情報を編集</button>':'';
+  el.innerHTML=editBtn+((rows||memos)?(rows+memos):'<div class="empty-msg" style="padding:14px 0;font-size:12px">追加情報はありません</div>');
+}
+// 編集可能な項目（ラベル＝マスタ見出し / key＝updateCustomerのペイロード）
+var CUST_EDIT_FIELDS=[
+  {label:'カード記載名',key:'card'},{label:'氏名',key:'name'},{label:'よみがな',key:'yomigana'},
+  {label:'会員番号',key:'no'},{label:'担当',key:'tantou'},{label:'ボトル種類',key:'bottle'},
+  {label:'ボトル位置',key:'pos'},{label:'会社名',key:'company'},{label:'誕生日',key:'bday',type:'date'},
+  {label:'飲み方',key:'drink'},{label:'タバコ',key:'tabaco'},{label:'ネック名',key:'neck'},
+  {label:'NG行為',key:'ng'},{label:'NGスタッフ',key:'ngStaff'},{label:'参考情報',key:'note',type:'area'}
+];
+function custValByLabel(label){
+  var n=function(s){return String(s||'').replace(/\s/g,'');};
+  var hit=(custDetailFields||[]).filter(function(f){return n(f.k).indexOf(n(label))>=0;})[0];
+  return hit?hit.v:'';
+}
+function cvDateVal(v){ var m=String(v||'').match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); return m?(m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2)):''; }
+function startCustEdit(){
+  var el=document.getElementById('cust-detail-body'); if(!el)return;
+  var h=CUST_EDIT_FIELDS.map(function(f){
+    var v=custValByLabel(f.label), input;
+    if(f.type==='area') input='<textarea id="ce-'+f.key+'" class="finput" rows="3" style="resize:none;width:100%;box-sizing:border-box">'+esc(v)+'</textarea>';
+    else if(f.type==='date') input='<input id="ce-'+f.key+'" class="finput" type="date" style="width:100%;box-sizing:border-box" value="'+esc(cvDateVal(v))+'">';
+    else input='<input id="ce-'+f.key+'" class="finput" style="width:100%;box-sizing:border-box" value="'+esc(v)+'">';
+    return '<div style="margin:9px 0"><div style="color:var(--dim);font-size:12px;margin-bottom:3px">'+esc(f.label)+'</div>'+input+'</div>';
+  }).join('');
+  el.innerHTML='<div style="padding:2px 0"><div style="font-size:13px;color:var(--accent);font-weight:800;margin-bottom:8px">✏️ 顧客情報の編集</div>'+h
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="nmemo-save" style="flex:1" onclick="saveCustEdit()">💾 保存</button>'
+    +'<button class="menu-btn" style="flex:1" onclick="renderCustDetailFields(custDetailFields)">キャンセル</button></div></div>';
+}
+function saveCustEdit(){
+  if(!custDetailRowIdx){alert('対象の顧客が特定できません');return;}
+  var payload={};
+  CUST_EDIT_FIELDS.forEach(function(f){ var e=document.getElementById('ce-'+f.key); if(e)payload[f.key]=e.value; });
+  var btn=document.querySelector('#cust-detail-body .nmemo-save'); if(btn){btn.disabled=true;btn.textContent='保存中...';}
+  if(IS_GAS){
+    gsr('kioskUpdateCustomer',custDetailRowIdx,payload).then(function(res){
+      if(res&&res.ok){
+        toast('✅ 顧客情報を更新しました');
+        // 手元の表示も更新して再描画（ヘッダーと詳細を最新に）
+        var c=custDetailCur; if(c){ c.name=payload.name||c.name; c.card=payload.card||c.card; c.member=payload.no||c.member; c.tantou=payload.tantou; c.bottle=payload.bottle; c.bottlePos=payload.pos; c.nomikata=payload.drink; c.tabako=payload.tabaco; c.ng=payload.ng; c.note=payload.note; }
+        openCustDetail(custDetailIdx);
+      } else { alert('更新エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='💾 保存';} }
+    }).catch(function(e){ alert('更新エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 保存';} });
+  }else{ toast('✅ 更新（ローカル）'); renderCustDetailFields(custDetailFields); }
 }
 
 /* ============ キャストリクエスト ============ */
