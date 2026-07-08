@@ -23,7 +23,8 @@ html,body{height:100%;font-family:-apple-system,'Helvetica Neue',sans-serif;back
 body{display:flex;flex-direction:column;height:100vh;}
 
 /* ---------- Header ---------- */
-.hdr{display:flex;align-items:center;gap:12px;padding:9px 15px;background:linear-gradient(180deg,#16162a,#101020);border-bottom:1px solid var(--line);flex-shrink:0;}
+/* iPad/iPhoneのPWA全画面ではステータスバー(時計等)がヘッダーに重なるため、セーフエリア分だけ上部を下げてボタンの当たり判定を確保 */
+.hdr{display:flex;align-items:center;gap:12px;padding:calc(9px + env(safe-area-inset-top)) calc(15px + env(safe-area-inset-right)) 9px calc(15px + env(safe-area-inset-left));background:linear-gradient(180deg,#16162a,#101020);border-bottom:1px solid var(--line);flex-shrink:0;}
 .brand{font-size:15px;font-weight:800;letter-spacing:.5px;white-space:nowrap;}
 .brand .z{color:var(--accent);}
 .term-badge{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);padding:3px 9px;border-radius:20px;white-space:nowrap;}
@@ -579,7 +580,7 @@ body{display:flex;flex-direction:column;height:100vh;}
 .cbd.noline{background:#241800;color:#ffbf6a;border-color:#7a5010;}
 .menu-overlay{position:fixed;inset:0;background:#0b0b12;z-index:80;display:none;flex-direction:column;}
 .menu-overlay.show{display:flex;}
-.menu-hd{display:flex;align-items:center;justify-content:space-between;padding:15px 22px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.menu-hd{display:flex;align-items:center;justify-content:space-between;padding:calc(15px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-right)) 15px calc(22px + env(safe-area-inset-left));border-bottom:1px solid var(--line);flex-shrink:0;}
 .menu-hd .t{font-size:19px;font-weight:800;}
 .menu-hd .x{font-size:14px;color:var(--sub);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 16px;cursor:pointer;}
 .menu-body{flex:1;overflow-y:auto;padding:22px;max-width:920px;margin:0 auto;width:100%;}
