@@ -1,0 +1,471 @@
+<meta charset="utf-8">
+<style>
+:root{
+  --bg:#0a0a12; --panel:#12121f; --panel2:#16162a; --line:#22223a; --line2:#2e2e4a;
+  --txt:#e8ecf6; --sub:#9aa6c4; --dim:#5a6688;
+  --accent:#7aa2ff; --accent-bg:#12233f; --accent-line:#2a5590;
+  --ok:#7be0a8; --okbg:#0d2618; --okline:#2a6a44;
+  --warn:#ffbf6a; --warnbg:#241800; --warnline:#7a5010;
+  --danger:#e79ad6; --dangerbg:#241014; --dangerline:#5a2430;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;font-size:14px;}
+.wrap{min-height:100vh;display:flex;flex-direction:column;}
+.hd{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#12101c,#0c0b14);flex-wrap:wrap;}
+.hd .brand{font-size:16px;font-weight:800;letter-spacing:.4px;}
+.hd .brand .z{color:var(--accent);}
+.hd .who{font-size:12px;color:var(--sub);font-weight:700;}
+.hd .sp{flex:1;}
+.tabs{display:flex;gap:5px;padding:10px 14px 0;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap;}
+.tab{padding:9px 13px;border-radius:9px 9px 0 0;border:1px solid transparent;background:transparent;color:var(--sub);font-size:14px;font-weight:700;cursor:pointer;}
+.tab.on{background:var(--panel2);border-color:var(--line2);border-bottom-color:var(--panel2);color:var(--accent);}
+.body{flex:1;padding:16px;overflow-y:auto;}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+.finput{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 12px;color:var(--txt);font-size:14px;outline:none;}
+.finput.grow{min-width:200px;flex:1;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{padding:7px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:700;cursor:pointer;}
+.chip.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.cnt{font-size:12px;color:var(--dim);font-weight:700;}
+.sec{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+.sec-t{font-size:14px;font-weight:800;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+.sec-t .sub{font-size:11px;color:var(--dim);font-weight:600;}
+.btn{padding:9px 14px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--txt);font-size:13px;font-weight:800;cursor:pointer;}
+.btn.pri{background:linear-gradient(180deg,#153a72,#0f2040);border-color:var(--accent-line);color:#dcecff;}
+.btn.ok{background:var(--okbg);border-color:var(--okline);color:var(--ok);}
+.btn.warn{background:var(--warnbg);border-color:var(--warnline);color:var(--warn);}
+.btn.dng{background:var(--dangerbg);border-color:var(--dangerline);color:#f0a0b0;}
+.btn.sm{padding:6px 10px;font-size:12px;}
+.btn:disabled{opacity:.45;cursor:default;}
+
+/* staff grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
+.card{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:13px 14px;}
+.card-top{display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+.card-nm{font-size:16px;font-weight:800;flex:1;}
+.badge{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;white-space:nowrap;}
+.badge.line-on{background:var(--okbg);border:1px solid var(--okline);color:var(--ok);}
+.badge.line-off{background:#1a1013;border:1px solid #5a2430;color:#e0a0b0;}
+.badge.kiosk{background:var(--accent-bg);border:1px solid var(--accent-line);color:var(--accent);}
+.badge.lock{background:#1c1830;border:1px solid #3a3560;color:#b9a6ff;}
+.row{display:flex;align-items:center;gap:8px;margin-top:10px;}
+.row .lbl{font-size:12px;color:var(--sub);font-weight:700;width:72px;flex-shrink:0;}
+.rolesel{flex:1;background:var(--panel);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:14px;font-weight:700;outline:none;}
+.perms{display:flex;gap:8px;margin-top:11px;}
+.toggle{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--sub);font-size:13px;font-weight:800;cursor:pointer;}
+.toggle.on.admin{background:#241028;border-color:#7a3a6a;color:#f0a0e0;}
+.toggle.on.safe{background:var(--warnbg);border-color:var(--warnline);color:var(--warn);}
+.toggle.on.gunshi{background:#0d2233;border-color:#2a6a9a;color:#7ac8ff;}
+.toggle.locked{opacity:.5;cursor:not-allowed;}
+
+/* matrix / tables */
+.mtx-wrap{overflow-x:auto;}
+table.mtx{border-collapse:collapse;width:100%;min-width:640px;font-size:13px;}
+table.mtx th,table.mtx td{border:1px solid var(--line);padding:8px 10px;text-align:center;}
+table.mtx th{background:#14142a;color:var(--sub);font-weight:800;}
+table.mtx td.nm{text-align:left;font-weight:800;color:#eef;white-space:nowrap;}
+table.mtx td.role{text-align:left;color:var(--sub);font-weight:700;}
+table.mtx td.cell{cursor:pointer;min-width:52px;}
+table.mtx td.cell:hover{background:var(--accent-bg);}
+.yes{color:var(--ok);font-weight:900;} .no{color:#44506a;}
+.mtx tr:nth-child(even) td{background:#101020;}
+.mtx.sm th,.mtx.sm td{padding:5px 8px;font-size:12px;}
+.mtx-scroll{overflow:auto;max-height:56vh;border:1px solid var(--line);border-radius:8px;}
+table.mtx td.cell.pending{background:#2a1f0a;color:#e0b84a;}
+table.mtx td.cell .pd{font-size:9px;background:#8a6d20;color:#fff;border-radius:3px;padding:0 3px;margin-right:2px;vertical-align:middle;}
+table.mtx tr.total-row td{background:#101a2e !important;color:#8fd0ff;font-weight:900;border-bottom:2px solid #2a5aaa;}
+table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
+.mtx-scroll table.mtx{min-width:520px;}
+.mtx-scroll .mtx th{position:sticky;top:0;z-index:1;}
+/* 名前列を左固定（横スクロールしても名前が見える） */
+.mtx-scroll .mtx td.nm{position:sticky;left:0;z-index:2;background:#0d0d1a;box-shadow:1px 0 0 var(--line);}
+.mtx-scroll .mtx tr:nth-child(even) td.nm{background:#111124;}
+.mtx-scroll .mtx th:first-child{left:0;z-index:3;}
+.shift-filter{margin:0 0 10px;}
+/* shift tab 2-col top */
+.shift-top{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+.shift-top>.sec{flex:1;min-width:290px;margin-bottom:0;}
+.sec.compact{margin-bottom:0;}
+.addbar{display:flex;gap:8px;flex-wrap:wrap;}
+.addbar .finput{flex:1;min-width:96px;}
+
+/* reference */
+.ref{display:flex;flex-direction:column;gap:10px;max-width:760px;}
+.ref-item{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:12px 14px;}
+.ref-item h4{margin:0 0 4px;font-size:15px;} .ref-item p{margin:0;font-size:13px;color:var(--sub);line-height:1.6;}
+.ref-perm h4{color:var(--warn);}
+
+/* generic list rows */
+.lrow{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-bottom:8px;flex-wrap:wrap;}
+.lrow .main{flex:1;min-width:160px;}
+.lrow .nm{font-size:14px;font-weight:800;}
+.lrow .meta{font-size:11px;color:var(--dim);margin-top:2px;}
+.sw{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;}
+.sw.on{background:var(--okbg);border-color:var(--okline);color:var(--ok);}
+.ta{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;resize:vertical;outline:none;margin-top:6px;font-family:inherit;}
+.tin{width:76px;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;color:var(--txt);padding:6px 8px;font-size:13px;text-align:center;outline:none;}
+
+.empty{text-align:center;color:var(--dim);padding:40px 12px;font-size:14px;}
+.gate{max-width:420px;margin:80px auto;text-align:center;background:var(--panel2);border:1px solid var(--line2);border-radius:14px;padding:36px 24px;}
+.gate .ic{font-size:44px;} .gate h2{margin:12px 0 6px;} .gate p{color:var(--sub);font-size:13px;}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#0d2618;border:1px solid #2a6a44;color:#9fe8c0;font-size:13px;font-weight:700;padding:11px 20px;border-radius:12px;z-index:70;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center;}
+.toast.show{opacity:1;} .toast.err{background:#241014;border-color:#5a2430;color:#e0a0b0;}
+.hint{font-size:12px;color:var(--dim);margin:-4px 0 10px;}
+.who .logout{color:var(--accent);cursor:pointer;margin-left:10px;font-weight:800;}
+/* QRログインゲート */
+.qrgate{max-width:400px;margin:60px auto;text-align:center;display:flex;flex-direction:column;align-items:center;}
+.qrgate h2{margin:0 0 6px;font-size:22px;}
+.qrsub{font-size:14px;color:var(--sub);font-weight:700;margin-bottom:20px;}
+.qrbox{width:240px;height:240px;display:flex;align-items:center;justify-content:center;background:#fff;border-radius:12px;overflow:hidden;}
+.qrbox img{display:block;width:240px;height:240px;}
+.qrload{color:#8a9ac0;font-size:13px;font-weight:700;padding:20px;}
+.qrhint{font-size:12px;color:var(--sub);margin-top:18px;line-height:1.6;}
+/* PIN */
+.pinrow{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);}
+.pinrow .pinlbl{font-size:12px;color:var(--sub);font-weight:800;}
+.pinrow .pinstat{font-size:11px;color:var(--dim);font-weight:700;flex:1;}
+.pinrow .pinstat.set{color:var(--warn);}
+</style>
+
+<div class="wrap">
+  <div class="hd">
+    <div class="brand">⚙️ IEYAS <span class="z">軍師</span> 管理コンソール</div>
+    <div class="sp"></div>
+    <div class="who" id="who"></div>
+  </div>
+  <div class="tabs" id="tabs" style="display:none">
+    <button class="tab on" data-t="staff" onclick="switchTab('staff')">👥 スタッフ</button>
+    <button class="tab" data-t="matrix" onclick="switchTab('matrix')">🔐 権限</button>
+    <button class="tab" data-t="shift" onclick="switchTab('shift')">🗓 シフト</button>
+    <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
+    <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
+    <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
+    <button class="tab" data-t="ref" onclick="switchTab('ref')">📖 説明</button>
+  </div>
+  <div class="body" id="body"><div class="empty">読み込み中…</div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var GAS_URL='<?= GAS_URL ?>';
+var USER_ID='<?= USER_ID ?>'; if(USER_ID.indexOf('?')>=0) USER_ID='';
+var IS_GAS=(typeof google!=='undefined' && google.script && google.script.run);
+var ST=null, TAB='staff', roleFilter='all', q='';
+var DENOMS=[{k:'m10000',t:'万'},{k:'m5000',t:'五千'},{k:'m1000',t:'千'}];
+
+var ROLE_DESC={
+  'キャスト':'通常のキャスト。ホール接客・付け回しの対象。',
+  '体験':'体験入店のキャスト。シフト表示で「体」表記。',
+  '黒服社員':'黒服（正社員）。軍師（店舗端末）にログイン可。',
+  '黒服バイト':'黒服（アルバイト）。軍師（店舗端末）にログイン可。',
+  '派遣':'派遣スタッフ。当日シフトから拾われる。',
+  'ドライバー':'送迎ドライバー。送り依頼のため登録するだけで、キャスト・付け回し・予約担当などの名前一覧には出ない。',
+  '管理者':'運営管理者の属性。※管理機能へのアクセス権は「管理者」トグルで別途付与。'
+};
+var PERM_DESC=[
+  {t:'管理者',d:'この管理コンソール、開店/閉店チェックのリセット、通知設定、給与・ランキング公開、シフト承認など全管理機能へのアクセス。'},
+  {t:'金庫管理',d:'金庫出金など現金管理操作の許可。'},
+  {t:'軍師ログイン',d:'軍師（店舗端末）にログインできる。スタッフの「🏯 軍師」トグルで付与。管理者は常に可。未設定の黒服社員/黒服バイトは既定で可。'}
+];
+
+function gsr(fn){var a=[].slice.call(arguments,1);return new Promise(function(res,rej){google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn].apply(google.script.run,a);});}
+function api(action,extra){var body={action:action,userId:USER_ID};if(extra)for(var k in extra)body[k]=extra[k];if(!IS_GAS)return Promise.resolve(MOCKAPI(action,body));return gsr('adminConsoleApi',body);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function jstr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+function toast(m,err){var t=document.getElementById('toast');t.textContent=m;t.className='toast show'+(err?' err':'');setTimeout(function(){t.className='toast';},2100);}
+function res(r,okmsg){ if(r&&r.ok===false){toast(r.error||'失敗',true);return false;} if(okmsg)toast(okmsg); return true; }
+
+function load(){
+  if(!IS_GAS){ ST=MOCK(); document.getElementById('who').textContent='管理者: りく（ローカル）'; render(); return; }
+  gsr('getAdminConsoleData',USER_ID).then(function(r){
+    if(!r||r.ok===false){ gate(r&&r.error); return; }
+    ST=r; document.getElementById('who').innerHTML=(r.caller?'管理者: '+esc(r.caller):'')+' <span class="logout" onclick="adminLogout()">ログアウト</span>'; render();
+  }).catch(function(){ gate('通信エラー'); });
+}
+function gate(msg){
+  document.getElementById('tabs').style.display='none';
+  document.getElementById('body').innerHTML='<div class="gate"><div class="ic">🔒</div><h2>アクセスできません</h2><p>'+esc(msg||'管理者権限が必要です')+'</p><p style="margin-top:10px"><span onclick="adminLogout()" style="color:var(--accent);cursor:pointer;text-decoration:underline">別のアカウントでQRログイン</span></p></div>';
+}
+/* ===== QRログイン（本人認証・管理者のみ） ===== */
+function admSessKey(){return 'adminsess_v1';}
+function loadAdminSession(){try{var r=localStorage.getItem(admSessKey());if(!r)return null;var s=JSON.parse(r);if(s&&s.exp&&Date.now()<s.exp&&s.userId)return s;localStorage.removeItem(admSessKey());return null;}catch(e){return null;}}
+function saveAdminSession(userId,name){try{localStorage.setItem(admSessKey(),JSON.stringify({userId:userId,name:name,exp:Date.now()+12*60*60*1000}));}catch(_){}}
+function adminLogout(){try{localStorage.removeItem(admSessKey());}catch(_){} location.reload();}
+var _aAuthToken=null,_aAuthTimer=null;
+function stopAAuth(){ if(_aAuthTimer){clearInterval(_aAuthTimer);_aAuthTimer=null;} }
+function boot(){
+  if(!IS_GAS){ load(); return; }
+  if(USER_ID){ load(); return; }                 // URLにuserId(後方互換/dev)があれば従来通り
+  var sess=loadAdminSession();
+  if(sess){ USER_ID=sess.userId; load(); return; }
+  showAdminQr();
+}
+function showAdminQr(){
+  stopAAuth();
+  document.getElementById('tabs').style.display='none';
+  document.getElementById('who').textContent='';
+  document.getElementById('body').innerHTML='<div class="qrgate"><h2>⚙️ 管理コンソール</h2><div class="qrsub">📱 LINEでQRを読み取って本人認証（管理者のみ）</div><div class="qrbox" id="admQr"><div class="qrload">QRを生成中…</div></div><div class="qrhint">スマホのLINEでスキャン → 本人確認 → コンソールが開きます</div></div>';
+  gsr('adminAuthStart').then(function(r){
+    if(!r||!r.ok){ var e=document.getElementById('admQr'); if(e)e.innerHTML='<div class="qrload">QR生成エラー</div>'; return; }
+    _aAuthToken=r.token;
+    var q='https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data='+encodeURIComponent(r.url);
+    var box=document.getElementById('admQr'); if(box)box.innerHTML='<img src="'+q+'" width="240" height="240" alt="QR">';
+    pollAdminAuth(r.token);
+  }).catch(function(){ var e=document.getElementById('admQr'); if(e)e.innerHTML='<div class="qrload">通信エラー</div>'; });
+}
+function pollAdminAuth(token){
+  stopAAuth();
+  _aAuthTimer=setInterval(function(){
+    if(_aAuthToken!==token){ stopAAuth(); return; }
+    gsr('kioskAuthStatus',token).then(function(r){
+      if(!r)return;
+      if(r.status==='ok'){ stopAAuth(); if(r.userId){ USER_ID=r.userId; saveAdminSession(r.userId,r.name); load(); } }
+      else if(r.status==='expired'){ stopAAuth(); showAdminQr(); }
+    }).catch(function(){});
+  },2500);
+}
+function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
+function render(){
+  document.getElementById('tabs').style.display='flex';
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,ops:renderOps,ref:renderRef}[TAB]||renderStaff)();
+}
+function setBody(h){ document.getElementById('body').innerHTML=h; }
+function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
+
+/* ===== 👥 スタッフ ===== */
+function filtered(){ return ST.staff.filter(function(s){ if(roleFilter!=='all'&&s.role!==roleFilter)return false; if(q&&s.name.indexOf(q)<0)return false; return true; }); }
+function renderStaff(){
+  var fchips='<div class="chip'+(roleFilter==='all'?' on':'')+'" onclick="setFilter(\'all\')">全て</div>'+ST.roles.map(function(r){return '<div class="chip'+(roleFilter===r?' on':'')+'" onclick="setFilter(\''+jstr(r)+'\')">'+esc(r)+'</div>';}).join('');
+  var list=filtered();
+  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">該当スタッフなし</div>'));
+  var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+}
+function cardHtml(s){
+  var line=s.registered?'<span class="badge line-on">LINE ○</span>':'<span class="badge line-off">LINE 未</span>';
+  var roleOpts=ST.roles.map(function(r){return '<option value="'+esc(r)+'"'+(r===s.role?' selected':'')+'>'+esc(r)+'</option>';}).join('');
+  var gunshiBtn=s.hardGunshi?'<div class="toggle on gunshi locked" title="管理者は常に軍師ログイン可">🏯 軍師 🔒</div>':'<div class="toggle'+(s.kioskLogin?' on gunshi':'')+'" onclick="toggleGunshi(\''+jstr(s.name)+'\','+(!s.kioskLogin)+')">🏯 軍師</div>';
+  var adminBtn=s.hardAdmin?'<div class="toggle on admin locked" title="コード保護">🛡 管理者 🔒</div>':'<div class="toggle'+(s.adminFlag?' on admin':'')+'" onclick="toggleAdmin(\''+jstr(s.name)+'\','+(!s.adminFlag)+')">🛡 管理者</div>';
+  var safeBtn=s.hardSafe?'<div class="toggle on safe locked" title="コード保護">🔑 金庫管理 🔒</div>':'<div class="toggle'+(s.safeFlag?' on safe':'')+'" onclick="toggleSafe(\''+jstr(s.name)+'\','+(!s.safeFlag)+')">🔑 金庫管理</div>';
+  var pinRow=s.kioskLogin?'<div class="pinrow"><span class="pinlbl">🔢 PIN</span><span class="pinstat'+(s.hasPin?' set':'')+'">'+(s.hasPin?'個別PIN設定済み':'マスターPIN使用')+'</span><button class="btn sm" onclick="setPin(\''+jstr(s.name)+'\')">設定</button>'+(s.hasPin?'<button class="btn sm" onclick="clearPin(\''+jstr(s.name)+'\')">クリア</button>':'')+'</div>':'';
+  return '<div class="card"><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
+    '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+'</div>';
+}
+function toggleGunshi(name,on){ var s=findStaff(name); if(s){s.gunshiFlag=on?'○':'×';s.kioskLogin=on;} render(); if(!IS_GAS){toast(name+' 軍師'+(on?'ON':'OFF'));return;} gsr('adminSetGunshi',USER_ID,name,on).then(function(r){res(r,name+' 軍師ログイン '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
+function setPin(name){ var p=prompt(name+' の個別PIN（4桁数字。空欄でクリア＝マスターPINに戻す）',''); if(p===null)return; p=p.trim(); if(p&&!/^\d{4}$/.test(p)){toast('PINは4桁の数字で入力してください',true);return;} var s=findStaff(name); if(s)s.hasPin=!!p; render(); if(!IS_GAS){toast(name+' PIN'+(p?'設定':'クリア'));return;} gsr('adminSetKioskPin',USER_ID,name,p).then(function(r){res(r,name+' の個別PINを'+(p?'設定':'クリア')+'しました')||load();}).catch(function(){toast('通信エラー',true);load();}); }
+function clearPin(name){ if(!confirm(name+' の個別PINをクリアしますか？（マスターPIN使用に戻ります）'))return; var s=findStaff(name); if(s)s.hasPin=false; render(); if(!IS_GAS){toast(name+' PINクリア');return;} gsr('adminSetKioskPin',USER_ID,name,'').then(function(r){res(r,name+' の個別PINをクリアしました')||load();}).catch(function(){toast('通信エラー',true);load();}); }
+function saveMasterPin(){ var p=(document.getElementById('mpin').value||'').trim(); if(!/^\d{4}$/.test(p)){toast('PINは4桁の数字で入力してください',true);return;} if(!IS_GAS){ST.masterPin=p;toast('マスターPIN保存');return;} gsr('adminSetMasterPin',USER_ID,p).then(function(r){ if(res(r,'マスターPINを保存しました'))ST.masterPin=p; }).catch(function(){toast('通信エラー',true);}); }
+function setFilter(f){ roleFilter=f; renderStaff(); }
+function onSearch(){ q=(document.getElementById('q').value||'').trim(); renderStaff(); }
+function findStaff(n){ return ST.staff.find(function(s){return s.name===n;}); }
+function setRole(name,role){ var s=findStaff(name); if(s){s.role=role;s.kioskLogin=(ST.kioskRoles.indexOf(role)>=0);} if(!IS_GAS){toast(name+' → '+role);return;} gsr('adminSetStaffRole',USER_ID,name,role).then(function(r){res(r,name+' → '+role)||load();}).catch(function(){toast('通信エラー',true);load();}); }
+function toggleAdmin(name,on){ var s=findStaff(name); if(s){s.adminFlag=on;s.isAdmin=on||s.hardAdmin;} render(); if(!IS_GAS){toast(name+' 管理者'+(on?'ON':'OFF'));return;} gsr('adminSetAdminFlag',USER_ID,name,on).then(function(r){res(r,name+' 管理者 '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
+function toggleSafe(name,on){ var s=findStaff(name); if(s){s.safeFlag=on;s.isSafeAdmin=on||s.hardSafe;} render(); if(!IS_GAS){toast(name+' 金庫'+(on?'ON':'OFF'));return;} gsr('adminSetSafeAdmin',USER_ID,name,on).then(function(r){res(r,name+' 金庫管理 '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
+
+/* ===== 🔐 権限 ===== */
+function renderMatrix(){
+  var rows=ST.staff.slice().sort(function(a,c){return (c.isAdmin?1:0)-(a.isAdmin?1:0)||a.role.localeCompare(c.role);});
+  var mk=function(on){return on?'<span class="yes">✓</span>':'<span class="no">−</span>';};
+  var tr=rows.map(function(s){return '<tr><td class="nm">'+esc(s.name)+(s.hardAdmin?' 🛡':'')+'</td><td class="role">'+esc(s.role)+'</td><td>'+mk(s.isAdmin)+'</td><td>'+mk(s.isSafeAdmin)+'</td><td>'+mk(s.kioskLogin)+'</td><td>'+mk(s.registered)+'</td></tr>';}).join('');
+  setBody('<div class="toolbar"><span class="cnt">誰が何をできるか一覧（🛡=コード保護の常時管理者）</span></div><div class="mtx-wrap"><table class="mtx"><thead><tr><th style="text-align:left">名前</th><th style="text-align:left">属性</th><th>管理者</th><th>金庫管理</th><th>軍師</th><th>LINE</th></tr></thead><tbody>'+tr+'</tbody></table></div>');
+}
+function renderRef(){
+  var roles='<div class="ref">'+ST.roles.map(function(r){return '<div class="ref-item"><h4>'+esc(r)+'</h4><p>'+esc(ROLE_DESC[r]||'')+'</p></div>';}).join('')+'</div>';
+  var perms='<div class="ref" style="margin-top:18px">'+PERM_DESC.map(function(p){return '<div class="ref-item ref-perm"><h4>🔐 '+esc(p.t)+'</h4><p>'+esc(p.d)+'</p></div>';}).join('')+'</div>';
+  setBody('<div class="toolbar"><span class="cnt">属性（役割）の説明</span></div>'+roles+'<div class="toolbar" style="margin-top:20px"><span class="cnt">アクセス権限の説明</span></div>'+perms);
+}
+
+/* ===== 🗓 シフト ===== */
+var shiftReq=null, shiftMgmt=null, shiftRoleFilter='all';
+function shiftRoleMatch(role){ var f=shiftRoleFilter; if(f==='all')return true; if(f==='黒服')return String(role||'').indexOf('黒服')>=0; return role===f; }
+function setShiftRole(f){ shiftRoleFilter=f; drawShift(); }
+function renderShift(){
+  loading();
+  Promise.all([api('getShiftRequests'),api('getShiftMgmt')]).then(function(r){
+    shiftReq=(r[0]&&r[0].requests)||[]; shiftMgmt=(r[1]&&r[1].data)||{headers:[],rows:[]};
+    drawShift();
+  }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+}
+function drawShift(){
+  var reqPend=shiftReq.filter(function(x){return (x.status||'pending')==='pending'||!x.status;});
+  var reqHtml=reqPend.length?reqPend.map(function(x){
+    return '<div class="lrow"><div class="main"><div class="nm">'+esc(x.name)+'</div><div class="meta">'+esc(x.date||'')+' '+esc(x.time||'')+(x.role?' ・'+esc(x.role):'')+(x.submittedAt?' ・申請 '+esc(x.submittedAt):'')+'</div></div><button class="btn ok sm" onclick="approveShift('+x.rowIdx+',\''+jstr(x.name)+'\',\''+jstr(x.date||'')+'\',\''+jstr(x.time||'')+'\',\'承諾\')">承諾</button><button class="btn dng sm" onclick="approveShift('+x.rowIdx+',\''+jstr(x.name)+'\',\''+jstr(x.date||'')+'\',\''+jstr(x.time||'')+'\',\'却下\')">却下</button></div>';
+  }).join(''):'<div class="empty" style="padding:18px">承認待ちのリクエストはありません</div>';
+
+  var H=shiftMgmt.headers||[], R=(shiftMgmt.rows||[]).filter(function(row){return shiftRoleMatch(row.role);});
+  // 出勤日数（休み以外・申請中含む）が多い順に上から並べる
+  function _scnt(row){ var c=0; H.forEach(function(d){ var v=row.cells&&row.cells[d]; if(v&&v!=='休み')c++; else if(row.pending&&row.pending[d])c++; }); return c; }
+  R.sort(function(a,b){ return _scnt(b)-_scnt(a) || String(a.name).localeCompare(String(b.name)); });
+  var RFILT=['all','キャスト','黒服','派遣','体験'];
+  var rchips=RFILT.map(function(f){return '<div class="chip'+(shiftRoleFilter===f?' on':'')+'" onclick="setShiftRole(\''+f+'\')">'+(f==='all'?'全て':f)+'</div>';}).join('');
+  var thead='<tr><th style="text-align:left">名前</th><th>属性</th>'+H.map(function(d){return '<th>'+esc(d)+'</th>';}).join('')+'</tr>';
+  // 日付ごとの出勤人数トータル（確定＋申請中）。表示中の役割絞り込みに追従
+  var totalRow='<tr class="total-row"><td class="nm">👥 合計</td><td></td>'+H.map(function(d){
+    var cf=0,pd=0;
+    R.forEach(function(row){ var v=row.cells&&row.cells[d]; if(v&&v!=='休み')cf++; else if(row.pending&&row.pending[d])pd++; });
+    return '<td>'+cf+(pd?'<span class="tp"> +'+pd+'申</span>':'')+'</td>';
+  }).join('')+'</tr>';
+  var tbody=totalRow+R.map(function(row){
+    return '<tr><td class="nm">'+esc(row.name)+'</td><td class="role">'+esc(row.role||'')+'</td>'+H.map(function(d){
+      var v=(row.cells&&row.cells[d])||'';
+      var p=(!v&&row.pending&&row.pending[d])||'';
+      var disp=v?esc(v):(p?'<span class="pd">申</span>'+esc(p):'');
+      return '<td class="cell'+(p?' pending':'')+'" onclick="editCell(\''+jstr(row.name)+'\',\''+jstr(d)+'\')">'+disp+'</td>';
+    }).join('')+'</tr>';
+  }).join('');
+  var dateOpts=H.map(function(d){return '<option value="'+esc(d)+'">'+esc(d)+'</option>';}).join('');
+
+  setBody(
+    '<div class="shift-top">'+
+      '<div class="sec compact"><div class="sec-t">📩 承認リクエスト <span class="cnt">'+reqPend.length+'件</span><span class="sp" style="flex:1"></span>'+(reqPend.length?'<button class="btn dng sm" onclick="clearAllReq('+reqPend.length+')">🗑 全てクリア</button>':'')+'</div>'+reqHtml+'</div>'+
+      '<div class="sec compact"><div class="sec-t">➕ 派遣/体験を追加</div><div class="addbar"><input class="finput" id="as-name" placeholder="氏名"><select class="finput" id="as-role"><option value="派遣">派遣</option><option value="体験">体験</option></select><select class="finput" id="as-date">'+dateOpts+'</select><input class="finput" id="as-time" placeholder="時刻 例20:00"><button class="btn pri" onclick="addShiftStaff()">追加</button></div></div>'+
+    '</div>'+
+    '<div class="sec"><div class="sec-t">🗓 シフト表 <span class="sub">今日以降・セルをタップで編集</span></div><div class="chips shift-filter">'+rchips+'</div><div class="mtx-scroll"><table class="mtx sm">'+thead+tbody+'</table></div></div>'
+  );
+}
+function clearAllReq(n){ if(!confirm('承認待ちのシフトリクエスト '+n+'件を全てクリアします。（副作用・通知なし）よろしいですか？'))return; api('clearShiftRequests').then(function(r){ if(res(r,(r&&r.cleared!=null?r.cleared+'件':'')+'クリアしました'))renderShift(); }); }
+function approveShift(rowIdx,name,date,time,decision){
+  if(!confirm(name+' '+date+' '+time+' を「'+decision+'」しますか？'))return;
+  api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:decision}).then(function(r){ if(res(r,decision+'しました'))renderShift(); });
+}
+function editCell(name,date){
+  var row=(shiftMgmt.rows||[]).find(function(x){return x.name===name;}); var cur=(row&&row.cells&&row.cells[date])||'';
+  var v=prompt(name+' の '+date+'（時刻 / 休み / 空欄で消去）', cur); if(v===null)return;
+  api('writeShiftCellPortal',{name:name,date:date,value:v.trim()}).then(function(r){ if(res(r,'更新しました'))renderShift(); });
+}
+function addShiftStaff(){
+  var name=(document.getElementById('as-name').value||'').trim(); var role=document.getElementById('as-role').value;
+  var date=document.getElementById('as-date').value; var time=(document.getElementById('as-time').value||'').trim();
+  if(!name){toast('氏名を入力',true);return;}
+  api('addShiftStaff',{staffName:name,role:role,date:date,timeVal:time}).then(function(r){ if(res(r,'追加しました'))renderShift(); });
+}
+
+/* ===== 🔔 通知設定 ===== */
+var notif=null;
+function renderNotif(){
+  loading();
+  api('getNotifSettings').then(function(r){ notif=(r&&r.settings)||{}; drawNotif(); }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+}
+function drawNotif(){
+  var keys=Object.keys(notif);
+  var rows=keys.map(function(k){
+    var s=notif[k]; var auto=(s.type==='auto');
+    var timeInput=auto?'<span class="badge kiosk">自動</span>':'<input class="tin" id="nt-'+k+'" value="'+esc(s.time||'')+'" style="width:64px">';
+    var msg=s.msgEditable?'<textarea class="ta" id="nm-'+k+'" rows="2" placeholder="（既定文）">'+esc(s.message||'')+'</textarea>':'';
+    return '<div class="lrow" style="align-items:flex-start"><div class="main"><div class="nm">'+esc(s.label||k)+'</div><div class="meta">'+esc(s.group||'')+(s.desc?' ・'+esc(s.desc):'')+'</div>'+msg+'</div>'+timeInput+'<span class="sw'+(s.enabled!==false?' on':'')+'" id="ne-'+k+'" onclick="toggleNotif(\''+jstr(k)+'\')">'+(s.enabled!==false?'ON':'OFF')+'</span></div>';
+  }).join('');
+  setBody('<div class="toolbar"><span class="cnt">定時・自動通知の設定（変更後は「保存」）</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="saveNotif()">💾 保存</button></div>'+(rows||'<div class="empty">設定なし</div>'));
+}
+function toggleNotif(k){ notif[k].enabled=!(notif[k].enabled!==false); var el=document.getElementById('ne-'+k); el.classList.toggle('on',notif[k].enabled); el.textContent=notif[k].enabled?'ON':'OFF'; }
+function saveNotif(){
+  Object.keys(notif).forEach(function(k){ var ti=document.getElementById('nt-'+k); if(ti)notif[k].time=ti.value.trim(); var mi=document.getElementById('nm-'+k); if(mi)notif[k].message=mi.value; });
+  api('saveNotifSettings',{settings:notif}).then(function(r){ res(r,'通知設定を保存しました'); });
+}
+
+/* ===== 💰 給与・ランキング ===== */
+var payMonth=null, payStat=null;
+function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
+function renderPay(){
+  if(!payMonth)payMonth=nowMonth(); loading();
+  api('getPublishStatus',{month:payMonth}).then(function(r){ payStat=r||{}; drawPay(); }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+}
+function drawPay(){
+  var pay=!!payStat.payPublished, rank=!!payStat.rankPublished;
+  setBody(
+    '<div class="toolbar"><span class="cnt">対象月</span><input class="finput" id="pm" value="'+esc(payMonth)+'" style="width:130px" placeholder="YYYY-MM"><button class="btn" onclick="loadPayMonth()">表示</button></div>'+
+    '<div class="sec"><div class="sec-t">💴 給与の公開</div><div class="lrow"><div class="main"><div class="nm">'+esc(payMonth)+' 給与明細</div><div class="meta">'+(pay?'公開中（スタッフが自分の給与を閲覧可）':'非公開')+'</div></div><button class="btn '+(pay?'dng':'ok')+'" onclick="togglePay('+(!pay)+')">'+(pay?'非公開にする':'公開する')+'</button></div></div>'+
+    '<div class="sec"><div class="sec-t">🏆 ランキングの公開</div><div class="lrow"><div class="main"><div class="nm">'+esc(payMonth)+' ランキング</div><div class="meta">'+(rank?'公開中':'非公開')+'</div></div><button class="btn '+(rank?'dng':'ok')+'" onclick="toggleRank('+(!rank)+')">'+(rank?'非公開にする':'公開する')+'</button></div></div>'+
+    '<div class="sec"><div class="sec-t">📅 売上データ日付</div><div class="toolbar"><input class="finput" id="sd" type="date" value="'+esc(payStat.salesDate||'')+'"><button class="btn pri" onclick="saveSalesDate()">保存</button></div><div class="hint">TRUST売上を紐付ける基準日。</div></div>'+
+    '<div class="sec"><div class="sec-t">📥 給与CSVインポート</div><div class="hint">既知の不具合があるため、このコンソールには未搭載です（修正後に追加予定）。</div></div>'
+  );
+}
+function loadPayMonth(){ var m=(document.getElementById('pm').value||'').trim(); if(m)payMonth=m; renderPay(); }
+function togglePay(on){ api(on?'publishPay':'unpublishPay',{month:payMonth}).then(function(r){ if(res(r,on?'給与を公開しました':'給与を非公開にしました'))renderPay(); }); }
+function toggleRank(on){ api(on?'publishRanking':'unpublishRanking',{month:payMonth}).then(function(r){ if(res(r,on?'ランキングを公開しました':'非公開にしました'))renderPay(); }); }
+function saveSalesDate(){ var d=document.getElementById('sd').value; api('setSalesDataDate',{month:payMonth,date:d}).then(function(r){ res(r,'売上データ日付を保存しました'); }); }
+
+/* ===== ⚙️ 運営 ===== */
+var okuriMode=null, thresholds=null, seatList=null;
+function renderOps(){
+  loading();
+  Promise.all([api('getOkuriMode'),api('getCashThresholds'),api('getSeatList')]).then(function(r){
+    okuriMode=(r[0]&&r[0].mode)||'driver'; thresholds=(r[1]&&r[1].thresholds)||null; seatList=(r[2]&&r[2].seats)||[];
+    drawOps();
+  }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+}
+function drawOps(){
+  var drv=okuriMode!=='jisha';
+  var okuri='<div class="sec"><div class="sec-t">🚗 送りモード</div><div class="chips"><div class="chip'+(drv?' on':'')+'" onclick="setOkuri(\'driver\')">🚗 ドライバー手配</div><div class="chip'+(!drv?' on':'')+'" onclick="setOkuri(\'jisha\')">🏠 自社送り</div></div><div class="hint">自社送りモード中はドライバーへの通知を止めます。</div></div>';
+
+  var seatCards=(seatList||[]).map(function(s){
+    var st=s.occupied?('🟢 '+(s.cust?esc(s.cust)+'様':'稼働')+(s.casts&&s.casts.length?' / '+s.casts.map(esc).join('、'):'')):'空席';
+    return '<div class="lrow"><div class="main"><div class="nm">'+esc(s.label)+'</div><div class="meta">'+st+'</div></div><button class="btn dng sm" onclick="resetSeat(\''+jstr(s.code)+'\',\''+jstr(s.label)+'\')">強制リセット</button></div>';
+  }).join('')||'<div class="empty" style="padding:14px">席データなし</div>';
+  var seats='<div class="sec"><div class="sec-t">🪑 席単位の強制リセット <span class="sub">その席の在席・予約・タグ等をクリア</span></div>'+seatCards+'</div>';
+
+  var resets='<div class="sec"><div class="sec-t">♻️ 各種リセット <span class="sub">当日分・破壊的操作（確認あり）</span></div><div class="chips">'+
+    '<button class="btn warn" onclick="doReset(\'resetOpeningCheck\',\'開店チェック\')">開店チェック</button>'+
+    '<button class="btn warn" onclick="doReset(\'resetCashCheck\',\'閉店チェック\')">閉店チェック</button>'+
+    '<button class="btn warn" onclick="doReset(\'resetSafeWithdrawalLog\',\'金庫出金ログ\')">金庫出金ログ</button>'+
+    '<button class="btn dng" onclick="doReset(\'resetGunshiSettings\',\'軍師設定\')">軍師設定</button>'+
+    '<button class="btn dng" onclick="doReset(\'resetGunshiSeating\',\'全席（軍師座席）\')">全席リセット</button>'+
+    '</div></div>';
+
+  var other='<div class="sec"><div class="sec-t">🔧 その他</div><div class="chips">'+
+    '<button class="btn" onclick="doAction(\'syncRsrvWithReservations\',\'予約を同期しました\')">🔄 予約同期</button>'+
+    '<button class="btn warn" onclick="doForceLogout()">🚪 軍師端末を強制ログアウト</button>'+
+    '</div></div>';
+
+  var th=thresholds||{till:{f5:{},f2:{}},safe:{f5:{},f2:{}}};
+  function tRow(kind,floor){
+    return '<tr><td class="nm">'+(kind==='till'?'レジ':'金庫')+' '+floor.toUpperCase().replace('F','F')+'</td>'+DENOMS.map(function(d){
+      var o=((th[kind]||{})[floor]||{})[d.k]||{};
+      var minI='<input class="tin" id="ct-'+kind+'-'+floor+'-'+d.k+'-min" value="'+(o.min!=null?o.min:'')+'" placeholder="下限">';
+      var maxI=kind==='till'?'<input class="tin" id="ct-'+kind+'-'+floor+'-'+d.k+'-max" value="'+(o.max!=null?o.max:'')+'" placeholder="上限">':'<span class="no">−</span>';
+      return '<td>'+minI+(kind==='till'?' 〜 '+maxI:'')+'</td>';
+    }).join('')+'</tr>';
+  }
+  var thresholdsSec='<div class="sec"><div class="sec-t">💰 現金しきい値 <span class="sub">枚数の下限〜上限（現金チェックの警告判定）</span></div><div class="mtx-wrap"><table class="mtx"><tr><th style="text-align:left">区分</th>'+DENOMS.map(function(d){return '<th>'+d.t+'</th>';}).join('')+'</tr>'+tRow('till','f5')+tRow('till','f2')+tRow('safe','f5')+tRow('safe','f2')+'</table></div><button class="btn pri" style="margin-top:10px" onclick="saveThresholds()">💾 しきい値を保存</button></div>';
+
+  var pinSec='<div class="sec"><div class="sec-t">🔢 軍師 マスターPIN <span class="sub">個別PIN未設定の人が使う共通PIN（4桁）</span></div><div class="toolbar"><input class="finput" id="mpin" value="'+esc(ST.masterPin||'')+'" maxlength="4" inputmode="numeric" style="width:120px" placeholder="4桁数字"><button class="btn pri" onclick="saveMasterPin()">保存</button></div><div class="hint">個別PINはスタッフタブの各カードで設定できます。</div></div>';
+  setBody(okuri+pinSec+seats+resets+thresholdsSec+other);
+}
+function setOkuri(mode){ if(okuriMode===mode)return; if(!confirm(mode==='jisha'?'自社送りモードに切替（ドライバー通知を止めます）':'ドライバー手配モードに切替'))return; api('setOkuriMode',{mode:mode}).then(function(r){ if(res(r,'送りモードを変更しました')){okuriMode=(r&&r.mode)||mode;drawOps();} }); }
+function resetSeat(code,label){ if(!confirm(label+' を強制リセットします。この席の在席・予約・タグ等がクリアされます。よろしいですか？'))return; api('resetSeat',{seatCode:code}).then(function(r){ if(res(r,label+' をリセットしました'))renderOps(); }); }
+function doReset(action,label){ if(!confirm('【'+label+'】を本日分リセットします。元に戻せません。実行しますか？'))return; api(action).then(function(r){ res(r,label+' をリセットしました'); }); }
+function doAction(action,okmsg){ api(action).then(function(r){ res(r,okmsg); }); }
+function doForceLogout(){ if(!confirm('全ての軍師端末を強制ログアウトします。よろしいですか？'))return; api('kioskForceLogout').then(function(r){ res(r,'強制ログアウトしました'); }); }
+function saveThresholds(){
+  var out={till:{f5:{},f2:{}},safe:{f5:{},f2:{}}};
+  ['till','safe'].forEach(function(kind){ ['f5','f2'].forEach(function(fl){ DENOMS.forEach(function(d){
+    var mn=document.getElementById('ct-'+kind+'-'+fl+'-'+d.k+'-min'); var o={};
+    if(mn&&mn.value!=='')o.min=Number(mn.value);
+    if(kind==='till'){ var mx=document.getElementById('ct-'+kind+'-'+fl+'-'+d.k+'-max'); if(mx&&mx.value!=='')o.max=Number(mx.value); }
+    out[kind][fl][d.k]=o;
+  }); }); });
+  api('saveCashThresholds',{thresholds:out}).then(function(r){ res(r,'しきい値を保存しました'); });
+}
+
+/* ===== ローカルモック ===== */
+function MOCK(){
+  return {ok:true,caller:'りく',roles:['キャスト','体験','黒服社員','黒服バイト','派遣','ドライバー','管理者'],kioskRoles:['黒服社員','黒服バイト'],masterPin:'1234',staff:[
+    {name:'りく',role:'管理者',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
+    {name:'ひろき',role:'黒服社員',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
+    {name:'たかし',role:'黒服社員',registered:true,isAdmin:false,adminFlag:true,hardAdmin:false,isSafeAdmin:true,safeFlag:true,hardSafe:false,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
+    {name:'まや',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'○',hasPin:true},
+    {name:'ゆうた',role:'黒服バイト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'',hasPin:false},
+    {name:'田中',role:'ドライバー',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false}
+  ]};
+}
+function MOCKAPI(action,body){
+  if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
+  if(action==='getShiftMgmt')return {ok:true,data:{headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'}}]}};
+  if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
+  if(action==='getPublishStatus')return {ok:true,month:body.month,payPublished:false,rankPublished:true,salesDate:''};
+  if(action==='getOkuriMode')return {ok:true,mode:'driver'};
+  if(action==='getCashThresholds')return {ok:true,thresholds:{till:{f5:{m10000:{min:7,max:30},m5000:{min:5,max:30},m1000:{min:10,max:50}},f2:{m10000:{min:5,max:30},m5000:{min:5,max:30},m1000:{min:10,max:50}}},safe:{f5:{m10000:{min:10},m5000:{min:10},m1000:{min:10}},f2:{m10000:{min:10},m5000:{min:10},m1000:{min:10}}}}};
+  if(action==='getSeatList')return {ok:true,seats:[{code:'2F-C1',label:'2F カウンター1',floor:'2F',occupied:true,cust:'田中',casts:['まや']},{code:'2F-B1',label:'2F ボックス1',floor:'2F',occupied:false,cust:'',casts:[]}]};
+  return {ok:true};
+}
+boot();
+</script>
