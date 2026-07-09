@@ -1050,7 +1050,147 @@ function adminImportTrustMonth(userId, month, rawText, commit) {
   return { ok: true, month: mk, count: out.length };
 }
 
-// ── 管理コンソール: 給与明細（TRUST報酬＋立替代を合算） ──────────
+// ── 新バック方式：月単位の手入力（キャスト紹介料・入店祝い金）ストア ──────────
+// ※ バック方式（新ルール/固定率）はキャスト単位の永続設定（スタッフマスタ）で持つ→ getCastBackRuleMap_
+var KYUYO_MANUAL_TAB  = '給与手入力';
+var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金'];
+
+// 月手入力マップを取得 { 正規化名: {intro, nyuten} }
+function getKyuyoManual_(ss, monthKey) {
+  const map = {};
+  const sh = ss.getSheetByName(KYUYO_MANUAL_TAB);
+  if (!sh || sh.getLastRow() < 2) return map;
+  const rows = sh.getDataRange().getValues();
+  const h = rows[0].map(String);
+  const ci = function (n) { return h.indexOf(n); };
+  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金');
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) !== monthKey) continue;
+    const nm = normalizeName_(String(rows[i][1]).trim());
+    map[nm] = {
+      intro:  iIntro >= 0 ? (Number(rows[i][iIntro]) || 0) : 0,
+      nyuten: iNyu   >= 0 ? (Number(rows[i][iNyu])   || 0) : 0
+    };
+  }
+  return map;
+}
+
+// ── キャスト単位のバック方式設定（スタッフマスタに永続）──────────
+// バック方式='固定' なら固定バック率(%)を使用、それ以外（空/新ルール）は倍率ルール(10/15/20%)。
+var STAFF_BACKRULE_HEADERS = ['バック方式', '固定バック率(%)'];
+
+// スタッフマスタからバック方式2列の0-based indexを解決（create=trueで無ければ末尾に新設）
+function getStaffBackRuleCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_BACKRULE_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) { lastCol += 1; sh.getRange(1, lastCol).setValue(name); idx = lastCol - 1; }
+    cols[name] = idx;
+  });
+  return cols;
+}
+
+// 固定率マップ { 正規化名: 固定率(数値) }（新ルールのキャストは載らない）
+function getCastBackRuleMap_(ss) {
+  const map = {};
+  const sh = ss.getSheetByName(STAFF_TAB);
+  if (!sh) return map;
+  const cols = getStaffBackRuleCols_(sh, false);
+  const bmCol = cols['バック方式'], brCol = cols['固定バック率(%)'];
+  if (bmCol < 0) return map;
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    const nm = normalizeName_(String(rows[i][1]).trim());
+    if (!nm) continue;
+    if (String(rows[i][bmCol]).trim() === '固定') {
+      const rate = brCol >= 0 ? (Number(rows[i][brCol]) || 0) : 0;
+      map[nm] = rate;
+    }
+  }
+  return map;
+}
+
+// 管理者: キャストのバック方式を設定。mode='fixed'→固定率rate、それ以外→新ルール（倍率式）
+function adminSetCastBackRule(userId, targetName, mode, rate) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  targetName = String(targetName || '').trim();
+  const cols = getStaffBackRuleCols_(sh, true);
+  const bmCol = cols['バック方式'], brCol = cols['固定バック率(%)'];
+  const isFixed = (mode === 'fixed' || mode === '固定');
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, bmCol + 1).setValue(isFixed ? '固定' : '新ルール');
+      if (brCol >= 0) sh.getRange(i + 1, brCol + 1).setValue(isFixed ? (Number(rate) || 0) : '');
+      return { ok: true, name: targetName, mode: isFixed ? 'fixed' : 'rule', rate: isFixed ? (Number(rate) || 0) : null };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+
+// 新バック方式で1名分を再計算。g=TRUST報酬行のgetter(見出し名→値), m=手入力{intro,nyuten,fixedRate}
+// 式（cast_pay_final実データ31名で検算済・NG0／源泉は仕様どおり切り捨て）:
+//   新バック  = round(担当小計 × 率)   率= 固定override優先、無ければ倍率(担当小計/時間報酬)で 10/15/20%
+//   課税支給  = 総支給額 − 担当バック + 新バック + 入店祝い金 + 紹介料
+//   源泉徴収  = floor(課税支給 × 0.1021)
+//   残り支給額 = 課税支給 − 源泉 − 日払 − マイナス計
+function newBackCalc_(g, m) {
+  m = m || {};
+  const jikan   = Number(g('時間報酬'))   || 0;
+  const tanto   = Number(g('担当小計'))   || 0;
+  const gross   = Number(g('総支給額'))   || 0;
+  const tantoBk = Number(g('担当バック')) || 0;
+  const hibarai = Number(g('日払'))       || 0;
+  const minusT  = Number(g('マイナス計')) || 0;
+  const bairitu = jikan > 0 ? tanto / jikan : 0;
+  const ratePct = (m.fixedRate != null) ? m.fixedRate : (bairitu < 2 ? 10 : (bairitu < 3 ? 15 : 20));
+  const newBack = Math.round(tanto * ratePct / 100);
+  const intro   = m.intro  || 0;
+  const nyuten  = m.nyuten || 0;
+  // 新バックは担当バックの置換。担当小計>0（＝新バックを算出する）時のみTRUST担当バックを剥がす。
+  // 担当小計=0で担当バックだけ残る例外行（手当扱い）は保全する。
+  const stripTantoBk = tanto > 0 ? tantoBk : 0;
+  const kazei   = gross - stripTantoBk + newBack + nyuten + intro;
+  const gensen  = Math.floor(kazei * 0.1021);
+  const nokori  = kazei - gensen - hibarai - minusT;
+  return {
+    bairitu: Math.round(bairitu * 100) / 100, ratePct: ratePct, newBack: newBack,
+    fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten,
+    kazei: kazei, gensen: gensen, nokori: nokori,
+    hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross
+  };
+}
+
+// 管理者: 月単位の給与手入力（キャスト紹介料・入店祝い金）を保存
+function adminSetKyuyoManual(userId, month, name, vals) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const mk = monthKey_(month);
+  if (!/^\d{4}\/\d{2}$/.test(mk)) return { ok: false, error: '対象月が不正です' };
+  const nm = String(name || '').trim();
+  if (!nm) return { ok: false, error: '名前がありません' };
+  vals = vals || {};
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(KYUYO_MANUAL_TAB);
+  if (!sh) { sh = ss.insertSheet(KYUYO_MANUAL_TAB); sh.appendRow(KYUYO_MANUAL_HEAD); sh.setFrozenRows(1); }
+  const intro  = Number(vals.intro)  || 0;
+  const nyuten = Number(vals.nyuten) || 0;
+  const rows = sh.getDataRange().getValues();
+  const nmNorm = normalizeName_(nm);
+  let found = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) === mk && normalizeName_(String(rows[i][1]).trim()) === nmNorm) { found = i; break; }
+  }
+  const rowData = [mk, nm, intro, nyuten];
+  if (found >= 0) sh.getRange(found + 1, 1, 1, rowData.length).setValues([rowData]);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
+  return { ok: true, month: mk, name: nm };
+}
+
+// ── 管理コンソール: 給与明細（新バック方式で再計算＋立替代を合算） ──────────
 function adminGetPayrollDetail(userId, month) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
   const ss = getOrOpenSS_();
@@ -1066,29 +1206,43 @@ function adminGetPayrollDetail(userId, month) {
   const rows = (sh && sh.getLastRow() >= 2) ? sh.getDataRange().getValues() : [];
   const hdrs = rows.length ? rows[0].map(String) : [];
   const ci = function (h) { return hdrs.indexOf(h); };
+  const manual = getKyuyoManual_(ss, mSel);
+  const castRule = getCastBackRuleMap_(ss);
   const list = [];
-  const tot = { jikan: 0, backTotal: 0, plusTotal: 0, gross: 0, gensen: 0, hibarai: 0, okuri: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
+  const tot = { jikan: 0, tanto: 0, newBack: 0, backTotal: 0, plusTotal: 0, gross: 0, kazei: 0, gensen: 0, hibarai: 0, okuri: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== mSel) continue;
     const g = function (h) { const j = ci(h); return j >= 0 ? (Number(rows[i][j]) || 0) : 0; };
     const name = String(rows[i][1]).trim();
+    const nmN = normalizeName_(name);
     let tatekae = 0;
-    getHairReceipts_(ss, normalizeName_(name), mSel).forEach(function (r) { tatekae += r.amount; });
-    const net = g('残り支給額');
-    const finalPay = net + tatekae;
+    getHairReceipts_(ss, nmN, mSel).forEach(function (r) { tatekae += r.amount; });
+    // 新バック方式で再計算（TRUSTの担当バック・源泉・残りは使わず、この式で置き換え）
+    // 固定率はキャスト設定を優先で反映（未設定＝倍率ルール）
+    const m = Object.assign({}, manual[nmN] || {}, { fixedRate: (castRule[nmN] != null ? castRule[nmN] : null) });
+    const nb = newBackCalc_(g, m);
+    const finalPay = nb.nokori + tatekae;
     const rec = {
-      name: name, kinmu: g('勤務日数'), jikan: g('時間報酬'),
-      tantoBk: g('担当バック'), yoyakuBk: g('予約バック'), dohanBk: g('同伴バック'),
+      name: name, kinmu: g('勤務日数'), jikan: nb.jikan, tanto: nb.tanto,
+      bairitu: nb.bairitu, ratePct: nb.ratePct, fixed: nb.fixed, newBack: nb.newBack,
+      intro: nb.intro, nyuten: nb.nyuten,
+      yoyakuBk: g('予約バック'), dohanBk: g('同伴バック'),
       drinkBk: g('ドリンクバック'), bottleBk: g('ボトルバック'), foodBk: g('フードバック'),
-      backTotal: g('バック計'), plusTotal: g('プラス計'), gross: g('総支給額'),
-      gensen: g('源泉徴収'), hibarai: g('日払'), okuri: g('送り代'), minusTotal: g('マイナス計'),
-      net: net, tatekae: tatekae, finalPay: finalPay
+      plusTotal: g('プラス計'), gross: nb.gross, kazei: nb.kazei,
+      gensen: nb.gensen, hibarai: nb.hibarai, okuri: g('送り代'), minusTotal: nb.minusTotal,
+      net: nb.nokori, tatekae: tatekae, finalPay: finalPay,
+      // 参考: TRUST自身の数字（支給には使わない）
+      trustGross: g('総支給額'), trustBackTotal: g('バック計'), trustGensen: g('源泉徴収'), trustNet: g('残り支給額'), trustTantoBk: nb.tantoBk
     };
     list.push(rec);
-    Object.keys(tot).forEach(function (k) { tot[k] += rec[k]; });
+    tot.jikan += rec.jikan; tot.tanto += rec.tanto; tot.newBack += rec.newBack;
+    tot.backTotal += rec.newBack; tot.plusTotal += rec.plusTotal; tot.gross += rec.gross;
+    tot.kazei += rec.kazei; tot.gensen += rec.gensen; tot.hibarai += rec.hibarai;
+    tot.okuri += rec.okuri; tot.minusTotal += rec.minusTotal; tot.net += rec.net;
+    tot.tatekae += rec.tatekae; tot.finalPay += rec.finalPay;
   }
   list.sort(function (a, b) { return b.finalPay - a.finalPay; });
-  return { ok: true, month: mSel, months: months, casts: list, totals: tot, published: !!prop('PAY_PUBLISHED_' + mSel) };
+  return { ok: true, month: mSel, months: months, casts: list, totals: tot, method: 'newback', published: !!prop('PAY_PUBLISHED_' + mSel) };
 }
 
 // ── ポータル給与: TRUST報酬を「売上明細(URIAGE)互換」キーで返す（キャスト画面はこれを読む） ──────────
@@ -1098,21 +1252,28 @@ function portalTrustPay_(ss, name, filterMonth) {
   const rows = sh.getDataRange().getValues();
   const hdrs = rows[0].map(String);
   const idx = function (h) { return hdrs.indexOf(h); };
+  const castFixed = getCastBackRuleMap_(ss)[name]; // 固定率（無ければundefined＝倍率ルール）
   const out = {};
   for (let i = 1; i < rows.length; i++) {
     const m = mStr_(rows[i][0]);
     if (normalizeName_(rows[i][1]) !== name) continue;
     if (filterMonth && m !== filterMonth) continue;
     const g = function (h) { const j = idx(h); return j >= 0 ? rows[i][j] : ''; };
+    const gN = function (h) { const j = idx(h); return j >= 0 ? (Number(rows[i][j]) || 0) : 0; };
     const tanto = Number(g('担当小計')) || 0, dohan = Number(g('同伴小計')) || 0;
+    // 新バック方式で再計算（キャスト画面もTRUSTの数字ではなく新方式で見せる）
+    // 残り支給額は「立替前net」で返す。立替(ヘアサロン)はポータル側が自前で最終支給に加算するため二重計上しない。
+    const mm = Object.assign({}, getKyuyoManual_(ss, m)[name] || {}, { fixedRate: (castFixed != null ? castFixed : null) });
+    const nb = newBackCalc_(gN, mm);
     out[m] = {
       '担当小計': g('担当小計'), '同伴小計': g('同伴小計'), '売上合計': tanto + dohan,
       '給率(%)': g('給率'), '勤務日数': g('勤務日数'), '時間報酬': g('時間報酬'),
-      '担当バック': g('担当バック'), '予約バック': g('予約バック'), '同伴バック': g('同伴バック'),
+      '担当バック': nb.newBack, '予約バック': g('予約バック'), '同伴バック': g('同伴バック'),
       'ドリンクバック': g('ドリンクバック'), 'ボトルバック': g('ボトルバック'), '年会費バック': g('フードバック'),
       'ボーナス': g('運営手当'), '送迎手当': g('送迎手当'), '残業代': g('残業代'), '売り半': g('売り半'),
-      '源泉徴収': g('源泉徴収'), '日払': g('日払'), 'マイナス': g('マイナス計'), '送り代': g('送り代'),
-      '残り支給額': g('残り支給額'), '__trust': true
+      '新バック': nb.newBack, '倍率': nb.bairitu, 'バック率(%)': nb.ratePct, '課税支給': nb.kazei,
+      '源泉徴収': nb.gensen, '日払': g('日払'), 'マイナス': g('マイナス計'), '送り代': g('送り代'),
+      '残り支給額': nb.nokori, '__trust': true
     };
   }
   return out;
@@ -5061,6 +5222,7 @@ function getAdminConsoleData(userId) {
   const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   const rows = sh ? sh.getDataRange().getValues() : [];
   const termCols = sh ? getStaffTermCols_(sh, false) : {};
+  const backCols = sh ? getStaffBackRuleCols_(sh, false) : {};
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
   for (let i = 1; i < rows.length; i++) {
@@ -5082,7 +5244,10 @@ function getAdminConsoleData(userId) {
       kioskLogin: isAdminAll || (gunshiRaw === '○') || (gunshiRaw === '×' ? false : (role === '黒服社員' || role === '黒服バイト')),
       gunshiFlag: gunshiRaw, hardGunshi: isAdminAll,
       hasPin: !!allProps['KIOSK_PIN_' + name.replace(/[\s　]/g, '_')], // 個別PIN設定済みか
-      terms: (function () { var t = {}; STAFF_TERM_HEADERS.forEach(function (h) { var c = termCols[h]; t[h] = (c >= 0) ? String(rows[i][c] == null ? '' : rows[i][c]) : ''; }); return t; })()
+      terms: (function () { var t = {}; STAFF_TERM_HEADERS.forEach(function (h) { var c = termCols[h]; t[h] = (c >= 0) ? String(rows[i][c] == null ? '' : rows[i][c]) : ''; }); return t; })(),
+      // 給与バック方式（新ルール/固定）。未設定は新ルール扱い
+      backMode: (backCols['バック方式'] >= 0 && String(rows[i][backCols['バック方式']]).trim() === '固定') ? 'fixed' : 'rule',
+      backRate: (backCols['固定バック率(%)'] >= 0 ? (Number(rows[i][backCols['固定バック率(%)']]) || 0) : 0)
     });
   }
   return { ok: true, caller: caller, staff: staff, roles: ADMIN_ROLES_, kioskRoles: KIOSK_LOGIN_ROLES_, masterPin: prop('KIOSK_PIN') || '1234', consolePinSet: !!prop('ADMIN_CONSOLE_PIN') };
