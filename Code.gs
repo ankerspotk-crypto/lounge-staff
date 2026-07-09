@@ -2798,6 +2798,7 @@ function renameStaffEverywhere_(oldName, newName, dryRun) {
   renameCol(ss.getSheetByName(KYUYO_TAB), 1, '給与計算');
   renameCol(ss.getSheetByName(TRUST_TAB), 1, 'TRUST報酬');
   renameCol(ss.getSheetByName(HAIR_RECEIPT_TAB), 1, 'ヘアサロン領収書');
+  renameCol(ss.getSheetByName(ATEN_TAB), 3, 'アテンドログ(付け回し)'); // キャスト名=4列目。ライブ在席の名前もここ
   try { renameTokens(getYoyakuRsrvSheet_(), [6, 9, 11, 12], '予約(担当/予約担当者/予約/同伴)'); } catch (e) { rep['予約'] = 'ERR:' + e.message; }
 
   // 顧客マスタ（見出し行が2行目・担当/旧担当。getCustomerMasterColsで列特定）
@@ -3378,11 +3379,16 @@ function castCall_(body) {
   const KF = prop('GROUP_KUROFUKU');
   if (!KF) return { ok: false, error: 'GROUP_KUROFUKU未設定' };
 
-  // テーブル特定: フロント選択 → 軍師の付け回し → 席不明
+  // テーブル特定: フロント選択を軍師の付け回し(ライブ)と照合する。
+  // フロントが送る席はホーム読込時点のキャッシュのため、軍師で付け回しを変えた後だと古いことがある。
+  // → 現在のアテンド(getActiveAtendou由来)に無い席なら「移動済みの古い席」とみなしライブ席で上書き。
+  //   マルチ席の正当な選択(ライブに存在)や、ライブが空(アテンド未記録)の時はフロント選択を尊重。
+  const liveSeats = castCurrentSeats_(name).map(s => s.label);
   let seatStr = String(body.table || '').trim();
-  if (!seatStr) {
-    const seats = castCurrentSeats_(name).map(s => s.label);
-    seatStr = seats.length ? seats.join('・') : '席不明';
+  if (seatStr) {
+    if (liveSeats.length && liveSeats.indexOf(seatStr) < 0) seatStr = liveSeats.join('・');
+  } else {
+    seatStr = liveSeats.length ? liveSeats.join('・') : '席不明';
   }
 
   // 誤タップ・連打対策: 同一キャスト×同一種別×同一席は20秒以内の再送を無視
