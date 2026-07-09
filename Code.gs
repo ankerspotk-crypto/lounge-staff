@@ -2748,6 +2748,82 @@ function checkPendingStaffRegistrations_() {
   });
 }
 
+// スタッフ改名: 旧名→新名を「名前で紐づく」全シート/内部キーで一括置換。{シート名:件数} を返す。
+// 用途: 既存スタッフが#登録で名前変更（userIdは同一）した時、シフト等が旧名のままになるのを統一する。
+function renameStaffEverywhere_(oldName, newName) {
+  const oldN = String(oldName || '').trim(), newN = String(newName || '').trim();
+  const rep = {};
+  if (!oldN || !newN || oldN === newN) return { error: 'oldName/newNameが不正', rep: rep };
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const shiftSS = SpreadsheetApp.openById(SHIFT_SHEET_ID);
+  const eq = function (v) { const s = String(v == null ? '' : v).trim(); return s === oldN || normalizeName_(s) === normalizeName_(oldN); };
+
+  // 単一名の列を置換（col=0始まり）
+  function renameCol(sh, col, label) {
+    if (!sh || sh.getLastRow() < 2 || col < 0) { rep[label] = 0; return; }
+    const n = sh.getLastRow() - 1, rng = sh.getRange(2, col + 1, n, 1), vals = rng.getValues();
+    let c = 0;
+    for (let i = 0; i < vals.length; i++) if (eq(vals[i][0])) { vals[i][0] = newN; c++; }
+    if (c) rng.setValues(vals);
+    rep[label] = c;
+  }
+  // 複数名（、,， 区切り）セルのトークン単位置換（cols=0始まり配列）
+  function renameTokens(sh, cols, label) {
+    if (!sh || sh.getLastRow() < 2) { rep[label] = 0; return; }
+    const n = sh.getLastRow() - 1; let total = 0;
+    cols.forEach(function (col) {
+      const rng = sh.getRange(2, col + 1, n, 1), vals = rng.getValues(); let changed = false;
+      for (let i = 0; i < vals.length; i++) {
+        const raw = String(vals[i][0] == null ? '' : vals[i][0]); if (!raw) continue;
+        const parts = raw.split(/([、,，])/); let hit = false;
+        const out = parts.map(function (p) {
+          if (/^[、,，]$/.test(p)) return p;
+          const t = p.trim();
+          if (t && (t === oldN || normalizeName_(t) === normalizeName_(oldN))) { hit = true; return p.replace(t, newN); }
+          return p;
+        });
+        if (hit) { vals[i][0] = out.join(''); changed = true; total++; }
+      }
+      if (changed) rng.setValues(vals);
+    });
+    rep[label] = total;
+  }
+
+  renameCol(ss.getSheetByName(STAFF_TAB), 1, 'スタッフマスタ(名前)');
+  renameCol(shiftSS.getSheetByName(SHIFT_TAB), 0, 'シフト表');
+  renameCol(ss.getSheetByName(SHIFT_REQUEST_TAB), 1, 'シフト申請');
+  renameCol(ss.getSheetByName(KINTAI_TAB), 2, '勤怠ログ');
+  renameCol(ss.getSheetByName(URIAGE_TAB), 1, '売上明細');
+  renameCol(ss.getSheetByName(KYUYO_TAB), 1, '給与計算');
+  renameCol(ss.getSheetByName(TRUST_TAB), 1, 'TRUST報酬');
+  renameCol(ss.getSheetByName(HAIR_RECEIPT_TAB), 1, 'ヘアサロン領収書');
+  try { renameTokens(getYoyakuRsrvSheet_(), [6, 9, 11, 12], '予約(担当/予約担当者/予約/同伴)'); } catch (e) { rep['予約'] = 'ERR:' + e.message; }
+
+  // 顧客マスタ（見出し行が2行目・担当/旧担当。getCustomerMasterColsで列特定）
+  try {
+    const msh = ss.getSheetByName(MASTER_TAB);
+    if (msh) {
+      const values = msh.getDataRange().getValues();
+      const cols = getCustomerMasterCols_(values);
+      let c = 0;
+      if (cols) [cols.tantou, cols.oldTantou].filter(function (x) { return x >= 0; }).forEach(function (ci) {
+        for (let r = cols.headerRow + 1; r < values.length; r++) if (eq(values[r][ci])) { msh.getRange(r + 1, ci + 1).setValue(newN); c++; }
+      });
+      rep['顧客マスタ(担当)'] = c;
+    }
+  } catch (e) { rep['顧客マスタ(担当)'] = 'ERR:' + e.message; }
+
+  // 内部プロパティ: SHIFT_CONFIRMED_<name>
+  try {
+    const p = PropertiesService.getScriptProperties();
+    const v = p.getProperty('SHIFT_CONFIRMED_' + oldN);
+    if (v != null) { p.setProperty('SHIFT_CONFIRMED_' + newN, v); p.deleteProperty('SHIFT_CONFIRMED_' + oldN); rep['SHIFT_CONFIRMED'] = 1; } else rep['SHIFT_CONFIRMED'] = 0;
+  } catch (e) {}
+
+  try { CacheService.getScriptCache().remove('MEMFEEMAP_v1'); } catch (e) {}
+  return rep;
+}
+
 function checkUnregistered(event, groupId) {
   if (!groupId) { reply(event.replyToken, 'グループ内で送信してください'); return; }
   const ss = SpreadsheetApp.openById(SHEET_ID);
