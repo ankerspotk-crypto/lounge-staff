@@ -789,6 +789,8 @@ function renderHome(){
     +   '<button onclick="castCall(\'denmoku\',this)" style="' + sbBtn + '">🎤 デンモク</button>'
     +   '<button onclick="castCall(\'other\',this)" style="' + sbBtn + '">🔔 その他</button>'
     + '</div>'
+    + '<button onclick="castCall(\'rest\',this)" style="width:100%;padding:13px;background:transparent;color:#7fd6b0;border:1.5px solid #2a7a5a;border-radius:10px;font-size:16px;font-weight:700;margin-top:9px">🚽 レスト清掃（黒服に掃除依頼）'
+    +   '<span style="display:block;font-size:11px;font-weight:500;color:#5a9a7d;margin-top:3px">トイレが汚れていたら黒服に清掃を依頼します</span></button>'
     + '</div>'
     + '</div>';
   if (isAdmin) callCard = '';   // 管理者は呼び出しカードを出さない（本人のキャストのみ）
