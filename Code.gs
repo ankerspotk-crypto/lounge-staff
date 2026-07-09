@@ -895,6 +895,65 @@ function kioskGetDenpyoDay(bizDate) {
   };
 }
 
+// ── 管理コンソール: 伝票・現金の日付別確認 ──────────────────────────
+// 軍師から流れてくる伝票類(日払い/領収書/納品)＋現金管理系(閉店/開店/金庫出金)を営業日で束ねる。
+// JSON等の生データ列は確認用途に不要なので落とす。read() は kioskGetDenpyoDay と同型。
+function adminGetDenpyoDay(userId, dateKey) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const d = String(dateKey || '').trim() || bizDateStr_();
+  const ss = getOrOpenSS_();
+  function read(name, amtHeader) {
+    const sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return { headers: [], rows: [], total: 0 };
+    const vals = sh.getDataRange().getValues();
+    const rawHeaders = vals[0].map(String);
+    const keep = rawHeaders.map(function (h, i) { return /JSON/i.test(h) ? -1 : i; }).filter(function (i) { return i >= 0; });
+    const headers = keep.map(function (i) { return rawHeaders[i]; });
+    const iAmt = amtHeader ? rawHeaders.indexOf(amtHeader) : -1;
+    const rows = []; let total = 0;
+    for (let i = 1; i < vals.length; i++) {
+      const bd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+      if (bd !== d) continue;
+      const cells = vals[i].map(function (c) { return c instanceof Date ? Utilities.formatDate(c, TZ, 'yyyy-MM-dd HH:mm') : c; });
+      rows.push({ rowIdx: i + 1, cells: keep.map(function (k) { return cells[k]; }) });
+      if (iAmt >= 0) total += Number(vals[i][iAmt]) || 0;
+    }
+    return { headers: headers, rows: rows, total: total };
+  }
+  return {
+    ok: true, date: d,
+    groups: [
+      { key: 'daily',     title: '💴 日払い記録',      data: read('日払い記録', '伝票金額') },
+      { key: 'receipt',   title: '🧾 領収書記録',      data: read('領収書記録', '金額') },
+      { key: 'delivery',  title: '📦 納品記録',        data: read('納品記録', '金額') },
+      { key: 'cashClose', title: '🔒 閉店現金チェック', data: read(CASH_CHECK_TAB, '差額') },
+      { key: 'cashOpen',  title: '🌅 開店現金',        data: read(OPENING_CHECK_TAB, null) },
+      { key: 'safe',      title: '🏦 金庫出金',        data: read(SAFE_WITHDRAWAL_TAB, '出金金額') }
+    ]
+  };
+}
+
+// ── 管理コンソール: キャスト領収書(ヘアサロン)の月別提出状況 ──────────
+function adminGetHairReceiptsMonth(userId, month) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(HAIR_RECEIPT_TAB);
+  const monthsSet = {};
+  if (sh && sh.getLastRow() >= 2) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) {
+      const m = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy/MM') : String(r[0]).trim();
+      if (m) monthsSet[m] = true;
+    });
+  }
+  const months = Object.keys(monthsSet).sort().reverse();
+  const mSel = String(month || '').trim() || months[0] || Utilities.formatDate(new Date(), TZ, 'yyyy/MM');
+  const list = getHairReceipts_(ss, null, mSel); // name=null → 全キャスト・当月
+  list.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+  let total = 0; const byCast = {};
+  list.forEach(function (r) { total += r.amount; byCast[r.name] = (byCast[r.name] || 0) + r.amount; });
+  return { ok: true, month: mSel, months: months, receipts: list, total: total, castCount: Object.keys(byCast).length };
+}
+
 // 伝票1行の指定列を修正（patch = {見出し名:値}）。日払いは照合を自動再計算
 function kioskUpdateDenpyo(sheetName, rowIdx, patch) {
   try {
