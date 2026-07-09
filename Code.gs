@@ -404,6 +404,22 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return adminResetSeat_(String(body.seatCode || ''), adminName);
   }
+  // ---- 黒服タスクチケット ----
+  if (body.action === 'addKurofukuTask') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return addKurofukuTask_(body.title, body.memo, adminName);
+  }
+  if (body.action === 'listKurofukuTasks') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return { ok: true, tasks: listKurofukuTasks_() };
+  }
+  if (body.action === 'deleteKurofukuTask') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return deleteKurofukuTask_(body.id);
+  }
   // ---- 予約管理 ----
   if (body.action === 'addReservation') {
     const staffName = getStaffName(body.userId);
@@ -2674,6 +2690,9 @@ function scheduledJobs() {
     push_(prop('GROUP_KUROFUKU'), ns_['ieyas_url'].message || ns_['ieyas_url'].defaultMsg);
   });
 
+  // 18:00: 当日中に管理コンソールから追加された黒服タスクをまとめて送信（18時以降の追加分は即送信済み）
+  if (hhmm >= '18:00' && hhmm <= '18:09') once('KUROFUKU_TASKS_1800', sendPendingKurofukuTasks);
+
   notif_('kaiten_check', () => {
     push_(prop('GROUP_KUROFUKU'), ns_['kaiten_check'].message || ns_['kaiten_check'].defaultMsg);
   });
@@ -3020,6 +3039,12 @@ function getKioskTasks() {
     if (Date.now() - (c.ts || 0) > 12 * 3600000) return; // 12時間より前の呼び出しは無視
     tasks.push({ id: 'call:' + k, type: 'call', icon: c.emoji || '🔔', title: (c.title || '呼び出し') + '・' + (c.cast || ''), sub: (c.seat || '') + (c.at ? ' ' + c.at : ''), sort: '0_' + (c.ts || 0) });
   });
+  // 管理コンソールから投げた黒服タスク（完了するまで残る。呼び出しと違い期限切れなし）
+  Object.keys(props).forEach(function (k) {
+    if (k.indexOf('TASK_ADMIN_') !== 0) return;
+    let c; try { c = JSON.parse(props[k]); } catch (e) { return; }
+    tasks.push({ id: 'admin:' + k, type: 'admin', icon: '📋', title: c.title || 'タスク', sub: '管理' + (c.by ? '・' + c.by : ''), sort: '0_' + (c.ts || 0) });
+  });
   tasks.sort(function (a, b) { return String(a.sort).localeCompare(String(b.sort)); });
   return { ok: true, tasks: tasks };
 }
@@ -3030,7 +3055,73 @@ function completeKioskTask(taskId) {
   const id = String(taskId || '');
   if (id.indexOf('time:') === 0) { sp.setProperty('TASKDONE_' + bizDateStr_() + '_' + id.slice(5), '1'); return { ok: true }; }
   if (id.indexOf('call:') === 0) { sp.deleteProperty(id.slice(5)); return { ok: true }; }
+  if (id.indexOf('admin:') === 0) { sp.deleteProperty(id.slice(6)); return { ok: true }; }
   return { ok: false, error: '不明なタスク' };
+}
+
+/* ===== 黒服タスクチケット（管理コンソール → 黒服LINE ＋ 軍師「要対応」） =====
+ * 18時前に追加＝保留(sent=false)し18時の定時でまとめて送信。18時以降(翌5:59まで)＝即送信。
+ * 完了は軍師の「要対応」でチケットを押す（completeKioskTaskのadmin:分岐で削除）。 */
+function addKurofukuTask_(title, memo, byName) {
+  title = String(title || '').trim();
+  if (!title) return { ok: false, error: 'タスク内容を入力してください' };
+  const sp = PropertiesService.getScriptProperties();
+  const ts = Date.now();
+  const n = new Date(); let h = n.getHours(); if (h < 6) h += 24;
+  const past18 = (h * 60 + n.getMinutes()) >= 18 * 60; // 18:00〜翌5:59は即送信
+  const obj = { title: title, memo: String(memo || '').trim(), by: byName || '', ts: ts, sent: false, bizDate: bizDateStr_() };
+  if (past18) { pushKurofukuTaskMsg_([obj]); obj.sent = true; }
+  sp.setProperty('TASK_ADMIN_' + ts, JSON.stringify(obj));
+  return { ok: true, sent: obj.sent, past18: past18 };
+}
+
+function listKurofukuTasks_() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const list = [];
+  Object.keys(props).forEach(function (k) {
+    if (k.indexOf('TASK_ADMIN_') !== 0) return;
+    let c; try { c = JSON.parse(props[k]); } catch (e) { return; }
+    list.push({ id: k, title: c.title || '', memo: c.memo || '', by: c.by || '', sent: !!c.sent, at: c.ts ? Utilities.formatDate(new Date(c.ts), TZ, 'M/d HH:mm') : '' });
+  });
+  list.sort(function (a, b) { return String(b.id).localeCompare(String(a.id)); });
+  return list;
+}
+
+function deleteKurofukuTask_(id) {
+  id = String(id || '');
+  if (id.indexOf('TASK_ADMIN_') !== 0) return { ok: false, error: '不正なID' };
+  PropertiesService.getScriptProperties().deleteProperty(id);
+  return { ok: true };
+}
+
+// 黒服LINEへタスク通知（1件でも複数まとめでもOK）
+function pushKurofukuTaskMsg_(objs) {
+  const KF = prop('GROUP_KUROFUKU');
+  if (!KF || !objs || !objs.length) return;
+  let msg;
+  if (objs.length === 1) {
+    msg = '📋【黒服タスク】\n・' + objs[0].title + (objs[0].memo ? '\n　' + objs[0].memo : '') + '\n\n完了したらIEYAS軍師の「要対応」でチケットを押して完了にしてください。';
+  } else {
+    msg = '📋【黒服タスク ' + objs.length + '件】\n' + objs.map(function (o) { return '・' + o.title + (o.memo ? '（' + o.memo + '）' : ''); }).join('\n') + '\n\n完了したらIEYAS軍師の「要対応」で各チケットを押して完了にしてください。';
+  }
+  push_(KF, msg);
+}
+
+// 18:00定時: 未送信の黒服タスクをまとめて送信（scheduledJobsから）
+function sendPendingKurofukuTasks() {
+  const sp = PropertiesService.getScriptProperties();
+  const props = sp.getProperties();
+  const pending = [];
+  Object.keys(props).forEach(function (k) {
+    if (k.indexOf('TASK_ADMIN_') !== 0) return;
+    let c; try { c = JSON.parse(props[k]); } catch (e) { return; }
+    if (c.sent) return;
+    pending.push({ key: k, obj: c });
+  });
+  if (!pending.length) return;
+  pending.sort(function (a, b) { return (a.obj.ts || 0) - (b.obj.ts || 0); });
+  pushKurofukuTaskMsg_(pending.map(function (p) { return p.obj; }));
+  pending.forEach(function (p) { p.obj.sent = true; sp.setProperty(p.key, JSON.stringify(p.obj)); });
 }
 
 function reply(replyToken, message) {
@@ -5803,7 +5894,7 @@ function arrivalTimeForRsv_(r) {
   return String(r.time || '');
 }
 
-// 来店予定を30分超過した確定予約を黒服LINEへ確認依頼（毎分 scheduledJobs から呼ぶ・1予約につき1回）
+// 来店予定を15分超過した確定予約を黒服LINEへ確認依頼（毎分 scheduledJobs から呼ぶ・1予約につき1回）
 function checkLateReservations() {
   const n = new Date();
   let nh = n.getHours(); if (nh < 6) nh += 24;
@@ -5820,7 +5911,7 @@ function checkLateReservations() {
     const p = arr.split(':');
     let rh = parseInt(p[0], 10); if (rh < 6) rh += 24;
     const late = nowM - (rh * 60 + (parseInt(p[1], 10) || 0));
-    if (late < 30) return;
+    if (late < 15) return;
     const key = 'KLATE_' + r.rowIdx;
     if (sp.getProperty(key)) return; // 通知済み
     const tantou = r.tantouCast ? '担当：' + r.tantouCast : '担当：未設定';
