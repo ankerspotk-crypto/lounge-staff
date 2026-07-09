@@ -702,6 +702,12 @@ function handleReceiptImage_(event) {
     // 会計伝票（お客様の会計）→ 売上伝票フォルダに「時刻_客名」で保存＋手書き/予約人数とPOS印字を突合（シート記録なし）
     if (ai && ai.doc_type === '会計伝票') { handleKaikeiCheck_(event, blob, bizDate, tstamp, fileExt, ai); return; }
 
+    // 品薄伝票（マルト等の欠品・入荷連絡）→ 納品書と紛らわしいが実納品ではないので保存も記録もせず無視
+    if (ai && ai.doc_type === '品薄伝票') {
+      reply(event.replyToken, '📩 品薄伝票を確認しました（納品書ではないため、在庫・記録には反映しません）。');
+      return;
+    }
+
     // それ以外（受領書/領収書/納品書/日払い/その他）→ 従来どおり受領書フォルダ＋シート記録
     blob.setName('受領書_' + bizDate + '_' + tstamp + '.' + fileExt);
     const folder = getReceiptDayFolder_(bizDate);
@@ -868,7 +874,7 @@ function extractReceiptWithGemini_(blob) {
   const mime = blob.getContentType() || 'image/jpeg';
   const thisYear = Utilities.formatDate(new Date(), TZ, 'yyyy');
   const prompt = 'これは店舗で受け取った書類の写真です。まず書類の種類(doc_type)を判定し、種類に応じた項目をJSONだけで返してください（説明・コードブロック不要）。年が書かれていなければ ' + thisYear + ' を使う。金額は¥やカンマを除いた整数。日付はyyyy-MM-dd（和暦→西暦）。読めない項目はnullまたは空。\n' +
-    'doc_typeは次のいずれか: "会計伝票" / "日払い受領書" / "領収書" / "納品書" / "その他"。\n' +
+    'doc_typeは次のいずれか: "会計伝票" / "日払い受領書" / "領収書" / "納品書" / "品薄伝票" / "その他"。\n' +
     '【最優先ルール】書類に「報酬」「日払い」「給料」「給与」など、店がキャスト・スタッフへ支払う報酬に関する記載があれば、発行元や体裁・宛名に関わらず必ず doc_type を "日払い受領書" にすること（領収書にしない）。\n' +
     'それ以外で「会計伝票」「お会計伝票」の見出しがあり、テーブル・人数・注文明細・合計が並ぶお客様の会計なら doc_type を "会計伝票" にする（写真に印字伝票と手書き伝票の両方が写っていることが多い）。\n\n' +
     '■会計伝票（お客様の会計。POSレジ印字の「会計伝票」＋手書きの「お会計伝票」）:\n' +
@@ -886,6 +892,9 @@ function extractReceiptWithGemini_(blob) {
     '■納品書（仕入先からの納品書。商品明細の表がある）:\n' +
     '{"doc_type":"納品書","supplier":"仕入先の会社名","date":"出荷/納品日","slip_no":"伝票No","total":総合計金額整数,"items":[{"name":"商品名（先頭の商品コード番号は除く）","volume":"容量 例:700ML","pack":入数（整数。無ければnull）,"cases":ケース数（整数。無ければ0）,"pieces":バラ数（整数。無ければ0）,"unit_price":単価整数,"amount":金額整数}]}\n' +
     '（納品書の数量はケース列とバラ列に分かれる。ケース×入数＋バラ が実本数。cases/pieces/pack を正確に読む。明細行はすべて漏れなく含める。）\n\n' +
+    '■品薄伝票（仕入先が在庫の「品薄」「欠品」「品切れ」「入荷未定」「次回入荷」等を知らせる連絡票。商品名の表があり納品書と紛らわしいが、実際に納品された商品ではない）:\n' +
+    '{"doc_type":"品薄伝票"}\n' +
+    '（★重要: 見出し・余白・備考に「品薄」「欠品」「品切れ」「在庫切れ」「入荷未定」「入荷予定」「次回入荷」等の記載があり、実際の納品ではなく在庫状況の連絡であれば、商品明細の表があっても必ず "納品書" ではなく "品薄伝票" にすること。）\n\n' +
     '■その他: {"doc_type":"その他"}\n\nJSON以外は出力しないこと。';
   const payload = {
     contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: mime, data: b64 } } ] }],
@@ -7950,6 +7959,21 @@ function kioskApplyDelivery(payload) {
     applied++;
   });
   return { ok: true, applied: applied, created: created };
+}
+
+// 納品明細を削除（誤読・不要伝票の除去）。rowIdxListは行番号の配列 or 単一値。
+// 行ズレを防ぐため降順に削除する（在庫には触れない＝記録から消すだけ）。
+function kioskDeleteDelivery(rowIdxList) {
+  try {
+    const sh = getOrOpenSS_().getSheetByName('納品記録');
+    if (!sh) return { ok: false, error: '納品記録シートがありません' };
+    const idxs = (Array.isArray(rowIdxList) ? rowIdxList : [rowIdxList])
+      .map(Number).filter(function (n) { return n >= 2; })
+      .sort(function (a, b) { return b - a; });
+    let deleted = 0;
+    idxs.forEach(function (r) { if (r <= sh.getLastRow()) { sh.deleteRow(r); deleted++; } });
+    return { ok: true, deleted: deleted };
+  } catch (e) { return { ok: false, error: e.message }; }
 }
 
 // 棚卸し対象（消耗品カテゴリ、または賞味期限管理品）
