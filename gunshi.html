@@ -1725,6 +1725,7 @@ var MENU_TILES=[
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
     {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
+    {ic:'📢', t:'お知らせ配信',       act:"openBroadcast()"},
     {ic:'🍽', t:'POS',               act:"alert('（プロト）POSへ')"}
   ]}
 ];
@@ -1991,6 +1992,48 @@ function reqListHtml(list){
 function toggleReq(id,checked){var r=REQUESTS.find(function(x){return x.id===id;});if(r)r.handled=checked;renderHall();if(IS_GAS)gsr('setCastRequestHandled',id,checked).catch(function(){});}
 function openReqForSeat(idx,ev){if(ev)ev.stopPropagation();var s=SEATS[idx];showSheet('📣 '+esc(custKey(s.cust))+'様 のリクエスト',reqListHtml(reqsForCust(s.cust)),false);}
 function openAllRequests(){closeMenu();showSheet('📣 本日のキャストリクエスト',reqListHtml(REQUESTS),false);}
+
+/* ============ 📢 全キャストへお知らせ配信（個別LINE push） ============ */
+function openBroadcast(){
+  closeMenu();
+  var body=''
+    +'<div class="flabel">全キャストへLINEで個別にお知らせを送ります。</div>'
+    +'<textarea id="bc-msg" class="finput" rows="6" placeholder="お知らせ内容を入力…" style="width:100%;box-sizing:border-box;resize:vertical;font-size:15px;line-height:1.5" oninput="bcCount()"></textarea>'
+    +'<div id="bc-count" style="font-size:12px;color:#7a8aa8;margin:4px 2px 10px">0 文字</div>'
+    +'<div id="bc-to" style="font-size:13px;color:#8fd0ff;margin-bottom:12px">送信先を確認中…</div>'
+    +'<button id="bc-send" onclick="bcSend()" style="width:100%;padding:14px;border-radius:12px;border:1px solid #2a6a44;background:#0f2a1a;color:#7fe0a3;font-weight:800;font-size:16px;cursor:pointer">📢 送信する</button>'
+    +'<div id="bc-result" style="font-size:13px;margin-top:12px;line-height:1.6"></div>';
+  showSheet('📢 お知らせ配信',body,false);
+  if(!IS_GAS){ var e=document.getElementById('bc-to'); if(e)e.textContent='（ローカル）送信は本番のみ'; return; }
+  gsr('gunshiGetCastList').then(function(r){
+    var el=document.getElementById('bc-to'); if(!el)return;
+    var un=(r.unregisteredNames||[]);
+    el.innerHTML='送信先: <b>'+r.registered+'名</b>（LINE登録済みキャスト）'
+      +(un.length?'<br><span style="color:#e0a060;font-size:12px">⚠️ LINE未登録で送れない '+un.length+'名: '+un.map(esc).join('、')+'</span>':'');
+  }).catch(function(){ var el=document.getElementById('bc-to'); if(el)el.textContent='送信先の取得に失敗しました'; });
+}
+function bcCount(){ var t=((document.getElementById('bc-msg')||{}).value)||''; var c=document.getElementById('bc-count'); if(c)c.textContent=t.length+' 文字'; }
+function bcSend(){
+  var msg=(((document.getElementById('bc-msg')||{}).value)||'').trim();
+  if(!msg){ toast('メッセージを入力してください'); return; }
+  if(!IS_GAS){ toast('（ローカル）送信は本番のみ'); return; }
+  if(!confirm('全キャストにこのお知らせを個別送信します。よろしいですか？\n\n'+msg.slice(0,140)+(msg.length>140?'…':''))) return;
+  var btn=document.getElementById('bc-send'); if(btn){btn.disabled=true;btn.textContent='送信中…';}
+  gsr('gunshiBroadcastCast',msg).then(function(r){
+    var el=document.getElementById('bc-result');
+    if(r&&r.ok===false){ if(el)el.innerHTML='<span style="color:#e88">送信失敗: '+esc(r.error||'')+'</span>'; if(btn){btn.disabled=false;btn.textContent='📢 送信する';} return; }
+    var out='✅ <b>'+r.sent+'名</b>に送信しました';
+    if(r.failed)  out+='<br><span style="color:#e88">送信失敗 '+r.failed+'名: '+(r.failedNames||[]).map(esc).join('、')+'</span>';
+    if(r.skipped) out+='<br><span style="color:#e0a060;font-size:12px">LINE未登録でスキップ '+r.skipped+'名</span>';
+    if(el)el.innerHTML=out;
+    toast('✅ '+r.sent+'名に送信しました');
+    var ta=document.getElementById('bc-msg'); if(ta){ta.value='';bcCount();}
+    if(btn){btn.disabled=false;btn.textContent='📢 送信する';}
+  }).catch(function(){
+    var el=document.getElementById('bc-result'); if(el)el.innerHTML='<span style="color:#e88">通信エラー</span>';
+    if(btn){btn.disabled=false;btn.textContent='📢 送信する';}
+  });
+}
 
 /* ============ 現金管理：🌅 開店チェック ============ */
 var CASH_DENOMS=[{k:'m10000',label:'万',v:10000},{k:'m5000',label:'五千',v:5000},{k:'m1000',label:'千',v:1000}];
