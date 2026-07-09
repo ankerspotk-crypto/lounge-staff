@@ -89,6 +89,15 @@ body{display:flex;flex-direction:column;height:100vh;}
 .ticket.k-task{border-color:#2a6a9a;} .ticket.k-task .tk-time{background:#12283a;color:#7ac6ff;} .ticket.k-task .tk-title{color:#cfe4ff;}
 .ticket.k-task .tk-done{font-size:10px;font-weight:800;text-align:center;padding:3px;background:#12283a;color:#7ac6ff;border-top:1px solid #24405a;}
 .ticket.k-task:active{filter:brightness(1.25);}
+.ticket.k-admin{border-color:#6a4a2a;} .ticket.k-admin .tk-time{background:#2a1f10;color:#ffbf6a;} .ticket.k-admin .tk-title{color:#ffd9a0;} .ticket.k-admin .tk-done{background:#2a1f10;color:#ffbf6a;border-top-color:#4a3520;}
+/* タスク詳細ポップアップ */
+.tdetail{padding:6px 2px 4px;}
+.td-title{font-size:18px;font-weight:800;line-height:1.5;color:var(--txt);margin-bottom:12px;word-break:break-word;white-space:pre-wrap;}
+.td-memo{font-size:14px;line-height:1.65;color:var(--sub);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:12px;word-break:break-word;}
+.td-meta{font-size:12px;color:var(--dim);font-weight:700;margin-bottom:18px;}
+.td-actions{display:flex;gap:10px;}
+.td-done{flex:1;padding:13px;border-radius:11px;border:1px solid #2f7a4a;background:#12331f;color:#7ee0a0;font-weight:800;font-size:15px;cursor:pointer;}
+.td-close{padding:13px 20px;border-radius:11px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-weight:700;font-size:15px;cursor:pointer;}
 
 /* ---------- Dashboard split ---------- */
 .dash{flex:1;display:flex;gap:12px;padding:12px 15px;min-height:0;}
@@ -897,13 +906,31 @@ function completeTask(id,ev){
   if(typeof toast==='function')toast('✅ 完了しました');
   if(IS_GAS) gsr('completeKioskTask',id).catch(function(){ loadAll(); });
 }
+/* 黒服タスクの全文詳細ポップアップ（チケットは1行省略されるため） */
+function showTaskDetail(id){
+  var t=(TASKS||[]).find(function(x){return x.id===id;}); if(!t)return;
+  var body='<div class="tdetail">'
+    +'<div class="td-title">'+esc(t.title)+'</div>'
+    +(t.memo?'<div class="td-memo">'+esc(t.memo).replace(/\n/g,'<br>')+'</div>':'')
+    +((t.by||t.at)?'<div class="td-meta">'+(t.by?'追加：'+esc(t.by):'')+(t.at?'　'+esc(t.at):'')+'</div>':'')
+    +'<div class="td-actions"><button class="td-done" onclick="completeTaskFromDetail(\''+jsStr(id)+'\')">✅ 完了にする</button>'
+    +'<button class="td-close" onclick="closeSheet()">閉じる</button></div></div>';
+  showSheet('📋 タスク詳細',body,false);
+}
+function completeTaskFromDetail(id){ closeSheet(); completeTask(id); }
 function renderAlerts(){
   var list=buildTimeline();
   var q=TASKS||[];
   var nowCount=list.filter(function(x){return x.g<=1;}).length + q.length;
   var lead='<div class="alert-lead '+(nowCount?'busy':'calm')+'"><div class="big">'+(nowCount||'0')+'</div><div class="cap">要対応</div></div>';
-  // キュー（時間タスク・呼び出し）を先頭に。押すと完了して消える
+  // キュー（時間タスク・呼び出し・黒服タスク）を先頭に。呼び出しは押すと完了、黒服タスクは押すと詳細ポップアップ
   var qHtml=q.map(function(t){
+    if(t.type==='admin'){
+      return '<div class="ticket k-task k-admin" onclick="showTaskDetail(\''+jsStr(t.id)+'\')">'
+        +'<div class="tk-time">📋 タスク'+(t.by?'・'+esc(t.by):'')+'</div>'
+        +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">タップで全文・完了</span></span></div>'
+        +'<div class="tk-done">詳細 ›</div></div>';
+    }
     return '<div class="ticket k-task" onclick="completeTask(\''+jsStr(t.id)+'\',event)">'
       +'<div class="tk-time">'+esc(t.type==='call'?'呼出':(t.sub||''))+'</div>'
       +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">'+esc(t.type==='call'?(t.sub||'席へ'):'タップで完了')+'</span></span></div>'
