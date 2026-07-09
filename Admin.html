@@ -153,6 +153,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab" data-t="shift" onclick="switchTab('shift')">🗓 シフト</button>
     <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
     <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
+    <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
     <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
     <button class="tab" data-t="ref" onclick="switchTab('ref')">📖 説明</button>
   </div>
@@ -268,7 +269,7 @@ function pollAdminAuth(token){
 function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
 function render(){
   document.getElementById('tabs').style.display='flex';
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,ops:renderOps,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -492,6 +493,63 @@ function loadPayMonth(){ var m=(document.getElementById('pm').value||'').trim();
 function togglePay(on){ api(on?'publishPay':'unpublishPay',{month:payMonth}).then(function(r){ if(res(r,on?'給与を公開しました':'給与を非公開にしました'))renderPay(); }); }
 function toggleRank(on){ api(on?'publishRanking':'unpublishRanking',{month:payMonth}).then(function(r){ if(res(r,on?'ランキングを公開しました':'非公開にしました'))renderPay(); }); }
 function saveSalesDate(){ var d=document.getElementById('sd').value; api('setSalesDataDate',{month:payMonth,date:d}).then(function(r){ res(r,'売上データ日付を保存しました'); }); }
+
+/* ===== 🧾 伝票・領収書 ===== */
+var denpyoSub='slip', denpyoDate='', receiptMonth='';
+function fmtYen(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); }
+function dpCell(c){ var s=String(c==null?'':c); if(/^https?:\/\//.test(s)) return '<a href="'+esc(s)+'" target="_blank" rel="noopener" style="color:var(--accent)">🖼 開く</a>'; return esc(s); }
+function dpAddDays(ds,n){ var p=(ds||'').split('-'); var dt=(p.length===3)?new Date(+p[0],+p[1]-1,+p[2]):new Date(); dt.setDate(dt.getDate()+n); return dt.getFullYear()+'-'+('0'+(dt.getMonth()+1)).slice(-2)+'-'+('0'+dt.getDate()).slice(-2); }
+function dpSubToggle(which){
+  function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="dpSwitch(\''+k+'\')">'+label+'</div>'; }
+  return '<div class="chips" style="margin-bottom:12px">'+chip('slip','🧾 伝票（日付別）')+chip('receipt','💇 領収書（月別）')+'</div>';
+}
+function renderDenpyo(){ if(!IS_GAS){ setBody(dpSubToggle(denpyoSub)+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; } if(denpyoSub==='receipt') loadReceipts(); else loadSlips(); }
+function dpSwitch(k){ denpyoSub=k; renderDenpyo(); }
+/* --- 伝票（日付別） --- */
+function loadSlips(){ loading(); gsr('adminGetDenpyoDay',USER_ID,denpyoDate).then(function(r){ if(!res(r))return; denpyoDate=r.date; drawSlips(r); }).catch(function(){setBody(dpSubToggle('slip')+'<div class="empty">読み込みエラー</div>');}); }
+function drawSlips(r){
+  var nav='<div class="toolbar"><button class="btn" onclick="slipDay(-1)">‹ 前日</button>'
+    +'<input class="finput" id="dpd" type="date" value="'+esc(r.date)+'" onchange="slipPick()" style="width:150px">'
+    +'<button class="btn" onclick="slipDay(1)">翌日 ›</button><button class="btn" onclick="slipToday()">今日</button></div>';
+  var any=r.groups.some(function(g){return g.data.rows.length;});
+  var body=r.groups.map(dpTable).join('');
+  setBody(dpSubToggle('slip')+nav+(any?'':'<div class="hint" style="margin:2px 0 12px">この営業日に登録された伝票はありません。日付を変えてご確認ください。</div>')+body);
+}
+function dpTable(g){
+  var d=g.data||{headers:[],rows:[],total:0};
+  var meta=d.rows.length+'件'+(d.total?' ・ 計'+fmtYen(d.total):'');
+  var h='<div class="sec"><div class="sec-t">'+g.title+' <span style="color:var(--dim);font-weight:600;font-size:12px">'+meta+'</span></div>';
+  if(!d.rows.length){ return h+'<div class="empty" style="padding:12px 0">—</div></div>'; }
+  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="border-collapse:collapse;min-width:100%;font-size:12px;white-space:nowrap">';
+  h+='<tr>'+d.headers.map(function(hd){return '<th style="text-align:left;padding:6px 9px;border-bottom:1px solid var(--line2);color:var(--dim);font-weight:700">'+esc(hd)+'</th>';}).join('')+'</tr>';
+  h+=d.rows.map(function(row){ return '<tr>'+row.cells.map(function(c){return '<td style="padding:6px 9px;border-bottom:1px solid var(--line2)">'+dpCell(c)+'</td>';}).join('')+'</tr>'; }).join('');
+  return h+'</table></div></div>';
+}
+function slipDay(n){ denpyoDate=dpAddDays(denpyoDate,n); renderDenpyo(); }
+function slipPick(){ var v=document.getElementById('dpd').value; if(v){denpyoDate=v;renderDenpyo();} }
+function slipToday(){ denpyoDate=''; renderDenpyo(); }
+/* --- 領収書（月別・全キャスト） --- */
+function loadReceipts(){ loading(); gsr('adminGetHairReceiptsMonth',USER_ID,receiptMonth).then(function(r){ if(!res(r))return; receiptMonth=r.month; drawReceipts(r); }).catch(function(){setBody(dpSubToggle('receipt')+'<div class="empty">読み込みエラー</div>');}); }
+function drawReceipts(r){
+  var opts=(r.months||[]).map(function(m){return '<option value="'+esc(m)+'"'+(m===r.month?' selected':'')+'>'+esc(m)+'</option>';}).join('') || '<option>'+esc(r.month)+'</option>';
+  var head='<div class="toolbar"><span class="cnt">対象月</span><select class="finput" id="rcm" onchange="onReceiptMonth()" style="width:120px">'+opts+'</select>'
+    +'<span class="cnt">'+r.receipts.length+'件 ・ 計'+fmtYen(r.total)+'（'+r.castCount+'名）</span></div>';
+  var body;
+  if(!r.receipts.length){ body='<div class="empty">この月の提出はありません</div>'; }
+  else{
+    body='<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px">'
+      +'<tr>'+['日付','キャスト','金額','内容（画像）'].map(function(hd){return '<th style="text-align:left;padding:7px 10px;border-bottom:1px solid var(--line2);color:var(--dim)">'+hd+'</th>';}).join('')+'</tr>'
+      +r.receipts.map(function(x){ return '<tr>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid var(--line2)">'+esc(x.date||'—')+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid var(--line2)">'+esc(x.name)+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid var(--line2);text-align:right">'+fmtYen(x.amount)+'</td>'
+        +'<td style="padding:7px 10px;border-bottom:1px solid var(--line2)">'+(x.photoUrl?'<a href="'+esc(x.photoUrl)+'" target="_blank" rel="noopener" style="color:var(--accent)">🖼 領収書を開く</a>':'<span style="color:var(--dim)">画像なし</span>')+'</td>'
+        +'</tr>'; }).join('')
+      +'</table></div>';
+  }
+  setBody(dpSubToggle('receipt')+head+body);
+}
+function onReceiptMonth(){ receiptMonth=document.getElementById('rcm').value; renderDenpyo(); }
 
 /* ===== ⚙️ 運営 ===== */
 var okuriMode=null, thresholds=null, seatList=null, kfTasks=[];
