@@ -220,7 +220,7 @@ function doPost(e) {
 }
 
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -239,6 +239,70 @@ function gunshiApi_(body) {
 // 軍師フロント起動時の設定値（キオスクLINE ID・本日営業日）
 function getKioskBootstrap() {
   return { ok: true, kioskUserId: prop('KIOSK_USER_ID') || '', today: bizDateStr_() };
+}
+
+/* ===== 端末時刻ズレ検知（軍師iPadの日付戻し忘れ対策） =====
+ * 領収書発行で端末の日付を過去に戻す運用があり、戻し忘れると翌営業の伝票日付がズレる。
+ * 軍師フロントが1分ごとに getServerTime を取り、端末時刻との差を算出。閾値超過で
+ *   reportClockDrift → 黒服LINE(GROUP_KUROFUKU)へ毎分通知 ＋「要対応」に常に1件だけチケットを上書き
+ *   clearClockDrift  → 解消時にチケット削除＋復旧通知（フロントが1回だけ呼ぶ）
+ * ※ズレは端末側にしか現れないためサーバー単独では検知不可＝フロント主導。 */
+function getServerTime() {
+  return { ok: true, epoch: (new Date()).getTime(), hhmm: now_(), bizDate: bizDateStr_() };
+}
+
+var CLOCK_DRIFT_TASK_KEY = 'TASK_ADMIN_CLOCKDRIFT';
+
+function fmtDriftJp_(sec) {
+  var a = Math.abs(Math.round(Number(sec) || 0));
+  var d = Math.floor(a / 86400); a -= d * 86400;
+  var h = Math.floor(a / 3600); a -= h * 3600;
+  var m = Math.floor(a / 60); var s = a - m * 60;
+  var p = [];
+  if (d) p.push(d + '日');
+  if (h) p.push(h + '時間');
+  if (m) p.push(m + '分');
+  if (!d && !h && !m) p.push(s + '秒');
+  return p.join('');
+}
+
+// driftSec = 端末時刻 - サーバー時刻（マイナス＝端末が過去に戻っている＝日付戻し忘れの疑い）
+function reportClockDrift(driftSec, deviceStr) {
+  driftSec = Number(driftSec) || 0;
+  var mag = fmtDriftJp_(driftSec);
+  var dir = (driftSec < 0) ? ('実際より' + mag + '前（過去に戻っています）') : (mag + '進んでいます');
+  deviceStr = String(deviceStr || '').slice(0, 60);
+  var sp = PropertiesService.getScriptProperties();
+
+  // 黒服グループへ毎分通知（しつこく：戻し忘れ防止）
+  var KF = prop('GROUP_KUROFUKU');
+  if (KF) {
+    push_(KF,
+      '🚨【端末の日付ズレ 検知】\n' +
+      '軍師iPadの時刻が' + dir + '。\n' +
+      (deviceStr ? '端末表示：' + deviceStr + '\n' : '') +
+      '\n領収書の日付戻しのあと、戻し忘れの可能性が高いです。\n' +
+      'iPadの「設定 ＞ 一般 ＞ 日付と時刻 ＞ 自動設定」をONに戻してください。\n' +
+      '（直るまで1分ごとにお知らせします）');
+  }
+
+  // 「要対応」に常に1件だけチケットを上書き（毎分呼ばれても増殖しない）
+  sp.setProperty(CLOCK_DRIFT_TASK_KEY, JSON.stringify({
+    title: '⏰ 端末の日付ズレ｜iPadの時刻設定を戻して',
+    memo: dir + (deviceStr ? '（端末：' + deviceStr + '）' : ''),
+    by: 'システム自動', ts: Date.now(), sent: true, clockDrift: true
+  }));
+  return { ok: true };
+}
+
+function clearClockDrift() {
+  var sp = PropertiesService.getScriptProperties();
+  if (sp.getProperty(CLOCK_DRIFT_TASK_KEY)) {
+    sp.deleteProperty(CLOCK_DRIFT_TASK_KEY);
+    var KF = prop('GROUP_KUROFUKU');
+    if (KF) push_(KF, '✅【端末の日付ズレ 復旧】軍師iPadの時刻が正常に戻りました。');
+  }
+  return { ok: true };
 }
 
 function handleApiRequest_(body) {

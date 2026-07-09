@@ -2703,7 +2703,38 @@ function submitPin(){
     else { loginPin=''; renderPin(); var e=document.getElementById('klErr'); if(e)e.textContent=(r&&r.error)||'PINが違います'; }
   }).catch(function(){ loginPin=''; renderPin(); var e=document.getElementById('klErr'); if(e)e.textContent='通信エラー'; });
 }
-function afterLogin(){ window._k2loginAt=Date.now(); renderAll(); loadAll(); if(!window._k2i) window._k2i=setInterval(loadAll,30000); if(!window._k2sw) window._k2sw=setInterval(checkForceLogout,30000); }
+function afterLogin(){ window._k2loginAt=Date.now(); renderAll(); loadAll(); if(!window._k2i) window._k2i=setInterval(loadAll,30000); if(!window._k2sw) window._k2sw=setInterval(checkForceLogout,30000); checkClockDrift(); if(!window._k2clk) window._k2clk=setInterval(checkClockDrift,60000); }
+/* ===== 端末時刻ズレ検知（iPadの日付戻し忘れ対策・1分ごと） =====
+ * 領収書発行で端末の日付を過去に戻したまま戻し忘れると翌営業の伝票日付がズレる。
+ * サーバー時刻(getServerTime)と端末時刻を毎分突合し、閾値超過で：①最上部に赤バナー②reportClockDriftで黒服LINE＋要対応チケット。解消でclearClockDrift。 */
+var CLOCK_DRIFT_SEC=300;   // この秒数以上ズレたら警告。領収書の日付戻しは通常「日」単位なので5分閾値で誤検知なく確実に捕捉
+var _clockDrifted=false;
+function showDriftBanner(html){
+  var b=document.getElementById('clockDriftBanner');
+  if(!b){ b=document.createElement('div'); b.id='clockDriftBanner';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:600;background:#b3132a;color:#fff;font-weight:800;font-size:15px;text-align:center;padding:10px 14px;box-shadow:0 2px 12px rgba(0,0,0,.45);font-family:-apple-system,sans-serif;line-height:1.55';
+    document.body.appendChild(b); }
+  b.innerHTML=html; b.style.display='block';
+}
+function hideDriftBanner(){ var b=document.getElementById('clockDriftBanner'); if(b)b.style.display='none'; }
+function checkClockDrift(){
+  if(!IS_GAS||!LOGIN)return;
+  var t0=Date.now();
+  gsr('getServerTime').then(function(st){
+    if(!st||!st.epoch)return;
+    var t1=Date.now();
+    var offsetSec=Math.round(((t0+t1)/2 - st.epoch)/1000); // 端末 - サーバー（往復遅延を相殺）
+    if(Math.abs(offsetSec)>=CLOCK_DRIFT_SEC){
+      var behind=offsetSec<0;
+      showDriftBanner('🚨 この端末の日付/時刻が'+(behind?'過去に戻っています':'進んでずれています')+'。<br>領収書の日付戻しのあとは【設定 ＞ 一般 ＞ 日付と時刻 ＞ 自動設定】をONに戻してください。');
+      gsr('reportClockDrift',offsetSec,new Date().toString()).catch(function(){});
+      _clockDrifted=true;
+    } else {
+      hideDriftBanner();
+      if(_clockDrifted){ gsr('clearClockDrift').catch(function(){}); _clockDrifted=false; }
+    }
+  }).catch(function(){});
+}
 function forceLogoutReload(){ try{localStorage.removeItem(kSessKey());}catch(_){} LOGIN=''; stopAuthPoll(); location.reload(); }
 /* 強制ログアウト監視: ①翌3時失効 ②現金承認の10分後 or 管理者操作（全端末） */
 function checkForceLogout(){
