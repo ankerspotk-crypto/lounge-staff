@@ -274,16 +274,19 @@ function reportClockDrift(driftSec, deviceStr) {
   deviceStr = String(deviceStr || '').slice(0, 60);
   var sp = PropertiesService.getScriptProperties();
 
-  // 黒服グループへ毎分通知（しつこく：戻し忘れ防止）
+  // 黒服グループへ通知（戻し忘れ防止。ただし毎分だとスパムになるため約15分間隔にスロットル）
   var KF = prop('GROUP_KUROFUKU');
-  if (KF) {
+  var lastPush = Number(sp.getProperty('CLOCK_DRIFT_LAST_PUSH') || 0);
+  var nowMs = Date.now();
+  if (KF && (nowMs - lastPush) >= 15 * 60 * 1000) {
     push_(KF,
       '🚨【端末の日付ズレ 検知】\n' +
       '軍師iPadの時刻が' + dir + '。\n' +
       (deviceStr ? '端末表示：' + deviceStr + '\n' : '') +
       '\n領収書の日付戻しのあと、戻し忘れの可能性が高いです。\n' +
       'iPadの「設定 ＞ 一般 ＞ 日付と時刻 ＞ 自動設定」をONに戻してください。\n' +
-      '（直るまで1分ごとにお知らせします）');
+      '（直るまで約15分ごとにお知らせします）');
+    sp.setProperty('CLOCK_DRIFT_LAST_PUSH', String(nowMs));
   }
 
   // 「要対応」に常に1件だけチケットを上書き（毎分呼ばれても増殖しない）
@@ -297,6 +300,7 @@ function reportClockDrift(driftSec, deviceStr) {
 
 function clearClockDrift() {
   var sp = PropertiesService.getScriptProperties();
+  sp.deleteProperty('CLOCK_DRIFT_LAST_PUSH'); // 次にズレたら即座に通知できるようスロットルをリセット
   if (sp.getProperty(CLOCK_DRIFT_TASK_KEY)) {
     sp.deleteProperty(CLOCK_DRIFT_TASK_KEY);
     var KF = prop('GROUP_KUROFUKU');
@@ -2749,7 +2753,10 @@ function scheduledJobs() {
   const hhmm = Utilities.formatDate(new Date(), TZ, 'HH:mm');
   const dow   = Number(Utilities.formatDate(new Date(), TZ, 'u')); // 1=月...7=日
   const today = todayStr();
-  const isSun = dow === 7; // 日曜定休日
+  // 早朝(6時前)は前営業日の続き（例: 日曜0:30の閉店作業は土曜営業ぶん）。営業日判定は前日dowで行う
+  const bizDow = (hhmm < '06:00') ? (dow === 1 ? 7 : dow - 1) : dow;
+  const isClosed = bizDow === 7; // その営業日が定休(日曜)か
+  const isSun = dow === 7; // 日曜定休日（当日カレンダーベース。互換のため残す）
 
   function once(id, fn) {
     const key = 'SCHED_' + today + '_' + id;
@@ -2782,7 +2789,7 @@ function scheduledJobs() {
   function notif_(key, fn) {
     const s = ns_[key];
     if (!s || !s.enabled) return;
-    if (s.days && s.days.length > 0 && !s.days.includes(dow)) return;
+    if (s.days && s.days.length > 0 && !s.days.includes(bizDow)) return;
     const t = s.time;
     const mm = parseInt(t.slice(3, 5), 10);
     const endT = t.slice(0, 3) + String(mm + 10 < 60 ? mm + 10 : 59).padStart(2, '0');
@@ -2801,8 +2808,8 @@ function scheduledJobs() {
     }
   });
 
-  // 日曜定休日: 以下の定時送信をすべてスキップ
-  if (isSun) return;
+  // 定休日(日曜)の営業ぶんはスキップ。ただし日曜早朝=土曜の閉店作業なので bizDow で判定し、土曜クローズ通知(照明/終了現金/未退勤)は通す
+  if (isClosed) return;
 
   // 日曜営業なし → 月曜00:00〜11:59は本日出勤・黒服等の通知をスキップ
   if (dow === 1 && hhmm < '12:00') return;
@@ -7660,6 +7667,12 @@ function submitCashCheck(payload) {
     if (!reporterName) return { ok: false, error: '報告者を選択してください' };
 
     const dateKey = bizDateStr_();
+    // 承認済みの再提出をブロック（承認の無音消失・承認後の金額改変を防止）
+    const _sh0 = getCashCheckSheet_();
+    const _existIdx = findCashCheckRow_(_sh0, dateKey);
+    if (_existIdx > 0 && String(_sh0.getRange(_existIdx, 16).getValue()).trim()) {
+      return { ok: false, error: '本日の閉店の現金は既に承認済みです。修正するには管理者にリセットを依頼してください' };
+    }
     const cashSalesInput = Number(payload.cashSalesInput) || 0;
     const bags = payload.bags || {};
 
@@ -7747,6 +7760,9 @@ function approveCashCheck(dateKey, approverName) {
     if (rowIdx < 0) return { ok: false, error: '当日の閉店チェックが見つかりません' };
     const row = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
     if (!String(row[1]).trim()) return { ok: false, error: '閉店の現金がまだ提出されていません' };
+    // 照合ができていない（開店未提出＝判定欄が空）状態での承認をブロック
+    const _judg = String(sh.getRange(rowIdx, 14).getValue()).trim();
+    if (!_judg) return { ok: false, error: '開店の現金が未提出で照合できていません。先に開店チェックを提出してから承認してください' };
     sh.getRange(rowIdx, 16).setValue(approverName);
     sh.getRange(rowIdx, 17).setValue(now_());
     const orderCount = approveOrderDraftsForDate_(dateKey, approverName);
