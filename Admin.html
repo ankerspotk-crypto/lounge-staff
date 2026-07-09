@@ -317,6 +317,20 @@ function cardHtml(s,i){
   var adminBtn=s.hardAdmin?'<div class="toggle on admin locked" title="コード保護">🛡 管理者 🔒</div>':'<div class="toggle'+(s.adminFlag?' on admin':'')+'" onclick="toggleAdmin(\''+jstr(s.name)+'\','+(!s.adminFlag)+')">🛡 管理者</div>';
   var safeBtn=s.hardSafe?'<div class="toggle on safe locked" title="コード保護">🔑 金庫管理 🔒</div>':'<div class="toggle'+(s.safeFlag?' on safe':'')+'" onclick="toggleSafe(\''+jstr(s.name)+'\','+(!s.safeFlag)+')">🔑 金庫管理</div>';
   var pinRow=s.kioskLogin?'<div class="pinrow"><span class="pinlbl">🔢 PIN</span><span class="pinstat'+(s.hasPin?' set':'')+'">'+(s.hasPin?'個別PIN設定済み':'マスターPIN使用')+'</span><button class="btn sm" onclick="setPin(\''+jstr(s.name)+'\')">設定</button>'+(s.hasPin?'<button class="btn sm" onclick="clearPin(\''+jstr(s.name)+'\')">クリア</button>':'')+'</div>':'';
+  var backRuleHtml='';
+  if(isTermRole(s.role)){
+    var bm=s.backMode||'rule', br=s.backRate||0, showR=(bm==='fixed');
+    backRuleHtml='<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px;align-items:center;gap:6px;flex-wrap:wrap">'
+      +'<span class="lbl">💴 バック方式</span>'
+      +'<select class="rolesel" id="bm'+i+'" onchange="onBackModeChange('+i+',\''+jstr(s.name)+'\')">'
+        +'<option value="rule"'+(bm==='rule'?' selected':'')+'>新ルール（倍率式 10/15/20%）</option>'
+        +'<option value="fixed"'+(bm==='fixed'?' selected':'')+'>固定率</option>'
+      +'</select>'
+      +'<input class="finput" id="br'+i+'" type="number" min="0" max="100" value="'+(br||'')+'" placeholder="率" style="width:56px;display:'+(showR?'inline-block':'none')+'">'
+      +'<span id="brp'+i+'" style="font-size:12px;opacity:.7;display:'+(showR?'inline':'none')+'">%</span>'
+      +'<button class="btn pri sm" id="brsave'+i+'" onclick="saveBackRule('+i+',\''+jstr(s.name)+'\')" style="display:'+(showR?'inline-block':'none')+'">保存</button>'
+      +'</div>';
+  }
   var termHtml='';
   if(isTermRole(s.role)){
     var t=s.terms||{};
@@ -335,7 +349,27 @@ function cardHtml(s,i){
   }
   return '<div class="card"><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+termHtml+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+backRuleHtml+termHtml+'</div>';
+}
+/* バック方式（新ルール/固定率）＝キャスト永続設定・給与計算に直結 */
+function onBackModeChange(i,name){
+  var mode=document.getElementById('bm'+i).value, show=(mode==='fixed');
+  var br=document.getElementById('br'+i), brp=document.getElementById('brp'+i), bs=document.getElementById('brsave'+i);
+  if(br)br.style.display=show?'inline-block':'none';
+  if(brp)brp.style.display=show?'inline':'none';
+  if(bs)bs.style.display=show?'inline-block':'none';
+  if(mode==='rule') saveBackRuleValue(name,'rule',0,i); // 新ルールは率不要＝即保存
+  else if(br) br.focus();
+}
+function saveBackRule(i,name){
+  var rate=parseFloat(document.getElementById('br'+i).value)||0;
+  if(rate<=0||rate>100){ toast('固定率は1〜100%で入力してください',true); return; }
+  saveBackRuleValue(name,'fixed',rate,i);
+}
+function saveBackRuleValue(name,mode,rate,i){
+  var s=findStaff(name); if(s){s.backMode=mode;s.backRate=rate;}
+  if(!IS_GAS){ toast(name+' バック方式='+(mode==='fixed'?('固定'+rate+'%'):'新ルール')+'（ローカル）'); return; }
+  gsr('adminSetCastBackRule',USER_ID,name,mode,rate).then(function(r){ res(r,name+' のバック方式を保存しました')||load(); }).catch(function(){ toast('通信エラー',true); load(); });
 }
 /* ===== キャスト個別条件（参照メモ。給与計算には非連動。対象=キャスト・黒服・ドライバー） ===== */
 var TERM_FIELDS=[
@@ -660,30 +694,45 @@ function drawKyuyo(r){
   var body;
   if(!r.casts.length){ body='<div class="empty">この月のTRUST報酬データがありません。「📥 TRUST取込」から取込んでください。</div>'; }
   else{
-    var cols=[['名前','nm'],['勤務','日'],['時間報酬','¥'],['担当','¥'],['予約','¥'],['同伴','¥'],['ドリンク','¥'],['バック計','¥'],['プラス','¥'],['源泉','¥'],['日払','¥'],['送り代','¥'],['残り支給','¥'],['立替+','¥'],['最終支給','¥']];
-    var th='<thead><tr>'+cols.map(function(c,i){return '<th style="'+(i===0?'text-align:left':'')+'">'+esc(c[0])+'</th>';}).join('')+'</tr></thead>';
+    var cols=[['名前','nm'],['勤務','日'],['時間報酬','¥'],['担当小計','¥'],['倍率',''],['率',''],['新バック','¥'],['課税支給','¥'],['源泉','¥'],['日払','¥'],['マイナス','¥'],['残り','¥'],['立替+','¥'],['最終支給','¥'],['','']];
+    var th='<thead><tr>'+cols.map(function(c,i){return '<th style="'+(i===0?'text-align:left':(i>=4&&i<=5?'text-align:center':''))+'">'+esc(c[0])+'</th>';}).join('')+'</tr></thead>';
     var rows=r.casts.map(function(c){
       function y(v,cls){ return '<td style="text-align:right'+(cls?';'+cls:'')+'">'+(v?fmtYen(v):'<span style="color:var(--dim)">—</span>')+'</td>'; }
-      return '<tr><td class="nm">'+esc(c.name)+'</td>'
+      var rateLbl=(c.ratePct||0)+'%'+(c.fixed?'<span style="color:#e0b060" title="固定率">固</span>':'');
+      var manualMark=(c.intro||c.nyuten)?' <span title="紹介料'+fmtYen(c.intro||0)+' / 入店祝金'+fmtYen(c.nyuten||0)+'" style="color:#7fd88f">•</span>':'';
+      return '<tr><td class="nm">'+esc(c.name)+manualMark+'</td>'
         +'<td style="text-align:center">'+(c.kinmu||'—')+'</td>'
-        +y(c.jikan)+y(c.tantoBk)+y(c.yoyakuBk)+y(c.dohanBk)+y(c.drinkBk)+y(c.backTotal)+y(c.plusTotal)
+        +y(c.jikan)+y(c.tanto)
+        +'<td style="text-align:center;color:var(--sub)">'+(c.bairitu||0).toFixed(2)+'</td>'
+        +'<td style="text-align:center;color:var(--sub);font-size:11px">'+rateLbl+'</td>'
+        +'<td style="text-align:right;color:#8fd0ff;font-weight:700">'+(c.newBack?fmtYen(c.newBack):'—')+'</td>'
+        +y(c.kazei)
         +'<td style="text-align:right;color:#e88">'+(c.gensen?'-'+fmtYen(c.gensen):'—')+'</td>'
         +'<td style="text-align:right;color:#e88">'+(c.hibarai?'-'+fmtYen(c.hibarai):'—')+'</td>'
-        +'<td style="text-align:right;color:#e88">'+(c.okuri?'-'+fmtYen(c.okuri):'—')+'</td>'
+        +'<td style="text-align:right;color:#e88">'+(c.minusTotal?'-'+fmtYen(c.minusTotal):'—')+'</td>'
         +y(c.net)
         +'<td style="text-align:right;color:#7fd88f">'+(c.tatekae?'+'+fmtYen(c.tatekae):'—')+'</td>'
-        +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.finalPay)+'</td></tr>';
+        +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.finalPay)+'</td>'
+        +'<td style="text-align:center"><button class="btn sm" style="padding:2px 6px;font-size:11px" onclick=\'editKyuyoManual('+JSON.stringify(c.name)+','+(c.intro||0)+','+(c.nyuten||0)+')\'>✎</button></td></tr>';
     }).join('');
     var t=r.totals;
     var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td><td></td>'
-      +'<td style="text-align:right">'+fmtYen(t.jikan)+'</td><td></td><td></td><td></td><td></td>'
-      +'<td style="text-align:right">'+fmtYen(t.backTotal)+'</td><td style="text-align:right">'+fmtYen(t.plusTotal)+'</td>'
-      +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.okuri)+'</td>'
-      +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td></tr>';
+      +'<td style="text-align:right">'+fmtYen(t.jikan)+'</td><td style="text-align:right">'+fmtYen(t.tanto)+'</td><td></td><td></td>'
+      +'<td style="text-align:right">'+fmtYen(t.newBack)+'</td><td style="text-align:right">'+fmtYen(t.kazei)+'</td>'
+      +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.minusTotal)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td><td></td></tr>';
     body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'
-      +'<div class="hint" style="margin-top:8px">最終支給＝TRUSTの残り支給額（総支給−源泉−日払−マイナス）＋ 立替代（ヘアサロン領収書）。公開は「📣 公開設定」から。</div>';
+      +'<div class="hint" style="margin-top:8px">🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金（月単位）の編集。公開は「📣 公開設定」から。</div>';
   }
   setBody(paySubToggle('kyuyo')+head+body);
+}
+function editKyuyoManual(name,intro,nyuten){
+  var a=prompt('【'+name+'】'+(payMonth||'')+' キャスト紹介料（円）',intro||0); if(a===null)return;
+  var b=prompt('【'+name+'】'+(payMonth||'')+' 入店祝い金（円）',nyuten||0); if(b===null)return;
+  var vals={intro:parseInt(a,10)||0, nyuten:parseInt(b,10)||0};
+  if(!IS_GAS){ toast('（ローカルでは保存不可）'); return; }
+  loading();
+  gsr('adminSetKyuyoManual',USER_ID,payMonth,name,vals).then(function(r){ if(res(r,name+' の手入力を保存しました')) renderKyuyo(); }).catch(function(){ toast('保存に失敗しました',true); renderKyuyo(); });
 }
 function onKyuyoMonth(){ payMonth=document.getElementById('km').value; renderKyuyo(); }
 /* --- 📣 公開設定（従来の給与・ランキング公開） --- */
