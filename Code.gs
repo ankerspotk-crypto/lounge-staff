@@ -4520,6 +4520,54 @@ function handlePortalApi_(e) {
     return out({ ok: true, name, isAdmin: true, castList: castNames, castRoles });
   }
 
+  // === ホーム軽量ペイロード（初回ロード高速化） ===
+  // 売上/給与/領収書/月一覧などホーム非表示データを除外し、代わりに座席・今日の予約・空席を同梱して
+  // 従来の「portal(全計算) + getCastSeats + tab=yoyaku + tab=vacancy」の4往復を1往復に集約する。
+  // 成績・領収書タブを開いたときに tab=stats で残りを遅延ロードする（フロント loadStatsData）。
+  if (tab === 'home') {
+    const lookupNameH = normalizeName_(isAdmin ? viewAs : name);
+    const staffRoleH = getStaffRoleByName_(lookupNameH);
+    const shiftsH = portalShifts_(lookupNameH);
+    const confirmedShiftsH = getConfirmedShiftDates_(lookupNameH, shiftsH, staffRoleH);
+    const pendingShiftsH = staffRoleH === '黒服バイト' ? getPendingShiftDates_(lookupNameH) : {};
+    // 本日の実効出勤（デフォルト経路と同一ロジック）
+    let todayArrivalH = null;
+    const todayKeyH = bizShiftColKey_();
+    const todayShiftValH = rawShiftCellToday_(lookupNameH) || shiftsH[todayKeyH];
+    if (todayShiftValH && todayShiftValH !== '休み' && todayShiftValH !== '欠勤') {
+      const effH = castEffectiveArrival_(lookupNameH, todayShiftValH);
+      todayArrivalH = { key: todayKeyH, time: effH.time, pending: effH.pending, dohan: effH.dohan };
+    }
+    // 同梱: 座席(getCastSeats相当) / 今日の予約(tab=yoyaku相当) / 空席(tab=vacancy相当)
+    const seatsH = castCurrentSeats_(lookupNameH);
+    const workingH = isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin;
+    let reservationsH = []; try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {}
+    let vacancyH = null; try { vacancyH = getPortalVacancy_(); } catch (e) {}
+    return out({ ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH,
+      shifts: shiftsH, confirmedShifts: confirmedShiftsH, pendingShifts: pendingShiftsH,
+      todayArrival: todayArrivalH, seats: seatsH, working: workingH,
+      reservations: reservationsH, vacancy: vacancyH });
+  }
+
+  // === 成績ペイロード（成績タブを開いた時に遅延ロード） ===
+  if (tab === 'stats') {
+    const lookupNameS = normalizeName_(isAdmin ? viewAs : name);
+    const salesS = portalSales_(ss, lookupNameS, month);
+    const payS   = portalPay_(ss, lookupNameS, month);
+    const monthsS = portalAvailMonths_(ss, lookupNameS);
+    const hairTotalsS = {};
+    getHairReceipts_(ss, lookupNameS, '').forEach(r => { hairTotalsS[r.month] = (hairTotalsS[r.month] || 0) + r.amount; });
+    Object.keys(hairTotalsS).forEach(m => { if (!monthsS.includes(m)) monthsS.push(m); });
+    monthsS.sort().reverse();
+    const payPublishedS = {};
+    (monthsS || []).forEach(m => { payPublishedS[m] = !!prop('PAY_PUBLISHED_' + m); });
+    const salesDataDatesS = JSON.parse(prop('SALES_DATA_DATES') || '{}');
+    const payReceiptS = getPayrollReceiptStatus_(lookupNameS);
+    return out({ ok: true, name, isAdmin, viewAs: lookupNameS,
+      months: monthsS, sales: salesS, pay: payS, hairTotals: hairTotalsS,
+      payPublished: payPublishedS, salesDataDates: salesDataDatesS, payReceipt: payReceiptS });
+  }
+
   const lookupName = normalizeName_(isAdmin ? viewAs : name);
   const sales     = portalSales_(ss, lookupName, month);
   const pay       = portalPay_(ss, lookupName, month);
