@@ -1920,9 +1920,12 @@ var CUST_EDIT_FIELDS=[
   {label:'カード記載名',key:'card'},{label:'氏名',key:'name'},{label:'よみがな',key:'yomigana'},
   {label:'会員番号',key:'no'},{label:'担当',key:'tantou'},{label:'ボトル種類',key:'bottle'},
   {label:'ボトル位置',key:'pos'},{label:'会社名',key:'company'},{label:'誕生日',key:'bday',type:'date'},
+  {label:'入会日',key:'memberSince',type:'date'},{label:'年会費更新（会員期限の起点）',key:'feeDate',type:'date'},
   {label:'飲み方',key:'drink'},{label:'タバコ',key:'tabaco'},{label:'ネック名',key:'neck'},
   {label:'NG行為',key:'ng'},{label:'NGスタッフ',key:'ngStaff'},{label:'参考情報',key:'note',type:'area'}
 ];
+// 年月のみ("2026/07")も年月日("2026-07-01")も date入力用 yyyy-MM-dd に正規化（日が無ければ1日）
+function toDateInput(v){ var m=String(v||'').match(/(\d{4})[-\/.](\d{1,2})(?:[-\/.](\d{1,2}))?/); return m?(m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+(m[3]||'1')).slice(-2)):''; }
 function custValByLabel(label){
   var n=function(s){return String(s||'').replace(/\s/g,'');};
   var hit=(custDetailFields||[]).filter(function(f){return n(f.k).indexOf(n(label))>=0;})[0];
@@ -1933,8 +1936,11 @@ function startCustEdit(){
   var el=document.getElementById('cust-detail-body'); if(!el)return;
   var h=CUST_EDIT_FIELDS.map(function(f){
     var v=custValByLabel(f.label), input;
+    // 会員日付は詳細ヘッダー（解決済み）の値を優先してプレフィル
+    if(f.key==='feeDate') v=(custDetailCur&&custDetailCur.feeDate)||v;
+    else if(f.key==='memberSince') v=(custDetailCur&&custDetailCur.joined)||v;
     if(f.type==='area') input='<textarea id="ce-'+f.key+'" class="finput" rows="3" style="resize:none;width:100%;box-sizing:border-box">'+esc(v)+'</textarea>';
-    else if(f.type==='date') input='<input id="ce-'+f.key+'" class="finput" type="date" style="width:100%;box-sizing:border-box" value="'+esc(cvDateVal(v))+'">';
+    else if(f.type==='date') input='<input id="ce-'+f.key+'" class="finput" type="date" style="width:100%;box-sizing:border-box" value="'+esc(toDateInput(v))+'">';
     else input='<input id="ce-'+f.key+'" class="finput" style="width:100%;box-sizing:border-box" value="'+esc(v)+'">';
     return '<div style="margin:9px 0"><div style="color:var(--dim);font-size:12px;margin-bottom:3px">'+esc(f.label)+'</div>'+input+'</div>';
   }).join('');
@@ -1946,13 +1952,16 @@ function saveCustEdit(){
   if(!custDetailRowIdx){alert('対象の顧客が特定できません');return;}
   var payload={};
   CUST_EDIT_FIELDS.forEach(function(f){ var e=document.getElementById('ce-'+f.key); if(e)payload[f.key]=e.value; });
+  // 会員日付は空欄なら送らない（既存の入会日・年会費更新を誤って消さないため）
+  if(!payload.feeDate) delete payload.feeDate;
+  if(!payload.memberSince) delete payload.memberSince;
   var btn=document.querySelector('#cust-detail-body .nmemo-save'); if(btn){btn.disabled=true;btn.textContent='保存中...';}
   if(IS_GAS){
     gsr('kioskUpdateCustomer',custDetailRowIdx,payload).then(function(res){
       if(res&&res.ok){
         toast('✅ 顧客情報を更新しました');
         // 手元の表示も更新して再描画（ヘッダーと詳細を最新に）
-        var c=custDetailCur; if(c){ c.name=payload.name||c.name; c.card=payload.card||c.card; c.member=payload.no||c.member; c.tantou=payload.tantou; c.bottle=payload.bottle; c.bottlePos=payload.pos; c.nomikata=payload.drink; c.tabako=payload.tabaco; c.ng=payload.ng; c.note=payload.note; }
+        var c=custDetailCur; if(c){ c.name=payload.name||c.name; c.card=payload.card||c.card; c.member=payload.no||c.member; c.tantou=payload.tantou; c.bottle=payload.bottle; c.bottlePos=payload.pos; c.nomikata=payload.drink; c.tabako=payload.tabaco; c.ng=payload.ng; c.note=payload.note; if(payload.memberSince)c.joined=payload.memberSince; if(payload.feeDate)c.feeDate=payload.feeDate; }
         openCustDetail(custDetailIdx);
       } else { alert('更新エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='💾 保存';} }
     }).catch(function(e){ alert('更新エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 保存';} });
