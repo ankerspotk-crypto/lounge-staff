@@ -1614,9 +1614,9 @@ var custDetailList=[]; // 検索結果を保持（詳細表示のタップ用）
 var custLastQ='';      // 直近の検索キーワード（詳細→検索に戻る時に復元）
 var MENU_TILES=[
   {group:'開店・閉店 / 現金', items:[
-    {ic:'🌅', t:'開店チェック',   act:"openOpeningCheck()"},
+    {ic:'🌅', t:'開店の現金',   act:"openOpeningCheck()"},
     {ic:'🔓', t:'金庫出金',       act:"openSafeWithdrawal()"},
-    {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"}
+    {ic:'🌙', t:'閉店の現金',   act:"openCashCheck()"}
   ]},
   {group:'管理', items:[
     {ic:'👤', t:'顧客管理',           act:"menuCustomer()"},
@@ -1800,47 +1800,98 @@ function toggleReq(id,checked){var r=REQUESTS.find(function(x){return x.id===id;
 function openReqForSeat(idx,ev){if(ev)ev.stopPropagation();var s=SEATS[idx];showSheet('📣 '+esc(custKey(s.cust))+'様 のリクエスト',reqListHtml(reqsForCust(s.cust)),false);}
 function openAllRequests(){closeMenu();showSheet('📣 本日のキャストリクエスト',reqListHtml(REQUESTS),false);}
 
-/* ============ 現金管理：🌅 開店チェック ============ */
+/* ============ 現金管理：共通（4袋モデル） ============ */
 var CASH_DENOMS=[{k:'m10000',label:'万',v:10000},{k:'m5000',label:'五千',v:5000},{k:'m1000',label:'千',v:1000}];
+// 現金がある4つの場所。金種の枚数(m10000/m5000/m1000)で管理
+var CASH_BAGS=[
+  {k:'f5',    label:'5Fレジ', color:'#8fb8ff'},
+  {k:'f2',    label:'2Fレジ', color:'#6fd6b0'},
+  {k:'keihi', label:'経費袋', color:'#e0a060'},
+  {k:'safe',  label:'金庫',   color:'#bb99ee'}
+];
+function newBag(){ return {m10000:0,m5000:0,m1000:0}; }
+function newBags(){ var o={}; CASH_BAGS.forEach(function(b){ o[b.k]=newBag(); }); return o; }
+function bagYen(o){ o=o||{}; return (o.m10000||0)*10000+(o.m5000||0)*5000+(o.m1000||0)*1000; }
+function bagsYen(bags){ return CASH_BAGS.reduce(function(s,b){ return s+bagYen(bags[b.k]); },0); }
+function chipsHtml(names,fn){ return (names||[]).map(function(n){ return '<div class="chip" onclick="'+fn+'(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>'; }).join(''); }
+function cashStaffNames(){ return IS_GAS ? gsr('getKioskStaffList') : Promise.resolve(['りく','ひろき','たけし','ゆうと']); }
+// 金種別の枚数入力ブロック（4袋共通・data-b=袋キー / data-d=金種キー）
+function bagDenomInputs(bagKey,state,oninput){
+  var o=state[bagKey]||{};
+  return '<div class="ck-row" style="border:0;padding:0">'+CASH_DENOMS.map(function(d){
+    return '<label class="ck-denom"><span>'+d.label+'</span><input type="number" min="0" inputmode="numeric" data-b="'+bagKey+'" data-d="'+d.k+'" value="'+(o[d.k]||'')+'" oninput="'+oninput+'(this)"></label>';
+  }).join('')+'</div>';
+}
+
+/* ============ 現金管理：🌅 開店の現金 ============ */
 var openState=null;
+function mockOpenInit(){ return {dateKey:'2026-07-09',locked:false,prevClose:{dateKey:'2026-07-08',bags:{f5:120000,f2:80000,keihi:50000,safe:180000},total:430000}}; }
 function openOpeningCheck(){
-  closeMenu(); showSheet('🌅 開店チェック','<div class="empty-msg">読み込み中...</div>',false);
-  if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）開店チェックは本番のみ</div>'; return; }
+  closeMenu(); showSheet('🌅 開店の現金','<div class="empty-msg">読み込み中...</div>',false);
+  if(!IS_GAS){ renderOpening(mockOpenInit()); return; }
   gsr('getOpeningCheckInit').then(renderOpening).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
-function ckDenomBlock(group,floor,label){
-  return '<div class="ck-row"><div class="ck-flabel">'+label+'</div>'+CASH_DENOMS.map(function(d){return '<label class="ck-denom"><span>'+d.label+'</span><input type="number" min="0" inputmode="numeric" data-g="'+group+'" data-f="'+floor+'" data-d="'+d.k+'" oninput="opInput(this)"></label>';}).join('')+'</div>';
+function opBagCard(bag){
+  var o=openState.bags[bag.k], prev=(openState.prevClose&&openState.prevClose.bags)?openState.prevClose.bags[bag.k]:null;
+  return '<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+      +'<span style="width:11px;height:11px;border-radius:3px;background:'+bag.color+'"></span>'
+      +'<span style="font-weight:700;color:var(--txt)">'+bag.label+'</span>'
+      +(prev!=null?'<span style="font-size:11px;color:var(--dim)">前日 ¥'+Number(prev).toLocaleString()+'</span>':'')
+      +'<span id="op-sub-'+bag.k+'" style="margin-left:auto;font-weight:700;color:var(--txt)">¥'+bagYen(o).toLocaleString()+'</span>'
+    +'</div>'
+    +bagDenomInputs(bag.k,openState.bags,'opInput')
+    +(bag.k==='safe'?'<div id="op-adjust" style="margin-top:8px"></div>':'')
+    +'</div>';
 }
 function renderOpening(init){
   var b=document.getElementById('sheetBody'); if(!b)return;
   if(init.locked){
     var h='<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
     h+='<div class="ck-banner ok">✅ 提出済み（修正不可）／報告者 '+esc(init.reporterName)+'</div>';
-    if(init.prevClosing){ var d=Number(init.tillTotal)-Number(init.prevClosing.tillTotal); var dc=d===0?'#7be0a8':(Math.abs(d)<=500?'#e6c060':'#ff9a9a'); h+='<div class="kv"><span class="k">前日('+esc(init.prevClosing.dateKey)+')閉店レジ</span><span class="v">¥'+Number(init.prevClosing.tillTotal).toLocaleString()+'</span></div><div class="kv"><span class="k">本日開店レジ</span><span class="v">¥'+Number(init.tillTotal).toLocaleString()+'</span></div><div class="kv"><span class="k">差異</span><span class="v" style="color:'+dc+'">'+(d>=0?'+':'')+d.toLocaleString()+'円'+(d===0?'（一致）':'')+'</span></div>'; }
-    h+='<div class="flabel">レジ現金内訳</div><div class="ck-detail">'+(esc(init.tillStr)||'（内訳なし）')+'</div><div class="ck-total">合計 ¥'+Number(init.tillTotal).toLocaleString()+'</div>';
-    if(init.keihiStr||init.keihiTotal>0){ h+='<div class="flabel">経費</div><div class="ck-detail">'+(esc(init.keihiStr)||'')+'</div><div class="ck-total">合計 ¥'+Number(init.keihiTotal).toLocaleString()+'</div>'; }
+    var bags=init.bags||{}, prev=(init.prevClose&&init.prevClose.bags)||{};
+    CASH_BAGS.forEach(function(bg){
+      var now=Number(bags[bg.k]||0), pv=prev[bg.k]!=null?Number(prev[bg.k]):null, d=pv!=null?now-pv:0;
+      var dc=d===0?'#7be0a8':(Math.abs(d)<=1000?'#e6c060':(bg.k==='safe'?'#8fb8ff':'#ff9a9a'));
+      h+='<div class="kv"><span class="k"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'+bg.color+';margin-right:6px"></span>'+bg.label+'</span><span class="v">¥'+now.toLocaleString()+(pv!=null&&d!==0?' <span style="color:'+dc+';font-size:12px">('+(d>0?'+':'')+d.toLocaleString()+')</span>':'')+'</span></div>';
+    });
+    if(init.safeAdjust){ h+='<div class="ck-banner warn">🔷 金庫が前日より '+(init.safeAdjust>0?'+':'')+Number(init.safeAdjust).toLocaleString()+'円（営業時間外の運営者の抜き差し）</div>'; }
+    h+='<div class="kv" style="font-size:15px;margin-top:6px"><span class="k">今夜のスタート金額</span><span class="v">¥'+Number(init.total||bagsYen(bags)).toLocaleString()+'</span></div>';
     h+='<div class="savebtn" style="background:#1a2030" onclick="closeSheet()">閉じる</div>';
     b.innerHTML=h; return;
   }
-  openState={reporterName:'',till:{f5:{m10000:0,m5000:0,m1000:0},f2:{m10000:0,m5000:0,m1000:0}},keihi:{m10000:0,m5000:0,m1000:0}};
-  gsr('getKioskStaffList').then(function(names){
+  openState={reporterName:'',bags:newBags(),prevClose:init.prevClose||null};
+  cashStaffNames().then(function(names){
     var b2=document.getElementById('sheetBody'); if(!b2)return;
-    var h='<div class="ck-note">対象日 '+esc(init.dateKey)+'</div><div class="flabel">報告者（黒服）</div><div class="chips" id="op-rep">'+(names||[]).map(function(n){return '<div class="chip" onclick="opRep(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>';}).join('')+'</div>';
-    h+='<div class="flabel">レジ内現金（枚数）</div>'+ckDenomBlock('till','f5','5F')+ckDenomBlock('till','f2','2F');
-    h+='<div class="flabel">経費（枚数）</div>'+ckDenomBlock('keihi','keihi','経費');
+    var h='<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
+    h+='<div class="flabel">報告者（黒服）</div><div class="chips" id="op-rep">'+chipsHtml(names,'opRep')+'</div>';
+    h+='<div class="flabel">4つの袋を数える（紙幣の枚数）</div>';
+    h+=CASH_BAGS.map(opBagCard).join('');
+    h+='<div class="kv" style="font-size:15px;margin-top:2px"><span class="k">今夜のスタート金額（4袋 合計）</span><span class="v" id="op-grand">¥'+bagsYen(openState.bags).toLocaleString()+'</span></div>';
     h+='<div style="font-size:11px;color:#e0a060;margin-top:10px">⚠️ 送信後は修正できません。内容を確認してから送信してください。</div>';
     h+='<div id="op-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div>';
     h+='<div class="savebtn" onclick="submitOpening()">開店チェックを送信</div>';
-    b2.innerHTML=h;
+    b2.innerHTML=h; opRefresh();
   });
 }
 function opRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); openState.reporterName=n; }
-function opInput(inp){ var v=Number(inp.value)||0; if(inp.dataset.g==='keihi') openState.keihi[inp.dataset.d]=v; else openState.till[inp.dataset.f][inp.dataset.d]=v; }
+function opInput(inp){ openState.bags[inp.dataset.b][inp.dataset.d]=Number(inp.value)||0; opRefresh(); }
+function opRefresh(){
+  CASH_BAGS.forEach(function(bg){ var el=document.getElementById('op-sub-'+bg.k); if(el) el.textContent='¥'+bagYen(openState.bags[bg.k]).toLocaleString(); });
+  var g=document.getElementById('op-grand'); if(g) g.textContent='¥'+bagsYen(openState.bags).toLocaleString();
+  var adj=document.getElementById('op-adjust'); if(!adj)return;
+  var prev=(openState.prevClose&&openState.prevClose.bags)?Number(openState.prevClose.bags.safe||0):0;
+  var now=bagYen(openState.bags.safe), d=now-prev;
+  if(now===0){ adj.innerHTML=''; }
+  else if(d===0){ adj.innerHTML='<div style="font-size:12px;color:#7be0a8">前日 ¥'+prev.toLocaleString()+' と一致</div>'; }
+  else { adj.innerHTML='<div style="font-size:12px;color:'+(d>0?'#8fb8ff':'#ffb38f')+'">前日 ¥'+prev.toLocaleString()+' → '+(d>0?'+':'')+d.toLocaleString()+'円　運営者が金庫を'+(d>0?'足した':'抜いた')+'?</div>'; }
+}
 function submitOpening(){
   if(!openState.reporterName){ alert('報告者を選択してください'); return; }
   if(!confirm('開店チェックを送信します。送信後は修正できません。よろしいですか？'))return;
   var s=document.getElementById('op-status'); if(s)s.textContent='送信中…';
-  gsr('submitOpeningCheck',{reporterName:openState.reporterName,till:openState.till,keihi:openState.keihi}).then(function(res){
+  if(!IS_GAS){ if(s)s.textContent='✅ （ローカル）送信をシミュレート（スタート ¥'+bagsYen(openState.bags).toLocaleString()+'）'; return; }
+  gsr('submitOpeningCheck',{reporterName:openState.reporterName,bags:openState.bags}).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
     gsr('getOpeningCheckInit').then(renderOpening);
   }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
@@ -1878,49 +1929,120 @@ function submitSW(){
   }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
 }
 
-/* ============ 現金管理：🌙 閉店チェック ============ */
+/* ============ 現金管理：🌙 閉店の現金 ============ */
 var cashState=null;
+var SLIP_CATS=['買出し・経費','代引き','酒屋 現金仕入れ','派遣 日払い','在籍 日払い','給与 一部払い','出前','ドライバー支払い','通信光熱費支払い','その他'];
+var CASH_TOLERANCE=1000; // 札だけ数えるため小銭ぶんのズレは±この額まで「合ってる」扱い
+function mockCashInit(){ return {dateKey:'2026-07-09',openingSubmitted:true,openingTotal:450000,reportSubmitted:false,approved:false,souvenirStock:{}}; }
+function mockReadSlips(){ return [
+  {source:'read',category:'在籍 日払い',payee:'まや',amount:35000,imageUrl:'#',include:true},
+  {source:'read',category:'在籍 日払い',payee:'のあ',amount:28000,imageUrl:'#',include:true},
+  {source:'read',category:'買出し・経費',payee:'ドンキ',amount:7000,imageUrl:'#',include:true},
+  {source:'read',category:'酒屋 現金仕入れ',payee:'鈴木酒店',amount:40000,imageUrl:'#',include:true}
+]; }
+// kioskGetDenpyoDay の戻り（日払い記録／領収書記録）を伝票スリップ配列へ変換
+function readSlipsFromDenpyo(dp){
+  if(!dp) return [];
+  var out=[];
+  function pull(sec,payeeHdr,amtHdr,defCat){
+    if(!sec||!sec.rows)return; var hs=sec.headers||[];
+    var iP=hs.indexOf(payeeHdr), iA=hs.indexOf(amtHdr), iImg=-1;
+    hs.forEach(function(hd,idx){ if(/画像|写真|URL|リンク|ドライブ/.test(String(hd))) iImg=idx; });
+    sec.rows.forEach(function(r){ var c=r.cells||[]; var amt=Number(c[iA])||0; if(!amt)return;
+      out.push({source:'read',category:defCat,payee:iP>=0?String(c[iP]||''):'',amount:amt,imageUrl:iImg>=0?String(c[iImg]||''):'',include:true}); });
+  }
+  pull(dp.daily,'受取人','伝票金額','在籍 日払い');
+  pull(dp.receipt,'発行元','金額','買出し・経費');
+  return out;
+}
 function openCashCheck(){
-  closeMenu(); showSheet('🌙 閉店チェック','<div class="empty-msg">読み込み中...</div>',false);
-  if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）閉店チェックは本番のみ</div>'; return; }
-  Promise.all([gsr('getCashCheckInit'),gsr('getCashApproverNames').catch(function(){return[];}),gsr('getKioskStaffList').catch(function(){return[];})]).then(function(r){
-    initCashCheck(r[0],r[1]||[],r[2]||[]);
+  closeMenu(); showSheet('🌙 閉店の現金','<div class="empty-msg">読み込み中...</div>',false);
+  if(!IS_GAS){ initCashCheck(mockCashInit(),['りく'],['りく','ひろき','たけし','ゆうと'],mockReadSlips()); return; }
+  Promise.all([gsr('getCashCheckInit'),gsr('getCashApproverNames').catch(function(){return[];}),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay').catch(function(){return null;})]).then(function(r){
+    initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]));
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
-function initCashCheck(init,approvers,staff){
-  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,till:{f5:{m10000:0,m5000:0,m1000:0},f2:{m10000:0,m5000:0,m1000:0}},safeTransfer:{m10000:0,m5000:0,m1000:0},safeFinal:{m10000:0,m5000:0,m1000:0},keihi:{m10000:0,m5000:0,m1000:0},slips:[],approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted};
+function initCashCheck(init,approvers,staff,readSlips){
+  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted};
   renderCashCheck();
 }
-function ccDenom(group,floor,label){ return '<div class="ck-row"><div class="ck-flabel">'+label+'</div>'+CASH_DENOMS.map(function(d){return '<label class="ck-denom"><span>'+d.label+'</span><input type="number" min="0" inputmode="numeric" data-g="'+group+'" data-f="'+floor+'" data-d="'+d.k+'" oninput="ccInput(this)"></label>';}).join('')+'</div>'; }
-function ccInput(inp){ var v=Number(inp.value)||0,g=inp.dataset.g,d=inp.dataset.d; if(g==='till') cashState.till[inp.dataset.f][d]=v; else cashState[g][d]=v; }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
 function ccRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.reporterName=n; }
 function ccApprover(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.approverName=n; }
+function ccBagCard(bag){
+  var o=cashState.bags[bag.k];
+  return '<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:11px;height:11px;border-radius:3px;background:'+bag.color+'"></span><span style="font-weight:700;color:var(--txt)">'+bag.label+'</span><span id="cc-sub-'+bag.k+'" style="margin-left:auto;font-weight:700;color:var(--txt)">¥'+bagYen(o).toLocaleString()+'</span></div>'
+    +bagDenomInputs(bag.k,cashState.bags,'ccBagInput')+'</div>';
+}
+function ccBagInput(inp){ cashState.bags[inp.dataset.b][inp.dataset.d]=Number(inp.value)||0; ccRefresh(); }
+function ccCalc(){
+  var st=cashState, init=st.init;
+  var slipTotal=st.slips.reduce(function(s,x){ return s+((x.include!==false&&x.amount>0)?Number(x.amount):0); },0);
+  var start=Number(init.openingTotal||0), sales=Number(st.cashSalesInput||0);
+  var expected=start+sales-slipTotal, actual=bagsYen(st.bags), diff=expected-actual;
+  return {start:start,sales:sales,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:Math.abs(diff)<=CASH_TOLERANCE,openingSubmitted:!!init.openingSubmitted};
+}
+function ccDiagHtml(){
+  return '<div style="background:rgba(224,80,80,.12);border-radius:10px;padding:10px 12px;margin-top:8px">'
+    +'<div style="font-size:12px;color:#ff9a9a;margin-bottom:6px">よくある原因、確認して👇</div>'
+    +['運転手さんの日払い、入れた?','キャストの日払い、全員分ある?','経費レシート、撮り忘れてない?','もう一度数えてみる'].map(function(t){return '<label style="display:flex;gap:7px;align-items:center;font-size:13px;color:var(--txt);padding:3px 0"><input type="checkbox"> '+esc(t)+'</label>';}).join('')
+    +'</div>';
+}
+function ccFlowHtml(v,withDiag){
+  var h='<div class="cc-flow">';
+  h+=ccFlowRow('🌅 今夜のスタート','¥'+v.start.toLocaleString(),'#cfe0ff');
+  if(v.sales>0) h+=ccFlowRow('＋ 現金売上','¥'+v.sales.toLocaleString(),'#7be0a8');
+  if(v.slipTotal>0) h+=ccFlowRow('－ 伝票 出金','¥'+v.slipTotal.toLocaleString(),'#e0a060');
+  h+='<div class="cc-flow-row total"><span>＝ 残るはず</span><span>¥'+v.expected.toLocaleString()+'</span></div>';
+  h+=ccFlowRow('実際に数えた（4袋）','¥'+v.actual.toLocaleString(),'#ccc');
+  h+='</div>';
+  if(!v.openingSubmitted) return h+'<div class="ck-banner warn">🔶 開店の現金が未提出（残るはずが出せません）</div>';
+  var ok=v.within, msg=ok?'✅ 合ってます（差額 ¥'+Math.abs(v.diff).toLocaleString()+'・許容内）':(v.diff>0?'⚠️ ¥'+Math.abs(v.diff).toLocaleString()+' 足りません':'⚠️ ¥'+Math.abs(v.diff).toLocaleString()+' 多いです');
+  h+='<div class="ck-banner '+(ok?'ok':'ng')+'">'+msg+'</div>';
+  if(!ok&&withDiag) h+=ccDiagHtml();
+  return h;
+}
+function ccRefresh(){
+  CASH_BAGS.forEach(function(bg){ var el=document.getElementById('cc-sub-'+bg.k); if(el) el.textContent='¥'+bagYen(cashState.bags[bg.k]).toLocaleString(); });
+  var r=document.getElementById('cc-recon'); if(r) r.innerHTML=ccFlowHtml(ccCalc(),true);
+}
 function renderCashCheck(){
   var b=document.getElementById('sheetBody'); if(!b)return; var st=cashState, init=st.init;
   if(!st.formMode && init.reportSubmitted){ b.innerHTML=cashResultHtml(init); return; }
   var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
-  if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店チェックが未提出です（理論値が計算できません）</div>';
-  else h+='<div class="cc-info"><div>🌅 開店レジ　¥'+Number(init.openingTotal||0).toLocaleString()+'</div>'+((init.openingKeihiTotal||0)>0?'<div style="color:#e0a060">開店経費　¥'+Number(init.openingKeihiTotal).toLocaleString()+'</div>':'')+((init.withdrawalTotal||0)>0?'<div style="color:#7be0a8">金庫出金合計　¥'+Number(init.withdrawalTotal).toLocaleString()+'</div>':'')+'</div>';
-  h+='<div class="flabel">報告者（黒服）</div><div class="chips">'+st.staff.map(function(n){return '<div class="chip" onclick="ccRep(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>';}).join('')+'</div>';
-  h+='<div class="flabel">現金売上</div><input class="finput" type="number" inputmode="numeric" min="0" placeholder="0" style="text-align:right" oninput="cashState.cashSalesInput=Number(this.value)||0">';
-  h+='<div class="flabel">出金伝票（種別・相手先・金額・写真）</div><div id="cc-slips"></div><div class="cc-addslip" onclick="ccAddSlip()">＋ 伝票を追加</div>';
-  h+='<div class="flabel">レジ現金（紙幣のみ）</div>'+ccDenom('till','f5','5F')+ccDenom('till','f2','2F');
-  h+='<div class="flabel">金庫へ移動した分</div>'+ccDenom('safeTransfer','safeTransfer','金庫移動');
-  h+='<div class="flabel">金庫 最終枚数</div>'+ccDenom('safeFinal','safeFinal','金庫');
-  h+='<div class="flabel">経費</div>'+ccDenom('keihi','keihi','経費');
-  h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="submitCash()">照合チェックを送信</div>';
-  b.innerHTML=h; ccRenderSlips();
+  if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店の現金が未提出です（残るはずが計算できません）</div>';
+  else h+='<div class="cc-info"><div>🌅 今夜のスタート　¥'+Number(init.openingTotal||0).toLocaleString()+'</div></div>';
+  h+='<div class="flabel">報告者（黒服）</div><div class="chips">'+chipsHtml(st.staff,'ccRep')+'</div>';
+  h+='<div class="flabel">現金売上（数字ひとつ）</div><input class="finput" type="number" inputmode="numeric" min="0" placeholder="0" style="text-align:right" value="'+(st.cashSalesInput||'')+'" oninput="cashState.cashSalesInput=Number(this.value)||0;ccRefresh()">';
+  h+='<div id="cc-slips"></div>';
+  h+='<div class="flabel">閉店時の現金を数える（4袋・紙幣の枚数）</div>'+CASH_BAGS.map(ccBagCard).join('');
+  h+='<div class="flabel">現金の流れ（自動照合）</div><div id="cc-recon"></div>';
+  h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="submitCash()">閉店チェックを送信</div>';
+  b.innerHTML=h; ccRenderSlips(); ccRefresh();
 }
-function ccAddSlip(){ cashState.slips.push({type:'日払い',payee:'',amount:0,photoBase64:'',mime:'',previewUrl:''}); ccRenderSlips(); }
+function slipCatSelect(i){ var s=cashState.slips[i]; return '<select onchange="cashState.slips['+i+'].category=this.value">'+SLIP_CATS.map(function(c){return '<option'+(s.category===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'; }
+function ccAddSlip(){ cashState.slips.push({source:'manual',category:'買出し・経費',payee:'',amount:0,include:true,photoBase64:'',mime:'',previewUrl:''}); ccRenderSlips(); ccRefresh(); }
 function ccRenderSlips(){
-  var w=document.getElementById('cc-slips'); if(!w)return; var types=['日払い','支払い','その他'];
-  w.innerHTML=cashState.slips.map(function(s,i){
-    return '<div class="cc-slip"><div class="cc-slip-top"><select onchange="cashState.slips['+i+'].type=this.value">'+types.map(function(t){return '<option'+(s.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select><button onclick="cashState.slips.splice('+i+',1);ccRenderSlips()">✕</button></div>'
+  var w=document.getElementById('cc-slips'); if(!w)return;
+  var reads=[],mans=[]; cashState.slips.forEach(function(s,i){ (s.source==='read'?reads:mans).push(i); });
+  var readTotal=reads.reduce(function(t,i){ var s=cashState.slips[i]; return t+((s.include!==false&&s.amount>0)?Number(s.amount):0); },0);
+  var h='<div class="flabel">読み取り済み伝票（画像から）'+(reads.length?' <span style="color:#e0a060;font-weight:400">計 −¥'+readTotal.toLocaleString()+'</span>':'')+'</div>';
+  h+=reads.length?reads.map(function(i){ var s=cashState.slips[i];
+    return '<div class="cc-slip"><div class="cc-slip-top">'+slipCatSelect(i)+'<label style="margin-left:auto;font-size:12px;color:var(--dim)"><input type="checkbox" '+(s.include!==false?'checked':'')+' onchange="cashState.slips['+i+'].include=this.checked;ccRenderSlips();ccRefresh()"> 含める</label></div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-size:13px;color:var(--txt)">'+esc(s.payee||'（相手先不明）')+'</span>'
+      +'<input type="number" class="finput" style="width:110px;margin:0" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;ccRefresh()">'
+      +(s.imageUrl&&s.imageUrl!=='#'?'<a href="'+esc(s.imageUrl)+'" target="_blank" class="dp-img">📷</a>':'<span class="dp-img" style="opacity:.45">📷</span>')+'</div></div>';
+  }).join(''):'<div class="empty-msg" style="padding:6px 0;font-size:12px">画像から読み取った伝票はありません</div>';
+  h+='<div class="flabel">手入力で追加（写真が無い支払い）</div>';
+  h+=mans.map(function(i){ var s=cashState.slips[i];
+    return '<div class="cc-slip"><div class="cc-slip-top">'+slipCatSelect(i)+'<button onclick="cashState.slips.splice('+i+',1);ccRenderSlips();ccRefresh()">✕</button></div>'
       +'<input type="text" class="finput" placeholder="相手先（例: りく、酒屋）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value" style="margin-bottom:6px">'
-      +'<input type="number" class="finput" placeholder="金額" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0" style="margin-bottom:6px">'
-      +'<label class="cc-photo">'+(s.previewUrl?'<img src="'+s.previewUrl+'">':'<span style="font-size:22px">📷</span>')+'<span>'+(s.photoBase64?'撮影済み（タップで変更）':'伝票と現金を一緒に撮影／選択')+'</span><input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])ccPhoto('+i+',this.files[0])"></label></div>';
-  }).join('')||'<div class="empty-msg" style="padding:8px 0;font-size:12px">伝票はまだありません</div>';
+      +'<input type="number" class="finput" placeholder="金額" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;ccRefresh()" style="margin-bottom:6px">'
+      +'<label class="cc-photo">'+(s.previewUrl?'<img src="'+s.previewUrl+'">':'<span style="font-size:22px">📷</span>')+'<span>'+(s.photoBase64?'撮影済み（タップで変更）':'伝票を撮影／選択')+'</span><input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])ccPhoto('+i+',this.files[0])"></label></div>';
+  }).join('');
+  h+='<div class="cc-addslip" onclick="ccAddSlip()">＋ 伝票を手入力で追加</div>';
+  w.innerHTML=h;
 }
 function ccPhoto(idx,file){
   var canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),img=new Image(),reader=new FileReader();
@@ -1930,7 +2052,9 @@ function ccPhoto(idx,file){
 function submitCash(){
   var st=cashState; if(!st.reporterName){ alert('報告者を選択してください'); return; }
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
-  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,till:st.till,safeTransfer:st.safeTransfer,safeFinal:st.safeFinal,keihi:st.keihi,slips:st.slips.filter(function(x){return x.amount>0||x.photoBase64;})};
+  var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||''};});
+  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips};
+  if(!IS_GAS){ var v=ccCalc(); var it=st.init; it.reportSubmitted=true; it.reporterName=st.reporterName; it.cashSalesInput=v.sales; it.slipTotal=v.slipTotal; it.expectedRemain=v.expected; it.actualTotal=v.actual; it.diff=v.diff; it.within=v.within; it.slipDetails=slips; st.formMode=false; if(s)s.textContent=''; renderCashCheck(); return; }
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
     gsr('getCashCheckInit').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
@@ -1938,21 +2062,14 @@ function submitCash(){
 }
 function ccFlowRow(l,v,c){ return '<div class="cc-flow-row"><span style="color:#889">'+l+'</span><span style="color:'+(c||'#ccc')+'">'+v+'</span></div>'; }
 function cashResultHtml(init){
-  var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'　報告者 '+esc(init.reporterName)+'</div><div class="flabel">現金の流れ</div><div class="cc-flow">';
-  h+=ccFlowRow('🌅 開店レジ残高','¥'+Number(init.openingTotal||0).toLocaleString(),'#cfe0ff');
-  if((init.cashSalesInput||0)>0) h+=ccFlowRow('＋ 現金売上','¥'+Number(init.cashSalesInput).toLocaleString(),'#7be0a8');
-  if((init.withdrawalTotal||0)>0) h+=ccFlowRow('＋ 金庫出金','¥'+Number(init.withdrawalTotal).toLocaleString(),'#7be0a8');
-  if((init.openingKeihiTotal||0)>0) h+=ccFlowRow('－ 開店経費','¥'+Number(init.openingKeihiTotal).toLocaleString(),'#e0a060');
-  if((init.slipTotal||0)>0) h+=ccFlowRow('－ 伝票出金','¥'+Number(init.slipTotal).toLocaleString(),'#e0a060');
-  if((init.keihiTotal||0)>0) h+=ccFlowRow('－ 閉店経費','¥'+Number(init.keihiTotal).toLocaleString(),'#e0a060');
-  if(init.theoreticalRemain!==null) h+='<div class="cc-flow-row total"><span>＝ 理論値</span><span>¥'+Number(init.theoreticalRemain).toLocaleString()+'</span></div>';
-  h+='</div><div class="flabel">照合チェック</div>';
-  if(init.theoreticalRemain===null) h+='<div class="ck-banner warn">⚠️ 開店チェック未提出のため理論値なし</div>';
-  else { var d=init.diff,ok=d===0; h+='<div class="ck-banner '+(ok?'ok':'ng')+'">実測合計 ¥'+Number(init.actualTotal||0).toLocaleString()+'（レジ¥'+Number(init.actualTill||0).toLocaleString()+(init.safeTransferTotal?'＋金庫移動¥'+Number(init.safeTransferTotal).toLocaleString():'')+'）<br>理論値 ¥'+Number(init.theoreticalRemain).toLocaleString()+'<br>差額 ¥'+Math.abs(d).toLocaleString()+(ok?'　✅ 一致':'　⚠️ 要確認')+'</div>'; }
-  if(init.safeFinalStr) h+='<div class="flabel">金庫 最終内訳</div><div class="ck-detail">'+esc(init.safeFinalStr)+'</div>';
+  var v={start:Number(init.openingTotal||0),sales:Number(init.cashSalesInput||0),slipTotal:Number(init.slipTotal||0),expected:Number(init.expectedRemain||0),actual:Number(init.actualTotal||0),diff:Number(init.diff||0),within:!!init.within,openingSubmitted:!!init.openingSubmitted};
+  var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'　報告者 '+esc(init.reporterName)+'</div>';
+  h+='<div class="flabel">現金の流れ</div>'+ccFlowHtml(v,true);
+  var sd=init.slipDetails||[];
+  if(sd.length) h+='<div class="flabel">出ていったお金（伝票 '+sd.length+'枚）</div><div class="cc-flow">'+sd.map(function(x){return '<div class="cc-flow-row"><span style="color:#889">'+esc(x.category||'その他')+(x.payee?' / '+esc(x.payee):'')+(x.imageUrl&&x.imageUrl!=='#'?' <a href="'+esc(x.imageUrl)+'" target="_blank" style="color:#7ac6ff">📷</a>':'')+'</span><span style="color:#e0a060">−¥'+Number(x.amount||0).toLocaleString()+'</span></div>';}).join('')+'</div>';
   if(init.approved) h+='<div class="ck-banner ok">✅ 承認済み　承認者 '+esc(init.approver)+'（'+esc(init.approvedAt)+'）<br>🚪 退勤OKです</div>';
-  else h+='<div class="flabel">管理者承認</div><div class="ck-note">りくまたは管理者が確認して承認してください</div><div class="chips">'+(cashState.approverNames||[]).map(function(n){return '<div class="chip" onclick="ccApprover(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>';}).join('')+'</div><div id="cc-appstatus" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="approveCash()">承認する</div>';
-  h+='<div class="act dng" style="margin-top:10px" onclick="redoCash()">✏️ 内容を修正して再照合チェック</div>';
+  else h+='<div class="flabel">管理者承認</div><div class="ck-note">りくまたは管理者が確認して承認してください</div><div class="chips">'+chipsHtml(cashState.approverNames||[],'ccApprover')+'</div><div id="cc-appstatus" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="approveCash()">承認する</div>';
+  h+='<div class="act dng" style="margin-top:10px" onclick="redoCash()">✏️ 内容を修正して再チェック</div>';
   return h;
 }
 function approveCash(){
@@ -1960,10 +2077,10 @@ function approveCash(){
   var s=document.getElementById('cc-appstatus'); if(s)s.textContent='送信中…';
   gsr('approveCashCheck',cashState.dateKey,cashState.approverName).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
-    gsr('getCashCheckInit').then(function(d){ initCashCheck(d,cashState.approverNames,cashState.staff); });
+    gsr('getCashCheckInit').then(function(d){ initCashCheck(d,cashState.approverNames,cashState.staff,cashState.slips.filter(function(x){return x.source==='read';})); });
   }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
 }
-function redoCash(){ cashState.formMode=true; cashState.slips=[]; cashState.reporterName=''; cashState.cashSalesInput=0; cashState.till={f5:{m10000:0,m5000:0,m1000:0},f2:{m10000:0,m5000:0,m1000:0}}; cashState.safeTransfer={m10000:0,m5000:0,m1000:0}; cashState.safeFinal={m10000:0,m5000:0,m1000:0}; cashState.keihi={m10000:0,m5000:0,m1000:0}; renderCashCheck(); }
+function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
