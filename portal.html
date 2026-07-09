@@ -1155,6 +1155,7 @@ function renderSales() {
   }
 
   if (num(row['ボーナス']) > 0) h += item('ボーナス', yen(row['ボーナス']), '#ffcc44');
+  if (num(row['送迎手当']) > 0) h += item('送迎手当', yen(row['送迎手当']), '#ffcc44');
   if (num(row['入店祝い金']) > 0) h += item('入店祝い金', yen(row['入店祝い金']), '#ffcc44');
   h += item('源泉徴収', '−' + yen(row['源泉徴収']), '#cc6666');
   if (num(row['日払']) > 0) h += item('日払控除', '−' + yen(row['日払']), '#cc6666');
@@ -1364,9 +1365,12 @@ function renderPay() {
   var bottleB = n(s['ボトルバック']);
   var foodB   = n(s['年会費バック']);
   var bonus   = n(s['ボーナス']);
+  var sougei  = n(s['送迎手当']);
+  var zangyo  = n(s['残業代']);
+  var urihan  = n(s['売り半']);
   var nyutenB = n(s['入店祝い金']);
   var shoBack = n(p['新バック']);
-  var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + nyutenB;
+  var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + sougei + zangyo + urihan + nyutenB;
 
   var gensen    = n(s['源泉徴収']);
   var nichibara = n(s['日払']);
@@ -1469,6 +1473,9 @@ function renderPay() {
   if (bottleB > 0) h += tr('ボトルバック',    yen(bottleB), 'shikyu');
   if (foodB   > 0) h += tr('年会費バック',    yen(foodB),   'shikyu');
   if (bonus   > 0) h += tr('運営手当',        yen(bonus),   'shikyu');
+  if (sougei  > 0) h += tr('送迎手当',        yen(sougei),  'shikyu');
+  if (zangyo  > 0) h += tr('残業代',          yen(zangyo),  'shikyu');
+  if (urihan  > 0) h += tr('売り半',          yen(urihan),  'shikyu');
   if (nyutenB > 0) h += tr('入店祝い金',      yen(nyutenB), 'shikyu');
   h += tr('合計', yen(shikyu), 'total');
 

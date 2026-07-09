@@ -473,23 +473,206 @@ function saveNotif(){
 }
 
 /* ===== 💰 給与・ランキング ===== */
-var payMonth=null, payStat=null;
+var payMonth=null, payStat=null, paySub='tatekae';
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
-function renderPay(){
-  if(!payMonth)payMonth=nowMonth(); loading();
-  api('getPublishStatus',{month:payMonth}).then(function(r){ payStat=r||{}; drawPay(); }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+function paySubToggle(which){
+  function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
+  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('trust','📥 TRUST取込')+chip('kyuyo','🧮 給与明細')+chip('publish','📣 公開設定')+'</div>';
 }
-function drawPay(){
+function paySwitch(k){ paySub=k; renderPay(); }
+function renderPay(){
+  if(paySub==='tatekae') return renderTatekae();
+  if(paySub==='trust')   return renderTrust();
+  if(paySub==='kyuyo')   return renderKyuyo();
+  renderPublish();
+}
+/* --- 💳 立替集計（キャスト×月の領収書合計） --- */
+function renderTatekae(){
+  if(!IS_GAS){ setBody(paySubToggle('tatekae')+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; }
+  loading();
+  gsr('adminGetTatekaeSummary',USER_ID).then(function(r){ if(!res(r))return; drawTatekae(r); }).catch(function(){setBody(paySubToggle('tatekae')+'<div class="empty">読み込みエラー</div>');});
+}
+function drawTatekae(r){
+  var head='<div class="toolbar"><span class="cnt">立替代（ヘアサロン領収書）'+r.castCount+'名 ・ 総額'+fmtYen(r.grandTotal)+'</span></div>';
+  if(!r.months.length){ setBody(paySubToggle('tatekae')+head+'<div class="empty">提出された領収書はありません</div>'); return; }
+  var th='<thead><tr><th style="text-align:left">キャスト</th>'+r.months.map(function(m){return '<th>'+esc(m)+'</th>';}).join('')+'<th>合計</th></tr></thead>';
+  var body=r.casts.map(function(c){
+    return '<tr><td class="nm">'+esc(c.name)+'</td>'
+      +r.months.map(function(m){ var v=c.byMonth[m]||0; return '<td style="text-align:right">'+(v?fmtYen(v):'<span style="color:var(--dim)">—</span>')+'</td>'; }).join('')
+      +'<td style="text-align:right;font-weight:800;color:var(--accent)">'+fmtYen(c.total)+'</td></tr>';
+  }).join('');
+  var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td>'+r.months.map(function(m){return '<td style="text-align:right">'+fmtYen(r.monthTotals[m])+'</td>';}).join('')+'<td style="text-align:right">'+fmtYen(r.grandTotal)+'</td></tr>';
+  setBody(paySubToggle('tatekae')+head+'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx">'+th+'<tbody>'+body+totalRow+'</tbody></table></div>'+'<div class="hint" style="margin-top:8px">立替代＝各キャストが提出したヘアサロン領収書の月合計。給与では最終支給に加算されます。</div>');
+}
+/* --- 📥 TRUST取込（Excelファイル or 貼り付け） --- */
+var trustPreview=null;
+function renderTrust(){
+  var mo=payMonth||nowMonth();
+  setBody(paySubToggle('trust')+
+    '<div class="sec"><div class="sec-t">📥 TRUSTデータ取込</div>'+
+    '<div class="hint">TRUSTの給与Excel（.xlsx）を選ぶだけで自動読取します。「キャスト売上一覧」シートを見つけて時間報酬・各種バック・源泉・送り代などを固定列で解釈します。</div>'+
+    '<div class="toolbar" style="margin-top:10px"><span class="cnt">対象月</span><input class="finput" id="tm" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM"></div>'+
+    '<div class="toolbar" style="margin-top:8px"><label class="btn pri" style="cursor:pointer">📂 Excelファイルを選ぶ<input type="file" id="txlsx" accept=".xlsx" onchange="trustPickFile(this)" style="display:none"></label><span class="cnt" id="tfname">（.xlsx を選択）</span></div>'+
+    '<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--sub);font-size:12px;font-weight:700">またはシートをコピーして貼り付け（ファイルが読めない時）</summary>'+
+    '<textarea class="ta" id="ttsv" rows="6" placeholder="Excel/スプレッドシートのキャスト売上一覧を全選択コピーして貼り付け（タブ区切り）" style="width:100%;margin-top:8px;font-family:monospace;font-size:12px"></textarea>'+
+    '<div class="toolbar" style="margin-top:8px"><button class="btn" onclick="trustDoPreview()">🔍 貼り付けをプレビュー</button></div></details>'+
+    '<div id="tprev"></div></div>');
+}
+/* ブラウザ内 xlsx 解析（ライブラリ不要・DecompressionStream/正規表現のみ） */
+async function xlsxInflateRaw_(bytes){
+  var ds=new DecompressionStream('deflate-raw');
+  var ab=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+async function xlsxUnzip_(u8, wanted){
+  var dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength), eocd=-1;
+  for(var i=u8.length-22;i>=0;i--){ if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;} }
+  if(eocd<0) throw new Error('ZIP終端が見つかりません');
+  var cdCount=dv.getUint16(eocd+10,true), off=dv.getUint32(eocd+16,true), td=new TextDecoder(), out={};
+  for(var n=0;n<cdCount;n++){
+    if(dv.getUint32(off,true)!==0x02014b50) break;
+    var method=dv.getUint16(off+10,true), compSize=dv.getUint32(off+20,true);
+    var nameLen=dv.getUint16(off+28,true), extraLen=dv.getUint16(off+30,true), commentLen=dv.getUint16(off+32,true);
+    var lho=dv.getUint32(off+42,true);
+    var name=td.decode(u8.subarray(off+46,off+46+nameLen));
+    if(wanted(name)){
+      var lNameLen=dv.getUint16(lho+26,true), lExtraLen=dv.getUint16(lho+28,true);
+      var start=lho+30+lNameLen+lExtraLen, comp=u8.subarray(start,start+compSize);
+      out[name]= method===0 ? comp.slice() : await xlsxInflateRaw_(comp);
+    }
+    off+=46+nameLen+extraLen+commentLen;
+  }
+  return out;
+}
+function xlsxUnesc_(s){return String(s).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&#x([0-9a-fA-F]+);/g,function(_,h){return String.fromCodePoint(parseInt(h,16));}).replace(/&#(\d+);/g,function(_,d){return String.fromCodePoint(+d);}).replace(/&amp;/g,'&');}
+function xlsxParseSST_(xml){var out=[],re=/<si>([\s\S]*?)<\/si>/g,m;while(m=re.exec(xml)){var s='',tre=/<t[^>]*>([\s\S]*?)<\/t>/g,tm;while(tm=tre.exec(m[1]))s+=xlsxUnesc_(tm[1]);out.push(s);}return out;}
+function xlsxColNum_(ref){var m=ref.match(/[A-Z]+/)[0],n=0;for(var i=0;i<m.length;i++)n=n*26+(m.charCodeAt(i)-64);return n;}
+function xlsxParseSheet_(xml,sst){
+  var rows=[],rowRe=/<row\b[^>]*>([\s\S]*?)<\/row>/g,rm;
+  while(rm=rowRe.exec(xml)){
+    var body=rm[1],cells={},mx=0,cRe=/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g,cm;
+    while(cm=cRe.exec(body)){
+      var attrs=cm[1]||'',inner=cm[2]||'',rM=attrs.match(/r="([A-Z]+\d+)"/); if(!rM)continue;
+      var ci=xlsxColNum_(rM[1]),tM=attrs.match(/t="([^"]+)"/),t=tM?tM[1]:null,val='',vM=inner.match(/<v>([\s\S]*?)<\/v>/);
+      if(t==='inlineStr'){var iM=inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);val=iM?xlsxUnesc_(iM[1]):'';}
+      else if(vM){val=t==='s'?(sst[parseInt(vM[1])]||''):xlsxUnesc_(vM[1]);}
+      cells[ci]=val; if(ci>mx)mx=ci;
+    }
+    var arr=[]; for(var k=1;k<=mx;k++)arr.push(cells[k]==null?'':String(cells[k]).replace(/[\t\r\n]/g,' '));
+    rows.push(arr);
+  }
+  return rows;
+}
+function xlsxDataRows_(rows){var c=0;for(var i=0;i<rows.length;i++){var no=(rows[i][0]||'').trim(),nm=(rows[i][1]||'').trim();if(/^\d+$/.test(no)&&nm&&nm!=='合計')c++;}return c;}
+async function xlsxBestSheetRows_(file){
+  var u8=new Uint8Array(await file.arrayBuffer());
+  var files=await xlsxUnzip_(u8,function(n){return n==='xl/sharedStrings.xml'||/^xl\/worksheets\/sheet\d+\.xml$/.test(n);});
+  var td=new TextDecoder();
+  var sst=files['xl/sharedStrings.xml']?xlsxParseSST_(td.decode(files['xl/sharedStrings.xml'])):[];
+  var best=null,score=-1;
+  Object.keys(files).filter(function(n){return /worksheets/.test(n);}).sort().forEach(function(n){
+    var rows=xlsxParseSheet_(td.decode(files[n]),sst),sc=xlsxDataRows_(rows);
+    if(sc>score){score=sc;best=rows;}
+  });
+  return best||[];
+}
+async function trustPickFile(inp){
+  var f=inp.files&&inp.files[0]; if(!f)return;
+  document.getElementById('tfname').textContent=f.name;
+  var prev=document.getElementById('tprev'); prev.innerHTML='<div class="empty">Excelを解析中…</div>';
+  try{
+    var rows=await xlsxBestSheetRows_(f);
+    if(!rows.length) throw new Error('シートが読めませんでした');
+    document.getElementById('ttsv').value=rows.map(function(r){return r.join('\t');}).join('\n');
+    trustDoPreview();
+  }catch(e){
+    prev.innerHTML='<div class="empty" style="color:#e88">Excelの自動読取に失敗しました（ブラウザ未対応の可能性）。下の「貼り付け」をお使いください。<br>詳細: '+esc(String(e&&e.message||e))+'</div>';
+  }
+}
+function trustDoPreview(){
+  var mo=(document.getElementById('tm').value||'').trim(); if(mo)payMonth=mo;
+  var tsv=document.getElementById('ttsv').value||'';
+  if(!tsv.trim()){ toast('データを貼り付けてください',true); return; }
+  document.getElementById('tprev').innerHTML='<div class="empty">解析中…</div>';
+  gsr('adminImportTrustMonth',USER_ID,mo,tsv,false).then(function(r){
+    if(r&&r.ok===false){ document.getElementById('tprev').innerHTML='<div class="empty" style="color:#e88">'+esc(r.error||'解析失敗')+'</div>'; return; }
+    trustPreview={month:r.month,tsv:tsv};
+    var rows=r.casts.map(function(c){ return '<tr><td class="nm">'+esc(c.name)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(c.jikan)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(c.backTotal)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(c.gross)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(c.gensen)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(c.okuri)+'</td>'
+      +'<td style="text-align:right;font-weight:800;color:var(--accent)">'+fmtYen(c.net)+'</td></tr>'; }).join('');
+    document.getElementById('tprev').innerHTML='<div class="hint" style="margin:10px 0 6px">'+esc(r.month)+' ・ '+r.count+'名を検出。内容を確認して取込してください。</div>'
+      +'<div style="overflow-x:auto"><table class="mtx"><thead><tr><th style="text-align:left">名前</th><th>時間報酬</th><th>バック計</th><th>総支給額</th><th>源泉徴収</th><th>送り代</th><th>残り支給額</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<div class="toolbar" style="margin-top:10px"><button class="btn ok" onclick="trustDoCommit()">✅ この内容で取込（'+esc(r.month)+'・'+r.count+'名）</button></div>';
+  }).catch(function(){ document.getElementById('tprev').innerHTML='<div class="empty">通信エラー</div>'; });
+}
+function trustDoCommit(){
+  if(!trustPreview){ toast('先にプレビューしてください',true); return; }
+  if(!confirm(trustPreview.month+' のTRUST報酬データを取込みます（同月の既存データは置き換え）。よろしいですか？'))return;
+  gsr('adminImportTrustMonth',USER_ID,trustPreview.month,trustPreview.tsv,true).then(function(r){
+    if(res(r,r&&r.count+'名を取込みました')){ trustPreview=null; paySub='kyuyo'; renderPay(); }
+  }).catch(function(){ toast('取込に失敗しました',true); });
+}
+/* --- 🧮 給与明細（TRUST報酬＋立替代→最終支給） --- */
+function renderKyuyo(){
+  if(!IS_GAS){ setBody(paySubToggle('kyuyo')+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; }
+  loading();
+  gsr('adminGetPayrollDetail',USER_ID,payMonth||'').then(function(r){ if(!res(r))return; drawKyuyo(r); }).catch(function(){setBody(paySubToggle('kyuyo')+'<div class="empty">読み込みエラー</div>');});
+}
+function drawKyuyo(r){
+  payMonth=r.month;
+  var opts=(r.months||[]).map(function(m){return '<option value="'+esc(m)+'"'+(m===r.month?' selected':'')+'>'+esc(m)+'</option>';}).join('')||'<option>'+esc(r.month||'—')+'</option>';
+  var head='<div class="toolbar"><span class="cnt">対象月</span><select class="finput" id="km" onchange="onKyuyoMonth()" style="width:120px">'+opts+'</select>'
+    +'<span class="cnt">'+(r.casts.length)+'名 ・ 最終支給計'+fmtYen(r.totals.finalPay)+'</span>'
+    +(r.published?'<span style="color:#7fd88f;font-weight:800;font-size:12px">● 公開中</span>':'<span style="color:var(--dim);font-weight:800;font-size:12px">○ 非公開</span>')
+    +(r.casts.length?'<button class="btn '+(r.published?'dng':'ok')+' sm" onclick="togglePay('+(!r.published)+')">'+(r.published?'非公開にする':'キャストに公開する')+'</button>':'')+'</div>';
+  var body;
+  if(!r.casts.length){ body='<div class="empty">この月のTRUST報酬データがありません。「📥 TRUST取込」から取込んでください。</div>'; }
+  else{
+    var cols=[['名前','nm'],['勤務','日'],['時間報酬','¥'],['担当','¥'],['予約','¥'],['同伴','¥'],['ドリンク','¥'],['バック計','¥'],['プラス','¥'],['源泉','¥'],['日払','¥'],['送り代','¥'],['残り支給','¥'],['立替+','¥'],['最終支給','¥']];
+    var th='<thead><tr>'+cols.map(function(c,i){return '<th style="'+(i===0?'text-align:left':'')+'">'+esc(c[0])+'</th>';}).join('')+'</tr></thead>';
+    var rows=r.casts.map(function(c){
+      function y(v,cls){ return '<td style="text-align:right'+(cls?';'+cls:'')+'">'+(v?fmtYen(v):'<span style="color:var(--dim)">—</span>')+'</td>'; }
+      return '<tr><td class="nm">'+esc(c.name)+'</td>'
+        +'<td style="text-align:center">'+(c.kinmu||'—')+'</td>'
+        +y(c.jikan)+y(c.tantoBk)+y(c.yoyakuBk)+y(c.dohanBk)+y(c.drinkBk)+y(c.backTotal)+y(c.plusTotal)
+        +'<td style="text-align:right;color:#e88">'+(c.gensen?'-'+fmtYen(c.gensen):'—')+'</td>'
+        +'<td style="text-align:right;color:#e88">'+(c.hibarai?'-'+fmtYen(c.hibarai):'—')+'</td>'
+        +'<td style="text-align:right;color:#e88">'+(c.okuri?'-'+fmtYen(c.okuri):'—')+'</td>'
+        +y(c.net)
+        +'<td style="text-align:right;color:#7fd88f">'+(c.tatekae?'+'+fmtYen(c.tatekae):'—')+'</td>'
+        +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.finalPay)+'</td></tr>';
+    }).join('');
+    var t=r.totals;
+    var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td><td></td>'
+      +'<td style="text-align:right">'+fmtYen(t.jikan)+'</td><td></td><td></td><td></td><td></td>'
+      +'<td style="text-align:right">'+fmtYen(t.backTotal)+'</td><td style="text-align:right">'+fmtYen(t.plusTotal)+'</td>'
+      +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.okuri)+'</td>'
+      +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td></tr>';
+    body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'
+      +'<div class="hint" style="margin-top:8px">最終支給＝TRUSTの残り支給額（総支給−源泉−日払−マイナス）＋ 立替代（ヘアサロン領収書）。公開は「📣 公開設定」から。</div>';
+  }
+  setBody(paySubToggle('kyuyo')+head+body);
+}
+function onKyuyoMonth(){ payMonth=document.getElementById('km').value; renderKyuyo(); }
+/* --- 📣 公開設定（従来の給与・ランキング公開） --- */
+function renderPublish(){
+  if(!payMonth)payMonth=nowMonth(); loading();
+  api('getPublishStatus',{month:payMonth}).then(function(r){ payStat=r||{}; drawPublish(); }).catch(function(){setBody(paySubToggle('publish')+'<div class="empty">読み込みエラー</div>');});
+}
+function drawPublish(){
   var pay=!!payStat.payPublished, rank=!!payStat.rankPublished;
-  setBody(
+  setBody(paySubToggle('publish')+
     '<div class="toolbar"><span class="cnt">対象月</span><input class="finput" id="pm" value="'+esc(payMonth)+'" style="width:130px" placeholder="YYYY-MM"><button class="btn" onclick="loadPayMonth()">表示</button></div>'+
     '<div class="sec"><div class="sec-t">💴 給与の公開</div><div class="lrow"><div class="main"><div class="nm">'+esc(payMonth)+' 給与明細</div><div class="meta">'+(pay?'公開中（スタッフが自分の給与を閲覧可）':'非公開')+'</div></div><button class="btn '+(pay?'dng':'ok')+'" onclick="togglePay('+(!pay)+')">'+(pay?'非公開にする':'公開する')+'</button></div></div>'+
     '<div class="sec"><div class="sec-t">🏆 ランキングの公開</div><div class="lrow"><div class="main"><div class="nm">'+esc(payMonth)+' ランキング</div><div class="meta">'+(rank?'公開中':'非公開')+'</div></div><button class="btn '+(rank?'dng':'ok')+'" onclick="toggleRank('+(!rank)+')">'+(rank?'非公開にする':'公開する')+'</button></div></div>'+
-    '<div class="sec"><div class="sec-t">📅 売上データ日付</div><div class="toolbar"><input class="finput" id="sd" type="date" value="'+esc(payStat.salesDate||'')+'"><button class="btn pri" onclick="saveSalesDate()">保存</button></div><div class="hint">TRUST売上を紐付ける基準日。</div></div>'+
-    '<div class="sec"><div class="sec-t">📥 給与CSVインポート</div><div class="hint">既知の不具合があるため、このコンソールには未搭載です（修正後に追加予定）。</div></div>'
+    '<div class="sec"><div class="sec-t">📅 売上データ日付</div><div class="toolbar"><input class="finput" id="sd" type="date" value="'+esc(payStat.salesDate||'')+'"><button class="btn pri" onclick="saveSalesDate()">保存</button></div><div class="hint">TRUST売上を紐付ける基準日。</div></div>'
   );
 }
-function loadPayMonth(){ var m=(document.getElementById('pm').value||'').trim(); if(m)payMonth=m; renderPay(); }
+function loadPayMonth(){ var m=(document.getElementById('pm').value||'').trim(); if(m)payMonth=m; renderPublish(); }
 function togglePay(on){ api(on?'publishPay':'unpublishPay',{month:payMonth}).then(function(r){ if(res(r,on?'給与を公開しました':'給与を非公開にしました'))renderPay(); }); }
 function toggleRank(on){ api(on?'publishRanking':'unpublishRanking',{month:payMonth}).then(function(r){ if(res(r,on?'ランキングを公開しました':'非公開にしました'))renderPay(); }); }
 function saveSalesDate(){ var d=document.getElementById('sd').value; api('setSalesDataDate',{month:payMonth,date:d}).then(function(r){ res(r,'売上データ日付を保存しました'); }); }

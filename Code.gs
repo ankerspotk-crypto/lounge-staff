@@ -57,6 +57,7 @@ function setProp(k, v) {
 const URIAGE_TAB       = '売上明細';
 const KYUYO_TAB        = '給与計算';
 const HAIR_RECEIPT_TAB = 'ヘアサロン領収書';
+const TRUST_TAB        = 'TRUST報酬';
 const CASH_CHECK_TAB     = '現金管理';
 const OPENING_CHECK_TAB  = '現金管理_開店';
 const SAFE_WITHDRAWAL_TAB = '金庫出金ログ';
@@ -457,7 +458,7 @@ function handleApiRequest_(body) {
   if (body.action === 'getPublishStatus') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
-    const m = String(body.month || '');
+    const m = monthKey_(String(body.month || ''));
     let salesDate = '';
     try { salesDate = (JSON.parse(prop('SALES_DATA_DATES') || '{}')[m]) || ''; } catch (e) {}
     return { ok: true, month: m, payPublished: prop('PAY_PUBLISHED_' + m) === '1', rankPublished: prop('RANKING_PUBLISHED_' + m) === '1', salesDate: salesDate };
@@ -538,14 +539,14 @@ function handleApiRequest_(body) {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     if (!body.month) return { ok: false, error: 'month required' };
-    setProp('PAY_PUBLISHED_' + body.month, '1');
+    setProp('PAY_PUBLISHED_' + monthKey_(body.month), '1');
     return { ok: true };
   }
   if (body.action === 'unpublishPay') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     if (!body.month) return { ok: false, error: 'month required' };
-    PropertiesService.getScriptProperties().deleteProperty('PAY_PUBLISHED_' + body.month);
+    PropertiesService.getScriptProperties().deleteProperty('PAY_PUBLISHED_' + monthKey_(body.month));
     return { ok: true };
   }
   if (body.action === 'publishRanking') {
@@ -956,6 +957,173 @@ function adminGetHairReceiptsMonth(userId, month) {
   let total = 0; const byCast = {};
   list.forEach(function (r) { total += r.amount; byCast[r.name] = (byCast[r.name] || 0) + r.amount; });
   return { ok: true, month: mSel, months: months, receipts: list, total: total, castCount: Object.keys(byCast).length };
+}
+
+// ── 管理コンソール: 立替代(ヘアサロン領収書)のキャスト×月 集計マトリクス ──────────
+function adminGetTatekaeSummary(userId) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const ss = getOrOpenSS_();
+  const all = getHairReceipts_(ss, null, ''); // 全キャスト・全月
+  const monthsSet = {}, castMap = {};
+  all.forEach(function (r) {
+    if (!r.name) return;
+    monthsSet[r.month] = true;
+    if (!castMap[r.name]) castMap[r.name] = { name: r.name, byMonth: {}, total: 0, count: 0 };
+    const c = castMap[r.name];
+    c.byMonth[r.month] = (c.byMonth[r.month] || 0) + r.amount;
+    c.total += r.amount;
+    c.count += 1;
+  });
+  const months = Object.keys(monthsSet).sort().reverse();
+  const monthTotals = {}; let grandTotal = 0;
+  months.forEach(function (m) { monthTotals[m] = 0; });
+  const casts = Object.keys(castMap).map(function (k) { return castMap[k]; });
+  casts.forEach(function (c) {
+    months.forEach(function (m) { monthTotals[m] += (c.byMonth[m] || 0); });
+    grandTotal += c.total;
+  });
+  casts.sort(function (a, b) { return b.total - a.total; });
+  return { ok: true, months: months, casts: casts, monthTotals: monthTotals, grandTotal: grandTotal, castCount: casts.length };
+}
+
+// ── TRUST給与: 数値パース・月正規化 ──────────
+function trustNum_(v) {
+  if (v == null) return 0;
+  const s = String(v).replace(/[¥,　\s%]/g, '');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+function monthKey_(m) { return String(m || '').trim().replace(/-/g, '/'); } // 2026-06 → 2026/06
+
+// TRUST報酬シートのヘッダ（固定）
+var TRUST_HEAD = ['月', '名前', '勤務日数', '給率', '担当小計', '同伴小計', '時間報酬',
+  '担当バック', '予約バック', '同伴バック', 'ドリンクバック', 'ボトルバック', 'フードバック', 'バック計',
+  '送迎手当', '残業代', '売り半', '運営手当', 'プラス計', '総支給額', '源泉徴収', '日払', '送り代', 'マイナス計', '残り支給額'];
+
+// ── 管理コンソール: TRUST「キャスト売上一覧」を取込（commit=falseでプレビューのみ） ──────────
+// rawText = Excelの該当シートをそのままコピペしたTSV（またはCSV）。固定列位置で解釈する。
+function adminImportTrustMonth(userId, month, rawText, commit) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const mk = monthKey_(month);
+  if (!/^\d{4}\/\d{2}$/.test(mk)) return { ok: false, error: '対象月は YYYY-MM 形式で指定してください' };
+  const text = String(rawText || '');
+  if (!text.trim()) return { ok: false, error: 'データが空です' };
+
+  const lines = text.split(/\r\n|\r|\n/).filter(function (l) { return l.length; });
+  const casts = [];
+  for (let li = 0; li < lines.length; li++) {
+    const r = lines[li].indexOf('\t') >= 0 ? lines[li].split('\t') : lines[li].split(',');
+    const no = String(r[0] || '').trim();
+    const name = String(r[1] || '').trim();
+    if (!/^\d+$/.test(no)) continue;            // No が整数の行 = データ行のみ
+    if (!name || name === '合計') continue;
+    const jikan = trustNum_(r[13]) + trustNum_(r[16]); // 時間報酬 1部(14列)+2部(17列)
+    casts.push({
+      name: name,
+      kinmu: trustNum_(r[10]), kyuritsu: trustNum_(r[9]),
+      tantoSub: trustNum_(r[6]), dohanSub: trustNum_(r[8]),
+      jikan: jikan,
+      tantoBk: trustNum_(r[19]), yoyakuBk: trustNum_(r[22]), dohanBk: trustNum_(r[25]),
+      drinkBk: trustNum_(r[29]), bottleBk: trustNum_(r[33]), foodBk: trustNum_(r[37]),
+      backTotal: trustNum_(r[38]),
+      somu: trustNum_(r[39]), zangyo: trustNum_(r[40]), uriHan: trustNum_(r[41]),
+      unei: trustNum_(r[42]), plusTotal: trustNum_(r[43]),
+      gross: trustNum_(r[3]), gensen: trustNum_(r[44]), hibarai: trustNum_(r[46]),
+      okuri: trustNum_(r[47]), minusTotal: trustNum_(r[51]), net: trustNum_(r[4])
+    });
+  }
+  if (!casts.length) return { ok: false, error: 'データ行が見つかりません（1行目にNo・名前が並ぶ形でコピペしてください）' };
+  if (!commit) return { ok: true, preview: true, month: mk, count: casts.length, casts: casts };
+
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(TRUST_TAB);
+  if (!sh) { sh = ss.insertSheet(TRUST_TAB); sh.appendRow(TRUST_HEAD); sh.setFrozenRows(1); }
+  const data = sh.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) { if (mStr_(data[i][0]) === mk) sh.deleteRow(i + 1); }
+  const out = casts.map(function (c) {
+    return [mk, c.name, c.kinmu, c.kyuritsu, c.tantoSub, c.dohanSub, c.jikan,
+      c.tantoBk, c.yoyakuBk, c.dohanBk, c.drinkBk, c.bottleBk, c.foodBk, c.backTotal,
+      c.somu, c.zangyo, c.uriHan, c.unei, c.plusTotal, c.gross, c.gensen, c.hibarai, c.okuri, c.minusTotal, c.net];
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_HEAD.length).setValues(out);
+  recordSalesDataDate_(mk);
+  return { ok: true, month: mk, count: out.length };
+}
+
+// ── 管理コンソール: 給与明細（TRUST報酬＋立替代を合算） ──────────
+function adminGetPayrollDetail(userId, month) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(TRUST_TAB);
+  const monthsSet = {};
+  if (sh && sh.getLastRow() >= 2) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) {
+      const m = mStr_(r[0]); if (m) monthsSet[m] = true;
+    });
+  }
+  const months = Object.keys(monthsSet).sort().reverse();
+  const mSel = monthKey_(month) && monthsSet[monthKey_(month)] ? monthKey_(month) : (months[0] || monthKey_(month) || '');
+  const rows = (sh && sh.getLastRow() >= 2) ? sh.getDataRange().getValues() : [];
+  const hdrs = rows.length ? rows[0].map(String) : [];
+  const ci = function (h) { return hdrs.indexOf(h); };
+  const list = [];
+  const tot = { jikan: 0, backTotal: 0, plusTotal: 0, gross: 0, gensen: 0, hibarai: 0, okuri: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) !== mSel) continue;
+    const g = function (h) { const j = ci(h); return j >= 0 ? (Number(rows[i][j]) || 0) : 0; };
+    const name = String(rows[i][1]).trim();
+    let tatekae = 0;
+    getHairReceipts_(ss, normalizeName_(name), mSel).forEach(function (r) { tatekae += r.amount; });
+    const net = g('残り支給額');
+    const finalPay = net + tatekae;
+    const rec = {
+      name: name, kinmu: g('勤務日数'), jikan: g('時間報酬'),
+      tantoBk: g('担当バック'), yoyakuBk: g('予約バック'), dohanBk: g('同伴バック'),
+      drinkBk: g('ドリンクバック'), bottleBk: g('ボトルバック'), foodBk: g('フードバック'),
+      backTotal: g('バック計'), plusTotal: g('プラス計'), gross: g('総支給額'),
+      gensen: g('源泉徴収'), hibarai: g('日払'), okuri: g('送り代'), minusTotal: g('マイナス計'),
+      net: net, tatekae: tatekae, finalPay: finalPay
+    };
+    list.push(rec);
+    Object.keys(tot).forEach(function (k) { tot[k] += rec[k]; });
+  }
+  list.sort(function (a, b) { return b.finalPay - a.finalPay; });
+  return { ok: true, month: mSel, months: months, casts: list, totals: tot, published: !!prop('PAY_PUBLISHED_' + mSel) };
+}
+
+// ── ポータル給与: TRUST報酬を「売上明細(URIAGE)互換」キーで返す（キャスト画面はこれを読む） ──────────
+function portalTrustPay_(ss, name, filterMonth) {
+  const sh = ss.getSheetByName(TRUST_TAB);
+  if (!sh || sh.getLastRow() < 2) return {};
+  const rows = sh.getDataRange().getValues();
+  const hdrs = rows[0].map(String);
+  const idx = function (h) { return hdrs.indexOf(h); };
+  const out = {};
+  for (let i = 1; i < rows.length; i++) {
+    const m = mStr_(rows[i][0]);
+    if (normalizeName_(rows[i][1]) !== name) continue;
+    if (filterMonth && m !== filterMonth) continue;
+    const g = function (h) { const j = idx(h); return j >= 0 ? rows[i][j] : ''; };
+    const tanto = Number(g('担当小計')) || 0, dohan = Number(g('同伴小計')) || 0;
+    out[m] = {
+      '担当小計': g('担当小計'), '同伴小計': g('同伴小計'), '売上合計': tanto + dohan,
+      '給率(%)': g('給率'), '勤務日数': g('勤務日数'), '時間報酬': g('時間報酬'),
+      '担当バック': g('担当バック'), '予約バック': g('予約バック'), '同伴バック': g('同伴バック'),
+      'ドリンクバック': g('ドリンクバック'), 'ボトルバック': g('ボトルバック'), '年会費バック': g('フードバック'),
+      'ボーナス': g('運営手当'), '送迎手当': g('送迎手当'), '残業代': g('残業代'), '売り半': g('売り半'),
+      '源泉徴収': g('源泉徴収'), '日払': g('日払'), 'マイナス': g('マイナス計'), '送り代': g('送り代'),
+      '残り支給額': g('残り支給額'), '__trust': true
+    };
+  }
+  return out;
+}
+// TRUST報酬を sales オブジェクトへ上書きマージ（未マップ列＝入店祝い金等は保全）。months にも追加
+function mergeTrustSales_(ss, name, sales, months) {
+  const tp = portalTrustPay_(ss, name, '');
+  Object.keys(tp).forEach(function (m) {
+    sales[m] = Object.assign({}, sales[m] || {}, tp[m]);
+    if (months && months.indexOf(m) < 0) months.push(m);
+  });
 }
 
 // 伝票1行の指定列を修正（patch = {見出し名:値}）。日払いは照合を自動再計算
@@ -4624,6 +4792,7 @@ function handlePortalApi_(e) {
     const hairTotalsS = {};
     getHairReceipts_(ss, lookupNameS, '').forEach(r => { hairTotalsS[r.month] = (hairTotalsS[r.month] || 0) + r.amount; });
     Object.keys(hairTotalsS).forEach(m => { if (!monthsS.includes(m)) monthsS.push(m); });
+    mergeTrustSales_(ss, lookupNameS, salesS, monthsS);
     monthsS.sort().reverse();
     const payPublishedS = {};
     (monthsS || []).forEach(m => { payPublishedS[m] = !!prop('PAY_PUBLISHED_' + m); });
@@ -4654,6 +4823,7 @@ function handlePortalApi_(e) {
   Object.keys(hairTotals).forEach(m => {
     if (!months.includes(m)) months.push(m);
   });
+  mergeTrustSales_(ss, lookupName, sales, months);
   months.sort().reverse();
 
   const payPublished = {};
