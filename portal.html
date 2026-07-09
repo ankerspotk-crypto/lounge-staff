@@ -1369,7 +1369,9 @@ function renderPay() {
   var zangyo  = n(s['残業代']);
   var urihan  = n(s['売り半']);
   var nyutenB = n(s['入店祝い金']);
-  var shoBack = n(p['新バック']);
+  // 新バック方式では担当小計バック(s['担当バック']=新バック)が正。レガシー給与計算シート由来の小計バック(p['新バック'])は
+  // 二重計上になるため、新バックがある月は抑制する（旧KYUYOのみの月はフォールバックで表示）。
+  var shoBack = tantoB > 0 ? 0 : n(p['新バック']);
   var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + sougei + zangyo + urihan + nyutenB;
 
   var gensen    = n(s['源泉徴収']);
