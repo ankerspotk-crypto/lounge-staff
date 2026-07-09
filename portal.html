@@ -3333,6 +3333,14 @@ function loadYoyaku() {
     .catch(function(e){ setContent('<div class="err">通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadYoyaku') + '</div>'); });
 }
 
+// 予約管理を開いた瞬間に「予約追加」を最も分かりやすくするための大型CTA。
+// 全サブタブ共通で最上部に表示（編集権限者のみ・追加画面表示中は非表示）。
+function yoyakuAddCta() {
+  if (!canEditYoyaku() || yoyakuSubTab === 'add') return '';
+  return '<button onclick="yoyakuSubSwitch(\'add\')" style="width:100%;padding:15px;margin-bottom:12px;background:linear-gradient(135deg,#1a7a44,#22a05a);color:#fff;border:none;border-radius:12px;font-size:17px;font-weight:800;box-shadow:0 4px 14px rgba(34,160,90,.35);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">'
+    + '<span style="font-size:22px;line-height:1;font-weight:900">＋</span> 新規予約を追加</button>';
+}
+
 function renderYoyaku() {
   var dateNav = '<div class="yoyaku-date-nav">'
     + '<button onclick="yoyakuChangeDate(-1)">‹</button>'
@@ -3357,7 +3365,7 @@ function renderYoyaku() {
   else if (yoyakuSubTab === 'sched') body = renderYoyakuSched();
   else if (yoyakuSubTab === 'add')   body = renderYoyakuAdd();
 
-  setContent('<div style="padding:14px">' + dateNav + subtabs + body + '</div>');
+  setContent('<div style="padding:14px">' + yoyakuAddCta() + dateNav + subtabs + body + '</div>');
   afterYoyakuRender();
 }
 
@@ -3383,12 +3391,12 @@ function loadYoyakuCal(headerHtml) {
       }).join('') + '</div>';
     headerHtml = '' + subtabs;
   }
-  setContent('<div style="padding:14px">' + headerHtml + '<div class="loading">カレンダー読み込み中...</div></div>');
+  setContent('<div style="padding:14px">' + yoyakuAddCta() + headerHtml + '<div class="loading">カレンダー読み込み中...</div></div>');
   gasFetch(GAS_URL + '?action=portal&tab=yoyakuMonth&userId=' + encodeURIComponent(userId) + '&month=' + yoyakuCalMonth)
     .then(function(r){ return r.json(); })
     .then(function(d) {
       if (!d.ok) { setContent('<div class="err">エラー: '+esc(d.error||'')+'</div>'); return; }
-      setContent('<div style="padding:14px">' + headerHtml + renderYoyakuCal(d.summary || {}) + '</div>');
+      setContent('<div style="padding:14px">' + yoyakuAddCta() + headerHtml + renderYoyakuCal(d.summary || {}) + '</div>');
     })
     .catch(function(){ setContent('<div class="err">通信エラー</div>'); });
 }
