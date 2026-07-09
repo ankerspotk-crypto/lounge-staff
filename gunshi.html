@@ -314,8 +314,11 @@ body{display:flex;flex-direction:column;height:100vh;}
 /* 納品→在庫反映 */
 .dr-wrap{padding:14px 16px 90px;overflow-y:auto;height:100%;}
 .dr-slip{border:1px solid var(--line2);border-radius:12px;margin-bottom:16px;overflow:hidden;}
-.dr-slip-h{background:#12202c;color:#7ac6ff;font-weight:800;font-size:15px;padding:11px 14px;border-bottom:1px solid var(--line);}
+.dr-slip-h{background:#12202c;color:#7ac6ff;font-weight:800;font-size:15px;padding:11px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.dr-slip-t{flex:1;min-width:0;}
 .dr-slip-meta{font-size:12px;color:var(--dim);font-weight:600;margin-left:6px;}
+.dr-delslip{flex:none;padding:5px 10px;border:1px solid #5a2a2a;border-radius:8px;background:#2a1414;color:#e08b8b;font-weight:800;font-size:12px;cursor:pointer;}
+.dr-delitem{margin-left:8px;padding:2px 8px;border:1px solid #5a2a2a;border-radius:7px;background:#2a1414;color:#e08b8b;font-weight:700;font-size:11px;cursor:pointer;}
 .dr-item{display:flex;gap:12px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
 .dr-item:last-child{border-bottom:none;}
 .dr-item-l{flex:1;min-width:180px;}
@@ -2268,11 +2271,12 @@ function renderDeliveryReflect(){
   if(!st.slips||!st.slips.length){ b.innerHTML='<div class="empty-msg" style="padding:40px 0">未反映の納品はありません 🎉<br><span style="font-size:12px;color:var(--dim)">黒服グループに納品書を送ると、ここに一覧が出ます</span></div>'; return; }
   var h='<div class="dr-wrap">';
   st.slips.forEach(function(sl){
-    h+='<div class="dr-slip"><div class="dr-slip-h">🚚 '+esc(sl.supplier||'仕入先不明')+' <span class="dr-slip-meta">伝票 '+esc(sl.slipNo)+(sl.date?' / '+esc(sl.date):'')+' / '+sl.items.length+'品目</span></div>';
+    var slipIds=sl.items.map(function(it){return it.deliveryRowIdx;}).join(',');
+    h+='<div class="dr-slip"><div class="dr-slip-h"><span class="dr-slip-t">🚚 '+esc(sl.supplier||'仕入先不明')+' <span class="dr-slip-meta">伝票 '+esc(sl.slipNo)+(sl.date?' / '+esc(sl.date):'')+' / '+sl.items.length+'品目</span></span><button class="dr-delslip" onclick="drDeleteSlip(\''+slipIds+'\','+sl.items.length+')">🗑 伝票ごと削除</button></div>';
     sl.items.forEach(function(it){
       var id=it.deliveryRowIdx;
       if(!drItems[id]) drItems[id]={name:it.name,qty:it.qty,volume:it.volume,floor:drGuessFloor(it.name)};
-      h+='<div class="dr-item"><div class="dr-item-l"><div class="dr-nm">'+esc(it.name)+(it.volume?' <span class="dr-vol">'+esc(it.volume)+'</span>':'')+'</div><div class="dr-sub">納品 '+it.qty+'本</div></div>'
+      h+='<div class="dr-item"><div class="dr-item-l"><div class="dr-nm">'+esc(it.name)+(it.volume?' <span class="dr-vol">'+esc(it.volume)+'</span>':'')+'</div><div class="dr-sub">納品 '+it.qty+'本<button class="dr-delitem" onclick="drDeleteItem('+id+')">🗑 削除</button></div></div>'
         +'<div class="dr-item-r" id="dr-r-'+id+'">'+drRight(id)+'</div></div>';
     });
     h+='</div>';
@@ -2303,6 +2307,25 @@ function applyDeliveryReflect(){
     if(res&&res.ok){ alert('✅ '+res.applied+'品目を在庫に反映しました'+(res.created?'（新規登録 '+res.created+'件）':'')); openDeliveryReflect(); }
     else { alert('エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='✅ 選択した内容で在庫に反映';} }
   }).catch(function(){ alert('反映に失敗しました'); if(btn){btn.disabled=false;btn.textContent='✅ 選択した内容で在庫に反映';} });
+}
+/* 誤読・不要な納品明細を削除（在庫は変えず、納品記録から消すだけ） */
+function drDeleteItem(id){
+  if(!IS_GAS){ alert('（ローカル）削除は本番のみ'); return; }
+  if(!confirm('この品目を納品記録から削除しますか？（在庫は変わりません／元に戻せません）'))return;
+  gsr('kioskDeleteDelivery',[Number(id)]).then(function(res){
+    if(res&&res.ok){ toast('🗑 削除しました'); openDeliveryReflect(); }
+    else { alert('削除エラー: '+((res&&res.error)||'')); }
+  }).catch(function(e){ alert('削除エラー: '+((e&&e.message)||e)); });
+}
+function drDeleteSlip(idsStr,n){
+  if(!IS_GAS){ alert('（ローカル）削除は本番のみ'); return; }
+  var ids=String(idsStr).split(',').map(Number).filter(function(x){return x>=2;});
+  if(!ids.length)return;
+  if(!confirm('この伝票の'+n+'品目をまとめて削除しますか？（在庫は変わりません／元に戻せません）'))return;
+  gsr('kioskDeleteDelivery',ids).then(function(res){
+    if(res&&res.ok){ toast('🗑 '+((res&&res.deleted)||ids.length)+'品目を削除しました'); openDeliveryReflect(); }
+    else { alert('削除エラー: '+((res&&res.error)||'')); }
+  }).catch(function(e){ alert('削除エラー: '+((e&&e.message)||e)); });
 }
 
 /* ============ 🧾 伝票管理（一覧・修正・削除） ============ */
