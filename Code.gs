@@ -3043,7 +3043,7 @@ function getKioskTasks() {
   Object.keys(props).forEach(function (k) {
     if (k.indexOf('TASK_ADMIN_') !== 0) return;
     let c; try { c = JSON.parse(props[k]); } catch (e) { return; }
-    tasks.push({ id: 'admin:' + k, type: 'admin', icon: '📋', title: c.title || 'タスク', sub: '管理' + (c.by ? '・' + c.by : ''), sort: '0_' + (c.ts || 0) });
+    tasks.push({ id: 'admin:' + k, type: 'admin', icon: '📋', title: c.title || 'タスク', sub: '管理' + (c.by ? '・' + c.by : ''), memo: c.memo || '', by: c.by || '', at: c.ts ? Utilities.formatDate(new Date(c.ts), TZ, 'M/d HH:mm') : '', sort: '0_' + (c.ts || 0) });
   });
   tasks.sort(function (a, b) { return String(a.sort).localeCompare(String(b.sort)); });
   return { ok: true, tasks: tasks };
