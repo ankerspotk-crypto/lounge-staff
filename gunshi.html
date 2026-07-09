@@ -382,6 +382,18 @@ body{display:flex;flex-direction:column;height:100vh;}
 .stk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}
 .stk-undel-bar{background:#181206;border-bottom:1px solid #4a3a12;padding:9px 16px;display:flex;gap:8px;align-items:center;overflow-x:auto;flex-shrink:0;}
 .stk-undel-bar .lbl{font-size:11px;color:#ffbf6a;font-weight:800;white-space:nowrap;flex-shrink:0;}
+/* おみやげ在庫カード */
+.sv-card{background:#1c1526;border-bottom:1px solid #4a2f6a;padding:10px 16px;flex-shrink:0;}
+.sv-h{font-size:12px;color:#d0a8ff;font-weight:800;margin-bottom:8px;}
+.sv-fl{display:inline-flex;align-items:center;gap:8px;margin:0 16px 6px 0;padding:6px 10px;border:1px solid #3a2a55;border-radius:10px;background:#171022;}
+.sv-fl.low{border-color:#7a2a2a;background:#241016;}
+.sv-flname{font-weight:800;color:#c9b3ff;font-size:14px;min-width:28px;}
+.sv-qbtn{width:32px;height:32px;border-radius:8px;border:1px solid #4a3a6a;background:#221830;color:#d0a8ff;font-size:18px;font-weight:800;cursor:pointer;}
+.sv-num{min-width:34px;text-align:center;font-size:18px;font-weight:800;color:#eee;}
+.sv-num.low{color:#ff8a8a;}
+.sv-set{width:70px;text-align:center;}
+.sv-setbtn{padding:6px 10px;border-radius:8px;border:1px solid #6a4a2a;background:#2a1f14;color:#ffbf6a;font-weight:700;font-size:12px;cursor:pointer;}
+.sv-low{color:#ff8a8a;font-weight:800;font-size:11px;}
 .stk-undel-row{display:flex;align-items:center;gap:8px;background:#221a08;border:1px solid #4a3a12;border-radius:9px;padding:6px 9px;font-size:12px;white-space:nowrap;flex-shrink:0;}
 .stk-deliver{background:#0d2618;border:1px solid #2a6a44;color:#79e0a8;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .stk-floor{color:#8fb8f0;font-size:11px;font-weight:700;}
@@ -2114,9 +2126,9 @@ var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], ST
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
-  Promise.all([gsr('getStockList').catch(function(){return[];}),gsr('getUndeliveredOrders').catch(function(){return[];})]).then(function(r){
+  Promise.all([gsr('getStockList').catch(function(){return[];}),gsr('getUndeliveredOrders').catch(function(){return[];}),gsr('kioskGetSouvenirStock').catch(function(){return{'2F':0,'5F':0};})]).then(function(r){
     var pc=stockState?stockState.category:null,pf=stockState?stockState.floor:null;
-    stockState={list:r[0]||[],undelivered:r[1]||[],category:pc||STOCK_CATS[0],floor:pf||'合算'};
+    stockState={list:r[0]||[],undelivered:r[1]||[],souvenir:r[2]||{'2F':0,'5F':0},category:pc||STOCK_CATS[0],floor:pf||'合算'};
     renderStock();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -2136,7 +2148,36 @@ function renderStock(){
   main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F','共通'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
   main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#ffbf6a">🛒 マスタにない商品を発注依頼のみ送る</div><div style="display:flex;gap:6px"><input id="stk-free-name" class="finput" placeholder="品名"><input id="stk-free-qty" class="finput" style="width:90px" placeholder="数量"></div><div class="savebtn" style="background:#2a1a10;border-color:#885522;color:#ffaa66;margin-top:10px" onclick="stkFreeOrder()">発注依頼を送信</div></div></div>';
   main+='</div></div>';
-  b.innerHTML='<div class="stk-wrap">'+undel+'<div class="stk-body">'+nav+main+'</div></div>'; stkListView();
+  b.innerHTML='<div class="stk-wrap">'+undel+'<div id="sv-card-wrap">'+souvenirCardHtml()+'</div><div class="stk-body">'+nav+main+'</div></div>'; stkListView();
+}
+/* 🎁 おみやげ在庫カード（退店で自動減算・アラームが読む「在庫管理」シートに直接補充） */
+function souvenirCardHtml(){
+  var s=(stockState&&stockState.souvenir)||{'2F':0,'5F':0};
+  function fl(f){ var q=Number(s[f])||0, low=q<=50;
+    return '<div class="sv-fl'+(low?' low':'')+'"><span class="sv-flname">'+f+'</span>'
+      +'<button class="sv-qbtn" onclick="svAdjust(\''+f+'\',-1)">−</button>'
+      +'<span class="sv-num'+(low?' low':'')+'">'+q+'</span>'
+      +'<button class="sv-qbtn" onclick="svAdjust(\''+f+'\',1)">＋</button>'
+      +'<input class="finput sv-set" id="sv-set-'+f+'" type="number" min="0" placeholder="実数">'
+      +'<button class="sv-setbtn" onclick="svSet(\''+f+'\')">セット</button>'
+      +(low?'<span class="sv-low">要発注</span>':'')+'</div>';
+  }
+  return '<div class="sv-card"><div class="sv-h">🎁 おみやげ在庫（退店で自動減算・50個以下で発注アラーム）</div>'+fl('2F')+fl('5F')+'</div>';
+}
+function svRerender(){ var el=document.getElementById('sv-card-wrap'); if(el)el.innerHTML=souvenirCardHtml(); }
+function svAdjust(floor,delta){
+  gsr('kioskAdjustSouvenirStock',floor,delta).then(function(res){
+    if(res&&res.ok){ stockState.souvenir[floor]=res.qty; svRerender(); }
+    else alert('エラー: '+((res&&res.error)||''));
+  }).catch(function(){alert('更新に失敗');});
+}
+function svSet(floor){
+  var el=document.getElementById('sv-set-'+floor); var v=el?String(el.value).trim():'';
+  if(v===''){alert('実数を入力してください');return;}
+  gsr('kioskSetSouvenirStock',floor,Number(v)).then(function(res){
+    if(res&&res.ok){ stockState.souvenir[floor]=res.qty; svRerender(); toast('🎁 '+floor+' おみやげ在庫を'+res.qty+'個に更新'); }
+    else alert('エラー: '+((res&&res.error)||''));
+  }).catch(function(){alert('更新に失敗');});
 }
 function undelHtml(items){
   if(!items.length) return '<span class="empty-msg" style="padding:0;font-size:12px">なし</span>';
