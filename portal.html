@@ -538,7 +538,9 @@ if (_devUid) {
 
 function loadPortal(month) {
   setContent('<div class="loading">データ取得中...</div>');
-  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId);
+  // ホーム軽量ペイロード（tab=home）: 売上/給与/領収書/月一覧を除外し、座席・今日の予約・空席を同梱。
+  // 管理者でviewAs未指定のときはサーバ側で先にcastListを返すため tab=home は無視される（従来通り）。
+  var url = GAS_URL + '?action=portal&tab=home&userId=' + encodeURIComponent(userId);
   if (month) url += '&month=' + encodeURIComponent(month);
   if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
   gasFetch(url)
@@ -850,19 +852,30 @@ function renderHome(){
   // 本日シフトに入っているかで呼び出しボタンを即ゲート（非同期のgetCastSeats完了を待たない＝タイムアウトでも押せない）
   homeWorking = homeOnShift(); applyWorkingGate();
 
-  // --- 現在の席（軍師の付け回しとリンク）を取得 ---
-  loadMySeat();
+  // --- 現在の席: tab=homeペイロードに同梱済みなら即描画、無ければ従来通り個別取得（管理者メニュー等のフォールバック） ---
+  if (portalData && portalData.seats !== undefined) {
+    homeMySeats = portalData.seats || [];
+    homeWorking = homeOnShift() || portalData.working === true;
+    renderMySeat(); applyWorkingGate();
+  } else {
+    loadMySeat();
+  }
 
-  // --- 今日の予約を取得 ---
-  var now = new Date();
-  var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
-  gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
-    .then(function(r){ return r.json(); })
-    .then(function(d){ renderHomeRsv((d && d.reservations) || []); })
-    .catch(function(){ var el=document.getElementById('home-rsv-list'); if(el) el.innerHTML='<div style="color:#cc5555;font-size:13px;padding:10px 0">予約の取得に失敗しました</div>'; });
+  // --- 今日の予約: 同梱済みなら即描画、無ければ従来取得 ---
+  if (portalData && portalData.reservations !== undefined) {
+    renderHomeRsv(portalData.reservations || []);
+  } else {
+    var now = new Date();
+    var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
+    gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
+      .then(function(r){ return r.json(); })
+      .then(function(d){ renderHomeRsv((d && d.reservations) || []); })
+      .catch(function(){ var el=document.getElementById('home-rsv-list'); if(el) el.innerHTML='<div style="color:#cc5555;font-size:13px;padding:10px 0">予約の取得に失敗しました</div>'; });
+  }
 
-  // --- 空席状況を取得（60秒ごとに自動更新） ---
-  fetchVacancy();
+  // --- 空席状況: 同梱済みの初回分を即描画し、以降60秒ごとに自動更新 ---
+  if (portalData && portalData.vacancy) renderHomeVacancy(portalData.vacancy);
+  else fetchVacancy();
   if(window._vacTimer) clearInterval(window._vacTimer);
   window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } fetchVacancy(); }, 60000);
 }
@@ -1000,6 +1013,27 @@ function homeToast(msg, ok){
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
 var statsSubTab = 'sales';
 
+// 成績データ（売上/給与/月一覧/領収書合計/受領状況）を遅延ロードしてportalDataにマージ。
+// ホームは tab=home の軽量ペイロードで先に描画し、成績タブを開いた時だけこれを叩く（初回ロード高速化）。
+function loadStatsData(force, cb) {
+  if (portalData && portalData.sales !== undefined && !force) { if (cb) cb(); return; }
+  var url = GAS_URL + '?action=portal&tab=stats&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
+  gasFetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { showErr('エラー: ' + (d.error||'') + retryBtn_('renderStats')); return; }
+      if (!portalData) portalData = {};
+      portalData.sales = d.sales; portalData.pay = d.pay; portalData.months = d.months;
+      portalData.hairTotals = d.hairTotals; portalData.payPublished = d.payPublished;
+      portalData.salesDataDates = d.salesDataDates; portalData.payReceipt = d.payReceipt;
+      if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
+      if (cb) cb();
+    })
+    .catch(function(e){ showErr('通信エラー<br><small>'+(e&&e.message||'')+'</small>'+retryBtn_('renderStats')); });
+}
+
 function renderStats() {
   var labels = { sales: '売上明細', pay: '給与明細', ranking: 'ランキング' };
   var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
@@ -1020,7 +1054,8 @@ function renderStats() {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
   }
-  if (!portalData) { loadPortal(); return; }
+  // 成績データ未ロード（tab=homeでは含まれない）なら遅延ロードしてから再描画
+  if (!portalData || portalData.sales === undefined) { loadStatsData(false, function(){ renderStats(); }); return; }
   if (statsSubTab === 'sales') renderSales();
   else if (statsSubTab === 'pay') renderPay();
 }
@@ -1544,7 +1579,7 @@ function handlePayrollCsv(input) {
       if (!d.ok) { if (statusEl) statusEl.textContent = '⚠️ ' + (d.error || 'エラー'); return; }
       if (statusEl) statusEl.textContent = '✅ ' + d.count + '名分を取り込みました';
       currentMonth = month;
-      loadPortal();
+      loadStatsData(true, function(){ renderStats(); });
     })
     .catch(function() {
       input.value = '';
@@ -1589,7 +1624,7 @@ function sendPayrollReceipt(month, method) {
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
-    if (d.ok) { alert('送信しました'); loadPortal(); }
+    if (d.ok) { alert('送信しました'); loadStatsData(true, function(){ renderStats(); }); }
     else alert('エラー: ' + (d.error || 'unknown'));
   })
   .catch(function() { alert('通信エラーが発生しました'); });
