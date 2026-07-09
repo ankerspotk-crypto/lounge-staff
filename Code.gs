@@ -221,7 +221,7 @@ function doPost(e) {
 }
 
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -3453,6 +3453,52 @@ function push_(groupId, message) {
   if (res.getResponseCode() !== 200) {
     console.error('push error:', res.getResponseCode(), res.getContentText());
   }
+}
+
+// ── 軍師: 全キャストへ個別LINEお知らせ配信 ──────────
+// 対象＝スタッフマスタで属性に「キャスト」or「体験」を含む者。LINE未登録(lineId無し)はスキップ。
+function gunshiBroadcastCastFilter_(all) {
+  return all.filter(function (s) {
+    const r = String(s.role || '');
+    return (r.indexOf('キャスト') >= 0 || r.indexOf('体験') >= 0);
+  });
+}
+
+// 配信先の件数・名簿（UIの「送信先○名」表示用）
+function gunshiGetCastList() {
+  const casts = gunshiBroadcastCastFilter_(getAllStaff_(getOrOpenSS_()));
+  const registered = casts.filter(function (c) { return !!c.lineId; });
+  return {
+    ok: true, total: casts.length, registered: registered.length,
+    registeredNames: registered.map(function (c) { return c.name; }),
+    unregisteredNames: casts.filter(function (c) { return !c.lineId; }).map(function (c) { return c.name; })
+  };
+}
+
+// メッセージを全キャストへ個別pushで一斉配信。{sent, failed, skipped, failedNames, skippedNames}
+function gunshiBroadcastCast(message) {
+  message = String(message == null ? '' : message).trim();
+  if (!message) return { ok: false, error: 'メッセージが空です' };
+  if (message.length > 4900) return { ok: false, error: 'メッセージが長すぎます（4900文字以内）' };
+  const token = prop('LINE_TOKEN');
+  if (!token) return { ok: false, error: 'LINE_TOKEN未設定' };
+  const casts = gunshiBroadcastCastFilter_(getAllStaff_(getOrOpenSS_()));
+  let sent = 0, failed = 0, skipped = 0;
+  const failedNames = [], skippedNames = [];
+  casts.forEach(function (c) {
+    if (!c.lineId) { skipped++; skippedNames.push(c.name); return; }
+    try {
+      const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'post', contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + token },
+        payload: JSON.stringify({ to: c.lineId, messages: [{ type: 'text', text: message }] }),
+        muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 200) { sent++; }
+      else { failed++; failedNames.push(c.name); console.error('broadcast push error', c.name, res.getResponseCode(), res.getContentText()); }
+    } catch (e) { failed++; failedNames.push(c.name); }
+  });
+  return { ok: true, sent: sent, failed: failed, skipped: skipped, total: casts.length, failedNames: failedNames, skippedNames: skippedNames };
 }
 
 // キャストの「現在アテンド中の席」を軍師のホール/付け回しデータ(getActiveAtendou)から取得（待機席は除外）
