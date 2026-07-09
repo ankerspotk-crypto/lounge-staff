@@ -2885,7 +2885,13 @@ function checkMissingShukkin() {
     ...detail.kurofuku.map(s => s.name)
   ];
 
-  const missing = scheduledNames.filter(name => !checkedIn.includes(name));
+  // 照合は「内部スペース除去＋エイリアス」の正規化キーで行う。
+  // 勤怠ログの名前(STAFF_TAB由来。黒服は「鈴木 海」等スペース入り)と、シフト表の名前の
+  // スペース有無・表記ゆれで生一致だと黒服が毎回未出勤扱いになるため（normalizeName_は内部スペース非除去）。
+  const shukNorm_ = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  const checkedKeys = {};
+  checkedIn.forEach(n => { checkedKeys[shukNorm_(n)] = true; });
+  const missing = scheduledNames.filter(name => !checkedKeys[shukNorm_(name)]);
 
   if (missing.length === 0) return;
   push_(prop('GROUP_STAFF'),
