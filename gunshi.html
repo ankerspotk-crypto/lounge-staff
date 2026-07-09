@@ -77,6 +77,8 @@ body{display:flex;flex-direction:column;height:100vh;}
 .tk-sub{font-size:10px;font-weight:700;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--sub);}
 .ticket.k-now-crit{border-color:#7a2424;animation:apulse 1.5s ease-in-out infinite;}
 .ticket.k-now-crit .tk-time{background:#3a1212;color:#ff9a9a;} .ticket.k-now-crit .tk-title{color:#ffb3b3;}
+.ticket.tk-blink{animation:tkblink 1s steps(1,end) infinite;}
+@keyframes tkblink{0%,49%{background:#3a1010;border-color:#ff5a5a;box-shadow:0 0 0 2px rgba(255,70,70,.55);}50%,100%{background:var(--panel2);border-color:#7a2424;box-shadow:none;}}
 .ticket.k-now-rot{border-color:#7a5010;} .ticket.k-now-rot .tk-time{background:#2a1e00;color:#ffcf6a;} .ticket.k-now-rot .tk-title{color:#ffd980;}
 .ticket.k-soon{border-color:#5a4200;} .ticket.k-soon .tk-time{background:#201800;color:#e6c060;} .ticket.k-soon .tk-title{color:#e6c060;}
 .ticket.k-todo{border-color:#7a4a1a;border-style:dashed;} .ticket.k-todo .tk-time{background:#241400;color:#ffb070;} .ticket.k-todo .tk-title{color:#ffb070;}
@@ -864,8 +866,8 @@ function rsvArrT(r){return /同伴/.test((r.cust||r.customer||'')+' '+(r.time||'
 function rsvLateMin(r){return nowBizMin()-tmin(rsvArrT(r));}
 function buildTimeline(){
   var t=[];
-  // 今：来店予定を30分超過（確定・未来店）→ 担当に確認
-  RSV.forEach(function(r){ if(r.status!=='確定')return; var late=rsvLateMin(r); if(late>=30) t.push({g:0,kind:'now-crit',ic:'🕘',time:'今',min:-1000-late,title:r.cust+'様 来店'+late+'分超過',sub:(r.tantou?'担当 '+r.tantou+' に来店確認':'担当に来店確認')+'（'+rsvArrT(r)+'予約）',act:'editRsv('+r.id+')'}); });
+  // 今：来店予定を15分超過（確定・未来店）→ 担当に来店確認（赤点滅）
+  RSV.forEach(function(r){ if(r.status!=='確定')return; var late=rsvLateMin(r); if(late>=15) t.push({g:0,kind:'now-crit',blink:true,ic:'🕘',time:'今',min:-1000-late,title:r.cust+'様 来店'+late+'分超過',sub:(r.tantou?'担当 '+r.tantou+' に来店確認':'担当に来店確認')+'（'+rsvArrT(r)+'予約）',act:'editRsv('+r.id+')'}); });
   // 今：超過
   SEATS.forEach(function(s,idx){
     var st=seatStatus(s);
@@ -876,9 +878,8 @@ function buildTimeline(){
   // まもなく：超過が近い席
   SEATS.forEach(function(s,idx){if(seatStatus(s)==='warn')t.push({g:2,kind:'soon',ic:'⏰',time:'まもなく',min:warnMin(s),title:s.floor+' '+shortNm(s.name)+' '+s.cust,sub:'あと'+warnMin(s)+'分で超過',act:'openSeat('+idx+')'});});
   // 予告：席未定の予約（時刻までに席決定）※30分超過は上の対応チケットへ
-  RSV.forEach(function(r){if(r.status==='確定'&&r.table==='未定'&&rsvLateMin(r)<30)t.push({g:3,kind:'todo',ic:'📌',time:rsvArrT(r),min:tmin(rsvArrT(r)),title:r.cust+'様('+r.pax+'名)',sub:'席未定 → 席を決定',act:'editRsv('+r.id+')'});});
-  // 予告：来店予定（席確定済み）※30分超過は上の対応チケットへ
-  RSV.forEach(function(r){if(r.status==='確定'&&r.table!=='未定'&&rsvLateMin(r)<30)t.push({g:3,kind:'preview',ic:'📅',time:rsvArrT(r),min:tmin(rsvArrT(r)),title:r.cust+'様 来店予定',sub:r.pax+'名 '+r.table,act:'editRsv('+r.id+')'});});
+  RSV.forEach(function(r){if(r.status==='確定'&&r.table==='未定'&&rsvLateMin(r)<15)t.push({g:3,kind:'todo',ic:'📌',time:rsvArrT(r),min:tmin(rsvArrT(r)),title:r.cust+'様('+r.pax+'名)',sub:'席未定 → 席を決定',act:'editRsv('+r.id+')'});});
+  // 予告：来店予定（📅）は要対応から撤去（クラッタ削減・ユーザー要望 2026-07-09）。15分超過すると上の来店確認チケットに出る。
   // 予告：キャスト早上がり（実シフトデータ由来）
   SHIFT.forEach(function(s){if(s.hayaagari)t.push({g:3,kind:'preview-cast',ic:'🚪',time:s.hayaagari,min:tmin(s.hayaagari),title:s.name+' 早上がり',sub:'担当の引き継ぎ準備を',act:'switchRight(\'shift\')'});});
   // 予告：送り予定チケットは撤去（送り管理ボード/LINE送りサマリで十分・要対応キューの水増し防止 2026-07-08）
@@ -909,7 +910,7 @@ function renderAlerts(){
       +'<div class="tk-done">✓完了</div></div>';
   }).join('');
   var tickets=list.map(function(x){
-    return '<div class="ticket k-'+x.kind+'"'+(x.act?' onclick="'+x.act+'"':'')+'>'
+    return '<div class="ticket k-'+x.kind+(x.blink?' tk-blink':'')+'"'+(x.act?' onclick="'+x.act+'"':'')+'>'
       +'<div class="tk-time">'+esc(x.time)+'</div>'
       +'<div class="tk-body"><span class="tk-ic">'+x.ic+'</span><span class="tk-tx"><span class="tk-title">'+esc(x.title)+'</span><span class="tk-sub">'+esc(x.sub)+'</span></span></div></div>';
   }).join('');
