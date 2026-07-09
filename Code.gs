@@ -3048,6 +3048,7 @@ function castCall_(body) {
     oshibori: { emoji: '🧻', title: 'おしぼり',   line: 'おしぼりをお願いします' },
     hiyashibo:{ emoji: '❄️', title: '冷しぼ',     line: '冷しぼりをお願いします' },
     denmoku:  { emoji: '🎤', title: 'デンモク',   line: 'デンモクをお願いします' },
+    rest:     { emoji: '🚽', title: 'レスト清掃', line: 'トイレが汚れています。清掃をお願いします' },
     other:    { emoji: '🔔', title: '呼び出し',   line: '席にお願いします' }
   };
   const m = CALL_KINDS[kind];
