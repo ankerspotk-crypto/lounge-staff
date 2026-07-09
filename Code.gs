@@ -4677,6 +4677,7 @@ function getAdminConsoleData(userId) {
   if (!isAdmin_(caller)) return { ok: false, error: '権限がありません' };
   const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   const rows = sh ? sh.getDataRange().getValues() : [];
+  const termCols = sh ? getStaffTermCols_(sh, false) : {};
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
   for (let i = 1; i < rows.length; i++) {
@@ -4697,10 +4698,55 @@ function getAdminConsoleData(userId) {
       // 軍師ログイン: フラグ○ / 未設定は黒服 / 管理者は常に可(hardGunshi)
       kioskLogin: isAdminAll || (gunshiRaw === '○') || (gunshiRaw === '×' ? false : (role === '黒服社員' || role === '黒服バイト')),
       gunshiFlag: gunshiRaw, hardGunshi: isAdminAll,
-      hasPin: !!allProps['KIOSK_PIN_' + name.replace(/[\s　]/g, '_')] // 個別PIN設定済みか
+      hasPin: !!allProps['KIOSK_PIN_' + name.replace(/[\s　]/g, '_')], // 個別PIN設定済みか
+      terms: (function () { var t = {}; STAFF_TERM_HEADERS.forEach(function (h) { var c = termCols[h]; t[h] = (c >= 0) ? String(rows[i][c] == null ? '' : rows[i][c]) : ''; }); return t; })()
     });
   }
   return { ok: true, caller: caller, staff: staff, roles: ADMIN_ROLES_, kioskRoles: KIOSK_LOGIN_ROLES_, masterPin: prop('KIOSK_PIN') || '1234', consolePinSet: !!prop('ADMIN_CONSOLE_PIN') };
+}
+
+/* ===== キャスト個別条件（参照メモ。給与計算には非連動） =====
+ * スタッフマスタに条件列を「ヘッダー名で探索→無ければ末尾に追加」で持たせる（既存A〜H列は非破壊）。
+ * 対象ロールの制御はフロント側（キャスト・黒服・ドライバーのみパネル表示）。 */
+var STAFF_TERM_HEADERS = ['基本時給', '基本バック', '入店日', '入店時条件', '設定条件', '個別メモ'];
+
+// スタッフマスタ1行目ヘッダーから条件各列の0-based indexを解決。create=trueで無い列を末尾に新設。
+function getStaffTermCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_TERM_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) {
+      lastCol += 1;
+      sh.getRange(1, lastCol).setValue(name);
+      idx = lastCol - 1;
+    }
+    cols[name] = idx; // 無く未作成なら -1
+  });
+  return cols;
+}
+
+// 管理コンソールからキャスト個別条件を保存（名前で行特定→各条件列へsetValue）
+function adminSaveStaffTerms(userId, targetName, terms) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  targetName = String(targetName || '').trim();
+  var cols = getStaffTermCols_(sh, true); // 無ければ列作成
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      STAFF_TERM_HEADERS.forEach(function (h) {
+        var c = cols[h];
+        if (c >= 0 && terms && Object.prototype.hasOwnProperty.call(terms, h)) {
+          sh.getRange(i + 1, c + 1).setValue(String(terms[h] == null ? '' : terms[h]));
+        }
+      });
+      return { ok: true, name: targetName };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
 }
 
 function adminSetStaffRole(userId, targetName, role) {

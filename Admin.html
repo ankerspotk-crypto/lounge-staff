@@ -281,16 +281,50 @@ function renderStaff(){
   setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">該当スタッフなし</div>'));
   var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
-function cardHtml(s){
+function cardHtml(s,i){
   var line=s.registered?'<span class="badge line-on">LINE ○</span>':'<span class="badge line-off">LINE 未</span>';
   var roleOpts=ST.roles.map(function(r){return '<option value="'+esc(r)+'"'+(r===s.role?' selected':'')+'>'+esc(r)+'</option>';}).join('');
   var gunshiBtn=s.hardGunshi?'<div class="toggle on gunshi locked" title="管理者は常に軍師ログイン可">🏯 軍師 🔒</div>':'<div class="toggle'+(s.kioskLogin?' on gunshi':'')+'" onclick="toggleGunshi(\''+jstr(s.name)+'\','+(!s.kioskLogin)+')">🏯 軍師</div>';
   var adminBtn=s.hardAdmin?'<div class="toggle on admin locked" title="コード保護">🛡 管理者 🔒</div>':'<div class="toggle'+(s.adminFlag?' on admin':'')+'" onclick="toggleAdmin(\''+jstr(s.name)+'\','+(!s.adminFlag)+')">🛡 管理者</div>';
   var safeBtn=s.hardSafe?'<div class="toggle on safe locked" title="コード保護">🔑 金庫管理 🔒</div>':'<div class="toggle'+(s.safeFlag?' on safe':'')+'" onclick="toggleSafe(\''+jstr(s.name)+'\','+(!s.safeFlag)+')">🔑 金庫管理</div>';
   var pinRow=s.kioskLogin?'<div class="pinrow"><span class="pinlbl">🔢 PIN</span><span class="pinstat'+(s.hasPin?' set':'')+'">'+(s.hasPin?'個別PIN設定済み':'マスターPIN使用')+'</span><button class="btn sm" onclick="setPin(\''+jstr(s.name)+'\')">設定</button>'+(s.hasPin?'<button class="btn sm" onclick="clearPin(\''+jstr(s.name)+'\')">クリア</button>':'')+'</div>':'';
+  var termHtml='';
+  if(isTermRole(s.role)){
+    var t=s.terms||{};
+    var fh=TERM_FIELDS.map(function(f,fi){
+      var id='tm'+i+'_'+fi, val=esc(t[f.h]||'');
+      var lbl='<span style="font-size:11px;opacity:.7">'+esc(f.label)+'</span>';
+      var field=f.ta?('<textarea class="ta" id="'+id+'" rows="2" placeholder="'+esc(f.ph)+'">'+val+'</textarea>')
+                    :('<input class="finput grow" id="'+id+'" placeholder="'+esc(f.ph)+'" value="'+val+'">');
+      return '<div style="display:flex;flex-direction:column;gap:3px;margin-top:7px">'+lbl+field+'</div>';
+    }).join('');
+    var hasVal=TERM_FIELDS.some(function(f){return String(t[f.h]||'').trim();});
+    termHtml='<div style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px">'+
+      '<div onclick="toggleTerms('+i+')" style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;user-select:none">✎ 個別条件'+(hasVal?' <span style="color:#5cc98a">●</span>':'')+' <span id="tmar'+i+'">▾</span></div>'+
+      '<div id="tmp'+i+'" style="display:none">'+fh+
+      '<button class="btn pri sm" style="width:100%;margin-top:8px" onclick="saveTerms('+i+',\''+jstr(s.name)+'\')">💾 条件を保存</button></div></div>';
+  }
   return '<div class="card"><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+termHtml+'</div>';
+}
+/* ===== キャスト個別条件（参照メモ。給与計算には非連動。対象=キャスト・黒服・ドライバー） ===== */
+var TERM_FIELDS=[
+  {h:'基本時給',label:'基本時給',ph:'例: 3000（円/時）'},
+  {h:'基本バック',label:'基本バック',ph:'例: 担当10〜20%'},
+  {h:'入店日',label:'入店日',ph:'例: 2026-05-01'},
+  {h:'入店時条件',label:'入店時の条件',ta:true,ph:'入店時に約束した条件'},
+  {h:'設定条件',label:'設定条件',ta:true,ph:'設定・待遇などの条件'},
+  {h:'個別メモ',label:'自由メモ',ta:true,ph:'その他メモ（自由記述）'}
+];
+function isTermRole(role){ role=String(role||''); return role.indexOf('キャスト')>=0||role.indexOf('体験')>=0||role.indexOf('黒服')>=0||role.indexOf('ドライバー')>=0; }
+function toggleTerms(i){ var p=document.getElementById('tmp'+i),a=document.getElementById('tmar'+i); if(!p)return; var open=p.style.display==='none'; p.style.display=open?'block':'none'; if(a)a.textContent=open?'▴':'▾'; }
+function saveTerms(i,name){
+  var terms={};
+  TERM_FIELDS.forEach(function(f,fi){ var el=document.getElementById('tm'+i+'_'+fi); terms[f.h]=el?(el.value||'').trim():''; });
+  var s=findStaff(name); if(s)s.terms=terms;
+  if(!IS_GAS){ toast(name+' の個別条件を保存（ローカル）'); return; }
+  gsr('adminSaveStaffTerms',USER_ID,name,terms).then(function(r){ res(r,name+' の個別条件を保存しました')||load(); }).catch(function(){ toast('通信エラー',true); load(); });
 }
 function toggleGunshi(name,on){ var s=findStaff(name); if(s){s.gunshiFlag=on?'○':'×';s.kioskLogin=on;} render(); if(!IS_GAS){toast(name+' 軍師'+(on?'ON':'OFF'));return;} gsr('adminSetGunshi',USER_ID,name,on).then(function(r){res(r,name+' 軍師ログイン '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
 function setPin(name){ var p=prompt(name+' の個別PIN（4桁数字。空欄でクリア＝マスターPINに戻す）',''); if(p===null)return; p=p.trim(); if(p&&!/^\d{4}$/.test(p)){toast('PINは4桁の数字で入力してください',true);return;} var s=findStaff(name); if(s)s.hasPin=!!p; render(); if(!IS_GAS){toast(name+' PIN'+(p?'設定':'クリア'));return;} gsr('adminSetKioskPin',USER_ID,name,p).then(function(r){res(r,name+' の個別PINを'+(p?'設定':'クリア')+'しました')||load();}).catch(function(){toast('通信エラー',true);load();}); }
