@@ -5921,6 +5921,43 @@ function getSouvenirStock_() {
   return result;
 }
 
+// 指定フロアの「おみやげ」行を取得（無ければ在庫0で作成）。減算/アラームと同じ在庫管理シートを使う
+function ensureSouvenirRow_(floor) {
+  const sh = getInventorySheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === floor && String(rows[i][1]) === SOUVENIR_NAME) return { sh: sh, row: i + 1, qty: Number(rows[i][2]) || 0 };
+  }
+  sh.appendRow([floor, SOUVENIR_NAME, 0, Utilities.formatDate(new Date(), TZ, 'M/d HH:mm')]);
+  return { sh: sh, row: sh.getLastRow(), qty: 0 };
+}
+
+// フロア別おみやげ在庫（2F/5F）をUI表示用に返す
+function kioskGetSouvenirStock() {
+  const s = getSouvenirStock_();
+  return { '2F': Number(s['2F']) || 0, '5F': Number(s['5F']) || 0 };
+}
+
+// おみやげ在庫を絶対値でセット（補充後の実数入力・棚卸し用）
+function kioskSetSouvenirStock(floor, qty) {
+  if (floor !== '2F' && floor !== '5F') return { ok: false, error: 'フロア不正' };
+  const q = Math.max(0, Math.round(Number(qty) || 0));
+  const r = ensureSouvenirRow_(floor);
+  r.sh.getRange(r.row, 3).setValue(q);
+  r.sh.getRange(r.row, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  return { ok: true, floor: floor, qty: q };
+}
+
+// おみやげ在庫を増減（＋補充/－調整。0未満にはならない）
+function kioskAdjustSouvenirStock(floor, delta) {
+  if (floor !== '2F' && floor !== '5F') return { ok: false, error: 'フロア不正' };
+  const r = ensureSouvenirRow_(floor);
+  const next = Math.max(0, r.qty + Math.round(Number(delta) || 0));
+  r.sh.getRange(r.row, 3).setValue(next);
+  r.sh.getRange(r.row, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  return { ok: true, floor: floor, qty: next };
+}
+
 function setReservationStatus_(rowIdx, status) {
   const sh = getYoyakuRsrvSheet_();
   sh.getRange(rowIdx, 9).setValue(status);
