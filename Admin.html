@@ -279,8 +279,36 @@ function filtered(){ return ST.staff.filter(function(s){ if(roleFilter!=='all'&&
 function renderStaff(){
   var fchips='<div class="chip'+(roleFilter==='all'?' on':'')+'" onclick="setFilter(\'all\')">全て</div>'+ST.roles.map(function(r){return '<div class="chip'+(roleFilter===r?' on':'')+'" onclick="setFilter(\''+jstr(r)+'\')">'+esc(r)+'</div>';}).join('');
   var list=filtered();
-  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">該当スタッフなし</div>'));
+  var renameTool='<details class="sec compact" style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:800;color:var(--accent)">✏️ スタッフ改名（名前変更の統一）</summary>'
+    +'<div class="hint" style="margin-top:8px">既存スタッフが <b>#登録</b> で名前を変えた時、旧名が残るシフト・シフト申請・勤怠・給与・領収書・顧客担当・予約などを新名に一括統一します。まず🔍プレビューで件数を確認してから実行してください。</div>'
+    +'<div class="toolbar"><input class="finput grow" id="rn-old" placeholder="旧名（今シフト等に残る名前）"><span style="color:var(--dim);font-weight:800">→</span><input class="finput grow" id="rn-new" placeholder="新名（#登録した名前）"><button class="btn" onclick="renamePreview()">🔍 プレビュー</button></div>'
+    +'<div id="rn-result"></div></details>';
+  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">該当スタッフなし</div>'));
   var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
+}
+function renameGetIn(){ return {o:(document.getElementById('rn-old').value||'').trim(), n:(document.getElementById('rn-new').value||'').trim()}; }
+function renamePreview(){
+  var v=renameGetIn(); if(!v.o||!v.n){ toast('旧名と新名を入力してください',true); return; }
+  if(v.o===v.n){ toast('旧名と新名が同じです',true); return; }
+  if(!IS_GAS){ document.getElementById('rn-result').innerHTML='<div class="empty">（ローカルではプレビュー不可）</div>'; return; }
+  document.getElementById('rn-result').innerHTML='<div class="empty" style="padding:12px">確認中…</div>';
+  gsr('adminRenameStaff',USER_ID,v.o,v.n,false).then(function(r){
+    if(r&&r.ok===false){ document.getElementById('rn-result').innerHTML='<div class="empty" style="color:#e88;padding:12px">'+esc(r.error||'失敗')+'</div>'; return; }
+    renameRenderResult(r,false);
+  }).catch(function(){ document.getElementById('rn-result').innerHTML='<div class="empty">通信エラー</div>'; });
+}
+function renameRenderResult(r,done){
+  var rows=Object.keys(r.report).map(function(k){ var val=r.report[k],pos=Number(val)>0; return '<tr><td style="padding:3px 10px 3px 0;color:var(--sub)">'+esc(k)+'</td><td style="padding:3px 0;text-align:right;font-weight:800;color:'+(pos?'var(--accent)':'var(--dim)')+'">'+esc(val)+'</td></tr>'; }).join('');
+  var head='<div class="hint" style="margin:10px 0 4px"><b>'+esc(r.oldName)+'</b> → <b>'+esc(r.newName)+'</b>　計 '+r.total+' 件'+(done?'　<span style="color:#7fd88f">✅ 実行済み</span>':'　<span style="color:var(--dim)">（プレビュー・未実行）</span>')+'</div>';
+  var btn=done?'':'<div class="toolbar" style="margin-top:10px"><button class="btn ok" onclick="renameCommit()">✅ この内容で改名を実行（'+r.total+'件）</button></div>';
+  document.getElementById('rn-result').innerHTML=head+'<table style="border-collapse:collapse;font-size:12px">'+rows+'</table>'+btn;
+}
+function renameCommit(){
+  var v=renameGetIn(); if(!v.o||!v.n)return;
+  if(!confirm(v.o+' を '+v.n+' に、名前で紐づく全シートで統一します。よろしいですか？'))return;
+  gsr('adminRenameStaff',USER_ID,v.o,v.n,true).then(function(r){
+    if(res(r,'改名しました（計'+r.total+'件）')){ renameRenderResult(r,true); }
+  }).catch(function(){ toast('実行に失敗しました',true); });
 }
 function cardHtml(s,i){
   var line=s.registered?'<span class="badge line-on">LINE ○</span>':'<span class="badge line-off">LINE 未</span>';

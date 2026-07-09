@@ -2749,8 +2749,9 @@ function checkPendingStaffRegistrations_() {
 }
 
 // スタッフ改名: 旧名→新名を「名前で紐づく」全シート/内部キーで一括置換。{シート名:件数} を返す。
+// dryRun=true で件数だけ数えて書き込まない（プレビュー用）。
 // 用途: 既存スタッフが#登録で名前変更（userIdは同一）した時、シフト等が旧名のままになるのを統一する。
-function renameStaffEverywhere_(oldName, newName) {
+function renameStaffEverywhere_(oldName, newName, dryRun) {
   const oldN = String(oldName || '').trim(), newN = String(newName || '').trim();
   const rep = {};
   if (!oldN || !newN || oldN === newN) return { error: 'oldName/newNameが不正', rep: rep };
@@ -2764,7 +2765,7 @@ function renameStaffEverywhere_(oldName, newName) {
     const n = sh.getLastRow() - 1, rng = sh.getRange(2, col + 1, n, 1), vals = rng.getValues();
     let c = 0;
     for (let i = 0; i < vals.length; i++) if (eq(vals[i][0])) { vals[i][0] = newN; c++; }
-    if (c) rng.setValues(vals);
+    if (c && !dryRun) rng.setValues(vals);
     rep[label] = c;
   }
   // 複数名（、,， 区切り）セルのトークン単位置換（cols=0始まり配列）
@@ -2784,7 +2785,7 @@ function renameStaffEverywhere_(oldName, newName) {
         });
         if (hit) { vals[i][0] = out.join(''); changed = true; total++; }
       }
-      if (changed) rng.setValues(vals);
+      if (changed && !dryRun) rng.setValues(vals);
     });
     rep[label] = total;
   }
@@ -2807,7 +2808,7 @@ function renameStaffEverywhere_(oldName, newName) {
       const cols = getCustomerMasterCols_(values);
       let c = 0;
       if (cols) [cols.tantou, cols.oldTantou].filter(function (x) { return x >= 0; }).forEach(function (ci) {
-        for (let r = cols.headerRow + 1; r < values.length; r++) if (eq(values[r][ci])) { msh.getRange(r + 1, ci + 1).setValue(newN); c++; }
+        for (let r = cols.headerRow + 1; r < values.length; r++) if (eq(values[r][ci])) { if (!dryRun) msh.getRange(r + 1, ci + 1).setValue(newN); c++; }
       });
       rep['顧客マスタ(担当)'] = c;
     }
@@ -2817,11 +2818,20 @@ function renameStaffEverywhere_(oldName, newName) {
   try {
     const p = PropertiesService.getScriptProperties();
     const v = p.getProperty('SHIFT_CONFIRMED_' + oldN);
-    if (v != null) { p.setProperty('SHIFT_CONFIRMED_' + newN, v); p.deleteProperty('SHIFT_CONFIRMED_' + oldN); rep['SHIFT_CONFIRMED'] = 1; } else rep['SHIFT_CONFIRMED'] = 0;
+    if (v != null) { if (!dryRun) { p.setProperty('SHIFT_CONFIRMED_' + newN, v); p.deleteProperty('SHIFT_CONFIRMED_' + oldN); } rep['SHIFT_CONFIRMED'] = 1; } else rep['SHIFT_CONFIRMED'] = 0;
   } catch (e) {}
 
-  try { CacheService.getScriptCache().remove('MEMFEEMAP_v1'); } catch (e) {}
+  if (!dryRun) { try { CacheService.getScriptCache().remove('MEMFEEMAP_v1'); } catch (e) {} }
   return rep;
+}
+
+// 管理コンソール: スタッフ改名（commit=falseでプレビュー＝件数のみ／trueで実行）。Admin.htmlからgsrで呼ぶ。
+function adminRenameStaff(userId, oldName, newName, commit) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const rep = renameStaffEverywhere_(oldName, newName, !commit);
+  if (rep && rep.error) return { ok: false, error: rep.error };
+  let total = 0; Object.keys(rep).forEach(function (k) { const n = Number(rep[k]); if (!isNaN(n)) total += n; });
+  return { ok: true, report: rep, total: total, committed: !!commit, oldName: String(oldName || '').trim(), newName: String(newName || '').trim() };
 }
 
 function checkUnregistered(event, groupId) {
