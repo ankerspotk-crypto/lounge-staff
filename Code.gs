@@ -5978,6 +5978,7 @@ function cancelKioskReservation(rowIdx) {
 }
 
 function addReservation_(payload, regBy) {
+ return withPropLock_(function () {
   const sh = getYoyakuRsrvSheet_();
   const dateKey = String(payload.date || todayStr());
   const time = String(payload.time || '');
@@ -6002,6 +6003,7 @@ function addReservation_(payload, regBy) {
   if (subCustomers.length) sh.getRange(sh.getLastRow(), 16).setValue(JSON.stringify(subCustomers));
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true, dateKey, rowIdx: sh.getLastRow() };
+ });
 }
 
 function updateReservation_(rowIdx, payload) {
@@ -6165,6 +6167,17 @@ function checkInReservation_(rowIdx) {
   const sp = PropertiesService.getScriptProperties();
   sp.setProperty('KCHECKIN_' + rowIdx, String(Date.now())); // 来店時刻（10分以内のみ来店前に戻せる判定用）
   seatCodes.forEach(code => {
+    // 席の重複検知: 既に別のお客様が着席中の卓へ来店させた場合、黒服へ警告（来店処理自体は止めない）
+    const _ex = sp.getProperty('RSRV_' + code);
+    if (_ex) {
+      try {
+        const _p = JSON.parse(_ex);
+        if (_p && _p.customer && _p.customer !== customer) {
+          const _KF = prop('GROUP_KUROFUKU');
+          if (_KF) push_(_KF, '⚠️【席の重複注意】' + code + ' には既に ' + _p.customer + '様が着席中です。そこへ ' + customer + '様を来店させました。席割りを確認してください。');
+        }
+      } catch (e) {}
+    }
     sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax, tantouCast }));
     sp.deleteProperty('YRSRV_' + code);
   });
