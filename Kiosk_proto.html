@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>キオスク統合プロト | IEYAS軍師</title>
+<style>
+:root{
+  --bg:#0b0b12; --panel:#12121f; --panel2:#161626; --line:#22223c; --line2:#2c2c48;
+  --txt:#e8f0ff; --sub:#8a9ac0; --dim:#5a6a90; --accent:#7ab0f0; --accent-bg:#0f2040; --accent-line:#1a50a0;
+  --ok:#4dcc84; --ok-bg:#0a2016; --ok-line:#1f6040;
+  --warn:#e6b23a; --warn-bg:#1c1400; --warn-line:#6a5000;
+  --over:#ee5a5a; --over-bg:#1e0808; --over-line:#7a2020;
+  --green:#66cc88; --gold:#e6b23a; --pink:#e08ad0;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;font-family:-apple-system,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;}
+body{display:flex;flex-direction:column;height:100vh;}
+
+/* ---------- Header ---------- */
+.hdr{display:flex;align-items:center;gap:12px;padding:9px 15px;background:linear-gradient(180deg,#16162a,#101020);border-bottom:1px solid var(--line);flex-shrink:0;}
+.brand{font-size:15px;font-weight:800;letter-spacing:.5px;white-space:nowrap;}
+.brand .z{color:var(--accent);}
+.term-badge{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.datenav{display:flex;align-items:center;gap:6px;margin-left:2px;}
+.dbtn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--accent);font-size:16px;cursor:pointer;line-height:1;}
+.dtoday{padding:5px 11px;border-radius:9px;border:1px solid var(--accent-line);background:var(--accent-bg);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;}
+.dlabel{font-size:14px;font-weight:800;min-width:110px;text-align:center;}
+.spacer{flex:1;}
+.clock{font-size:11px;color:var(--sub);text-align:right;line-height:1.3;white-space:nowrap;}
+.clock b{color:#fff;font-size:15px;}
+.who{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line2);border-radius:22px;padding:5px 6px 5px 12px;cursor:pointer;white-space:nowrap;}
+.who .nm{font-size:13px;font-weight:700;}
+.who .lo{font-size:10px;color:#ee7a63;background:#2a1010;border:1px solid #5a2020;border-radius:14px;padding:3px 9px;}
+
+/* ---------- Alert bar ---------- */
+.alertbar{display:flex;align-items:stretch;gap:10px;padding:9px 15px;background:linear-gradient(180deg,#14101c,#0d0b14);border-bottom:1px solid var(--line);flex-shrink:0;min-height:64px;}
+.alert-lead{display:flex;flex-direction:column;justify-content:center;padding-right:12px;border-right:1px solid var(--line2);flex-shrink:0;min-width:96px;}
+.alert-lead .big{font-size:24px;font-weight:900;line-height:1;}
+.alert-lead .cap{font-size:10px;color:var(--sub);font-weight:700;margin-top:3px;letter-spacing:.5px;}
+.alert-lead.calm .big{color:var(--ok);}
+.alert-lead.busy .big{color:var(--over);}
+.alert-scroll{display:flex;gap:9px;overflow-x:auto;flex:1;padding-bottom:2px;align-items:center;}
+.alert-scroll::-webkit-scrollbar{height:5px;}
+.alert-scroll::-webkit-scrollbar-thumb{background:#2a2a48;border-radius:3px;}
+.achip{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:8px 13px;border-radius:11px;cursor:pointer;border:1px solid;min-width:190px;max-width:280px;}
+.achip .aic{font-size:19px;line-height:1;}
+.achip .atx{display:flex;flex-direction:column;gap:2px;overflow:hidden;}
+.achip .amain{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.achip .asub{font-size:10px;font-weight:700;opacity:.85;white-space:nowrap;}
+.achip.lv1{background:linear-gradient(180deg,#2a0d0d,#1e0808);border-color:#7a2424;animation:apulse 1.5s ease-in-out infinite;}
+.achip.lv1 .amain{color:#ffb3b3;} .achip.lv1 .asub{color:#ee8080;}
+.achip.lv2{background:#201800;border-color:#6a5000;}
+.achip.lv2 .amain{color:#ffd980;} .achip.lv2 .asub{color:#d0a848;}
+.achip.lv3{background:#0c1c34;border-color:#245086;}
+.achip.lv3 .amain{color:#9dc8ff;} .achip.lv3 .asub{color:#6a9cd8;}
+.achip.lv4{background:#0d2018;border-color:#245a3c;}
+.achip.lv4 .amain{color:#8fe0b0;} .achip.lv4 .asub{color:#5cc088;}
+@keyframes apulse{0%,100%{box-shadow:0 0 0 0 rgba(238,90,90,0);}50%{box-shadow:0 0 0 3px rgba(238,90,90,.25);}}
+.alert-none{display:flex;align-items:center;gap:8px;color:var(--ok);font-size:14px;font-weight:700;padding-left:4px;}
+/* タスクチケット・タイムライン */
+.tl-scroll{display:flex;gap:8px;overflow-x:auto;flex:1;align-items:stretch;padding-bottom:2px;}
+.tl-scroll::-webkit-scrollbar{height:5px;} .tl-scroll::-webkit-scrollbar-thumb{background:#2a2a48;border-radius:3px;}
+.ticket{flex-shrink:0;min-width:168px;max-width:230px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;}
+.ticket:active{transform:scale(.98);}
+.tk-time{font-size:10px;font-weight:800;padding:3px 9px;letter-spacing:.5px;}
+.tk-body{display:flex;gap:8px;padding:6px 9px 8px;align-items:flex-start;}
+.tk-ic{font-size:16px;line-height:1.15;flex-shrink:0;}
+.tk-tx{display:flex;flex-direction:column;overflow:hidden;}
+.tk-title{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tk-sub{font-size:10px;font-weight:700;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--sub);}
+.ticket.k-now-crit{border-color:#7a2424;animation:apulse 1.5s ease-in-out infinite;}
+.ticket.k-now-crit .tk-time{background:#3a1212;color:#ff9a9a;} .ticket.k-now-crit .tk-title{color:#ffb3b3;}
+.ticket.k-now-rot{border-color:#7a5010;} .ticket.k-now-rot .tk-time{background:#2a1e00;color:#ffcf6a;} .ticket.k-now-rot .tk-title{color:#ffd980;}
+.ticket.k-soon{border-color:#5a4200;} .ticket.k-soon .tk-time{background:#201800;color:#e6c060;} .ticket.k-soon .tk-title{color:#e6c060;}
+.ticket.k-todo{border-color:#7a4a1a;border-style:dashed;} .ticket.k-todo .tk-time{background:#241400;color:#ffb070;} .ticket.k-todo .tk-title{color:#ffb070;}
+.ticket.k-preview{border-style:dashed;} .ticket.k-preview .tk-time{background:#0c1c34;color:#9dc8ff;} .ticket.k-preview .tk-title{color:#bcd8ff;}
+.ticket.k-preview-cast{border-style:dashed;} .ticket.k-preview-cast .tk-time{background:#241428;color:#e0a0d0;} .ticket.k-preview-cast .tk-title{color:#e6b0d6;}
+.ticket.k-preview-task{border-style:dashed;} .ticket.k-preview-task .tk-time{background:#102a26;color:#8fe0c0;} .ticket.k-preview-task .tk-title{color:#8fe0c0;}
+
+/* ---------- Dashboard split ---------- */
+.dash{flex:1;display:flex;gap:12px;padding:12px 15px;min-height:0;}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;}
+.col-hall{flex:1.65;}
+.col-rsv{flex:1;min-width:330px;}
+.col-hd{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.col-hd .ttl{font-size:14px;font-weight:800;}
+.col-hd .cnt{font-size:11px;color:var(--sub);font-weight:700;}
+.col-hd .mini-btn{font-size:12px;font-weight:700;padding:6px 11px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--accent);cursor:pointer;}
+.col-hd .mini-btn.add{background:#0d2016;border-color:#25603e;color:var(--ok);}
+.col-scroll{flex:1;overflow-y:auto;padding:12px 13px 16px;min-height:0;}
+
+/* ---------- Hall (seats) ---------- */
+.floors{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.floor .floor-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px;}
+.floor .fl{font-size:14px;font-weight:800;letter-spacing:1px;}
+.floor .meta{font-size:10px;color:var(--sub);}
+.grp-lbl{font-size:10px;color:var(--dim);font-weight:700;letter-spacing:.5px;margin:8px 2px 5px;}
+.seatgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.seatgrid.box{grid-template-columns:1fr;}
+.seat{border-radius:10px;border:1px solid var(--line2);background:var(--panel2);padding:8px 9px;min-height:70px;cursor:pointer;position:relative;overflow:hidden;transition:.1s;}
+.seat:active{transform:scale(.985);}
+.seat .st{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+.seat .snm{font-size:11px;font-weight:800;color:#c8d4ee;}
+.seat .pax{font-size:10px;color:var(--dim);}
+.seat .cust{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.seat .seat-info{font-size:10px;color:#9ab0d0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
+.seat .seat-info .bp{color:#8fd06a;margin-left:3px;}
+.seat .seat-info .dot{color:#44506a;margin:0 3px;}
+.seat.waiting{background:#0e1220;border-color:#243a5a;}
+.seat.waiting .snm{color:#99aacc;}
+.seat.kurofuku{background:#131313;border-color:#2e2e2e;}
+.seat.kurofuku .snm{color:#bbb;}
+.seat .casts{margin-top:3px;display:flex;flex-direction:column;gap:2px;}
+.seat .crow{display:flex;align-items:center;justify-content:space-between;font-size:11px;}
+.seat .cnm{color:#cfe0ff;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.seat .cmin{font-variant-numeric:tabular-nums;font-weight:800;font-size:11px;padding:0 6px;border-radius:6px;margin-left:6px;white-space:nowrap;}
+.seat .empty{font-size:13px;color:var(--dim);display:flex;align-items:center;height:42px;}
+.seat .tags{display:flex;flex-wrap:wrap;gap:3px;margin:1px 0;}
+.tg{font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;}
+.tg.vip{background:#2a1030;color:#e79ad6;border:1px solid #6a2a70;}
+.tg.bottle{background:#12240f;color:#8fd06a;border:1px solid #356020;}
+.tg.bday{background:#151046;color:#9d90ee;border:1px solid #4436a8;}
+.tg.ng{background:#2a0e0e;color:#f08080;border:1px solid #7a2828;}
+.seat .rsvline{margin-top:4px;font-size:10px;color:#ffcc55;background:#1a1400;border:1px solid #4a3800;border-radius:6px;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.req-badge{font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;background:#20203a;color:#9aa8c8;border:1px solid var(--line2);cursor:pointer;}
+.req-badge.un{background:#2a1600;color:#ffb060;border-color:#7a4a10;animation:apulse 1.6s ease-in-out infinite;}
+.req-card{background:var(--panel2);border:1px solid #5a3a20;border-radius:11px;padding:11px 13px;margin-bottom:9px;}
+.req-card.done{opacity:.55;border-color:var(--line2);}
+.rq-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.rq-time{font-size:11px;color:var(--sub);font-weight:700;}
+.rq-cast{font-size:14px;font-weight:800;}
+.rq-type{font-size:12px;font-weight:800;padding:2px 8px;border-radius:6px;}
+.rq-type.ng{background:#2a0e0e;color:#f08080;border:1px solid #7a2828;}
+.rq-type.want{background:#0d2618;color:#79e0a8;border:1px solid #2a6a44;}
+.rq-done{margin-left:auto;font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;cursor:pointer;}
+.rq-target{font-size:13px;font-weight:700;margin-top:7px;color:#cfe0ff;}
+.rq-comment{font-size:12px;color:var(--sub);margin-top:5px;background:#0f0f1c;border-radius:7px;padding:6px 9px;border:1px solid var(--line);}
+/* 担当 / 予約席の明示 */
+.seat.reserved{background:#0c1626;border:1px dashed #2f5a90;}
+.seat .rsv-tag{font-size:9px;font-weight:800;color:#9dc8ff;background:#12233f;border:1px solid #2a5590;border-radius:5px;padding:1px 6px;}
+.seat .rsv-meta{font-size:11px;color:#7ab0f0;margin-top:3px;font-weight:600;}
+.seat .rsv-meta .rt{color:#9dc8ff;font-weight:800;}
+.crow.istantou .cnm{color:#7be0a8;font-weight:800;}
+.crow.tantou-away .cnm{color:#ffbf6a;font-weight:800;}
+.tmini{font-size:8px;font-weight:800;padding:0 4px;border-radius:4px;margin-left:3px;vertical-align:middle;}
+.crow.istantou .tmini{background:#123020;color:#7be0a8;}
+.crow.tantou-away .tmini{background:#2a1e00;color:#ffbf6a;}
+.crow.tantou-away .cmin{color:#ffbf6a !important;background:#241800 !important;border-color:#5a4010 !important;}
+.seat.ok{background:var(--ok-bg);border-color:var(--ok-line);}
+.seat.ok .cmin{color:var(--ok);background:#071410;border:1px solid #143a26;}
+.seat.warn{background:var(--warn-bg);border-color:var(--warn-line);}
+.seat.warn .cmin{color:var(--warn);background:#160f00;border:1px solid #4a3800;}
+.seat.over{background:var(--over-bg);border-color:var(--over-line);animation:blink 1.6s ease-in-out infinite;}
+.seat.over .cmin{color:var(--over);background:#140505;border:1px solid #5a1a1a;}
+.seat.over .cust{color:#ffbdbd;}
+@keyframes blink{0%,100%{box-shadow:0 0 0 0 rgba(238,90,90,0);}50%{box-shadow:0 0 0 2px rgba(238,90,90,.35);}}
+.seat .cnr{position:absolute;top:0;right:0;font-size:9px;padding:2px 6px;border-bottom-left-radius:8px;font-weight:800;}
+.seat.ok .cnr{background:#123a26;color:#7be0a8;}
+.seat.warn .cnr{background:#3a2c00;color:#ffcf6a;}
+.seat.over .cnr{background:#4a1212;color:#ff9a9a;}
+
+/* ---------- Reservation list ---------- */
+.rlist{display:flex;flex-direction:column;gap:8px;}
+.rcard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;}
+.rcard.done{opacity:.5;}
+.rcard.next{border-color:#245086;box-shadow:0 0 0 1px #1a3a66 inset;}
+.rtop{display:flex;align-items:center;gap:9px;}
+.rtime{font-size:16px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.rname{font-size:14px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rname .mem{font-size:10px;color:var(--sub);font-weight:600;margin-left:4px;}
+.stbtns{display:flex;gap:4px;flex-shrink:0;}
+.stbtn{padding:5px 9px;font-size:11px;font-weight:700;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--sub);cursor:pointer;}
+.stbtn.a-wait.on{background:#12233f;border-color:#2a5590;color:#8fc0ff;}
+.stbtn.a-seat.on{background:#0d2618;border-color:#2a6a44;color:#79e0a8;}
+.stbtn.a-left.on{background:#241024;border-color:#66346a;color:#e79ad6;}
+.rbadges{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+.rb{font-size:10px;padding:2px 7px;border-radius:6px;background:#191930;color:#a9bce0;border:1px solid var(--line2);}
+.rb.t{color:#8fd06a;border-color:#2f5020;background:#101d0c;}
+.rb.d{color:#ffbf6a;border-color:#5a4010;background:#1c1300;}
+.rb.undef{color:#ff9a6a;border-color:#7a3a1a;background:#241000;}
+.rnote{font-size:11px;color:var(--sub);margin-top:6px;background:#0f0f1c;border-radius:7px;padding:5px 8px;border:1px solid var(--line);}
+
+/* ---------- Sheet (seat detail / add / schedule) ---------- */
+.scrim{position:fixed;inset:0;background:rgba(4,4,10,.55);opacity:0;pointer-events:none;transition:.2s;z-index:40;}
+.scrim.show{opacity:1;pointer-events:auto;}
+.sheet{position:fixed;top:0;right:0;bottom:0;width:min(460px,92vw);background:var(--panel);border-left:1px solid var(--line2);transform:translateX(100%);transition:.24s cubic-bezier(.2,.7,.2,1);z-index:41;display:flex;flex-direction:column;}
+.sheet.wide{width:min(860px,96vw);}
+.sheet.show{transform:translateX(0);}
+.sheet-hd{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.sheet-hd .t{font-size:17px;font-weight:800;}
+.sheet-hd .x{font-size:13px;color:var(--sub);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:7px 12px;cursor:pointer;}
+.sheet-bd{flex:1;overflow-y:auto;padding:16px 18px;}
+.sheet-bd .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;}
+.sheet-bd .kv .k{color:var(--sub);}
+.sheet-bd .kv .v{font-weight:700;}
+.detcast{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px;}
+.act{padding:14px;border-radius:11px;font-size:14px;font-weight:800;text-align:center;cursor:pointer;border:1px solid var(--line2);background:var(--panel2);color:#cfe0ff;}
+.act.pri{background:#0d2618;border-color:#2a6a44;color:#79e0a8;}
+.act.warn{background:#241800;border-color:#7a5010;color:#ffbf5a;}
+.act.dng{background:#240e0e;border-color:#7a2828;color:#f08080;}
+
+/* form inside sheet */
+.flabel{font-size:11px;color:var(--accent);font-weight:700;margin:14px 0 6px;letter-spacing:.3px;}
+.flabel:first-child{margin-top:0;}
+.finput{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:11px 13px;color:var(--txt);font-size:15px;outline:none;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{padding:8px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;}
+.chip.sel{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);font-weight:800;}
+.chip.cast.sel{background:#0d2618;border-color:#2a6a44;color:#79e0a8;}
+.chip.dohan.sel{background:#241800;border-color:#7a5010;color:#ffbf5a;}
+.custpick{display:flex;gap:8px;margin-bottom:6px;}
+.custpick>div{flex:1;text-align:center;padding:13px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;}
+.cp-exist{background:#0a1428;border:1px solid #1e3a6a;color:var(--accent);}
+.cp-new{background:#0d2010;border:1px solid #1a4a22;color:var(--green);}
+.savebtn{width:100%;margin-top:18px;padding:15px;border-radius:12px;border:1px solid var(--accent-line);background:linear-gradient(180deg,#153a72,#0f2040);color:#dcecff;font-size:16px;font-weight:800;cursor:pointer;}
+
+/* gantt inside sheet */
+.gantt{overflow-x:auto;}
+.g-inner{min-width:680px;}
+.g-hd{display:flex;border-bottom:1px solid var(--line2);}
+.g-corner{width:80px;flex-shrink:0;font-size:10px;color:var(--sub);padding:6px;}
+.g-hr{flex:1;min-width:56px;text-align:center;font-size:10px;color:var(--accent);padding:6px 0;border-left:1px solid var(--line);}
+.g-row{display:flex;height:40px;border-bottom:1px solid #171730;}
+.g-lbl{width:80px;flex-shrink:0;font-size:11px;font-weight:600;color:#b6c8e8;display:flex;align-items:center;padding:0 8px;}
+.g-track{flex:1;position:relative;display:flex;}
+.g-cell{flex:1;min-width:56px;border-left:1px solid #171730;}
+.g-blk{position:absolute;top:5px;height:30px;border-radius:6px;padding:2px 7px;font-size:10px;overflow:hidden;display:flex;flex-direction:column;justify-content:center;cursor:pointer;}
+.g-blk .bn{font-weight:800;color:#cfe0ff;white-space:nowrap;}
+.g-blk .bp{font-size:9px;color:#8aabcc;}
+.g-flr{font-size:10px;color:var(--dim);font-weight:800;padding:6px 8px 2px;letter-spacing:1px;}
+
+/* ---------- Right-column toggle + つけまわし board ---------- */
+.rtoggle{display:flex;gap:6px;}
+.rtg{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.col-rsv .col-hd{flex-wrap:nowrap;}
+.col-rsv .mini-btn{white-space:nowrap;}
+.rcnt{font-size:12px;color:var(--sub);font-weight:700;margin-bottom:9px;}
+.col-rsv .rtoggle{flex:1;}
+.col-rsv .rtg{flex:1;justify-content:center;padding:7px 6px;}
+.rsv-toolbar{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+.rsv-toolbar .rcnt{margin-bottom:0;}
+/* シフト一覧（1人1行・スクロール不要のコンパクト表示） */
+.shift-list{display:flex;flex-direction:column;gap:5px;}
+.shift-row{display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:9px;background:var(--panel2);border:1px solid var(--line);}
+.shift-row.hay{border-color:#5a2a5a;background:#180f1e;}
+.sr-ava{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#0b0b12;flex-shrink:0;}
+.sr-nm{font-size:13px;font-weight:800;min-width:48px;}
+.sr-time{font-size:12px;font-weight:700;color:#aac4e8;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.sr-b{margin-left:auto;display:flex;gap:5px;white-space:nowrap;}
+.sb{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;}
+.sb.haya{background:#241428;color:#e6b0d6;border:1px solid #5a2a5a;}
+.sb.okuri{background:#102a26;color:#8fe0c0;border:1px solid #2a6a5a;cursor:pointer;}
+.sb.okuri.off{background:#161626;color:#5a6a80;border:1px solid var(--line2);}
+.sb.mode{cursor:pointer;}
+.sb.mode.drv{background:#0f2040;color:#9dc8ff;border:1px solid #2a5590;}
+.sb.mode.jib{background:#1e1a0a;color:#e6c060;border:1px solid #5a4a1a;}
+.rtg.active{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.rtg .b{font-size:11px;font-weight:800;background:#7a2424;color:#ffb3b3;border-radius:10px;padding:1px 7px;}
+.rot-sum{font-size:12px;color:var(--sub);margin-bottom:11px;font-weight:700;}
+.rot-sum b{color:#ff9a9a;}
+.rcast{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:11px 12px;margin-bottom:9px;}
+.rcast.act{border-color:#7a2424;background:linear-gradient(180deg,#20100f,#150f14);}
+.rcast-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.rcast-nm{font-size:15px;font-weight:800;}
+.rcast-tag{font-size:10px;font-weight:800;padding:3px 9px;border-radius:11px;}
+.rcast-tag.a{background:#3a1212;color:#ff9a9a;}
+.rcast-tag.o{background:#123020;color:#7be0a8;}
+.rload{font-size:10px;font-weight:800;padding:3px 9px;border-radius:11px;white-space:nowrap;}
+.rload.l1{background:#123020;color:#7be0a8;border:1px solid #25603e;}
+.rload.l2{background:#2a1e00;color:#ffcf6a;border:1px solid #6a5000;}
+.rload.l3{background:#3a1212;color:#ff9a9a;border:1px solid #7a2424;}
+.rload .pip{letter-spacing:1px;margin-left:3px;}
+.rint{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line2);font-size:11px;color:var(--sub);font-weight:700;flex-wrap:wrap;}
+.rint .ichips{display:flex;gap:5px;}
+.rint .ic{padding:5px 11px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);color:var(--sub);font-size:12px;font-weight:800;cursor:pointer;}
+.rint .ic.sel{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.rtab .chg{font-size:10px;font-weight:800;color:#ff9a9a;margin-left:6px;}
+/* 掛け持ちマップ（一目サマリー） */
+.loadmap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px;}
+.lm{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid;}
+.lm.l2{background:#2a1e00;color:#ffcf6a;border-color:#6a5000;}
+.lm.l3{background:#3a1212;color:#ff9a9a;border-color:#7a2424;}
+.lm .n{font-size:10px;opacity:.85;}
+.rtab{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;margin-bottom:5px;font-size:12px;border:1px solid var(--line);}
+.rtab .tl{font-weight:700;color:#cfe0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rtab .tr{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;margin-left:8px;}
+.rtab.cur{background:#0d2016;border-color:#25603e;}   .rtab.cur .tr{color:#7be0a8;}
+.rtab.wait{background:#12121f;}                        .rtab.wait .tr{color:#8a9ac0;}
+.rtab.warnw{background:#1c1400;border-color:#5a4200;}  .rtab.warnw .tr{color:#ffcf6a;}
+.rtab.overw{background:#1e0808;border-color:#7a2020;animation:blink 1.6s ease-in-out infinite;} .rtab.overw .tr{color:#ff9a9a;}
+.rcast-act{display:flex;gap:7px;margin-top:9px;}
+.rbtn{flex:1;padding:12px 6px;border-radius:9px;font-size:13px;font-weight:800;text-align:center;cursor:pointer;border:1px solid;}
+.rbtn.ext{background:#141d30;border-color:#2a4068;color:#9dc8ff;}
+.rbtn.mv{background:linear-gradient(180deg,#153a72,#0f2040);border-color:#2a5590;color:#dcecff;}
+.rbtn.mv.urg{background:linear-gradient(180deg,#7a2424,#4a1414);border-color:#a03434;color:#ffd9d9;animation:apulse 1.5s ease-in-out infinite;}
+.rot-toast{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);background:#0d2618;border:1px solid #2a6a44;color:#9fe8c0;font-size:13px;font-weight:700;padding:11px 20px;border-radius:12px;z-index:70;opacity:0;transition:.25s;pointer-events:none;}
+.rot-toast.show{opacity:1;}
+
+/* ---------- キャストチップ（席上の担当を色で識別） ---------- */
+.castchip{display:inline-flex;align-items:center;gap:5px;background:#0e0e1a;border:1px solid var(--line2);border-radius:16px;padding:2px 9px 2px 2px;margin:3px 4px 0 0;font-size:11px;font-weight:700;cursor:pointer;max-width:100%;transition:.1s;}
+.castchip:active{transform:scale(.96);}
+.castchip .ava{width:21px;height:21px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#0b0b12;flex-shrink:0;}
+.castchip .cn{color:#eef2ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.castchip .tm{font-weight:800;margin-left:1px;font-variant-numeric:tabular-nums;}
+.castchip.s-ok .tm{color:#4dcc84;} .castchip.s-warn .tm{color:#e6b23a;} .castchip.s-over .tm{color:#ee5a5a;}
+.castchip.tantou{box-shadow:inset 0 0 0 1px #2a6a44;}
+.castchip.sel{outline:2px solid #7ab0f0;outline-offset:1px;background:#0f2040;}
+.castchip.awaychip{background:#1a1400;border-style:dashed;border-color:#5a4010;}
+.castchip.awaychip .cn{color:#ffbf6a;}
+.castchip .role{font-size:8px;font-weight:800;color:#8a9ac0;background:#20203a;border-radius:4px;padding:0 4px;}
+.castchip .awaytm{font-size:10px;font-weight:800;color:#ffbf6a;background:#241800;border:1px solid #5a4010;border-radius:6px;padding:0 5px;}
+/* 担当不在の席 */
+.seat.nocast{background:#1e1400;border-color:#6a5000;}
+.seat.nocast .cnr{background:#4a3400;color:#ffcf6a;}
+/* 移動モードのターゲット席 */
+.seat.movetarget{outline:2px dashed #3a80cc;outline-offset:-2px;}
+.seat.movetarget::after{content:'→ ここへ';position:absolute;right:6px;bottom:5px;font-size:10px;font-weight:800;color:#9dc8ff;background:#12233f;border:1px solid #2a5590;border-radius:6px;padding:1px 6px;}
+.seat.moveself{opacity:.45;}
+/* 席の結合・分割 */
+.seat.grouped{border-color:#2a8a8a !important;box-shadow:inset 0 0 0 1px #1a5a5a;}
+.seat .grp-badge{font-size:8px;font-weight:800;color:#8fe0e0;background:#0f2a2a;border:1px solid #2a7a7a;border-radius:5px;padding:1px 5px;margin-left:4px;vertical-align:middle;}
+.seat.mergedcell{background:#0b1c1c;border:1px dashed #2a7a7a;display:flex;align-items:center;justify-content:center;min-height:70px;}
+.seat.combinetarget{outline:2px dashed #2aa0a0;outline-offset:-2px;}
+.seat.combinetarget::after{content:'🔗 追加';position:absolute;right:6px;bottom:5px;font-size:10px;font-weight:800;color:#8fe0e0;background:#0f2a2a;border:1px solid #2a7a7a;border-radius:6px;padding:1px 6px;}
+.seat.combineprimary{outline:2px solid #2aa0a0;outline-offset:-2px;}
+.cb.cmb{background:#0f2a2a;border-color:#2a7a7a;color:#8fe0e0;}
+/* 下部フローティング操作バー */
+.castbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(24px);background:#16162a;border:1px solid var(--line2);border-radius:16px;padding:9px 10px 9px 14px;display:flex;align-items:center;gap:14px;z-index:58;opacity:0;pointer-events:none;transition:.22s cubic-bezier(.2,.7,.2,1);box-shadow:0 10px 34px rgba(0,0,0,.55);max-width:94vw;}
+.castbar.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0);}
+.castbar.movemode{border-color:#2a5590;background:#0c1c34;}
+.cb-info{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:800;white-space:nowrap;}
+.cb-info .ava{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#0b0b12;}
+.cb-info small{color:var(--sub);font-weight:700;font-size:12px;}
+.cb-btns{display:flex;gap:8px;}
+.cb{padding:12px 17px;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;border:1px solid var(--line2);background:var(--panel2);color:#cfe0ff;white-space:nowrap;}
+.cb.ext{background:#141d30;border-color:#2a4068;color:#9dc8ff;}
+.cb.mv{background:linear-gradient(180deg,#153a72,#0f2040);border-color:#2a5590;color:#dcecff;}
+.cb.pay{background:#241800;border-color:#7a5010;color:#ffbf5a;}
+.cb.x{background:#241014;border-color:#5a2430;color:#e0a0b0;padding:12px 14px;}
+
+/* メニュー */
+.menu-btn{background:var(--panel2);border:1px solid var(--line2);color:var(--accent);font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;}
+.menu-btn:active{background:var(--accent-bg);}
+.menu-btn.cust{background:#14213a;border-color:#2a4a7a;color:#8fb8f0;}
+.cust-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.cfil{font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;}
+.cfil.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.cfil.exp.on{background:#2a0e0e;border-color:#7a2828;color:#ff9a9a;}
+.cfil.nol.on{background:#241800;border-color:#7a5010;color:#ffbf6a;}
+.cbd.noline{background:#241800;color:#ffbf6a;border-color:#7a5010;}
+.menu-overlay{position:fixed;inset:0;background:#0b0b12;z-index:80;display:none;flex-direction:column;}
+.menu-overlay.show{display:flex;}
+.menu-hd{display:flex;align-items:center;justify-content:space-between;padding:15px 22px;border-bottom:1px solid var(--line);flex-shrink:0;}
+.menu-hd .t{font-size:19px;font-weight:800;}
+.menu-hd .x{font-size:14px;color:var(--sub);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 16px;cursor:pointer;}
+.menu-body{flex:1;overflow-y:auto;padding:22px;max-width:920px;margin:0 auto;width:100%;}
+.menu-grp{font-size:12px;color:var(--dim);font-weight:800;letter-spacing:.5px;margin:4px 2px 12px;}
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:26px;}
+.menu-tile{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:22px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:.1s;}
+.menu-tile:active{transform:scale(.97);}
+.menu-tile:hover{border-color:var(--accent-line);background:var(--accent-bg);}
+.mt-ic{font-size:30px;line-height:1;}
+.mt-t{font-size:14px;font-weight:800;text-align:center;}
+.menu-back{font-size:13px;color:var(--accent);cursor:pointer;display:inline-block;margin-bottom:14px;font-weight:700;}
+.cust-q{width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:13px 16px;color:var(--txt);font-size:16px;outline:none;margin-bottom:14px;}
+.cust-q:focus{border-color:var(--accent-line);}
+.cust-results{display:flex;flex-direction:column;gap:9px;}
+.cust-card{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:12px 15px;}
+.cust-card.exp{border-color:#7a2828;background:#1a0e0e;}
+.cc-top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+.cc-nm{font-size:16px;font-weight:800;}
+.cc-mem{font-size:12px;color:var(--sub);font-weight:700;}
+.cc-meta{font-size:11px;color:var(--sub);font-weight:600;margin-top:5px;}
+.cbd.exp{background:#2a0e0e;color:#ff9a9a;border-color:#7a2828;}
+.cbd.soon{background:#241a00;color:#ffcf6a;border-color:#6a5000;}
+.cbd.okr{background:#0d2618;color:#79e0a8;border-color:#2a6a44;}
+.cc-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.cbd{font-size:11px;font-weight:700;padding:3px 9px;border-radius:7px;background:#191930;color:#a9bce0;border:1px solid var(--line2);}
+.cbd.bottle{background:#101d0c;color:#8fd06a;border-color:#2f5020;}
+.cbd.bday{background:#151046;color:#9d90ee;border-color:#4436a8;}
+.cbd.t{background:#0d2618;color:#79e0a8;border-color:#2a6a44;}
+.cbd.ng{background:#2a0e0e;color:#f08080;border-color:#7a2828;}
+
+.proto-flag{position:fixed;left:12px;bottom:9px;z-index:60;font-size:10px;color:#8a7a3a;background:#1c1808;border:1px solid #4a3d10;border-radius:20px;padding:4px 11px;font-weight:700;}
+.empty-msg{text-align:center;color:var(--dim);padding:40px 12px;font-size:14px;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="brand">⚡IEYAS <span class="z">軍師</span></div>
+  <div class="term-badge" id="termBadge">2F 端末</div>
+  <div class="datenav">
+    <button class="dbtn" onclick="shiftDay(-1)">‹</button>
+    <button class="dtoday" onclick="goToday()">今日</button>
+    <div class="dlabel" id="dlabel">--</div>
+    <button class="dbtn" onclick="shiftDay(1)">›</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
+  <button class="menu-btn" onclick="openMenu()">☰ メニュー</button>
+  <div class="clock" id="clock"><b>--:--</b><br>更新 --:--</div>
+  <div class="who" onclick="alert('（プロト）ログアウト確認')">
+    <span class="nm" id="whoName">りく</span>
+    <span class="lo">ログアウト</span>
+  </div>
+</div>
+
+<!-- 上部 横長アラート帯 -->
+<div class="alertbar" id="alertbar"></div>
+
+<!-- ダッシュボード：左=ホール常時 / 右=当日予約常時 -->
+<div class="dash">
+  <div class="col col-hall">
+    <div class="col-hd">
+      <span class="ttl">🪑 ホール状況</span>
+      <span class="cnt" id="hallCnt"></span>
+      <div class="spacer"></div>
+    </div>
+    <div class="col-scroll" id="hallArea"></div>
+  </div>
+  <div class="col col-rsv">
+    <div class="col-hd" id="rsvHd"></div>
+    <div class="col-scroll" id="rsvArea"></div>
+  </div>
+</div>
+
+<div class="rot-toast" id="rotToast"></div>
+<div class="castbar" id="castbar"></div>
+<div class="castbar" id="combinebar"></div>
+
+<!-- 全画面メニュー（軍師ポータルの各機能・顧客管理検索） -->
+<div class="menu-overlay" id="menuOverlay">
+  <div class="menu-hd"><div class="t" id="menuTitle">☰ 各種メニュー</div><div class="x" onclick="closeMenu()">閉じる ✕</div></div>
+  <div class="menu-body" id="menu-body"></div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-hd"><div class="t" id="sheetTitle">詳細</div><div class="x" onclick="closeSheet()">閉じる ✕</div></div>
+  <div class="sheet-bd" id="sheetBody"></div>
+</div>
+
+<div class="proto-flag">🧪 仮実装プロト（モックデータ・本番/GAS未接続）</div>
+
+<script>
+/* ============ MOCK DATA ============ */
+var TERM='2F', LOGIN='りく';
+function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+var TODAY=fmtKey(new Date()), curDate=TODAY;
+var CASTS=['まや','みれい','のあ','ゆうか','りお','ゆき','かい','ここ','れな','あん'];
+
+var SEATS=[
+  {floor:'2F',type:'C',name:'カウンター1',pax:1,cust:'田中 様',member:'No.204',bottle:'獺祭 純米',bottlePos:'2F-C棚1',nomikata:'ロック',tantou:'まや',set:60,casts:[{n:'まや',mins:22,status:'ok'}],tags:['bottle']},
+  {floor:'2F',type:'C',name:'カウンター2',pax:0,casts:[]},
+  {floor:'2F',type:'C',name:'カウンター3',pax:1,cust:'佐藤 様',member:'No.156',bday:'7/5',tantou:'のあ',set:60,casts:[{n:'のあ',mins:6,status:'warn'}],tags:['bday']},
+  {floor:'2F',type:'C',name:'カウンター4',pax:0,casts:[],rsv:{time:'21:00',cust:'山本',tantou:'まや'}},
+  {floor:'2F',type:'B',name:'ボックス1',pax:3,cust:'鈴木 様',member:'No.128',bottle:'山崎12年',bottlePos:'2F-B棚3',nomikata:'水割り',bday:'5/12',tantou:'みれい',dohan:'ゆき',set:90,casts:[{n:'みれい',mins:40,status:'ok'},{n:'ゆき',mins:12,status:'ok'}],tags:['vip','bottle']},
+  {floor:'2F',type:'B',name:'ボックス2',pax:5,cust:'高橋 様',member:'No.045',bottle:'モエ',bottlePos:'冷蔵庫',tantou:'りお',set:90,casts:[{n:'りお',mins:-4,status:'over'},{n:'かい',mins:8,status:'warn'}],tags:['vip']},
+  {floor:'2F',type:'B',name:'ボックス3',pax:0,casts:[]},
+  {floor:'2F',type:'W',name:'待機',casts:[{n:'まき',mins:12},{n:'なな',mins:5}]},
+  {floor:'5F',type:'C',name:'カウンター1',pax:1,cust:'伊藤 様',member:'No.220',tantou:'ゆうか',set:60,casts:[{n:'ゆうか',mins:33,status:'ok'}],tags:[]},
+  {floor:'5F',type:'C',name:'カウンター2',pax:0,casts:[]},
+  {floor:'5F',type:'C',name:'カウンター3',pax:1,cust:'渡辺 様',member:'No.301',nomikata:'ハイボール',tantou:'れな',set:60,casts:[{n:'れな',mins:1,status:'warn'}],tags:['ng']},
+  {floor:'5F',type:'C',name:'カウンター4',pax:0,casts:[],rsv:{time:'20:30',cust:'中村',tantou:'ゆうか'}},
+  {floor:'5F',type:'C',name:'カウンター5',pax:0,casts:[]},
+  {floor:'5F',type:'C',name:'カウンター6',pax:1,cust:'小林 様',member:'No.077',tantou:'あん',set:60,casts:[{n:'あん',mins:18,status:'ok'}],tags:[]},
+  {floor:'5F',type:'B',name:'ボックス1',pax:4,cust:'加藤 様',member:'No.312',bottle:'響17年',bottlePos:'5F-A棚1',nomikata:'ロック',tantou:'まや',awayMin:18,set:90,casts:[{n:'ここ',mins:-12,status:'over'}],tags:['vip','bottle']},
+  {floor:'5F',type:'B',name:'ボックス2',pax:0,casts:[]},
+  {floor:'5F',type:'W',name:'待機',casts:[{n:'さく',mins:8}]}
+];
+
+var RSV=[
+  {id:1,time:'20:00',cust:'鈴木',mem:'No.128',pax:3,table:'2F ボックス1',tantou:'みれい',dohan:'ゆき',yoyaku:'みれい',status:'来店済み',note:'VIP・ボトルキープあり（山崎12年）'},
+  {id:2,time:'20:00',cust:'高橋',mem:'No.045',pax:5,table:'2F ボックス2',tantou:'りお',dohan:'',yoyaku:'りお',status:'来店済み',note:'誕生日サプライズ 22:00頃ケーキ'},
+  {id:3,time:'20:30',cust:'中村',mem:'',pax:2,table:'5F カウンター4',tantou:'ゆうか',dohan:'',yoyaku:'直接来店',status:'確定',note:''},
+  {id:4,time:'21:00',cust:'山本',mem:'No.301',pax:1,table:'2F カウンター4',tantou:'まや',dohan:'まや',yoyaku:'まや',status:'確定',note:'同伴あり'},
+  {id:5,time:'21:30',cust:'井上',mem:'No.212',pax:4,table:'未定',tantou:'のあ',dohan:'',yoyaku:'のあ',status:'確定',note:'席は当日調整'},
+  {id:6,time:'22:00',cust:'松本',mem:'',pax:2,table:'未定',tantou:'',dohan:'',yoyaku:'かい',status:'確定',note:''},
+  {id:7,time:'19:30',cust:'木村',mem:'No.088',pax:2,table:'5F カウンター1',tantou:'ゆうか',dohan:'',yoyaku:'ゆうか',status:'退店済み',note:''}
+];
+
+var TABLES_2F=['カウンター1','カウンター2','カウンター3','カウンター4','ボックス1','ボックス2','ボックス3'];
+var TABLES_5F=['カウンター1','カウンター2','カウンター3','カウンター4','カウンター5','カウンター6','ボックス1','ボックス2'];
+
+/* つけまわし（担当キャストの巡回）: cur=いま接客中の卓, wait=最後に付いてからの経過(待たせ時間)
+   まや は 2F カウ1 と 5F BOX1 を掛け持ち＝担当が被っている代表例（加藤様が超過で待ち） */
+var ROT=[
+  {cast:'まや', interval:15, tables:[
+    {key:'2F カウ1', cust:'田中様',  cur:true, min:22},
+    {key:'5F BOX1',  cust:'加藤様',  wait:18, alert:'超過中'}
+  ]},
+  {cast:'りお', interval:15, tables:[
+    {key:'2F BOX2',  cust:'高橋様',  cur:true, min:26, over:true},
+    {key:'5F カウ3', cust:'渡辺様',  wait:14}
+  ]},
+  {cast:'ゆき', interval:20, tables:[
+    {key:'2F BOX1',  cust:'鈴木様',  cur:true, min:12},
+    {key:'2F カウ3', cust:'佐藤様',  wait:8}
+  ]},
+  {cast:'ゆうか', interval:20, tables:[
+    {key:'5F カウ1', cust:'伊藤様',  cur:true, min:33},
+    {key:'5F カウ6', cust:'小林様',  wait:5}
+  ]},
+  {cast:'みれい', tables:[
+    {key:'2F BOX1',  cust:'鈴木様',  cur:true, min:40}
+  ]},
+  {cast:'のあ', tables:[
+    {key:'2F カウ3', cust:'佐藤様',  cur:true, min:6}
+  ]}
+];
+
+/* キャストの早上がり等の予定・店舗の予定タスク（時系列予告用） */
+var STAFF_EVENTS=[
+  {time:'21:30', cast:'のあ', label:'早上がり', note:'佐藤様の担当を引き継ぎ'},
+  {time:'22:00', cast:'まや', label:'早上がり', note:'掛け持ち2卓の引き継ぎ準備'}
+];
+var TASKS=[
+  {time:'22:00', ic:'🎂', label:'高橋様 誕生日ケーキ', note:'2F BOX2・サプライズ'},
+  {time:'23:00', ic:'🚗', label:'送り 田中様', note:'ドライバー手配'}
+];
+
+/* 当日のシフト（out は 25:00 = 翌1:00 表記）。hayaagari=早上がり希望時刻, okuri=送り希望 */
+var SHIFT=[
+  {name:'のあ',  in:'18:30', out:'21:30', hayaagari:'21:30', okuri:true,  okuriMode:'ドライバー'},
+  {name:'まや',  in:'19:00', out:'22:00', hayaagari:'22:00', okuri:true,  okuriMode:'ドライバー'},
+  {name:'かい',  in:'20:00', out:'25:00', hayaagari:'',      okuri:true,  okuriMode:'自便'},
+  {name:'ゆうか',in:'19:30', out:'25:00', hayaagari:'',      okuri:true,  okuriMode:'ドライバー'},
+  {name:'みれい',in:'19:00', out:'25:00', hayaagari:'',      okuri:false, okuriMode:'ドライバー'},
+  {name:'ゆき',  in:'19:00', out:'25:00', hayaagari:'',      okuri:false, okuriMode:'ドライバー'},
+  {name:'ここ',  in:'19:00', out:'25:00', hayaagari:'',      okuri:false, okuriMode:'ドライバー'},
+  {name:'あん',  in:'19:30', out:'25:00', hayaagari:'',      okuri:false, okuriMode:'ドライバー'},
+  {name:'れな',  in:'20:00', out:'26:00', hayaagari:'',      okuri:true,  okuriMode:'自便'},
+  {name:'りお',  in:'19:00', out:'26:00', hayaagari:'',      okuri:false, okuriMode:'ドライバー'}
+];
+
+/* ============ HELPERS ============ */
+function tmin(hhmm){var p=String(hhmm).split(':');var h=parseInt(p[0]);if(h<6)h+=24;return h*60+(parseInt(p[1])||0);}
+function fmtTime(hhmm){var p=String(hhmm).split(':');var h=parseInt(p[0]);return h>=24?('翌'+(h-24)+':'+p[1]):hhmm;}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+var TAGLABEL={vip:'VIP',bottle:'🍶ボトル',bday:'🎂誕生日',ng:'⚠NG'};
+function parseKey(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]);}
+function dateLabel(s){var d=parseKey(s);var w=['日','月','火','水','木','金','土'][d.getDay()];return (d.getMonth()+1)+'/'+d.getDate()+'（'+w+'）';}
+function shortNm(n){return n.replace('カウンター','カウ').replace('ボックス','BOX');}
+function seatIdx(s){return SEATS.indexOf(s);}
+function seatStatus(s){if(s.type==='W')return 'waiting';if(s.type==='K')return 'kurofuku';if(!s.casts||!s.casts.length)return s.cust?'nocast':'empty';if(s.casts.some(function(c){return c.status==='over';}))return 'over';if(s.casts.some(function(c){return c.status==='warn';}))return 'warn';return 'ok';}
+function overMins(s){return -Math.min.apply(null,s.casts.map(function(c){return c.mins;}));}
+function warnMin(s){return Math.min.apply(null,s.casts.filter(function(c){return c.status==='warn';}).map(function(c){return c.mins;}));}
+
+/* ============ CLOCK / DATE ============ */
+function tickClock(){var d=new Date();var hh=('0'+d.getHours()).slice(-2),mm=('0'+d.getMinutes()).slice(-2);document.getElementById('clock').innerHTML='<b>'+hh+':'+mm+'</b><br>更新 '+hh+':'+mm;}
+function shiftDay(n){var d=parseKey(curDate);d.setDate(d.getDate()+n);curDate=fmtKey(d);renderAll();}
+function goToday(){curDate=TODAY;renderAll();}
+
+/* ============ ALERT BAR ============ */
+function buildTimeline(){
+  var t=[];
+  // 今：超過・担当不在
+  SEATS.forEach(function(s,idx){
+    var st=seatStatus(s);
+    if(st==='over') t.push({g:0,kind:'now-crit',ic:'🔴',time:'今',min:-overMins(s),title:s.floor+' '+shortNm(s.name)+' '+s.cust,sub:overMins(s)+'分超過',act:'openSeat('+idx+')'});
+    else if(st==='nocast') t.push({g:0,kind:'now-crit',ic:'⚠️',time:'今',min:0,title:s.floor+' '+shortNm(s.name)+' '+s.cust,sub:'担当不在 → 至急キャストを',act:'openSeat('+idx+')'});
+  });
+  // 今：付け回し要
+  ROT.forEach(function(c){if(!isMulti(c))return;var w=worstWait(c),iv=rotInterval(c);if(w&&(w.alert||(w.wait||0)>=iv))t.push({g:1,kind:'now-rot',ic:'🔄',time:'今',min:-(w.wait||0),title:c.cast+' → '+w.key+' '+w.cust,sub:'抜けて'+(w.wait||0)+'分・付け回し',act:'switchRight(\'rot\')'});});
+  // まもなく：超過が近い席
+  SEATS.forEach(function(s,idx){if(seatStatus(s)==='warn')t.push({g:2,kind:'soon',ic:'⏰',time:'まもなく',min:warnMin(s),title:s.floor+' '+shortNm(s.name)+' '+s.cust,sub:'あと'+warnMin(s)+'分で超過',act:'openSeat('+idx+')'});});
+  // 予告：席未定の予約（時刻までに席決定）
+  RSV.forEach(function(r){if(r.status==='確定'&&r.table==='未定')t.push({g:3,kind:'todo',ic:'📌',time:r.time,min:tmin(r.time),title:r.cust+'様('+r.pax+'名)',sub:'席未定 → 席を決定',act:'editRsv('+r.id+')'});});
+  // 予告：来店予定（席確定済み）
+  RSV.forEach(function(r){if(r.status==='確定'&&r.table!=='未定')t.push({g:3,kind:'preview',ic:'📅',time:r.time,min:tmin(r.time),title:r.cust+'様 来店予定',sub:r.pax+'名 '+r.table,act:'editRsv('+r.id+')'});});
+  // 予告：キャスト早上がり
+  STAFF_EVENTS.forEach(function(e){t.push({g:3,kind:'preview-cast',ic:'🚪',time:e.time,min:tmin(e.time),title:e.cast+' '+e.label,sub:e.note,act:'switchRight(\'rot\')'});});
+  // 予告：予定タスク
+  TASKS.forEach(function(k){t.push({g:3,kind:'preview-task',ic:k.ic,time:k.time,min:tmin(k.time),title:k.label,sub:k.note,act:''});});
+  // 予告：おみやげ発注（随時）
+  t.push({g:3,kind:'preview-task',ic:'🎁',time:'随時',min:99999,title:'おみやげ 2F 残44個',sub:'残少 → 発注検討',act:''});
+  t.sort(function(a,b){return a.g!==b.g?a.g-b.g:(a.min||0)-(b.min||0);});
+  return t;
+}
+function renderAlerts(){
+  var list=buildTimeline();
+  var nowCount=list.filter(function(x){return x.g<=1;}).length;
+  var lead='<div class="alert-lead '+(nowCount?'busy':'calm')+'"><div class="big">'+(nowCount||'0')+'</div><div class="cap">要対応</div></div>';
+  var tickets=list.map(function(x){
+    return '<div class="ticket k-'+x.kind+'"'+(x.act?' onclick="'+x.act+'"':'')+'>'
+      +'<div class="tk-time">'+esc(x.time)+'</div>'
+      +'<div class="tk-body"><span class="tk-ic">'+x.ic+'</span><span class="tk-tx"><span class="tk-title">'+esc(x.title)+'</span><span class="tk-sub">'+esc(x.sub)+'</span></span></div></div>';
+  }).join('');
+  document.getElementById('alertbar').innerHTML=lead+'<div class="tl-scroll">'+(tickets||'<div class="alert-none">✓ タスクはありません</div>')+'</div>';
+}
+
+/* ============ HALL ============ */
+function renderHall(){
+  var cb=SEATS.filter(function(s){return s.type==='C'||s.type==='B';});
+  var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
+  document.getElementById('hallCnt').textContent='稼働 '+occ+'/'+cb.length+'　超過 '+cb.filter(function(s){return seatStatus(s)==='over';}).length;
+  document.getElementById('hallArea').innerHTML='<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>';
+}
+function floorHtml(fl){
+  var seats=SEATS.filter(function(s){return s.floor===fl;});
+  var counters=seats.filter(function(s){return s.type==='C';});
+  var boxes=seats.filter(function(s){return s.type==='B';});
+  var waiting=seats.filter(function(s){return s.type==='W';});
+  var kurofuku=seats.filter(function(s){return s.type==='K';});
+  var cb=seats.filter(function(s){return s.type==='C'||s.type==='B';});
+  var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
+  return '<div class="floor"><div class="floor-hd"><span class="fl">'+fl+'</span><span class="meta">稼働 '+occ+'/'+cb.length+'</span></div>'
+    +'<div class="grp-lbl">カウンター</div><div class="seatgrid">'+counters.map(seatHtml).join('')+'</div>'
+    +'<div class="grp-lbl">ボックス</div><div class="seatgrid box">'+boxes.map(seatHtml).join('')+'</div>'
+    +(waiting.length?'<div class="grp-lbl">待機</div><div class="seatgrid box">'+waiting.map(seatHtml).join('')+'</div>':'')
+    +(kurofuku.length?'<div class="grp-lbl">黒服</div><div class="seatgrid box">'+kurofuku.map(seatHtml).join('')+'</div>':'')
+    +'</div>';
+}
+var selCast=null, moveMode=false, combineMode=false, combinePrimary=null;
+var CAST_PALETTE=['#7ab0f0','#66cc88','#e6b23a','#e08ad0','#8fb0ff','#6fd0c0','#f0a060','#b090f0','#f08a8a','#9d90ee','#7cd0a0','#d0b060'];
+function castColor(n){var s=0;for(var i=0;i<n.length;i++)s+=n.charCodeAt(i);return CAST_PALETTE[s%CAST_PALETTE.length];}
+function castHere(s,name){return name&&(s.casts||[]).some(function(c){return c.n===name;});}
+function chipHtml(name,ci,si,opts){
+  opts=opts||{};
+  var col=castColor(name);
+  var sel=(selCast&&selCast.si===si&&selCast.ci===ci)?' sel':'';
+  var role=opts.tantou?'<span class="role">担当</span>':'';
+  var tm=opts.away?'':'<span class="tm">'+(opts.wait?(opts.mins+'分待機'):(opts.mins<0?'超'+(-opts.mins)+'分':'残'+opts.mins+'分'))+'</span>';
+  var cls=(opts.away?'castchip awaychip':'castchip '+(opts.status==='over'?'s-over':opts.status==='warn'?'s-warn':'s-ok'))+(opts.tantou?' tantou':'')+sel;
+  var onclick=opts.away?'onclick="tapAway(event)"':'onclick="tapCast('+si+','+ci+',event)"';
+  var av=opts.away?'#8a7038':col;
+  var awayLbl=opts.away?'<span class="role">担当</span><span class="awaytm">抜けて'+(opts.awayMin!=null?opts.awayMin:0)+'分</span>':'';
+  return '<span class="'+cls+'" '+onclick+'><span class="ava" style="background:'+av+'">'+esc(name.charAt(0))+'</span><span class="cn">'+esc(name)+'</span>'+role+awayLbl+tm+'</span>';
+}
+function seatInfoLine(s){
+  var p=[];
+  if(s.bottle) p.push('🍶'+esc(s.bottle)+(s.bottlePos?'<span class="bp">'+esc(s.bottlePos)+'</span>':''));
+  if(s.member) p.push('会員'+esc(s.member));
+  if(s.bday) p.push('🎂'+esc(s.bday));
+  return p.length?'<div class="seat-info">'+p.join('<span class="dot">・</span>')+'</div>':'';
+}
+function seatHtml(s){
+  var st=seatStatus(s), idx=seatIdx(s), nm=shortNm(s.name);
+  var oc='onclick="onSeatClick('+idx+')"';
+  // 結合の子（他席へ結合済み）
+  if(s.mergedTo!=null){
+    var pn=shortNm(SEATS[s.mergedTo].name);
+    return '<div class="seat mergedcell" '+oc+'><div style="text-align:center"><div class="grp-badge">🔗 結合中</div><div style="font-size:11px;margin-top:6px;color:#9ad0d0;font-weight:700">'+esc(nm)+' → '+esc(pn)+'</div></div></div>';
+  }
+  var isPrimary=s.mergeWith&&s.mergeWith.length;
+  var dispNm=isPrimary?nm+'＋'+s.mergeWith.map(function(mi){return shortNm(SEATS[mi].name);}).join('＋'):nm;
+  var grpBadge=isPrimary?'<span class="grp-badge">🔗'+(s.mergeWith.length+1)+'席</span>':'';
+  var mt=moveMode?' movetarget':'';
+  var self=(moveMode&&selCast&&selCast.si===idx)?' moveself':'';
+  var ct=(combineMode&&idx!==combinePrimary)?' combinetarget':'';
+  var cprim=(combineMode&&idx===combinePrimary)?' combineprimary':'';
+  var grp=isPrimary?' grouped':'';
+  // 待機席 / 黒服席（旧軍師ポータルの席タイプ）
+  if(st==='waiting'||st==='kurofuku'){
+    var wlbl=st==='waiting'?'🪑 待機':'🖤 黒服';
+    var wchips=(s.casts||[]).map(function(c,ci){return chipHtml(c.n,ci,idx,{mins:c.mins,status:'ok',wait:true});}).join('')||'<div class="empty">'+(st==='waiting'?'待機なし':'黒服なし')+'</div>';
+    return '<div class="seat '+st+mt+ct+'" '+oc+'><div class="st"><span class="snm">'+wlbl+'</span><span class="pax">'+(s.casts?s.casts.length:0)+'名</span></div><div style="margin-top:2px">'+wchips+'</div></div>';
+  }
+  // 空席 / 予約
+  if(st==='empty'){
+    if(s.rsv){
+      return '<div class="seat reserved'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span><span class="rsv-tag">予約</span></div>'
+        +'<div class="cust" style="color:#bcd8ff">'+esc(s.rsv.cust)+'様</div>'
+        +'<div class="rsv-meta"><span class="rt">📅 '+esc(s.rsv.time)+'〜</span>'+(s.rsv.tantou?'　担当 '+esc(s.rsv.tantou):'')+'</div></div>';
+    }
+    return '<div class="seat'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span></div><div class="empty">空席</div></div>';
+  }
+  var tags=(s.tags||[]).map(function(t){return '<span class="tg '+t+'">'+TAGLABEL[t]+'</span>';}).join('');
+  var tantou=s.tantou;
+  // 担当不在（接客者ゼロ）
+  if(st==='nocast'){
+    return '<div class="seat nocast'+mt+self+ct+cprim+grp+'" '+oc+'><div class="cnr">⚠ 担当不在</div>'
+      +'<div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span><span class="pax">'+s.pax+'名</span></div>'
+      +((tags||reqBadgeHtml(idx,s.cust))?'<div class="tags">'+tags+reqBadgeHtml(idx,s.cust)+'</div>':'')
+      +'<div class="cust">'+esc(s.cust)+'</div>'+seatInfoLine(s)
+      +(tantou?'<div style="margin-top:3px">'+chipHtml(tantou,-1,idx,{away:true,awayMin:s.awayMin})+'</div>':'')+'</div>';
+  }
+  // 接客中
+  var cnr=st==='over'?'🔴 超過':st==='warn'?'⏰ まもなく':'';
+  var rqb=reqBadgeHtml(idx,s.cust);
+  var tantouHere=castHere(s,tantou);
+  var chips='';
+  if(tantou&&!tantouHere) chips+=chipHtml(tantou,-1,idx,{away:true,awayMin:s.awayMin});
+  s.casts.forEach(function(c,ci){ chips+=chipHtml(c.n,ci,idx,{mins:c.mins,status:c.status,tantou:c.n===tantou}); });
+  return '<div class="seat '+st+mt+self+ct+cprim+grp+'" '+oc+'>'+(cnr?'<div class="cnr">'+cnr+'</div>':'')
+    +'<div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span><span class="pax">'+s.pax+'名</span></div>'
+    +((tags||rqb)?'<div class="tags">'+tags+rqb+'</div>':'')
+    +'<div class="cust">'+esc(s.cust)+'</div>'+seatInfoLine(s)+'<div style="margin-top:2px">'+chips+'</div></div>';
+}
+/* ---- 席・キャストのタップ操作（付け回し / 移動） ---- */
+function onSeatClick(idx){
+  if(moveMode){ placeCast(idx); return; }
+  if(combineMode){ mergeSeat(idx); return; }
+  var s=SEATS[idx]; if(s.mergedTo!=null){ openSeat(s.mergedTo); return; }
+  openSeat(idx);
+}
+/* ---- 席の結合 / 分割 ---- */
+function startCombine(idx){ closeSheet(); combineMode=true; combinePrimary=idx; renderHall(); showCombineBar(); }
+function showCombineBar(){ var p=SEATS[combinePrimary]; var b=document.getElementById('combinebar'); b.className='castbar movemode show'; b.innerHTML='<div class="cb-info">🔗 '+esc(p.floor+' '+shortNm(p.name))+' に結合する席をタップ</div><div class="cb-btns"><button class="cb cmb" onclick="finishCombine()">完了</button><button class="cb x" onclick="cancelCombine()">キャンセル</button></div>'; }
+function hideCombineBar(){ document.getElementById('combinebar').className='castbar'; }
+function mergeSeat(target){
+  if(target===combinePrimary) return;
+  var t=SEATS[target]; if(t.mergedTo!=null) return;
+  var p=SEATS[combinePrimary]; p.mergeWith=p.mergeWith||[];
+  if(p.mergeWith.indexOf(target)>=0) return;
+  p.mergeWith.push(target); t.mergedTo=combinePrimary;
+  if(t.cust){ p.pax=(p.pax||0)+(t.pax||0); if(t.casts&&t.casts.length) p.casts=(p.casts||[]).concat(t.casts); t.casts=[]; }
+  else { t.casts=[]; }
+  t.rsv=null;
+  renderHall(); showCombineBar();
+}
+function finishCombine(){ var p=SEATS[combinePrimary]; var did=p.mergeWith&&p.mergeWith.length; combineMode=false; combinePrimary=null; hideCombineBar(); if(did) toast('🔗 席を結合しました'); renderAll(); }
+function cancelCombine(){ combineMode=false; combinePrimary=null; hideCombineBar(); renderHall(); }
+function splitSeat(idx){
+  var p=SEATS[idx]; if(!p.mergeWith||!p.mergeWith.length) return;
+  p.mergeWith.forEach(function(mi){ SEATS[mi].mergedTo=null; });
+  p.mergeWith=[]; closeSheet(); toast('✂️ 結合を解除しました'); renderAll();
+}
+function tapCast(si,ci,ev){ if(ev)ev.stopPropagation(); if(moveMode){ placeCast(si); return; } selCast={si:si,ci:ci}; renderHall(); showCastBar(); }
+function tapAway(ev){ if(ev)ev.stopPropagation(); toast('その担当は他卓で接客中です（つけまわしで管理）'); }
+function closeBar(){ selCast=null; moveMode=false; document.getElementById('castbar').className='castbar'; }
+function hideCastBar(){ closeBar(); renderHall(); }
+function showCastBar(){
+  var bar=document.getElementById('castbar');
+  if(!selCast){ bar.className='castbar'; bar.innerHTML=''; return; }
+  var s=SEATS[selCast.si], c=s.casts[selCast.ci], col=castColor(c.n);
+  var av='<span class="ava" style="background:'+col+'">'+esc(c.n.charAt(0))+'</span>';
+  if(moveMode){
+    bar.className='castbar movemode show';
+    bar.innerHTML='<div class="cb-info">'+av+'🔄 '+esc(c.n)+' を移動 <small>移動先の席をタップ</small></div><div class="cb-btns"><button class="cb x" onclick="cancelMove()">キャンセル</button></div>';
+  }else{
+    bar.className='castbar show';
+    bar.innerHTML='<div class="cb-info">'+av+esc(c.n)+' <small>'+esc(s.floor+' '+s.name)+' ・ '+(c.mins<0?'超過'+(-c.mins)+'分':c.mins+'分')+'</small></div>'
+      +'<div class="cb-btns"><button class="cb mv" onclick="startMove()">🔄 別の席へ移動</button><button class="cb x" onclick="hideCastBar()">✕</button></div>';
+  }
+}
+function startMove(){ moveMode=true; renderHall(); showCastBar(); }
+function cancelMove(){ hideCastBar(); }
+function placeCast(targetSi){
+  if(!selCast){ return; }
+  if(targetSi===selCast.si){ hideCastBar(); return; }
+  var src=SEATS[selCast.si]; var c=src.casts.splice(selCast.ci,1)[0]; if(!c){ closeBar(); renderAll(); return; }
+  if(src.tantou===c.n) src.awayMin=0; // 担当が抜けた席は経過0からカウント
+  c.mins=20; c.status='ok';
+  var tgt=SEATS[targetSi]; if(!tgt.casts) tgt.casts=[]; tgt.casts.push(c);
+  toast('🔄 '+c.n+' を '+tgt.floor+' '+shortNm(tgt.name)+' へ移動');
+  closeBar(); renderAll();
+}
+
+/* ============ RIGHT COLUMN: 予約 / つけまわし ============ */
+var rightView='rsv';
+function switchRight(v){rightView=v;renderRight();}
+function renderRight(){
+  var act=ROT.filter(needsAction).length;
+  var haya=SHIFT.filter(function(s){return s.hayaagari;}).length;
+  var tabs=[{k:'rsv',ic:'📋',t:'予約'},{k:'rot',ic:'🔄',t:'付け回し',b:act},{k:'shift',ic:'🗒',t:'シフト',b:haya}];
+  var hd='<div class="rtoggle">'+tabs.map(function(t){
+    return '<button class="rtg'+(rightView===t.k?' active':'')+'" onclick="switchRight(\''+t.k+'\')">'+t.ic+' '+t.t+(t.b?'<span class="b">'+t.b+'</span>':'')+'</button>';
+  }).join('')+'</div>';
+  document.getElementById('rsvHd').innerHTML=hd;
+  if(rightView==='rsv') renderRsv(); else if(rightView==='rot') renderRotation(); else renderShift();
+}
+
+/* ---- つけまわしボード ---- */
+function worstWait(c){var w=c.tables.filter(function(t){return !t.cur;});if(!w.length)return null;return w.slice().sort(function(a,b){return (b.wait||0)-(a.wait||0);})[0];}
+function isMulti(c){return c.tables.length>=2;}
+function rotInterval(c){return c.interval||15;}
+function needsAction(c){
+  var cur=c.tables.find(function(t){return t.cur;});
+  if(cur&&cur.over)return true;
+  if(!isMulti(c))return false;
+  var iv=rotInterval(c);
+  return c.tables.some(function(t){return !t.cur&&(t.alert||(t.wait||0)>=iv);});
+}
+function renderRotation(){
+  var list=ROT.slice().sort(function(a,b){var d=(needsAction(b)?1:0)-(needsAction(a)?1:0);return d||(b.tables.length-a.tables.length);});
+  var multi=ROT.filter(isMulti);
+  var loadmap=multi.length?'<div class="loadmap">'+multi.slice().sort(function(a,b){return b.tables.length-a.tables.length;}).map(function(c){
+      return '<div class="lm l'+(c.tables.length>=3?'3':'2')+'" onclick="scrollToCast(\''+esc(c.cast)+'\')">'+esc(c.cast)+' <span class="n">'+c.tables.length+'卓 / '+rotInterval(c)+'分</span></div>';
+    }).join('')+'</div>':'';
+  var html='<div class="rot-sum">🔄 担当キャストの巡回状況　掛け持ち <b style="color:#ffcf6a">'+multi.length+'名</b>　要付け回し <b>'+ROT.filter(needsAction).length+'件</b></div>'
+    + loadmap + list.map(rcastHtml).join('');
+  document.getElementById('rsvArea').innerHTML=html;
+}
+function scrollToCast(name){var el=document.getElementById('rcast-'+name);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
+function rcastHtml(c){
+  var ci=ROT.indexOf(c);
+  var cur=c.tables.find(function(t){return t.cur;});
+  var others=c.tables.filter(function(t){return !t.cur;});
+  var multi=isMulti(c), iv=rotInterval(c), act=needsAction(c);
+  var load=multi
+    ? '<span class="rload l'+(c.tables.length>=3?'3':'2')+'">掛け持ち '+c.tables.length+'卓<span class="pip">'+Array(c.tables.length+1).join('●')+'</span></span>'
+    : '<span class="rload l1">専任</span>';
+  var rows='';
+  if(cur){
+    var left=iv-cur.min;
+    var rt=cur.over?'超過 '+cur.min+'分'
+         :multi?(left<=0?'交代時期・'+cur.min+'分':'接客中 '+cur.min+'分<span style="color:#8a9ac0"> / あと'+left+'分</span>')
+         :'接客中 '+cur.min+'分';
+    var cc=((multi&&left<=0)||cur.over)?'overw':'cur';
+    rows+='<div class="rtab '+cc+'"><span class="tl">🎤 '+esc(cur.key)+' '+esc(cur.cust)+'</span><span class="tr">'+rt+'</span></div>';
+  }
+  others.forEach(function(t){
+    var w=t.wait||0;
+    var wc=(t.alert||w>=iv)?'overw':(w>=iv*0.6?'warnw':'wait');
+    rows+='<div class="rtab '+wc+'"><span class="tl">⏳ '+esc(t.key)+' '+esc(t.cust)+'</span><span class="tr">抜けて'+w+'分'+(t.alert?'・'+esc(t.alert):(w>=iv?'・交代を':''))+'</span></div>';
+  });
+  var intctl=multi?'<div class="rint">⏱ 何分で回す<div class="ichips">'+[10,15,20,25].map(function(m){return '<div class="ic'+(iv===m?' sel':'')+'" onclick="setCastInterval('+ci+','+m+')">'+m+'</div>';}).join('')+'</div></div>':'';
+  var actions='';
+  if(others.length){
+    var tgt=worstWait(c);
+    var urg=(tgt.alert||(tgt.wait||0)>=iv)?' urg':'';
+    actions='<div class="rcast-act"><div class="rbtn mv'+urg+'" onclick="rotateCast('+ci+',\''+esc(tgt.key)+'\')">→ '+esc(tgt.key)+' へ回す</div></div>';
+  }
+  var tag=act?' <span class="rcast-tag a">要付け回し</span>':'';
+  return '<div class="rcast'+(act?' act':'')+'" id="rcast-'+esc(c.cast)+'"><div class="rcast-hd"><span class="rcast-nm">'+(act?'🔴 ':'🟢 ')+esc(c.cast)+tag+'</span>'+load+'</div>'+rows+intctl+actions+'</div>';
+}
+function setCastInterval(ci,m){ROT[ci].interval=m;renderAll();}
+function toast(msg){var t=document.getElementById('rotToast');t.textContent=msg;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){t.classList.remove('show');},2200);}
+function rotateCast(ci,key){var c=ROT[ci];var cur=c.tables.find(function(t){return t.cur;});if(cur){cur.cur=false;cur.wait=0;cur.over=false;}var tgt=c.tables.find(function(t){return t.key===key;});if(tgt){tgt.cur=true;tgt.min=0;tgt.wait=0;tgt.over=false;tgt.alert=null;}toast('🔄 '+c.cast+' を '+key+' へ付け回しました');renderAll();}
+
+/* ---- 予約リスト ---- */
+function renderRsv(){
+  var list=RSV.slice().sort(function(a,b){return a.time.localeCompare(b.time);});
+  var nextId=(list.filter(function(r){return r.status==='確定';})[0]||{}).id;
+  var head='<div class="rsv-toolbar"><span class="rcnt">'+list.length+'組 '+list.reduce(function(a,r){return a+r.pax;},0)+'名（'+list.filter(function(r){return r.status==='来店済み';}).length+'組来店済）</span><span style="flex:1"></span><button class="mini-btn" onclick="openSchedule()">🗓 表</button><button class="mini-btn add" onclick="openAdd()">＋ 追加</button></div>';
+  document.getElementById('rsvArea').innerHTML=head+(list.length?'<div class="rlist">'+list.map(function(r){return rcardHtml(r,r.id===nextId);}).join('')+'</div>':'<div class="empty-msg">この日の予約はありません</div>');
+}
+function outMin(s){return tmin(s.out);}
+function toggleOkuri(i){ SHIFT[i].okuri=!SHIFT[i].okuri; renderShift(); }
+function toggleOkuriMode(i){ SHIFT[i].okuriMode=SHIFT[i].okuriMode==='ドライバー'?'自便':'ドライバー'; renderShift(); }
+function renderShift(){
+  var haya=SHIFT.filter(function(s){return s.hayaagari;}), okuri=SHIFT.filter(function(s){return s.okuri;});
+  var drv=okuri.filter(function(s){return s.okuriMode==='ドライバー';}).length, jib=okuri.length-drv;
+  var list=SHIFT.slice().sort(function(a,b){return outMin(a)-outMin(b);});
+  var sum='<div class="rcnt">出勤 <b style="color:#66cc88">'+SHIFT.length+'名</b>　🚪早上がり <b style="color:#e6b0d6">'+haya.length+'名</b>　🚗送り <b style="color:#8fe0c0">'+okuri.length+'名</b>（🚙'+drv+'・🚶'+jib+'）</div>';
+  document.getElementById('rsvArea').innerHTML=sum+'<div class="shift-list">'+list.map(shiftRow).join('')+'</div>';
+}
+function shiftRow(s){
+  var i=SHIFT.indexOf(s);
+  var col=castColor(s.name);
+  var haya=s.hayaagari?'<span class="sb haya">🚪'+fmtTime(s.hayaagari)+'</span>':'';
+  var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
+  var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
+  return '<div class="shift-row'+(s.hayaagari?' hay':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span><span class="sr-nm">'+esc(s.name)+'</span><span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span><span class="sr-b">'+haya+okuri+mode+'</span></div>';
+}
+function rcardHtml(r,isNext){
+  var done=r.status==='退店済み';
+  var undef=r.table==='未定';
+  var badges='<span class="rb">'+r.pax+'名</span><span class="rb'+(undef?' undef':'')+'">'+esc(r.table)+'</span>';
+  if(r.tantou) badges+='<span class="rb t">担当 '+esc(r.tantou)+'</span>';
+  if(r.dohan) badges+='<span class="rb d">同伴 '+esc(r.dohan)+'</span>';
+  if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
+  return '<div class="rcard'+(done?' done':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
+    +'<div class="rtop"><span class="rtime">'+esc(r.time)+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+statusBtns(r)+'</div>'
+    +'<div class="rbadges">'+badges+'</div>'+(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
+}
+function statusBtns(r){
+  var items=[{k:'来店前',s:'確定',c:'a-wait'},{k:'来店済',s:'来店済み',c:'a-seat'},{k:'退店済',s:'退店済み',c:'a-left'}];
+  return '<div class="stbtns" onclick="event.stopPropagation()">'+items.map(function(it){return '<button class="stbtn '+it.c+(r.status===it.s?' on':'')+'" onclick="setStatus('+r.id+',\''+it.s+'\')">'+it.k+'</button>';}).join('')+'</div>';
+}
+function setStatus(id,s){var r=RSV.find(function(x){return x.id===id;});if(r){r.status=s;renderAll();}}
+
+/* ============ SHEETS ============ */
+function showSheet(title,html,wide){
+  document.getElementById('sheetTitle').textContent=title;
+  document.getElementById('sheetBody').innerHTML=html;
+  document.getElementById('sheet').classList.toggle('wide',!!wide);
+  document.getElementById('scrim').classList.add('show');
+  document.getElementById('sheet').classList.add('show');
+}
+function closeSheet(){document.getElementById('scrim').classList.remove('show');document.getElementById('sheet').classList.remove('show');}
+
+function openSeat(idx){
+  var s=SEATS[idx];var body;
+  if(s.mergedTo!=null){ openSeat(s.mergedTo); return; }
+  if(s.type==='W'||s.type==='K'){
+    var wc=(s.casts&&s.casts.length)?s.casts.map(function(c){return esc(c.n)+'（'+c.mins+'分）';}).join('、'):'なし';
+    showSheet(s.type==='W'?'🪑 待機':'🖤 黒服','<div style="font-size:11px;color:#8a9ac0;margin-bottom:6px;font-weight:700">'+(s.type==='W'?'待機中のキャスト':'在席の黒服')+'</div><div class="kv"><span class="v">'+wc+'</span></div><div class="empty-msg" style="padding:14px 0;font-size:12px">キャストチップをタップ →「移動」で席へ付けられます</div>',false);
+    return;
+  }
+  var title=s.floor+' '+shortNm(s.name)+((s.mergeWith&&s.mergeWith.length)?' ＋'+s.mergeWith.map(function(mi){return shortNm(SEATS[mi].name);}).join('＋'):'');
+  var combBtn=(s.mergeWith&&s.mergeWith.length)
+    ? '<div class="act" style="border-color:#2a7a7a;color:#8fe0e0" onclick="splitSeat('+idx+')">✂️ 結合を解除</div>'
+    : '<div class="act" style="border-color:#2a7a7a;color:#8fe0e0" onclick="startCombine('+idx+')">🔗 席を結合（広げる）</div>';
+  if(s.cust&&(!s.casts||!s.casts.length)){
+    // 担当不在（客はいるがキャスト0）
+    body='<div class="kv"><span class="k">お客様</span><span class="v">'+esc(s.cust)+'（'+s.pax+'名）</span></div>'
+      +'<div class="kv"><span class="k">状態</span><span class="v" style="color:#ffbf6a">⚠ 担当不在（接客者なし）</span></div>'
+      +(s.tantou?'<div class="kv"><span class="k">担当</span><span class="v">👤 '+esc(s.tantou)+' <span style="color:#ffbf6a;font-size:11px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span></span></div>':'')
+      +'<div class="empty-msg" style="padding:16px 0;font-size:13px">この卓に接客キャストがいません。<br>キャストのチップをタップ→「移動」でこの卓へ付けてください。</div>'
+      +'<div class="actions"><div class="act warn" onclick="alert(\'（プロト）待機キャストを割当\')">＋ 待機から割当</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+    showSheet(title,body,false); return;
+  }
+  if(!s.casts||!s.casts.length){
+    body='<div class="empty-msg" style="padding:24px 0">現在この席は空席です</div>';
+    if(s.rsv) body+='<div class="kv"><span class="k">次の予約</span><span class="v" style="color:#ffcc55">'+esc(s.rsv.time)+' '+esc(s.rsv.cust)+'様</span></div>';
+    body+='<div class="actions"><div class="act pri" onclick="alert(\'（プロト）来店受付→着席\')">＋ 着席させる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+  }else{
+    var st=seatStatus(s);
+    var stLabel=st==='over'?'<span style="color:#ee5a5a">🔴 時間超過</span>':st==='warn'?'<span style="color:#e6b23a">⏰ まもなく超過</span>':'<span style="color:#4dcc84">● 稼働中</span>';
+    var tHere=castHere(s,s.tantou);
+    var tantouV=s.tantou?('👤 '+esc(s.tantou)+(tHere?'<span style="color:#7be0a8;font-size:11px;margin-left:6px">● 接客中</span>':'<span style="color:#ffbf6a;font-size:11px;margin-left:6px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span>')):'—';
+    body='<div class="kv"><span class="k">お客様</span><span class="v">'+esc(s.cust)+'（'+s.pax+'名）</span></div>'
+      +(s.member?'<div class="kv"><span class="k">会員番号</span><span class="v">'+esc(s.member)+'</span></div>':'')
+      +(s.bottle?'<div class="kv"><span class="k">ボトル</span><span class="v">🍶 '+esc(s.bottle)+(s.bottlePos?'（'+esc(s.bottlePos)+'）':'')+'</span></div>':'')
+      +(s.bday?'<div class="kv"><span class="k">誕生日</span><span class="v">🎂 '+esc(s.bday)+'</span></div>':'')
+      +(s.nomikata?'<div class="kv"><span class="k">飲み方</span><span class="v">'+esc(s.nomikata)+'</span></div>':'')
+      +'<div class="kv"><span class="k">担当</span><span class="v">'+tantouV+'</span></div>'
+      +(s.dohan?'<div class="kv"><span class="k">同伴</span><span class="v">'+esc(s.dohan)+'</span></div>':'')
+      +'<div class="kv"><span class="k">状態</span><span class="v">'+stLabel+'</span></div>'
+      +((s.tags||[]).length?'<div class="kv"><span class="k">タグ</span><span class="v">'+s.tags.map(function(t){return TAGLABEL[t];}).join(' / ')+'</span></div>':'')
+      +'<div style="font-size:11px;color:#8a9ac0;margin:14px 0 4px;font-weight:700">担当キャストと残り時間</div>'
+      +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast"><span style="font-weight:700">'+esc(c.n)+'</span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span></div>';}).join('')
+      +'<div class="actions"><div class="act pri" onclick="alert(\'（プロト）付け回し\')">🔄 席移動 / 付替</div>'+combBtn+'<div class="act" onclick="alert(\'（プロト）席を空ける\')">🚪 退店（席を空ける）</div></div>';
+  }
+  showSheet(title,body,false);
+}
+
+var addSel={tables:[],tantou:[],dohan:[],time:'20:00',pax:3};
+function openAdd(){addSel={tables:[],tantou:[],dohan:[],time:'20:00',pax:3};showSheet('➕ 予約を追加',addFormHtml(),false);}
+function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;showSheet('✏️ '+r.cust+'様の予約',addFormHtml(r),false);}
+function addFormHtml(r){
+  var times=['同伴','20:00','20:30','21:00','21:30','22:00','22:30','23:00'];
+  var selT=r?r.time:addSel.time, selP=r?r.pax:addSel.pax;
+  var selTables=r&&r.table!=='未定'?r.table.split('、'):addSel.tables;
+  var selTantou=r&&r.tantou?r.tantou.split('、'):addSel.tantou;
+  var selDohan=r&&r.dohan?r.dohan.split('、'):addSel.dohan;
+  return (r?'':'<div class="custpick"><div class="cp-exist" onclick="alert(\'（プロト）顧客検索\')">🔍 既存のお客様</div><div class="cp-new" onclick="alert(\'（プロト）新規入力\')">＋ 新規のお客様</div></div>')
+    +'<div class="flabel">お客様名</div><input class="finput" value="'+(r?esc(r.cust)+' 様':'')+'" placeholder="山田 貴志 様">'
+    +'<div class="flabel">時間</div><div class="chips">'+times.map(function(t){return '<div class="chip'+(selT===t?' sel':'')+'">'+t+'</div>';}).join('')+'</div>'
+    +'<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(String(selP)===String(n)?' sel':'')+'">'+n+'名</div>';}).join('')+'</div>'
+    +'<div class="flabel">席（複数選択可）</div><div style="font-size:10px;color:#5a6a90;margin-bottom:4px">2F</div><div class="chips">'+TABLES_2F.map(function(t){return '<div class="chip'+(selTables.indexOf('2F '+t)>=0?' sel':'')+'">'+t+'</div>';}).join('')+'</div>'
+    +'<div style="font-size:10px;color:#5a6a90;margin:8px 0 4px">5F</div><div class="chips">'+TABLES_5F.map(function(t){return '<div class="chip'+(selTables.indexOf('5F '+t)>=0?' sel':'')+'">'+t+'</div>';}).join('')+'</div>'
+    +'<div class="flabel">担当キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip cast'+(selTantou.indexOf(c)>=0?' sel':'')+'">'+c+'</div>';}).join('')+'</div>'
+    +'<div class="flabel">同伴キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip dohan'+(selDohan.indexOf(c)>=0?' sel':'')+'">'+c+'</div>';}).join('')+'</div>'
+    +'<div class="flabel">要望・備考</div><textarea class="finput" rows="3" style="resize:none" placeholder="VIP対応・誕生日・ボトル・席希望など...">'+(r?esc(r.note):'')+'</textarea>'
+    +'<div class="savebtn" onclick="alert(\'（プロト）'+(r?'変更を保存':'予約を確定')+'：実装時はGAS呼び出し\')">'+(r?'変更を保存':'予約を確定する')+'</div>';
+}
+
+function openSchedule(){
+  var SH=19,EH=26;
+  var hdr='<div class="g-hd"><div class="g-corner">卓</div>';
+  for(var h=SH;h<EH;h++) hdr+='<div class="g-hr">'+(h<24?h:h-24)+':00</div>';
+  hdr+='</div>';
+  var rows='';
+  ['2F','5F'].forEach(function(fl){
+    rows+='<div class="g-flr">'+fl+'</div>';
+    (fl==='2F'?TABLES_2F:TABLES_5F).forEach(function(tn){
+      var full=fl+' '+tn,blk='';
+      RSV.forEach(function(r){
+        if(r.table!==full)return;
+        var p=r.time.split(':'),hh=parseInt(p[0]);if(hh<6)hh+=24;var mm=hh*60+(parseInt(p[1])||0);
+        var l=((mm-SH*60)/((EH-SH)*60))*100,w=(120/((EH-SH)*60))*100;if(l<0){w+=l;l=0;}
+        var col=r.status==='退店済み'?'background:#181828;border:1px solid #2a2a44':r.status==='来店済み'?'background:#0d2618;border:1px solid #2a6a44':'background:#12233f;border:1px solid #2a5590';
+        blk+='<div class="g-blk" style="left:'+l+'%;width:'+w+'%;'+col+'" onclick="editRsv('+r.id+')"><span class="bn">'+esc(r.cust)+'様</span><span class="bp">'+r.pax+'名 '+esc(r.time)+'</span></div>';
+      });
+      var cells='';for(var c=0;c<(EH-SH);c++)cells+='<div class="g-cell"></div>';
+      rows+='<div class="g-row"><div class="g-lbl">'+esc(tn.replace('カウンター','カウ'))+'</div><div class="g-track">'+cells+blk+'</div></div>';
+    });
+  });
+  showSheet('🗓 本日のスケジュール',' <div class="gantt"><div class="g-inner">'+hdr+rows+'</div></div>',true);
+}
+
+/* ============ メニュー / 顧客管理 ============ */
+var CUSTOMERS=[
+  {name:'鈴木', member:'No.128', joined:'2022/03', feeDate:'2026/05', bottle:'山崎12年',  bottlePos:'2F-B棚3', bday:'5/12',  tantou:'みれい', nomikata:'水割り',    tabako:'',          ng:''},
+  {name:'田中', member:'No.204', joined:'2021/07', feeDate:'2025/06', bottle:'獺祭 純米',  bottlePos:'2F-C棚1', bday:'',      tantou:'まや',   nomikata:'ロック',    tabako:'メビウス',  ng:''},
+  {name:'高橋', member:'No.045', joined:'2023/01', feeDate:'2025/08', bottle:'モエ',      bottlePos:'冷蔵庫',  bday:'',      tantou:'りお',   nomikata:'',        tabako:'',          ng:''},
+  {name:'加藤', member:'No.312', joined:'2020/11', feeDate:'2026/06', bottle:'響17年',    bottlePos:'5F-A棚1', bday:'',      tantou:'まや',   nomikata:'ロック',    tabako:'',          ng:'のあ'},
+  {name:'佐藤', member:'No.156', joined:'2024/02', feeDate:'2025/02', bottle:'',         bottlePos:'',        bday:'7/5',   tantou:'のあ',   nomikata:'',        tabako:'',          ng:''},
+  {name:'伊藤', member:'No.220', joined:'2023/09', feeDate:'2025/09', bottle:'',         bottlePos:'',        bday:'',      tantou:'ゆうか', nomikata:'ビール',    tabako:'',          ng:''},
+  {name:'渡辺', member:'No.302', joined:'2022/05', feeDate:'2026/01', bottle:'',         bottlePos:'',        bday:'',      tantou:'れな',   nomikata:'ハイボール', tabako:'',          ng:'かい'},
+  {name:'小林', member:'No.077', joined:'2021/11', feeDate:'2024/11', bottle:'',         bottlePos:'',        bday:'11/3',  tantou:'あん',   nomikata:'',        tabako:'セブンスター', ng:''},
+  {name:'中村', member:'No.410', joined:'2025/06', feeDate:'2025/08', bottle:'',         bottlePos:'',        bday:'',      tantou:'ゆうか', nomikata:'',        tabako:'',          ng:''},
+  {name:'山本', member:'No.301', joined:'2020/03', feeDate:'2026/07', bottle:'白州',      bottlePos:'2F-B棚1', bday:'',      tantou:'まや',   nomikata:'ソーダ',    tabako:'',          ng:''},
+  {name:'井上', member:'No.212', joined:'2023/08', feeDate:'2025/08', bottle:'',         bottlePos:'',        bday:'8/20',  tantou:'のあ',   nomikata:'',        tabako:'',          ng:''},
+  {name:'木村', member:'No.088', joined:'2019/12', feeDate:'2024/06', bottle:'',         bottlePos:'',        bday:'',      tantou:'ゆうか', nomikata:'',        tabako:'',          ng:''}
+];
+function renewStatus(fd){
+  if(!fd) return 'none';
+  var p=String(fd).split('/'); var due=parseInt(p[0])*12+parseInt(p[1])+12;
+  var today=2026*12+7; // モックの現在=2026/07
+  if(due<today) return 'expired';
+  if(due-today<=2) return 'soon';
+  return 'ok';
+}
+var NO_LINE_MEMBERS={'No.204':1,'No.156':1,'No.077':1,'No.410':1,'No.088':1};
+function isNoLine(c){return !!NO_LINE_MEMBERS[c.member];}
+var MENU_TILES=[
+  {group:'開店・閉店 / 現金', items:[
+    {ic:'🌅', t:'開店チェック',   act:"alert('（プロト）開店チェックへ')"},
+    {ic:'🔓', t:'金庫出金',       act:"alert('（プロト）金庫出金へ')"},
+    {ic:'🌙', t:'閉店チェック',   act:"alert('（プロト）閉店チェックへ')"}
+  ]},
+  {group:'管理', items:[
+    {ic:'👤', t:'顧客管理',           act:"menuCustomer()"},
+    {ic:'📋', t:'在庫発注管理',       act:"alert('（プロト）在庫発注管理へ')"},
+    {ic:'🚗', t:'送り管理',           act:"alert('（プロト）送り管理へ')"},
+    {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
+    {ic:'🍽', t:'POS',               act:"alert('（プロト）POSへ')"}
+  ]}
+];
+var menuView='grid', custFilter='all', custFromTop=false;
+function openMenu(){ menuView='grid'; custFromTop=false; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
+function openCustomer(){ menuView='customer'; custFilter='all'; custFromTop=true; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
+function closeMenu(){ document.getElementById('menuOverlay').classList.remove('show'); }
+function menuCustomer(){ menuView='customer'; custFilter='all'; custFromTop=false; renderMenu(); }
+function renderMenu(){
+  document.getElementById('menuTitle').textContent = menuView==='customer'?'👤 顧客管理':'☰ 各種メニュー';
+  var el=document.getElementById('menu-body');
+  if(menuView==='customer'){
+    var exp=CUSTOMERS.filter(function(c){return renewStatus(c.feeDate)==='expired';}).length;
+    var nol=CUSTOMERS.filter(isNoLine).length;
+    var back=custFromTop?'<span class="menu-back" onclick="closeMenu()">← ホームに戻る</span>':'<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
+    el.innerHTML=back
+      +'<input id="cust-q" class="cust-q" placeholder="お客様名・会員番号で検索" oninput="renderCustResults()">'
+      +'<div class="cust-filters">'
+        +'<span class="cfil'+(custFilter==='all'?' on':'')+'" onclick="setCustFilter(\'all\')">全員 '+CUSTOMERS.length+'</span>'
+        +'<span class="cfil exp'+(custFilter==='expired'?' on':'')+'" onclick="setCustFilter(\'expired\')">🔴 更新切れ '+exp+'</span>'
+        +'<span class="cfil nol'+(custFilter==='noline'?' on':'')+'" onclick="setCustFilter(\'noline\')">📵 公式LINE未登録 '+nol+'</span>'
+      +'</div>'
+      +'<div id="cust-results" class="cust-results"></div>';
+    renderCustResults();
+    var inp=document.getElementById('cust-q'); if(inp) inp.focus();
+    return;
+  }
+  el.innerHTML=MENU_TILES.map(function(g){
+    return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
+      return '<div class="menu-tile" onclick="'+it.act+'"><span class="mt-ic">'+it.ic+'</span><span class="mt-t">'+esc(it.t)+'</span></div>';
+    }).join('')+'</div>';
+  }).join('');
+}
+function setCustFilter(f){ var q=((document.getElementById('cust-q')||{}).value||''); custFilter=f; renderMenu(); var inp=document.getElementById('cust-q'); if(inp){ inp.value=q; renderCustResults(); } }
+function renderCustResults(){
+  var q=((document.getElementById('cust-q')||{}).value||'').trim();
+  var list=CUSTOMERS.filter(function(c){
+    if(q && !(c.name.indexOf(q)>=0||(c.member&&c.member.toLowerCase().indexOf(q.toLowerCase())>=0))) return false;
+    if(custFilter==='expired' && renewStatus(c.feeDate)!=='expired') return false;
+    if(custFilter==='noline' && !isNoLine(c)) return false;
+    return true;
+  });
+  document.getElementById('cust-results').innerHTML=custResultsHtml(list);
+}
+function custResultsHtml(list){
+  if(!list.length) return '<div class="empty-msg">見つかりませんでした</div>';
+  return list.map(function(c){
+    var rs=renewStatus(c.feeDate);
+    var rb=rs==='expired'?'<span class="cbd exp">🔴 更新切れ</span>':rs==='soon'?'<span class="cbd soon">🟡 まもなく更新</span>':rs==='ok'?'<span class="cbd okr">🟢 有効</span>':'<span class="cbd">更新日なし</span>';
+    if(isNoLine(c)) rb+='<span class="cbd noline">📵 公式LINE未登録</span>';
+    var b='';
+    if(c.bottle) b+='<span class="cbd bottle">🍶'+esc(c.bottle)+(c.bottlePos?' '+esc(c.bottlePos):'')+'</span>';
+    if(c.bday) b+='<span class="cbd bday">🎂'+esc(c.bday)+'</span>';
+    if(c.tantou) b+='<span class="cbd t">担当 '+esc(c.tantou)+'</span>';
+    if(c.nomikata) b+='<span class="cbd">'+esc(c.nomikata)+'</span>';
+    if(c.tabako) b+='<span class="cbd">🚬'+esc(c.tabako)+'</span>';
+    if(c.ng) b+='<span class="cbd ng">🚫NG '+esc(c.ng)+'</span>';
+    return '<div class="cust-card'+(rs==='expired'?' exp':'')+'"><div class="cc-top"><span class="cc-nm">'+esc(c.name)+' 様</span><span class="cc-mem">'+esc(c.member||'—')+'</span>'+rb+'</div>'
+      +'<div class="cc-meta">入会 '+esc(c.joined||'—')+'　・　前回更新 '+esc(c.feeDate||'—')+'</div>'
+      +(b?'<div class="cc-badges">'+b+'</div>':'')+'</div>';
+  }).join('');
+}
+
+/* ============ キャストリクエスト ============ */
+var REQUESTS=[
+  {id:1, time:'20:10', cast:'のあ',  type:'NG',  targetCust:'加藤', comment:'先日クレームあり・接客不可', handled:false},
+  {id:2, time:'20:25', cast:'みれい',type:'希望', targetCust:'鈴木', comment:'指名継続希望・ボトル入れたい', handled:false},
+  {id:3, time:'19:50', cast:'かい',  type:'NG',  targetCust:'渡辺', comment:'', handled:true},
+  {id:4, time:'21:00', cast:'ゆき',  type:'希望', targetStore:true, comment:'新規のお客様につけてほしい', handled:false}
+];
+function custKey(c){return String(c||'').replace(/\s*様\s*$/,'').trim();}
+function reqsForCust(cust){var k=custKey(cust);if(!k)return [];return REQUESTS.filter(function(r){return !r.targetStore&&r.targetCust===k;});}
+function reqTypeIcon(t){return t==='NG'?'🚫':t==='希望'?'🙋':'📣';}
+function reqBadgeHtml(idx,cust){var rq=reqsForCust(cust);if(!rq.length)return '';var un=rq.filter(function(r){return !r.handled;}).length;return '<span class="req-badge'+(un?' un':'')+'" onclick="openReqForSeat('+idx+',event)">📣 リクエスト'+(un?' '+un:'済')+'</span>';}
+function reqListHtml(list){
+  if(!list.length) return '<div class="empty-msg">リクエストはありません</div>';
+  var un=list.filter(function(r){return !r.handled;}).length;
+  return '<div style="font-size:12px;color:var(--sub);margin-bottom:10px;font-weight:700">未対応 '+un+' / 合計 '+list.length+'件</div>'
+    +list.map(function(r){
+      var tgt=r.targetStore?'店全体へ':(esc(r.targetCust)+'様');
+      return '<div class="req-card'+(r.handled?' done':'')+'"><div class="rq-top"><span class="rq-time">'+esc(r.time)+'</span><span class="rq-cast">'+esc(r.cast)+'さん</span><span class="rq-type '+(r.type==='NG'?'ng':'want')+'">'+reqTypeIcon(r.type)+' '+esc(r.type)+'</span><label class="rq-done"><input type="checkbox" '+(r.handled?'checked':'')+' onchange="toggleReq('+r.id+',this.checked)">対応済</label></div><div class="rq-target">対象：'+tgt+'</div>'+(r.comment?'<div class="rq-comment">📝 '+esc(r.comment)+'</div>':'')+'</div>';
+    }).join('');
+}
+function toggleReq(id,checked){var r=REQUESTS.find(function(x){return x.id===id;});if(r)r.handled=checked;renderHall();}
+function openReqForSeat(idx,ev){if(ev)ev.stopPropagation();var s=SEATS[idx];showSheet('📣 '+esc(custKey(s.cust))+'様 のリクエスト',reqListHtml(reqsForCust(s.cust)),false);}
+function openAllRequests(){closeMenu();showSheet('📣 本日のキャストリクエスト',reqListHtml(REQUESTS),false);}
+
+/* ============ BOOT ============ */
+function renderAll(){
+  document.getElementById('termBadge').textContent=TERM+' 端末';
+  document.getElementById('whoName').textContent=LOGIN;
+  document.getElementById('dlabel').textContent=dateLabel(curDate);
+  renderAlerts();renderHall();renderRight();
+}
+tickClock();setInterval(tickClock,10000);
+renderAll();
+</script>
+</body>
+</html>

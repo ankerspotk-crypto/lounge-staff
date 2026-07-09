@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1320">
+<title>現金報告 あたらしいやり方 | ラウンジ家康</title>
+<style>html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--bg);color:var(--ink)}</style>
+</head>
+<body>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#171b22; --muted:#5c6675; --line:#e4e8ee;
+    --accent:#2f6fb0; --accent-soft:#e8f0f8;
+    --ok:#1f8a5b; --ok-soft:#e4f3ec; --warn:#b5771a; --warn-soft:#f8efdd; --danger:#c0453f; --danger-soft:#f8e6e5;
+    --font:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",sans-serif;
+    /* 実アプリ（軍師）の配色。スクショ再現用に固定 */
+    --a-bg:#0e1320; --a-card:#161d2b; --a-card2:#111726; --a-line:#28324a;
+    --a-ink:#e9eef7; --a-dim:#8a97ad; --a-blue:#8fb8ff; --a-green:#7be0a8; --a-amber:#e0a060; --a-red:#ff9a9a; --a-purple:#bb99ee;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0f1217; --card:#171b22; --ink:#e9edf3; --muted:#9aa4b2; --line:#262c36; --accent:#7fb0e6; --accent-soft:#1a2634; --ok:#4cc38a; --ok-soft:#16271f; --warn:#e0a54a; --warn-soft:#2a2216; --danger:#e8736c; --danger-soft:#2c1a19; }
+  }
+  :root[data-theme="dark"]{ --bg:#0f1217; --card:#171b22; --ink:#e9edf3; --muted:#9aa4b2; --line:#262c36; --accent:#7fb0e6; --accent-soft:#1a2634; --ok:#4cc38a; --ok-soft:#16271f; --warn:#e0a54a; --warn-soft:#2a2216; --danger:#e8736c; --danger-soft:#2c1a19; }
+  :root[data-theme="light"]{ --bg:#f6f7f9; --card:#ffffff; --ink:#171b22; --muted:#5c6675; --line:#e4e8ee; --accent:#2f6fb0; --accent-soft:#e8f0f8; --ok:#1f8a5b; --ok-soft:#e4f3ec; --warn:#b5771a; --warn-soft:#f8efdd; --danger:#c0453f; --danger-soft:#f8e6e5; }
+
+  *{box-sizing:border-box}
+  .wrap{max-width:760px;margin:0 auto;padding:32px 20px 72px;font-family:var(--font);color:var(--ink);line-height:1.75;font-size:16px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;margin:0 0 8px}
+  h1{font-size:30px;line-height:1.25;font-weight:800;margin:0 0 10px;text-wrap:balance;letter-spacing:.01em}
+  .lede{font-size:17px;color:var(--muted);margin:0 0 8px}
+  h2{font-size:21px;font-weight:800;margin:0;letter-spacing:.01em}
+  h3{font-size:15px;font-weight:700;margin:0 0 4px}
+  p{margin:0 0 12px}
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 22px 24px;margin-top:18px}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .sec-num{flex:none;width:34px;height:34px;border-radius:10px;background:var(--accent-soft);color:var(--accent);font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center}
+  .sec-sub{color:var(--muted);font-size:14px;margin:2px 0 16px}
+  .grid2{display:grid;grid-template-columns:1fr;gap:20px}
+  @media(min-width:620px){.grid2{grid-template-columns:1.05fr .95fr;align-items:start}}
+  ol.steps{margin:0;padding:0;list-style:none;counter-reset:s}
+  ol.steps li{counter-increment:s;position:relative;padding:8px 0 8px 34px;border-bottom:1px solid var(--line)}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{content:counter(s);position:absolute;left:0;top:9px;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--card);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  ol.steps b{font-weight:700}
+  .note{font-size:13.5px;color:var(--muted);margin-top:12px;padding-left:14px;border-left:3px solid var(--line)}
+  .callout{border-radius:12px;padding:14px 16px;margin-top:14px;font-size:14.5px}
+  .callout.ok{background:var(--ok-soft);color:var(--ok)} .callout.warn{background:var(--warn-soft);color:var(--warn)} .callout.tip{background:var(--accent-soft);color:var(--accent)}
+  .callout b{font-weight:800}
+  .bags{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:6px 0 4px}
+  @media(min-width:520px){.bags{grid-template-columns:repeat(4,1fr)}}
+  .bag{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+  .bag .dot{width:12px;height:12px;border-radius:4px;display:inline-block;margin-bottom:6px}
+  .bag .nm{font-weight:700;font-size:14px} .bag .d{font-size:11.5px;color:var(--muted)}
+
+  /* ===== スクショ（実アプリ再現・常にダークネイビー） ===== */
+  .phone{background:var(--a-bg);border:1px solid var(--a-line);border-radius:20px;padding:14px 13px;box-shadow:0 10px 30px rgba(0,0,0,.28);color:var(--a-ink);font-size:13px}
+  .ph-bar{display:flex;align-items:center;gap:8px;padding:2px 4px 12px;border-bottom:1px solid var(--a-line);margin-bottom:12px}
+  .ph-bar .t{font-weight:800;font-size:15px} .ph-bar .x{margin-left:auto;color:var(--a-dim);font-size:12px}
+  .ph-note{color:var(--a-dim);font-size:11px;margin:-4px 0 10px}
+  .ph-label{color:var(--a-dim);font-size:11px;font-weight:700;margin:12px 0 6px}
+  .ph-card{border:1px solid var(--a-line);border-radius:11px;padding:9px 11px;margin-bottom:9px}
+  .ph-bagrow{display:flex;align-items:center;gap:7px}
+  .ph-bagrow .dot{width:10px;height:10px;border-radius:3px;flex:none}
+  .ph-bagrow .nm{font-weight:700} .ph-bagrow .prev{font-size:10.5px;color:var(--a-dim)} .ph-bagrow .amt{margin-left:auto;font-weight:800}
+  .ph-den{display:flex;gap:6px;margin-top:8px}
+  .ph-den .cell{flex:1;text-align:center}
+  .ph-den .cl{font-size:10px;color:var(--a-dim)} .ph-den .bx{border:1px solid var(--a-line);border-radius:7px;height:26px;margin-top:2px;background:var(--a-card2)}
+  .ph-adj{font-size:11px;color:var(--a-blue);margin-top:8px}
+  .ph-kv{display:flex;justify-content:space-between;padding:7px 0}
+  .ph-kv .k{color:var(--a-dim)} .ph-kv.big{font-size:15px;font-weight:800;border-top:1px solid var(--a-line);margin-top:4px;padding-top:11px}
+  .ph-banner{border-radius:10px;padding:10px 12px;font-weight:700;font-size:13px;margin-top:10px}
+  .ph-banner.ok{background:rgba(60,200,140,.14);color:#8fe6ba} .ph-banner.ng{background:rgba(224,80,80,.16);color:#ff9a9a} .ph-banner.info{background:rgba(120,160,255,.14);color:#a9c4ff}
+  .ph-slip{border:1px solid var(--a-line);border-radius:10px;padding:8px 10px;margin-bottom:8px;font-size:12px}
+  .ph-slip .top{display:flex;align-items:center;gap:6px;color:var(--a-dim);font-size:11px;margin-bottom:5px}
+  .ph-slip .top .chk{margin-left:auto}
+  .ph-slip .row{display:flex;align-items:center;gap:8px}
+  .ph-slip .row .py{flex:1} .ph-slip .row .mo{font-weight:700}
+  .ph-flow{border:1px solid var(--a-line);border-radius:11px;padding:6px 12px;margin-top:4px}
+  .ph-flow .r{display:flex;justify-content:space-between;padding:6px 0;font-size:12.5px}
+  .ph-flow .r .l{color:#8894a8}
+  .ph-flow .r.total{border-top:1px solid var(--a-line);font-weight:800;color:var(--a-ink);margin-top:2px;padding-top:9px}
+  .ph-flow .r.total .l{color:var(--a-ink)}
+  .ph-btn{background:#1a2338;border:1px solid #2c3a5c;border-radius:11px;text-align:center;padding:11px;font-weight:800;color:#cfe0ff;margin-top:12px;font-size:13px}
+  .cap{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+  .foot{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+  .toggle{position:sticky;top:12px;float:right;font-size:12px;color:var(--muted);border:1px solid var(--line);background:var(--card);border-radius:20px;padding:5px 12px;cursor:pointer;user-select:none}
+</style>
+
+<div class="wrap">
+  <span class="toggle" onclick="var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark')">◐ 表示切替</span>
+
+  <p class="eyebrow">ラウンジ家康 · IEYAS軍師</p>
+  <h1>現金報告 あたらしいやり方</h1>
+  <p class="lede">むずかしい計算は無し。<b>お金がある4つの袋を、朝と夜に数えるだけ</b>。あとはアプリが合ってるか教えてくれます。</p>
+
+  <div class="callout tip"><b>いちばん大事なこと</b> ── 数えるのは<b>お札だけ</b>（1万・5千・千円の枚数）。小銭は数えません。</div>
+
+  <div class="bags">
+    <div class="bag"><span class="dot" style="background:#8fb8ff"></span><div class="nm">5Fレジ</div><div class="d">5階のレジ袋</div></div>
+    <div class="bag"><span class="dot" style="background:#6fd6b0"></span><div class="nm">2Fレジ</div><div class="d">2階のレジ袋</div></div>
+    <div class="bag"><span class="dot" style="background:#e0a060"></span><div class="nm">経費袋</div><div class="d">共通の買い物用</div></div>
+    <div class="bag"><span class="dot" style="background:#bb99ee"></span><div class="nm">金庫</div><div class="d">予備の現金</div></div>
+  </div>
+  <p class="note">この4つの合計が「店にある現金」。夜は <b>朝の現金 ＋ 現金売上 － 払った伝票 ＝ 残るはず</b> になっていれば正解です。</p>
+
+  <!-- 開店 -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-num">1</span><h2>🌅 開店の現金</h2></div>
+    <p class="sec-sub">出勤したら（だいたい18時）いちばん最初に。</p>
+    <div class="grid2">
+      <div>
+        <ol class="steps">
+          <li><b>報告者</b>（自分の名前）をタップ</li>
+          <li>4つの袋を <b>金種ごとに数えて枚数</b>を入れる（万・五千・千）</li>
+          <li>下に <b>今夜のスタート金額</b>が自動で出る</li>
+          <li><b>送信</b>。※送信後は直せません</li>
+        </ol>
+        <div class="callout info" style="background:var(--accent-soft);color:var(--accent)"><b>金庫が前日と違ったら？</b> アプリが「+2万円 運営者が足した?」のように教えます。営業時間外にオーナーが金庫を出し入れした分です。数え間違いでなければそのままでOK。</div>
+      </div>
+      <div>
+        <div class="phone">
+          <div class="ph-bar"><span>🌅</span><span class="t">開店の現金</span><span class="x">7/9(木)</span></div>
+          <div class="ph-note">4つの袋を数える（紙幣の枚数）</div>
+          <div class="ph-card">
+            <div class="ph-bagrow"><span class="dot" style="background:#8fb8ff"></span><span class="nm">5Fレジ</span><span class="prev">前日 ¥120,000</span><span class="amt">¥120,000</span></div>
+            <div class="ph-den"><div class="cell"><div class="cl">万</div><div class="bx"></div></div><div class="cell"><div class="cl">五千</div><div class="bx"></div></div><div class="cell"><div class="cl">千</div><div class="bx"></div></div></div>
+          </div>
+          <div class="ph-card">
+            <div class="ph-bagrow"><span class="dot" style="background:#bb99ee"></span><span class="nm">金庫</span><span class="prev">前日 ¥180,000</span><span class="amt" style="color:#a9c4ff">¥200,000</span></div>
+            <div class="ph-den"><div class="cell"><div class="cl">万</div><div class="bx"></div></div><div class="cell"><div class="cl">五千</div><div class="bx"></div></div><div class="cell"><div class="cl">千</div><div class="bx"></div></div></div>
+            <div class="ph-adj">前日 ¥180,000 → +20,000円　運営者が金庫を足した?</div>
+          </div>
+          <div class="ph-kv big"><span class="k">今夜のスタート金額（4袋 合計）</span><span>¥450,000</span></div>
+          <div class="ph-btn">開店チェックを送信</div>
+        </div>
+        <p class="cap">▲ 開店の画面（5Fレジ・金庫のみ抜粋）</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 金庫出金 -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-num">2</span><h2>🔓 金庫出金</h2></div>
+    <p class="sec-sub">営業中に金庫からお金を出したとき（レジ補充など）。誰でも・何回でも。</p>
+    <p>金庫からお札を出したら、その都度 <b>対象フロア・出した枚数・出したあとの金庫残り</b>を記録します。これは「記録」なので、夜の合う・合わないの計算には影響しません（金庫からレジに移すだけでは、店の現金合計は変わらないため）。</p>
+    <div class="callout ok">やることは1つだけ ── <b>出したら記録</b>。それだけで金庫の中身が誰でも追えるようになります。</div>
+  </section>
+
+  <!-- 閉店 -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-num">3</span><h2>🌙 閉店の現金</h2></div>
+    <p class="sec-sub">帰る前に。ここで一晩のお金の流れをまとめて報告します。</p>
+    <div class="grid2">
+      <div>
+        <ol class="steps">
+          <li><b>報告者</b>をタップ</li>
+          <li><b>現金売上</b>を数字ひとつで入れる</li>
+          <li><b>読み取り済み伝票</b>を確認（黒服LINEに送った写真をアプリが自動で読み込み済み。金額・種類が合ってるか見て「含める」にチェック）</li>
+          <li>写真が無い支払いは <b>手入力で追加</b></li>
+          <li>4つの袋を <b>もう一度 金種で数える</b></li>
+          <li>下の <b>自動照合</b>で「✅ 合ってます」を確認して <b>送信</b></li>
+        </ol>
+        <div class="callout ok"><b>札だけなので小銭ぶんのズレは出ます。</b> ±1,000円までは「合ってる（緑）」扱いです。</div>
+      </div>
+      <div>
+        <div class="phone">
+          <div class="ph-bar"><span>🌙</span><span class="t">閉店の現金</span><span class="x">7/9(木)</span></div>
+          <div class="ph-label">読み取り済み伝票（画像から）　計 −¥110,000</div>
+          <div class="ph-slip">
+            <div class="top">在籍 日払い<span class="chk">☑ 含める</span></div>
+            <div class="row"><span class="py">まや</span><span class="mo">¥35,000</span><span>📷</span></div>
+          </div>
+          <div class="ph-slip">
+            <div class="top">買出し・経費<span class="chk">☑ 含める</span></div>
+            <div class="row"><span class="py">ドンキ</span><span class="mo">¥7,000</span><span>📷</span></div>
+          </div>
+          <div class="ph-label">現金の流れ（自動照合）</div>
+          <div class="ph-flow">
+            <div class="r"><span class="l">🌅 今夜のスタート</span><span style="color:#cfe0ff">¥450,000</span></div>
+            <div class="r"><span class="l">＋ 現金売上</span><span style="color:#7be0a8">¥620,000</span></div>
+            <div class="r"><span class="l">－ 伝票 出金</span><span style="color:#e0a060">¥110,000</span></div>
+            <div class="r total"><span class="l">＝ 残るはず</span><span>¥960,000</span></div>
+            <div class="r"><span class="l">実際に数えた（4袋）</span><span>¥960,000</span></div>
+          </div>
+          <div class="ph-banner ok">✅ 合ってます（差額 ¥0・許容内）</div>
+          <div class="ph-btn">閉店チェックを送信</div>
+        </div>
+        <p class="cap">▲ 閉店の画面（伝票と自動照合を抜粋）</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 合わないとき -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-num">4</span><h2>⚠️ 合わないとき</h2></div>
+    <p class="sec-sub">「残るはず」と「実際に数えた」が1,000円より大きくズレたら、赤くなって原因を聞いてきます。</p>
+    <div class="grid2">
+      <div>
+        <p>あわてず、下のチェックを上から順に確認してください。多くはこのどれかです。特に <b>運転手さんの日払い</b>は過去に入れ忘れが起きています。</p>
+        <div class="callout warn">直したら、伝票を足す／数え直す → もう一度「合ってます」になればOK。</div>
+      </div>
+      <div>
+        <div class="phone">
+          <div class="ph-banner ng" style="margin-top:0">⚠️ ¥7,000 足りません</div>
+          <div style="background:rgba(224,80,80,.10);border-radius:10px;padding:11px 12px;margin-top:10px">
+            <div style="font-size:11px;color:#ff9a9a;margin-bottom:8px">よくある原因、確認して👇</div>
+            <div style="font-size:12.5px;line-height:2">☐ 運転手さんの日払い、入れた?<br>☐ キャストの日払い、全員分ある?<br>☐ 経費レシート、撮り忘れてない?<br>☐ もう一度数えてみる</div>
+          </div>
+        </div>
+        <p class="cap">▲ ズレたときの画面</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 承認 -->
+  <section class="sec">
+    <div class="sec-head"><span class="sec-num">5</span><h2>✅ 承認して退勤</h2></div>
+    <p class="sec-sub">送信のあと、りく または 管理者が確認して「承認」します。</p>
+    <ol class="steps">
+      <li>閉店チェックを送信すると <b>承認待ち</b>になる</li>
+      <li><b>りく・管理者</b>が内容を見て「承認する」</li>
+      <li>承認されたら <b>🚪 退勤OK</b>。（10分後に端末は自動ログアウト）</li>
+    </ol>
+    <div class="callout tip" style="background:var(--accent-soft);color:var(--accent)">承認が下りるまでは退勤できません。ズレたまま帰らない仕組みです。</div>
+  </section>
+
+  <p class="foot">ラウンジ家康 現金報告マニュアル ・ わからないことは黒服LINEで質問してください。</p>
+</div>
+</body>
+</html>
