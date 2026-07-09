@@ -460,16 +460,23 @@ function toggleRank(on){ api(on?'publishRanking':'unpublishRanking',{month:payMo
 function saveSalesDate(){ var d=document.getElementById('sd').value; api('setSalesDataDate',{month:payMonth,date:d}).then(function(r){ res(r,'売上データ日付を保存しました'); }); }
 
 /* ===== ⚙️ 運営 ===== */
-var okuriMode=null, thresholds=null, seatList=null;
+var okuriMode=null, thresholds=null, seatList=null, kfTasks=[];
 function renderOps(){
   loading();
-  Promise.all([api('getOkuriMode'),api('getCashThresholds'),api('getSeatList')]).then(function(r){
-    okuriMode=(r[0]&&r[0].mode)||'driver'; thresholds=(r[1]&&r[1].thresholds)||null; seatList=(r[2]&&r[2].seats)||[];
+  Promise.all([api('getOkuriMode'),api('getCashThresholds'),api('getSeatList'),api('listKurofukuTasks')]).then(function(r){
+    okuriMode=(r[0]&&r[0].mode)||'driver'; thresholds=(r[1]&&r[1].thresholds)||null; seatList=(r[2]&&r[2].seats)||[]; kfTasks=(r[3]&&r[3].tasks)||[];
     drawOps();
   }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
 }
 function drawOps(){
   var drv=okuriMode!=='jisha';
+  // 📋 黒服へタスクを送る（18時にまとめてLINE送信／18時以降は即送信。完了は軍師の「要対応」で）
+  var kfList=(kfTasks||[]).map(function(t){
+    return '<div class="lrow"><div class="main"><div class="nm">'+esc(t.title)+'</div><div class="meta">'+(t.sent?'✅ LINE送信済み':'⏳ 18時にまとめて送信')+(t.by?' ・'+esc(t.by):'')+(t.at?' ・'+esc(t.at):'')+(t.memo?' ・'+esc(t.memo):'')+'</div></div><button class="btn dng sm" onclick="delKfTask(\''+jstr(t.id)+'\')">削除</button></div>';
+  }).join('')||'<div class="empty" style="padding:14px">未完了のタスクはありません</div>';
+  var kfSec='<div class="sec"><div class="sec-t">📋 黒服へタスクを送る <span class="sub">18時にまとめてLINE送信・18時以降の追加は即送信。完了は軍師の「要対応」でチケットを押す</span></div>'
+    +'<div class="toolbar"><input class="finput grow" id="kf-title" placeholder="例：お土産の在庫を入力すること" onkeydown="if(event.key===\'Enter\')addKfTask()"><button class="btn pri" onclick="addKfTask()">追加</button></div>'
+    +'<div style="margin-top:10px">'+kfList+'</div></div>';
   var okuri='<div class="sec"><div class="sec-t">🚗 送りモード</div><div class="chips"><div class="chip'+(drv?' on':'')+'" onclick="setOkuri(\'driver\')">🚗 ドライバー手配</div><div class="chip'+(!drv?' on':'')+'" onclick="setOkuri(\'jisha\')">🏠 自社送り</div></div><div class="hint">自社送りモード中はドライバーへの通知を止めます。</div></div>';
 
   var seatCards=(seatList||[]).map(function(s){
@@ -507,7 +514,16 @@ function drawOps(){
   var consolePinSec='<div class="sec"><div class="sec-t">🔐 管理コンソールPIN <span class="sub">このコンソールを開くときのPIN（4〜6桁）</span></div>'
     +'<div class="toolbar"><input class="finput" id="cpin" maxlength="6" inputmode="numeric" style="width:150px" placeholder="'+(cpSet?'変更する4〜6桁':'新規4〜6桁')+'"><button class="btn pri" onclick="saveConsolePin()">'+(cpSet?'変更':'設定')+'</button>'+(cpSet?'<button class="btn dng" onclick="clearConsolePin()">解除</button>':'')+'</div>'
     +'<div class="hint">'+(cpSet?'✅ 設定済み。次回からQRの代わりにこのPINでコンソールを開けます。':'未設定（今はQRログイン）。設定するとQRの代わりにPINで開けるようになります。')+'</div></div>';
-  setBody(okuri+pinSec+consolePinSec+seats+resets+thresholdsSec+other);
+  setBody(kfSec+okuri+pinSec+consolePinSec+seats+resets+thresholdsSec+other);
+}
+function addKfTask(){
+  var el=document.getElementById('kf-title'); var t=(el&&el.value||'').trim();
+  if(!t){toast('タスク内容を入力してください',true);return;}
+  api('addKurofukuTask',{title:t}).then(function(r){ if(res(r,(r&&r.sent)?'追加＋黒服LINEに送信しました':'追加しました（18時にまとめて送信）')){ if(el)el.value=''; renderOps(); } }).catch(function(){toast('通信エラー',true);});
+}
+function delKfTask(id){
+  if(!confirm('このタスクを削除しますか？（軍師の「要対応」からも消えます）'))return;
+  api('deleteKurofukuTask',{id:id}).then(function(r){ if(res(r,'削除しました'))renderOps(); }).catch(function(){toast('通信エラー',true);});
 }
 function setOkuri(mode){ if(okuriMode===mode)return; if(!confirm(mode==='jisha'?'自社送りモードに切替（ドライバー通知を止めます）':'ドライバー手配モードに切替'))return; api('setOkuriMode',{mode:mode}).then(function(r){ if(res(r,'送りモードを変更しました')){okuriMode=(r&&r.mode)||mode;drawOps();} }); }
 function resetSeat(code,label){ if(!confirm(label+' を強制リセットします。この席の在席・予約・タグ等がクリアされます。よろしいですか？'))return; api('resetSeat',{seatCode:code}).then(function(r){ if(res(r,label+' をリセットしました'))renderOps(); }); }
