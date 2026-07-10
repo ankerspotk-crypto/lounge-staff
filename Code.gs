@@ -4983,39 +4983,9 @@ function handlePortalApi_(e) {
   const out = v => ContentService.createTextOutput(JSON.stringify(v))
     .setMimeType(ContentService.MimeType.JSON);
 
-  // 伝票バックフィル 保守用トークン導線（管理者userId不要・運用者が直接起動/監視/検証するための一時経路）
-  const BF_TOKEN = 'ieyasu-bf-7k9x2m';
-  if (e.parameter.token === BF_TOKEN) {
-    const tb = e.parameter.tab || '';
-    if (tb === 'billbackfillall')    return out(startBillBackfill(e.parameter.from || ''));
-    if (tb === 'billbackfillstatus') return out(billBackfillStatus());
-    if (tb === 'billmonth')          return out(billBackfillMonth(e.parameter.month || ''));
-    if (tb === 'billsample')         return out(fetchTrustBillList_(e.parameter.date || bizDateStr_()));
-    if (tb === 'billdetailsample')   return out(fetchTrustBillDetail_(e.parameter.date || bizDateStr_(), e.parameter.uuid || ''));
-    if (tb === 'trustdiag')          return out(trustLoginDiag_());
-    if (tb === 'trustlastok')        return out({ ok: true, salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}'), hasCookie: !!prop('TRUST_COOKIE'), billCursor: prop('BILL_BF_CURSOR') || '', bfStall: prop('BILL_BF_STALL') || '' });
-    if (tb === 'trustcreds')         return out({ ok: true, u: prop('TRUST_USERNAME') || '', p: prop('TRUST_PASSWORD') || '' }); // リレー(Mac住宅IP)からのTRUSTログイン用
-    if (tb === 'billingest') {        // リレー取込: b=base64(JSON {d,b:[...]})
-      try {
-        const raw = Utilities.newBlob(Utilities.base64Decode(e.parameter.b || '')).getDataAsString('UTF-8');
-        const obj = JSON.parse(raw);
-        return out(billIngestRows_(obj.d, obj.b || []));
-      } catch (err) { return out({ ok: false, error: 'ingest parse: ' + String(err) }); }
-    }
-    if (tb === 'billcount')          return out({ ok: true, totalRows: Math.max(0, billSheet_().getLastRow() - 1) });
-    if (tb === 'billverify')         return out(portalGetMyBills_(e.parameter.cast || '', e.parameter.month || ''));
-    if (tb === 'billdetailverify')   return out(portalBillDetail_(e.parameter.cast || '', e.parameter.date || '', e.parameter.uuid || '', e.parameter.admin === '1'));
-    if (tb === 'billpurge') {        // 指定営業日の行を削除(テスト行掃除用)
-      const d = e.parameter.date || ''; const sh = billSheet_(); const vals = sh.getDataRange().getValues(); let del = 0;
-      for (let i = vals.length - 1; i >= 1; i--) { const bd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim(); if (bd === d) { sh.deleteRow(i + 1); del++; } }
-      return out({ ok: true, date: d, deleted: del });
-    }
-    if (tb === 'billcasts') {        // 伝票シートの主担当一覧(件数付き・検証用)
-      const sh = billSheet_(); const last = sh.getLastRow(); const cnt = {};
-      if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(r => { const n = String(r[0]).trim(); if (n) cnt[n] = (cnt[n] || 0) + 1; });
-      return out({ ok: true, casts: Object.keys(cnt).map(k => ({ cast: k, bills: cnt[k] })).sort((a, b) => b.bills - a.bills) });
-    }
-  }
+  // （伝票バックフィルの保守用トークン導線 trustcreds/billingest 等は撤去済み。
+  //   全期間バックフィルは 2024-09〜2026-07-09 完了。再取得が必要な時のみ一時的に再追加する。
+  //   管理者向けの再投入は下の isAdmin && tab==='billbackfill' 系を使う）
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
