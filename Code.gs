@@ -4990,8 +4990,15 @@ function handlePortalApi_(e) {
     .setMimeType(ContentService.MimeType.JSON);
 
   // （伝票バックフィルの保守用トークン導線 trustcreds/billingest 等は撤去済み。
-  //   全期間バックフィルは 2024-09〜2026-07-09 完了。再取得が必要な時のみ一時的に再追加する。
   //   管理者向けの再投入は下の isAdmin && tab==='billbackfill' 系を使う）
+  // 状態確認(読み取り専用・TRUSTへはGET1回のみ=ログインPOSTしない=BAN延長しない)
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'truststatus') {
+    let loginCode = 0;
+    try { loginCode = UrlFetchApp.fetch('https://admin.trust-operation.com/', { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' } }).getResponseCode(); } catch (err) { loginCode = -1; }
+    const sh = billSheet_(); const last = sh.getLastRow(); let latest = '';
+    if (last >= 2) latest = sh.getRange(2, 1, last - 1, 1).getValues().map(x => x[0] instanceof Date ? Utilities.formatDate(x[0], TZ, 'yyyy-MM-dd') : String(x[0]).trim()).sort().reverse()[0];
+    return out({ ok: true, gasToTrustLoginCode: loginCode, gasBlocked: loginCode !== 200, billRows: Math.max(0, last - 1), latestBillDate: latest, today: bizDateStr_(), salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}') });
+  }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
