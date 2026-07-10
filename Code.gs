@@ -424,6 +424,16 @@ function handleApiRequest_(body) {
   if (body.action === 'getKioskForceLogoutTs') {
     return { ok: true, ts: Number(prop('KIOSK_FORCE_LOGOUT_TS') || 0) };
   }
+  if (body.action === 'getIeyasuRequests') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return { ok: true, list: getIeyasuRequests_() };
+  }
+  if (body.action === 'setIeyasuRequestStatus') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return setIeyasuRequestStatus_(body.row, body.status);
+  }
   // 軍師QRログイン: LIFF(本人のLINE)からトークンを認証（本人のuserIdで確認）
   if (body.action === 'kioskAuthConfirm') {
     return kioskAuthConfirm_(String(body.token || ''), String(body.userId || ''));
@@ -1461,6 +1471,14 @@ function handleEvent(event) {
   // 20時出勤依頼への本人からの返信（DM）
   if (userId && !groupId && prop('KREQ20_' + userId)) {
     if (handleReq20Reply_(event, text, userId)) return;
+  }
+
+  // ── AI家康くん: 公式アカへの1:1 DM（登録スタッフ/キャスト本人）はAIが応答。
+  //    上の個別フロー(#登録/体験シフト/20時返信)を通過した後・グループ処理の前に置く＝既存フロー無干渉。
+  //    未登録者の1:1は従来通り（下のhandleReservation）に落とす。顧客は個人LINEで予約するため公式アカ1:1には来ない。
+  if (userId && !groupId) {
+    var _ieName = getStaffName(userId);
+    if (_ieName) { handleIeyasuAI_(event, text, _ieName); return; }
   }
 
   // グループ別ルーティング
@@ -5530,6 +5548,113 @@ function adminResetSeat_(code, adminName) {
   try { endAtendou_(code); } catch (e) {}
   sp.deleteProperty('RSRV_SYNC_AT');
   return { ok: true, code: code };
+}
+
+// ============================================================
+// AI家康くん：現場の声（改善要望・機能要求）の記録と管理
+//   LINE(1:1 DM)で受けた要望を「AI要望」シートに溜め、管理コンソール(現場の声タブ)で状態管理。
+// ============================================================
+var IEYASU_REQ_TAB = 'AI要望';
+var IEYASU_STATUSES_ = ['新規', '対応中', '反映済', '却下'];
+
+function getIeyasuReqSheet_() {
+  var ss = getOrOpenSS_();
+  var sh = ss.getSheetByName(IEYASU_REQ_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(IEYASU_REQ_TAB);
+    sh.appendRow(['日時', '発言者', '種別', '要約', '元の発言', 'カテゴリ', '優先度', '状態']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// 家康くんへの要望を1件記録（LINE側 handleIeyasuAI_ から呼ぶ）
+function logIeyasuRequest_(name, msg, ai) {
+  try {
+    getIeyasuReqSheet_().appendRow([
+      new Date(), String(name || ''), (ai && ai.type) || 'request',
+      (ai && ai.summary) || '', String(msg || ''),
+      (ai && ai.category) || '', (ai && ai.priority) || '', '新規'
+    ]);
+    return true;
+  } catch (e) { console.error('logIeyasuRequest_', e); return false; }
+}
+
+// 管理コンソール：要望一覧（新しい順）
+function getIeyasuRequests_() {
+  var sh = getIeyasuReqSheet_();
+  var rows = sh.getDataRange().getValues();
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i];
+    if (!r[0] && !r[4]) continue; // 空行スキップ
+    var ts = (r[0] instanceof Date) ? Utilities.formatDate(r[0], TZ, 'M/d HH:mm') : String(r[0] || '');
+    out.push({
+      row: i + 1, ts: ts, name: String(r[1] || ''), type: String(r[2] || ''),
+      summary: String(r[3] || ''), text: String(r[4] || ''),
+      category: String(r[5] || ''), priority: String(r[6] || ''), status: String(r[7] || '新規')
+    });
+  }
+  out.reverse();
+  return out;
+}
+
+// 管理コンソール：要望の状態を更新（H列=状態）
+function setIeyasuRequestStatus_(row, status) {
+  row = Number(row) || 0;
+  if (row < 2) return { ok: false, error: 'row不正' };
+  if (IEYASU_STATUSES_.indexOf(status) < 0) return { ok: false, error: '不正な状態' };
+  getIeyasuReqSheet_().getRange(row, 8).setValue(status);
+  return { ok: true, row: row, status: status };
+}
+
+// LINE 1:1 DM の窓口。登録スタッフ/キャスト本人の発言をAI家康くんが受け答え。
+// 要望はシートに記録、質問は即答、雑談は軽く返す。
+function handleIeyasuAI_(event, text, name) {
+  var msg = String(text || '').trim();
+  if (!msg) { reply(event.replyToken, 'おう、' + name + '。家康じゃ。困りごとでも要望でも、なんでも申してみよ。'); return; }
+  if (/^(ヘルプ|help|使い方|\?|？)$/i.test(msg)) {
+    reply(event.replyToken,
+      'わしはこの店の軍師、家康じゃ。' + (name ? '\n' + name + '、' : '\n') + 'なんでも話しかけてくれ。\n' +
+      '・「こうしてほしい／ここが不便」＝要望として承り、主(あるじ)に届ける\n' +
+      '・店のルールや使い方の質問＝その場で答える\n' +
+      '・愚痴や雑談も、聞くぞ。');
+    return;
+  }
+  var ai = ieyasuBrain_(msg, name);
+  if (!ai || !ai.reply) { reply(event.replyToken, 'すまん、いま少し立て込んでおる。もう一度頼む。🙏'); return; }
+  reply(event.replyToken, ai.reply);
+  if (ai.type === 'request') logIeyasuRequest_(name, msg, ai);
+}
+
+// AI家康くんの脳。Gemini(既存GEMINI_API_KEY)に人格＋分類プロンプトを流し、JSONで返す。
+// 店の知識は IEYASU_KB プロパティに入れると回答の根拠になる（未設定でも動く）。
+function ieyasuBrain_(msg, name) {
+  var key = prop('GEMINI_API_KEY'); if (!key) return null;
+  var model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
+  var kb = prop('IEYASU_KB') || '';
+  var sys =
+    'あなたは高級ラウンジ「家康」の頼れる軍師AI、その名も「家康くん」。徳川家康の風格をほんのり纏いつつ、現場のキャスト・黒服(スタッフ)を支える右腕。' +
+    '一人称は「わし」。敬意と親しみを持って簡潔に。LINEで読むので全体3〜6行、絵文字は0〜2個まで。相手の名前を時々添えるとよい。\n' +
+    '相手の発言を必ず次のいずれかに分類する:\n' +
+    '- request: 改善要望・機能追加・「こうしてほしい」「不便」等。→ まず受け止めて共感し、実装に必要な点を1つだけ質問し返して具体化する。安請け合いはせず「主に伝えておく」程度に留める。\n' +
+    '- question: 店のルール・使い方・業務の質問。→ 分かる範囲で即答。知識に無い/確証がなければ断定せず「黒服に確認を」と促す。\n' +
+    '- chat: 挨拶・雑談・お礼など。→ 軽く温かく返す。\n' +
+    (kb ? '\n【店の知識(回答の根拠。ここに無いことは断定しない)】\n' + kb + '\n' : '') +
+    '\n出力は必ず次のJSONのみ(前後に文章を付けない): {"type":"request|question|chat","reply":"LINEでそのまま送る本文","summary":"requestなら要望の一文要約、他は空文字","category":"requestならホール/付け回し/現金/発注在庫/予約/給与/シフト/システム/その他 から1つ、他は空文字","priority":"requestなら高/中/低、他は空文字"}';
+  var prompt = sys + '\n\n【発言者】' + (name || 'スタッフ') + '\n【発言】' + msg;
+  try {
+    var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key), {
+      method: 'post', contentType: 'application/json',
+      payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, response_mime_type: 'application/json' } }),
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() !== 200) { console.error('ieyasuBrain http', res.getResponseCode(), res.getContentText().slice(0, 200)); return null; }
+    var o = JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
+    if (!o || !o.reply) return null;
+    if (o.type !== 'request' && o.type !== 'question' && o.type !== 'chat') o.type = 'chat';
+    return o;
+  } catch (e) { console.error('ieyasuBrain', e); return null; }
 }
 
 // 派遣名→店名マッピングシートを取得（なければ作成）

@@ -155,6 +155,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
     <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
     <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
+    <button class="tab" data-t="voice" onclick="switchTab('voice')">🗣 現場の声</button>
     <button class="tab" data-t="ref" onclick="switchTab('ref')">📖 説明</button>
   </div>
   <div class="body" id="body"><div class="empty">読み込み中…</div></div>
@@ -269,7 +270,7 @@ function pollAdminAuth(token){
 function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
 function render(){
   document.getElementById('tabs').style.display='flex';
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -893,6 +894,56 @@ function saveThresholds(){
   api('saveCashThresholds',{thresholds:out}).then(function(r){ res(r,'しきい値を保存しました'); });
 }
 
+/* ===== 🗣 現場の声（AI家康くんに届いた要望）===== */
+var voiceFilter='all', voiceList=[];
+var VOICE_STATUSES=['新規','対応中','反映済','却下'];
+function voiceStatusColor(s){ return {'新規':'#3b82f6','対応中':'#d97706','反映済':'#16a34a','却下':'#6b7280'}[s]||'#6b7280'; }
+function voicePrioColor(p){ return {'高':'#dc2626','中':'#d97706','低':'#6b7280'}[p]||'#6b7280'; }
+function renderVoice(){
+  loading();
+  api('getIeyasuRequests').then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    voiceList=(r&&r.list)||[]; drawVoice();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function drawVoice(){
+  var counts={all:voiceList.length}; VOICE_STATUSES.forEach(function(s){counts[s]=0;});
+  voiceList.forEach(function(v){ if(counts[v.status]!=null)counts[v.status]++; });
+  var chips='<div class="chips" style="margin-bottom:12px">'
+    +'<div class="chip'+(voiceFilter==='all'?' on':'')+'" onclick="setVoiceFilter(\'all\')">すべて '+counts.all+'</div>'
+    +VOICE_STATUSES.map(function(s){return '<div class="chip'+(voiceFilter===s?' on':'')+'" onclick="setVoiceFilter(\''+s+'\')">'+s+' '+counts[s]+'</div>';}).join('')
+    +'</div>';
+  var list=voiceList.filter(function(v){ return voiceFilter==='all'||v.status===voiceFilter; });
+  var cards=list.map(function(v){
+    var stColor=voiceStatusColor(v.status);
+    var badges='';
+    if(v.category) badges+='<span style="display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--panel2,#2a2a2a);border:1px solid var(--line2);margin-right:6px">'+esc(v.category)+'</span>';
+    if(v.priority) badges+='<span style="display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;color:#fff;background:'+voicePrioColor(v.priority)+';margin-right:6px">優先度 '+esc(v.priority)+'</span>';
+    var stBadge='<span style="display:inline-block;font-size:11px;padding:3px 9px;border-radius:10px;color:#fff;white-space:nowrap;background:'+stColor+'">'+esc(v.status)+'</span>';
+    var title=v.summary||v.text||'（内容なし）';
+    var quote=(v.summary&&v.text&&v.text!==v.summary)?'<div class="meta" style="margin-top:8px;padding:8px 10px;background:var(--panel2,#242424);border-radius:8px;border-left:3px solid '+stColor+'">「'+esc(v.text)+'」</div>':'';
+    var btns=VOICE_STATUSES.map(function(s){ return '<button class="btn sm'+(v.status===s?' pri':'')+'" onclick="setVoiceStatus('+v.row+',\''+s+'\')"'+(v.status===s?' disabled style="opacity:.6"':'')+'>'+s+'</button>'; }).join('');
+    return '<div class="sec" style="margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+      +'<div class="nm" style="font-size:15px;font-weight:700;line-height:1.4">'+esc(title)+'</div>'+stBadge+'</div>'
+      +(badges?'<div style="margin-top:8px">'+badges+'</div>':'')
+      +quote
+      +'<div class="meta" style="margin-top:8px;opacity:.75">'+esc(v.name||'（不明）')+' ・ '+esc(v.ts)+(v.type&&v.type!=='request'?' ・ '+esc(v.type):'')+'</div>'
+      +'<div class="chips" style="margin-top:10px">'+btns+'</div>'
+      +'</div>';
+  }).join('')||'<div class="empty" style="padding:30px">'+(voiceFilter==='all'?'まだ現場の声は届いていません。<br><span style="font-size:13px;opacity:.7">キャストがLINEでAI家康くんに要望を送ると、ここに溜まります。</span>':'この状態の項目はありません')+'</div>';
+  setBody('<div class="sec-t" style="margin-bottom:8px">🗣 現場の声 <span class="sub">AI家康くんに届いた改善要望・機能要求。状態を管理して反映につなげる</span></div>'+chips+cards);
+}
+function setVoiceFilter(f){ voiceFilter=f; drawVoice(); }
+function setVoiceStatus(row,status){
+  api('setIeyasuRequestStatus',{row:row,status:status}).then(function(r){
+    if(res(r,'「'+status+'」に更新しました')){
+      for(var i=0;i<voiceList.length;i++){ if(voiceList[i].row===row){voiceList[i].status=status;break;} }
+      drawVoice();
+    }
+  }).catch(function(){toast('通信エラー',true);});
+}
+
 /* ===== ローカルモック ===== */
 function MOCK(){
   return {ok:true,caller:'りく',roles:['キャスト','体験','黒服社員','黒服バイト','派遣','ドライバー','管理者'],kioskRoles:['黒服社員','黒服バイト'],masterPin:'1234',staff:[
@@ -912,6 +963,12 @@ function MOCKAPI(action,body){
   if(action==='getOkuriMode')return {ok:true,mode:'driver'};
   if(action==='getCashThresholds')return {ok:true,thresholds:{till:{f5:{m10000:{min:7,max:30},m5000:{min:5,max:30},m1000:{min:10,max:50}},f2:{m10000:{min:5,max:30},m5000:{min:5,max:30},m1000:{min:10,max:50}}},safe:{f5:{m10000:{min:10},m5000:{min:10},m1000:{min:10}},f2:{m10000:{min:10},m5000:{min:10},m1000:{min:10}}}}};
   if(action==='getSeatList')return {ok:true,seats:[{code:'2F-C1',label:'2F カウンター1',floor:'2F',occupied:true,cust:'田中',casts:['まや']},{code:'2F-B1',label:'2F ボックス1',floor:'2F',occupied:false,cust:'',casts:[]}]};
+  if(action==='getIeyasuRequests')return {ok:true,list:[
+    {row:2,ts:'7/10 21:30',name:'まや',type:'request',summary:'付け回しで自分の残り時間が見たい',text:'席についてる時、あと何分で回されるのか分からなくて不安。画面に残り時間が出たら嬉しいです',category:'付け回し',priority:'中',status:'新規'},
+    {row:3,ts:'7/10 20:15',name:'ゆうた',type:'request',summary:'現金チェックのボタンが小さくて押しにくい',text:'閉店の現金チェック、iPadだとボタンが小さくて連打しちゃう。もう少し大きくしてほしい',category:'現金',priority:'低',status:'対応中'},
+    {row:4,ts:'7/9 23:40',name:'さくら',type:'request',summary:'指名のお客様が来たら通知してほしい',text:'自分の指名客が来店したらLINEで教えてほしいです',category:'予約',priority:'高',status:'反映済'}
+  ]};
+  if(action==='setIeyasuRequestStatus')return {ok:true,row:body.row,status:body.status};
   return {ok:true};
 }
 boot();
