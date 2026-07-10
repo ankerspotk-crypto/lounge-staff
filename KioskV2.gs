@@ -77,14 +77,20 @@ function getKioskShiftBoard() {
 }
 
 // 顧客検索（既存検索 + 年会費/更新 + 公式LINE登録状況を合成）
-function searchKioskCustomersV2(query) {
+// viewer＝閲覧者名。累計売上(totalSales)は「黒服・管理者」or「その客の担当キャスト本人」だけに返す（金額ガード）。
+function searchKioskCustomersV2(query, viewer) {
   var base = searchKioskCustomers(query) || [];
   var feeMap = (typeof getMemberFeeMap_ === 'function') ? getMemberFeeMap_() : {};
   var visitMap = null;
   try { visitMap = (typeof getMemberVisitMap_ === 'function') ? getMemberVisitMap_() : null; } catch (e) {}
+  var full = (typeof visitViewerFull_ === 'function') ? visitViewerFull_(viewer) : false;
+  var vNorm = normalizeName_(String(viewer || ''));
   return base.map(function (c) {
     var f = feeMap[c.no] || feeMap[c.member] || {};
     var v = visitMap ? (visitStatsFor_(visitMap, c.no, c.card) || visitStatsFor_(visitMap, '', c.name)) : null;
+    // 担当キャスト本人か（「、」区切り複数対応）
+    var isTantou = vNorm && String(c.tantou || '').split('、').some(function (t) { return normalizeName_(t.trim()) === vNorm; });
+    var canMoney = full || isTantou;
     return Object.assign({}, c, {
       memberSince: f.memberSince || '',
       annualFeeDate: f.annualFeeDate || '',
@@ -93,7 +99,8 @@ function searchKioskCustomersV2(query) {
       lastVisit: v ? v.last : '',
       dohanCount: v ? v.dohanCount : 0,
       lastDohanCast: v ? v.lastDohanCast : '',
-      totalSales: v ? (v.totalSales || 0) : 0
+      totalSales: (canMoney && v) ? (v.totalSales || 0) : null,
+      money: canMoney
     });
   });
 }

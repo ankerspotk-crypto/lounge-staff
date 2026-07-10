@@ -6788,15 +6788,28 @@ function visitStatsFor_(map, no, name) {
   return map.byNo[visitCanonNo_(no)] || map.byName[visitCanonName_(name)] || null;
 }
 
-// 顧客の来店履歴＋集計（顧客管理の詳細画面用）。会員番号優先・なければ名前照合
-function kioskGetCustomerVisits(no, name, limit) {
+// 金額（売上/席料/同伴料/累計売上）を全件見れる閲覧者か＝管理者 or 黒服社員/黒服バイト。
+// （個別の担当キャスト一致は呼び出し側で別途OR判定する）
+function visitViewerFull_(viewer) {
+  const v = normalizeName_(String(viewer || ''));
+  if (!v) return false;
+  if (isAdmin_(v)) return true;
+  const r = getStaffRoleByName_(v);
+  return r === '黒服社員' || r === '黒服バイト' || r === '管理者';
+}
+
+// 顧客の来店履歴＋集計（顧客管理の詳細画面用）。会員番号優先・なければ名前照合。
+// viewer＝閲覧者名。金額(売上/席料/同伴料/累計売上)は「黒服・管理者」or「この客の担当キャスト本人」だけに返す。
+function kioskGetCustomerVisits(no, name, limit, viewer) {
   try {
     const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
     const nq = visitCanonNo_(no), mq = visitCanonName_(name);
     if (!sh || (!nq && !mq)) return { ok: true, stats: null, history: [] };
     const rows = sh.getDataRange().getValues();
+    const vNorm = normalizeName_(String(viewer || ''));
+    const full = visitViewerFull_(viewer);
     const hist = [];
-    let count = 0, dohanCount = 0, last = '', totalSales = 0;
+    let count = 0, dohanCount = 0, last = '', totalSales = 0, isTantou = false;
     for (let i = 1; i < rows.length; i++) {
       const rno = visitNoFromRow_(rows[i][4], rows[i][3]);
       const rnm = visitCanonName_(rows[i][3]);
@@ -6805,6 +6818,9 @@ function kioskGetCustomerVisits(no, name, limit) {
       const dohanCast = String(rows[i][8] || '').trim();
       const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
       const sales = Number(rows[i][14]) || 0;
+      const tantou = String(rows[i][7] || '');
+      // 担当キャスト本人か（来店記録の担当列に閲覧者名が含まれる＝「、」区切り複数対応）
+      if (vNorm && tantou.split('、').some(function (t) { return normalizeName_(t.trim()) === vNorm; })) isTantou = true;
       count++;
       if (dohan) dohanCount++;
       if (d > last) last = d;
@@ -6812,7 +6828,7 @@ function kioskGetCustomerVisits(no, name, limit) {
       hist.push({
         date: d, in: visitHmStr_(rows[i][1]), out: visitHmStr_(rows[i][2]),
         pax: Number(rows[i][5]) || null, table: String(rows[i][6] || ''),
-        tantou: String(rows[i][7] || ''), dohanCast: dohanCast, dohan: dohan,
+        tantou: tantou, dohanCast: dohanCast, dohan: dohan,
         seatFee: (rows[i][9] !== '' && rows[i][9] != null) ? Number(rows[i][9]) : null,
         dohanFee: (rows[i][10] !== '' && rows[i][10] != null) ? Number(rows[i][10]) : null,
         source: String(rows[i][11] || ''),
@@ -6820,8 +6836,11 @@ function kioskGetCustomerVisits(no, name, limit) {
       });
     }
     hist.sort(function (a, b) { return (b.date + (b.in || '')).localeCompare(a.date + (a.in || '')); });
+    const canMoney = full || isTantou;
+    if (!canMoney) hist.forEach(function (h) { h.sales = null; h.seatFee = null; h.dohanFee = null; });
     const lim = Math.max(1, Math.min(Number(limit) || 30, 100));
-    return { ok: true, stats: { count: count, dohanCount: dohanCount, last: last, totalSales: totalSales }, history: hist.slice(0, lim) };
+    const stats = { count: count, dohanCount: dohanCount, last: last, totalSales: canMoney ? totalSales : null, money: canMoney };
+    return { ok: true, stats: stats, history: hist.slice(0, lim) };
   } catch (e) { return { ok: false, error: e.message }; }
 }
 

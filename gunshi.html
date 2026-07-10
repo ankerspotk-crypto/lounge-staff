@@ -1805,7 +1805,7 @@ function renderCustResults(){
   var el=document.getElementById('cust-results'); if(!el)return;
   if(IS_GAS){
     el.innerHTML='<div class="empty-msg">検索中...</div>';
-    gsr('searchKioskCustomersV2', q).then(function(list){
+    gsr('searchKioskCustomersV2', q, LOGIN).then(function(list){
       var a=(list||[]).map(adaptCustomer).filter(custFilterFn);
       var cur=document.getElementById('cust-results'); if(cur) cur.innerHTML=custResultsHtml(a);
     }).catch(function(){ var cur=document.getElementById('cust-results'); if(cur) cur.innerHTML='<div class="empty-msg">検索エラー</div>'; });
@@ -1872,7 +1872,7 @@ function openCustDetail(i){
       renderCustDetailFields((d&&d.ok&&d.fields&&d.fields.length)?d.fields:custFieldsFrom(c));
       renderNextMemo((d&&d.ok)?(d.nextMemo||''):'');
     }).catch(function(){ renderCustDetailFields(custFieldsFrom(c)); });
-    gsr('kioskGetCustomerVisits', c.member||'', c.name||'', 30).then(function(v){
+    gsr('kioskGetCustomerVisits', c.member||'', c.name||'', 30, LOGIN).then(function(v){
       renderCustVisits(v&&v.ok?v:{stats:null,history:[]});
     }).catch(function(){ renderCustVisits({stats:null,history:[]}); });
   }else{
