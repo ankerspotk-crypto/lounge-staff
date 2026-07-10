@@ -4974,6 +4974,7 @@ function handlePortalApi_(e) {
     if (tb === 'billmonth')          return out(billBackfillMonth(e.parameter.month || ''));
     if (tb === 'billsample')         return out(fetchTrustBillList_(e.parameter.date || bizDateStr_()));
     if (tb === 'billdetailsample')   return out(fetchTrustBillDetail_(e.parameter.date || bizDateStr_(), e.parameter.uuid || ''));
+    if (tb === 'trustdiag')          return out(trustLoginDiag_());
   }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
@@ -8990,6 +8991,40 @@ function billBackfillStatus() {
   const rows = Math.max(0, sh.getLastRow() - 1);
   const running = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'billBackfillTick');
   return { ok: true, cursor: prop('BILL_BF_CURSOR') || '(未開始)', from: prop('BILL_BF_FROM') || BILL_BF_FROM_DEFAULT, running: running, totalRows: rows };
+}
+
+// TRUSTログイン失敗の切り分け用（読み取り診断・POSTは1回のみ・Cookieは保存しない）
+function trustLoginDiag_() {
+  const username = prop('TRUST_USERNAME'), password = prop('TRUST_PASSWORD');
+  const out = { hasUser: !!username, hasPass: !!password, passLen: (password || '').length, hasCachedCookie: !!prop('TRUST_COOKIE') };
+  try {
+    const c = prop('TRUST_COOKIE');
+    if (c) { const t = UrlFetchApp.fetch('https://admin.trust-operation.com/summary', { headers: { Cookie: c }, followRedirects: false, muteHttpExceptions: true }); out.summaryCode = t.getResponseCode(); }
+  } catch (e) { out.summaryErr = String(e); }
+  if (!username || !password) { out.result = 'creds未設定'; return out; }
+  try {
+    const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36';
+    const r1 = UrlFetchApp.fetch('https://admin.trust-operation.com/', { followRedirects: true, muteHttpExceptions: true, headers: { 'User-Agent': UA } });
+    out.loginPageCode = r1.getResponseCode();
+    const html = r1.getContentText('UTF-8');
+    const m = html.match(/name="_csrfToken"[^>]*value="([^"]+)"/);
+    out.csrfFound = !!m;
+    if (!m) { out.result = 'CSRF無し(既ログイン扱い?)'; return out; }
+    const sc1 = r1.getAllHeaders()['Set-Cookie'];
+    const arr = sc1 ? (Array.isArray(sc1) ? sc1 : [sc1]) : [];
+    const csrfCookie = arr.map(c => c.split(';')[0]).join('; ');
+    const payload = '_csrfToken=' + encodeURIComponent(m[1]) + '&username=' + encodeURIComponent(username) + '&hashed_password=' + encodeURIComponent(password) + '&password_check=';
+    const r2 = UrlFetchApp.fetch('https://admin.trust-operation.com/', { method: 'post', payload: payload, headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': csrfCookie }, followRedirects: false, muteHttpExceptions: true });
+    out.loginPostCode = r2.getResponseCode();
+    const sc2 = r2.getAllHeaders()['Set-Cookie'];
+    out.hasSetCookie = !!sc2;
+    out.location = String(r2.getAllHeaders()['Location'] || '');
+    const body2 = r2.getContentText('UTF-8');
+    const em = body2.match(/(パスワード|ユーザー|認証|失敗|ロック|正しくありません|できません)[^<]{0,40}/);
+    out.bodyHint = em ? em[0] : '';
+    out.result = sc2 ? 'Set-Cookieあり(本来成功のはず)' : 'Set-Cookieなし(認証拒否)';
+  } catch (e) { out.result = '例外:' + String(e); }
+  return out;
 }
 
 // /sales/daily_bill_detail/DATE/UUID の明細をパース
