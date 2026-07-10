@@ -1035,9 +1035,9 @@ function loadStatsData(force, cb) {
 }
 
 function renderStats() {
-  var labels = { sales: '売上明細', pay: '給与明細', ranking: 'ランキング' };
+  var labels = { sales: '売上明細', bills: '伝票', pay: '給与明細', ranking: 'ランキング' };
   var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
-    + ['sales', 'pay', 'ranking'].map(function(t) {
+    + ['sales', 'bills', 'pay', 'ranking'].map(function(t) {
         return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:12px;cursor:pointer;border-radius:7px;'
           + (statsSubTab === t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
           + '" onclick="statsSubSwitch(\'' + t + '\')">' + labels[t] + '</div>';
@@ -1966,7 +1966,7 @@ function renderCustomerList_() {
     return;
   }
   var today = new Date(); today.setHours(0,0,0,0);
-  el.innerHTML = custList.map(function(c) {
+  el.innerHTML = custList.map(function(c, i) {
     var badges = '';
     if (c.bottle) badges += '<span class="ycm ycm-bottle">🍶' + esc(c.bottle) + '</span>';
     if (c.bday)   badges += '<span class="ycm ycm-bday">🎂 ' + esc(c.bday) + '</span>';
@@ -1984,7 +1984,7 @@ function renderCustomerList_() {
       }
     }
     if (c.restricted) badges += '<span class="ycm ycm-note" style="opacity:.7">🔒 担当のみ詳細</span>';
-    return '<div class="cust-card">'
+    return '<div class="cust-card" onclick="openPortalCustDetail(' + i + ')" style="cursor:pointer">'
       + '<div class="cust-card-top">'
       + '<span class="cust-card-name">' + esc(c.name || c.card || '') + '様</span>'
       + (c.no ? '<span class="cust-card-no">会員 ' + esc(c.no) + '</span>' : '')
@@ -1995,8 +1995,67 @@ function renderCustomerList_() {
           + (c.drink ? '飲み方: ' + esc(c.drink) + '　' : '')
           + (c.tabaco ? 'タバコ: ' + esc(c.tabaco) : '')
           + '</div>' : '')
+      + (c.visitCount ? '<div style="font-size:11px;color:#8aabcc;margin-top:4px">🕗 来店 ' + c.visitCount + '回　前回 ' + fmtVisitDate(c.lastVisit) + (c.dohanCount ? '　同伴 ' + c.dohanCount + '回' : '') + '　<span style="color:#5a7ba0">詳細 ›</span></div>' : '<div style="font-size:11px;color:#5a7ba0;margin-top:4px">詳細 ›</div>')
       + '</div>';
   }).join('');
+}
+
+// 来店日 'yyyy-MM-dd' → 'M/d'（今年以外は yyyy/M/d）
+function fmtVisitDate(d) {
+  var m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return String(d || '');
+  var y = +m[1], mo = +m[2], da = +m[3];
+  return (y === (new Date()).getFullYear()) ? (mo + '/' + da) : (y + '/' + mo + '/' + da);
+}
+
+// 顧客詳細（ポータル・キャスト視点）。担当客の来店履歴＋金額を表示。金額はサーバ側でviewer権限判定済み
+function openPortalCustDetail(i) {
+  var c = custList[i]; if (!c) return;
+  var head = '<div style="padding:14px">'
+    + '<button onclick="backToCustList()" style="background:#111b2e;border:1px solid #1e3050;color:#8aabcc;border-radius:8px;padding:7px 14px;font-size:13px;margin-bottom:14px;cursor:pointer">← 顧客一覧へ戻る</button>'
+    + '<div style="font-size:20px;font-weight:800;color:#e8f0ff;margin-bottom:2px">' + esc(c.name || c.card || '') + ' 様</div>'
+    + '<div style="font-size:12px;color:#6a8ab0;margin-bottom:12px">' + (c.no ? '会員 ' + esc(c.no) : '') + (c.tantou ? '　担当 ' + esc(c.tantou) : '') + '</div>';
+  var info = '';
+  function row(k, v) { if (v) info += '<div style="display:flex;gap:10px;padding:8px 2px;border-bottom:1px solid #16233c;font-size:13px"><span style="width:90px;flex-shrink:0;color:#6a8ab0">' + k + '</span><span style="flex:1;color:#d0e4f8;white-space:pre-wrap">' + esc(v) + '</span></div>'; }
+  row('ボトル', c.bottle); row('誕生日', c.bday); row('飲み方', c.drink); row('タバコ', c.tabaco);
+  row('会員期限', c.annualFeeDate); row('参考', c.note);
+  if (c.restricted) info += '<div style="font-size:12px;color:#6a8ab0;padding:10px 2px">🔒 担当キャストのみ詳細を表示できます</div>';
+  setContent(head + (info ? '<div style="background:#0d1626;border:1px solid #1a2740;border-radius:12px;padding:6px 12px;margin-bottom:14px">' + info + '</div>' : '')
+    + '<div id="pcust-visits"><div style="color:#6a8ab0;font-size:13px;padding:10px 0">🕗 来店情報 読み込み中...</div></div></div>');
+  var url = GAS_URL + '?action=portal&tab=customerVisits&userId=' + encodeURIComponent(userId)
+    + '&no=' + encodeURIComponent(c.no || '') + '&cname=' + encodeURIComponent(c.name || c.card || '');
+  gasFetch(url).then(function(r){ return r.json(); }).then(function(v){
+    renderPortalVisits(v && v.ok ? v : { stats: null, history: [] });
+  }).catch(function(){ renderPortalVisits({ stats: null, history: [] }); });
+}
+function backToCustList() { renderCustomerShell_(); renderCustomerList_(); }
+
+// 来店情報BOX（ポータル配色）。金額はサーバがviewer権限で出し分け済み（非担当はnull）
+function renderPortalVisits(v) {
+  var el = document.getElementById('pcust-visits'); if (!el) return;
+  var s = v.stats, h = v.history || [];
+  if (!s || !s.count) { el.innerHTML = '<div style="background:#0d1626;border:1px solid #1a2740;border-radius:12px;padding:14px"><div style="font-size:12px;color:#6a8ab0;margin-bottom:4px">🕗 来店情報</div><div style="font-size:13px;color:#8aabcc">来店記録はまだありません</div></div>'; return; }
+  var tiles = '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">'
+    + '<div><div style="font-size:11px;color:#6a8ab0">累計来店</div><div style="font-size:18px;font-weight:800;color:#e8f0ff">' + s.count + '回</div></div>'
+    + '<div><div style="font-size:11px;color:#6a8ab0">前回来店</div><div style="font-size:18px;font-weight:800;color:#e8f0ff">' + esc(fmtVisitDate(s.last)) + '</div></div>'
+    + (s.dohanCount ? '<div><div style="font-size:11px;color:#6a8ab0">同伴</div><div style="font-size:18px;font-weight:800;color:#e8f0ff">' + s.dohanCount + '回</div></div>' : '')
+    + (s.totalSales ? '<div><div style="font-size:11px;color:#6a8ab0">累計売上</div><div style="font-size:18px;font-weight:800;color:#7fe0a0">¥' + Number(s.totalSales).toLocaleString() + '</div></div>' : '')
+    + '</div>';
+  var moneyNote = (s.money === false) ? '<div style="font-size:11px;color:#6a8ab0;margin-bottom:8px">🔒 金額は担当キャストのみ表示されます</div>' : '';
+  var rows = h.map(function(r) {
+    var sales = r.sales ? '売上¥' + Number(r.sales).toLocaleString() : '';
+    var fee = (r.seatFee ? '席料¥' + Number(r.seatFee).toLocaleString() : '') + (r.dohanFee ? (r.seatFee ? ' ' : '') + '同伴料¥' + Number(r.dohanFee).toLocaleString() : '');
+    return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 2px;border-bottom:1px solid #16233c;font-size:13px">'
+      + '<span style="width:66px;flex-shrink:0;font-weight:700;color:#d0e4f8">' + esc(fmtVisitDate(r.date)) + '</span>'
+      + '<span style="flex:1;color:#8aabcc">' + esc(r.in || '') + (r.out ? '〜' + esc(r.out) : '') + (r.table ? '　' + esc(r.table) : '') + (r.tantou ? '　担当' + esc(r.tantou) : '') + (sales ? '　' + sales : (fee ? '　' + fee : '')) + '</span>'
+      + (r.dohan ? '<span class="ycm ycm-note" style="flex-shrink:0">🤝同伴' + (r.dohanCast ? esc(r.dohanCast) : '') + '</span>' : '')
+      + (r.source === 'TRUST' ? '<span class="ycm ycm-note" style="flex-shrink:0">TRUST</span>' : '')
+      + '</div>';
+  }).join('');
+  el.innerHTML = '<div style="background:#0d1626;border:1px solid #1a2740;border-radius:12px;padding:14px">'
+    + '<div style="font-size:12px;color:#6a8ab0;margin-bottom:8px">🕗 来店情報</div>' + tiles + moneyNote
+    + '<div id="pcv-list" style="display:none;max-height:340px;overflow-y:auto">' + rows + '</div>'
+    + '<button onclick="var l=document.getElementById(\'pcv-list\');var on=l.style.display===\'none\';l.style.display=on?\'block\':\'none\';this.textContent=on?\'▲ 履歴を閉じる\':\'▼ 来店履歴を見る（直近' + h.length + '件）\'" style="width:100%;margin-top:6px;background:#111b2e;border:1px solid #1e3050;color:#8aabcc;border-radius:8px;padding:8px;font-size:13px;cursor:pointer">▼ 来店履歴を見る（直近' + h.length + '件）</button>'
+    + '</div>';
 }
 
 function loadHairReceipts() {

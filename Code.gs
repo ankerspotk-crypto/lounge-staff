@@ -5005,8 +5005,22 @@ function handlePortalApi_(e) {
   if (tab === 'customers') {
     // 管理者・黒服は全項目。キャストは担当のみ全項目。管理者ならスタッフシート読込をスキップ（短絡評価）
     const cFull = isAdmin || (function () { const r = getStaffRoleByName_(normalizeName_(name)); return r === '黒服社員' || r === '黒服バイト'; })();
-    return out({ ok: true, name, isAdmin, fullAccess: cFull,
-      customers: getCustomerList_({ q: e.parameter.q || '', filter: e.parameter.filter || '', viewer: name, fullAccess: cFull }) });
+    const cust = getCustomerList_({ q: e.parameter.q || '', filter: e.parameter.filter || '', viewer: name, fullAccess: cFull });
+    // 来店集計をjoin（回数/前回来店/同伴は全員に、金額=累計売上は担当キャスト本人or黒服=!restrictedのみ）
+    try {
+      const vmap = getMemberVisitMap_();
+      cust.forEach(function (c) {
+        const v = visitStatsFor_(vmap, c.no, c.card) || visitStatsFor_(vmap, '', c.name);
+        if (!v) return;
+        c.visitCount = v.count; c.lastVisit = v.last; c.dohanCount = v.dohanCount;
+        if (!c.restricted) c.totalSales = v.totalSales || 0;
+      });
+    } catch (e2) { /* 来店集計は無くても顧客一覧は返す */ }
+    return out({ ok: true, name, isAdmin, fullAccess: cFull, customers: cust });
+  }
+  // ポータル：顧客の来店履歴＋集計（キャストが自分の担当客の来店・売上を見る）。金額はkioskGetCustomerVisits側でviewer権限判定
+  if (tab === 'customerVisits') {
+    return out(kioskGetCustomerVisits(e.parameter.no || '', e.parameter.cname || '', 30, name));
   }
   if (tab === 'vacancy') {
     return out({ ok: true, vacancy: getPortalVacancy_() });
