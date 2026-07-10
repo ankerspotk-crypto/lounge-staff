@@ -4965,6 +4965,17 @@ function handlePortalApi_(e) {
   const out = v => ContentService.createTextOutput(JSON.stringify(v))
     .setMimeType(ContentService.MimeType.JSON);
 
+  // 伝票バックフィル 保守用トークン導線（管理者userId不要・運用者が直接起動/監視/検証するための一時経路）
+  const BF_TOKEN = 'ieyasu-bf-7k9x2m';
+  if (e.parameter.token === BF_TOKEN) {
+    const tb = e.parameter.tab || '';
+    if (tb === 'billbackfillall')    return out(startBillBackfill(e.parameter.from || ''));
+    if (tb === 'billbackfillstatus') return out(billBackfillStatus());
+    if (tb === 'billmonth')          return out(billBackfillMonth(e.parameter.month || ''));
+    if (tb === 'billsample')         return out(fetchTrustBillList_(e.parameter.date || bizDateStr_()));
+    if (tb === 'billdetailsample')   return out(fetchTrustBillDetail_(e.parameter.date || bizDateStr_(), e.parameter.uuid || ''));
+  }
+
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
   if (!name) return out({ ok: false, error: 'unregistered' });
