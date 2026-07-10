@@ -1054,10 +1054,98 @@ function renderStats() {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
   }
+  // 伝票は成績ペイロード非依存（専用APIをその場でfetch）
+  if (statsSubTab === 'bills') { renderBills(); return; }
   // 成績データ未ロード（tab=homeでは含まれない）なら遅延ロードしてから再描画
   if (!portalData || portalData.sales === undefined) { loadStatsData(false, function(){ renderStats(); }); return; }
   if (statsSubTab === 'sales') renderSales();
   else if (statsSubTab === 'pay') renderPay();
+}
+
+// ---- 伝票（日別売上＋伝票明細ドリル） ----
+function renderBills() {
+  setContent('<div class="loading">読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&tab=bills&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
+  gasFetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) { setContent('<div style="color:#e88;padding:24px 16px;font-size:13px">エラー: ' + esc(d.error||'') + '</div>'); return; }
+    renderBillsBody(d);
+  }).catch(function(e){ setContent('<div style="color:#e88;padding:24px 16px;font-size:13px">通信エラー<br><small>'+esc(e&&e.message||'')+'</small></div>'); });
+}
+
+function renderBillsBody(d) {
+  var days = d.days || [];
+  var h = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
+    + '<div style="font-size:13px;color:#7ab0f0;font-weight:700">' + esc(d.cast||'') + ' さんの伝票</div>'
+    + '<div style="font-size:11px;color:#7a9cc8">' + esc(d.month||'') + '・前日まで</div></div>';
+  h += '<div style="background:#0f2040;border:1px solid #1a50a0;border-radius:8px;padding:11px 13px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:12px;color:#7a9cc8">今月の担当売上（前日まで）</span>'
+    + '<span style="font-size:19px;font-weight:800;color:#7ab0f0">' + yen(d.monthTotal||0) + '</span></div>';
+  if (days.length === 0) {
+    h += '<div style="text-align:center;color:#6a8ab0;padding:44px 16px;font-size:13px;line-height:1.8">この月の伝票データはまだありません。<br><small>毎晩、自動で前日分が追加されます。</small></div>';
+    setContent(h); return;
+  }
+  days.forEach(function(day){
+    h += '<div style="border:1px solid #1e3050;border-radius:9px;margin-bottom:8px;overflow:hidden">'
+      + '<div onclick="toggleBillDay(this)" style="padding:11px 13px;background:#141d30;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'
+      + '<span style="font-size:13px;color:#cfe0f5;font-weight:700">' + fmtBillDate(day.date)
+      + ' <span style="color:#7a9cc8;font-weight:400;font-size:11px">(' + day.count + '件)</span></span>'
+      + '<span style="font-size:14px;font-weight:700;color:#7ab0f0">' + yen(day.total) + '</span></div>'
+      + '<div class="bill-slips" style="display:none">';
+    (day.slips||[]).forEach(function(s){
+      h += '<div onclick="openBillDetail(this,\'' + day.date + '\',\'' + s.uuid + '\')" style="padding:9px 13px;border-top:1px solid #1a2740;cursor:pointer">'
+        + '<div style="display:flex;justify-content:space-between;align-items:baseline">'
+        + '<span style="font-size:12px;color:#cfe0f5">' + esc(s.cust||'（無記名）')
+        + ' <span style="color:#7a9cc8">卓' + esc(s.table||'-') + '・' + esc(s.guests||'-') + '名</span></span>'
+        + '<span style="font-size:13px;font-weight:700;color:#9fd0a0">' + yen(s.tantoAmt) + '</span></div>'
+        + (s.dohanCast ? '<div style="font-size:10px;color:#7799cc;margin-top:2px">同伴: ' + esc(s.dohanCast) + '</div>' : '')
+        + '<div class="bill-detail" style="display:none;margin-top:8px"></div></div>';
+    });
+    h += '</div></div>';
+  });
+  setContent(h);
+}
+
+function toggleBillDay(el){ var b = el.nextElementSibling; b.style.display = (b.style.display === 'none' ? 'block' : 'none'); }
+
+function fmtBillDate(s){
+  var p = String(s).split('-'); if (p.length < 3) return s;
+  var wd = ['日','月','火','水','木','金','土'];
+  var dt = new Date(+p[0], +p[1]-1, +p[2]);
+  return (+p[1]) + '/' + (+p[2]) + '(' + wd[dt.getDay()] + ')';
+}
+
+function openBillDetail(el, date, uuid){
+  var box = el.querySelector('.bill-detail');
+  if (!box) return;
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div style="font-size:11px;color:#7a9cc8;padding:6px 2px">明細を取得中...</div>';
+  var url = GAS_URL + '?action=portal&tab=billdetail&userId=' + encodeURIComponent(userId)
+    + '&date=' + encodeURIComponent(date) + '&uuid=' + encodeURIComponent(uuid);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) { box.innerHTML = '<div style="font-size:11px;color:#e88;padding:6px 2px">' + esc(d.error||'取得失敗') + '</div>'; return; }
+    box.innerHTML = renderBillItems(d);
+  }).catch(function(){ box.innerHTML = '<div style="font-size:11px;color:#e88;padding:6px 2px">通信エラー</div>'; });
+}
+
+function renderBillItems(d){
+  var items = d.items || [];
+  if (items.length === 0) return '<div style="font-size:11px;color:#7a9cc8;padding:6px 2px">明細なし</div>';
+  var h = '<div style="background:#0b1424;border:1px solid #1a2740;border-radius:7px;padding:9px 11px">';
+  if (d.bottleCount > 0) h += '<div style="font-size:11px;color:#e0b060;margin-bottom:7px;font-weight:600">🍾 ボトル ' + d.bottleCount + '本'
+    + (d.bottles && d.bottles.length ? '：' + esc(d.bottles.join(' / ')) : '') + '</div>';
+  items.forEach(function(it){
+    h += '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid #131f33">'
+      + '<span style="color:#9fb4d0;min-width:0">' + (it.isBottle ? '🍾 ' : '')
+      + '<span style="color:#6a8ab0">[' + esc(it.category) + ']</span> ' + esc(it.product || it.detail || '')
+      + (it.qty > 1 ? ' ×' + it.qty : '') + '</span>'
+      + '<span style="color:#cfe0f5;font-weight:600;white-space:nowrap">' + yen(it.amount) + '</span></div>';
+  });
+  h += '</div>';
+  return h;
 }
 
 function statsSubSwitch(t) {
