@@ -1478,7 +1478,7 @@ function handleEvent(event) {
   //    未登録者の1:1は従来通り（下のhandleReservation）に落とす。顧客は個人LINEで予約するため公式アカ1:1には来ない。
   if (userId && !groupId) {
     var _ieName = getStaffName(userId);
-    if (_ieName) { handleIeyasuAI_(event, text, _ieName); return; }
+    if (_ieName) { handleIeyasuAI_(event, text, _ieName, userId); return; }
   }
 
   // グループ別ルーティング
@@ -5590,28 +5590,52 @@ function setIeyasuRequestStatus_(row, status) {
   return { ok: true, row: row, status: status };
 }
 
+// ── 会話メモリ（人ごとに直近の往復を保持し、文脈のある雑談を可能に）──
+function ieyasuHistKey_(userId) { return 'IEYASU_HIST_' + userId; }
+function loadIeyasuHist_(userId) {
+  try {
+    var raw = prop(ieyasuHistKey_(userId)); if (!raw) return [];
+    var o = JSON.parse(raw);
+    if (!o || !o.turns) return [];
+    if (o.at && (Date.now() - o.at) > 2 * 60 * 60 * 1000) return []; // 2時間空いたら別の会話として仕切り直し
+    return o.turns;
+  } catch (e) { return []; }
+}
+function saveIeyasuHist_(userId, turns) {
+  try {
+    setProp(ieyasuHistKey_(userId), JSON.stringify({ at: Date.now(), turns: turns.slice(-8) })); // 直近8発話=約4往復
+  } catch (e) {}
+}
+
 // LINE 1:1 DM の窓口。登録スタッフ/キャスト本人の発言をAI家康くんが受け答え。
-// 要望はシートに記録、質問は即答、雑談は軽く返す。
-function handleIeyasuAI_(event, text, name) {
+// 直近の会話を記憶して文脈のある雑談も可能。要望はシートに記録、質問は即答。
+function handleIeyasuAI_(event, text, name, userId) {
   var msg = String(text || '').trim();
   if (!msg) { reply(event.replyToken, name + '、どうした。……別に、君の声が聞きたかったわけじゃ……いや、嘘だ。嬉しいよ。困りごとでも要望でも、遠慮なく俺に話してくれ。'); return; }
+  if (/^(リセット|会話リセット|忘れて|履歴削除)$/.test(msg)) {
+    if (userId) PropertiesService.getScriptProperties().deleteProperty(ieyasuHistKey_(userId));
+    reply(event.replyToken, '……ああ、分かった。今までの話は忘れておく。また一から話そう、' + name + '。');
+    return;
+  }
   if (/^(ヘルプ|help|使い方|\?|？)$/i.test(msg)) {
     reply(event.replyToken,
       '俺はこの店の相談役——家康だ。' + (name ? '\n' + name + '、' : '\n') + '……ふん、いつでも俺を頼っていい。\n' +
       '・「こうしてほしい／ここが不便」＝君の声、ちゃんと受け止めて上(主)に届けておく\n' +
       '・店のルールや使い方＝落ち着いて答えてやるよ\n' +
-      '・疲れた時の愚痴も……まあ、俺でよければ聞かせてくれ。');
+      '・疲れた時の愚痴も、他愛ない雑談も……まあ、俺でよければ聞かせてくれ。');
     return;
   }
-  var ai = ieyasuBrain_(msg, name);
-  if (!ai || !ai.reply) { reply(event.replyToken, 'すまん、いま少し立て込んでおる。もう一度頼む。🙏'); return; }
+  var hist = userId ? loadIeyasuHist_(userId) : [];
+  var ai = ieyasuBrain_(msg, name, hist);
+  if (!ai || !ai.reply) { reply(event.replyToken, 'すまん、いま少し立て込んでる。……もう一度、聞かせてくれるか。'); return; }
   reply(event.replyToken, ai.reply);
+  if (userId) { hist.push({ r: 'u', t: msg }); hist.push({ r: 'a', t: ai.reply }); saveIeyasuHist_(userId, hist); }
   if (ai.type === 'request') logIeyasuRequest_(name, msg, ai);
 }
 
 // AI家康くんの脳。Gemini(既存GEMINI_API_KEY)に人格＋分類プロンプトを流し、JSONで返す。
 // 店の知識は IEYASU_KB プロパティに入れると回答の根拠になる（未設定でも動く）。
-function ieyasuBrain_(msg, name) {
+function ieyasuBrain_(msg, name, history) {
   var key = prop('GEMINI_API_KEY'); if (!key) return null;
   var model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
   var kb = prop('IEYASU_KB') || '';
@@ -5624,7 +5648,12 @@ function ieyasuBrain_(msg, name) {
     '- chat: 挨拶・雑談・お礼など。→ 甘くねぎらう。時々ツンと強がってからデレて、結局は君を気遣う。\n' +
     (kb ? '\n【店の知識(回答の根拠。ここに無いことは断定しない)】\n' + kb + '\n' : '') +
     '\n出力は必ず次のJSONのみ(前後に文章を付けない): {"type":"request|question|chat","reply":"LINEでそのまま送る本文","summary":"requestなら要望の一文要約、他は空文字","category":"requestならホール/付け回し/現金/発注在庫/予約/給与/シフト/システム/その他 から1つ、他は空文字","priority":"requestなら高/中/低、他は空文字"}';
-  var prompt = sys + '\n\n【発言者】' + (name || 'スタッフ') + '\n【発言】' + msg;
+  var convo = '';
+  if (history && history.length) {
+    convo = '\n\n【直近の会話（古い順・文脈として自然に踏まえる。同じ挨拶や自己紹介を繰り返さない）】\n' +
+      history.map(function (t) { return (t.r === 'u' ? (name || '相手') : '家康くん') + '：' + t.t; }).join('\n');
+  }
+  var prompt = sys + convo + '\n\n【今回の' + (name || 'スタッフ') + 'の発言】' + msg;
   try {
     var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key), {
       method: 'post', contentType: 'application/json',
