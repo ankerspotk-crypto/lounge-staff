@@ -5615,52 +5615,71 @@ function getStaffRoleByUserId_(userId) {
   return row ? (String(row[2]).trim() || 'キャスト') : 'キャスト';
 }
 
-// メッセージのキーワードに応じて、3本柱の"今の実データ"を必要な分だけ取得して文脈文字列にする。
-// 役割で出し分け：顧客名・予約・席・在庫など運営情報は黒服/管理のみ。キャストは出勤ラインナップまで。
-// ここに項目を足せば家康くんが答えられる情報が増える（拡張ポイント）。
-function ieyasuLiveContext_(msg, name, role) {
+// 取得できる3本柱の実データソース。ops=運営情報(黒服/管理のみ)。re=高速パス用トリガー。label=AIに見せるメニュー名。
+// ★ここにソースを1つ足すだけで、家康くんが答えられる情報が増える（拡張ポイント）。
+var IEYASU_SOURCES_ = {
+  shift:        { ops: false, label: '本日の出勤ラインナップ',       re: /出勤|ラインナップ|メンバー|メンツ|今日.*(誰|出て|いる|いた)|誰が(いる|出|来)|何人/ },
+  seats:        { ops: true,  label: '席の稼働状況（誰がどの席か）', re: /席|空席|満席|状況|埋ま|空いて|ボックス|カウンター/ },
+  reservations: { ops: true,  label: '本日の予約一覧',               re: /予約/ },
+  stock:        { ops: true,  label: '在庫（下限を下回る品）',       re: /在庫|発注|足りな|切れ|残り/ },
+  souvenir:     { ops: true,  label: 'お土産の在庫',                 re: /お土産|おみやげ|土産/ }
+};
+
+function ieyasuIsOps_(name, role) { return String(role).indexOf('黒服') >= 0 || role === '管理者' || isAdmin_(name); }
+function ieyasuAllowedSources_(name, role) {
+  var ops = ieyasuIsOps_(name, role);
+  return Object.keys(IEYASU_SOURCES_).filter(function (k) { return ops || !IEYASU_SOURCES_[k].ops; });
+}
+// 高速パス: メッセージのキーワードに素直に当たるソース名（許可分のみ）
+function ieyasuRegexSources_(msg, allowed) {
   var m = String(msg || '');
-  var ops = (String(role).indexOf('黒服') >= 0 || role === '管理者' || isAdmin_(name));
-  var parts = [];
-  // 本日の出勤ラインナップ（全スタッフに開示可）
-  if (/出勤|ラインナップ|メンバー|今日.*(誰|出て|いる|いた)|誰が(いる|出|来)|何人/.test(m)) {
-    try {
+  return (allowed || []).filter(function (k) { return IEYASU_SOURCES_[k].re.test(m); });
+}
+
+// 指定ソースの実データを1ブロックの文字列で返す（取得失敗時は空）
+function ieyasuFetchSource_(src, name, role) {
+  try {
+    if (src === 'shift') {
       var d = getTodayShiftDetail_();
       var f = function (a) { return a.map(function (c) { return c.name + '(' + c.shift + ')'; }).join('、') || 'なし'; };
-      parts.push('■本日の出勤\nキャスト: ' + f(d.cast) + '\n黒服: ' + f(d.kurofuku) + (d.haken.length ? '\n派遣: ' + f(d.haken) : ''));
-    } catch (e) {}
-  }
-  if (ops && /席|空席|満席|状況|埋ま|空いて/.test(m)) {
-    try {
+      return '■本日の出勤\nキャスト: ' + f(d.cast) + '\n黒服: ' + f(d.kurofuku) + (d.haken.length ? '\n派遣: ' + f(d.haken) : '');
+    }
+    if (src === 'seats') {
       var seats = (getSekiJokyouData() || []).filter(function (s) { return s.type === 'C' || s.type === 'B'; });
       var occ = seats.filter(function (s) { return s.occupied; });
       var lines = occ.map(function (s) {
         return (s.label || s.short || s.code) + '=' + ((s.rsrv && s.rsrv.customer) ? s.rsrv.customer + '様' : '稼働') +
           ((s.casts && s.casts.length) ? '/' + s.casts.map(function (c) { return c.name; }).join('、') : '');
       });
-      parts.push('■席状況（' + occ.length + '/' + seats.length + '席 稼働）\n' + (lines.join('\n') || '全席空き'));
-    } catch (e) {}
-  }
-  if (ops && /予約/.test(m)) {
-    try {
+      return '■席状況（' + occ.length + '/' + seats.length + '席 稼働）\n' + (lines.join('\n') || '全席空き');
+    }
+    if (src === 'reservations') {
       var rv = getYoyakuReservations_(bizDateStr_()) || [];
-      var lines2 = rv.slice(0, 20).map(function (r) {
+      var l = rv.slice(0, 20).map(function (r) {
         return (r.time || '--') + ' ' + r.customer + '様' + (r.yoyakuCast ? '/' + r.yoyakuCast : '') +
           (r.dohanCast ? '(同伴:' + r.dohanCast + ')' : '') + (r.status ? ' [' + r.status + ']' : '');
       });
-      parts.push('■本日の予約（' + rv.length + '件）\n' + (lines2.join('\n') || 'なし'));
-    } catch (e) {}
-  }
-  if (ops && /在庫|発注|足りな|切れ|残り/.test(m)) {
-    try {
+      return '■本日の予約（' + rv.length + '件）\n' + (l.join('\n') || 'なし');
+    }
+    if (src === 'stock') {
       var low = (getStockList() || []).filter(function (x) { var mn = Number(x.minStock); return x.minStock !== '' && !isNaN(mn) && x.qty <= mn; });
-      var lines3 = low.map(function (x) { return x.name + ' 残' + x.qty + '（下限' + x.minStock + '）' + (x.floor ? ' [' + x.floor + ']' : ''); });
-      parts.push('■在庫が少ない品（下限以下 ' + low.length + '件）\n' + (lines3.join('\n') || '下限を下回る在庫はなし'));
-    } catch (e) {}
-  }
-  if (ops && /お土産|おみやげ|土産/.test(m)) {
-    try { var sv = kioskGetSouvenirStock(); parts.push('■お土産在庫\n2F: ' + sv['2F'] + '個 / 5F: ' + sv['5F'] + '個'); } catch (e) {}
-  }
+      var l2 = low.map(function (x) { return x.name + ' 残' + x.qty + '（下限' + x.minStock + '）' + (x.floor ? ' [' + x.floor + ']' : ''); });
+      return '■在庫が少ない品（下限以下 ' + low.length + '件）\n' + (l2.join('\n') || '下限を下回る在庫はなし');
+    }
+    if (src === 'souvenir') {
+      var sv = kioskGetSouvenirStock();
+      return '■お土産在庫\n2F: ' + sv['2F'] + '個 / 5F: ' + sv['5F'] + '個';
+    }
+  } catch (e) {}
+  return '';
+}
+// 複数ソースをまとめて取得（重複除去・許可済み前提）
+function ieyasuFetchSources_(keys, name, role) {
+  var seen = {}, parts = [];
+  (keys || []).forEach(function (k) {
+    if (seen[k] || !IEYASU_SOURCES_[k]) return; seen[k] = 1;
+    var b = ieyasuFetchSource_(k, name, role); if (b) parts.push(b);
+  });
   return parts.join('\n\n');
 }
 
@@ -5684,8 +5703,19 @@ function handleIeyasuAI_(event, text, name, userId) {
   }
   var hist = userId ? loadIeyasuHist_(userId) : [];
   var role = userId ? getStaffRoleByUserId_(userId) : '';
-  var ctx = ieyasuLiveContext_(msg, name, role);
-  var ai = ieyasuBrain_(msg, name, hist, ctx);
+  var allowed = ieyasuAllowedSources_(name, role);
+  var picked = ieyasuRegexSources_(msg, allowed);              // 高速パス（はっきりした言い回し）
+  var ctx = ieyasuFetchSources_(picked, name, role);
+  var menu = allowed.map(function (k) { return k + '=' + IEYASU_SOURCES_[k].label; }).join(' / ');
+  var ai = ieyasuBrain_(msg, name, hist, ctx, menu);
+  // 崩れた言い回しでも: AIが「この実データが要る」と判断したのに未取得なら、取りに行って一度だけ答え直す
+  if (ai && ai.need && ai.need.length) {
+    var more = ai.need.filter(function (k) { return allowed.indexOf(k) >= 0 && picked.indexOf(k) < 0; });
+    if (more.length) {
+      var ctx2 = ieyasuFetchSources_(picked.concat(more), name, role);
+      ai = ieyasuBrain_(msg, name, hist, ctx2, menu) || ai;
+    }
+  }
   if (!ai || !ai.reply) { reply(event.replyToken, 'すまん、いま少し立て込んでる。……もう一度、聞かせてくれるか。'); return; }
   reply(event.replyToken, ai.reply);
   if (userId) { hist.push({ r: 'u', t: msg }); hist.push({ r: 'a', t: ai.reply }); saveIeyasuHist_(userId, hist); }
@@ -5694,7 +5724,7 @@ function handleIeyasuAI_(event, text, name, userId) {
 
 // AI家康くんの脳。Gemini(既存GEMINI_API_KEY)に人格＋分類プロンプトを流し、JSONで返す。
 // 店の知識は IEYASU_KB プロパティに入れると回答の根拠になる（未設定でも動く）。
-function ieyasuBrain_(msg, name, history, ctx) {
+function ieyasuBrain_(msg, name, history, ctx, menu) {
   var key = prop('GEMINI_API_KEY'); if (!key) return null;
   var model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
   var kb = prop('IEYASU_KB') || '';
@@ -5706,7 +5736,8 @@ function ieyasuBrain_(msg, name, history, ctx) {
     '- question: 店のルール・使い方・業務の質問。→ 分かる範囲で落ち着いて即答。知識に無い/確証がなければ格好つけず「そこは黒服に確認してくれるか」と促す。\n' +
     '- chat: 挨拶・雑談・お礼など。→ 甘くねぎらう。時々ツンと強がってからデレて、結局は君を気遣う。\n' +
     (kb ? '\n【店の知識(回答の根拠。ここに無いことは断定しない)】\n' + kb + '\n' : '') +
-    '\n出力は必ず次のJSONのみ(前後に文章を付けない): {"type":"request|question|chat","reply":"LINEでそのまま送る本文","summary":"requestなら要望の一文要約、他は空文字","category":"requestならホール/付け回し/現金/発注在庫/予約/給与/シフト/システム/その他 から1つ、他は空文字","priority":"requestなら高/中/低、他は空文字"}';
+    (menu ? '\n\n【取得できる店の実データ（必要な時だけ使う）】' + menu + '\n相手の質問に上の実データが必要なら、そのキーを need 配列に入れる（例:["seats","reservations"]）。言い回しは自由——キーワードでなく意味で判断せよ（「メンツは？」→shift、「ボックス埋まってる？」→seats、「今夜来る人は？」→reservations 等）。実データが不要な雑談・一般会話は need:[]。上に無い情報は need に入れない。' : '') +
+    '\n\n出力は必ず次のJSONのみ(前後に文章を付けない): {"type":"request|question|chat","reply":"LINEでそのまま送る本文","need":["回答に必要な実データのキー配列。不要なら[]"],"summary":"requestなら要望の一文要約、他は空文字","category":"requestならホール/付け回し/現金/発注在庫/予約/給与/シフト/システム/その他 から1つ、他は空文字","priority":"requestなら高/中/低、他は空文字"}';
   var convo = '';
   if (history && history.length) {
     convo = '\n\n【直近の会話（古い順・文脈として自然に踏まえる。同じ挨拶や自己紹介を繰り返さない）】\n' +
@@ -5724,6 +5755,7 @@ function ieyasuBrain_(msg, name, history, ctx) {
     var o = JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
     if (!o || !o.reply) return null;
     if (o.type !== 'request' && o.type !== 'question' && o.type !== 'chat') o.type = 'chat';
+    if (!Array.isArray(o.need)) o.need = [];
     return o;
   } catch (e) { console.error('ieyasuBrain', e); return null; }
 }
