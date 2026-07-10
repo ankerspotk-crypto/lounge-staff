@@ -9259,7 +9259,8 @@ function portalGetMyBills_(lookupName, month) {
       day.total += Number(r[9]) || 0;
       day.count += 1;
       day.slips.push({
-        uuid: String(r[1]), inTime: String(r[2]), table: String(r[4]), guests: String(r[5]),
+        uuid: String(r[1]), inTime: (r[2] instanceof Date ? Utilities.formatDate(r[2], TZ, 'HH:mm') : String(r[2] || '')),
+        table: String(r[4]), guests: String(r[5]),
         cust: String(r[6]), tantoAmt: Number(r[9]) || 0, dohanCast: String(r[10]),
         dohanAmt: Number(r[11]) || 0, total: Number(r[12]) || 0
       });
