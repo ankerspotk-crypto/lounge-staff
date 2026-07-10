@@ -2875,7 +2875,7 @@ function afterLogin(){ window._k2loginAt=Date.now(); renderAll(); loadAll(); if(
 /* ===== 端末時刻ズレ検知（iPadの日付戻し忘れ対策・1分ごと） =====
  * 領収書発行で端末の日付を過去に戻したまま戻し忘れると翌営業の伝票日付がズレる。
  * サーバー時刻(getServerTime)と端末時刻を毎分突合し、閾値超過で：①最上部に赤バナー②reportClockDriftで黒服LINE＋要対応チケット。解消でclearClockDrift。 */
-var CLOCK_DRIFT_SEC=300;   // この秒数以上ズレたら警告。領収書の日付戻しは通常「日」単位なので5分閾値で誤検知なく確実に捕捉
+var CLOCK_DRIFT_SEC=43200;   // この秒数以上ズレたら警告。領収書の日付戻しは「日」単位なので12時間閾値に設定＝数分〜数時間の些細なズレは無視し、日付戻し忘れ（≒1日以上前）だけ確実に捕捉
 var _clockDrifted=false;
 function showDriftBanner(html){
   var b=document.getElementById('clockDriftBanner');
