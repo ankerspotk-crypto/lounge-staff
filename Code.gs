@@ -5044,6 +5044,11 @@ function handlePortalApi_(e) {
     return out({ ok: true, name, isAdmin, staff: getAllStaff_(ss), hakenList: getHakenNameList_() });
   }
 
+  // 伝票バックフィル（管理者のみ・指定月＝既定今月の1日〜前日を 伝票シートへ投入）
+  if (isAdmin && tab === 'billbackfill') {
+    return out(billBackfillMonth(e.parameter.month || ''));
+  }
+
   // ランキングタブ
   if (tab === 'ranking') {
     const sh = ss.getSheetByName(URIAGE_TAB);
