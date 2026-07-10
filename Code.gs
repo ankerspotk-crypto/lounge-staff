@@ -8973,7 +8973,7 @@ function billBackfillTick() {
     days++;
     setProp('BILL_BF_CURSOR', cur);
     if (buffer.length >= 300) { sh.getRange(sh.getLastRow() + 1, 1, buffer.length, BILL_HEAD_.length).setValues(buffer); buffer = []; }
-    Utilities.sleep(150);
+    Utilities.sleep(1200); // WAF再ブロック回避のため緩めに（連打しない）
     cur = billNextDay_(cur);
   }
   if (buffer.length) sh.getRange(sh.getLastRow() + 1, 1, buffer.length, BILL_HEAD_.length).setValues(buffer);
