@@ -221,7 +221,7 @@ function doPost(e) {
 }
 
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -6648,7 +6648,9 @@ function testLateReservationNotice() {
 //  「来店前に戻す」で行削除。TRUST取込(ソース=TRUST)もこのシートに合流予定。
 // ============================================================
 const VISIT_TAB = '来店記録';
-const VISIT_HEAD_ = ['来店日', '来店時刻', '退店時刻', 'お客様名', '会員番号', '人数', 'テーブル', '担当キャスト', '同伴キャスト', '席料', '同伴料', 'ソース', '予約行', '登録日時'];
+// 「売上」(15列目/index14)はTRUST来店取込用。軍師の自動来店は空（会計は席料/同伴料で持つ）。
+const VISIT_HEAD_ = ['来店日', '来店時刻', '退店時刻', 'お客様名', '会員番号', '人数', 'テーブル', '担当キャスト', '同伴キャスト', '席料', '同伴料', 'ソース', '予約行', '登録日時', '売上'];
+const VISIT_COL_URIAGE_ = 15; // 売上列（1始まり）
 
 function getVisitSheet_() {
   const ss = getOrOpenSS_();
@@ -6657,6 +6659,8 @@ function getVisitSheet_() {
     sh = ss.insertSheet(VISIT_TAB);
     sh.appendRow(VISIT_HEAD_);
     sh.setFrozenRows(1);
+  } else if (sh.getLastColumn() < VISIT_COL_URIAGE_) {
+    sh.getRange(1, VISIT_COL_URIAGE_).setValue('売上'); // 既存シート（14列）に売上列を後付け
   }
   return sh;
 }
@@ -6759,11 +6763,12 @@ function getMemberVisitMapRaw_() {
   const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
   if (!sh) return out;
   const rows = sh.getDataRange().getValues();
-  const add = function (bucket, key, d, dohan, cast) {
+  const add = function (bucket, key, d, dohan, cast, sales) {
     if (!key) return;
-    const s = bucket[key] || (bucket[key] = { count: 0, last: '', dohanCount: 0, lastDohanDate: '', lastDohanCast: '' });
+    const s = bucket[key] || (bucket[key] = { count: 0, last: '', dohanCount: 0, lastDohanDate: '', lastDohanCast: '', totalSales: 0 });
     s.count++;
     if (d > s.last) s.last = d;
+    if (sales) s.totalSales += sales;
     if (dohan) { s.dohanCount++; if (d >= s.lastDohanDate) { s.lastDohanDate = d; s.lastDohanCast = cast; } }
   };
   for (let i = 1; i < rows.length; i++) {
@@ -6771,8 +6776,9 @@ function getMemberVisitMapRaw_() {
     if (!d) continue;
     const dohanCast = String(rows[i][8] || '').trim();
     const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
-    add(out.byNo, visitNoFromRow_(rows[i][4], rows[i][3]), d, dohan, dohanCast);
-    add(out.byName, visitCanonName_(rows[i][3]), d, dohan, dohanCast);
+    const sales = Number(rows[i][14]) || 0;
+    add(out.byNo, visitNoFromRow_(rows[i][4], rows[i][3]), d, dohan, dohanCast, sales);
+    add(out.byName, visitCanonName_(rows[i][3]), d, dohan, dohanCast, sales);
   }
   return out;
 }
@@ -6790,7 +6796,7 @@ function kioskGetCustomerVisits(no, name, limit) {
     if (!sh || (!nq && !mq)) return { ok: true, stats: null, history: [] };
     const rows = sh.getDataRange().getValues();
     const hist = [];
-    let count = 0, dohanCount = 0, last = '';
+    let count = 0, dohanCount = 0, last = '', totalSales = 0;
     for (let i = 1; i < rows.length; i++) {
       const rno = visitNoFromRow_(rows[i][4], rows[i][3]);
       const rnm = visitCanonName_(rows[i][3]);
@@ -6798,21 +6804,24 @@ function kioskGetCustomerVisits(no, name, limit) {
       const d = visitDateStr_(rows[i][0]);
       const dohanCast = String(rows[i][8] || '').trim();
       const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
+      const sales = Number(rows[i][14]) || 0;
       count++;
       if (dohan) dohanCount++;
       if (d > last) last = d;
+      totalSales += sales;
       hist.push({
         date: d, in: visitHmStr_(rows[i][1]), out: visitHmStr_(rows[i][2]),
         pax: Number(rows[i][5]) || null, table: String(rows[i][6] || ''),
         tantou: String(rows[i][7] || ''), dohanCast: dohanCast, dohan: dohan,
         seatFee: (rows[i][9] !== '' && rows[i][9] != null) ? Number(rows[i][9]) : null,
         dohanFee: (rows[i][10] !== '' && rows[i][10] != null) ? Number(rows[i][10]) : null,
-        source: String(rows[i][11] || '')
+        source: String(rows[i][11] || ''),
+        sales: sales || null
       });
     }
     hist.sort(function (a, b) { return (b.date + (b.in || '')).localeCompare(a.date + (a.in || '')); });
     const lim = Math.max(1, Math.min(Number(limit) || 30, 100));
-    return { ok: true, stats: { count: count, dohanCount: dohanCount, last: last }, history: hist.slice(0, lim) };
+    return { ok: true, stats: { count: count, dohanCount: dohanCount, last: last, totalSales: totalSales }, history: hist.slice(0, lim) };
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
@@ -6846,13 +6855,71 @@ function gunshiBackfillVisits(commit) {
     out.push([d, inHm, '', customer, String(row[3] || ''), Number(row[4]) || 1,
       String(row[5] || ''), String(row[6] || ''), String(row[12] || ''),
       visitFeeVal_(row[13]), visitFeeVal_(row[14]),
-      '移行', rowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')]);
+      '移行', rowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'), '']);
   }
   if (commit && out.length) {
     vs.getRange(vs.getLastRow() + 1, 1, out.length, VISIT_HEAD_.length).setValues(out);
     visitCacheClear_();
   }
   return { ok: true, candidates: out.length, committed: !!commit, sample: out.slice(0, 5).map(function (r) { return r[0] + ' ' + r[3]; }) };
+}
+
+// TRUST来店リスト（日付・タグ(客名+会員番号)・売上）を来店記録へ取込。
+// items = [{date:'2024/09/27', tag:'平山浩二様 0605', sales:18000}, ...]（複数回に分けて呼べる＝チャンク対応）
+// 照合: 同一「来店日＋会員番号(なければ正規化名前)」の既存行があれば売上のみ補完（軍師の卓/担当/同伴を尊重＝二重計上しない）。
+//        無ければソース=TRUSTで新規追加。commit=false でプレビュー（追加/補完/スキップ件数）。
+function gunshiImportTrustVisits(items, commit) {
+  if (!Array.isArray(items)) return { ok: false, error: 'items配列が必要' };
+  const vs = getVisitSheet_();
+  const vRows = vs.getDataRange().getValues();
+  // 既存インデックス: 日付ごとに {会員番号set, 名前set, 売上補完対象の行番号map}
+  const byDate = {};
+  for (let i = 1; i < vRows.length; i++) {
+    const d = visitDateStr_(vRows[i][0]);
+    if (!d) continue;
+    const slot = byDate[d] || (byDate[d] = { no: {}, name: {} });
+    const no = visitNoFromRow_(vRows[i][4], vRows[i][3]);
+    const nm = visitCanonName_(vRows[i][3]);
+    const cur = Number(vRows[i][14]) || 0;
+    if (no) slot.no[no] = { row: i + 1, sales: cur };
+    if (nm) slot.name[nm] = { row: i + 1, sales: cur };
+  }
+  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
+  const toAppend = [];   // 新規行
+  const toFill = [];     // {row, sales} 売上補完
+  let added = 0, filled = 0, skipped = 0;
+  const filledRows = {}; // 同一実行内の二重補完防止
+  items.forEach(function (it) {
+    const d = visitDateStr_((it.date || '').replace(/\//g, '-'));
+    const tag = String(it.tag || '').trim();
+    const sales = Number(it.sales) || 0;
+    if (!d || !tag) { skipped++; return; }
+    const no = visitNoFromRow_('', tag);
+    const nm = visitCanonName_(tag);
+    const slot = byDate[d];
+    let hit = null;
+    if (slot) hit = (no && slot.no[no]) || (nm && slot.name[nm]) || null;
+    if (hit) {
+      // 既存来店（軍師 or 既取込TRUST）: 売上が未設定なら補完のみ
+      if (!hit.sales && sales && !filledRows[hit.row]) { toFill.push({ row: hit.row, sales: sales }); filledRows[hit.row] = true; filled++; }
+      else skipped++;
+    } else {
+      const memberNo = no || '';
+      toAppend.push([d, '', '', tag, memberNo, '', '', '', '', '', '', 'TRUST', '', now, sales]);
+      added++;
+      // 同一CSV内の同日同客の重複に備えインデックスへ反映
+      const s2 = byDate[d] || (byDate[d] = { no: {}, name: {} });
+      const ref = { row: -1, sales: sales };
+      if (no) s2.no[no] = ref; if (nm) s2.name[nm] = ref;
+    }
+  });
+  if (commit) {
+    if (toAppend.length) vs.getRange(vs.getLastRow() + 1, 1, toAppend.length, VISIT_HEAD_.length).setValues(toAppend);
+    toFill.forEach(function (f) { vs.getRange(f.row, VISIT_COL_URIAGE_).setValue(f.sales); });
+    if (toAppend.length || toFill.length) visitCacheClear_();
+  }
+  return { ok: true, received: items.length, added: added, filled: filled, skipped: skipped, committed: !!commit,
+    sample: toAppend.slice(0, 5).map(function (r) { return r[0] + ' ' + r[3] + ' ¥' + r[14]; }) };
 }
 
 function checkInReservation_(rowIdx) {

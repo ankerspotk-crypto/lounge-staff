@@ -92,7 +92,8 @@ function searchKioskCustomersV2(query) {
       visitCount: v ? v.count : 0,
       lastVisit: v ? v.last : '',
       dohanCount: v ? v.dohanCount : 0,
-      lastDohanCast: v ? v.lastDohanCast : ''
+      lastDohanCast: v ? v.lastDohanCast : '',
+      totalSales: v ? (v.totalSales || 0) : 0
     });
   });
 }
