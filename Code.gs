@@ -5000,6 +5000,17 @@ function handlePortalApi_(e) {
     return out({ ok: true, gasToTrustLoginCode: loginCode, gasBlocked: loginCode !== 200, billRows: Math.max(0, last - 1), latestBillDate: latest, today: bizDateStr_(), salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}') });
   }
   if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billverify') return out(portalGetMyBills_(e.parameter.cast || '', e.parameter.month || ''));
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billmonthbreakdown') {
+    const ym = String(e.parameter.month || '').replace(/\//g, '-').slice(0, 7);
+    const sh = billSheet_(); const last = sh.getLastRow(); const agg = {}; let total = 0, cnt = 0;
+    if (last >= 2) sh.getRange(2, 1, last - 1, 14).getValues().forEach(r => {
+      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
+      if (bd.slice(0, 7) !== ym) return;
+      const p = String(r[8]).trim() || '(空)'; const amt = Number(r[9]) || 0;
+      (agg[p] = agg[p] || { count: 0, total: 0 }); agg[p].count++; agg[p].total += amt; total += amt; cnt++;
+    });
+    return out({ ok: true, month: ym, slips: cnt, total: total, byCast: Object.keys(agg).map(k => ({ cast: k, count: agg[k].count, total: agg[k].total })).sort((a, b) => b.count - a.count) });
+  }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
