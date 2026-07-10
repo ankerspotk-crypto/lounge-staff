@@ -5048,6 +5048,14 @@ function handlePortalApi_(e) {
   if (isAdmin && tab === 'billbackfill') {
     return out(billBackfillMonth(e.parameter.month || ''));
   }
+  // 全期間バックフィル開始（管理者のみ・既定2024-09〜前日を無人完走。from=YYYY-MM-DDで起点変更可）
+  if (isAdmin && tab === 'billbackfillall') {
+    return out(startBillBackfill(e.parameter.from || ''));
+  }
+  // 全期間バックフィル進捗（管理者のみ）
+  if (isAdmin && tab === 'billbackfillstatus') {
+    return out(billBackfillStatus());
+  }
 
   // ランキングタブ
   if (tab === 'ranking') {
@@ -8874,6 +8882,103 @@ function billBackfillMonth(month) {
   }
   Logger.log('伝票backfill ' + mk + ' 完了: fetched=' + fetched + ' added=' + added);
   return { ok: true, month: mk, days: lastDay, fetched: fetched, added: added, detail: detail };
+}
+
+/* ── 全期間バックフィル（既定 2024-09-01 〜 前日）──────────────
+ * 690日規模＝GAS 6分上限を1回で超えるため、1tick=約4分で中断→5分毎トリガーで自動再開→完走で自動停止。
+ * カーソル(BILL_BF_CURSOR=最後に完了した営業日)を毎日チェックポイント。冪等(営業日|UUIDで重複排除)。 */
+const BILL_BF_FROM_DEFAULT = '2024-09-01';
+
+function billNextDay_(dk) {
+  const p = String(dk).split('-');
+  const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + 1);
+  return Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+}
+
+function billLoadKeys_(sh) {
+  const set = {};
+  const last = sh.getLastRow();
+  if (last >= 2) {
+    const keys = sh.getRange(2, 1, last - 1, 2).getValues();
+    keys.forEach(k => {
+      const bd = k[0] instanceof Date ? Utilities.formatDate(k[0], TZ, 'yyyy-MM-dd') : String(k[0]).trim();
+      set[bd + '|' + String(k[1]).trim()] = true;
+    });
+  }
+  return set;
+}
+
+// 全期間バックフィル開始: カーソルをリセットし、5分毎の自動再開トリガーを張る（無人完走）
+function startBillBackfill(fromDate) {
+  setProp('BILL_BF_FROM', fromDate || BILL_BF_FROM_DEFAULT);
+  setProp('BILL_BF_CURSOR', '');
+  setProp('BILL_BF_STALL', '');
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'billBackfillTick').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('billBackfillTick').timeBased().everyMinutes(5).create();
+  Logger.log('全期間バックフィル開始: from=' + (fromDate || BILL_BF_FROM_DEFAULT) + ' / 5分毎トリガー登録');
+  return { ok: true, started: true, from: fromDate || BILL_BF_FROM_DEFAULT, note: '5分毎に自動実行・完了で自動停止。進捗は billBackfillStatus()' };
+}
+
+// 1tick（最大約4分）処理して中断。トリガーから繰り返し呼ばれ、前日に到達したら自動停止
+function billBackfillTick() {
+  const start = Date.now(), BUDGET = 4 * 60 * 1000;
+  const session = trustGetSession_();
+  if (!session) { Logger.log('BFtick: TRUSTログイン失敗'); return { ok: false, error: 'session' }; }
+  const from = prop('BILL_BF_FROM') || BILL_BF_FROM_DEFAULT;
+  const cursor = prop('BILL_BF_CURSOR') || '';
+  const yst = (function () { const d = new Date(); d.setDate(d.getDate() - 1); return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); })();
+  let cur = cursor ? billNextDay_(cursor) : from;
+  const sh = billSheet_();
+  const set = billLoadKeys_(sh);
+  let added = 0, days = 0, buffer = [];
+  while (cur <= yst) {
+    if (Date.now() - start > BUDGET) break;
+    let r;
+    try { r = fetchTrustBillList_(cur, session); } catch (e) { r = { ok: false, error: String(e) }; }
+    if (!r.ok) {
+      // セッション切れ等 → 最大3回まで同日リトライ、超えたら1日スキップして続行
+      const sc = String(prop('BILL_BF_STALL') || '').split(':');
+      const scnt = (sc[0] === cur) ? (Number(sc[1]) || 0) + 1 : 1;
+      if (scnt >= 3) {
+        Logger.log('BFtick skip ' + cur + '（3回失敗）: ' + r.error);
+        setProp('BILL_BF_CURSOR', cur); setProp('BILL_BF_STALL', '');
+        Utilities.sleep(150); cur = billNextDay_(cur); continue;
+      }
+      setProp('BILL_BF_STALL', cur + ':' + scnt); setProp('TRUST_COOKIE', ''); // 次tickで再ログイン
+      Logger.log('BFtick ' + cur + ' 失敗(' + scnt + ')→中断: ' + r.error);
+      break;
+    }
+    if (prop('BILL_BF_STALL')) setProp('BILL_BF_STALL', '');
+    r.bills.forEach(b => {
+      const k = cur + '|' + b.uuid;
+      if (!set[k]) {
+        set[k] = true;
+        buffer.push([cur, b.uuid, b.inTime, b.outTime, b.table, b.guests, b.cust, b.member,
+          b.primary, b.tantoAmt, b.dohanCast, b.dohanAmt, b.total, b.tanto, '']);
+        added++;
+      }
+    });
+    days++;
+    setProp('BILL_BF_CURSOR', cur);
+    if (buffer.length >= 300) { sh.getRange(sh.getLastRow() + 1, 1, buffer.length, BILL_HEAD_.length).setValues(buffer); buffer = []; }
+    Utilities.sleep(150);
+    cur = billNextDay_(cur);
+  }
+  if (buffer.length) sh.getRange(sh.getLastRow() + 1, 1, buffer.length, BILL_HEAD_.length).setValues(buffer);
+  const done = cur > yst;
+  if (done) {
+    ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'billBackfillTick').forEach(t => ScriptApp.deleteTrigger(t));
+    Logger.log('✅ 全期間バックフィル完了 cursor=' + prop('BILL_BF_CURSOR'));
+  }
+  Logger.log('BFtick days=' + days + ' added=' + added + ' cursor=' + prop('BILL_BF_CURSOR') + ' done=' + done);
+  return { ok: true, days: days, added: added, cursor: prop('BILL_BF_CURSOR'), done: done };
+}
+
+function billBackfillStatus() {
+  const sh = billSheet_();
+  const rows = Math.max(0, sh.getLastRow() - 1);
+  const running = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'billBackfillTick');
+  return { ok: true, cursor: prop('BILL_BF_CURSOR') || '(未開始)', from: prop('BILL_BF_FROM') || BILL_BF_FROM_DEFAULT, running: running, totalRows: rows };
 }
 
 // /sales/daily_bill_detail/DATE/UUID の明細をパース
