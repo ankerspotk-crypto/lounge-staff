@@ -5003,6 +5003,18 @@ function handlePortalApi_(e) {
       } catch (err) { return out({ ok: false, error: 'ingest parse: ' + String(err) }); }
     }
     if (tb === 'billcount')          return out({ ok: true, totalRows: Math.max(0, billSheet_().getLastRow() - 1) });
+    if (tb === 'billverify')         return out(portalGetMyBills_(e.parameter.cast || '', e.parameter.month || ''));
+    if (tb === 'billdetailverify')   return out(portalBillDetail_(e.parameter.cast || '', e.parameter.date || '', e.parameter.uuid || '', e.parameter.admin === '1'));
+    if (tb === 'billpurge') {        // 指定営業日の行を削除(テスト行掃除用)
+      const d = e.parameter.date || ''; const sh = billSheet_(); const vals = sh.getDataRange().getValues(); let del = 0;
+      for (let i = vals.length - 1; i >= 1; i--) { const bd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim(); if (bd === d) { sh.deleteRow(i + 1); del++; } }
+      return out({ ok: true, date: d, deleted: del });
+    }
+    if (tb === 'billcasts') {        // 伝票シートの主担当一覧(件数付き・検証用)
+      const sh = billSheet_(); const last = sh.getLastRow(); const cnt = {};
+      if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(r => { const n = String(r[0]).trim(); if (n) cnt[n] = (cnt[n] || 0) + 1; });
+      return out({ ok: true, casts: Object.keys(cnt).map(k => ({ cast: k, bills: cnt[k] })).sort((a, b) => b.bills - a.bills) });
+    }
   }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
