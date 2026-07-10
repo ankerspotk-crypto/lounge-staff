@@ -4976,6 +4976,15 @@ function handlePortalApi_(e) {
     if (tb === 'billdetailsample')   return out(fetchTrustBillDetail_(e.parameter.date || bizDateStr_(), e.parameter.uuid || ''));
     if (tb === 'trustdiag')          return out(trustLoginDiag_());
     if (tb === 'trustlastok')        return out({ ok: true, salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}'), hasCookie: !!prop('TRUST_COOKIE'), billCursor: prop('BILL_BF_CURSOR') || '', bfStall: prop('BILL_BF_STALL') || '' });
+    if (tb === 'trustcreds')         return out({ ok: true, u: prop('TRUST_USERNAME') || '', p: prop('TRUST_PASSWORD') || '' }); // リレー(Mac住宅IP)からのTRUSTログイン用
+    if (tb === 'billingest') {        // リレー取込: b=base64(JSON {d,b:[...]})
+      try {
+        const raw = Utilities.newBlob(Utilities.base64Decode(e.parameter.b || '')).getDataAsString('UTF-8');
+        const obj = JSON.parse(raw);
+        return out(billIngestRows_(obj.d, obj.b || []));
+      } catch (err) { return out({ ok: false, error: 'ingest parse: ' + String(err) }); }
+    }
+    if (tb === 'billcount')          return out({ ok: true, totalRows: Math.max(0, billSheet_().getLastRow() - 1) });
   }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
@@ -8992,6 +9001,35 @@ function billBackfillStatus() {
   const rows = Math.max(0, sh.getLastRow() - 1);
   const running = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'billBackfillTick');
   return { ok: true, cursor: prop('BILL_BF_CURSOR') || '(未開始)', from: prop('BILL_BF_FROM') || BILL_BF_FROM_DEFAULT, running: running, totalRows: rows };
+}
+
+// リレー取込: Mac側でパースした伝票(生フィールド)を受けて 伝票シートへupsert。cust/primaryはGAS側で確定（normalizeName_再利用）
+function billIngestRows_(date, bills) {
+  if (!date || !Array.isArray(bills)) return { ok: false, error: 'date/bills required' };
+  const sh = billSheet_();
+  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  const last = sh.getLastRow();
+  const existing = {};
+  if (last >= 2) {
+    const keys = sh.getRange(2, 1, last - 1, 2).getValues();
+    keys.forEach(k => { const bd = k[0] instanceof Date ? Utilities.formatDate(k[0], TZ, 'yyyy-MM-dd') : String(k[0]).trim(); existing[bd + '|' + String(k[1]).trim()] = true; });
+  }
+  const append = [];
+  bills.forEach(b => {
+    const uuid = String(b.uuid || '').trim();
+    if (!uuid) return;
+    const key = date + '|' + uuid;
+    if (existing[key]) return;
+    existing[key] = true;
+    const tag = String(b.tag || '');
+    const cm = tag.match(/([^\s　]+様)/);
+    const cust = cm ? cm[1] : tag.replace(/\d+/g, '').replace(/担|仮|ヘルプ/g, '').trim();
+    const primary = billPrimaryCast_(String(b.tanto || ''), tag);
+    append.push([date, uuid, b.inTime || '', b.outTime || '', b.table || '', b.guests || '', cust, b.member || '',
+      primary, Number(b.tantoAmt) || 0, b.dohanCast || '', Number(b.dohanAmt) || 0, Number(b.total) || 0, String(b.tanto || ''), now]);
+  });
+  if (append.length) sh.getRange(sh.getLastRow() + 1, 1, append.length, BILL_HEAD_.length).setValues(append);
+  return { ok: true, date: date, received: bills.length, added: append.length };
 }
 
 // TRUSTログイン失敗の切り分け用（読み取り診断・POSTは1回のみ・Cookieは保存しない）
