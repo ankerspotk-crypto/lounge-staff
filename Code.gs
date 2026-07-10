@@ -5607,8 +5607,65 @@ function saveIeyasuHist_(userId, turns) {
   } catch (e) {}
 }
 
+// userId→スタッフ属性（役割）。getStaffNameと同じくスタッフマスタ(A=userId,B=名前,C=役割)を引く。
+function getStaffRoleByUserId_(userId) {
+  if (!userId) return 'キャスト';
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB); if (!sh) return 'キャスト';
+  var row = sh.getDataRange().getValues().find(function (r) { return r[0] === userId; });
+  return row ? (String(row[2]).trim() || 'キャスト') : 'キャスト';
+}
+
+// メッセージのキーワードに応じて、3本柱の"今の実データ"を必要な分だけ取得して文脈文字列にする。
+// 役割で出し分け：顧客名・予約・席・在庫など運営情報は黒服/管理のみ。キャストは出勤ラインナップまで。
+// ここに項目を足せば家康くんが答えられる情報が増える（拡張ポイント）。
+function ieyasuLiveContext_(msg, name, role) {
+  var m = String(msg || '');
+  var ops = (String(role).indexOf('黒服') >= 0 || role === '管理者' || isAdmin_(name));
+  var parts = [];
+  // 本日の出勤ラインナップ（全スタッフに開示可）
+  if (/出勤|ラインナップ|メンバー|今日.*(誰|出て|いる|いた)|誰が(いる|出|来)|何人/.test(m)) {
+    try {
+      var d = getTodayShiftDetail_();
+      var f = function (a) { return a.map(function (c) { return c.name + '(' + c.shift + ')'; }).join('、') || 'なし'; };
+      parts.push('■本日の出勤\nキャスト: ' + f(d.cast) + '\n黒服: ' + f(d.kurofuku) + (d.haken.length ? '\n派遣: ' + f(d.haken) : ''));
+    } catch (e) {}
+  }
+  if (ops && /席|空席|満席|状況|埋ま|空いて/.test(m)) {
+    try {
+      var seats = (getSekiJokyouData() || []).filter(function (s) { return s.type === 'C' || s.type === 'B'; });
+      var occ = seats.filter(function (s) { return s.occupied; });
+      var lines = occ.map(function (s) {
+        return (s.label || s.short || s.code) + '=' + ((s.rsrv && s.rsrv.customer) ? s.rsrv.customer + '様' : '稼働') +
+          ((s.casts && s.casts.length) ? '/' + s.casts.map(function (c) { return c.name; }).join('、') : '');
+      });
+      parts.push('■席状況（' + occ.length + '/' + seats.length + '席 稼働）\n' + (lines.join('\n') || '全席空き'));
+    } catch (e) {}
+  }
+  if (ops && /予約/.test(m)) {
+    try {
+      var rv = getYoyakuReservations_(bizDateStr_()) || [];
+      var lines2 = rv.slice(0, 20).map(function (r) {
+        return (r.time || '--') + ' ' + r.customer + '様' + (r.yoyakuCast ? '/' + r.yoyakuCast : '') +
+          (r.dohanCast ? '(同伴:' + r.dohanCast + ')' : '') + (r.status ? ' [' + r.status + ']' : '');
+      });
+      parts.push('■本日の予約（' + rv.length + '件）\n' + (lines2.join('\n') || 'なし'));
+    } catch (e) {}
+  }
+  if (ops && /在庫|発注|足りな|切れ|残り/.test(m)) {
+    try {
+      var low = (getStockList() || []).filter(function (x) { var mn = Number(x.minStock); return x.minStock !== '' && !isNaN(mn) && x.qty <= mn; });
+      var lines3 = low.map(function (x) { return x.name + ' 残' + x.qty + '（下限' + x.minStock + '）' + (x.floor ? ' [' + x.floor + ']' : ''); });
+      parts.push('■在庫が少ない品（下限以下 ' + low.length + '件）\n' + (lines3.join('\n') || '下限を下回る在庫はなし'));
+    } catch (e) {}
+  }
+  if (ops && /お土産|おみやげ|土産/.test(m)) {
+    try { var sv = kioskGetSouvenirStock(); parts.push('■お土産在庫\n2F: ' + sv['2F'] + '個 / 5F: ' + sv['5F'] + '個'); } catch (e) {}
+  }
+  return parts.join('\n\n');
+}
+
 // LINE 1:1 DM の窓口。登録スタッフ/キャスト本人の発言をAI家康くんが受け答え。
-// 直近の会話を記憶して文脈のある雑談も可能。要望はシートに記録、質問は即答。
+// 直近の会話を記憶して文脈のある雑談も可能。要望はシートに記録、質問は3本柱の実データで即答。
 function handleIeyasuAI_(event, text, name, userId) {
   var msg = String(text || '').trim();
   if (!msg) { reply(event.replyToken, name + '、どうした。……別に、君の声が聞きたかったわけじゃ……いや、嘘だ。嬉しいよ。困りごとでも要望でも、遠慮なく俺に話してくれ。'); return; }
@@ -5626,7 +5683,9 @@ function handleIeyasuAI_(event, text, name, userId) {
     return;
   }
   var hist = userId ? loadIeyasuHist_(userId) : [];
-  var ai = ieyasuBrain_(msg, name, hist);
+  var role = userId ? getStaffRoleByUserId_(userId) : '';
+  var ctx = ieyasuLiveContext_(msg, name, role);
+  var ai = ieyasuBrain_(msg, name, hist, ctx);
   if (!ai || !ai.reply) { reply(event.replyToken, 'すまん、いま少し立て込んでる。……もう一度、聞かせてくれるか。'); return; }
   reply(event.replyToken, ai.reply);
   if (userId) { hist.push({ r: 'u', t: msg }); hist.push({ r: 'a', t: ai.reply }); saveIeyasuHist_(userId, hist); }
@@ -5635,7 +5694,7 @@ function handleIeyasuAI_(event, text, name, userId) {
 
 // AI家康くんの脳。Gemini(既存GEMINI_API_KEY)に人格＋分類プロンプトを流し、JSONで返す。
 // 店の知識は IEYASU_KB プロパティに入れると回答の根拠になる（未設定でも動く）。
-function ieyasuBrain_(msg, name, history) {
+function ieyasuBrain_(msg, name, history, ctx) {
   var key = prop('GEMINI_API_KEY'); if (!key) return null;
   var model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
   var kb = prop('IEYASU_KB') || '';
@@ -5653,7 +5712,8 @@ function ieyasuBrain_(msg, name, history) {
     convo = '\n\n【直近の会話（古い順・文脈として自然に踏まえる。同じ挨拶や自己紹介を繰り返さない）】\n' +
       history.map(function (t) { return (t.r === 'u' ? (name || '相手') : '家康くん') + '：' + t.t; }).join('\n');
   }
-  var prompt = sys + convo + '\n\n【今回の' + (name || 'スタッフ') + 'の発言】' + msg;
+  var live = ctx ? '\n\n【今の店の実データ（回答の根拠。ここに書かれた事実だけを使い、無い情報は推測せず「今は手元に無いな」と正直に言う）】\n' + ctx : '';
+  var prompt = sys + live + convo + '\n\n【今回の' + (name || 'スタッフ') + 'の発言】' + msg;
   try {
     var res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key), {
       method: 'post', contentType: 'application/json',
