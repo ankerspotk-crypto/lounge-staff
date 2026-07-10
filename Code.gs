@@ -5073,6 +5073,21 @@ function handlePortalApi_(e) {
     return out({ ok: true, name, isAdmin: true, castList: castNames, castRoles });
   }
 
+  // 伝票（担当キャスト本人の今月・前日までの売上/伝票一覧）
+  if (tab === 'bills') {
+    const lookupNameB = normalizeName_(isAdmin ? viewAs : name);
+    const r = portalGetMyBills_(lookupNameB, month);
+    return out(Object.assign({ name, isAdmin, viewAs: lookupNameB }, r));
+  }
+  // 伝票明細（ライブ取得・所有ガード）
+  if (tab === 'billdetail') {
+    const lookupNameD = normalizeName_(isAdmin ? viewAs : name);
+    const dk = e.parameter.date || '';
+    const uuid = e.parameter.uuid || '';
+    if (!dk || !uuid) return out({ ok: false, error: 'date/uuid required' });
+    return out(portalBillDetail_(lookupNameD, dk, uuid, isAdmin));
+  }
+
   // === ホーム軽量ペイロード（初回ロード高速化） ===
   // 売上/給与/領収書/月一覧などホーム非表示データを除外し、代わりに座席・今日の予約・空席を同梱して
   // 従来の「portal(全計算) + getCastSeats + tab=yoyaku + tab=vacancy」の4往復を1往復に集約する。
@@ -7440,6 +7455,7 @@ function fetchTrustSalesNightly() {
   writeTrustSales_(monthKey, data);
   calcAndWriteKyuyo_(monthKey);
   recordSalesDataDate_(monthKey);
+  try { enrichBillsYesterday(); } catch (e) { Logger.log('enrichBillsYesterday err: ' + e); } // 前日分の伝票をシートへenrich
   Logger.log('✅ 完了: ' + monthKey);
 }
 
@@ -8700,6 +8716,253 @@ function setupTrustTrigger() {
     .inTimezone(TZ)
     .create();
   Logger.log('✅ TRUSTトリガー登録完了（毎日 3:00 JST）');
+}
+
+/* ============================================================
+ *  TRUST 伝票（担当キャスト別・日次売上／伝票明細ビュー）
+ *  設計: project_trust_visit_pipeline メモ準拠。
+ *   - 一覧(/sales/daily/DATE の伝票テーブル)は 伝票 シートへ夜間保存（前日分）。
+ *   - 明細(/sales/daily_bill_detail/DATE/UUID)は開いた時にライブ取得（ボトル判定込み）。
+ *   - ポータル「成績＞伝票」で担当キャスト本人が今月・前日までの自分の売上/伝票を閲覧。
+ *  既存関数・シートは無改変。trustGetSession_ / normalizeName_ / NAME_ALIAS を再利用。
+ * ==========================================================*/
+
+const BILL_TAB = '伝票';
+const BILL_HEAD_ = ['営業日', 'UUID', '入店', '退店', '卓', '客数', '客名', '会員番号',
+  '主担当', '担当売上', '同伴キャスト', '同伴額', '伝票合計', '全担当', '取得日時'];
+
+function billSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(BILL_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(BILL_TAB);
+    sh.appendRow(BILL_HEAD_);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// <tr>内の <td>/<th> セルテキストを順に配列で返す（タグ除去・空白圧縮）
+function billRowCells_(trHtml) {
+  const cells = [];
+  const re = /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi;
+  let m;
+  while ((m = re.exec(trHtml)) !== null) {
+    cells.push(m[1].replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim());
+  }
+  return cells;
+}
+
+function billNum_(s) {
+  const v = parseFloat(String(s == null ? '' : s).replace(/[￥¥,\s　]/g, '').replace('−', '-').replace('▲', '-'));
+  return isNaN(v) ? 0 : v;
+}
+
+// 担当セル("ひなの みよ (1)"等)＋タグ("海様 みよ担 仮")から主担当名を推定
+function billPrimaryCast_(tantoCell, tagCell) {
+  const mTag = String(tagCell || '').match(/([^\s　()]+?)\s*担/); // タグ「〜担」が主担当ヒント
+  if (mTag && mTag[1]) return normalizeName_(mTag[1]);
+  const first = String(tantoCell || '').replace(/\(.*?\)/g, ' ').trim().split(/[\s　]+/)[0] || '';
+  return normalizeName_(first);
+}
+
+// /sales/daily/YYYY-MM-DD の伝票一覧をパース
+// 行: 0№ 1入店 2退店 3滞在 4卓 5客数 6タグ 7担当 8担当額 9予約 10予約額 11同伴 12同伴額 13担当小計 14現金 15カード 16売掛 17合計
+function parseTrustBillList_(html, dateKey) {
+  const out = [];
+  const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  let trM;
+  while ((trM = trRe.exec(html)) !== null) {
+    const inner = trM[1];
+    const um = inner.match(/daily_bill_detail\/[0-9\-]+\/([0-9a-fA-F\-]{36})/);
+    if (!um) continue; // 伝票行のみ（№セルに明細リンクがある行）
+    const uuid = um[1];
+    const c = billRowCells_(inner);
+    if (c.length < 14) continue;
+    const tagCell = c[6] || '';
+    const cm = tagCell.match(/([^\s　]+様)/);
+    const custName = cm ? cm[1] : tagCell.replace(/\d+/g, '').replace(/担|仮|ヘルプ/g, '').trim();
+    const memberM = inner.match(/outsider\/detail\/(\d+)/);
+    out.push({
+      uuid: uuid,
+      inTime: c[1] || '',
+      outTime: c[2] || '',
+      table: c[4] || '',
+      guests: c[5] || '',
+      cust: custName,
+      member: memberM ? memberM[1] : '',
+      tanto: c[7] || '',
+      primary: billPrimaryCast_(c[7], tagCell),
+      tantoAmt: billNum_(c[13]),           // 担当小計
+      dohanCast: c[11] || '',
+      dohanAmt: billNum_(c[12]),
+      total: billNum_(c.length > 17 ? c[17] : c[c.length - 1])
+    });
+  }
+  return out;
+}
+
+function fetchTrustBillList_(dateKey, session) {
+  session = session || trustGetSession_();
+  if (!session) return { ok: false, error: 'TRUSTへの自動ログインに失敗しました' };
+  const url = 'https://admin.trust-operation.com/sales/daily/' + dateKey;
+  const resp = UrlFetchApp.fetch(url, { headers: { Cookie: session }, muteHttpExceptions: true, followRedirects: true });
+  if (resp.getResponseCode() !== 200) return { ok: false, error: '伝票一覧の取得に失敗（HTTP ' + resp.getResponseCode() + '）' };
+  return { ok: true, bills: parseTrustBillList_(resp.getContentText('UTF-8'), dateKey) };
+}
+
+// 指定営業日の伝票一覧を取得し 伝票シートへupsert（キー=営業日|UUID）
+function billUpsertDay_(dateKey, session) {
+  const r = fetchTrustBillList_(dateKey, session);
+  if (!r.ok) return r;
+  const sh = billSheet_();
+  const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  const last = sh.getLastRow();
+  const existing = {}; // 営業日|UUID → 行番号
+  if (last >= 2) {
+    const keys = sh.getRange(2, 1, last - 1, 2).getValues();
+    keys.forEach((k, i) => {
+      const bd = k[0] instanceof Date ? Utilities.formatDate(k[0], TZ, 'yyyy-MM-dd') : String(k[0]).trim();
+      existing[bd + '|' + String(k[1]).trim()] = i + 2;
+    });
+  }
+  const append = [];
+  r.bills.forEach(b => {
+    const row = [dateKey, b.uuid, b.inTime, b.outTime, b.table, b.guests, b.cust, b.member,
+      b.primary, b.tantoAmt, b.dohanCast, b.dohanAmt, b.total, b.tanto, now];
+    const at = existing[dateKey + '|' + b.uuid];
+    if (at) sh.getRange(at, 1, 1, BILL_HEAD_.length).setValues([row]);
+    else append.push(row);
+  });
+  if (append.length) sh.getRange(sh.getLastRow() + 1, 1, append.length, BILL_HEAD_.length).setValues(append);
+  return { ok: true, date: dateKey, fetched: r.bills.length, added: append.length, updated: r.bills.length - append.length };
+}
+
+// 夜間: 前日分の伝票をenrich（fetchTrustSalesNightlyの末尾から相乗り呼び出し）
+function enrichBillsYesterday() {
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const dk = Utilities.formatDate(y, TZ, 'yyyy-MM-dd');
+  try {
+    const r = billUpsertDay_(dk);
+    Logger.log('伝票enrich ' + dk + ': ' + JSON.stringify(r));
+    return r;
+  } catch (e) { Logger.log('enrichBillsYesterday error: ' + e); return { ok: false, error: String(e) }; }
+}
+
+// 手動: 指定月（既定=今月）の1日〜前日まで伝票をバックフィル
+function billBackfillMonth(month) {
+  const session = trustGetSession_();
+  if (!session) return { ok: false, error: 'TRUSTへの自動ログインに失敗しました' };
+  const mk = (month || Utilities.formatDate(new Date(), TZ, 'yyyy-MM')).replace(/\//g, '-').slice(0, 7);
+  const Y = Number(mk.slice(0, 4)), M = Number(mk.slice(5, 7));
+  const today = new Date();
+  const isThisMonth = (today.getFullYear() === Y && (today.getMonth() + 1) === M);
+  const lastDay = isThisMonth ? today.getDate() - 1 : new Date(Y, M, 0).getDate();
+  let fetched = 0, added = 0; const detail = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const dk = mk + '-' + ('0' + d).slice(-2);
+    try {
+      const r = billUpsertDay_(dk, session);
+      if (r.ok) { fetched += r.fetched; added += r.added; detail.push(dk + ':' + r.fetched); }
+      Utilities.sleep(250);
+    } catch (e) { Logger.log('backfill ' + dk + ' err: ' + e); detail.push(dk + ':ERR'); }
+  }
+  Logger.log('伝票backfill ' + mk + ' 完了: fetched=' + fetched + ' added=' + added);
+  return { ok: true, month: mk, days: lastDay, fetched: fetched, added: added, detail: detail };
+}
+
+// /sales/daily_bill_detail/DATE/UUID の明細をパース
+// 明細行=7セル（カテゴリは<th>）: [カテゴリ,商品,詳細,単価,税,数量,計]。ボトル=商品に「ボトル」を含む
+function parseTrustBillDetail_(html) {
+  const items = [];
+  const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
+  let trM;
+  while ((trM = trRe.exec(html)) !== null) {
+    const c = billRowCells_(trM[1]);
+    if (c.length !== 7) continue;
+    const cat = c[0];
+    if (!cat || /カテゴリ|項目|区分|明細/.test(cat)) continue; // ヘッダ行除外
+    const product = c[1] || '';
+    if (!product && !billNum_(c[6])) continue;
+    items.push({
+      category: cat,
+      product: product,
+      detail: c[2] || '',
+      unit: billNum_(c[3]),
+      tax: c[4] || '',
+      qty: billNum_(c[5]) || 1,
+      amount: billNum_(c[6]),
+      isBottle: /ボトル/.test(product)
+    });
+  }
+  return items;
+}
+
+function fetchTrustBillDetail_(dateKey, uuid, session) {
+  session = session || trustGetSession_();
+  if (!session) return { ok: false, error: 'TRUSTへの自動ログインに失敗しました' };
+  const url = 'https://admin.trust-operation.com/sales/daily_bill_detail/' + dateKey + '/' + uuid;
+  const resp = UrlFetchApp.fetch(url, { headers: { Cookie: session }, muteHttpExceptions: true, followRedirects: true });
+  if (resp.getResponseCode() !== 200) return { ok: false, error: '伝票明細の取得に失敗（HTTP ' + resp.getResponseCode() + '）' };
+  return { ok: true, items: parseTrustBillDetail_(resp.getContentText('UTF-8')) };
+}
+
+// ポータル: 担当キャスト本人の今月・前日までの売上一覧＋伝票一覧（伝票シートから）
+function portalGetMyBills_(lookupName, month) {
+  const target = normalizeName_(lookupName);
+  if (!target) return { ok: true, month: '', cast: '', monthTotal: 0, days: [] };
+  const ym = (month || Utilities.formatDate(new Date(), TZ, 'yyyy-MM')).replace(/\//g, '-').slice(0, 7);
+  const yst = (function () { const d = new Date(); d.setDate(d.getDate() - 1); return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); })();
+  const sh = billSheet_();
+  const last = sh.getLastRow();
+  const byDay = {};
+  if (last >= 2) {
+    const vals = sh.getRange(2, 1, last - 1, BILL_HEAD_.length).getValues();
+    vals.forEach(r => {
+      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
+      if (bd.slice(0, 7) !== ym) return;
+      if (bd > yst) return; // 今日以降（未確定）は除外
+      if (normalizeName_(String(r[8]).trim()) !== target) return; // 主担当本人のみ
+      const day = (byDay[bd] = byDay[bd] || { date: bd, total: 0, count: 0, slips: [] });
+      day.total += Number(r[9]) || 0;
+      day.count += 1;
+      day.slips.push({
+        uuid: String(r[1]), inTime: String(r[2]), table: String(r[4]), guests: String(r[5]),
+        cust: String(r[6]), tantoAmt: Number(r[9]) || 0, dohanCast: String(r[10]),
+        dohanAmt: Number(r[11]) || 0, total: Number(r[12]) || 0
+      });
+    });
+  }
+  const days = Object.keys(byDay).sort().reverse().map(k => byDay[k]);
+  days.forEach(d => d.slips.sort((a, b) => String(a.inTime).localeCompare(String(b.inTime))));
+  const monthTotal = days.reduce((s, d) => s + d.total, 0);
+  return { ok: true, month: ym, cast: target, monthTotal: monthTotal, days: days };
+}
+
+// ポータル: 伝票明細ライブ取得（所有ガード＝その伝票の主担当が本人であること。管理者は素通し）
+function portalBillDetail_(lookupName, dateKey, uuid, isAdmin) {
+  const target = normalizeName_(lookupName);
+  const sh = billSheet_();
+  const last = sh.getLastRow();
+  let owner = '', found = false;
+  if (last >= 2) {
+    const vals = sh.getRange(2, 1, last - 1, BILL_HEAD_.length).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      if (String(vals[i][1]).trim() === String(uuid).trim()) { owner = normalizeName_(String(vals[i][8]).trim()); found = true; break; }
+    }
+  }
+  if (found && !isAdmin && owner !== target) return { ok: false, error: '権限がありません' };
+  if (!found && !isAdmin) {
+    // シート未収録（未enrich）→ ライブ一覧で所有確認
+    const list = fetchTrustBillList_(dateKey);
+    if (!list.ok) return list;
+    const hit = list.bills.filter(b => b.uuid === uuid)[0];
+    if (!hit || normalizeName_(hit.primary) !== target) return { ok: false, error: '権限がありません' };
+  }
+  const d = fetchTrustBillDetail_(dateKey, uuid);
+  if (!d.ok) return d;
+  const bottles = d.items.filter(it => it.isBottle);
+  return { ok: true, date: dateKey, uuid: uuid, items: d.items, bottleCount: bottles.length, bottles: bottles.map(b => b.product) };
 }
 
 // ============================================================
