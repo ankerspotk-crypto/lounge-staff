@@ -1710,7 +1710,7 @@ function membershipInfo(joined, feeDate){
 var NO_LINE_MEMBERS={'No.204':1,'No.156':1,'No.077':1,'No.410':1,'No.088':1};
 function isNoLine(c){ if(c.lineRegistered===false)return true; if(c.lineRegistered===true)return false; return !!NO_LINE_MEMBERS[c.member]; }
 // 実データ(searchKioskCustomersV2)→ 顧客カード用に変換
-function adaptCustomer(c){return {name:c.name||c.card||'', card:c.card||'', member:c.no||'', bottle:c.bottle||'', bottlePos:'', bday:c.bday||'', tantou:c.tantou||'', nomikata:c.drink||'', tabako:c.tabaco||'', ng:'', note:c.note||'', joined:c.memberSince||'', feeDate:c.annualFeeDate||'', lineRegistered:(c.lineRegistered!=null?c.lineRegistered:null)};}
+function adaptCustomer(c){return {name:c.name||c.card||'', card:c.card||'', member:c.no||'', bottle:c.bottle||'', bottlePos:'', bday:c.bday||'', tantou:c.tantou||'', nomikata:c.drink||'', tabako:c.tabaco||'', ng:'', note:c.note||'', joined:c.memberSince||'', feeDate:c.annualFeeDate||'', lineRegistered:(c.lineRegistered!=null?c.lineRegistered:null), visitCount:c.visitCount||0, lastVisit:c.lastVisit||'', dohanCount:c.dohanCount||0, lastDohanCast:c.lastDohanCast||''};}
 var custDetailList=[]; // 検索結果を保持（詳細表示のタップ用）
 var custLastQ='';      // 直近の検索キーワード（詳細→検索に戻る時に復元）
 var MENU_TILES=[
@@ -1834,6 +1834,7 @@ function custResultsHtml(list){
     if(c.ng) b+='<span class="cbd ng">🚫NG '+esc(c.ng)+'</span>';
     return '<div class="cust-card'+(rs==='expired'?' exp':'')+'" onclick="openCustDetail('+ci+')" style="cursor:pointer"><div class="cc-top"><span class="cc-nm">'+esc(c.name)+' 様</span><span class="cc-mem">'+esc(c.member||'—')+'</span>'+rb+'</div>'
       +'<div class="cc-meta">入会 '+esc(c.joined||'—')+'　・　前回更新 '+esc(c.feeDate||'—')+'</div>'
+      +(c.visitCount?'<div class="cc-meta">🕗 来店 '+c.visitCount+'回　・　前回来店 '+esc(fmtVisitDate(c.lastVisit))+(c.dohanCount?'　・　同伴 '+c.dohanCount+'回':'')+'</div>':'')
       +(b?'<div class="cc-badges">'+b+'</div>':'')+'</div>';
   }).join('');
 }
@@ -1856,6 +1857,7 @@ function openCustDetail(i){
     +'<div style="font-size:22px;font-weight:800;color:var(--txt);margin-bottom:2px">'+esc(c.name)+' 様</div>'
     +'<div style="font-size:13px;color:var(--dim);margin-bottom:10px">会員番号 '+esc(c.member||'—')+(c.card&&c.card!==c.name?'　・　カード名 '+esc(c.card):'')+(lineChip?'　'+lineChip:'')+'</div>'
     +memBox
+    +'<div id="cust-visits"></div>'
     +'<div id="cust-nextmemo"></div>'
     +'<div id="cust-detail-body"><div class="empty-msg" style="padding:14px 0;font-size:13px">読み込み中...</div></div>'
     +'</div>';
@@ -1863,15 +1865,53 @@ function openCustDetail(i){
   var mb=document.getElementById('menu-body'); if(mb) mb.innerHTML=back+head;
   custDetailCur=c; custDetailIdx=i; custDetailRowIdx=0; custDetailFields=[];
   renderNextMemo('');
+  renderCustVisits(null);
   if(IS_GAS){
     gsr('kioskGetCustomerDetail', c.member, c.name).then(function(d){
       if(d&&d.ok){ custDetailRowIdx=d.rowIdx||0; custDetailFields=d.fields||[]; }
       renderCustDetailFields((d&&d.ok&&d.fields&&d.fields.length)?d.fields:custFieldsFrom(c));
       renderNextMemo((d&&d.ok)?(d.nextMemo||''):'');
     }).catch(function(){ renderCustDetailFields(custFieldsFrom(c)); });
+    gsr('kioskGetCustomerVisits', c.member||'', c.name||'', 30).then(function(v){
+      renderCustVisits(v&&v.ok?v:{stats:null,history:[]});
+    }).catch(function(){ renderCustVisits({stats:null,history:[]}); });
   }else{
     renderCustDetailFields(custFieldsFrom(c));
+    renderCustVisits({stats:null,history:[]});
   }
+}
+// 来店日 'yyyy-MM-dd' → 'M/d' 表示（今年以外は yyyy/M/d）
+function fmtVisitDate(d){
+  var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m)return String(d||'');
+  var y=+m[1], mo=+m[2], da=+m[3];
+  return (y===(new Date()).getFullYear())?(mo+'/'+da):(y+'/'+mo+'/'+da);
+}
+// 🕗 来店情報BOX（詳細画面。null=読み込み中）
+function renderCustVisits(v){
+  var el=document.getElementById('cust-visits'); if(!el)return;
+  if(v===null){ el.innerHTML='<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px"><div style="font-size:12px;color:var(--dim)">🕗 来店情報　読み込み中...</div></div>'; return; }
+  var s=v.stats, h=v.history||[];
+  if(!s||!s.count){ el.innerHTML='<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px"><div style="font-size:12px;color:var(--dim);margin-bottom:4px">🕗 来店情報</div><div style="font-size:13px;color:var(--sub)">来店記録はまだありません</div></div>'; return; }
+  var sum='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">'
+    +'<div><div style="font-size:11px;color:var(--dim)">累計来店</div><div style="font-size:18px;font-weight:800">'+s.count+'回</div></div>'
+    +'<div><div style="font-size:11px;color:var(--dim)">前回来店</div><div style="font-size:18px;font-weight:800">'+esc(fmtVisitDate(s.last))+'</div></div>'
+    +(s.dohanCount?'<div><div style="font-size:11px;color:var(--dim)">同伴</div><div style="font-size:18px;font-weight:800">'+s.dohanCount+'回</div></div>':'')
+    +'</div>';
+  var rows=h.map(function(r){
+    var fee=(r.seatFee!=null||r.dohanFee!=null)?((r.seatFee?('席料¥'+Number(r.seatFee).toLocaleString()):'')+(r.dohanFee?((r.seatFee?' ':'')+'同伴料¥'+Number(r.dohanFee).toLocaleString()):'')):'';
+    return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13px">'
+      +'<span style="width:74px;flex-shrink:0;font-weight:700">'+esc(fmtVisitDate(r.date))+'</span>'
+      +'<span style="flex:1;color:var(--sub)">'+esc(r.in||'')+(r.out?'〜'+esc(r.out):'')+(r.table?'　'+esc(r.table):'')+(r.tantou?'　担当 '+esc(r.tantou):'')+(fee?'　'+fee:'')+'</span>'
+      +(r.dohan?'<span class="cbd" style="flex-shrink:0">🤝同伴'+(r.dohanCast?' '+esc(r.dohanCast):'')+'</span>':'')
+      +(r.source==='TRUST'?'<span class="cbd" style="flex-shrink:0">TRUST</span>':'')
+      +'</div>';
+  }).join('');
+  var listId='cust-visit-list';
+  el.innerHTML='<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px">'
+    +'<div style="font-size:12px;color:var(--dim);margin-bottom:7px">🕗 来店情報</div>'+sum
+    +'<div id="'+listId+'" style="display:none;max-height:300px;overflow-y:auto">'+rows+'</div>'
+    +'<button class="menu-btn" style="width:100%;margin-top:4px;font-size:13px;padding:8px" onclick="var l=document.getElementById(\''+listId+'\');var on=l.style.display===\'none\';l.style.display=on?\'block\':\'none\';this.textContent=on?\'▲ 履歴を閉じる\':\'▼ 来店履歴を見る（直近'+h.length+'件）\'">▼ 来店履歴を見る（直近'+h.length+'件）</button>'
+    +'</div>';
 }
 var custDetailCur=null, custDetailIdx=-1, custDetailRowIdx=0, custDetailFields=[];
 function renderNextMemo(memo){

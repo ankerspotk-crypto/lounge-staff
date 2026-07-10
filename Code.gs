@@ -221,7 +221,7 @@ function doPost(e) {
 }
 
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -6288,6 +6288,12 @@ function getYoyakuReservations_(dateKey) {
 // 席料・同伴料の保存（IEYAS POSの会計セクションから呼ぶ。N列=席料、O列=同伴料）
 function updateSeatCharges(rowIdx, seatFee, dohanFee) {
   getYoyakuRsrvSheet_().getRange(rowIdx, 14, 1, 2).setValues([[Number(seatFee) || 0, Number(dohanFee) || 0]]);
+  try { // 来店記録DBにも反映（退店後の追記・修正にも追従）
+    const row = getYoyakuRsrvSheet_().getRange(rowIdx, 1, 1, 1).getValues()[0];
+    const vs = getVisitSheet_();
+    const r = findVisitRowByRsv_(vs, rowIdx, visitDateStr_(row[0]) || bizDateStr_());
+    if (r) { vs.getRange(r, 10, 1, 2).setValues([[Number(seatFee) || 0, Number(dohanFee) || 0]]); visitCacheClear_(); }
+  } catch (e) {}
   return { ok: true };
 }
 
@@ -6321,6 +6327,7 @@ function setKioskReservationStatus(rowIdx, status) {
     return { ok: false, error: '来店から10分以上経過したため来店前に戻せません' };
   }
   sp.deleteProperty('KCHECKIN_' + rowIdx);
+  deleteVisitOnRevert_(rowIdx); // 誤操作取消: 来店記録DBの行も消す
   return setReservationStatus_(rowIdx, '確定');
 }
 
@@ -6634,6 +6641,220 @@ function testLateReservationNotice() {
   return { ok: true };
 }
 
+// ============================================================
+// 来店記録DB（恒久来店履歴）
+//  予約管理=当日の運用台帳 / 来店記録=顧客ごとの蓄積DB。
+//  チェックインで1行追加・チェックアウトで退店時刻と最終料金を確定・
+//  「来店前に戻す」で行削除。TRUST取込(ソース=TRUST)もこのシートに合流予定。
+// ============================================================
+const VISIT_TAB = '来店記録';
+const VISIT_HEAD_ = ['来店日', '来店時刻', '退店時刻', 'お客様名', '会員番号', '人数', 'テーブル', '担当キャスト', '同伴キャスト', '席料', '同伴料', 'ソース', '予約行', '登録日時'];
+
+function getVisitSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(VISIT_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(VISIT_TAB);
+    sh.appendRow(VISIT_HEAD_);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// 全角数字→半角（予約の顧客名は「早坂０３６１」のように全角の会員番号が付く運用があるため）
+function visitZen2Han_(s) { return String(s || '').replace(/[０-９]/g, function (ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); }); }
+// 会員番号の正規化（数字のみ抽出・先頭ゼロ無視。"139"と"0139"と"０１３９"を同一視）
+function visitCanonNo_(s) { return visitZen2Han_(s).replace(/\D/g, '').replace(/^0+(?=\d)/, ''); }
+// 名前の正規化（空白全除去＝normalizeName_の内部スペース問題を回避・「同伴」接頭辞・「様」・末尾の会員番号を除去）
+function visitCanonName_(s) { return visitZen2Han_(s).replace(/[\s　]/g, '').replace(/^同伴/, '').replace(/様?\d*$/, ''); }
+// 会員番号セルが空でも顧客名末尾の数字（2桁以上）を会員番号として救出
+function visitNoFromRow_(noCell, nameCell) {
+  const no = visitCanonNo_(noCell);
+  if (no) return no;
+  const m = visitZen2Han_(String(nameCell || '')).match(/(\d{2,})\s*$/);
+  return m ? visitCanonNo_(m[1]) : '';
+}
+
+function visitDateStr_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); }
+function visitHmStr_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'HH:mm') : String(v || '').trim(); }
+function visitFeeVal_(v) { return (v !== '' && v != null) ? (Number(v) || 0) : ''; }
+function visitCacheClear_() { try { CacheService.getScriptCache().remove('VISITMAP_v1'); } catch (e) {} }
+
+// 予約行rowIdx＋来店日で来店記録の行番号を返す（後ろから検索=直近優先）。無ければ0
+function findVisitRowByRsv_(sh, rsvRowIdx, dateKey) {
+  const rows = sh.getDataRange().getValues();
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][12]) === String(rsvRowIdx) && visitDateStr_(rows[i][0]) === dateKey) return i + 1;
+  }
+  return 0;
+}
+
+// チェックイン時に来店記録を1行追加（同予約の行が既にあれば来店時刻のみ更新=戻す→再来店の重複防止）
+function logVisitOnCheckIn_(rsvRowIdx) {
+  try {
+    const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 16).getValues()[0];
+    const customer = String(row[2] || '').trim();
+    if (!customer) return;
+    const dateKey = visitDateStr_(row[0]) || bizDateStr_();
+    const vs = getVisitSheet_();
+    const nowHm = Utilities.formatDate(new Date(), TZ, 'HH:mm');
+    const exist = findVisitRowByRsv_(vs, rsvRowIdx, dateKey);
+    if (exist) {
+      vs.getRange(exist, 2, 1, 2).setValues([[nowHm, '']]);
+    } else {
+      vs.appendRow([dateKey, nowHm, '', customer, String(row[3] || ''), Number(row[4]) || 1,
+        String(row[5] || ''), String(row[6] || ''), String(row[12] || ''),
+        visitFeeVal_(row[13]), visitFeeVal_(row[14]),
+        '軍師', rsvRowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')]);
+    }
+    visitCacheClear_();
+  } catch (e) { /* 来店記録は本処理(チェックイン)を止めない */ }
+}
+
+// チェックアウト時: 退店時刻を記録し、来店中に更新された人数・卓・キャスト・料金を最終値で確定
+function closeVisitOnCheckOut_(rsvRowIdx) {
+  try {
+    const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 16).getValues()[0];
+    const dateKey = visitDateStr_(row[0]) || bizDateStr_();
+    const vs = getVisitSheet_();
+    let r = findVisitRowByRsv_(vs, rsvRowIdx, dateKey);
+    if (!r) {
+      // 機能導入前にチェックイン済みだった来店など: この場で1行起こす（来店時刻はKCHECKIN_から復元）
+      const ci = Number(PropertiesService.getScriptProperties().getProperty('KCHECKIN_' + rsvRowIdx) || 0);
+      const inHm = ci ? Utilities.formatDate(new Date(ci), TZ, 'HH:mm') : visitHmStr_(row[1]);
+      vs.appendRow([dateKey, inHm, '', String(row[2] || ''), String(row[3] || ''), Number(row[4]) || 1,
+        String(row[5] || ''), String(row[6] || ''), String(row[12] || ''), '', '',
+        '軍師', rsvRowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')]);
+      r = vs.getLastRow();
+    }
+    vs.getRange(r, 3).setValue(Utilities.formatDate(new Date(), TZ, 'HH:mm'));
+    vs.getRange(r, 6, 1, 6).setValues([[Number(row[4]) || 1, String(row[5] || ''), String(row[6] || ''),
+      String(row[12] || ''), visitFeeVal_(row[13]), visitFeeVal_(row[14])]]);
+    visitCacheClear_();
+  } catch (e) { /* 来店記録は本処理(チェックアウト)を止めない */ }
+}
+
+// 「来店前に戻す」（誤操作取消）時: 当該来店記録行を削除
+function deleteVisitOnRevert_(rsvRowIdx) {
+  try {
+    const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 1).getValues()[0];
+    const dateKey = visitDateStr_(row[0]) || bizDateStr_();
+    const vs = getVisitSheet_();
+    const r = findVisitRowByRsv_(vs, rsvRowIdx, dateKey);
+    if (r) { vs.deleteRow(r); visitCacheClear_(); }
+  } catch (e) {}
+}
+
+// 顧客キー → 来店集計 {count,last,dohanCount,lastDohanDate,lastDohanCast}（120秒キャッシュ・会費マップと同流儀）
+function getMemberVisitMap_() {
+  const cache = CacheService.getScriptCache();
+  const c = cache.get('VISITMAP_v1');
+  if (c) { try { return JSON.parse(c); } catch (e) {} }
+  const map = getMemberVisitMapRaw_();
+  try { cache.put('VISITMAP_v1', JSON.stringify(map), 120); } catch (e) {}
+  return map;
+}
+function getMemberVisitMapRaw_() {
+  const out = { byNo: {}, byName: {} };
+  const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
+  if (!sh) return out;
+  const rows = sh.getDataRange().getValues();
+  const add = function (bucket, key, d, dohan, cast) {
+    if (!key) return;
+    const s = bucket[key] || (bucket[key] = { count: 0, last: '', dohanCount: 0, lastDohanDate: '', lastDohanCast: '' });
+    s.count++;
+    if (d > s.last) s.last = d;
+    if (dohan) { s.dohanCount++; if (d >= s.lastDohanDate) { s.lastDohanDate = d; s.lastDohanCast = cast; } }
+  };
+  for (let i = 1; i < rows.length; i++) {
+    const d = visitDateStr_(rows[i][0]);
+    if (!d) continue;
+    const dohanCast = String(rows[i][8] || '').trim();
+    const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
+    add(out.byNo, visitNoFromRow_(rows[i][4], rows[i][3]), d, dohan, dohanCast);
+    add(out.byName, visitCanonName_(rows[i][3]), d, dohan, dohanCast);
+  }
+  return out;
+}
+// 会員番号優先・なければ名前で来店集計を引く
+function visitStatsFor_(map, no, name) {
+  if (!map) return null;
+  return map.byNo[visitCanonNo_(no)] || map.byName[visitCanonName_(name)] || null;
+}
+
+// 顧客の来店履歴＋集計（顧客管理の詳細画面用）。会員番号優先・なければ名前照合
+function kioskGetCustomerVisits(no, name, limit) {
+  try {
+    const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
+    const nq = visitCanonNo_(no), mq = visitCanonName_(name);
+    if (!sh || (!nq && !mq)) return { ok: true, stats: null, history: [] };
+    const rows = sh.getDataRange().getValues();
+    const hist = [];
+    let count = 0, dohanCount = 0, last = '';
+    for (let i = 1; i < rows.length; i++) {
+      const rno = visitNoFromRow_(rows[i][4], rows[i][3]);
+      const rnm = visitCanonName_(rows[i][3]);
+      if (!((nq && rno && rno === nq) || (mq && rnm && rnm === mq))) continue;
+      const d = visitDateStr_(rows[i][0]);
+      const dohanCast = String(rows[i][8] || '').trim();
+      const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
+      count++;
+      if (dohan) dohanCount++;
+      if (d > last) last = d;
+      hist.push({
+        date: d, in: visitHmStr_(rows[i][1]), out: visitHmStr_(rows[i][2]),
+        pax: Number(rows[i][5]) || null, table: String(rows[i][6] || ''),
+        tantou: String(rows[i][7] || ''), dohanCast: dohanCast, dohan: dohan,
+        seatFee: (rows[i][9] !== '' && rows[i][9] != null) ? Number(rows[i][9]) : null,
+        dohanFee: (rows[i][10] !== '' && rows[i][10] != null) ? Number(rows[i][10]) : null,
+        source: String(rows[i][11] || '')
+      });
+    }
+    hist.sort(function (a, b) { return (b.date + (b.in || '')).localeCompare(a.date + (a.in || '')); });
+    const lim = Math.max(1, Math.min(Number(limit) || 30, 100));
+    return { ok: true, stats: { count: count, dohanCount: dohanCount, last: last }, history: hist.slice(0, lim) };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+// 予約管理の過去の来店済み/退店済み行を来店記録へ一括移行（重複スキップ・何度でも安全に再実行可）
+// commit=false でプレビュー（件数とサンプルのみ返す）
+function gunshiBackfillVisits(commit) {
+  const rsv = getYoyakuRsrvSheet_().getDataRange().getValues();
+  const vs = getVisitSheet_();
+  const vRows = vs.getDataRange().getValues();
+  const seen = {}; // 既存来店記録: 予約行|日 と 正規化名前|日 の両方でガード
+  for (let i = 1; i < vRows.length; i++) {
+    const d = visitDateStr_(vRows[i][0]);
+    if (String(vRows[i][12] || '') !== '') seen['r' + vRows[i][12] + '|' + d] = true;
+    seen['n' + visitCanonName_(vRows[i][3]) + '|' + d] = true;
+  }
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const out = [];
+  for (let i = 1; i < rsv.length; i++) {
+    const row = rsv[i];
+    const st = String(row[8] || '').trim();
+    if (st !== '来店済み' && st !== '退店済み') continue;
+    const customer = String(row[2] || '').trim();
+    if (!customer) continue;
+    const d = visitDateStr_(row[0]);
+    if (!d) continue;
+    const rowIdx = i + 1;
+    if (seen['r' + rowIdx + '|' + d] || seen['n' + visitCanonName_(customer) + '|' + d]) continue;
+    seen['n' + visitCanonName_(customer) + '|' + d] = true;
+    const ci = Number(props['KCHECKIN_' + rowIdx] || 0);
+    const inHm = ci ? Utilities.formatDate(new Date(ci), TZ, 'HH:mm') : visitHmStr_(row[1]);
+    out.push([d, inHm, '', customer, String(row[3] || ''), Number(row[4]) || 1,
+      String(row[5] || ''), String(row[6] || ''), String(row[12] || ''),
+      visitFeeVal_(row[13]), visitFeeVal_(row[14]),
+      '移行', rowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')]);
+  }
+  if (commit && out.length) {
+    vs.getRange(vs.getLastRow() + 1, 1, out.length, VISIT_HEAD_.length).setValues(out);
+    visitCacheClear_();
+  }
+  return { ok: true, candidates: out.length, committed: !!commit, sample: out.slice(0, 5).map(function (r) { return r[0] + ' ' + r[3]; }) };
+}
+
 function checkInReservation_(rowIdx) {
   const sh = getYoyakuRsrvSheet_();
   const row = sh.getRange(rowIdx, 1, 1, 12).getValues()[0];
@@ -6661,6 +6882,7 @@ function checkInReservation_(rowIdx) {
     sp.deleteProperty('YRSRV_' + code);
   });
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
+  logVisitOnCheckIn_(rowIdx); // 来店記録DBへ追記（失敗してもチェックインは止めない）
   if (seatCodes.length === 0) {
     const KF = prop('GROUP_KUROFUKU');
     if (KF) push_(KF, '⚠️ テーブル設定おねがいします（' + customer + '様）');
@@ -6674,6 +6896,7 @@ function checkOutReservation_(rowIdx) {
   const pax = Number(row[4]) || 1;
   const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('退店済み');
+  closeVisitOnCheckOut_(rowIdx); // 来店記録DBを確定（KCHECKIN_削除より先に呼ぶ=来店時刻の復元用）
   const sp = PropertiesService.getScriptProperties();
   sp.deleteProperty('KCHECKIN_' + rowIdx);
   seatCodes.forEach(code => {

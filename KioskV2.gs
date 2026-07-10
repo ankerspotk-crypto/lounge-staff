@@ -80,12 +80,19 @@ function getKioskShiftBoard() {
 function searchKioskCustomersV2(query) {
   var base = searchKioskCustomers(query) || [];
   var feeMap = (typeof getMemberFeeMap_ === 'function') ? getMemberFeeMap_() : {};
+  var visitMap = null;
+  try { visitMap = (typeof getMemberVisitMap_ === 'function') ? getMemberVisitMap_() : null; } catch (e) {}
   return base.map(function (c) {
     var f = feeMap[c.no] || feeMap[c.member] || {};
+    var v = visitMap ? (visitStatsFor_(visitMap, c.no, c.card) || visitStatsFor_(visitMap, '', c.name)) : null;
     return Object.assign({}, c, {
       memberSince: f.memberSince || '',
       annualFeeDate: f.annualFeeDate || '',
-      lineRegistered: (c.lineRegistered != null) ? c.lineRegistered : null // 既存に無ければ後で接続
+      lineRegistered: (c.lineRegistered != null) ? c.lineRegistered : null, // 既存に無ければ後で接続
+      visitCount: v ? v.count : 0,
+      lastVisit: v ? v.last : '',
+      dohanCount: v ? v.dohanCount : 0,
+      lastDohanCast: v ? v.lastDohanCast : ''
     });
   });
 }
