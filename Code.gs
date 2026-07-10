@@ -4975,6 +4975,7 @@ function handlePortalApi_(e) {
     if (tb === 'billsample')         return out(fetchTrustBillList_(e.parameter.date || bizDateStr_()));
     if (tb === 'billdetailsample')   return out(fetchTrustBillDetail_(e.parameter.date || bizDateStr_(), e.parameter.uuid || ''));
     if (tb === 'trustdiag')          return out(trustLoginDiag_());
+    if (tb === 'trustlastok')        return out({ ok: true, salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}'), hasCookie: !!prop('TRUST_COOKIE'), billCursor: prop('BILL_BF_CURSOR') || '', bfStall: prop('BILL_BF_STALL') || '' });
   }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
