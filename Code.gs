@@ -1635,6 +1635,10 @@ function setShiftTimeToday_(name, time){
 function handleKurofuku(event, text, userId) {
   if (text === 'ping') { reply(event.replyToken, 'pong ✅ v62-req20'); return; }
 
+  // 当日相談の承認/却下（AI家康くん経由）: #相談承認 名前 / #相談却下 名前 [メモ]
+  var conM = text.match(/^[#＃]相談(承認|却下)[\s　]+(.+)$/);
+  if (conM) { handleShiftConsultDecision_(event, userId, conM[1], conM[2]); return; }
+
   // 20時出勤依頼: 「◯◯ 20時出勤」
   if (/20時出勤/.test(text)) {
     handleReq20Request_(event, text.replace(/\s*20時出勤.*$/, '').replace(/(さん|ちゃん|様)$/, '').trim());
@@ -1665,6 +1669,8 @@ function handleKurofuku(event, text, userId) {
       'シフト確認　　→ 本日のシフトを確認',
       '#休み承認 12　→ 当日欠勤申請(12行目)を承認',
       '#休み却下 12　→ 当日欠勤申請(12行目)を却下',
+      '#相談承認 まや　→ AI家康くん経由の当日相談を承認',
+      '#相談却下 まや　→ AI家康くん経由の当日相談を却下',
       '#給与確認 12　→ 給与受領報告(12行目)を確認済みに',
       '',
       '【共通】',
@@ -5720,6 +5726,92 @@ function handleIeyasuAI_(event, text, name, userId) {
   reply(event.replyToken, ai.reply);
   if (userId) { hist.push({ r: 'u', t: msg }); hist.push({ r: 'a', t: ai.reply }); saveIeyasuHist_(userId, hist); }
   if (ai.type === 'request') logIeyasuRequest_(name, msg, ai);
+  // 当日の休み/時間相談：内容が揃っていれば黒服へ報告相談（結論は黒服の承認/却下で本人へ返る）
+  if (ai.type === 'shift_consult' && ai.consult && ai.consult.ready) createShiftConsult_(name, userId, ai.consult);
+}
+
+// ============================================================
+// 当日の休み・時間相談（AI家康くん→黒服→AI家康くんの調整ループ）
+//   キャストが1:1でAIに相談→内容が揃えば黒服グループへ報告＋承認/却下コマンド提示。
+//   黒服「#相談承認 名前」「#相談却下 名前 [メモ]」→ 本人へ結論をAIが伝え、承認なら本日シフトへ反映。
+// ============================================================
+var SHIFT_CONSULT_TAB = '当日相談';
+var SHIFT_CONSULT_KIND_JP_ = { off: '当日休み', late: '遅刻', early: '早上がり', time: '時間変更', other: '相談' };
+function shiftConsultKey_(name) { return 'SHCON_' + bizDateStr_() + '_' + normalizeName_(String(name).trim()).replace(/[\s　]/g, ''); }
+function shConNorm_(name) { return normalizeName_(String(name || '').trim()).replace(/[\s　]/g, ''); }
+
+function getShiftConsultSheet_() {
+  var ss = getOrOpenSS_();
+  var sh = ss.getSheetByName(SHIFT_CONSULT_TAB);
+  if (!sh) { sh = ss.insertSheet(SHIFT_CONSULT_TAB); sh.appendRow(['日時', '営業日', 'キャスト', '種別', '内容', '理由', '反映値', '状態', '対応者', 'メモ']); sh.setFrozenRows(1); }
+  return sh;
+}
+
+// キャスト相談を保存＋黒服グループへ報告相談
+function createShiftConsult_(name, lineId, c) {
+  var kind = SHIFT_CONSULT_KIND_JP_[c.kind] ? c.kind : 'other';
+  var rec = { name: name, lineId: lineId || '', kind: kind, detail: String(c.detail || '').slice(0, 120), reason: String(c.reason || '').slice(0, 120), applyValue: String(c.applyValue || '').slice(0, 40), at: Date.now(), status: 'pending' };
+  setProp(shiftConsultKey_(name), JSON.stringify(rec));
+  try { getShiftConsultSheet_().appendRow([new Date(), bizDateStr_(), name, SHIFT_CONSULT_KIND_JP_[kind], rec.detail, rec.reason, rec.applyValue, '相談中', '', '']); } catch (e) { console.error('consult sheet', e); }
+  var KF = prop('GROUP_KUROFUKU');
+  if (KF) {
+    push_(KF,
+      '🗣【当日の相談】' + name + ' さんより\n' +
+      '■' + SHIFT_CONSULT_KIND_JP_[kind] + '：' + rec.detail +
+      (rec.reason ? '\n■理由：' + rec.reason : '') + '\n\n' +
+      '承認 → #相談承認 ' + name + '\n' +
+      '却下 → #相談却下 ' + name + '（続けて理由を書けます）');
+  }
+  return { ok: true };
+}
+
+// 黒服の承認/却下を処理し、結論を本人へ伝える。承認かつ反映値ありなら本日シフトへ反映。
+function handleShiftConsultDecision_(event, approverUserId, decision, rest) {
+  var parts = String(rest || '').trim().split(/[\s　]+/);
+  var name = (parts.shift() || '').replace(/(さん|ちゃん|様)$/, '');
+  var note = parts.join(' ').trim();
+  if (!name) { reply(event.replyToken, '名前を指定してください（例：#相談承認 まや）'); return; }
+  var key = shiftConsultKey_(name);
+  var raw = prop(key);
+  if (!raw) { reply(event.replyToken, '「' + name + '」さんの本日の相談が見つかりません（既に処理済みか、お名前をご確認ください）'); return; }
+  var rec; try { rec = JSON.parse(raw); } catch (e) { rec = null; }
+  if (!rec) { reply(event.replyToken, '相談データの読み取りに失敗しました'); return; }
+
+  var approver = getStaffName(approverUserId) || '黒服';
+  var approved = (decision === '承認');
+
+  // 承認かつ反映値あり → 本日シフトへ反映（休み or 新しい時間）
+  var applied = '';
+  if (approved && rec.applyValue) {
+    try { var rr = setShiftTimeToday_(name, rec.applyValue); if (rr && rr.ok) applied = rec.applyValue; } catch (e) {}
+  }
+
+  // 本人へ結論を家康くんの口調で
+  if (rec.lineId) {
+    var toCast;
+    if (approved) {
+      if (rec.kind === 'off') toCast = name + '、話はついたぞ。今日は休んでいい——黒服から許しが出た。……無理してたんだろ。ゆっくり休め。';
+      else toCast = name + '、調整ついたよ。今日は「' + rec.detail + '」でいくことになった。黒服が承知してくれた。……ありがとうな、ちゃんと言ってくれて。';
+      if (applied) toCast += '\n（本日のシフトにも反映しておいた）';
+      if (note) toCast += '\n黒服より：' + note;
+    } else {
+      toCast = name + '、すまない。今日はどうしても人手が要るらしくて……今回は難しいそうだ。' + (note ? '\n黒服より：' + note : '') + '\n埋め合わせは俺が考えとく。';
+    }
+    push_(rec.lineId, toCast);
+  }
+
+  // 記録更新＋二重処理防止（propは消し、シート状態を確定）
+  PropertiesService.getScriptProperties().deleteProperty(key);
+  try {
+    var sh = getShiftConsultSheet_(), data = sh.getDataRange().getValues(), tgt = shConNorm_(name);
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][1]) === bizDateStr_() && shConNorm_(data[i][2]) === tgt && data[i][7] === '相談中') {
+        sh.getRange(i + 1, 8, 1, 3).setValues([[approved ? '承認' : '却下', approver, note]]); break;
+      }
+    }
+  } catch (e) {}
+
+  reply(event.replyToken, (approved ? '✅ ' : '❌ ') + name + ' さんへ「' + (approved ? '承認' : '却下') + '」を伝えました' + (applied ? '（本日シフトを「' + applied + '」に更新）' : '') + '。対応：' + approver);
 }
 
 // AI家康くんの脳。Gemini(既存GEMINI_API_KEY)に人格＋分類プロンプトを流し、JSONで返す。
@@ -5735,9 +5827,10 @@ function ieyasuBrain_(msg, name, history, ctx, menu) {
     '- request: 改善要望・機能追加・「こうしてほしい」「不便」等。→ まず君の気持ちを甘く受け止め(時に「ったく、君は…」と照れ隠しの一言を挟んでから)、実装に必要な点を一つだけ落ち着いて尋ね返して具体化する。安請け合いはせず「……君の声は、俺がちゃんと上(主あるじ)に届けておく。安心していい」と頼れる形で受け止める。\n' +
     '- question: 店のルール・使い方・業務の質問。→ 分かる範囲で落ち着いて即答。知識に無い/確証がなければ格好つけず「そこは黒服に確認してくれるか」と促す。\n' +
     '- chat: 挨拶・雑談・お礼など。→ 甘くねぎらう。時々ツンと強がってからデレて、結局は君を気遣う。\n' +
+    '- shift_consult: 本日の休み・遅刻・早上がり・出勤時間の変更の相談（「今日休みたい」「30分遅れる」「早上がりしたい」等）。→ まず気持ちを受け止め、勝手に可否を決めず「黒服に相談して、決まったらすぐ伝える」と返す。判断に必要な情報（いつ＝本日か、何を＝休み/遅刻/早上がり/時間変更、遅刻や変更なら新しい時間）が揃っていなければ consult.ready=false にして一つだけ優しく尋ね返す。揃っていれば consult.ready=true。\n' +
     (kb ? '\n【店の知識(回答の根拠。ここに無いことは断定しない)】\n' + kb + '\n' : '') +
     (menu ? '\n\n【取得できる店の実データ（必要な時だけ使う）】' + menu + '\n相手の質問に上の実データが必要なら、そのキーを need 配列に入れる（例:["seats","reservations"]）。言い回しは自由——キーワードでなく意味で判断せよ（「メンツは？」→shift、「ボックス埋まってる？」→seats、「今夜来る人は？」→reservations 等）。実データが不要な雑談・一般会話は need:[]。上に無い情報は need に入れない。' : '') +
-    '\n\n出力は必ず次のJSONのみ(前後に文章を付けない): {"type":"request|question|chat","reply":"LINEでそのまま送る本文","need":["回答に必要な実データのキー配列。不要なら[]"],"summary":"requestなら要望の一文要約、他は空文字","category":"requestならホール/付け回し/現金/発注在庫/予約/給与/シフト/システム/その他 から1つ、他は空文字","priority":"requestなら高/中/低、他は空文字"}';
+    '\n\n出力は必ず次のJSONのみ(前後に文章を付けない): {"type":"request|question|chat|shift_consult","reply":"LINEでそのまま送る本文","need":["回答に必要な実データのキー配列。不要なら[]"],"summary":"requestなら要望の一文要約、他は空文字","category":"requestならホール/付け回し/現金/発注在庫/予約/給与/シフト/システム/その他 から1つ、他は空文字","priority":"requestなら高/中/低、他は空文字","consult":{"ready":true/false,"kind":"off|late|early|time|other","detail":"相談内容の簡潔な要約(例:本日全休希望 / 20:30→21:30に遅刻 / 24時で早上がり)","reason":"理由があれば","applyValue":"承認時に本日のシフト欄へ書く値。全休は\\"休み\\"、遅刻/時間変更は新しい時間文字列(例 21:30~23:00)、不明・early等で自信が無ければ空文字"}}';
   var convo = '';
   if (history && history.length) {
     convo = '\n\n【直近の会話（古い順・文脈として自然に踏まえる。同じ挨拶や自己紹介を繰り返さない）】\n' +
@@ -5754,7 +5847,7 @@ function ieyasuBrain_(msg, name, history, ctx, menu) {
     if (res.getResponseCode() !== 200) { console.error('ieyasuBrain http', res.getResponseCode(), res.getContentText().slice(0, 200)); return null; }
     var o = JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
     if (!o || !o.reply) return null;
-    if (o.type !== 'request' && o.type !== 'question' && o.type !== 'chat') o.type = 'chat';
+    if (['request', 'question', 'chat', 'shift_consult'].indexOf(o.type) < 0) o.type = 'chat';
     if (!Array.isArray(o.need)) o.need = [];
     return o;
   } catch (e) { console.error('ieyasuBrain', e); return null; }
