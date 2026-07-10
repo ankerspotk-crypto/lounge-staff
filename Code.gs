@@ -5021,6 +5021,15 @@ function handlePortalApi_(e) {
     });
     return out({ ok: true, rows: Math.max(0, last - 1), emptyPrimary: empty, digitPrefixed: digit, digitNames: digitSet, emptyExamples: emptyEx });
   }
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'dupnames') {
+    const sh = getOrOpenSS_().getSheetByName(STAFF_TAB); const byName = {};
+    if (sh && sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().forEach(r => {
+      const nm = normalizeName_(String(r[1]).trim()); if (!nm) return;
+      (byName[nm] = byName[nm] || []).push({ userId: String(r[0]).slice(-6), role: String(r[2]), reg: r[7] instanceof Date ? Utilities.formatDate(r[7], TZ, 'yyyy-MM-dd') : '' });
+    });
+    const dups = Object.keys(byName).filter(n => byName[n].length >= 2).map(n => ({ name: n, holders: byName[n] }));
+    return out({ ok: true, totalStaff: Object.keys(byName).length, reusedNames: dups });
+  }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
@@ -5146,16 +5155,18 @@ function handlePortalApi_(e) {
   // 伝票（担当キャスト本人の今月・前日までの売上/伝票一覧）
   if (tab === 'bills') {
     const lookupNameB = normalizeName_(isAdmin ? viewAs : name);
-    const r = portalGetMyBills_(lookupNameB, month);
+    const sinceB = isAdmin ? '' : billTenureCutoff_(userId); // 管理者=全期間、キャスト=使い回し源氏名のみ登録日カット
+    const r = portalGetMyBills_(lookupNameB, month, sinceB);
     return out(Object.assign({ name, isAdmin, viewAs: lookupNameB }, r));
   }
-  // 伝票明細（ライブ取得・所有ガード）
+  // 伝票明細（ライブ取得・所有ガード＋在籍期間ガード）
   if (tab === 'billdetail') {
     const lookupNameD = normalizeName_(isAdmin ? viewAs : name);
+    const sinceD = isAdmin ? '' : billTenureCutoff_(userId);
     const dk = e.parameter.date || '';
     const uuid = e.parameter.uuid || '';
     if (!dk || !uuid) return out({ ok: false, error: 'date/uuid required' });
-    return out(portalBillDetail_(lookupNameD, dk, uuid, isAdmin));
+    return out(portalBillDetail_(lookupNameD, dk, uuid, isAdmin, sinceD));
   }
 
   // === ホーム軽量ペイロード（初回ロード高速化） ===
@@ -9453,7 +9464,7 @@ function fetchTrustBillDetail_(dateKey, uuid, session) {
 }
 
 // ポータル: 担当キャスト本人の今月・前日までの売上一覧＋伝票一覧（伝票シートから）
-function portalGetMyBills_(lookupName, month) {
+function portalGetMyBills_(lookupName, month, sinceDate) {
   const target = normalizeName_(lookupName);
   if (!target) return { ok: true, month: '', cast: '', monthTotal: 0, days: [] };
   const ym = (month || Utilities.formatDate(new Date(), TZ, 'yyyy-MM')).replace(/\//g, '-').slice(0, 7);
@@ -9467,6 +9478,7 @@ function portalGetMyBills_(lookupName, month) {
       const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
       if (bd.slice(0, 7) !== ym) return;
       if (bd > yst) return; // 今日以降（未確定）は除外
+      if (sinceDate && bd < sinceDate) return; // 使い回し源氏名: 本人の登録日以降のみ（前任者の代を除外）
       if (normalizeName_(String(r[8]).trim()) !== target) return; // 主担当本人のみ
       const day = (byDay[bd] = byDay[bd] || { date: bd, total: 0, count: 0, slips: [] });
       day.total += Number(r[9]) || 0;
@@ -9485,9 +9497,27 @@ function portalGetMyBills_(lookupName, month) {
   return { ok: true, month: ym, cast: target, monthTotal: monthTotal, days: days };
 }
 
-// ポータル: 伝票明細ライブ取得（所有ガード＝その伝票の主担当が本人であること。管理者は素通し）
-function portalBillDetail_(lookupName, dateKey, uuid, isAdmin) {
+// 使い回し源氏名の在籍カットオフ: スタッフマスタで同名(別userId)が2人以上居る源氏名だけ、
+// 本人の登録日(H列)以降に限定して前任者の代を除外。使い回しの無い名前は空文字=全履歴。管理者には適用しない。
+function billTenureCutoff_(userId) {
+  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh || sh.getLastRow() < 2) return '';
+  const vals = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues(); // A..H(登録日)
+  let myName = '', myReg = null;
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === String(userId).trim()) { myName = normalizeName_(String(vals[i][1]).trim()); myReg = vals[i][7]; break; }
+  }
+  if (!myName) return '';
+  let cnt = 0;
+  vals.forEach(r => { if (normalizeName_(String(r[1]).trim()) === myName) cnt++; });
+  if (cnt < 2) return ''; // 使い回し無し→全履歴
+  return (myReg instanceof Date) ? Utilities.formatDate(myReg, TZ, 'yyyy-MM-dd') : ''; // 使い回しあり→自分の登録日以降
+}
+
+// ポータル: 伝票明細ライブ取得（所有ガード＝主担当が本人＋在籍期間内。管理者は素通し）
+function portalBillDetail_(lookupName, dateKey, uuid, isAdmin, sinceDate) {
   const target = normalizeName_(lookupName);
+  if (!isAdmin && sinceDate && String(dateKey) < sinceDate) return { ok: false, error: '権限がありません' }; // 在籍前の伝票は不可
   const sh = billSheet_();
   const last = sh.getLastRow();
   let owner = '', found = false;
