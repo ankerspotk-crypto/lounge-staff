@@ -5011,6 +5011,16 @@ function handlePortalApi_(e) {
     });
     return out({ ok: true, month: ym, slips: cnt, total: total, byCast: Object.keys(agg).map(k => ({ cast: k, count: agg[k].count, total: agg[k].total })).sort((a, b) => b.count - a.count) });
   }
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billqualityscan') {
+    const sh = billSheet_(); const last = sh.getLastRow(); let empty = 0, digit = 0; const digitSet = {}, emptyEx = [];
+    if (last >= 2) sh.getRange(2, 1, last - 1, 14).getValues().forEach(r => {
+      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
+      const p = String(r[8]).trim();
+      if (!p) { empty++; if (emptyEx.length < 8) emptyEx.push({ date: bd, tanto: String(r[13]) }); }
+      else if (/^\d/.test(p)) { digit++; digitSet[p] = (digitSet[p] || 0) + 1; }
+    });
+    return out({ ok: true, rows: Math.max(0, last - 1), emptyPrimary: empty, digitPrefixed: digit, digitNames: digitSet, emptyExamples: emptyEx });
+  }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
