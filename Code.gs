@@ -10396,11 +10396,8 @@ function addShiftStaff_(staffName, role, date, timeVal) {
   const newRow = new Array(headers.length).fill('');
   newRow[0] = staffName;
   newRow[1] = role;
-  if (date && timeVal) {
-    const colIdx = headers.indexOf(date);
-    if (colIdx >= 0) newRow[colIdx] = timeVal;
-  }
   sh.appendRow(newRow);
+  if (date && timeVal) return writeShiftCell_(staffName, date, timeVal); // 列が無ければ自動生成して書く
   return { ok: true };
 }
 
@@ -10465,6 +10462,19 @@ function getShiftMgmtData_() {
       dateCols.push(j); // 非日付の見出しは残す（防御的）
     }
   }
+  // 恒久対策(2026-07-11): シート列に無い未来日も常に表示する。今日〜翌々月末を動的に補完し表示/申請突合の対象に含める。
+  // 毎月シート列を手で足す運用をやめ、列は書込時(承認/編集/追加)に自動生成する（ensureShiftDateColumn_）。
+  const allDates = {}; // 'M/d' → Date(0:00)
+  dateCols.forEach(j => {
+    const v = headerVals[j];
+    let dt = (v instanceof Date && !isNaN(v)) ? new Date(v) : mdToBizDate_(headers[j], cutoff);
+    if (dt) { dt.setHours(0, 0, 0, 0); allDates[headers[j]] = dt; }
+  });
+  const horizon = new Date(cutoff.getFullYear(), cutoff.getMonth() + 3, 0); horizon.setHours(0, 0, 0, 0); // 翌々月末
+  for (let dd = new Date(cutoff); dd.getTime() <= horizon.getTime(); dd.setDate(dd.getDate() + 1)) {
+    const key = (dd.getMonth() + 1) + '/' + dd.getDate();
+    if (!allDates[key]) allDates[key] = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate());
+  }
   const rows = [];
   const idx = {}; // 空白除去の正規化名 → row（「鈴木 海」と「鈴木海」を同一視して統合）
   const nkeyOf = s => normalizeName_(String(s).trim()).replace(/[\s　]/g, '');
@@ -10485,7 +10495,7 @@ function getShiftMgmtData_() {
 
   // シフト申請を統合：黒服はシフト表に行が無くここが主データ。承諾=確定(cells)、pending=申請中(pending)
   // これで「1日に何人出られるか」を承認待ちも含めてトータル把握できる
-  const headerSet = {}; dateCols.forEach(j => { headerSet[headers[j]] = true; });
+  const headerSet = {}; Object.keys(allDates).forEach(k => { headerSet[k] = true; }); // 動的日付も申請突合の対象に
   const reqSh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHIFT_REQUEST_TAB);
   if (reqSh) {
     const rr = reqSh.getDataRange().getValues();
@@ -10514,10 +10524,11 @@ function getShiftMgmtData_() {
     }
   }
 
+  // 表示ヘッダ = シート実列(今日以降) ∪ 動的日付。実日付でソート（年またぎ対応）。
+  const outHeaders = Object.keys(allDates).sort((a, b) => allDates[a] - allDates[b]);
   // 日付ごとの出勤人数トータル（確定＋申請中。休みは除外）
   const totals = {};
-  dateCols.forEach(j => {
-    const d = headers[j];
+  outHeaders.forEach(d => {
     let confirmed = 0, pending = 0;
     rows.forEach(r => {
       const c = r.cells[d];
@@ -10527,9 +10538,32 @@ function getShiftMgmtData_() {
     totals[d] = { confirmed, pending, total: confirmed + pending };
   });
 
-  return { headers: dateCols.map(j => headers[j]), rows, totals };
+  return { headers: outHeaders, rows, totals };
 }
 
+// 'M/d'文字列を今日基準の実日付に。過去15日より前になる月は翌年扱い（年またぎ対応）。
+function mdToBizDate_(md, base) {
+  const p = String(md).split('/'); if (p.length !== 2) return null;
+  const m = parseInt(p[0], 10), d = parseInt(p[1], 10);
+  if (!m || !d) return null;
+  const b = base || new Date();
+  let cand = new Date(b.getFullYear(), m - 1, d);
+  if (cand.getTime() < b.getTime() - 15 * 86400000) cand = new Date(b.getFullYear() + 1, m - 1, d);
+  return cand;
+}
+// シフト表シートの1行目に日付列(date='M/d')が無ければ末尾に追加し、列インデックス(0始まり)を返す。
+function ensureShiftDateColumn_(sh, date) {
+  const lastCol = sh.getLastColumn();
+  const headerVals = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  const headers = headerVals.map(v => (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim());
+  const existing = headers.indexOf(date);
+  if (existing >= 0) return existing;
+  const dt = mdToBizDate_(date, new Date());
+  if (!dt) return -1;
+  const newCol = lastCol + 1;
+  sh.getRange(1, newCol).setValue(dt); // Date値で入れる（既存列と同じ型。読取時にM/d化される）
+  return newCol - 1;
+}
 function writeShiftCell_(name, date, value) {
   const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
   if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
@@ -10539,8 +10573,11 @@ function writeShiftCell_(name, date, value) {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
     return String(v).trim();
   });
-  const colIdx = headers.indexOf(date);
-  if (colIdx < 0) return { ok: false, error: '日付列が見つかりません: ' + date };
+  let colIdx = headers.indexOf(date);
+  if (colIdx < 0) {
+    colIdx = ensureShiftDateColumn_(sh, date); // 列が無ければ自動生成してから書く
+    if (colIdx < 0) return { ok: false, error: '日付列を作成できません: ' + date };
+  }
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === name) {
       sh.getRange(i + 1, colIdx + 1).setValue(value || '');
@@ -10568,11 +10605,8 @@ function addShiftStaff_(staffName, role, date, timeVal) {
   const newRow = new Array(headers.length).fill('');
   newRow[0] = staffName;
   newRow[1] = role;
-  if (date && timeVal) {
-    const colIdx = headers.indexOf(date);
-    if (colIdx >= 0) newRow[colIdx] = timeVal;
-  }
   sh.appendRow(newRow);
+  if (date && timeVal) return writeShiftCell_(staffName, date, timeVal); // 列が無ければ自動生成して書く
   return { ok: true };
 }
 // キオスクURLのシークレットキーをリセット（実行するたびに新URLが発行される）
