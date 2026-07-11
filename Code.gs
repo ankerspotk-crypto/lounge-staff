@@ -5241,6 +5241,31 @@ function handlePortalApi_(e) {
     const dups = Object.keys(byName).filter(n => byName[n].length >= 2).map(n => ({ name: n, holders: byName[n] }));
     return out({ ok: true, totalStaff: Object.keys(byName).length, reusedNames: dups });
   }
+  // 誕生日バック診断（読み取りのみ・原因切り分け用・恒久化しない）
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'bdaydiag') {
+    const rep = { ok: true, monthIn: e.parameter.month || '' };
+    try {
+      rep.mk = monthKey_(e.parameter.month || '') || '';
+      const ss2 = getOrOpenSS_();
+      rep.sheetExists = !!ss2.getSheetByName(BIRTHDAY_BACK_TAB);
+      rep.trustExists = !!ss2.getSheetByName(TRUST_TAB);
+      rep.step = 'getBirthdayBackMap_';
+      rep.map = getBirthdayBackMap_(ss2, rep.mk);
+      rep.step = 'mkShift_';
+      rep.mkShiftTest = mkShift_(rep.mk, -1) + ' / ' + mkShift_(rep.mk, 1);
+      rep.step = 'trustScan';
+      const ts = ss2.getSheetByName(TRUST_TAB), casts = [];
+      if (ts && ts.getLastRow() >= 2) {
+        const tr = ts.getDataRange().getValues();
+        for (let i = 1; i < tr.length; i++) { if (mStr_(tr[i][0]) !== rep.mk) continue; const nm = String(tr[i][1]).trim(); if (nm && casts.indexOf(nm) < 0) casts.push(nm); }
+      }
+      rep.castCount = casts.length; rep.castsSample = casts.slice(0, 8);
+      rep.step = 'done';
+    } catch (err) {
+      rep.ok = false; rep.error = String((err && err.message) || err); rep.stack = String((err && err.stack) || '');
+    }
+    return out(rep);
+  }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
