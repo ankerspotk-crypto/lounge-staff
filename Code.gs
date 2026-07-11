@@ -6360,9 +6360,15 @@ function getYoyakuReqSheet_() {
 function resetGunshiSettings_() {
   const ps = PropertiesService.getScriptProperties();
   const all = ps.getProperties();
-  const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID'];
+  // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
+  // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
+  const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID'];
+  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_'];
   Object.keys(all).forEach(k => {
-    if (!KEEP.includes(k)) ps.deleteProperty(k);
+    if (KEEP.includes(k)) return;
+    if (KEEP_PREFIX.some(p => k.startsWith(p))) return;
+    ps.deleteProperty(k);
   });
 
   // アテンドログの未終了行（今日分）をクリア
