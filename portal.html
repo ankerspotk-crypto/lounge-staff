@@ -1143,6 +1143,7 @@ function openBillDetail(el, date, uuid){
 }
 
 function renderBillItems(d){
+  if (d.pending) return '<div style="font-size:11px;color:#c9a066;padding:6px 2px">明細（内訳）はまだ取り込まれていません。<br><small>コンソールの「伝票を取得」で保存されます。</small></div>';
   var items = d.items || [];
   if (items.length === 0) return '<div style="font-size:11px;color:#7a9cc8;padding:6px 2px">明細なし</div>';
   var h = '<div style="background:#0b1424;border:1px solid #1a2740;border-radius:7px;padding:9px 11px">';

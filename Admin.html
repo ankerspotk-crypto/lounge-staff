@@ -622,7 +622,7 @@ function trustAcquireSection(){
       '<a id="adm-cash-bm" href="" style="text-align:center;padding:10px 14px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 日払い・経費を取得 ← ドラッグ</a></div>'+
     '<div class="toolbar" style="margin-top:10px;gap:8px"><span class="cnt" style="min-width:110px">③ 月次売上</span><span class="lbl">対象月</span><input class="finput" id="adm-bm-month" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM" onchange="trustSetupBookmarklets_()">'+
       '<a id="adm-trust-bm" href="" style="text-align:center;padding:10px 14px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 売上を取得 ← ドラッグ</a></div>'+
-    '<div class="hint" style="margin-top:8px">①伝票＝各キャストの来店・売上明細（毎営業後）。②日払い・経費＝現金チェック用（毎営業後）。③月次売上＝給与用のキャスト集計（月1回）。①は「この日から前日まで」を順に取得＝抜けた日はここを遡って埋められます。</div></div>';
+    '<div class="hint" style="margin-top:8px">①伝票＝各キャストの来店・売上＋<b>品目内訳（ドリンク/ボトル）まで保存</b>（毎営業後・伝票数ぶん取得するので少し時間がかかります）。②日払い・経費＝現金チェック用（毎営業後）。③月次売上＝給与用のキャスト集計（月1回）。①は「この日から前日まで」を順に取得＝抜けた日はここを遡って埋められます。</div></div>';
 }
 /* 伝票取得ブックマークレットの既定開始日＝最新伝票日の翌日（無ければ前日）。最大14日前まで */
 function trustDefaultBillStart_(){
@@ -721,13 +721,17 @@ function trustSetupBookmarklets_(){
       +'var end=new Date();end.setDate(end.getDate()-1);var cur=START?new Date(START+"T00:00:00"):new Date(end);'
       +'var days=[];var g=0;while(cur<=end&&g++<45){days.push(fmt(cur));cur.setDate(cur.getDate()+1);}'
       +'if(!days.length){show("取得対象の日がありません（開始日が前日より後）");return;}'
-      +'var i=0,okc=0,addc=0;'
-      +'function step(){if(i>=days.length){show("✅ 伝票取得 完了<br><small>"+okc+"/"+days.length+"日・追加"+addc+"件</small>");setTimeout(function(){var e=document.getElementById("_lbm");if(e)e.remove();},9000);return;}'
+      +'var i=0,okc=0,addc=0,detc=0;'
+      +'function step(){if(i>=days.length){show("✅ 伝票取得 完了<br><small>"+okc+"/"+days.length+"日・伝票追加"+addc+"件・明細"+detc+"件</small>");setTimeout(function(){var e=document.getElementById("_lbm");if(e)e.remove();},9000);return;}'
       +'var dk=days[i];show("伝票取得中 "+dk+" ("+(i+1)+"/"+days.length+")");'
       +'fetch("/sales/daily/"+dk).then(function(r){return r.text();}).then(function(html){'
       +'if(html.indexOf("daily_bill_detail")<0&&/(password|passwd|ログイン|パスワード)/i.test(html)){throw new Error("__login__");}'
       +'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustBills",syncSecret:S,dateKey:dk,html:html})}).then(function(r){return r.json();});})'
-      +'.then(function(res){if(res&&res.ok){okc++;addc+=(res.added||0);}i++;step();})'
+      +'.then(function(res){if(!res||!res.ok){i++;step();return;}okc++;addc+=(res.added||0);'
+      +'var uu=res.uuids||[];var j=0;'
+      +'function dstep(){if(j>=uu.length){i++;step();return;}var id=uu[j];show("明細取得中 "+dk+"<br><small>"+(j+1)+"/"+uu.length+"件</small>");'
+      +'fetch("/sales/daily_bill_detail/"+dk+"/"+id).then(function(r){return r.text();}).then(function(dh){return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustBillItems",syncSecret:S,dateKey:dk,uuid:id,html:dh})}).then(function(r){return r.json();});}).then(function(dr){if(dr&&dr.ok)detc++;j++;dstep();}).catch(function(){j++;dstep();});}'
+      +'dstep();})'
       +'.catch(function(e){if(String(e.message||e).indexOf("__login__")>=0){show("❌ TRUSTに<b>ログインできていない</b>ようです。<br>ログインし直してから、もう一度押してください。");return;}i++;step();});}'
       +'step();})();';
     billEl.href=bcode;

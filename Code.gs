@@ -630,9 +630,23 @@ function handleApiRequest_(body) {
     if (!body.dateKey) return { ok: false, error: 'dateKey required' };
     const bills = parseTrustBillList_(String(body.html || ''), String(body.dateKey));
     const r = billWriteRows_(String(body.dateKey), bills);
+    r.uuids = bills.map(function (b) { return b.uuid; }); // ブックマークレットが各明細ページを追って取得するため
     logTrustImport_('伝票', body.dateKey, (r && r.fetched) || 0, bySecret ? 'ブックマークレット' : 'コンソール',
       (r && r.ok === false) ? '失敗' : '完了', '追加' + ((r && r.added) || 0) + '件／更新' + ((r && r.updated) || 0) + '件');
     return r;
+  }
+  // 伝票明細（品目内訳）ページのHTMLをブラウザ経由でリレー → パース→伝票明細シートへupsert
+  if (body.action === 'syncTrustBillItems') {
+    const secret = prop('SYNC_SECRET');
+    const bySecret = secret && body.syncSecret === secret;
+    if (!bySecret) {
+      const adminName = getStaffName(body.userId);
+      if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    }
+    if (!body.dateKey || !body.uuid) return { ok: false, error: 'dateKey/uuid required' };
+    const items = parseTrustBillDetail_(String(body.html || ''));
+    const bottles = items.filter(function (it) { return it.isBottle; });
+    return billWriteDetail_(String(body.dateKey), String(body.uuid), items, bottles);
   }
   // ---- シフト管理（管理者専用）----
   if (body.action === 'writeShiftCellPortal') {
@@ -10078,6 +10092,49 @@ function billCoverageMap_(ss) {
   return m;
 }
 
+// ── 伝票明細（品目内訳）ストア：伝票UUIDごとに明細JSONを保存。ポータルはここから表示（ライブ取得しない） ──
+var BILL_DETAIL_TAB  = '伝票明細';
+var BILL_DETAIL_HEAD = ['営業日', 'UUID', '明細JSON', 'ボトル本数', 'ボトル', '取得時刻'];
+function billDetailSheet_() {
+  var ss = getOrOpenSS_();
+  var sh = ss.getSheetByName(BILL_DETAIL_TAB);
+  if (!sh) { sh = ss.insertSheet(BILL_DETAIL_TAB); sh.appendRow(BILL_DETAIL_HEAD); sh.setFrozenRows(1); }
+  return sh;
+}
+// 明細をupsert（キー=営業日|UUID）
+function billWriteDetail_(dateKey, uuid, items, bottles) {
+  var sh = billDetailSheet_();
+  var now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+  var key = String(dateKey) + '|' + String(uuid);
+  var last = sh.getLastRow(), at = -1;
+  if (last >= 2) {
+    var keys = sh.getRange(2, 1, last - 1, 2).getValues();
+    for (var i = 0; i < keys.length; i++) {
+      var bd = keys[i][0] instanceof Date ? Utilities.formatDate(keys[i][0], TZ, 'yyyy-MM-dd') : String(keys[i][0]).trim();
+      if (bd + '|' + String(keys[i][1]).trim() === key) { at = i + 2; break; }
+    }
+  }
+  var row = [dateKey, uuid, JSON.stringify(items || []), (bottles || []).length, (bottles || []).map(function (b) { return b.product; }).join(' / '), now];
+  if (at > 0) sh.getRange(at, 1, 1, BILL_DETAIL_HEAD.length).setValues([row]);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, BILL_DETAIL_HEAD.length).setValues([row]);
+  return { ok: true, uuid: uuid, items: (items || []).length, bottles: (bottles || []).length };
+}
+// 保存済み明細を読む → { items, bottleCount, bottles } / 無ければ null
+function billReadDetail_(uuid) {
+  var sh = billDetailSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var vals = sh.getRange(2, 1, last - 1, BILL_DETAIL_HEAD.length).getValues();
+  var u = String(uuid).trim();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][1]).trim() === u) {
+      var items = []; try { items = JSON.parse(vals[i][2] || '[]'); } catch (e) {}
+      return { items: items, bottleCount: Number(vals[i][3]) || 0, bottles: String(vals[i][4] || '').split(' / ').filter(Boolean) };
+    }
+  }
+  return null;
+}
+
 // 夜間: 前日分の伝票をenrich（fetchTrustSalesNightlyの末尾から相乗り呼び出し）
 function enrichBillsYesterday() {
   const y = new Date(); y.setDate(y.getDate() - 1);
@@ -10372,17 +10429,11 @@ function portalBillDetail_(lookupName, dateKey, uuid, isAdmin, sinceDate) {
     }
   }
   if (found && !isAdmin && owner !== target) return { ok: false, error: '権限がありません' };
-  if (!found && !isAdmin) {
-    // シート未収録（未enrich）→ ライブ一覧で所有確認
-    const list = fetchTrustBillList_(dateKey);
-    if (!list.ok) return list;
-    const hit = list.bills.filter(b => b.uuid === uuid)[0];
-    if (!hit || normalizeName_(hit.primary) !== target) return { ok: false, error: '権限がありません' };
-  }
-  const d = fetchTrustBillDetail_(dateKey, uuid);
-  if (!d.ok) return d;
-  const bottles = d.items.filter(it => it.isBottle);
-  return { ok: true, date: dateKey, uuid: uuid, items: d.items, bottleCount: bottles.length, bottles: bottles.map(b => b.product) };
+  if (!found && !isAdmin) return { ok: false, error: 'この伝票は見つかりません' }; // 保存済みでない＝所有確認できないので不可
+  // 保存済み明細から表示（ライブ取得しない＝TRUSTブロック中でも表示できる）
+  const det = billReadDetail_(uuid);
+  if (!det) return { ok: true, date: dateKey, uuid: uuid, items: [], bottleCount: 0, bottles: [], pending: true };
+  return { ok: true, date: dateKey, uuid: uuid, items: det.items, bottleCount: det.bottleCount, bottles: det.bottles };
 }
 
 // ============================================================
