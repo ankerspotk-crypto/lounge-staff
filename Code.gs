@@ -1203,34 +1203,76 @@ function birthdayWeekRatio_(ss, name, monthKey, start, end) {
   return { ratio: ratio, monthSum: monthSum, bdaySum: bdaySum };
 }
 
-// 管理者: 誕生日バック週を設定/更新。start・endどちらか空なら当該キャスト×月の設定を削除。率未指定は既定30%。
+// 'yyyy-MM-dd'〜'yyyy-MM-dd' を月ごとに分割し各月を月初/月末でクリップ → [{mk:'yyyy/MM', start, end}]
+// 例: 2026-07-28〜2026-08-03 → [{2026/07,2026-07-28,2026-07-31},{2026/08,2026-08-01,2026-08-03}]
+function splitRangeByMonth_(start, end) {
+  const sp = start.split('-').map(Number), ep = end.split('-').map(Number);
+  const pad = function (n) { return ('0' + n).slice(-2); };
+  let y = sp[0], m = sp[1];
+  const ey = ep[0], em = ep[1];
+  const out = [];
+  let guard = 0;
+  while ((y < ey || (y === ey && m <= em)) && guard++ < 36) {
+    const mk = y + '/' + pad(m);
+    const isFirst = (y === sp[0] && m === sp[1]);
+    const isLast  = (y === ey && m === em);
+    const segStart = isFirst ? start : (y + '-' + pad(m) + '-01');
+    const lastDay  = new Date(y, m, 0).getDate(); // mは1始まり→当月末日
+    const segEnd   = isLast ? end : (y + '-' + pad(m) + '-' + pad(lastDay));
+    out.push({ mk: mk, start: segStart, end: segEnd });
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+// 'yyyy/MM' を delta ヶ月ずらす
+function mkShift_(mk, delta) {
+  let y = Number(mk.slice(0, 4)), m = Number(mk.slice(5, 7)) + delta;
+  while (m < 1) { m += 12; y--; }
+  while (m > 12) { m -= 12; y++; }
+  return y + '/' + ('0' + m).slice(-2);
+}
+
+// 管理者: 誕生日バック週を設定/更新。start・endどちらか空なら当該キャスト×（表示中の）月の設定を削除。率未指定は既定30%。
+// 月をまたぐレンジは月ごとに自動分割して各月に保存（その月は月末まで・翌月は月初から続き）。
 function adminSetBirthdayBack(userId, month, name, start, end, rate) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
-  const mk = monthKey_(month);
-  if (!/^\d{4}\/\d{2}$/.test(mk)) return { ok: false, error: '対象月が不正です' };
+  const mkView = monthKey_(month);
+  if (!/^\d{4}\/\d{2}$/.test(mkView)) return { ok: false, error: '対象月が不正です' };
   const nm = String(name || '').trim();
   if (!nm) return { ok: false, error: '名前がありません' };
   const ss = getOrOpenSS_();
   let sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
   if (!sh) { sh = ss.insertSheet(BIRTHDAY_BACK_TAB); sh.appendRow(BIRTHDAY_BACK_HEAD); sh.setFrozenRows(1); }
+  const nmNorm = normalizeName_(nm);
   const s = String(start || '').trim(), e = String(end || '').trim();
+  function findRow(rows, mk) {
+    for (let i = 1; i < rows.length; i++) {
+      if (mStr_(rows[i][0]) === mk && normalizeName_(String(rows[i][1]).trim()) === nmNorm) return i;
+    }
+    return -1;
+  }
+  if (!s || !e) { // 解除＝表示中の月のこのキャスト行だけ削除（他の月の分割行は残す）
+    const rows = sh.getDataRange().getValues();
+    const found = findRow(rows, mkView);
+    if (found >= 0) sh.deleteRow(found + 1);
+    return { ok: true, name: nm, month: mkView, cleared: true };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return { ok: false, error: '日付形式が不正です' };
+  if (s > e) return { ok: false, error: '開始日が終了日より後です' };
   const rNum = Number(rate);
   const rt = (rate === '' || rate == null || isNaN(rNum)) ? 30 : rNum;
-  const rows = sh.getDataRange().getValues();
-  const nmNorm = normalizeName_(nm);
-  let found = -1;
-  for (let i = 1; i < rows.length; i++) {
-    if (mStr_(rows[i][0]) === mk && normalizeName_(String(rows[i][1]).trim()) === nmNorm) { found = i; break; }
-  }
-  if (!s || !e) { // レンジ未指定＝設定解除
-    if (found >= 0) sh.deleteRow(found + 1);
-    return { ok: true, month: mk, name: nm, cleared: true };
-  }
-  if (s > e) return { ok: false, error: '開始日が終了日より後です' };
-  const rowData = [mk, nm, s, e, rt];
-  if (found >= 0) sh.getRange(found + 1, 1, 1, rowData.length).setValues([rowData]);
-  else sh.getRange(sh.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
-  return { ok: true, month: mk, name: nm, start: s, end: e, rate: rt };
+  const segs = splitRangeByMonth_(s, e);
+  const monthsSet = [];
+  segs.forEach(function (seg) {
+    const rows = sh.getDataRange().getValues(); // 追加のたび読み直して行番号ズレを防ぐ
+    const found = findRow(rows, seg.mk);
+    const rowData = [seg.mk, nm, seg.start, seg.end, rt];
+    if (found >= 0) sh.getRange(found + 1, 1, 1, rowData.length).setValues([rowData]);
+    else sh.getRange(sh.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
+    monthsSet.push(seg.mk);
+  });
+  return { ok: true, name: nm, months: monthsSet, startMonth: segs[0].mk, spans: segs.length > 1, rate: rt };
 }
 
 // 管理者: 指定月の誕生日バック設定一覧＋その月のキャスト名候補を返す（Admin設定UI用）
@@ -1246,9 +1288,18 @@ function adminGetBirthdayBack(userId, month) {
     const h = rows[0].map(String);
     const iN = h.indexOf('名前'), iS = h.indexOf('開始日'), iE = h.indexOf('終了日'), iR = h.indexOf('率(%)');
     const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+    const present = {}; // 'mk|正規化名' の存在集合（月またぎ分割の隣月検出用）
+    for (let i = 1; i < rows.length; i++) {
+      present[mStr_(rows[i][0]) + '|' + normalizeName_(String(rows[i][iN]).trim())] = true;
+    }
     for (let i = 1; i < rows.length; i++) {
       if (mStr_(rows[i][0]) !== mk) continue;
-      list.push({ name: String(rows[i][iN]).trim(), start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0 });
+      const nmRaw = String(rows[i][iN]).trim(), nmKey = normalizeName_(nmRaw);
+      list.push({
+        name: nmRaw, start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0,
+        contPrev: !!present[mkShift_(mk, -1) + '|' + nmKey], // 前月に続き行がある
+        contNext: !!present[mkShift_(mk, 1) + '|' + nmKey]   // 翌月に続き行がある
+      });
     }
   }
   // その月にTRUST報酬があるキャスト名（ドロップダウン候補）
