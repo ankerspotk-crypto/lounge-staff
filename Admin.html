@@ -765,9 +765,11 @@ function drawBday(r,mo){
   var castOpts='<option value="">— キャストを選択 —</option>'+bdNames.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
   var head='<div class="toolbar"><span class="cnt">対象月</span><input class="finput" id="bm" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM"><button class="btn" onclick="onBdayMonth()">表示</button><span class="cnt">'+(r.list.length)+'件 設定中</span></div>';
   var rows=(r.list||[]).map(function(x){
+    var cl=x.contPrev?'<span style="color:#c9a0ff" title="前月から続く期間（月またぎ分割）">◀続</span> ':'';
+    var cr=x.contNext?' <span style="color:#c9a0ff" title="翌月へ続く期間（月またぎ分割）">続▶</span>':'';
     return '<tr><td class="nm">'+esc(x.name)+'</td>'
-      +'<td style="text-align:center">'+esc(x.start)+'</td>'
-      +'<td style="text-align:center">〜 '+esc(x.end)+'</td>'
+      +'<td style="text-align:center">'+cl+esc(x.start)+'</td>'
+      +'<td style="text-align:center">〜 '+esc(x.end)+cr+'</td>'
       +'<td style="text-align:center;color:#c9a0ff;font-weight:800">'+(x.rate||0)+'%</td>'
       +'<td style="text-align:center"><button class="btn sm" style="padding:2px 8px;font-size:11px" onclick=\'editBday('+JSON.stringify(x.name)+','+JSON.stringify(x.start)+','+JSON.stringify(x.end)+','+(x.rate||30)+')\'>✎</button> '
       +'<button class="btn sm dng" style="padding:2px 8px;font-size:11px" onclick=\'clearBday('+JSON.stringify(x.name)+')\'>解除</button></td></tr>';
@@ -782,7 +784,7 @@ function drawBday(r,mo){
     +'<span class="cnt">終了</span><input class="finput" id="bd_e" type="date" style="width:160px">'
     +'<span class="cnt">率</span><input class="finput" id="bd_r" type="number" value="30" min="0" max="100" style="width:70px">%'
     +'<button class="btn pri" onclick="saveBday()">保存</button></div>'
-    +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ、小計バック率を上書きします（通常は倍率ルール10/15/20%）。分割の合計は必ずTRUST担当小計に一致します。キャストはプルダウンから、日付はカレンダーから選択してください。</div></div>';
+    +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ、小計バック率を上書きします（通常は倍率ルール10/15/20%）。分割の合計は必ずTRUST担当小計に一致します。<b>月をまたぐ期間は自動で月ごとに分割</b>（その月は月末まで＝一旦締め、翌月は月初から続き）。◀続/続▶マークは月またぎの継続を示します。キャストはプルダウンから、日付はカレンダーから選択してください。</div></div>';
   setBody(paySubToggle('bday')+head+table+form);
 }
 function onBdayMonth(){ var m=(document.getElementById('bm').value||'').trim(); if(m)payMonth=m; renderBday(); }
@@ -797,11 +799,16 @@ function saveBday(){
   var name=(document.getElementById('bd_name').value||'').trim();
   var s=document.getElementById('bd_s').value, e=document.getElementById('bd_e').value;
   var r=document.getElementById('bd_r').value;
-  if(!name){ toast('キャスト名を入れてください',true); return; }
-  if(!s||!e){ toast('開始日・終了日を入れてください',true); return; }
+  if(!name){ toast('キャストを選択してください',true); return; }
+  if(!s||!e){ toast('開始日・終了日を選択してください',true); return; }
   if(s>e){ toast('開始日が終了日より後です',true); return; }
   loading();
-  gsr('adminSetBirthdayBack',USER_ID,payMonth,name,s,e,r).then(function(res_){ if(res(res_,name+' の誕生日バックを保存しました')) renderBday(); }).catch(function(){ toast('保存に失敗しました',true); renderBday(); });
+  gsr('adminSetBirthdayBack',USER_ID,payMonth,name,s,e,r).then(function(rr){
+    if(!rr||rr.ok===false){ toast((rr&&rr.error)||'保存に失敗しました',true); renderBday(); return; }
+    if(rr.startMonth) payMonth=rr.startMonth.replace('/','-'); // 開始月に表示を合わせる
+    toast(rr.spans ? (name+' の誕生日バックを保存（月またぎ→'+rr.months.join(' / ')+'に自動分割）') : (name+' の誕生日バックを保存しました'));
+    renderBday();
+  }).catch(function(){ toast('保存に失敗しました',true); renderBday(); });
 }
 function clearBday(name){
   if(!confirm('【'+name+'】'+(payMonth||'')+' の誕生日バック設定を解除しますか？')) return;
