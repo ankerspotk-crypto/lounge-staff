@@ -1140,11 +1140,11 @@ function drawReceipts(r){
 function onReceiptMonth(){ receiptMonth=document.getElementById('rcm').value; renderDenpyo(); }
 
 /* ===== ⚙️ 運営 ===== */
-var okuriMode=null, thresholds=null, seatList=null, kfTasks=[];
+var okuriMode=null, thresholds=null, seatList=null, kfTasks=[], cashStatus=null;
 function renderOps(){
   loading();
-  Promise.all([api('getOkuriMode'),api('getCashThresholds'),api('getSeatList'),api('listKurofukuTasks')]).then(function(r){
-    okuriMode=(r[0]&&r[0].mode)||'driver'; thresholds=(r[1]&&r[1].thresholds)||null; seatList=(r[2]&&r[2].seats)||[]; kfTasks=(r[3]&&r[3].tasks)||[];
+  Promise.all([api('getOkuriMode'),api('getCashThresholds'),api('getSeatList'),api('listKurofukuTasks'),api('getCashCheckStatus').catch(function(){return null;})]).then(function(r){
+    okuriMode=(r[0]&&r[0].mode)||'driver'; thresholds=(r[1]&&r[1].thresholds)||null; seatList=(r[2]&&r[2].seats)||[]; kfTasks=(r[3]&&r[3].tasks)||[]; cashStatus=(r[4]&&r[4].cash)||null;
     drawOps();
   }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
 }
@@ -1194,7 +1194,43 @@ function drawOps(){
   var consolePinSec='<div class="sec"><div class="sec-t">🔐 管理コンソールPIN <span class="sub">このコンソールを開くときのPIN（4〜6桁）</span></div>'
     +'<div class="toolbar"><input class="finput" id="cpin" maxlength="6" inputmode="numeric" style="width:150px" placeholder="'+(cpSet?'変更する4〜6桁':'新規4〜6桁')+'"><button class="btn pri" onclick="saveConsolePin()">'+(cpSet?'変更':'設定')+'</button>'+(cpSet?'<button class="btn dng" onclick="clearConsolePin()">解除</button>':'')+'</div>'
     +'<div class="hint">'+(cpSet?'✅ 設定済み。次回からQRの代わりにこのPINでコンソールを開けます。':'未設定（今はQRログイン）。設定するとQRの代わりにPINで開けるようになります。')+'</div></div>';
-  setBody(kfSec+okuri+pinSec+consolePinSec+seats+resets+thresholdsSec+other);
+  var cashApproveSec=(function(){
+    var c=cashStatus;
+    var head='<div class="sec"><div class="sec-t">🌙 閉店チェックの承認 <span class="sub">黒服が提出した現金照合を管理者が承認（承認で退勤ゲート解除）</span></div>';
+    if(!c||!c.reportSubmitted){
+      return head+'<div class="empty" style="padding:14px">本日'+(c&&c.dateKey?'（'+esc(c.dateKey)+'）':'')+'の閉店チェックはまだ黒服から提出されていません。</div></div>';
+    }
+    var yen=function(n){return '¥'+Number(n||0).toLocaleString();};
+    function row(l,v,col){ return '<div class="lrow" style="padding:6px 2px"><div class="main"><div class="meta">'+l+'</div></div><div style="font-weight:800;color:'+(col||'var(--txt)')+'">'+v+'</div></div>'; }
+    var rows='';
+    if(c.openingSubmitted){
+      rows+=row('🌅 スタート',yen(c.openingTotal));
+      rows+=row('＋ 現金売上',yen(c.cashSalesInput),'#7be0a8');
+      rows+=row('－ 伝票 出金',yen(c.slipTotal),'#e0a060');
+      rows+=row('＝ 残るはず',yen(c.expectedRemain));
+      rows+=row('実測（4袋）',yen(c.actualTotal));
+      var d=Number(c.diff||0), ok=!!c.within;
+      rows+=row('差額',(ok?'✅ ':'⚠️ ')+yen(Math.abs(d))+(ok?'（許容内）':(d>0?' 足りない':' 多い')),ok?'#66cc88':'#e06666');
+    } else {
+      rows+='<div class="empty" style="padding:10px;color:#e0a060">⚠️ 開店の現金が未提出のため照合できていません（承認前に開店チェックの提出が必要）</div>';
+    }
+    var slips=(c.slipDetails||[]);
+    var slipHtml=slips.length?('<div class="meta" style="margin-top:8px;line-height:1.6">伝票 '+slips.length+'枚：'+slips.map(function(x){return esc((x.category||'その他')+(x.payee?'/'+x.payee:'')+' ')+yen(x.amount);}).join('、')+'</div>'):'';
+    var body='<div class="lrow" style="padding:6px 2px"><div class="main"><div class="nm">報告者 '+esc(c.reporterName)+'</div><div class="meta">対象日 '+esc(c.dateKey)+'</div></div></div>'+rows+slipHtml;
+    if(c.approved){
+      return head+body+'<div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:rgba(102,204,136,.14);color:#8fe0ab;font-weight:800">✅ 承認済み　承認者 '+esc(c.approver)+'（'+esc(c.approvedAt)+'）／黒服の退勤OK</div></div>';
+    }
+    var btn=c.openingSubmitted
+      ?'<button class="btn ok" style="width:100%;margin-top:12px;padding:12px;font-size:15px" onclick="approveCashFromConsole()">✅ この内容で承認する</button>'
+      :'<div class="hint" style="margin-top:10px">開店チェックが提出されると承認できるようになります。</div>';
+    return head+body+btn+'</div>';
+  })();
+  setBody(cashApproveSec+kfSec+okuri+pinSec+consolePinSec+seats+resets+thresholdsSec+other);
+}
+function approveCashFromConsole(){
+  var c=cashStatus; if(!c){toast('データがありません',true);return;}
+  if(!confirm('本日（'+c.dateKey+'）の閉店チェックを承認します。\n黒服の退勤ゲートが解除され、10分後に軍師端末が自動ログアウトします。\nよろしいですか？'))return;
+  api('approveCashCheck',{dateKey:c.dateKey}).then(function(r){ if(res(r,'承認しました（黒服の退勤OK）'))renderOps(); }).catch(function(){toast('通信エラー',true);});
 }
 function addKfTask(){
   var el=document.getElementById('kf-title'); var t=(el&&el.value||'').trim();

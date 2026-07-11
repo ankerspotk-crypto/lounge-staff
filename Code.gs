@@ -222,7 +222,9 @@ function doPost(e) {
 }
 
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'approveCashCheck', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashApproverNames', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen'];
+// ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
+//    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -385,6 +387,18 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     resetCashCheck_(bizDateStr_(), adminName);
     return { ok: true };
+  }
+  // 閉店チェックの状況取得（管理コンソール承認カード用）＝軍師のgetCashCheckInitと同じ内容を管理者認証付きで返す
+  if (body.action === 'getCashCheckStatus') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return { ok: true, cash: getCashCheckInit(), adminName: adminName };
+  }
+  // 閉店チェックの承認（管理コンソールのみ）。承認者＝ログイン中の管理者本人。
+  if (body.action === 'approveCashCheck') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return approveCashCheck(body.dateKey || bizDateStr_(), adminName);
   }
   if (body.action === 'resetSafeWithdrawalLog') {
     const adminName = getStaffName(body.userId);
@@ -3812,6 +3826,23 @@ function recordSeen(userId, groupId) {
   if (!prop(key)) setProp(key, userId);
 }
 
+// 出退勤の報告・リマインド対象外の名前キー集合を返す。
+// 対象外＝①管理者（常時管理者ADMIN_NAMES_＋スタッフマスタで管理者「○」タグ）②テストアカウント「徳子」。
+// キーは checkMissingShukkin と同じ「正規化＋内部スペース除去」で保持し、表記ゆれでも一致させる。
+function kintaiExemptKeys_() {
+  const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  const keys = {};
+  ADMIN_NAMES_.concat(['徳子']).forEach(n => { keys[norm(n)] = true; });
+  try {
+    const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (sh && sh.getLastRow() > 1) {
+      const rows = sh.getRange(2, 2, sh.getLastRow() - 1, 3).getValues(); // B=名前 C=役割 D=管理者
+      rows.forEach(r => { if (String(r[2]).trim() === '○') keys[norm(r[0])] = true; }); // 管理者○タグは除外
+    }
+  } catch (e) {}
+  return keys;
+}
+
 function checkMissingShukkin() {
   const today = todayStr();
   const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -3836,7 +3867,8 @@ function checkMissingShukkin() {
   const shukNorm_ = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
   const checkedKeys = {};
   checkedIn.forEach(n => { checkedKeys[shukNorm_(n)] = true; });
-  const missing = scheduledNames.filter(name => !checkedKeys[shukNorm_(name)]);
+  const exempt = kintaiExemptKeys_(); // 管理者・徳子は出勤報告の対象外
+  const missing = scheduledNames.filter(name => !checkedKeys[shukNorm_(name)] && !exempt[shukNorm_(name)]);
 
   if (missing.length === 0) return;
   push_(prop('GROUP_STAFF'),
@@ -3854,7 +3886,9 @@ function checkMissingTaikin() {
     .filter(r => (r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0])) === today);
   const checkedIn  = rows.filter(r => String(r[3]) === '出勤').map(r => String(r[2]));
   const checkedOut = rows.filter(r => String(r[3]) === '退勤').map(r => String(r[2]));
-  const missing = checkedIn.filter(n => !checkedOut.includes(n));
+  const exempt = kintaiExemptKeys_(); // 管理者・徳子は退勤報告の対象外
+  const eNorm_ = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  const missing = checkedIn.filter(n => !checkedOut.includes(n) && !exempt[eNorm_(n)]);
   if (missing.length === 0) return;
   push_(prop('GROUP_STAFF'),
     '【退勤確認】まだ退勤報告がない方：\n' +
@@ -3863,6 +3897,9 @@ function checkMissingTaikin() {
 }
 
 function recordKintai(name, type) {
+  // 管理者・徳子（テスト）は出退勤を記録しない＝出勤/退勤報告に一切引っかからない
+  const _exKey = normalizeName_(String(name == null ? '' : name)).replace(/[\s　]/g, '');
+  if (kintaiExemptKeys_()[_exKey]) return;
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sh = ss.getSheetByName(KINTAI_TAB);
   if (!sh) {
@@ -9820,12 +9857,13 @@ function submitCashCheck(payload) {
   }
 }
 
-// りく/管理者が閉店チェックを承認（黒服の退勤ゲートが解除される）
+// 管理者が閉店チェックを承認（黒服の退勤ゲートが解除される）
+// ⚠️ 呼び出し口は管理コンソール(adminConsoleApi)のみ。軍師APIホワイトリストからは除外済み。
 function approveCashCheck(dateKey, approverName) {
   try {
     if (!dateKey || !approverName) return { ok: false, error: '引数が不正です' };
     approverName = String(approverName).trim();
-    if (!SAFE_ADMIN_DEFAULT_.includes(approverName)) return { ok: false, error: '承認権限がありません（りくまたは管理者のみ）' };
+    if (!isAdmin_(approverName)) return { ok: false, error: '承認権限がありません（管理者のみ）' };
     const sh = getCashCheckSheet_();
     const rowIdx = findCashCheckRow_(sh, dateKey);
     if (rowIdx < 0) return { ok: false, error: '当日の閉店チェックが見つかりません' };

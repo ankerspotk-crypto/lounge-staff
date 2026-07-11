@@ -2224,7 +2224,7 @@ var cashState=null;
 function openCashCheck(){
   closeMenu(); showSheet('🌙 閉店の現金','<div class="empty-msg">読み込み中...</div>',false);
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）閉店チェックは本番のみ</div>'; return; }
-  Promise.all([gsr('getCashCheckInit'),gsr('getCashApproverNames').catch(function(){return[];}),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay').catch(function(){return null;})]).then(function(r){
+  Promise.all([gsr('getCashCheckInit'),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay').catch(function(){return null;})]).then(function(r){
     initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]));
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -2234,7 +2234,6 @@ function initCashCheck(init,approvers,staff,readSlips){
 }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
 function ccRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.reporterName=n; }
-function ccApprover(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.approverName=n; }
 function ccBagCard(bag){
   var o=cashState.bags[bag.k];
   return '<div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px">'
@@ -2333,17 +2332,9 @@ function cashResultHtml(init){
   var sd=init.slipDetails||[];
   if(sd.length) h+='<div class="flabel">出ていったお金（伝票 '+sd.length+'枚）</div><div class="cc-flow">'+sd.map(function(x){return '<div class="cc-flow-row"><span style="color:#889">'+esc(x.category||'その他')+(x.payee?' / '+esc(x.payee):'')+(x.imageUrl&&x.imageUrl!=='#'?' <a href="'+esc(x.imageUrl)+'" target="_blank" style="color:#7ac6ff">📷</a>':'')+'</span><span style="color:#e0a060">−¥'+Number(x.amount||0).toLocaleString()+'</span></div>';}).join('')+'</div>';
   if(init.approved) h+='<div class="ck-banner ok">✅ 承認済み　承認者 '+esc(init.approver)+'（'+esc(init.approvedAt)+'）<br>🚪 退勤OKです</div>';
-  else h+='<div class="flabel">管理者承認</div><div class="ck-note">りくまたは管理者が確認して承認してください</div><div class="chips">'+chipsHtml(cashState.approverNames||[],'ccApprover')+'</div><div id="cc-appstatus" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="approveCash()">承認する</div>';
+  else h+='<div class="ck-banner warn">⏳ 管理者の承認待ちです<br>承認は管理者が管理コンソールから行います（退勤OKになったらここに表示されます）</div>';
   h+='<div class="act dng" style="margin-top:10px" onclick="redoCash()">✏️ 内容を修正して再チェック</div>';
   return h;
-}
-function approveCash(){
-  if(!cashState.approverName){ alert('承認者を選択してください'); return; }
-  var s=document.getElementById('cc-appstatus'); if(s)s.textContent='送信中…';
-  gsr('approveCashCheck',cashState.dateKey,cashState.approverName).then(function(res){
-    if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
-    gsr('getCashCheckInit').then(function(d){ initCashCheck(d,cashState.approverNames,cashState.staff,cashState.slips.filter(function(x){return x.source==='read';})); });
-  }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
 }
 function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 
