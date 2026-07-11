@@ -1153,6 +1153,119 @@ function adminSetCastBackRule(userId, targetName, mode, rate) {
   return { ok: false, error: targetName + ' が見つかりません' };
 }
 
+// ── 誕生日バック週：キャスト×月ごとに「この来店日レンジだけ小計バック率を上書き」する設定ストア ──────────
+// 通常は新バック方式（倍率10/15/20% or 固定率）。設定した来店日レンジの担当売上ぶんだけ率を上書き（既定30%）。
+// 分割の正はあくまでTRUST月合計「担当小計」。伝票シート(TRUST由来・日別担当売上)で比率だけ出し、月合計へ掛けるのでズレない（案A）。
+var BIRTHDAY_BACK_TAB  = '誕生日バック';
+var BIRTHDAY_BACK_HEAD = ['月', '名前', '開始日', '終了日', '率(%)'];
+
+// 誕生日バック設定マップを取得 { 正規化名: {start:'yyyy-MM-dd', end:'yyyy-MM-dd', rate:数値} }
+function getBirthdayBackMap_(ss, monthKey) {
+  const map = {};
+  const sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!sh || sh.getLastRow() < 2) return map;
+  const rows = sh.getDataRange().getValues();
+  const h = rows[0].map(String);
+  const ci = function (n) { return h.indexOf(n); };
+  const iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)');
+  const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) !== monthKey) continue;
+    const nm = normalizeName_(String(rows[i][1]).trim());
+    if (!nm) continue;
+    const start = iS >= 0 ? toD(rows[i][iS]) : '', end = iE >= 0 ? toD(rows[i][iE]) : '';
+    if (!start || !end) continue;
+    map[nm] = { start: start, end: end, rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0 };
+  }
+  return map;
+}
+
+// 伝票シート(TRUST由来・日別の主担当×担当売上)から「誕生日週売上 ÷ 月売上」の比率を出す。
+// この比率をTRUST月合計「担当小計」へ掛けて誕生日週ぶんを切り出す（金額の正はTRUST側なのでズレない）。
+function birthdayWeekRatio_(ss, name, monthKey, start, end) {
+  const sh = ss.getSheetByName(BILL_TAB);
+  const ymDash = String(monthKey).replace(/\//g, '-').slice(0, 7);
+  const target = normalizeName_(String(name || '').trim());
+  let monthSum = 0, bdaySum = 0;
+  if (target && sh && sh.getLastRow() >= 2) {
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, BILL_HEAD_.length).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      const r = vals[i];
+      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
+      if (bd.slice(0, 7) !== ymDash) continue;
+      if (normalizeName_(String(r[8]).trim()) !== target) continue; // 主担当本人のみ
+      const amt = Number(r[9]) || 0; // 担当売上
+      monthSum += amt;
+      if (start && end && bd >= start && bd <= end) bdaySum += amt;
+    }
+  }
+  const ratio = monthSum > 0 ? bdaySum / monthSum : 0;
+  return { ratio: ratio, monthSum: monthSum, bdaySum: bdaySum };
+}
+
+// 管理者: 誕生日バック週を設定/更新。start・endどちらか空なら当該キャスト×月の設定を削除。率未指定は既定30%。
+function adminSetBirthdayBack(userId, month, name, start, end, rate) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const mk = monthKey_(month);
+  if (!/^\d{4}\/\d{2}$/.test(mk)) return { ok: false, error: '対象月が不正です' };
+  const nm = String(name || '').trim();
+  if (!nm) return { ok: false, error: '名前がありません' };
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!sh) { sh = ss.insertSheet(BIRTHDAY_BACK_TAB); sh.appendRow(BIRTHDAY_BACK_HEAD); sh.setFrozenRows(1); }
+  const s = String(start || '').trim(), e = String(end || '').trim();
+  const rNum = Number(rate);
+  const rt = (rate === '' || rate == null || isNaN(rNum)) ? 30 : rNum;
+  const rows = sh.getDataRange().getValues();
+  const nmNorm = normalizeName_(nm);
+  let found = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) === mk && normalizeName_(String(rows[i][1]).trim()) === nmNorm) { found = i; break; }
+  }
+  if (!s || !e) { // レンジ未指定＝設定解除
+    if (found >= 0) sh.deleteRow(found + 1);
+    return { ok: true, month: mk, name: nm, cleared: true };
+  }
+  if (s > e) return { ok: false, error: '開始日が終了日より後です' };
+  const rowData = [mk, nm, s, e, rt];
+  if (found >= 0) sh.getRange(found + 1, 1, 1, rowData.length).setValues([rowData]);
+  else sh.getRange(sh.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
+  return { ok: true, month: mk, name: nm, start: s, end: e, rate: rt };
+}
+
+// 管理者: 指定月の誕生日バック設定一覧＋その月のキャスト名候補を返す（Admin設定UI用）
+function adminGetBirthdayBack(userId, month) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const ss = getOrOpenSS_();
+  const mk = monthKey_(month) || '';
+  // 設定一覧（元の名前表記のまま返す）
+  const list = [];
+  const bs = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (bs && bs.getLastRow() >= 2) {
+    const rows = bs.getDataRange().getValues();
+    const h = rows[0].map(String);
+    const iN = h.indexOf('名前'), iS = h.indexOf('開始日'), iE = h.indexOf('終了日'), iR = h.indexOf('率(%)');
+    const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+    for (let i = 1; i < rows.length; i++) {
+      if (mStr_(rows[i][0]) !== mk) continue;
+      list.push({ name: String(rows[i][iN]).trim(), start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0 });
+    }
+  }
+  // その月にTRUST報酬があるキャスト名（ドロップダウン候補）
+  const casts = [], seen = {};
+  const ts = ss.getSheetByName(TRUST_TAB);
+  if (ts && ts.getLastRow() >= 2) {
+    const trows = ts.getDataRange().getValues();
+    for (let i = 1; i < trows.length; i++) {
+      if (mStr_(trows[i][0]) !== mk) continue;
+      const nm = String(trows[i][1]).trim();
+      if (nm && !seen[nm]) { seen[nm] = 1; casts.push(nm); }
+    }
+  }
+  casts.sort();
+  return { ok: true, month: mk, list: list, casts: casts };
+}
+
 // 新バック方式で1名分を再計算。g=TRUST報酬行のgetter(見出し名→値), m=手入力{intro,nyuten,fixedRate}
 // 式（cast_pay_final実データ31名で検算済・NG0／源泉は仕様どおり切り捨て）:
 //   新バック  = round(担当小計 × 率)   率= 固定override優先、無ければ倍率(担当小計/時間報酬)で 10/15/20%
@@ -1168,8 +1281,27 @@ function newBackCalc_(g, m) {
   const hibarai = Number(g('日払'))       || 0;
   const minusT  = Number(g('マイナス計')) || 0;
   const bairitu = jikan > 0 ? tanto / jikan : 0;
+  // 通常率＝倍率ルール(10/15/20%) or 固定率。案A: 倍率判定は月トータル担当小計のまま（誕生日週も倍率に貢献）。
   const ratePct = (m.fixedRate != null) ? m.fixedRate : (bairitu < 2 ? 10 : (bairitu < 3 ? 15 : 20));
-  const newBack = Math.round(tanto * ratePct / 100);
+  // 誕生日バック週: 担当小計を比率で「通常ぶん」「誕生日週ぶん」に分割し、誕生日週だけ率を上書き（既定30%）。
+  // m.bday = {ratio, rate, start, end}。ratio>0 & 担当小計>0 のときだけ発動。合計は必ずtantoに一致（丸めは通常側で吸収）。
+  let newBack, bdayInfo = null;
+  if (m.bday && m.bday.ratio > 0 && tanto > 0) {
+    const bRate       = Number(m.bday.rate) || 0;
+    const tantoBday   = Math.round(tanto * m.bday.ratio);
+    const tantoNormal = tanto - tantoBday;
+    const normalBack  = Math.round(tantoNormal * ratePct / 100);
+    const bdayBack    = Math.round(tantoBday * bRate / 100);
+    newBack  = normalBack + bdayBack;
+    bdayInfo = {
+      ratio: Math.round(m.bday.ratio * 1000) / 1000, rate: bRate,
+      start: m.bday.start || '', end: m.bday.end || '',
+      tantoNormal: tantoNormal, tantoBday: tantoBday,
+      normalRate: ratePct, normalBack: normalBack, bdayBack: bdayBack
+    };
+  } else {
+    newBack = Math.round(tanto * ratePct / 100);
+  }
   const intro   = m.intro  || 0;
   const nyuten  = m.nyuten || 0;
   // 新バックは担当バックの置換。担当小計>0（＝新バックを算出する）時のみTRUST担当バックを剥がす。
@@ -1182,7 +1314,8 @@ function newBackCalc_(g, m) {
     bairitu: Math.round(bairitu * 100) / 100, ratePct: ratePct, newBack: newBack,
     fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten,
     kazei: kazei, gensen: gensen, nokori: nokori,
-    hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross
+    hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross,
+    bday: bdayInfo   // 誕生日バック週の内訳（未設定はnull）: {ratio,rate,start,end,tantoNormal,tantoBday,normalRate,normalBack,bdayBack}
   };
 }
 
@@ -1229,6 +1362,7 @@ function adminGetPayrollDetail(userId, month) {
   const ci = function (h) { return hdrs.indexOf(h); };
   const manual = getKyuyoManual_(ss, mSel);
   const castRule = getCastBackRuleMap_(ss);
+  const bdayMap = getBirthdayBackMap_(ss, mSel); // 誕生日バック週設定 { 正規化名: {start,end,rate} }
   const list = [];
   const tot = { jikan: 0, tanto: 0, newBack: 0, backTotal: 0, plusTotal: 0, gross: 0, kazei: 0, gensen: 0, hibarai: 0, okuri: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
   for (let i = 1; i < rows.length; i++) {
@@ -1241,11 +1375,18 @@ function adminGetPayrollDetail(userId, month) {
     // 新バック方式で再計算（TRUSTの担当バック・源泉・残りは使わず、この式で置き換え）
     // 固定率はキャスト設定を優先で反映（未設定＝倍率ルール）
     const m = Object.assign({}, manual[nmN] || {}, { fixedRate: (castRule[nmN] != null ? castRule[nmN] : null) });
+    // 誕生日バック週: 設定があれば伝票シートから比率を出して率上書きを仕込む（案A・比率方式）
+    const bcfg = bdayMap[nmN];
+    if (bcfg) {
+      const bwr = birthdayWeekRatio_(ss, name, mSel, bcfg.start, bcfg.end);
+      if (bwr.ratio > 0) m.bday = { ratio: bwr.ratio, rate: bcfg.rate, start: bcfg.start, end: bcfg.end };
+    }
     const nb = newBackCalc_(g, m);
     const finalPay = nb.nokori + tatekae;
     const rec = {
       name: name, kinmu: g('勤務日数'), jikan: nb.jikan, tanto: nb.tanto,
       bairitu: nb.bairitu, ratePct: nb.ratePct, fixed: nb.fixed, newBack: nb.newBack,
+      bday: nb.bday, // 誕生日バック週の内訳（未設定null）
       intro: nb.intro, nyuten: nb.nyuten,
       yoyakuBk: g('予約バック'), dohanBk: g('同伴バック'),
       drinkBk: g('ドリンクバック'), bottleBk: g('ボトルバック'), foodBk: g('フードバック'),
@@ -1274,6 +1415,7 @@ function portalTrustPay_(ss, name, filterMonth) {
   const hdrs = rows[0].map(String);
   const idx = function (h) { return hdrs.indexOf(h); };
   const castFixed = getCastBackRuleMap_(ss)[name]; // 固定率（無ければundefined＝倍率ルール）
+  const bdayCache = {}; // 月別 誕生日バック設定キャッシュ { monthKey: {start,end,rate}|null }
   const out = {};
   for (let i = 1; i < rows.length; i++) {
     const m = mStr_(rows[i][0]);
@@ -1285,6 +1427,13 @@ function portalTrustPay_(ss, name, filterMonth) {
     // 新バック方式で再計算（キャスト画面もTRUSTの数字ではなく新方式で見せる）
     // 残り支給額は「立替前net」で返す。立替(ヘアサロン)はポータル側が自前で最終支給に加算するため二重計上しない。
     const mm = Object.assign({}, getKyuyoManual_(ss, m)[name] || {}, { fixedRate: (castFixed != null ? castFixed : null) });
+    // 誕生日バック週: 本人の画面もTRUST数字ではなく分割後で見せる
+    if (!(m in bdayCache)) bdayCache[m] = getBirthdayBackMap_(ss, m)[name] || null;
+    const bcfg = bdayCache[m];
+    if (bcfg) {
+      const bwr = birthdayWeekRatio_(ss, name, m, bcfg.start, bcfg.end);
+      if (bwr.ratio > 0) mm.bday = { ratio: bwr.ratio, rate: bcfg.rate, start: bcfg.start, end: bcfg.end };
+    }
     const nb = newBackCalc_(gN, mm);
     out[m] = {
       '担当小計': g('担当小計'), '同伴小計': g('同伴小計'), '売上合計': tanto + dohan,
@@ -1292,7 +1441,7 @@ function portalTrustPay_(ss, name, filterMonth) {
       '担当バック': nb.newBack, '予約バック': g('予約バック'), '同伴バック': g('同伴バック'),
       'ドリンクバック': g('ドリンクバック'), 'ボトルバック': g('ボトルバック'), '年会費バック': g('フードバック'),
       'ボーナス': g('運営手当'), '送迎手当': g('送迎手当'), '残業代': g('残業代'), '売り半': g('売り半'),
-      '新バック': nb.newBack, '倍率': nb.bairitu, 'バック率(%)': nb.ratePct, '課税支給': nb.kazei,
+      '新バック': nb.newBack, '倍率': nb.bairitu, 'バック率(%)': nb.ratePct, '__bday': nb.bday, '課税支給': nb.kazei,
       '源泉徴収': nb.gensen, '日払': g('日払'), 'マイナス': g('マイナス計'), '送り代': g('送り代'),
       '残り支給額': nb.nokori, '__trust': true
     };
