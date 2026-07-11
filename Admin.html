@@ -333,6 +333,21 @@ function cardHtml(s,i){
       +'<button class="btn pri sm" id="brsave'+i+'" onclick="saveBackRule('+i+',\''+jstr(s.name)+'\')" style="display:'+(showR?'inline-block':'none')+'">保存</button>'
       +'</div>';
   }
+  var bdayInfoHtml='';
+  if(isTermRole(s.role)){
+    var bd=((s.terms&&s.terms['誕生日'])||'').trim();
+    var w=s.bdayWeek||{status:'none'};
+    var wk;
+    if(w.status==='none'){ wk='<span style="color:var(--dim)">申請なし</span>'; }
+    else {
+      var jp={pending:'申請中',approved:'承認済',sentback:'差戻'}[w.status]||w.status;
+      wk=bdayStatusBadge(jp)+' <span style="color:var(--sub);font-size:12px">'+esc(w.start||'')+'〜'+esc(w.end||'')+'</span>'
+        +((w.status==='sentback'&&w.reason)?' <span style="color:#ff9aa0;font-size:11px">('+esc(w.reason)+')</span>':'');
+    }
+    bdayInfoHtml='<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<span class="lbl">🎂 誕生日</span><span style="font-weight:700;color:'+(bd?'var(--fg)':'var(--dim)')+'">'+(bd?esc(bd):'未登録')+'</span>'
+      +'<span class="lbl" style="margin-left:8px">🗓 週間</span>'+wk+'</div>';
+  }
   var termHtml='';
   if(isTermRole(s.role)){
     var t=s.terms||{};
@@ -351,7 +366,7 @@ function cardHtml(s,i){
   }
   return '<div class="card"><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+backRuleHtml+termHtml+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+termHtml+'</div>';
 }
 /* バック方式（新ルール/固定率）＝キャスト永続設定・給与計算に直結 */
 function onBackModeChange(i,name){

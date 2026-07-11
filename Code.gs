@@ -1247,6 +1247,39 @@ function castBirthdayWeekState_(ss, name) {
   out.applied = (pick.arr.find(function (x) { return x.a; }) || {}).a || '';
   return out;
 }
+// 全キャストの誕生日週間 申請状態を { 正規化名: {status,start,end,reason,applied} } でまとめて返す（シート1回読み・一覧用）
+function birthdayWeekStateMap_(ss) {
+  var out = {};
+  var sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!sh || sh.getLastRow() < 2) return out;
+  var cols = bbCols_(sh);
+  var iSt = cols['ステータス'], iS = cols['開始日'], iE = cols['終了日'], iR = cols['差戻理由'], iA = cols['申請日時'], iN = cols['名前'];
+  var rows = sh.getDataRange().getValues();
+  var toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+  var byName = {};
+  for (var i = 1; i < rows.length; i++) {
+    var nm = String(rows[i][iN != null ? iN : 1]).trim(); if (!nm) continue;
+    var key = normalizeName_(nm);
+    var st = (iSt >= 0 ? String(rows[i][iSt] || '').trim() : '') || BB_STATUS.APPROVED;
+    if (!byName[key]) byName[key] = { '申請中': [], '差戻': [], '承認済': [] };
+    if (!byName[key][st]) continue;
+    byName[key][st].push({ s: iS >= 0 ? toD(rows[i][iS]) : '', e: iE >= 0 ? toD(rows[i][iE]) : '', r: iR >= 0 ? String(rows[i][iR] || '').trim() : '', a: iA >= 0 ? String(rows[i][iA] || '').trim() : '' });
+  }
+  Object.keys(byName).forEach(function (key) {
+    var b = byName[key];
+    var pick = b['申請中'].length ? { st: 'pending', arr: b['申請中'] }
+      : b['差戻'].length ? { st: 'sentback', arr: b['差戻'] }
+      : b['承認済'].length ? { st: 'approved', arr: b['承認済'] } : null;
+    if (!pick) { out[key] = { status: 'none', start: '', end: '', reason: '', applied: '' }; return; }
+    var starts = pick.arr.map(function (x) { return x.s; }).filter(Boolean).sort();
+    var ends = pick.arr.map(function (x) { return x.e; }).filter(Boolean).sort();
+    out[key] = {
+      status: pick.st, start: starts.length ? starts[0] : '', end: ends.length ? ends[ends.length - 1] : '',
+      reason: (pick.arr.find(function (x) { return x.r; }) || {}).r || '', applied: (pick.arr.find(function (x) { return x.a; }) || {}).a || ''
+    };
+  });
+  return out;
+}
 // 承認待ちの誕生日週間申請を集計 → 黒服「要対応」チケットを常に1件だけ上書き（ゼロなら消す）
 function refreshBirthdayWeekPendingTicket_(ss) {
   var sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
@@ -6016,10 +6049,12 @@ const KIOSK_LOGIN_ROLES_ = ['黒服社員', '黒服バイト'];
 function getAdminConsoleData(userId) {
   const caller = getStaffName(userId);
   if (!isAdmin_(caller)) return { ok: false, error: '権限がありません' };
-  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  const ssAdmin = getOrOpenSS_();
+  const sh = ssAdmin.getSheetByName(STAFF_TAB);
   const rows = sh ? sh.getDataRange().getValues() : [];
   const termCols = sh ? getStaffTermCols_(sh, false) : {};
   const backCols = sh ? getStaffBackRuleCols_(sh, false) : {};
+  const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
   for (let i = 1; i < rows.length; i++) {
@@ -6042,6 +6077,7 @@ function getAdminConsoleData(userId) {
       gunshiFlag: gunshiRaw, hardGunshi: isAdminAll,
       hasPin: !!allProps['KIOSK_PIN_' + name.replace(/[\s　]/g, '_')], // 個別PIN設定済みか
       terms: (function () { var t = {}; STAFF_TERM_HEADERS.forEach(function (h) { var c = termCols[h]; t[h] = (c >= 0) ? String(rows[i][c] == null ? '' : rows[i][c]) : ''; }); return t; })(),
+      bdayWeek: bWeekMap[normalizeName_(name)] || { status: 'none', start: '', end: '', reason: '', applied: '' },
       // 給与バック方式（新ルール/固定）。未設定は新ルール扱い
       backMode: (backCols['バック方式'] >= 0 && String(rows[i][backCols['バック方式']]).trim() === '固定') ? 'fixed' : 'rule',
       backRate: (backCols['固定バック率(%)'] >= 0 ? (Number(rows[i][backCols['固定バック率(%)']]) || 0) : 0)
