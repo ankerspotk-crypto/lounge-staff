@@ -1152,7 +1152,7 @@ function adminGetTrustImport(userId) {
     if (sh && sh.getLastRow() >= 2) {
       var rows = sh.getDataRange().getValues();
       for (var i = rows.length - 1; i >= 1 && log.length < 60; i--) {
-        log.push({ at: String(rows[i][0] || ''), type: String(rows[i][1] || ''), target: String(rows[i][2] || ''), count: String(rows[i][3] == null ? '' : rows[i][3]), source: String(rows[i][4] || ''), status: String(rows[i][5] || ''), memo: String(rows[i][6] || '') });
+        log.push({ at: fmtStamp_(rows[i][0]), type: String(rows[i][1] || ''), target: String(rows[i][2] || ''), count: String(rows[i][3] == null ? '' : rows[i][3]), source: String(rows[i][4] || ''), status: String(rows[i][5] || ''), memo: String(rows[i][6] || '') });
       }
     }
     // 接続ステータス（GAS→TRUST GET1回のみ・ログインPOSTしない＝WAF/BANを延長しない）
@@ -1339,7 +1339,7 @@ function castBirthdayWeekState_(ss, name) {
     if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
     var st = (iSt >= 0 ? String(rows[i][iSt] || '').trim() : '') || BB_STATUS.APPROVED; // 空欄=旧データ=承認済
     if (!buckets[st]) continue;
-    buckets[st].push({ s: iS >= 0 ? toD(rows[i][iS]) : '', e: iE >= 0 ? toD(rows[i][iE]) : '', r: iR >= 0 ? String(rows[i][iR] || '').trim() : '', a: iA >= 0 ? String(rows[i][iA] || '').trim() : '' });
+    buckets[st].push({ s: iS >= 0 ? toD(rows[i][iS]) : '', e: iE >= 0 ? toD(rows[i][iE]) : '', r: iR >= 0 ? String(rows[i][iR] || '').trim() : '', a: iA >= 0 ? fmtStamp_(rows[i][iA]) : '' });
   }
   var pick = buckets['申請中'].length ? { st: 'pending', arr: buckets['申請中'] }
     : buckets['差戻'].length ? { st: 'sentback', arr: buckets['差戻'] }
@@ -1370,7 +1370,7 @@ function birthdayWeekStateMap_(ss) {
     var st = (iSt >= 0 ? String(rows[i][iSt] || '').trim() : '') || BB_STATUS.APPROVED;
     if (!byName[key]) byName[key] = { '申請中': [], '差戻': [], '承認済': [] };
     if (!byName[key][st]) continue;
-    byName[key][st].push({ s: iS >= 0 ? toD(rows[i][iS]) : '', e: iE >= 0 ? toD(rows[i][iE]) : '', r: iR >= 0 ? String(rows[i][iR] || '').trim() : '', a: iA >= 0 ? String(rows[i][iA] || '').trim() : '' });
+    byName[key][st].push({ s: iS >= 0 ? toD(rows[i][iS]) : '', e: iE >= 0 ? toD(rows[i][iE]) : '', r: iR >= 0 ? String(rows[i][iR] || '').trim() : '', a: iA >= 0 ? fmtStamp_(rows[i][iA]) : '' });
   }
   Object.keys(byName).forEach(function (key) {
     var b = byName[key];
@@ -1643,7 +1643,7 @@ function birthdayBackListForMonth_(ss, mk, presentSet) {
       name: nmRaw, start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0,
       status: iSt >= 0 ? (String(rows[i][iSt] || '').trim() || BB_STATUS.APPROVED) : BB_STATUS.APPROVED,
       reason: iRs >= 0 ? String(rows[i][iRs] || '').trim() : '',
-      applied: iAp >= 0 ? String(rows[i][iAp] || '').trim() : '',
+      applied: iAp >= 0 ? fmtStamp_(rows[i][iAp]) : '',
       contPrev: !!presentSet[mkShift_(mk, -1) + '|' + nmKey],
       contNext: !!presentSet[mkShift_(mk, 1) + '|' + nmKey]
     });
@@ -4295,6 +4295,20 @@ function todayStr() {
 }
 function now_() {
   return Utilities.formatDate(new Date(), TZ, 'HH:mm');
+}
+// 監査ログ等・日付も残したいタイムスタンプ（西暦年月日＋時刻）。シートに書いてもHH:mm文字列のように時刻値へ誤変換されない。
+function nowStamp_() {
+  return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+}
+// シート値を表示用に整形。Date→'yyyy-MM-dd HH:mm'。時刻のみのセル(=1899年扱いのDate)はHH:mmだけ。文字列/空はそのまま。
+// 「Sat Dec 30 1899 …」のような生のDate.toString()流出を防ぐ共通フォーマッタ。
+function fmtStamp_(v) {
+  if (v instanceof Date && !isNaN(v)) {
+    return v.getFullYear() < 1900
+      ? Utilities.formatDate(v, TZ, 'HH:mm')
+      : Utilities.formatDate(v, TZ, 'yyyy-MM-dd HH:mm');
+  }
+  return String(v == null ? '' : v);
 }
 
 function push_(groupId, message) {
@@ -9761,7 +9775,7 @@ function getCashCheckInit() {
     if (String(row[15]).trim()) {
       result.approved   = true;
       result.approver   = String(row[15]);
-      result.approvedAt = String(row[16]);
+      result.approvedAt = fmtStamp_(row[16]); // 生Date流出（Sat Dec 30 1899…）を防ぎ西暦年月日で表示
     }
   }
   return result;
@@ -9873,7 +9887,7 @@ function approveCashCheck(dateKey, approverName) {
     const _judg = String(sh.getRange(rowIdx, 14).getValue()).trim();
     if (!_judg) return { ok: false, error: '開店の現金が未提出で照合できていません。先に開店チェックを提出してから承認してください' };
     sh.getRange(rowIdx, 16).setValue(approverName);
-    sh.getRange(rowIdx, 17).setValue(now_());
+    sh.getRange(rowIdx, 17).setValue(nowStamp_()); // 西暦年月日＋時刻で記録（HH:mmだと1899年の時刻値に化ける）
     const orderCount = approveOrderDraftsForDate_(dateKey, approverName);
     setProp('KIOSK_LOGOUT_AT', String(Date.now() + 10 * 60 * 1000)); // 10分後に全端末を強制ログアウト
     const msgLines = ['✅ 【閉店チェック承認済み】' + dateKey, '承認者　' + approverName, '黒服の退勤が可能になりました'];
@@ -10870,7 +10884,7 @@ function kioskGetPendingDeliveries() {
     if (!name) continue;
     const slipNo = String(r[3] || '').trim() || '(伝票No不明)';
     const key = slipNo + '|' + String(r[1] || '');
-    if (!groups[key]) { groups[key] = { slipNo: slipNo, supplier: String(r[1] || ''), date: String(r[2] || ''), bizDate: String(r[0] || ''), items: [] }; order.push(key); }
+    if (!groups[key]) { groups[key] = { slipNo: slipNo, supplier: String(r[1] || ''), date: fmtDateFull_(r[2]), bizDate: fmtDateFull_(r[0]), items: [] }; order.push(key); }
     const m = matchStockName_(name, list);
     groups[key].items.push({
       deliveryRowIdx: i + 1, name: name, volume: String(r[5] || ''), qty: Number(r[6]) || 0,
