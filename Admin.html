@@ -378,6 +378,7 @@ var TERM_FIELDS=[
   {h:'基本時給',label:'基本時給',ph:'例: 3000（円/時）'},
   {h:'基本バック',label:'基本バック',ph:'例: 担当10〜20%'},
   {h:'入店日',label:'入店日',ph:'例: 2026-05-01'},
+  {h:'誕生日',label:'誕生日',ph:'例: 8/15（月/日）'},
   {h:'入店時条件',label:'入店時の条件',ta:true,ph:'入店時に約束した条件'},
   {h:'設定条件',label:'設定条件',ta:true,ph:'設定・待遇などの条件'},
   {h:'個別メモ',label:'自由メモ',ta:true,ph:'その他メモ（自由記述）'}
@@ -753,42 +754,64 @@ function onKyuyoMonth(){ payMonth=document.getElementById('km').value; renderKyu
 var bdayCasts=[];
 function renderBday(){
   if(!IS_GAS){ setBody(paySubToggle('bday')+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; }
-  var mo=payMonth||nowMonth();
   loading();
-  gsr('adminGetBirthdayBack',USER_ID,mo).then(function(r){ if(!res(r))return; drawBday(r,mo); }).catch(function(){setBody(paySubToggle('bday')+'<div class="empty">読み込みエラー</div>');});
+  gsr('adminGetBirthdayBackRange',USER_ID).then(function(r){ if(!res(r))return; drawBday(r); }).catch(function(){setBody(paySubToggle('bday')+'<div class="empty">読み込みエラー</div>');});
 }
-function drawBday(r,mo){
-  payMonth=mo; bdayCasts=r.casts||[];
-  var bdNames=(r.casts||[]).slice();
-  (r.list||[]).forEach(function(x){ if(bdNames.indexOf(x.name)<0) bdNames.push(x.name); }); // 既存設定の名前も必ず選択肢に含める
+function drawBday(r){
+  bdayCasts=r.casts||[];
+  var nameSet={},bdNames=[];
+  function addName(n){ n=String(n||'').trim(); if(n&&!nameSet[n]){nameSet[n]=1;bdNames.push(n);} }
+  (r.casts||[]).forEach(addName);
+  (r.months||[]).forEach(function(m){ m.settings.forEach(function(x){addName(x.name);}); m.bdayCasts.forEach(function(c){addName(c.name);}); });
   bdNames.sort();
   var castOpts='<option value="">— キャストを選択 —</option>'+bdNames.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
-  var head='<div class="toolbar"><span class="cnt">対象月</span><input class="finput" id="bm" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM"><button class="btn" onclick="onBdayMonth()">表示</button><span class="cnt">'+(r.list.length)+'件 設定中</span></div>';
-  var rows=(r.list||[]).map(function(x){
-    var cl=x.contPrev?'<span style="color:#c9a0ff" title="前月から続く期間（月またぎ分割）">◀続</span> ':'';
-    var cr=x.contNext?' <span style="color:#c9a0ff" title="翌月へ続く期間（月またぎ分割）">続▶</span>':'';
-    return '<tr><td class="nm">'+esc(x.name)+'</td>'
-      +'<td style="text-align:center">'+cl+esc(x.start)+'</td>'
-      +'<td style="text-align:center">〜 '+esc(x.end)+cr+'</td>'
-      +'<td style="text-align:center;color:#c9a0ff;font-weight:800">'+(x.rate||0)+'%</td>'
-      +'<td style="text-align:center"><button class="btn sm" style="padding:2px 8px;font-size:11px" onclick=\'editBday('+JSON.stringify(x.name)+','+JSON.stringify(x.start)+','+JSON.stringify(x.end)+','+(x.rate||30)+')\'>✎</button> '
-      +'<button class="btn sm dng" style="padding:2px 8px;font-size:11px" onclick=\'clearBday('+JSON.stringify(x.name)+')\'>解除</button></td></tr>';
-  }).join('');
-  var table = r.list.length
-    ? '<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px"><thead><tr><th style="text-align:left">キャスト</th><th>開始日</th><th>終了日</th><th>率</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
-    : '<div class="empty">この月の誕生日バック設定はまだありません</div>';
   var fld='display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--dim);font-weight:700';
-  var form='<div class="sec" style="margin-top:12px"><div class="sec-t">🎂 誕生日バック週を追加 / 変更</div>'
+  var remBar='<div class="toolbar" style="margin-bottom:10px"><span class="cnt">今月誕生日で未設定のキャストを黒服の要対応へ</span><button class="btn" onclick="runBdayReminder()">🔔 今すぐリマインド</button></div>';
+  var form='<div class="sec"><div class="sec-t">🎂 誕生日バック週を追加 / 変更</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">'
     +'<label style="'+fld+'">キャスト<select class="finput" id="bd_name" style="width:170px">'+castOpts+'</select></label>'
     +'<label style="'+fld+'">開始日<input class="finput" id="bd_s" type="date" style="width:180px"></label>'
     +'<label style="'+fld+'">終了日<input class="finput" id="bd_e" type="date" style="width:180px"></label>'
     +'<label style="'+fld+'">率(%)<input class="finput" id="bd_r" type="number" value="30" min="0" max="100" inputmode="numeric" style="width:90px"></label>'
     +'<button class="btn pri" onclick="saveBday()" style="align-self:flex-end">保存</button></div>'
-    +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ、小計バック率を上書きします（通常は倍率ルール10/15/20%）。分割の合計は必ずTRUST担当小計に一致します。<b>月をまたぐ期間は自動で月ごとに分割</b>（その月は月末まで＝一旦締め、翌月は月初から続き）。◀続/続▶マークは月またぎの継続を示します。キャストはプルダウンから、日付はカレンダーから選択してください。</div></div>';
-  setBody(paySubToggle('bday')+head+table+form);
+    +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ小計バック率を上書き（通常は倍率10/15/20%）。合計は必ずTRUST担当小計に一致。<b>月またぎは自動で月ごとに分割</b>（月末で一旦締め→翌月は続き）。下の🎂候補の「設定」を押すと誕生日週が自動入力されます。</div></div>';
+  var sections=(r.months||[]).filter(function(m){return m.settings.length||m.bdayCasts.length;}).map(function(m){
+    var moLabel=esc(m.mk)+(m.isCurrent?' <span style="background:#2a1a4a;color:#d8b8ff;border:1px solid #7a5ac0;border-radius:10px;padding:1px 8px;font-size:11px;margin-left:6px">今月</span>':'');
+    var nudge='';
+    if(m.bdayCasts.length){
+      nudge='<div style="font-size:12px;color:var(--sub);margin:2px 0 10px;line-height:2.1">🎂 誕生日: '+m.bdayCasts.map(function(c){
+        if(c.hasBack) return '<span style="background:#0f1a14;border:1px solid #2a6a44;color:#8fe0b0;border-radius:12px;padding:3px 9px;font-size:12px">'+esc(c.name)+'('+esc(c.mmdd)+') 設定済</span>';
+        return '<span style="background:#241428;border:1px solid #5a2a5a;color:#e6b0d6;border-radius:12px;padding:3px 6px 3px 9px;font-size:12px">'+esc(c.name)+'('+esc(c.mmdd)+') 未設定 <button class="btn sm" style="padding:1px 7px;font-size:11px" onclick=\'prefillBday('+JSON.stringify(c.name)+','+JSON.stringify(m.mk)+','+JSON.stringify(c.mmdd)+')\'>設定</button></span>';
+      }).join(' ')+'</div>';
+    }
+    var rows=m.settings.map(function(x){
+      var cl=x.contPrev?'<span style="color:#c9a0ff" title="前月から続く（月またぎ）">◀続</span> ':'';
+      var cr=x.contNext?' <span style="color:#c9a0ff" title="翌月へ続く（月またぎ）">続▶</span>':'';
+      return '<tr><td class="nm">'+esc(x.name)+'</td>'
+        +'<td style="text-align:center">'+cl+esc(x.start)+' 〜 '+esc(x.end)+cr+'</td>'
+        +'<td style="text-align:center;color:#c9a0ff;font-weight:800">'+(x.rate||0)+'%</td>'
+        +'<td style="text-align:center;white-space:nowrap"><button class="btn sm" style="padding:2px 8px;font-size:11px" onclick=\'editBday('+JSON.stringify(x.name)+','+JSON.stringify(x.start)+','+JSON.stringify(x.end)+','+(x.rate||30)+')\'>✎</button> '
+        +'<button class="btn sm dng" style="padding:2px 8px;font-size:11px" onclick=\'clearBday('+JSON.stringify(x.name)+','+JSON.stringify(m.mk)+')\'>解除</button></td></tr>';
+    }).join('');
+    var tbl=m.settings.length?'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px"><thead><tr><th style="text-align:left">キャスト</th><th>期間</th><th>率</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'';
+    return '<div class="sec"><div class="sec-t">'+moLabel+'</div>'+nudge+tbl+'</div>';
+  }).join('')||'<div class="empty">前後6ヶ月に誕生日バック設定・誕生日キャストはありません（スタッフの誕生日は👥スタッフの「✎個別条件」で登録）</div>';
+  setBody(paySubToggle('bday')+remBar+form+sections);
 }
-function onBdayMonth(){ var m=(document.getElementById('bm').value||'').trim(); if(m)payMonth=m; renderBday(); }
+function prefillBday(name,mk,mmdd){
+  document.getElementById('bd_name').value=name;
+  var y=parseInt(String(mk).slice(0,4),10);
+  var p=String(mmdd).split(/[^\d]+/).filter(Boolean),mo,da;
+  if(p.length>=3&&p[0].length===4){mo=+p[1];da=+p[2];}else{mo=+p[0];da=+p[1];}
+  if(mo>=1&&da>=1){
+    var bd=new Date(y,mo-1,da);
+    var f=function(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);};
+    var s=new Date(bd);s.setDate(s.getDate()-3); var e=new Date(bd);e.setDate(e.getDate()+3);
+    document.getElementById('bd_s').value=f(s); document.getElementById('bd_e').value=f(e);
+  }
+  document.getElementById('bd_r').value=30;
+  document.getElementById('bd_name').scrollIntoView({behavior:'smooth',block:'center'});
+}
 function editBday(name,s,e,rate){
   document.getElementById('bd_name').value=name;
   document.getElementById('bd_s').value=s;
@@ -804,17 +827,24 @@ function saveBday(){
   if(!s||!e){ toast('開始日・終了日を選択してください',true); return; }
   if(s>e){ toast('開始日が終了日より後です',true); return; }
   loading();
-  gsr('adminSetBirthdayBack',USER_ID,payMonth,name,s,e,r).then(function(rr){
+  gsr('adminSetBirthdayBack',USER_ID,s.slice(0,7),name,s,e,r).then(function(rr){
     if(!rr||rr.ok===false){ toast((rr&&rr.error)||'保存に失敗しました',true); renderBday(); return; }
-    if(rr.startMonth) payMonth=rr.startMonth.replace('/','-'); // 開始月に表示を合わせる
     toast(rr.spans ? (name+' の誕生日バックを保存（月またぎ→'+rr.months.join(' / ')+'に自動分割）') : (name+' の誕生日バックを保存しました'));
     renderBday();
   }).catch(function(){ toast('保存に失敗しました',true); renderBday(); });
 }
-function clearBday(name){
-  if(!confirm('【'+name+'】'+(payMonth||'')+' の誕生日バック設定を解除しますか？')) return;
+function clearBday(name,mk){
+  if(!confirm('【'+name+'】'+mk+' の誕生日バック設定を解除しますか？')) return;
   loading();
-  gsr('adminSetBirthdayBack',USER_ID,payMonth,name,'','','').then(function(r){ if(res(r,name+' の設定を解除しました')) renderBday(); }).catch(function(){ toast('解除に失敗しました',true); renderBday(); });
+  gsr('adminSetBirthdayBack',USER_ID,mk,name,'','','').then(function(r){ if(res(r,name+' の設定を解除しました')) renderBday(); }).catch(function(){ toast('解除に失敗しました',true); renderBday(); });
+}
+function runBdayReminder(){
+  loading();
+  gsr('adminRunBirthdayReminderNow',USER_ID).then(function(r){
+    if(!r||r.ok===false){ toast((r&&r.error)||'失敗しました',true); renderBday(); return; }
+    toast(r.count ? ('要対応に出しました: '+r.names) : '今月は未設定の誕生日キャストがいません');
+    renderBday();
+  }).catch(function(){ toast('通信エラー',true); renderBday(); });
 }
 /* --- 📣 公開設定（従来の給与・ランキング公開） --- */
 function renderPublish(){
