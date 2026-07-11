@@ -155,6 +155,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
     <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
     <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
+    <button class="tab" data-t="holiday" onclick="switchTab('holiday')">🏖 店休日</button>
     <button class="tab" data-t="voice" onclick="switchTab('voice')">🗣 現場の声</button>
     <button class="tab" data-t="ref" onclick="switchTab('ref')">📖 説明</button>
   </div>
@@ -270,7 +271,7 @@ function pollAdminAuth(token){
 function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
 function render(){
   document.getElementById('tabs').style.display='flex';
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -444,7 +445,13 @@ function drawShift(){
   R.sort(function(a,b){ return _tier(a)-_tier(b) || _roleRank(a.role)-_roleRank(b.role) || _scnt(b)-_scnt(a) || String(a.name).localeCompare(String(b.name)); });
   var RFILT=['all','キャスト','黒服','派遣','体験'];
   var rchips=RFILT.map(function(f){return '<div class="chip'+(shiftRoleFilter===f?' on':'')+'" onclick="setShiftRole(\''+f+'\')">'+(f==='all'?'全て':f)+'</div>';}).join('');
-  var thead='<tr><th style="text-align:left">名前</th><th>属性</th>'+H.map(function(d){return '<th>'+esc(d)+'</th>';}).join('')+'</tr>';
+  var _DOW_SH=['日','月','火','水','木','金','土'], _shYear=new Date().getFullYear();
+  var thead='<tr><th style="text-align:left">名前</th><th>属性</th>'+H.map(function(d){
+    var pp=String(d).split('/'), mm=parseInt(pp[0],10), dd=parseInt(pp[1],10);
+    var wd=(mm&&dd)?_DOW_SH[new Date(_shYear,mm-1,dd).getDay()]:'';
+    var wc=(wd==='日')?'#ee6666':(wd==='土')?'#6688ee':'inherit';
+    return '<th style="color:'+wc+'">'+esc(d)+'<br><span style="font-size:9px;font-weight:400;opacity:.85">'+wd+'</span></th>';
+  }).join('')+'</tr>';
   // 日付ごとの出勤人数トータル（確定＋申請中）。キャスト・体験・派遣のみ（黒服は除外）
   var totalRow='<tr class="total-row"><td class="nm">👥 合計</td><td>キャスト系</td>'+H.map(function(d){
     var cf=0,pd=0;
@@ -894,6 +901,52 @@ function saveThresholds(){
   api('saveCashThresholds',{thresholds:out}).then(function(r){ res(r,'しきい値を保存しました'); });
 }
 
+/* ===== 🏖 店休日（お盆休み・臨時休業など）===== */
+var holidays=[];
+function hdFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function hdToday(){ var n=new Date(); if(n.getHours()<6)n.setDate(n.getDate()-1); return hdFmt(n); } // 営業日基準(6時境界)
+function hdWeekday(dateStr){ return ['日','月','火','水','木','金','土'][new Date(dateStr+'T00:00:00').getDay()]; }
+function renderHolidays(){
+  loading();
+  api('getHolidays').then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    holidays=(r&&r.holidays)||[]; drawHolidays();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function drawHolidays(){
+  var tk=hdToday();
+  var rows=(holidays||[]).map(function(h){
+    var past=h.date<tk;
+    return '<div class="lrow"'+(past?' style="opacity:.45"':'')+'><div class="main"><div class="nm">'+esc(h.date)+'（'+hdWeekday(h.date)+'）'+(past?' <span class="sub">済</span>':(h.date===tk?' <span class="sub">本日</span>':''))+'</div><div class="meta">'+(h.label?esc(h.label):'店休日')+'</div></div><button class="btn dng sm" onclick="delHoliday(\''+jstr(h.date)+'\')">削除</button></div>';
+  }).join('')||'<div class="empty" style="padding:14px">店休日は登録されていません</div>';
+  var form='<div class="sec"><div class="sec-t">➕ 店休日を追加 <span class="sub">単発は開始日だけ／お盆など連続は終了日まで指定</span></div>'
+    +'<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:13px">開始 <input class="finput" type="date" id="hd-from"></label>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:13px">終了 <input class="finput" type="date" id="hd-to"></label>'
+    +'<input class="finput grow" id="hd-label" placeholder="例：お盆休み（任意）" style="min-width:150px" onkeydown="if(event.key===\'Enter\')addHoliday()">'
+    +'<button class="btn pri" onclick="addHoliday()">追加</button>'
+    +'</div><div class="hint">終了日を空にすると開始日のみ登録。深夜営業のため店休日は「営業日（朝6時境界）」で扱います。</div></div>';
+  var listSec='<div class="sec"><div class="sec-t">📅 登録済みの店休日 <span class="sub">キャストのシフトカレンダーに表示・その日は予約受付を停止・夜間の定時通知も自動停止</span></div>'+rows+'</div>';
+  setBody(form+listSec);
+}
+function addHoliday(){
+  var f=((document.getElementById('hd-from')||{}).value||'');
+  var t=((document.getElementById('hd-to')||{}).value||f)||f;
+  var label=((document.getElementById('hd-label')||{}).value||'').trim();
+  if(!f){ toast('開始日を選んでください',true); return; }
+  if(t<f){ toast('終了日は開始日以降にしてください',true); return; }
+  var add=[], cur=new Date(f+'T00:00:00'), end=new Date(t+'T00:00:00'), guard=0;
+  while(cur<=end && guard++<400){ add.push({date:hdFmt(cur), label:label}); cur.setDate(cur.getDate()+1); }
+  var map={}; (holidays||[]).forEach(function(h){map[h.date]=h;}); add.forEach(function(h){map[h.date]=h;});
+  var merged=Object.keys(map).map(function(k){return map[k];});
+  api('saveHolidays',{holidays:merged}).then(function(r){ if(res(r,add.length>1?add.length+'日ぶんの店休日を登録しました':'店休日を登録しました')){ holidays=(r&&r.holidays)||merged; var lb=document.getElementById('hd-label'); if(lb)lb.value=''; drawHolidays(); } }).catch(function(){toast('通信エラー',true);});
+}
+function delHoliday(date){
+  if(!confirm(date+' の店休日を削除しますか？'))return;
+  var merged=(holidays||[]).filter(function(h){return h.date!==date;});
+  api('saveHolidays',{holidays:merged}).then(function(r){ if(res(r,'削除しました')){ holidays=(r&&r.holidays)||merged; drawHolidays(); } }).catch(function(){toast('通信エラー',true);});
+}
+
 /* ===== 🗣 現場の声（AI家康くんに届いた要望）===== */
 var voiceFilter='all', voiceList=[];
 var VOICE_STATUSES=['新規','対応中','反映済','却下'];
@@ -956,6 +1009,8 @@ function MOCK(){
   ]};
 }
 function MOCKAPI(action,body){
+  if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
+  if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
   if(action==='getShiftMgmt')return {ok:true,data:{headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};

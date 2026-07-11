@@ -62,6 +62,7 @@ const CASH_CHECK_TAB     = '現金管理';
 const OPENING_CHECK_TAB  = '現金管理_開店';
 const SAFE_WITHDRAWAL_TAB = '金庫出金ログ';
 const CASH_THRESHOLDS_PROP_ = 'CASH_THRESHOLDS_JSON';
+const HOLIDAYS_PROP_        = 'HOLIDAYS_JSON'; // 店休日リスト [{date:'yyyy-MM-dd', label:'お盆休み'}]
 const HAKEN_NAME_MAP_TAB = '派遣名マッピング';
 const ADMIN_NAMES_ = ['管理者', 'ひろき', 'りく']; // ハードコードの常時管理者（ロックアウト防止の保険。UIから外せない）
 const SAFE_ADMIN_DEFAULT_ = ['りく'].concat(ADMIN_NAMES_); // 金庫管理タグのデフォルト許可者
@@ -362,6 +363,16 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     setCashThresholds_(body.thresholds);
     return { ok: true };
+  }
+  if (body.action === 'getHolidays') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return { ok: true, holidays: getHolidays_() };
+  }
+  if (body.action === 'saveHolidays') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return { ok: true, holidays: setHolidays_(body.holidays) };
   }
   if (body.action === 'resetOpeningCheck') {
     const adminName = getStaffName(body.userId);
@@ -3201,7 +3212,7 @@ function scheduledJobs() {
   const today = todayStr();
   // 早朝(6時前)は前営業日の続き（例: 日曜0:30の閉店作業は土曜営業ぶん）。営業日判定は前日dowで行う
   const bizDow = (hhmm < '06:00') ? (dow === 1 ? 7 : dow - 1) : dow;
-  const isClosed = bizDow === 7; // その営業日が定休(日曜)か
+  const isClosed = bizDow === 7 || isHoliday_(bizDateStr_()); // その営業日が定休(日曜)か店休日(お盆等)か
   const isSun = dow === 7; // 日曜定休日（当日カレンダーベース。互換のため残す）
 
   function once(id, fn) {
@@ -5192,10 +5203,11 @@ function handlePortalApi_(e) {
     const workingH = isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin;
     let reservationsH = []; try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {}
     let vacancyH = null; try { vacancyH = getPortalVacancy_(); } catch (e) {}
+    const closedDaysH = {}; getHolidays_().forEach(h => { closedDaysH[h.date] = h.label || '店休日'; });
     return out({ ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH,
       shifts: shiftsH, confirmedShifts: confirmedShiftsH, pendingShifts: pendingShiftsH,
       todayArrival: todayArrivalH, seats: seatsH, working: workingH,
-      reservations: reservationsH, vacancy: vacancyH });
+      reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH });
   }
 
   // === 成績ペイロード（成績タブを開いた時に遅延ロード） ===
@@ -6892,6 +6904,7 @@ function addReservation_(payload, regBy) {
  return withPropLock_(function () {
   const sh = getYoyakuRsrvSheet_();
   const dateKey = String(payload.date || todayStr());
+  if (isHoliday_(dateKey)) return { ok: false, error: 'この日は店休日のため予約を登録できません' };
   const time = String(payload.time || '');
   const customer = String(payload.customer || '');
   // 重複ガード: 同一(日付・時刻・お客様)の未キャンセル予約が既にあれば新規作成しない
@@ -6918,6 +6931,7 @@ function addReservation_(payload, regBy) {
 }
 
 function updateReservation_(rowIdx, payload) {
+  if (payload && payload.date && isHoliday_(String(payload.date))) return { ok: false, error: 'この日は店休日のため予約を移動できません' };
   const sh = getYoyakuRsrvSheet_();
   const oldRow = sh.getRange(rowIdx, 1, 1, 9).getValues()[0];
   const oldTable = String(oldRow[5]);
@@ -8352,6 +8366,40 @@ function getCashThresholds_() {
 
 function setCashThresholds_(thresholds) {
   setProp(CASH_THRESHOLDS_PROP_, JSON.stringify(thresholds));
+}
+
+// ============================================================
+// 店休日（お盆休み・臨時休業など不定期の休業日）
+//   Script Properties に [{date:'yyyy-MM-dd', label:'お盆休み'}] のJSON配列で保持。
+//   date は営業日キー(bizDateStr_ と同じ6時境界)で統一 → 日曜定休ロジックと整合。
+// ============================================================
+function getHolidays_() {
+  const raw = prop(HOLIDAYS_PROP_);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// UIから受け取ったリストを正規化して保存（date必須・重複排除・昇順）。保存後の配列を返す。
+function setHolidays_(list) {
+  const seen = {};
+  const clean = (Array.isArray(list) ? list : [])
+    .map(h => ({ date: String((h && h.date) || '').trim(), label: String((h && h.label) || '').trim() }))
+    .filter(h => /^\d{4}-\d{2}-\d{2}$/.test(h.date))
+    .filter(h => (seen[h.date] ? false : (seen[h.date] = true)))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  setProp(HOLIDAYS_PROP_, JSON.stringify(clean));
+  return clean;
+}
+
+// 指定営業日(yyyy-MM-dd)が店休日か。引数省略時は本日の営業日で判定。
+function isHoliday_(dateStr) {
+  const d = dateStr || bizDateStr_();
+  return getHolidays_().some(h => h.date === d);
 }
 
 // 管理者操作: 本日の開店チェックを削除（ロック解除して再提出可能にする）

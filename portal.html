@@ -107,6 +107,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day .shift-status-label { font-size: 8px; margin-top: 1px; line-height: 1.1; text-align: center; }
 .day.pending-shift .shift-status-label { color: #ccaa44; }
 .day.scheduled .shift-status-label { color: #66cc88; }
+.day.holiday { background: #241a2e; border-color: #7a5bb0; pointer-events: none; }
+.day.holiday .num { color: #c9a8f0; }
+.day.holiday .holiday-label { font-size: 9px; color: #c9a8f0; margin-top: 2px; text-align: center; line-height: 1.1; }
 .seatreq-rsv-card { background: #141d30; border: 1px solid #1e3050; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
 .seatreq-rsv-card.sel { background: #0f2040; border-color: #2a60bb; }
 
@@ -330,6 +333,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .ycal-day.other { opacity: 0.25; pointer-events: none; }
 .ycal-day.sunday .ycal-num { color: #ee6666; }
 .ycal-day.saturday .ycal-num { color: #6688ee; }
+.ycal-day.holiday { background: #241a2e; border: 1px solid #7a5bb0; cursor: default; }
+.ycal-day.holiday:hover { background: #241a2e; }
+.ycal-day.holiday .ycal-num { color: #c9a8f0; }
 .ycal-num { font-size: 15px; font-weight: 600; color: #ddd; line-height: 1; }
 .ycal-pax { font-size: 10px; color: #7ab0f0; font-weight: 700; margin-top: 3px; }
 .ycal-dot { width: 6px; height: 6px; background: #ddaa44; border-radius: 50%; position: absolute; top: 5px; right: 5px; }
@@ -2374,11 +2380,15 @@ function calHtml() {
     var isConfirmed = portalData && portalData.confirmedShifts && portalData.confirmedShifts.indexOf(key) !== -1;
     // 黒服のみ「申請中(未確定)」と「確定済み」を区別する。それ以外の役職は従来通りscheduled扱い
     var notYetConfirmed = isKurofukuRole && existShift && !isKyukin && !isConfirmed;
+    var dkey = viewYear+'-'+('0'+(viewMonth+1)).slice(-2)+'-'+('0'+d).slice(-2);
+    var closedLabel = portalData && portalData.closedDays && portalData.closedDays[dkey];
+    var isClosed = !!closedLabel;
     var cls = 'day';
     if (wday===0) cls += ' sun';
     if (wday===6) cls += ' sat';
     if (past) cls += ' past';
     if (isToday) cls += ' today';
+    if (isClosed) cls += ' holiday';
     if (isKyukin) cls += ' kyukin';
     else if (sel) cls += ' selected';
     else if (isPending || notYetConfirmed) cls += ' pending-shift';
@@ -2396,11 +2406,14 @@ function calHtml() {
     } else if (isPending && !existShift && !sel && !isKyukin) {
       statusLabel = '申請中'; // 黒服バイトの承認待ち（シフト表未反映）
     }
-    h += '<div class="'+cls+'" data-key="'+key+'" onclick="openPicker(\''+key+'\')">'
+    var clickAttr = isClosed ? '' : ' onclick="openPicker(\''+key+'\')"';
+    var titleAttr = isClosed ? ' title="'+String(closedLabel).replace(/"/g,'')+'"' : '';
+    h += '<div class="'+cls+'" data-key="'+key+'"'+clickAttr+titleAttr+'>'
       + '<div class="num">'+d+'</div>'
-      + (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : '')
-      + (isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
-      + (statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
+      + (isClosed ? '<div class="holiday-label">🏖休</div>'
+          : (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : ''))
+      + (!isClosed && isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
+      + (!isClosed && statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
       + '</div>';
   }
   h += '</div>';
@@ -3587,10 +3600,14 @@ function renderYoyakuCal(summary) {
     if (dateKey === todayStr) cls += ' today';
     if (dow === 0) cls += ' sunday';
     if (dow === 6) cls += ' saturday';
+    var closedL = portalData && portalData.closedDays && portalData.closedDays[dateKey];
+    if (closedL) cls += ' holiday';
     var s = summary[dateKey];
-    var paxHtml = s ? '<div class="ycal-pax">'+s.pax+'名</div>' : '';
+    var paxHtml = s ? '<div class="ycal-pax">'+s.pax+'名</div>' : (closedL ? '<div class="ycal-pax" style="color:#a888d0">🏖休</div>' : '');
     var dotHtml = ''; // 将来：仮予約バッジ用
-    cells += '<div class="'+cls+'" onclick="yoyakuCalGo(\''+dateKey+'\')">'
+    var clickY = closedL ? '' : ' onclick="yoyakuCalGo(\''+dateKey+'\')"';
+    var titleY = closedL ? ' title="'+String(closedL).replace(/"/g,'')+'"' : '';
+    cells += '<div class="'+cls+'"'+clickY+titleY+'>'
       + dotHtml
       + '<div class="ycal-num">'+day+'</div>'
       + paxHtml
@@ -4024,6 +4041,11 @@ function renderRsvCal() {
     var ds = year + '-' + String(month).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     var dow = new Date(year, month - 1, d).getDay();
     var isSel = ds === yoyakuRsvDate, isToday = ds === today;
+    var closedL = portalData && portalData.closedDays && portalData.closedDays[ds];
+    if (closedL) {
+      h += '<div title="' + String(closedL).replace(/"/g,'') + '" style="text-align:center;padding:5px 2px;border-radius:5px;font-size:12px;color:#a888d0;background:#241a2e">' + d + '<div style="font-size:7px;line-height:1;margin-top:1px">休</div></div>';
+      continue;
+    }
     h += '<div onclick="yoyakuRsvSelectDate(\'' + ds + '\')" style="text-align:center;padding:5px 2px;border-radius:5px;cursor:pointer;font-size:12px;'
       + (isSel ? 'background:#1a55bb;color:#e8f0ff;font-weight:700'
                : isToday ? 'background:#0f2040;color:#7ab0f0;font-weight:700'
