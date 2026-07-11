@@ -367,6 +367,18 @@ function getKioskWorkingCasts() {
   }
 }
 
+// 当日の非通常キャストの区分マップ { 空白除去した実名: '派遣'|'体験' }。通常キャストは含めない＝バッジ無し
+function getKioskCastKubun() {
+  try {
+    var d = getTodayShiftDetail_();
+    var map = {};
+    var k = function (n) { return String(n || '').replace(/\s/g, ''); };
+    (d.cast || []).forEach(function (s) { if (s && s.name && s.role === '体験') map[k(s.name)] = '体験'; });
+    (d.haken || []).forEach(function (s) { if (s && s.name) map[k(s.name)] = '派遣'; });
+    return map;
+  } catch (e) { return {}; }
+}
+
 /* =========================================================
  *  送り管理（キオスク全画面ボード）
  *  既存の本番関数を再利用:

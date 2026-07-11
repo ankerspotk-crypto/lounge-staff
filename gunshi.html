@@ -590,6 +590,9 @@ body{display:flex;flex-direction:column;height:100vh;}
 /* 席の結合・分割 */
 .seat.grouped{border-color:#2a8a8a !important;box-shadow:inset 0 0 0 1px #1a5a5a;}
 .seat .grp-badge{font-size:8px;font-weight:800;color:#8fe0e0;background:#0f2a2a;border:1px solid #2a7a7a;border-radius:5px;padding:1px 5px;margin-left:4px;vertical-align:middle;}
+.kubun-badge{font-size:8px;font-weight:800;padding:1px 5px;border-radius:5px;margin-left:4px;vertical-align:middle;border:1px solid;white-space:nowrap;}
+.kubun-badge.haken{color:#8fbaff;background:#0f1c33;border-color:#2a4a7a;}
+.kubun-badge.taiken{color:#ffcf6a;background:#2a1e00;border-color:#7a5a10;}
 .seat.mergedcell{background:#0b1c1c;border:1px dashed #2a7a7a;display:flex;align-items:center;justify-content:center;min-height:70px;}
 .seat.combinetarget{outline:2px dashed #2aa0a0;outline-offset:-2px;}
 .seat.combinetarget::after{content:'🔗 追加';position:absolute;right:6px;bottom:5px;font-size:10px;font-weight:800;color:#8fe0e0;background:#0f2a2a;border:1px solid #2a7a7a;border-radius:6px;padding:1px 6px;}
@@ -771,6 +774,9 @@ var BOOTED=false; /* loadAll() で実データを1度でも取得したか。本
 /* 以下の配列はローカルプレビュー用フォールバック。GAS本番では loadAll() が実データで上書きする。 */
 var CASTS=['まや','みれい','のあ','ゆうか','りお','ゆき','かい','ここ','れな','あん'];
 var WORKCASTS=null; /* 本日出勤＋当日派遣のキャスト。付け回し候補に使用（null=未取得→全キャストにフォールバック） */
+var CASTKUBUN={}; /* {空白除去実名:'派遣'|'体験'} 当日の非通常キャスト区分。名前の横にバッジ表示 */
+function castKubun(name){ return CASTKUBUN[String(name||'').replace(/\s/g,'')]||''; }
+function castBadge(name){ var k=castKubun(name); if(!k)return ''; return '<span class="kubun-badge '+(k==='派遣'?'haken':'taiken')+'">'+k+'</span>'; }
 
 var SEATS=[
   {floor:'2F',type:'C',name:'カウンター1',pax:1,cust:'田中 様',member:'No.204',bottle:'獺祭 純米',bottlePos:'2F-C棚1',nomikata:'ロック',tantou:'まや',set:60,casts:[{n:'まや',mins:22,status:'ok'}],tags:['bottle']},
@@ -992,7 +998,7 @@ function chipHtml(name,ci,si,opts){
   var onclick=opts.away?'onclick="tapAway(event)"':'onclick="tapCast('+si+','+ci+',event)"';
   var av=opts.away?'#8a7038':col;
   var awayLbl=opts.away?'<span class="role">担当</span><span class="awaytm">抜けて'+(opts.awayMin!=null?opts.awayMin:0)+'分</span>':'';
-  return '<span class="'+cls+'" '+onclick+'><span class="ava" style="background:'+av+'">'+esc(name.charAt(0))+'</span><span class="cn">'+esc(name)+'</span>'+role+awayLbl+tm+'</span>';
+  return '<span class="'+cls+'" '+onclick+'><span class="ava" style="background:'+av+'">'+esc(name.charAt(0))+'</span><span class="cn">'+esc(name)+'</span>'+castBadge(name)+role+awayLbl+tm+'</span>';
 }
 function seatInfoLine(s){
   var p=[];
@@ -1252,7 +1258,7 @@ function shiftRow(s){
   var haya='<span class="sb haya'+(s.hayaagari?'':' off')+'" onclick="setHaya('+i+')">🚪 '+(s.hayaagari?fmtTime(s.hayaagari):'早上がり')+'</span>';
   var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
   var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
-  var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>';
+  var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>'+castBadge(s.name);
   return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span><span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
 }
 /* 当日の源氏名を修正（体験の子など）。空欄で元名に戻す。keyは元のシート名。 */
@@ -1552,7 +1558,7 @@ function rotPickerHtml(idx){
   var pool=(WORKCASTS!=null&&WORKCASTS.length)?WORKCASTS:CASTS; /* 本日出勤＋当日派遣のみ（未取得時は全キャスト） */
   var avail=pool.filter(function(c){return here.indexOf(c)<0;});
   if(!avail.length) return '<div class="flabel">🔄 付け回し</div><div class="empty-msg" style="padding:10px 0;font-size:12px">出勤中の付けられるキャストがいません</div>';
-  return '<div class="flabel">🔄 付け回し（タップでこの席に付ける／動かす）</div><div class="chips rotpick">'+avail.map(function(c){var loc=castSeatLabel(c);return '<div class="chip cast" onclick="quickRotate('+idx+',\''+jsStr(c)+'\')">'+esc(c)+(loc?'<span class="rploc">'+esc(loc)+'</span>':'<span class="rploc free">待機</span>')+'</div>';}).join('')+'</div>';
+  return '<div class="flabel">🔄 付け回し（タップでこの席に付ける／動かす）</div><div class="chips rotpick">'+avail.map(function(c){var loc=castSeatLabel(c);return '<div class="chip cast" onclick="quickRotate('+idx+',\''+jsStr(c)+'\')">'+esc(c)+castBadge(c)+(loc?'<span class="rploc">'+esc(loc)+'</span>':'<span class="rploc free">待機</span>')+'</div>';}).join('')+'</div>';
 }
 /* ワンタップ付け回し: castName を toIdx の席へ（他席にいれば移動、いなければ新規配置）。ローカル優先。 */
 function quickRotate(toIdx,castName){
@@ -2836,9 +2842,10 @@ function loadAll(){
     gsr('getCastRequestsToday'),
     gsr('getKioskCastNames'),
     gsr('getKioskWorkingCasts').catch(function(){return null;}),
-    gsr('getKioskTasks').catch(function(){return null;})
+    gsr('getKioskTasks').catch(function(){return null;}),
+    gsr('getKioskCastKubun').catch(function(){return null;})
   ]).then(function(r){
-    SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[];
+    SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[]; CASTKUBUN=(r[8]&&typeof r[8]==='object')?r[8]:CASTKUBUN;
     applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
     BOOTED=true; renderAll();
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
