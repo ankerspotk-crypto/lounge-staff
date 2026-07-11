@@ -1277,44 +1277,52 @@ function adminSetBirthdayBack(userId, month, name, start, end, rate) {
 
 // 管理者: 指定月の誕生日バック設定一覧＋その月のキャスト名候補を返す（Admin設定UI用）
 function adminGetBirthdayBack(userId, month) {
-  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
-  const ss = getOrOpenSS_();
-  const mk = monthKey_(month) || '';
-  // 設定一覧（元の名前表記のまま返す）
-  const list = [];
-  const bs = ss.getSheetByName(BIRTHDAY_BACK_TAB);
-  if (bs && bs.getLastRow() >= 2) {
-    const rows = bs.getDataRange().getValues();
-    const h = rows[0].map(String);
-    const iN = h.indexOf('名前'), iS = h.indexOf('開始日'), iE = h.indexOf('終了日'), iR = h.indexOf('率(%)');
-    const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
-    const present = {}; // 'mk|正規化名' の存在集合（月またぎ分割の隣月検出用）
-    for (let i = 1; i < rows.length; i++) {
-      present[mStr_(rows[i][0]) + '|' + normalizeName_(String(rows[i][iN]).trim())] = true;
+  try {
+    if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+    const ss = getOrOpenSS_();
+    const mk = monthKey_(month) || '';
+    // 設定一覧（元の名前表記のまま返す）
+    const list = [];
+    const bs = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+    if (bs && bs.getLastRow() >= 2) {
+      const rows = bs.getDataRange().getValues();
+      const h = rows[0].map(String);
+      const iN = h.indexOf('名前'), iS = h.indexOf('開始日'), iE = h.indexOf('終了日'), iR = h.indexOf('率(%)');
+      const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+      const present = {}; // 'mk|正規化名' の存在集合（月またぎ分割の隣月検出用）
+      for (let i = 1; i < rows.length; i++) {
+        present[mStr_(rows[i][0]) + '|' + normalizeName_(String(rows[i][iN]).trim())] = true;
+      }
+      for (let i = 1; i < rows.length; i++) {
+        if (mStr_(rows[i][0]) !== mk) continue;
+        const nmRaw = String(rows[i][iN]).trim(), nmKey = normalizeName_(nmRaw);
+        list.push({
+          name: nmRaw, start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0,
+          contPrev: !!present[mkShift_(mk, -1) + '|' + nmKey], // 前月に続き行がある
+          contNext: !!present[mkShift_(mk, 1) + '|' + nmKey]   // 翌月に続き行がある
+        });
+      }
     }
-    for (let i = 1; i < rows.length; i++) {
-      if (mStr_(rows[i][0]) !== mk) continue;
-      const nmRaw = String(rows[i][iN]).trim(), nmKey = normalizeName_(nmRaw);
-      list.push({
-        name: nmRaw, start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0,
-        contPrev: !!present[mkShift_(mk, -1) + '|' + nmKey], // 前月に続き行がある
-        contNext: !!present[mkShift_(mk, 1) + '|' + nmKey]   // 翌月に続き行がある
-      });
+    // ドロップダウン候補: スタッフマスタのキャスト系（月データ未取込でも常に出る）∪ その月のTRUST名 ∪ 既存設定名
+    const seen = {}, casts = [];
+    const add = function (nm) { nm = String(nm || '').trim(); if (nm && !seen[nm]) { seen[nm] = 1; casts.push(nm); } };
+    const stf = ss.getSheetByName(STAFF_TAB);
+    if (stf && stf.getLastRow() >= 2) {
+      const srows = stf.getRange(2, 1, stf.getLastRow() - 1, 3).getValues(); // A=userId B=名前 C=役割
+      const EXCLUDE = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1 };
+      for (let i = 0; i < srows.length; i++) { if (EXCLUDE[String(srows[i][2]).trim()]) continue; add(srows[i][1]); }
     }
+    const ts = ss.getSheetByName(TRUST_TAB);
+    if (ts && ts.getLastRow() >= 2) {
+      const trows = ts.getDataRange().getValues();
+      for (let i = 1; i < trows.length; i++) { if (mStr_(trows[i][0]) === mk) add(trows[i][1]); }
+    }
+    list.forEach(function (x) { add(x.name); });
+    casts.sort();
+    return { ok: true, month: mk, list: list, casts: casts };
+  } catch (err) {
+    return { ok: false, error: '誕生日バック読込エラー: ' + String((err && err.message) || err) };
   }
-  // その月にTRUST報酬があるキャスト名（ドロップダウン候補）
-  const casts = [], seen = {};
-  const ts = ss.getSheetByName(TRUST_TAB);
-  if (ts && ts.getLastRow() >= 2) {
-    const trows = ts.getDataRange().getValues();
-    for (let i = 1; i < trows.length; i++) {
-      if (mStr_(trows[i][0]) !== mk) continue;
-      const nm = String(trows[i][1]).trim();
-      if (nm && !seen[nm]) { seen[nm] = 1; casts.push(nm); }
-    }
-  }
-  casts.sort();
-  return { ok: true, month: mk, list: list, casts: casts };
 }
 
 // 新バック方式で1名分を再計算。g=TRUST報酬行のgetter(見出し名→値), m=手入力{intro,nyuten,fixedRate}
@@ -5240,31 +5248,6 @@ function handlePortalApi_(e) {
     });
     const dups = Object.keys(byName).filter(n => byName[n].length >= 2).map(n => ({ name: n, holders: byName[n] }));
     return out({ ok: true, totalStaff: Object.keys(byName).length, reusedNames: dups });
-  }
-  // 誕生日バック診断（読み取りのみ・原因切り分け用・恒久化しない）
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'bdaydiag') {
-    const rep = { ok: true, monthIn: e.parameter.month || '' };
-    try {
-      rep.mk = monthKey_(e.parameter.month || '') || '';
-      const ss2 = getOrOpenSS_();
-      rep.sheetExists = !!ss2.getSheetByName(BIRTHDAY_BACK_TAB);
-      rep.trustExists = !!ss2.getSheetByName(TRUST_TAB);
-      rep.step = 'getBirthdayBackMap_';
-      rep.map = getBirthdayBackMap_(ss2, rep.mk);
-      rep.step = 'mkShift_';
-      rep.mkShiftTest = mkShift_(rep.mk, -1) + ' / ' + mkShift_(rep.mk, 1);
-      rep.step = 'trustScan';
-      const ts = ss2.getSheetByName(TRUST_TAB), casts = [];
-      if (ts && ts.getLastRow() >= 2) {
-        const tr = ts.getDataRange().getValues();
-        for (let i = 1; i < tr.length; i++) { if (mStr_(tr[i][0]) !== rep.mk) continue; const nm = String(tr[i][1]).trim(); if (nm && casts.indexOf(nm) < 0) casts.push(nm); }
-      }
-      rep.castCount = casts.length; rep.castsSample = casts.slice(0, 8);
-      rep.step = 'done';
-    } catch (err) {
-      rep.ok = false; rep.error = String((err && err.message) || err); rep.stack = String((err && err.stack) || '');
-    }
-    return out(rep);
   }
 
   if (!userId) return out({ ok: false, error: 'userId required' });
