@@ -519,6 +519,12 @@ body{display:flex;flex-direction:column;height:100vh;}
 .sb.mode{cursor:pointer;}
 .sb.mode.drv{background:#0f2040;color:#9dc8ff;border:1px solid #2a5590;}
 .sb.mode.jib{background:#1e1a0a;color:#e6c060;border:1px solid #5a4a1a;}
+.sb.shusen{background:#0e1a22;color:#8fd0e0;border:1px solid #2a4a5a;cursor:pointer;}
+.sb.shusen.off{background:#161626;color:#5a6a80;border:1px solid var(--line2);}
+.sr-nm{cursor:pointer;}
+.sr-nm .pen{color:#6a5a8a;font-size:11px;margin-left:3px;}
+.sr-nm .rnm{color:#c9a0ff;font-size:11px;margin-left:3px;font-weight:800;}
+.shift-row.rnm{border-color:#5a2a5a;}
 .rtg.active{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
 .rtg .b{font-size:11px;font-weight:800;background:#7a2424;color:#ffb3b3;border-radius:10px;padding:1px 7px;}
 .rot-sum{font-size:12px;color:var(--sub);margin-bottom:11px;font-weight:700;}
@@ -1242,10 +1248,29 @@ function renderShift(){
 function shiftRow(s){
   var i=SHIFT.indexOf(s);
   var col=castColor(s.name);
+  var shusen='<span class="sb shusen'+(s.shusen?'':' off')+'" onclick="setShusen('+i+')">🚃 '+(s.shusen?esc(s.shusen):'終電')+'</span>';
   var haya='<span class="sb haya'+(s.hayaagari?'':' off')+'" onclick="setHaya('+i+')">🚪 '+(s.hayaagari?fmtTime(s.hayaagari):'早上がり')+'</span>';
   var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
   var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
-  return '<div class="shift-row'+(s.hayaagari?' hay':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span><span class="sr-nm">'+esc(s.name)+'</span><span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span><span class="sr-b">'+haya+okuri+mode+'</span></div>';
+  var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>';
+  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span><span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
+}
+/* 当日の源氏名を修正（体験の子など）。空欄で元名に戻す。keyは元のシート名。 */
+function setGenji(i){
+  var s=SHIFT[i]; var orig=s.origName||s.name;
+  var t=prompt('「'+orig+'」の当日の源氏名（体験の子など・空欄で元に戻す）', s.renamed?s.name:orig);
+  if(t===null)return; t=String(t).trim();
+  s.name=(t&&t!==orig)?t:orig; s.renamed=(s.name!==orig); /* 楽観的反映 */
+  renderShift(); renderAlerts();
+  if(IS_GAS)gsr('kioskSetGenji',orig,t).then(function(){loadAll();}).catch(function(){toast('保存エラー');loadAll();});
+}
+/* 当日の終電情報（時刻＋自由メモ）。空欄で解除。 */
+function setShusen(i){
+  var s=SHIFT[i];
+  var t=prompt(s.name+' の終電情報（例 24:35 / 24:10 京王線・空欄で解除）', s.shusen||'');
+  if(t===null)return; t=String(t).trim();
+  s.shusen=t; renderShift();
+  if(IS_GAS)gsr('kioskSetShusen',s.name,t).catch(function(){toast('保存エラー');loadAll();});
 }
 function rcardHtml(r,isNext){
   var done=r.status==='退店済み';
@@ -2798,7 +2823,7 @@ function applyRsvGrouping(){
   });
 }
 function adaptRot(list){return (list||[]).map(function(c){return {cast:c.cast, interval:c.interval||15, tables:(c.tables||[]).map(function(t){return {key:t.label, code:t.code, cust:(t.cust||'')+(t.cust?'様':''), cur:!!t.current, min:0, wait:t.awayMin||0};})};});}
-function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー'};});}
+function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||''};});}
 function adaptReq(list){return (list||[]).map(function(r){var store=/店全体|全体/.test(r.target||'');return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCust:store?'':custKey(r.target), comment:r.comment||'', handled:!!r.handled};});}
 
 function loadAll(){

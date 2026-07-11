@@ -60,18 +60,24 @@ function getKioskShiftBoard() {
   var today = todayStr();
   var haya = kioskGetHayaagari_();
   var okuriMode = kioskGetOkuriMode_();
+  var genji = kioskGetGenji_();     // { 元名: 当日の源氏名 }
+  var shusen = kioskGetShusen_();   // { 表示名: 終電情報 }
   var okuriSet = {};
   (getOkuriList(today) || []).forEach(function (o) { okuriSet[o.name] = true; });
 
   var rows = getTodayShiftRows_(today); // ↓ 下部で暫定実装（本番シフト表に接続）
   return rows.map(function (r) {
+    var nm = genji[r.name] || r.name; // 当日の源氏名（未設定は元名）。以降の当日属性は表示名で引く（未設定時は元名にフォールバック）
     return {
-      name: r.name,
+      name: nm,
+      origName: r.name,
+      renamed: nm !== r.name,
       in: r.in,
       out: r.out,
-      hayaagari: haya[r.name] || '',
-      okuri: !!okuriSet[r.name],
-      okuriMode: okuriMode[r.name] || 'ドライバー'
+      hayaagari: haya[nm] || haya[r.name] || '',
+      okuri: !!(okuriSet[nm] || okuriSet[r.name]),
+      okuriMode: okuriMode[nm] || okuriMode[r.name] || 'ドライバー',
+      shusen: shusen[nm] || shusen[r.name] || ''
     };
   });
 }
@@ -310,6 +316,40 @@ function kioskSetOkuriMode(cast, mode) {
     mm[cast] = mode;
     setProp('KOKURIMODE_' + todayStr(), JSON.stringify(mm));
     return { ok: true };
+  });
+}
+
+// 源氏名の当日修正（体験の子など：事前登録名→当日の源氏名）。keyは元のシート名・値は当日表示名。その日限り。
+function kioskGetGenji_() {
+  var raw = prop('KGENJI_' + todayStr());
+  return raw ? JSON.parse(raw) : {}; // { 元名: 当日表示名 }
+}
+function kioskSetGenji(origName, newName) {
+  return withPropLock_(function () {
+    origName = String(origName || '').trim();
+    newName = String(newName || '').trim();
+    if (!origName) return { ok: false, error: '対象がありません' };
+    var map = kioskGetGenji_();
+    if (newName && newName !== origName) map[origName] = newName; else delete map[origName]; // 空/同名=元に戻す
+    setProp('KGENJI_' + todayStr(), JSON.stringify(map));
+    return { ok: true, genji: map };
+  });
+}
+
+// 終電情報（当日・キャスト別）。時刻＋自由メモの自由記述（例 '24:35' / '24:10 京王線'）。その日限り。
+function kioskGetShusen_() {
+  var raw = prop('KSHUSEN_' + todayStr());
+  return raw ? JSON.parse(raw) : {}; // { 表示名: '終電情報' }
+}
+function kioskSetShusen(cast, info) {
+  return withPropLock_(function () {
+    cast = String(cast || '').trim();
+    info = String(info || '').trim();
+    if (!cast) return { ok: false, error: '対象がありません' };
+    var map = kioskGetShusen_();
+    if (info) map[cast] = info; else delete map[cast];
+    setProp('KSHUSEN_' + todayStr(), JSON.stringify(map));
+    return { ok: true, shusen: map };
   });
 }
 
