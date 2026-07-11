@@ -628,6 +628,7 @@ var SECTIONS = {
   hair:     { t:'領収書提出',   i:'🧾' },
   seatreq:  { t:'席リクエスト', i:'💺' },
   customers:{ t:'顧客管理',     i:'👥' },
+  bday:     { t:'誕生日設定',   i:'🎂' },
   requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'シフト管理',   i:'🗂' },
   notif:    { t:'通知設定',     i:'🔔' },
@@ -660,7 +661,7 @@ function menuBtn(key) {
     + '<span style="font-size:14px;font-weight:700;color:#e8f0ff">' + s.t + '</span></button>';
 }
 function homeMenu() {
-  var castKeys = ['shift','yoyaku','stats','hair','seatreq','customers'];
+  var castKeys = ['shift','yoyaku','stats','hair','seatreq','customers','bday'];
   var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
   if (isAdmin) {
@@ -696,6 +697,7 @@ function switchTab(tab) {
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (tab === 'customers') { loadCustomers(); return; }
+  if (tab === 'bday') { loadBirthday(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -2978,6 +2980,106 @@ function processReq(ev, rowIdx, name, date, time, decision) {
 }
 
 var contentTargetId = 'content';
+// ---- 🎂 誕生日設定タブ（誕生日 & 誕生日週間の申請）----
+var bdayData = null;
+function bdayTargetName() { return isAdmin ? adminViewAs : ''; }
+function loadBirthday() {
+  if (isAdmin && !adminViewAs) {
+    setContent('<div style="padding:24px;color:#8aabcc;font-size:14px;line-height:1.8">🎂 誕生日設定はキャスト本人の画面です。<br>上部の「キャストを選択」から対象キャストを選ぶと、代理で設定・申請できます。</div>');
+    return;
+  }
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castGetBirthday', userId: userId, targetName: bdayTargetName() }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      bdayData = d; renderBirthday(d);
+    })
+    .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function renderBirthday(d) {
+  var w = d.week || { status:'none' };
+  var box = 'background:#111b2e;border:1px solid #1e3050;border-radius:12px;padding:16px;margin-bottom:16px';
+  var lbl = 'font-size:12px;color:#7a9cc8;display:block;margin-bottom:6px';
+  var inp = 'width:100%;padding:11px;background:#0d1626;border:1px solid #24365a;border-radius:9px;color:#e8f0ff;font-size:15px;box-sizing:border-box';
+  var h = '<div style="padding:14px">';
+  if (isAdmin && adminViewAs) h += '<div style="font-size:12px;color:#c9a0ff;margin-bottom:10px">代理設定中: <b>' + esc(adminViewAs) + '</b></div>';
+
+  // ── 誕生日 ──
+  h += '<div style="' + box + '">'
+    + '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:4px">🎂 あなたの誕生日</div>'
+    + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;line-height:1.6">月/日で入力してください（例: 8/15）。誕生日バックの対象月判定に使われます。</div>'
+    + '<label style="' + lbl + '">誕生日（月/日）</label>'
+    + '<input id="bday-md" type="text" inputmode="text" placeholder="例: 8/15" value="' + esc(d.birthday || '') + '" style="' + inp + ';max-width:180px">'
+    + '<button onclick="saveBirthdayMd()" style="margin-left:10px;padding:11px 18px;background:#1a50a0;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">保存</button>'
+    + '</div>';
+
+  // ── 誕生日週間 ──
+  h += '<div style="' + box + '">'
+    + '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:4px">🗓 誕生日週間の期間</div>'
+    + '<div style="font-size:11px;color:#aa8833;background:#1a1500;border:1px solid #3a2e00;border-radius:8px;padding:8px 10px;margin:8px 0 14px;line-height:1.6">バック率（'
+    + (d.defaultRate || 30) + '%）は黒服が設定します。あなたは<b>期間の申請</b>のみ行えます。承認されると期間は変更できなくなります。</div>';
+
+  if (w.status === 'approved') {
+    h += statusBadge('approved')
+      + '<div style="font-size:15px;color:#e8f0ff;margin:12px 0 4px">' + esc(w.start) + ' 〜 ' + esc(w.end) + '</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.7">承認済みのためロックされています。変更が必要な場合は黒服に連絡してください。</div>';
+  } else if (w.status === 'pending') {
+    h += statusBadge('pending')
+      + '<div style="font-size:15px;color:#e8f0ff;margin:12px 0 4px">' + esc(w.start) + ' 〜 ' + esc(w.end) + '</div>'
+      + '<div style="font-size:12px;color:#7a9cc8;line-height:1.7;margin-bottom:12px">黒服の承認待ちです。' + (w.applied ? '（申請: ' + esc(w.applied) + '）' : '') + '</div>'
+      + '<button onclick="cancelBirthdayWeek()" style="padding:10px 16px;background:#2a1520;color:#ff9aa0;border:1px solid #5a2530;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">申請を取り下げる</button>';
+  } else {
+    if (w.status === 'sentback') {
+      h += statusBadge('sentback')
+        + '<div style="font-size:12px;color:#ff9aa0;background:#2a1214;border:1px solid #5a2226;border-radius:8px;padding:9px 11px;margin:10px 0 14px;line-height:1.7">差し戻されました。内容を見直して再申請してください。<br>理由: ' + esc(w.reason || '（記載なし）') + '</div>';
+    }
+    h += '<label style="' + lbl + '">開始日</label>'
+      + '<input id="bw-start" type="date" value="' + esc(w.start || '') + '" style="' + inp + ';margin-bottom:12px">'
+      + '<label style="' + lbl + '">終了日</label>'
+      + '<input id="bw-end" type="date" value="' + esc(w.end || '') + '" style="' + inp + ';margin-bottom:16px">'
+      + '<button onclick="applyBirthdayWeek()" style="width:100%;padding:13px;background:#7a3fa0;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">' + (w.status === 'sentback' ? '再申請する' : '期間を申請する') + '</button>';
+  }
+  h += '</div></div>';
+  setContent(h);
+}
+
+function statusBadge(st) {
+  var m = {
+    approved: { t:'承認済', bg:'#0f2a18', bd:'#1f5a34', c:'#7ee0a0' },
+    pending:  { t:'承認待ち', bg:'#2a2410', bd:'#5a4e1f', c:'#e0d07e' },
+    sentback: { t:'差し戻し', bg:'#2a1214', bd:'#5a2226', c:'#ff9aa0' }
+  }[st] || { t:'未申請', bg:'#141b2a', bd:'#2a3a55', c:'#8aabcc' };
+  return '<span style="display:inline-block;font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px;background:' + m.bg + ';border:1px solid ' + m.bd + ';color:' + m.c + '">' + m.t + '</span>';
+}
+
+function saveBirthdayMd() {
+  var md = (document.getElementById('bday-md').value || '').trim();
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castSetBirthday', userId: userId, targetName: bdayTargetName(), mmdd: md }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (!d.ok) { alert(d.error || '保存に失敗しました'); return; } alert('誕生日を保存しました'); loadBirthday(); })
+    .catch(function(){ alert('通信エラーが発生しました'); });
+}
+
+function applyBirthdayWeek() {
+  var s = (document.getElementById('bw-start').value || '').trim();
+  var e = (document.getElementById('bw-end').value || '').trim();
+  if (!s || !e) { alert('開始日と終了日を選んでください'); return; }
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castApplyBirthdayWeek', userId: userId, targetName: bdayTargetName(), start: s, end: e }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (!d.ok) { alert(d.error || '申請に失敗しました'); return; } alert('誕生日週間を申請しました。黒服の承認をお待ちください。'); loadBirthday(); })
+    .catch(function(){ alert('通信エラーが発生しました'); });
+}
+
+function cancelBirthdayWeek() {
+  if (!confirm('誕生日週間の申請を取り下げますか？')) return;
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castCancelBirthdayWeek', userId: userId, targetName: bdayTargetName() }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (!d.ok) { alert(d.error || '取り下げに失敗しました'); return; } loadBirthday(); })
+    .catch(function(){ alert('通信エラーが発生しました'); });
+}
+
 function setContent(html) {
   var el = document.getElementById(contentTargetId);
   if (el) el.innerHTML = html;

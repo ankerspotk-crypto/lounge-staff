@@ -787,16 +787,56 @@ function drawBday(r){
     var rows=m.settings.map(function(x){
       var cl=x.contPrev?'<span style="color:#c9a0ff" title="前月から続く（月またぎ）">◀続</span> ':'';
       var cr=x.contNext?' <span style="color:#c9a0ff" title="翌月へ続く（月またぎ）">続▶</span>':'';
-      return '<tr><td class="nm">'+esc(x.name)+'</td>'
+      var st=x.status||'承認済';
+      var badge=bdayStatusBadge(st);
+      var reasonLine=(st==='差戻'&&x.reason)?'<div style="font-size:11px;color:#ff9aa0;margin-top:3px">差戻理由: '+esc(x.reason)+'</div>':'';
+      var appLine=(st==='申請中'&&x.applied)?'<div style="font-size:11px;color:#8aabcc;margin-top:3px">申請: '+esc(x.applied)+'</div>':'';
+      var actions;
+      if(st==='申請中'){
+        actions='<button class="btn sm pri" style="padding:2px 9px;font-size:11px" onclick=\'approveBday('+JSON.stringify(x.name)+')\'>✅承認</button> '
+          +'<button class="btn sm" style="padding:2px 9px;font-size:11px" onclick=\'sendbackBday('+JSON.stringify(x.name)+')\'>↩差し戻し</button>';
+      } else {
+        actions='<button class="btn sm" style="padding:2px 8px;font-size:11px" onclick=\'editBday('+JSON.stringify(x.name)+','+JSON.stringify(x.start)+','+JSON.stringify(x.end)+','+(x.rate||30)+')\'>✎</button> '
+          +'<button class="btn sm dng" style="padding:2px 8px;font-size:11px" onclick=\'clearBday('+JSON.stringify(x.name)+','+JSON.stringify(m.mk)+')\'>解除</button>';
+      }
+      return '<tr><td class="nm">'+esc(x.name)+' '+badge+appLine+reasonLine+'</td>'
         +'<td style="text-align:center">'+cl+esc(x.start)+' 〜 '+esc(x.end)+cr+'</td>'
         +'<td style="text-align:center;color:#c9a0ff;font-weight:800">'+(x.rate||0)+'%</td>'
-        +'<td style="text-align:center;white-space:nowrap"><button class="btn sm" style="padding:2px 8px;font-size:11px" onclick=\'editBday('+JSON.stringify(x.name)+','+JSON.stringify(x.start)+','+JSON.stringify(x.end)+','+(x.rate||30)+')\'>✎</button> '
-        +'<button class="btn sm dng" style="padding:2px 8px;font-size:11px" onclick=\'clearBday('+JSON.stringify(x.name)+','+JSON.stringify(m.mk)+')\'>解除</button></td></tr>';
+        +'<td style="text-align:center;white-space:nowrap">'+actions+'</td></tr>';
     }).join('');
-    var tbl=m.settings.length?'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px"><thead><tr><th style="text-align:left">キャスト</th><th>期間</th><th>率</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'';
+    var pendCnt=m.settings.filter(function(x){return (x.status||'承認済')==='申請中';}).length;
+    var pendNote=pendCnt?'<div style="font-size:11px;color:#e0d07e;margin:0 0 8px">⏳ 承認待ち '+pendCnt+'件（承認するまで給与バックには反映されません）</div>':'';
+    var tbl=m.settings.length?pendNote+'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px"><thead><tr><th style="text-align:left">キャスト</th><th>期間</th><th>率</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>':'';
     return '<div class="sec"><div class="sec-t">'+moLabel+'</div>'+nudge+tbl+'</div>';
   }).join('')||'<div class="empty">前後6ヶ月に誕生日バック設定・誕生日キャストはありません（スタッフの誕生日は👥スタッフの「✎個別条件」で登録）</div>';
   setBody(paySubToggle('bday')+remBar+form+sections);
+}
+function bdayStatusBadge(st){
+  var m={
+    '承認済':{t:'承認済',bg:'#0f2a18',bd:'#1f5a34',c:'#7ee0a0'},
+    '申請中':{t:'承認待ち',bg:'#2a2410',bd:'#5a4e1f',c:'#e0d07e'},
+    '差戻':{t:'差戻',bg:'#2a1214',bd:'#5a2226',c:'#ff9aa0'}
+  }[st]||{t:esc(st),bg:'#141b2a',bd:'#2a3a55',c:'#8aabcc'};
+  return '<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;background:'+m.bg+';border:1px solid '+m.bd+';color:'+m.c+'">'+m.t+'</span>';
+}
+function approveBday(name){
+  if(!confirm('【'+name+'】の誕生日週間を承認しますか？\n承認するとこの期間の担当売上に誕生日バック率が適用されます。')) return;
+  loading();
+  gsr('adminApproveBirthdayWeek',USER_ID,name).then(function(r){
+    if(!r||r.ok===false){ toast((r&&r.error)||'承認に失敗しました',true); renderBday(); return; }
+    toast(name+' の誕生日週間を承認しました（'+esc(r.start)+'〜'+esc(r.end)+'）');
+    renderBday();
+  }).catch(function(){ toast('承認に失敗しました',true); renderBday(); });
+}
+function sendbackBday(name){
+  var reason=prompt('【'+name+'】の誕生日週間を差し戻します。\n差し戻し理由（本人に通知されます）:','');
+  if(reason===null) return;
+  loading();
+  gsr('adminSendbackBirthdayWeek',USER_ID,name,String(reason||'').trim()).then(function(r){
+    if(!r||r.ok===false){ toast((r&&r.error)||'差し戻しに失敗しました',true); renderBday(); return; }
+    toast(name+' の誕生日週間を差し戻しました');
+    renderBday();
+  }).catch(function(){ toast('差し戻しに失敗しました',true); renderBday(); });
 }
 function prefillBday(name,mk,mmdd){
   document.getElementById('bd_name').value=name;

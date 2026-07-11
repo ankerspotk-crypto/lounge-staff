@@ -625,6 +625,13 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return addShiftStaff_(String(body.staffName || '').trim(), String(body.role || '派遣'), String(body.date || ''), String(body.timeVal || ''));
   }
+  // 🎂 誕生日 & 誕生日週間（キャスト自己設定）
+  if (body.action === 'castGetBirthday')      return castGetBirthday(body.userId, body.targetName);
+  if (body.action === 'castSetBirthday')      return castSetBirthday(body.userId, body.targetName, body.mmdd);
+  if (body.action === 'castApplyBirthdayWeek')return castApplyBirthdayWeek(body.userId, body.targetName, body.start, body.end);
+  if (body.action === 'castCancelBirthdayWeek')return castCancelBirthdayWeek(body.userId, body.targetName);
+  if (body.action === 'adminApproveBirthdayWeek') return adminApproveBirthdayWeek(body.userId, body.name);
+  if (body.action === 'adminSendbackBirthdayWeek') return adminSendbackBirthdayWeek(body.userId, body.name, body.reason);
   return { ok: false, error: 'unknown action' };
 }
 
@@ -1157,7 +1164,115 @@ function adminSetCastBackRule(userId, targetName, mode, rate) {
 // 通常は新バック方式（倍率10/15/20% or 固定率）。設定した来店日レンジの担当売上ぶんだけ率を上書き（既定30%）。
 // 分割の正はあくまでTRUST月合計「担当小計」。伝票シート(TRUST由来・日別担当売上)で比率だけ出し、月合計へ掛けるのでズレない（案A）。
 var BIRTHDAY_BACK_TAB  = '誕生日バック';
-var BIRTHDAY_BACK_HEAD = ['月', '名前', '開始日', '終了日', '率(%)'];
+var BIRTHDAY_BACK_HEAD = ['月', '名前', '開始日', '終了日', '率(%)', 'ステータス', '申請日時', '承認日時', '差戻理由'];
+// キャスト申請フロー用ステータス。空欄＝旧データ（管理者直接設定）＝承認済み扱い（給与に効く）
+var BB_STATUS = { APPROVED: '承認済', PENDING: '申請中', SENTBACK: '差戻' };
+
+// 誕生日バックシートを取得（無ければ作成）。既存シートには不足ヘッダ列を後方互換で追加。
+function ensureBirthdayBackSheet_(ss) {
+  var sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!sh) { sh = ss.insertSheet(BIRTHDAY_BACK_TAB); sh.appendRow(BIRTHDAY_BACK_HEAD); sh.setFrozenRows(1); return sh; }
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  BIRTHDAY_BACK_HEAD.forEach(function (name) {
+    if (headers.indexOf(name) < 0) { lastCol += 1; sh.getRange(1, lastCol).setValue(name); headers.push(name); }
+  });
+  return sh;
+}
+// ヘッダ名→0-based列index
+function bbCols_(sh) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var c = {};
+  BIRTHDAY_BACK_HEAD.forEach(function (n) { c[n] = headers.indexOf(n); });
+  return c;
+}
+function bbNow_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'); }
+// 月内1行/キャストで誕生日バック行をupsert。statusと各状態列も更新。extra={applied,approved,reason}（未指定列は触らない）
+function upsertBirthdayBackRow_(sh, cols, mk, name, start, end, rate, status, extra) {
+  var rows = sh.getDataRange().getValues();
+  var nmNorm = normalizeName_(String(name).trim());
+  var found = -1;
+  for (var i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) === mk && normalizeName_(String(rows[i][1]).trim()) === nmNorm) { found = i; break; }
+  }
+  var rowNum = (found >= 0) ? found + 1 : sh.getLastRow() + 1;
+  function setC(colName, val) { var c = cols[colName]; if (c != null && c >= 0 && val !== undefined) sh.getRange(rowNum, c + 1).setValue(val); }
+  setC('月', mk); setC('名前', name); setC('開始日', start); setC('終了日', end); setC('率(%)', rate); setC('ステータス', status);
+  if (extra) { setC('申請日時', extra.applied); setC('承認日時', extra.approved); setC('差戻理由', extra.reason); }
+  return rowNum;
+}
+// 指定キャストの指定ステータス行を全削除（下から）。statuses=['申請中','差戻']等
+function clearBirthdayBackByStatus_(sh, cols, name, statuses) {
+  var iSt = cols['ステータス'];
+  if (iSt == null || iSt < 0) return 0;
+  var rows = sh.getDataRange().getValues();
+  var nmNorm = normalizeName_(String(name).trim());
+  var del = 0;
+  for (var i = rows.length - 1; i >= 1; i--) {
+    if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+    if (statuses.indexOf(String(rows[i][iSt] || '').trim()) < 0) continue;
+    sh.deleteRow(i + 1); del++;
+  }
+  return del;
+}
+// キャストの誕生日週間 申請状態を1件に束ねて返す（月またぎ分割行も統合）。
+// 優先: 申請中 > 差戻 > 承認済 > none。range は該当ステータス行のspan。
+function castBirthdayWeekState_(ss, name) {
+  var sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  var out = { status: 'none', start: '', end: '', reason: '', applied: '' };
+  if (!sh || sh.getLastRow() < 2) return out;
+  var cols = bbCols_(sh);
+  var iSt = cols['ステータス'], iS = cols['開始日'], iE = cols['終了日'], iR = cols['差戻理由'], iA = cols['申請日時'];
+  var rows = sh.getDataRange().getValues();
+  var nmNorm = normalizeName_(String(name).trim());
+  var toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+  var buckets = { '申請中': [], '差戻': [], '承認済': [] };
+  for (var i = 1; i < rows.length; i++) {
+    if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+    var st = (iSt >= 0 ? String(rows[i][iSt] || '').trim() : '') || BB_STATUS.APPROVED; // 空欄=旧データ=承認済
+    if (!buckets[st]) continue;
+    buckets[st].push({ s: iS >= 0 ? toD(rows[i][iS]) : '', e: iE >= 0 ? toD(rows[i][iE]) : '', r: iR >= 0 ? String(rows[i][iR] || '').trim() : '', a: iA >= 0 ? String(rows[i][iA] || '').trim() : '' });
+  }
+  var pick = buckets['申請中'].length ? { st: 'pending', arr: buckets['申請中'] }
+    : buckets['差戻'].length ? { st: 'sentback', arr: buckets['差戻'] }
+    : buckets['承認済'].length ? { st: 'approved', arr: buckets['承認済'] } : null;
+  if (!pick) return out;
+  var starts = pick.arr.map(function (x) { return x.s; }).filter(Boolean).sort();
+  var ends = pick.arr.map(function (x) { return x.e; }).filter(Boolean).sort();
+  out.status = pick.st;
+  out.start = starts.length ? starts[0] : '';
+  out.end = ends.length ? ends[ends.length - 1] : '';
+  out.reason = (pick.arr.find(function (x) { return x.r; }) || {}).r || '';
+  out.applied = (pick.arr.find(function (x) { return x.a; }) || {}).a || '';
+  return out;
+}
+// 承認待ちの誕生日週間申請を集計 → 黒服「要対応」チケットを常に1件だけ上書き（ゼロなら消す）
+function refreshBirthdayWeekPendingTicket_(ss) {
+  var sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  var sp = PropertiesService.getScriptProperties();
+  var KEY = 'TASK_ADMIN_BDAYWEEK_APPLY';
+  var names = [];
+  if (sh && sh.getLastRow() >= 2) {
+    var cols = bbCols_(sh), iSt = cols['ステータス'], iN = cols['名前'];
+    if (iSt >= 0) {
+      var rows = sh.getDataRange().getValues(), seen = {};
+      for (var i = 1; i < rows.length; i++) {
+        if (String(rows[i][iSt] || '').trim() !== BB_STATUS.PENDING) continue;
+        var nm = String(rows[i][iN]).trim();
+        if (nm && !seen[nm]) { seen[nm] = 1; names.push(nm); }
+      }
+    }
+  }
+  if (!names.length) { sp.deleteProperty(KEY); return { ok: true, count: 0 }; }
+  var obj = {
+    title: '🎂 誕生日週間の申請 承認待ち ' + names.length + '名',
+    memo: names.join('、') + '。管理コンソール→💰給与→🎂誕生日バック で承認/差し戻ししてください。',
+    by: '自動', ts: Date.now(), sent: true, bizDate: bizDateStr_()
+  };
+  sp.setProperty(KEY, JSON.stringify(obj));
+  return { ok: true, count: names.length, names: names.join('、') };
+}
 
 // 誕生日バック設定マップを取得 { 正規化名: {start:'yyyy-MM-dd', end:'yyyy-MM-dd', rate:数値} }
 function getBirthdayBackMap_(ss, monthKey) {
@@ -1167,10 +1282,12 @@ function getBirthdayBackMap_(ss, monthKey) {
   const rows = sh.getDataRange().getValues();
   const h = rows[0].map(String);
   const ci = function (n) { return h.indexOf(n); };
-  const iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)');
+  const iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)'), iSt = ci('ステータス');
   const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== monthKey) continue;
+    // 給与に効くのは承認済みのみ（申請中/差戻は無視）。ステータス空欄＝旧データ（管理者直接設定）＝承認済み扱い
+    if (iSt >= 0) { const st = String(rows[i][iSt] || '').trim(); if (st && st !== BB_STATUS.APPROVED) continue; }
     const nm = normalizeName_(String(rows[i][1]).trim());
     if (!nm) continue;
     const start = iS >= 0 ? toD(rows[i][iS]) : '', end = iE >= 0 ? toD(rows[i][iE]) : '';
@@ -1242,8 +1359,7 @@ function adminSetBirthdayBack(userId, month, name, start, end, rate) {
   const nm = String(name || '').trim();
   if (!nm) return { ok: false, error: '名前がありません' };
   const ss = getOrOpenSS_();
-  let sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
-  if (!sh) { sh = ss.insertSheet(BIRTHDAY_BACK_TAB); sh.appendRow(BIRTHDAY_BACK_HEAD); sh.setFrozenRows(1); }
+  let sh = ensureBirthdayBackSheet_(ss);
   const nmNorm = normalizeName_(nm);
   const s = String(start || '').trim(), e = String(end || '').trim();
   function findRow(rows, mk) {
@@ -1264,14 +1380,13 @@ function adminSetBirthdayBack(userId, month, name, start, end, rate) {
   const rt = (rate === '' || rate == null || isNaN(rNum)) ? 30 : rNum;
   const segs = splitRangeByMonth_(s, e);
   const monthsSet = [];
+  const now = bbNow_();
   segs.forEach(function (seg) {
-    const rows = sh.getDataRange().getValues(); // 追加のたび読み直して行番号ズレを防ぐ
-    const found = findRow(rows, seg.mk);
-    const rowData = [seg.mk, nm, seg.start, seg.end, rt];
-    if (found >= 0) sh.getRange(found + 1, 1, 1, rowData.length).setValues([rowData]);
-    else sh.getRange(sh.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
+    // 管理者の直接設定＝即承認済み（給与に効く）。申請中/差戻だった行も承認済みへ上書き。
+    upsertBirthdayBackRow_(sh, bbCols_(sh), seg.mk, nm, seg.start, seg.end, rt, BB_STATUS.APPROVED, { approved: now, reason: '' });
     monthsSet.push(seg.mk);
   });
+  refreshBirthdayWeekPendingTicket_(ss); // 直接承認で承認待ち一覧が変わる可能性
   return { ok: true, name: nm, months: monthsSet, startMonth: segs[0].mk, spans: segs.length > 1, rate: rt };
 }
 
@@ -1379,12 +1494,16 @@ function birthdayBackListForMonth_(ss, mk, presentSet) {
   var rows = bs.getDataRange().getValues();
   var h = rows[0].map(String);
   var iN = h.indexOf('名前'), iS = h.indexOf('開始日'), iE = h.indexOf('終了日'), iR = h.indexOf('率(%)');
+  var iSt = h.indexOf('ステータス'), iRs = h.indexOf('差戻理由'), iAp = h.indexOf('申請日時');
   var toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
   for (var i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== mk) continue;
     var nmRaw = String(rows[i][iN]).trim(), nmKey = normalizeName_(nmRaw);
     list.push({
       name: nmRaw, start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0,
+      status: iSt >= 0 ? (String(rows[i][iSt] || '').trim() || BB_STATUS.APPROVED) : BB_STATUS.APPROVED,
+      reason: iRs >= 0 ? String(rows[i][iRs] || '').trim() : '',
+      applied: iAp >= 0 ? String(rows[i][iAp] || '').trim() : '',
       contPrev: !!presentSet[mkShift_(mk, -1) + '|' + nmKey],
       contNext: !!presentSet[mkShift_(mk, 1) + '|' + nmKey]
     });
@@ -1462,6 +1581,164 @@ function adminRunBirthdayReminderNow(userId) {
   var ym = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
   setProp('BDAYREMIND_' + ym, '1');
   return writeBirthdayBackTask_();
+}
+
+// ── キャスト自己設定：誕生日 & 誕生日週間の申請 ─────────────────────────
+// 操作対象キャスト名を解決（管理者はtargetNameで代理設定可、通常は本人）
+function bbResolveName_(userId, targetName) {
+  var myName = getStaffName(userId);
+  var t = String(targetName || '').trim();
+  return (t && isAdmin_(myName)) ? t : myName;
+}
+
+// キャスト：自分の誕生日＋誕生日週間の申請状態を取得
+function castGetBirthday(userId, targetName) {
+  try {
+    var ss = getOrOpenSS_();
+    var name = bbResolveName_(userId, targetName);
+    if (!name) return { ok: false, error: '本人を特定できません（LINE未登録の可能性）' };
+    // 誕生日（スタッフマスタ 個別条件'誕生日'）
+    var birthday = '';
+    var stf = ss.getSheetByName(STAFF_TAB);
+    if (stf) {
+      var cols = getStaffTermCols_(stf, false), bcol = cols['誕生日'];
+      if (bcol != null && bcol >= 0) {
+        var rows = stf.getDataRange().getValues();
+        for (var i = 1; i < rows.length; i++) {
+          if (String(rows[i][1]).trim() === name) {
+            var v = rows[i][bcol];
+            birthday = v instanceof Date ? Utilities.formatDate(v, TZ, 'M/d') : String(v || '').trim();
+            break;
+          }
+        }
+      }
+    }
+    var week = castBirthdayWeekState_(ss, name);
+    return { ok: true, name: name, birthday: birthday, week: week, defaultRate: 30 };
+  } catch (err) {
+    return { ok: false, error: '誕生日情報の読込エラー: ' + String((err && err.message) || err) };
+  }
+}
+
+// キャスト：自分の誕生日(M/D)を保存（空文字で消去）。給与には非連動
+function castSetBirthday(userId, targetName, mmdd) {
+  var ss = getOrOpenSS_();
+  var name = bbResolveName_(userId, targetName);
+  if (!name) return { ok: false, error: '本人を特定できません' };
+  var md = String(mmdd || '').trim();
+  if (md) {
+    if (!/^\d{1,2}\/\d{1,2}$/.test(md)) return { ok: false, error: '誕生日は「月/日」で入力してください（例: 8/15）' };
+    var p = md.split('/').map(Number);
+    if (p[0] < 1 || p[0] > 12 || p[1] < 1 || p[1] > 31) return { ok: false, error: '誕生日の月日が不正です' };
+  }
+  var sh = ss.getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  var cols = getStaffTermCols_(sh, true), bcol = cols['誕生日'];
+  if (bcol == null || bcol < 0) return { ok: false, error: '誕生日列がありません' };
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === name) { sh.getRange(i + 1, bcol + 1).setValue(md); return { ok: true, name: name, birthday: md }; }
+  }
+  return { ok: false, error: name + ' が見つかりません' };
+}
+
+// キャスト：誕生日週間の期間を申請（承認済みはロック。差戻/未申請から再申請可）。率は触らせない＝既定30%
+function castApplyBirthdayWeek(userId, targetName, start, end) {
+  var ss = getOrOpenSS_();
+  var name = bbResolveName_(userId, targetName);
+  if (!name) return { ok: false, error: '本人を特定できません' };
+  var s = String(start || '').trim(), e = String(end || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return { ok: false, error: '開始日・終了日を選んでください' };
+  if (s > e) return { ok: false, error: '開始日が終了日より後です' };
+  // 期間ガード：最大14日（誕生日“週間”）
+  var dS = new Date(s + 'T00:00:00'), dE = new Date(e + 'T00:00:00');
+  var days = Math.round((dE - dS) / 86400000) + 1;
+  if (days > 14) return { ok: false, error: '誕生日週間は最大14日までです（申請: ' + days + '日）' };
+  var state = castBirthdayWeekState_(ss, name);
+  if (state.status === 'approved') return { ok: false, error: '誕生日週間は承認済みのため変更できません。変更が必要なら黒服に連絡してください。' };
+  var sh = ensureBirthdayBackSheet_(ss);
+  // 既存の申請中/差戻を作り直す（承認済みは温存）
+  clearBirthdayBackByStatus_(sh, bbCols_(sh), name, [BB_STATUS.PENDING, BB_STATUS.SENTBACK]);
+  var now = bbNow_();
+  var segs = splitRangeByMonth_(s, e);
+  segs.forEach(function (seg) {
+    upsertBirthdayBackRow_(sh, bbCols_(sh), seg.mk, name, seg.start, seg.end, 30, BB_STATUS.PENDING, { applied: now, approved: '', reason: '' });
+  });
+  refreshBirthdayWeekPendingTicket_(ss); // 軍師「要対応」に承認待ちチケットを自動集約（承認/取下で自動クリア）
+  try { var KF = prop('GROUP_KUROFUKU'); if (KF) push_(KF, '🎂【誕生日週間 申請】\n' + name + ' さんが ' + s + '〜' + e + ' を申請しました。\n管理コンソール→💰給与→🎂誕生日バック で承認/差し戻しをお願いします。'); } catch (er) {}
+  return { ok: true, name: name, start: s, end: e, status: 'pending' };
+}
+
+// キャスト：申請中の誕生日週間を取り下げ（承認済みは取消不可）
+function castCancelBirthdayWeek(userId, targetName) {
+  var ss = getOrOpenSS_();
+  var name = bbResolveName_(userId, targetName);
+  if (!name) return { ok: false, error: '本人を特定できません' };
+  var state = castBirthdayWeekState_(ss, name);
+  if (state.status === 'approved') return { ok: false, error: '承認済みは取り下げできません' };
+  var sh = ensureBirthdayBackSheet_(ss);
+  var del = clearBirthdayBackByStatus_(sh, bbCols_(sh), name, [BB_STATUS.PENDING, BB_STATUS.SENTBACK]);
+  refreshBirthdayWeekPendingTicket_(ss);
+  return { ok: true, name: name, cleared: del };
+}
+
+// 管理者：誕生日週間の申請を承認（申請中→承認済。ここで初めて給与に効く）
+function adminApproveBirthdayWeek(userId, name) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var ss = getOrOpenSS_();
+  var sh = ensureBirthdayBackSheet_(ss), cols = bbCols_(sh);
+  var iSt = cols['ステータス'];
+  if (iSt < 0) return { ok: false, error: 'ステータス列がありません' };
+  var nmNorm = normalizeName_(String(name || '').trim());
+  var rows = sh.getDataRange().getValues();
+  var now = bbNow_(), cnt = 0, range = { s: '', e: '' };
+  var iS = cols['開始日'], iE = cols['終了日'];
+  for (var i = 1; i < rows.length; i++) {
+    if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+    if (String(rows[i][iSt] || '').trim() !== BB_STATUS.PENDING) continue;
+    sh.getRange(i + 1, iSt + 1).setValue(BB_STATUS.APPROVED);
+    if (cols['承認日時'] >= 0) sh.getRange(i + 1, cols['承認日時'] + 1).setValue(now);
+    if (cols['差戻理由'] >= 0) sh.getRange(i + 1, cols['差戻理由'] + 1).setValue('');
+    var sv = iS >= 0 ? (rows[i][iS] instanceof Date ? Utilities.formatDate(rows[i][iS], TZ, 'yyyy-MM-dd') : String(rows[i][iS] || '')) : '';
+    var ev = iE >= 0 ? (rows[i][iE] instanceof Date ? Utilities.formatDate(rows[i][iE], TZ, 'yyyy-MM-dd') : String(rows[i][iE] || '')) : '';
+    if (sv && (!range.s || sv < range.s)) range.s = sv;
+    if (ev && (!range.e || ev > range.e)) range.e = ev;
+    cnt++;
+  }
+  if (!cnt) return { ok: false, error: '申請中の誕生日週間が見つかりません' };
+  refreshBirthdayWeekPendingTicket_(ss);
+  try {
+    var cast = resolveCastLine_(name);
+    if (cast && cast.lineId) push_(cast.lineId, '🎂【誕生日週間 承認】\n' + range.s + '〜' + range.e + ' で承認されました！当日のバックは自動で反映されます🎉');
+  } catch (er) {}
+  return { ok: true, name: name, count: cnt, start: range.s, end: range.e };
+}
+
+// 管理者：誕生日週間の申請を差し戻し（申請中→差戻＋理由。キャストは再申請可）
+function adminSendbackBirthdayWeek(userId, name, reason) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var ss = getOrOpenSS_();
+  var sh = ensureBirthdayBackSheet_(ss), cols = bbCols_(sh);
+  var iSt = cols['ステータス'];
+  if (iSt < 0) return { ok: false, error: 'ステータス列がありません' };
+  var nmNorm = normalizeName_(String(name || '').trim());
+  var rsn = String(reason || '').trim();
+  var rows = sh.getDataRange().getValues();
+  var cnt = 0;
+  for (var i = 1; i < rows.length; i++) {
+    if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+    if (String(rows[i][iSt] || '').trim() !== BB_STATUS.PENDING) continue;
+    sh.getRange(i + 1, iSt + 1).setValue(BB_STATUS.SENTBACK);
+    if (cols['差戻理由'] >= 0) sh.getRange(i + 1, cols['差戻理由'] + 1).setValue(rsn);
+    cnt++;
+  }
+  if (!cnt) return { ok: false, error: '申請中の誕生日週間が見つかりません' };
+  refreshBirthdayWeekPendingTicket_(ss);
+  try {
+    var cast = resolveCastLine_(name);
+    if (cast && cast.lineId) push_(cast.lineId, '🎂【誕生日週間 差し戻し】\n申請内容の見直しをお願いします。\n理由: ' + (rsn || '（記載なし）') + '\nポータルの「🎂誕生日設定」から再申請してください。');
+  } catch (er) {}
+  return { ok: true, name: name, count: cnt, reason: rsn };
 }
 
 // 新バック方式で1名分を再計算。g=TRUST報酬行のgetter(見出し名→値), m=手入力{intro,nyuten,fixedRate}
