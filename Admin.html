@@ -759,7 +759,10 @@ function renderBday(){
 }
 function drawBday(r,mo){
   payMonth=mo; bdayCasts=r.casts||[];
-  var dl='<datalist id="bdcasts">'+bdayCasts.map(function(n){return '<option value="'+esc(n)+'">';}).join('')+'</datalist>';
+  var bdNames=(r.casts||[]).slice();
+  (r.list||[]).forEach(function(x){ if(bdNames.indexOf(x.name)<0) bdNames.push(x.name); }); // 既存設定の名前も必ず選択肢に含める
+  bdNames.sort();
+  var castOpts='<option value="">— キャストを選択 —</option>'+bdNames.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
   var head='<div class="toolbar"><span class="cnt">対象月</span><input class="finput" id="bm" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM"><button class="btn" onclick="onBdayMonth()">表示</button><span class="cnt">'+(r.list.length)+'件 設定中</span></div>';
   var rows=(r.list||[]).map(function(x){
     return '<tr><td class="nm">'+esc(x.name)+'</td>'
@@ -774,13 +777,13 @@ function drawBday(r,mo){
     : '<div class="empty">この月の誕生日バック設定はまだありません</div>';
   var form='<div class="sec" style="margin-top:12px"><div class="sec-t">🎂 誕生日バック週を追加 / 変更</div>'
     +'<div class="toolbar" style="flex-wrap:wrap;gap:8px">'
-    +'<input class="finput" id="bd_name" list="bdcasts" placeholder="キャスト名" style="width:150px">'
-    +'<span class="cnt">開始</span><input class="finput" id="bd_s" type="date" style="width:150px">'
-    +'<span class="cnt">終了</span><input class="finput" id="bd_e" type="date" style="width:150px">'
+    +'<select class="finput" id="bd_name" style="width:170px">'+castOpts+'</select>'
+    +'<span class="cnt">開始</span><input class="finput" id="bd_s" type="date" style="width:160px">'
+    +'<span class="cnt">終了</span><input class="finput" id="bd_e" type="date" style="width:160px">'
     +'<span class="cnt">率</span><input class="finput" id="bd_r" type="number" value="30" min="0" max="100" style="width:70px">%'
     +'<button class="btn pri" onclick="saveBday()">保存</button></div>'
-    +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ、小計バック率を上書きします（通常は倍率ルール10/15/20%）。分割の合計は必ずTRUST担当小計に一致します。名前はTRUST/伝票と同じ表記で（候補から選べます）。</div></div>';
-  setBody(paySubToggle('bday')+dl+head+table+form);
+    +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ、小計バック率を上書きします（通常は倍率ルール10/15/20%）。分割の合計は必ずTRUST担当小計に一致します。キャストはプルダウンから、日付はカレンダーから選択してください。</div></div>';
+  setBody(paySubToggle('bday')+head+table+form);
 }
 function onBdayMonth(){ var m=(document.getElementById('bm').value||'').trim(); if(m)payMonth=m; renderBday(); }
 function editBday(name,s,e,rate){
