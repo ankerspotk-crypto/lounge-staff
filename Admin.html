@@ -446,11 +446,15 @@ function drawShift(){
   var RFILT=['all','キャスト','黒服','派遣','体験'];
   var rchips=RFILT.map(function(f){return '<div class="chip'+(shiftRoleFilter===f?' on':'')+'" onclick="setShiftRole(\''+f+'\')">'+(f==='all'?'全て':f)+'</div>';}).join('');
   var _DOW_SH=['日','月','火','水','木','金','土'], _shYear=new Date().getFullYear();
+  var _closedSh=(shiftMgmt&&shiftMgmt.closedDays)||{};
+  function _shMdToYmd(mm,dd){ var now=new Date(),y=now.getFullYear(),cand=new Date(y,mm-1,dd),cut=new Date(now);cut.setHours(0,0,0,0);cut.setDate(cut.getDate()-15); if(cand<cut)y+=1; return y+'-'+('0'+mm).slice(-2)+'-'+('0'+dd).slice(-2); }
   var thead='<tr><th style="text-align:left">名前</th><th>属性</th>'+H.map(function(d){
     var pp=String(d).split('/'), mm=parseInt(pp[0],10), dd=parseInt(pp[1],10);
     var wd=(mm&&dd)?_DOW_SH[new Date(_shYear,mm-1,dd).getDay()]:'';
-    var wc=(wd==='日')?'#ee6666':(wd==='土')?'#6688ee':'inherit';
-    return '<th style="color:'+wc+'">'+esc(d)+'<br><span style="font-size:9px;font-weight:400;opacity:.85">'+wd+'</span></th>';
+    var cl=(mm&&dd)?_closedSh[_shMdToYmd(mm,dd)]:'';
+    var wc=cl?'#c9a8f0':(wd==='日')?'#ee6666':(wd==='土')?'#6688ee':'inherit';
+    var mark=cl?'<br><span style="font-size:8px;color:#c9a8f0">🏖休</span>':'';
+    return '<th style="color:'+wc+'"'+(cl?' title="'+String(cl).replace(/"/g,'')+'"':'')+'>'+esc(d)+'<br><span style="font-size:9px;font-weight:400;opacity:.85">'+wd+'</span>'+mark+'</th>';
   }).join('')+'</tr>';
   // 日付ごとの出勤人数トータル（確定＋申請中）。キャスト・体験・派遣のみ（黒服は除外）
   var totalRow='<tr class="total-row"><td class="nm">👥 合計</td><td>キャスト系</td>'+H.map(function(d){
@@ -1012,7 +1016,7 @@ function MOCKAPI(action,body){
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
   if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
-  if(action==='getShiftMgmt')return {ok:true,data:{headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
+  if(action==='getShiftMgmt')return {ok:true,data:{closedDays:{'2026-07-07':'テスト店休'},headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
   if(action==='getPublishStatus')return {ok:true,month:body.month,payPublished:false,rankPublished:true,salesDate:''};
   if(action==='getOkuriMode')return {ok:true,mode:'driver'};

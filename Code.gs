@@ -10544,7 +10544,8 @@ function getShiftMgmtData_() {
     totals[d] = { confirmed, pending, total: confirmed + pending };
   });
 
-  return { headers: outHeaders, rows, totals };
+  const closedDays = {}; getHolidays_().forEach(h => { closedDays[h.date] = h.label || '店休日'; });
+  return { headers: outHeaders, rows, totals, closedDays };
 }
 
 // 'M/d'文字列を今日基準の実日付に。過去15日より前になる月は翌年扱い（年またぎ対応）。
