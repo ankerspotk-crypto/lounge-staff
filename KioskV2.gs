@@ -60,24 +60,24 @@ function getKioskShiftBoard() {
   var today = todayStr();
   var haya = kioskGetHayaagari_();
   var okuriMode = kioskGetOkuriMode_();
-  var genji = kioskGetGenji_();     // { 元名: 当日の源氏名 }
   var shusen = kioskGetShusen_();   // { 表示名: 終電情報 }
   var okuriSet = {};
   (getOkuriList(today) || []).forEach(function (o) { okuriSet[o.name] = true; });
 
-  var rows = getTodayShiftRows_(today); // ↓ 下部で暫定実装（本番シフト表に接続）
+  // 源氏名リネームは getTodayShiftDetail_ で適用済み（r.name=当日の表示名, r.origName=シフト表の元名）
+  var rows = getTodayShiftRows_(today);
   return rows.map(function (r) {
-    var nm = genji[r.name] || r.name; // 当日の源氏名（未設定は元名）。以降の当日属性は表示名で引く（未設定時は元名にフォールバック）
+    var nm = r.name, orig = r.origName || r.name;
     return {
       name: nm,
-      origName: r.name,
-      renamed: nm !== r.name,
+      origName: orig,
+      renamed: nm !== orig,
       in: r.in,
       out: r.out,
-      hayaagari: haya[nm] || haya[r.name] || '',
-      okuri: !!(okuriSet[nm] || okuriSet[r.name]),
-      okuriMode: okuriMode[nm] || okuriMode[r.name] || 'ドライバー',
-      shusen: shusen[nm] || shusen[r.name] || ''
+      hayaagari: haya[nm] || haya[orig] || '',
+      okuri: !!(okuriSet[nm] || okuriSet[orig]),
+      okuriMode: okuriMode[nm] || okuriMode[orig] || 'ドライバー',
+      shusen: shusen[nm] || shusen[orig] || ''
     };
   });
 }
@@ -432,6 +432,7 @@ function getTodayShiftRows_(today) {
       var parts = String(s.shift || '').split(/[-〜~]/);
       rows.push({
         name: String(s.name).trim(),
+        origName: String(s.origName || s.name).trim(),
         in: (parts[0] || '').trim(),
         out: (parts[1] || '').trim(),
         haken: !!isHaken
