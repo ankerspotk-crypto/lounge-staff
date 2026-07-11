@@ -1647,13 +1647,12 @@ function castApplyBirthdayWeek(userId, targetName, start, end) {
   var ss = getOrOpenSS_();
   var name = bbResolveName_(userId, targetName);
   if (!name) return { ok: false, error: '本人を特定できません' };
-  var s = String(start || '').trim(), e = String(end || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return { ok: false, error: '開始日・終了日を選んでください' };
-  if (s > e) return { ok: false, error: '開始日が終了日より後です' };
-  // 期間ガード：最大14日（誕生日“週間”）
-  var dS = new Date(s + 'T00:00:00'), dE = new Date(e + 'T00:00:00');
-  var days = Math.round((dE - dS) / 86400000) + 1;
-  if (days > 14) return { ok: false, error: '誕生日週間は最大14日までです（申請: ' + days + '日）' };
+  var s = String(start || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { ok: false, error: '開始日を選んでください' };
+  // 誕生日週間＝2週間固定。開始日が決まれば終了日はサーバー側で自動確定（開始+13日＝14日間）。クライアントのend申告は無視＝改ざん不可。
+  var dS = new Date(s + 'T00:00:00');
+  var dE = new Date(dS.getTime() + 13 * 86400000);
+  var e = Utilities.formatDate(dE, TZ, 'yyyy-MM-dd');
   var state = castBirthdayWeekState_(ss, name);
   if (state.status === 'approved') return { ok: false, error: '誕生日週間は承認済みのため変更できません。変更が必要なら黒服に連絡してください。' };
   var sh = ensureBirthdayBackSheet_(ss);

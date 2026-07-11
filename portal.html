@@ -3035,10 +3035,11 @@ function renderBirthday(d) {
       h += statusBadge('sentback')
         + '<div style="font-size:12px;color:#ff9aa0;background:#2a1214;border:1px solid #5a2226;border-radius:8px;padding:9px 11px;margin:10px 0 14px;line-height:1.7">差し戻されました。内容を見直して再申請してください。<br>理由: ' + esc(w.reason || '（記載なし）') + '</div>';
     }
-    h += '<label style="' + lbl + '">開始日</label>'
-      + '<input id="bw-start" type="date" value="' + esc(w.start || '') + '" style="' + inp + ';margin-bottom:12px">'
-      + '<label style="' + lbl + '">終了日</label>'
-      + '<input id="bw-end" type="date" value="' + esc(w.end || '') + '" style="' + inp + ';margin-bottom:16px">'
+    h += '<label style="' + lbl + '">開始日（誕生日週間の初日）</label>'
+      + '<input id="bw-start" type="date" value="' + esc(w.start || '') + '" onchange="bwSyncEnd()" oninput="bwSyncEnd()" style="' + inp + ';margin-bottom:12px">'
+      + '<label style="' + lbl + '">終了日（自動 = 開始から2週間）</label>'
+      + '<input id="bw-end" type="date" value="' + esc(w.end || '') + '" readonly style="' + inp + ';margin-bottom:8px;opacity:.75;background:#0a1120">'
+      + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:16px">🗓 誕生日週間は<b>2週間（14日間）</b>固定です。開始日を選ぶと終了日が自動で決まります。</div>'
       + '<button onclick="applyBirthdayWeek()" style="width:100%;padding:13px;background:#7a3fa0;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">' + (w.status === 'sentback' ? '再申請する' : '期間を申請する') + '</button>';
   }
   h += '</div></div>';
@@ -3062,11 +3063,21 @@ function saveBirthdayMd() {
     .catch(function(){ alert('通信エラーが発生しました'); });
 }
 
+// 開始日→終了日を自動計算（2週間＝開始+13日）。表示用。実際の確定はサーバー側。
+function bwSyncEnd() {
+  var el = document.getElementById('bw-start'), out = document.getElementById('bw-end');
+  if (!el || !out) return;
+  var s = (el.value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) { out.value = ''; return; }
+  var d = new Date(s + 'T00:00:00'); d.setDate(d.getDate() + 13);
+  out.value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
 function applyBirthdayWeek() {
+  bwSyncEnd();
   var s = (document.getElementById('bw-start').value || '').trim();
-  var e = (document.getElementById('bw-end').value || '').trim();
-  if (!s || !e) { alert('開始日と終了日を選んでください'); return; }
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castApplyBirthdayWeek', userId: userId, targetName: bdayTargetName(), start: s, end: e }) })
+  if (!s) { alert('開始日を選んでください'); return; }
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castApplyBirthdayWeek', userId: userId, targetName: bdayTargetName(), start: s }) })
     .then(function(r){ return r.json(); })
     .then(function(d){ if (!d.ok) { alert(d.error || '申請に失敗しました'); return; } alert('誕生日週間を申請しました。黒服の承認をお待ちください。'); loadBirthday(); })
     .catch(function(){ alert('通信エラーが発生しました'); });
