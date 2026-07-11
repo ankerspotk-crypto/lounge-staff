@@ -595,19 +595,119 @@ function drawTatekae(r){
   var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td>'+r.months.map(function(m){return '<td style="text-align:right">'+fmtYen(r.monthTotals[m])+'</td>';}).join('')+'<td style="text-align:right">'+fmtYen(r.grandTotal)+'</td></tr>';
   setBody(paySubToggle('tatekae')+head+'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx">'+th+'<tbody>'+body+totalRow+'</tbody></table></div>'+'<div class="hint" style="margin-top:8px">立替代＝各キャストが提出したヘアサロン領収書の月合計。給与では最終支給に加算されます。</div>');
 }
-/* --- 📥 TRUST取込（Excelファイル or 貼り付け） --- */
+/* --- 📥 TRUST取込（取得ブックマークレット＋処理ステータス＋取込履歴＋Excel） --- */
 var trustPreview=null;
+var trustInfo=null;
+var TRUST_GAS_URL='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
 function renderTrust(){
+  if(!IS_GAS){ setBody(paySubToggle('trust')+trustExcelSection()+'<div class="empty" style="margin-top:10px">（取得・履歴はローカル不可・本番でご確認ください）</div>'); return; }
+  loading();
+  gsr('adminGetTrustImport',USER_ID).then(function(r){ trustInfo=(r&&r.ok)?r:null; drawTrust(); }).catch(function(){ trustInfo=null; drawTrust(); });
+}
+function drawTrust(){
+  setBody(paySubToggle('trust')+trustAcquireSection()+trustStatusSection()+trustHistorySection()+trustExcelSection());
+  trustSetupBookmarklets_();
+}
+/* 🔄 TRUSTデータ取得（ブックマークレット・リレー方式。GAS直取得は403なので唯一の実働経路） */
+function trustAcquireSection(){
   var mo=payMonth||nowMonth();
-  setBody(paySubToggle('trust')+
-    '<div class="sec"><div class="sec-t">📥 TRUSTデータ取込</div>'+
+  var blocked=trustInfo&&trustInfo.status&&trustInfo.status.gasBlocked;
+  var warn=blocked?'<div class="hint" style="background:#2a1500;border:1px solid #664400;color:#e0b060;margin-top:8px">⚠️ GASからTRUSTへの直接取得は現在ブロック中（'+esc(String((trustInfo.status.gasToTrustLoginCode))) +'）。下のブックマークレット（ブラウザ経由リレー）で取得してください。</div>':'';
+  return '<div class="sec"><div class="sec-t">🔄 TRUSTデータ取得</div>'+
+    '<div class="hint">TRUSTに直接アクセスできるブラウザ経由で取得します。①下のボタンをブックマークバーにドラッグ →②TRUST(admin.trust-operation.com)にログインした状態でクリック →③自動でGASへ反映されます。</div>'+warn+
+    '<div class="toolbar" style="margin-top:10px"><span class="cnt">売上の対象月</span><input class="finput" id="adm-bm-month" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM" onchange="trustSetupBookmarklets_()"></div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">'+
+      '<a id="adm-trust-bm" href="" style="flex:1;min-width:200px;text-align:center;padding:11px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 売上を取得 ← ドラッグして登録</a>'+
+      '<a id="adm-cash-bm" href="" style="flex:1;min-width:200px;text-align:center;padding:11px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 日払い・経費を取得 ← ドラッグして登録</a>'+
+    '</div>'+
+    '<div class="hint" style="margin-top:8px">「売上を取得」＝対象月のキャスト売上（担当小計・各種バック等）。「日払い・経費を取得」＝当日の現金チェック用（営業後にクリック）。</div></div>';
+}
+/* 📊 処理ステータス（GAS→TRUST接続・最新伝票日・各月のデータ日付） */
+function trustStatusSection(){
+  if(!trustInfo||!trustInfo.status) return '<div class="sec"><div class="sec-t">📊 処理ステータス</div><div class="empty">ステータスを取得できませんでした</div></div>';
+  var st=trustInfo.status;
+  var conn=st.gasBlocked
+    ?'<span style="background:#2a1214;border:1px solid #5a2226;color:#ff9aa0;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700">ブロック中（'+esc(String(st.gasToTrustLoginCode))+'）</span>'
+    :'<span style="background:#0f2a18;border:1px solid #1f5a34;color:#7ee0a0;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700">接続OK（200）</span>';
+  var dates=st.salesDataDates||{};
+  var dk=Object.keys(dates).sort().reverse();
+  var drows=dk.length?dk.map(function(m){return '<tr><td style="padding:3px 12px 3px 0;color:var(--sub)">'+esc(m)+'</td><td style="padding:3px 0;font-weight:700">'+esc(dates[m])+' 時点</td></tr>';}).join(''):'<tr><td colspan="2" style="color:var(--dim);padding:4px 0">記録なし</td></tr>';
+  return '<div class="sec"><div class="sec-t">📊 処理ステータス</div>'+
+    '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="lbl">GAS→TRUST 直接接続</span>'+conn+'</div>'+
+    '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px"><span class="lbl">最新の伝票日</span><span style="font-weight:700">'+esc(st.latestBillDate||'—')+'</span><span class="cnt">（本日 '+esc(st.today||'')+'）</span></div>'+
+    '<div style="margin-top:8px"><div class="lbl" style="margin-bottom:4px">売上データの取込基準日（月別）</div><table style="border-collapse:collapse;font-size:12px">'+drows+'</table></div></div>';
+}
+/* 📜 取込履歴 */
+function trustHistorySection(){
+  var log=(trustInfo&&trustInfo.log)||[];
+  if(!log.length) return '<div class="sec"><div class="sec-t">📜 取込履歴</div><div class="empty">まだ取込の記録はありません</div></div>';
+  var rows=log.map(function(e){
+    var stColor=e.status==='完了'?'#7ee0a0':(e.status==='失敗'?'#ff9aa0':'#e0d07e');
+    var srcBadge='<span style="font-size:11px;color:var(--sub)">'+esc(e.source||'')+'</span>';
+    return '<tr>'+
+      '<td style="padding:4px 10px 4px 0;white-space:nowrap;color:var(--sub)">'+esc(e.at)+'</td>'+
+      '<td style="padding:4px 10px 4px 0;white-space:nowrap">'+esc(e.type)+'</td>'+
+      '<td style="padding:4px 10px 4px 0;white-space:nowrap;font-weight:700">'+esc(e.target)+'</td>'+
+      '<td style="padding:4px 10px 4px 0;text-align:right">'+esc(e.count)+'</td>'+
+      '<td style="padding:4px 10px 4px 0;color:'+stColor+';font-weight:700;white-space:nowrap">'+esc(e.status)+'</td>'+
+      '<td style="padding:4px 10px 4px 0">'+srcBadge+'</td>'+
+      '<td style="padding:4px 0;color:var(--sub);font-size:11px">'+esc(e.memo||'')+'</td></tr>';
+  }).join('');
+  return '<div class="sec"><div class="sec-t">📜 取込履歴 <span class="cnt">直近'+log.length+'件</span></div>'+
+    '<div class="mtx-wrap" style="overflow-x:auto"><table style="border-collapse:collapse;font-size:12px;min-width:640px">'+
+    '<thead><tr style="color:var(--dim);text-align:left"><th style="padding:0 10px 4px 0">実行日時</th><th style="padding:0 10px 4px 0">種別</th><th style="padding:0 10px 4px 0">対象</th><th style="padding:0 10px 4px 0;text-align:right">件数</th><th style="padding:0 10px 4px 0">状態</th><th style="padding:0 10px 4px 0">取得元</th><th style="padding:0 0 4px 0">メモ</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table></div></div>';
+}
+/* 📥 Excel取込（従来経路。ファイルが手元にある時の直接取込） */
+function trustExcelSection(){
+  var mo=payMonth||nowMonth();
+  return '<div class="sec"><div class="sec-t">📥 Excelから取込</div>'+
     '<div class="hint">TRUSTの給与Excel（.xlsx）を選ぶだけで自動読取します。「キャスト売上一覧」シートを見つけて時間報酬・各種バック・源泉・送り代などを固定列で解釈します。</div>'+
     '<div class="toolbar" style="margin-top:10px"><span class="cnt">対象月</span><input class="finput" id="tm" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM"></div>'+
     '<div class="toolbar" style="margin-top:8px"><label class="btn pri" style="cursor:pointer">📂 Excelファイルを選ぶ<input type="file" id="txlsx" accept=".xlsx" onchange="trustPickFile(this)" style="display:none"></label><span class="cnt" id="tfname">（.xlsx を選択）</span></div>'+
     '<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--sub);font-size:12px;font-weight:700">またはシートをコピーして貼り付け（ファイルが読めない時）</summary>'+
     '<textarea class="ta" id="ttsv" rows="6" placeholder="Excel/スプレッドシートのキャスト売上一覧を全選択コピーして貼り付け（タブ区切り）" style="width:100%;margin-top:8px;font-family:monospace;font-size:12px"></textarea>'+
     '<div class="toolbar" style="margin-top:8px"><button class="btn" onclick="trustDoPreview()">🔍 貼り付けをプレビュー</button></div></details>'+
-    '<div id="tprev"></div></div>');
+    '<div id="tprev"></div></div>';
+}
+/* ブックマークレット生成（ポータルと同一方式・TRUSTページ内で実行してGASへリレー） */
+function trustSetupBookmarklets_(){
+  var secret=(trustInfo&&trustInfo.syncSecret)||'lounge-sync-2026';
+  var gas=TRUST_GAS_URL;
+  var mSel=(document.getElementById('adm-bm-month')||{}).value||'';
+  var ym=/^(\d{4})-(\d{2})$/.exec(String(mSel).trim());
+  // 売上取得
+  var bmEl=document.getElementById('adm-trust-bm');
+  if(bmEl){
+    var ymInit=ym?('var yr='+(+ym[1])+';var mo='+(+ym[2])+';'):'var now=new Date();var yr=now.getFullYear();var mo=now.getMonth()+1;';
+    var code='javascript:(function(){'
+      +'var G='+JSON.stringify(gas)+';var S='+JSON.stringify(secret)+';'
+      +ymInit
+      +'var mk=yr+"/"+(("0"+mo).slice(-2));'
+      +'var show=function(t){var e=document.getElementById("_lsm");if(!e){e=document.createElement("div");e.id="_lsm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#182a3a",border:"1px solid #3a80cc",borderRadius:"10px",padding:"12px 16px",color:"#aaddff",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+      +'function pv(s){if(!s||s==="--")return null;var n=parseFloat(s.replace(/[￥,]/g,""));return isNaN(n)?null:n;}'
+      +'function extractCast(html,name){var p=new DOMParser();var doc=p.parseFromString(html,"text/html");var tot=null;doc.querySelectorAll("tr").forEach(function(tr){var c=tr.querySelectorAll("td");if(c.length===62&&c[0].textContent.trim()==="合計")tot=c;});if(!tot)return null;function v(i){return pv(tot[i].textContent.trim());}return{name:name,nokori:v(1),tanto:v(3),dohan:v(5),kyuritsu:v(6),kinmu:v(7),jikan:v(20),tantoBk:v(29),yoyakuCnt:v(30),yoyakuBk:v(32),dohanCnt:v(33),dohanBk:v(35),drinkBk:v(39),bottleBk:v(43),foodBk:v(47),gensen:v(54),hizuke:v(55),minus:v(61)};}'
+      +'show("① キャスト一覧を取得中... ("+mk+")");'
+      +'fetch("/cast/index/"+yr+"/"+mo+"/0").then(function(r){return r.text();}).then(function(html){var p=new DOMParser();var doc=p.parseFromString(html,"text/html");var links=doc.querySelectorAll("a[href*=\\"/cast/detail/\\"]");var um={};links.forEach(function(a){var n=a.textContent.trim();var h=a.getAttribute("href");if(n&&h&&!um[n])um[n]=h;});var names=Object.keys(um);if(!names.length){show("❌ キャストURLが取得できません（TRUSTにログインしていますか？）");return null;}show("② "+names.length+"名の詳細を取得中...");var done=0;return Promise.all(names.map(function(name){return fetch(um[name]).then(function(r){return r.text();}).then(function(h2){done++;show("② "+done+"/"+names.length+"名 取得中...");return extractCast(h2,name);});}));})'
+      +'.then(function(casts){if(!casts)return null;casts=casts.filter(function(c){return c!==null;});show("③ GASにデータ送信中 ("+casts.length+"名)...");return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustAll",syncSecret:S,monthKey:mk,casts:casts})}).then(function(r){return r.json();});})'
+      +'.then(function(res){if(!res)return;if(res.ok)show("✅ "+mk+" の売上データを同期しました<br><small>"+res.updated+"名分 完了</small>");else show("❌ "+(res.error||"エラー"));setTimeout(function(){var e=document.getElementById("_lsm");if(e)e.remove();},8000);})'
+      +'.catch(function(e){show("❌ "+(e.message||e));});})();';
+    bmEl.href=code;
+  }
+  // 日払い・経費取得
+  var cashEl=document.getElementById('adm-cash-bm');
+  if(cashEl){
+    var ccode='javascript:(function(){'
+      +'var G='+JSON.stringify(gas)+';var S='+JSON.stringify(secret)+';'
+      +'var now=new Date();var biz=new Date(now);if(now.getHours()<6)biz.setDate(biz.getDate()-1);var yr=biz.getFullYear();var mo=biz.getMonth()+1;var dy=biz.getDate();function pad(n){return ("0"+n).slice(-2);}var dateKey=yr+"-"+pad(mo)+"-"+pad(dy);var path="/report/index/"+yr+"/"+pad(mo)+"/"+pad(dy);'
+      +'var show=function(t){var e=document.getElementById("_lcm");if(!e){e=document.createElement("div");e.id="_lcm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#2a2210",border:"1px solid #aa8822",borderRadius:"10px",padding:"12px 16px",color:"#ddbb55",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+      +'function pv(s){var n=parseFloat(String(s).replace(/[￥,]/g,""));return isNaN(n)?0:n;}'
+      +'show("① "+dateKey+" の日報を取得中...");'
+      +'fetch(path).then(function(r){return r.text();}).then(function(html){var p=new DOMParser();var doc=p.parseFromString(html,"text/html");var dayPayTotal=0;doc.querySelectorAll("table#timecard input[name=\\"1\\"]").forEach(function(inp){dayPayTotal+=pv(inp.value);});var costOutTotal=0;var costOutDetail=[];doc.querySelectorAll("table#logCostOut tr").forEach(function(tr){var sel=tr.querySelector("select[name=\\"cost_id\\"]");var priceInp=tr.querySelector("input[name=\\"price\\"]");if(!sel||!priceInp)return;var label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:"";var amount=pv(priceInp.value);costOutTotal+=amount;costOutDetail.push({label:label,amount:amount});});show("② GASに送信中...<br><small>日払い ¥"+dayPayTotal.toLocaleString()+" / 経費 ¥"+costOutTotal.toLocaleString()+"</small>");return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustDailyCash",syncSecret:S,dateKey:dateKey,dayPayTotal:dayPayTotal,costOutTotal:costOutTotal,costOutDetail:costOutDetail})}).then(function(r){return r.json();});})'
+      +'.then(function(res){if(!res)return;if(res.ok)show("✅ "+dateKey+" の現金データを記録しました<br><small>日払い ¥"+res.dayPayTotal.toLocaleString()+" / 経費 ¥"+res.costOutTotal.toLocaleString()+"</small>");else show("❌ "+(res.error||"エラー"));setTimeout(function(){var e=document.getElementById("_lcm");if(e)e.remove();},8000);})'
+      +'.catch(function(e){show("❌ "+(e.message||e));});})();';
+    cashEl.href=ccode;
+  }
 }
 /* ブラウザ内 xlsx 解析（ライブラリ不要・DecompressionStream/正規表現のみ） */
 async function xlsxInflateRaw_(bytes){

@@ -601,6 +601,7 @@ function handleApiRequest_(body) {
     if (!body.monthKey || !body.casts) return { ok: false, error: 'monthKey/casts required' };
     const cnt = writeTrustDataAll_(body.monthKey, body.casts);
     recordSalesDataDate_(body.monthKey);
+    logTrustImport_('月次売上', body.monthKey, cnt, bySecret ? 'ブックマークレット' : 'コンソール', '完了', '売上データ日付を更新／給与・成績に即反映');
     return { ok: true, monthKey: body.monthKey, updated: cnt };
   }
   // TRUST日報ページから当日の日払い・経費合計を取得して記録
@@ -612,7 +613,11 @@ function handleApiRequest_(body) {
       if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     }
     if (!body.dateKey) return { ok: false, error: 'dateKey required' };
-    return writeTrustDailyCash_(body.dateKey, body.dayPayTotal || 0, body.costOutTotal || 0, body.costOutDetail || []);
+    const dailyRes = writeTrustDailyCash_(body.dateKey, body.dayPayTotal || 0, body.costOutTotal || 0, body.costOutDetail || []);
+    logTrustImport_('日次現金', body.dateKey, (body.costOutDetail || []).length, bySecret ? 'ブックマークレット' : 'コンソール',
+      (dailyRes && dailyRes.ok === false) ? '失敗' : '完了',
+      '日払い合計 ¥' + (Number(body.dayPayTotal) || 0).toLocaleString() + ' / 経費合計 ¥' + (Number(body.costOutTotal) || 0).toLocaleString());
+    return dailyRes;
   }
   // ---- シフト管理（管理者専用）----
   if (body.action === 'writeShiftCellPortal') {
@@ -1075,7 +1080,53 @@ function adminImportTrustMonth(userId, month, rawText, commit) {
   });
   sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_HEAD.length).setValues(out);
   recordSalesDataDate_(mk);
+  logTrustImport_('月次売上', mk, out.length, 'Excel取込', '完了', '同月の既存データを置き換え／売上データ日付を更新');
   return { ok: true, month: mk, count: out.length };
+}
+
+// ── TRUST取込 履歴ログ（取得・取込の実行記録。給与ロジックには非連動の監査用） ──────────
+var TRUST_IMPORT_LOG_TAB  = 'TRUST取込ログ';
+var TRUST_IMPORT_LOG_HEAD = ['実行日時', '種別', '対象', '件数', '取得元', 'ステータス', 'メモ'];
+// 取込1件を記録（append・直近300行に自動トリム）。失敗しても本処理は止めない
+function logTrustImport_(type, target, count, source, status, memo) {
+  try {
+    var ss = getOrOpenSS_();
+    var sh = ss.getSheetByName(TRUST_IMPORT_LOG_TAB);
+    if (!sh) { sh = ss.insertSheet(TRUST_IMPORT_LOG_TAB); sh.appendRow(TRUST_IMPORT_LOG_HEAD); sh.setFrozenRows(1); }
+    sh.appendRow([bbNow_(), type || '', target || '', (count == null ? '' : count), source || '', status || '', memo || '']);
+    var last = sh.getLastRow(), MAX = 300;
+    if (last > MAX + 1) sh.deleteRows(2, last - (MAX + 1));
+  } catch (e) {}
+}
+// 管理者：TRUST取込の履歴＋処理ステータス＋取得ブックマークレット用パラメータを返す
+function adminGetTrustImport(userId) {
+  try {
+    if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+    var ss = getOrOpenSS_();
+    // 履歴（新しい順・直近60）
+    var log = [];
+    var sh = ss.getSheetByName(TRUST_IMPORT_LOG_TAB);
+    if (sh && sh.getLastRow() >= 2) {
+      var rows = sh.getDataRange().getValues();
+      for (var i = rows.length - 1; i >= 1 && log.length < 60; i--) {
+        log.push({ at: String(rows[i][0] || ''), type: String(rows[i][1] || ''), target: String(rows[i][2] || ''), count: String(rows[i][3] == null ? '' : rows[i][3]), source: String(rows[i][4] || ''), status: String(rows[i][5] || ''), memo: String(rows[i][6] || '') });
+      }
+    }
+    // 接続ステータス（GAS→TRUST GET1回のみ・ログインPOSTしない＝WAF/BANを延長しない）
+    var loginCode = 0;
+    try {
+      loginCode = UrlFetchApp.fetch('https://admin.trust-operation.com/', { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' } }).getResponseCode();
+    } catch (e) { loginCode = -1; }
+    var latest = '';
+    try { var bs = billSheet_(); var last = bs.getLastRow(); if (last >= 2) latest = bs.getRange(2, 1, last - 1, 1).getValues().map(function (x) { return x[0] instanceof Date ? Utilities.formatDate(x[0], TZ, 'yyyy-MM-dd') : String(x[0]).trim(); }).sort().reverse()[0]; } catch (e) {}
+    return {
+      ok: true, log: log,
+      status: { gasToTrustLoginCode: loginCode, gasBlocked: loginCode !== 200, latestBillDate: latest, today: bizDateStr_(), salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}') },
+      syncSecret: prop('SYNC_SECRET') || 'lounge-sync-2026'
+    };
+  } catch (err) {
+    return { ok: false, error: 'TRUST取込情報の読込エラー: ' + String((err && err.message) || err) };
+  }
 }
 
 // ── 新バック方式：月単位の手入力（キャスト紹介料・入店祝い金）ストア ──────────
