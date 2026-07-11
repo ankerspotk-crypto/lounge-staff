@@ -777,13 +777,14 @@ function drawBday(r,mo){
   var table = r.list.length
     ? '<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px"><thead><tr><th style="text-align:left">キャスト</th><th>開始日</th><th>終了日</th><th>率</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>'
     : '<div class="empty">この月の誕生日バック設定はまだありません</div>';
+  var fld='display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--dim);font-weight:700';
   var form='<div class="sec" style="margin-top:12px"><div class="sec-t">🎂 誕生日バック週を追加 / 変更</div>'
-    +'<div class="toolbar" style="flex-wrap:wrap;gap:8px">'
-    +'<select class="finput" id="bd_name" style="width:170px">'+castOpts+'</select>'
-    +'<span class="cnt">開始</span><input class="finput" id="bd_s" type="date" style="width:160px">'
-    +'<span class="cnt">終了</span><input class="finput" id="bd_e" type="date" style="width:160px">'
-    +'<span class="cnt">率</span><input class="finput" id="bd_r" type="number" value="30" min="0" max="100" style="width:70px">%'
-    +'<button class="btn pri" onclick="saveBday()">保存</button></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">'
+    +'<label style="'+fld+'">キャスト<select class="finput" id="bd_name" style="width:170px">'+castOpts+'</select></label>'
+    +'<label style="'+fld+'">開始日<input class="finput" id="bd_s" type="date" style="width:180px"></label>'
+    +'<label style="'+fld+'">終了日<input class="finput" id="bd_e" type="date" style="width:180px"></label>'
+    +'<label style="'+fld+'">率(%)<input class="finput" id="bd_r" type="number" value="30" min="0" max="100" inputmode="numeric" style="width:90px"></label>'
+    +'<button class="btn pri" onclick="saveBday()" style="align-self:flex-end">保存</button></div>'
     +'<div class="hint">対象月内の<b>来店日</b>がこのレンジに入る担当売上ぶんだけ、小計バック率を上書きします（通常は倍率ルール10/15/20%）。分割の合計は必ずTRUST担当小計に一致します。<b>月をまたぐ期間は自動で月ごとに分割</b>（その月は月末まで＝一旦締め、翌月は月初から続き）。◀続/続▶マークは月またぎの継続を示します。キャストはプルダウンから、日付はカレンダーから選択してください。</div></div>';
   setBody(paySubToggle('bday')+head+table+form);
 }
