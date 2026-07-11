@@ -4034,18 +4034,21 @@ function getTodayShiftDetail_() {
   const colIdx  = headers.indexOf(colKey);
   if (colIdx < 0) return { cast: [], kurofuku: [], haken: [] };
 
+  // 当日の源氏名リネーム（体験の子など）を全ロスターに横断適用。付け回しプール/送り/シフト/ラインナップは全てこの関数経由。
+  const genji = (typeof kioskGetGenji_ === 'function') ? (kioskGetGenji_() || {}) : {}; // { 元名: 当日の表示名 }
   const cast = [], kurofuku = [], haken = [];
   for (let i = 1; i < data.length; i++) {
-    const name     = String(data[i][0]).trim();
+    const origName = String(data[i][0]).trim();
     const role     = String(data[i][1]).trim();
     const shiftRaw = data[i][colIdx];
     const shift    = (shiftRaw instanceof Date)
       ? Utilities.formatDate(shiftRaw, TZ, 'HH:mm')
       : String(shiftRaw).trim();
-    if (!name || !shift || shift === '休み') continue;
-    if (role === 'キャスト' || role === '体験') cast.push({ name, shift, role });
-    else if (role === '黒服社員' || role === '黒服バイト' || role === '黒服') kurofuku.push({ name, shift });
-    else if (role === '派遣') haken.push({ name, shift });
+    if (!origName || !shift || shift === '休み') continue;
+    const name = genji[origName] || origName; // 当日の表示名（源氏名）。origNameはシフト表の元名
+    if (role === 'キャスト' || role === '体験') cast.push({ name, origName, shift, role });
+    else if (role === '黒服社員' || role === '黒服バイト' || role === '黒服') kurofuku.push({ name, origName, shift });
+    else if (role === '派遣') haken.push({ name, origName, shift });
   }
   return { cast, kurofuku, haken };
 }
