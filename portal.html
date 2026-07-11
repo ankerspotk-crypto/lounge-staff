@@ -1463,6 +1463,7 @@ function renderPay() {
   var zangyo  = n(s['残業代']);
   var urihan  = n(s['売り半']);
   var nyutenB = n(s['入店祝い金']);
+  var bdayInfo = s['__bday'] || null; // 誕生日バック週の内訳（未設定null）
   // 新バック方式では担当小計バック(s['担当バック']=新バック)が正。レガシー給与計算シート由来の小計バック(p['新バック'])は
   // 二重計上になるため、新バックがある月は抑制する（旧KYUYOのみの月はフォールバックで表示）。
   var shoBack = tantoB > 0 ? 0 : n(p['新バック']);
@@ -1562,7 +1563,15 @@ function renderPay() {
   h += trHead('支給対象');
   h += tr('基本給（時給）', yen(jikanH), 'shikyu');
   if (shoBack > 0) h += tr('小計バック', yen(shoBack), 'shikyu');
-  if (tantoB  > 0) h += tr('担当小計バック', yen(tantoB),  'shikyu');
+  if (tantoB  > 0) {
+    if (bdayInfo) {
+      h += tr('担当小計バック（通常 ' + bdayInfo.normalRate + '%）', yen(bdayInfo.normalBack), 'shikyu');
+      h += tr('🎂 誕生日週バック（' + bdayInfo.rate + '%）',        yen(bdayInfo.bdayBack),   'shikyu');
+      h += tr('担当小計バック 合計',                                 yen(tantoB),              'shikyu');
+    } else {
+      h += tr('担当小計バック', yen(tantoB),  'shikyu');
+    }
+  }
   if (yoyakuB > 0) h += tr('予約給',         yen(yoyakuB), 'shikyu');
   if (dohanB  > 0) h += tr('同伴給',          yen(dohanB),  'shikyu');
   if (drinkB  > 0) h += tr('ドリンクバック',  yen(drinkB),  'shikyu');
@@ -1599,6 +1608,16 @@ function renderPay() {
   h += '</div>';
 
   h += '</div>';  // white card
+
+  // ---- 🎂 誕生日バックのお祝いノート ----
+  if (bdayInfo) {
+    var bdayGain = bdayInfo.bdayBack - Math.round(bdayInfo.tantoBday * bdayInfo.normalRate / 100);
+    h += '<div style="background:#1e1630;border:1px solid #3a2a5a;border-radius:12px;padding:13px 15px;margin-top:10px;color:#e0d4ff">';
+    h += '<div style="font-size:13px;font-weight:700;margin-bottom:5px">🎂 誕生日バック適用中（' + esc(bdayInfo.start) + ' 〜 ' + esc(bdayInfo.end) + '）</div>';
+    h += '<div style="font-size:12px;line-height:1.7;color:#c8b8f0">この週の担当売上 <b style="color:#e0d4ff">' + yen(bdayInfo.tantoBday) + '</b> は特別に <b style="color:#c9a0ff">' + bdayInfo.rate + '%</b> バック。'
+      + '通常率なら' + yen(Math.round(bdayInfo.tantoBday * bdayInfo.normalRate / 100)) + 'のところ <b style="color:#7fd88f">+' + yen(bdayGain) + '</b> お得です。おめでとう！🎉</div>';
+    h += '</div>';
+  }
 
   // ---- バック率メーター ----
   if (tantoK > 0 && jikanH > 0) {
