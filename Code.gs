@@ -1325,6 +1325,145 @@ function adminGetBirthdayBack(userId, month) {
   }
 }
 
+// スタッフマスタのキャスト系名簿（管理者/ドライバー/黒服を除外）＝誕生日バックのドロップダウン候補
+function castRosterNames_(ss) {
+  var out = [], seen = {};
+  var sh = ss.getSheetByName(STAFF_TAB);
+  if (sh && sh.getLastRow() >= 2) {
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues(); // A=userId B=名前 C=役割
+    var EX = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '黒服': 1 };
+    for (var i = 0; i < rows.length; i++) {
+      if (EX[String(rows[i][2]).trim()]) continue;
+      var nm = String(rows[i][1]).trim();
+      if (nm && !seen[nm]) { seen[nm] = 1; out.push(nm); }
+    }
+  }
+  out.sort();
+  return out;
+}
+
+// 'M/D' '8/15' '2000/8/15' 等 → 誕生月(1-12)。取れなければ0
+function birthdayMonth_(s) {
+  var parts = String(s || '').split(/[^\d]+/).filter(function (x) { return x !== ''; });
+  if (!parts.length) return 0;
+  var mo = (parts.length >= 3 && parts[0].length === 4) ? Number(parts[1]) : Number(parts[0]); // Y/M/D か M/D
+  return (mo >= 1 && mo <= 12) ? mo : 0;
+}
+
+// スタッフマスタの誕生日(個別条件の'誕生日'列)から 月→[{name,mmdd}] を作る（キャスト系のみ）
+function castsBirthdayByMonth_(ss) {
+  var map = {};
+  var sh = ss.getSheetByName(STAFF_TAB);
+  if (!sh || sh.getLastRow() < 2) return map;
+  var cols = getStaffTermCols_(sh, false);
+  var bcol = cols['誕生日'];
+  if (bcol == null || bcol < 0) return map;
+  var EX = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '黒服': 1 };
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    var nm = String(rows[i][1]).trim();
+    if (!nm || EX[String(rows[i][2]).trim()]) continue;
+    var bd = String(rows[i][bcol] || '').trim();
+    var mo = birthdayMonth_(bd);
+    if (!mo) continue;
+    (map[mo] = map[mo] || []).push({ name: nm, mmdd: bd });
+  }
+  return map;
+}
+
+// 1ヶ月ぶんの誕生日バック設定リスト（元名＋月またぎ継続フラグ）。presentSet='mk|正規化名'の存在集合
+function birthdayBackListForMonth_(ss, mk, presentSet) {
+  var list = [];
+  var bs = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!bs || bs.getLastRow() < 2) return list;
+  var rows = bs.getDataRange().getValues();
+  var h = rows[0].map(String);
+  var iN = h.indexOf('名前'), iS = h.indexOf('開始日'), iE = h.indexOf('終了日'), iR = h.indexOf('率(%)');
+  var toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+  for (var i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) !== mk) continue;
+    var nmRaw = String(rows[i][iN]).trim(), nmKey = normalizeName_(nmRaw);
+    list.push({
+      name: nmRaw, start: toD(rows[i][iS]), end: toD(rows[i][iE]), rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0,
+      contPrev: !!presentSet[mkShift_(mk, -1) + '|' + nmKey],
+      contNext: !!presentSet[mkShift_(mk, 1) + '|' + nmKey]
+    });
+  }
+  return list;
+}
+
+// 管理者: 今月±6ヶ月の誕生日バック設定＋各月の誕生日キャスト（設定有無つき）を一覧で返す
+function adminGetBirthdayBackRange(userId) {
+  try {
+    if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+    var ss = getOrOpenSS_();
+    var baseMk = Utilities.formatDate(new Date(), TZ, 'yyyy/MM');
+    var presentSet = {};
+    var bs = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+    if (bs && bs.getLastRow() >= 2) {
+      var brows = bs.getDataRange().getValues();
+      var iN2 = brows[0].map(String).indexOf('名前');
+      for (var i = 1; i < brows.length; i++) presentSet[mStr_(brows[i][0]) + '|' + normalizeName_(String(brows[i][iN2]).trim())] = true;
+    }
+    var bdayByMonth = castsBirthdayByMonth_(ss);
+    var months = [];
+    for (var d = -6; d <= 6; d++) {
+      var mk = mkShift_(baseMk, d);
+      var mo = Number(mk.slice(5, 7));
+      var setMap = getBirthdayBackMap_(ss, mk);
+      var bdayCasts = (bdayByMonth[mo] || []).map(function (c) { return { name: c.name, mmdd: c.mmdd, hasBack: !!setMap[normalizeName_(c.name)] }; });
+      months.push({ mk: mk, isCurrent: (mk === baseMk), settings: birthdayBackListForMonth_(ss, mk, presentSet), bdayCasts: bdayCasts });
+    }
+    return { ok: true, baseMonth: baseMk, months: months, casts: castRosterNames_(ss) };
+  } catch (err) {
+    return { ok: false, error: '誕生日バック一覧エラー: ' + String((err && err.message) || err) };
+  }
+}
+
+// 今月誕生日で誕生日バック未設定のキャスト（リマインド用）
+function birthdayBackUnsetThisMonth_(ss) {
+  var mk = Utilities.formatDate(new Date(), TZ, 'yyyy/MM');
+  var mo = Number(mk.slice(5, 7));
+  var setMap = getBirthdayBackMap_(ss, mk);
+  var byMonth = castsBirthdayByMonth_(ss);
+  return (byMonth[mo] || []).filter(function (c) { return !setMap[normalizeName_(c.name)]; });
+}
+
+// 要対応チケットを最新状態で作成/更新（未設定ゼロなら消す）。固定キー＝重複しない
+function writeBirthdayBackTask_() {
+  var ss = getOrOpenSS_();
+  var mo = Number(Utilities.formatDate(new Date(), TZ, 'MM'));
+  var unset = birthdayBackUnsetThisMonth_(ss);
+  var sp = PropertiesService.getScriptProperties();
+  var KEY = 'TASK_ADMIN_BDAYBACK';
+  if (!unset.length) { sp.deleteProperty(KEY); return { ok: true, count: 0 }; }
+  var names = unset.map(function (c) { return c.name + '(' + c.mmdd + ')'; }).join('、');
+  var obj = {
+    title: '🎂' + mo + '月 誕生日バックの設定',
+    memo: '今月が誕生日で誕生日バック未設定: ' + names + '。管理コンソール→💰給与→🎂誕生日バック で設定してください。',
+    by: '自動', ts: Date.now(), sent: true, bizDate: bizDateStr_()
+  };
+  sp.setProperty(KEY, JSON.stringify(obj));
+  return { ok: true, count: unset.length, names: names };
+}
+
+// 月初に1回: 今月誕生日で未設定のキャストを軍師の要対応キューへ（LINEなし・要対応のみ）
+function remindBirthdayBackIfNeeded_() {
+  var ym = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  var guard = 'BDAYREMIND_' + ym; // 日付(YYYY-MM-DD)を含まない→cleanOldPropertiesで消えない＝月1回
+  if (prop(guard)) return;
+  setProp(guard, '1');
+  writeBirthdayBackTask_();
+}
+
+// 管理者: 誕生日バックのリマインドを今すぐ要対応へ出す（テスト/手動用）
+function adminRunBirthdayReminderNow(userId) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var ym = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  setProp('BDAYREMIND_' + ym, '1');
+  return writeBirthdayBackTask_();
+}
+
 // 新バック方式で1名分を再計算。g=TRUST報酬行のgetter(見出し名→値), m=手入力{intro,nyuten,fixedRate}
 // 式（cast_pay_final実データ31名で検算済・NG0／源泉は仕様どおり切り捨て）:
 //   新バック  = round(担当小計 × 率)   率= 固定override優先、無ければ倍率(担当小計/時間報酬)で 10/15/20%
@@ -3488,6 +3627,9 @@ function scheduledJobs() {
   // 18:00: 当日中に管理コンソールから追加された黒服タスクをまとめて送信（18時以降の追加分は即送信済み）
   if (hhmm >= '18:00' && hhmm <= '18:09') once('KUROFUKU_TASKS_1800', sendPendingKurofukuTasks);
 
+  // 18:00: 月初1回、今月誕生日で誕生日バック未設定のキャストを軍師の要対応へ（内部で月ガード＝月1回）
+  if (hhmm >= '18:00' && hhmm <= '18:09') once('BDAYREMIND', remindBirthdayBackIfNeeded_);
+
   notif_('kaiten_check', () => {
     push_(prop('GROUP_KUROFUKU'), ns_['kaiten_check'].message || ns_['kaiten_check'].defaultMsg);
   });
@@ -5635,7 +5777,7 @@ function getAdminConsoleData(userId) {
 /* ===== キャスト個別条件（参照メモ。給与計算には非連動） =====
  * スタッフマスタに条件列を「ヘッダー名で探索→無ければ末尾に追加」で持たせる（既存A〜H列は非破壊）。
  * 対象ロールの制御はフロント側（キャスト・黒服・ドライバーのみパネル表示）。 */
-var STAFF_TERM_HEADERS = ['基本時給', '基本バック', '入店日', '入店時条件', '設定条件', '個別メモ'];
+var STAFF_TERM_HEADERS = ['基本時給', '基本バック', '入店日', '誕生日', '入店時条件', '設定条件', '個別メモ'];
 
 // スタッフマスタ1行目ヘッダーから条件各列の0-based indexを解決。create=trueで無い列を末尾に新設。
 function getStaffTermCols_(sh, create) {
