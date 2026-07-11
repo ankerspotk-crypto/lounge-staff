@@ -605,7 +605,7 @@ function renderTrust(){
   gsr('adminGetTrustImport',USER_ID).then(function(r){ trustInfo=(r&&r.ok)?r:null; drawTrust(); }).catch(function(){ trustInfo=null; drawTrust(); });
 }
 function drawTrust(){
-  setBody(paySubToggle('trust')+trustAcquireSection()+trustStatusSection()+trustHistorySection()+trustExcelSection());
+  setBody(paySubToggle('trust')+trustAcquireSection()+trustCoverageSection()+trustStatusSection()+trustHistorySection()+trustExcelSection());
   trustSetupBookmarklets_();
 }
 /* 🔄 TRUSTデータ取得（ブックマークレット・リレー方式。GAS直取得は403なので唯一の実働経路） */
@@ -613,14 +613,47 @@ function trustAcquireSection(){
   var mo=payMonth||nowMonth();
   var blocked=trustInfo&&trustInfo.status&&trustInfo.status.gasBlocked;
   var warn=blocked?'<div class="hint" style="background:#2a1500;border:1px solid #664400;color:#e0b060;margin-top:8px">⚠️ GASからTRUSTへの直接取得は現在ブロック中（'+esc(String((trustInfo.status.gasToTrustLoginCode))) +'）。下のブックマークレット（ブラウザ経由リレー）で取得してください。</div>':'';
+  var billStart=trustDefaultBillStart_();
   return '<div class="sec"><div class="sec-t">🔄 TRUSTデータ取得</div>'+
     '<div class="hint">TRUSTに直接アクセスできるブラウザ経由で取得します。①下のボタンをブックマークバーにドラッグ →②TRUST(admin.trust-operation.com)にログインした状態でクリック →③自動でGASへ反映されます。</div>'+warn+
-    '<div class="toolbar" style="margin-top:10px"><span class="cnt">売上の対象月</span><input class="finput" id="adm-bm-month" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM" onchange="trustSetupBookmarklets_()"></div>'+
-    '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">'+
-      '<a id="adm-trust-bm" href="" style="flex:1;min-width:200px;text-align:center;padding:11px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 売上を取得 ← ドラッグして登録</a>'+
-      '<a id="adm-cash-bm" href="" style="flex:1;min-width:200px;text-align:center;padding:11px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 日払い・経費を取得 ← ドラッグして登録</a>'+
-    '</div>'+
-    '<div class="hint" style="margin-top:8px">「売上を取得」＝対象月のキャスト売上（担当小計・各種バック等）。「日払い・経費を取得」＝当日の現金チェック用（営業後にクリック）。</div></div>';
+    '<div class="toolbar" style="margin-top:12px;gap:8px"><span class="cnt" style="min-width:110px">① 伝票（前日まで）</span><span class="lbl">この日から前日まで</span><input class="finput" id="adm-bill-start" type="date" value="'+esc(billStart)+'" style="width:150px" onchange="trustSetupBookmarklets_()">'+
+      '<a id="adm-bill-bm" href="" style="text-align:center;padding:10px 14px;background:#151f2e;border:1px solid #35507f;border-radius:10px;color:#8fc0ff;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 伝票を取得 ← ドラッグ</a></div>'+
+    '<div class="toolbar" style="margin-top:10px;gap:8px"><span class="cnt" style="min-width:110px">② 日払い・経費</span><span class="lbl">当日ぶん（営業後）</span>'+
+      '<a id="adm-cash-bm" href="" style="text-align:center;padding:10px 14px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 日払い・経費を取得 ← ドラッグ</a></div>'+
+    '<div class="toolbar" style="margin-top:10px;gap:8px"><span class="cnt" style="min-width:110px">③ 月次売上</span><span class="lbl">対象月</span><input class="finput" id="adm-bm-month" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM" onchange="trustSetupBookmarklets_()">'+
+      '<a id="adm-trust-bm" href="" style="text-align:center;padding:10px 14px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 売上を取得 ← ドラッグ</a></div>'+
+    '<div class="hint" style="margin-top:8px">①伝票＝各キャストの来店・売上明細（毎営業後）。②日払い・経費＝現金チェック用（毎営業後）。③月次売上＝給与用のキャスト集計（月1回）。①は「この日から前日まで」を順に取得＝抜けた日はここを遡って埋められます。</div></div>';
+}
+/* 伝票取得ブックマークレットの既定開始日＝最新伝票日の翌日（無ければ前日）。最大14日前まで */
+function trustDefaultBillStart_(){
+  function fmt(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+  var yst=new Date();yst.setDate(yst.getDate()-1);
+  var cap=new Date();cap.setDate(cap.getDate()-14);
+  var start=yst;
+  var lb=trustInfo&&trustInfo.status&&trustInfo.status.latestBillDate;
+  if(lb&&/^\d{4}-\d{2}-\d{2}$/.test(lb)){var d=new Date(lb+'T00:00:00');d.setDate(d.getDate()+1);start=d;}
+  if(start>yst)start=yst;
+  if(start<cap)start=cap;
+  return fmt(start);
+}
+/* 🗓 伝票カバレッジ（直近の日別 取得状況。✅取得済 ❌未取得 休店休） */
+function trustCoverageSection(){
+  var cov=(trustInfo&&trustInfo.coverage)||[];
+  if(!cov.length) return '';
+  var wd=['','月','火','水','木','金','土','日'];
+  var cells=cov.map(function(c){
+    var md=String(c.date).slice(5).replace('-','/');
+    var bg,bd,fg,mark;
+    if(c.closed){ bg='#1a1f27';bd='#2a3340';fg='#7a8aa0';mark='休'; }
+    else if(c.count>0){ bg='#0f2a18';bd='#1f5a34';fg='#7ee0a0';mark='✓'+c.count; }
+    else { bg='#2a1214';bd='#5a2226';fg='#ff9aa0';mark='✕'; }
+    var title=c.date+'（'+wd[c.dow]+'）'+(c.closed?(' 休み'+(c.holiday?'：'+c.holiday:'')):(c.count>0?(' 取得済 '+c.count+'件'):' 未取得'));
+    return '<div title="'+esc(title)+'" style="flex:none;width:56px;padding:6px 0;text-align:center;background:'+bg+';border:1px solid '+bd+';border-radius:8px">'+
+      '<div style="font-size:11px;color:'+fg+'">'+esc(md)+'</div><div style="font-size:12px;font-weight:700;color:'+fg+'">'+esc(mark)+'</div></div>';
+  }).join('');
+  var legend='<div class="hint" style="margin-top:8px"><span style="color:#7ee0a0">✓件数=取得済</span>　<span style="color:#ff9aa0">✕=未取得</span>　<span style="color:#7a8aa0">休=店休/定休</span>　← 新しい順（前日から35日）</div>';
+  return '<div class="sec"><div class="sec-t">🗓 伝票カバレッジ</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:6px">'+cells+'</div>'+legend+'</div>';
 }
 /* 📊 処理ステータス（GAS→TRUST接続・最新伝票日・各月のデータ日付） */
 function trustStatusSection(){
@@ -676,6 +709,29 @@ function trustSetupBookmarklets_(){
   var gas=TRUST_GAS_URL;
   var mSel=(document.getElementById('adm-bm-month')||{}).value||'';
   var ym=/^(\d{4})-(\d{2})$/.exec(String(mSel).trim());
+  // 伝票取得（開始日→前日まで順に /sales/daily を取得しHTMLをGASへリレー・パースはサーバー側）
+  var billEl=document.getElementById('adm-bill-bm');
+  if(billEl){
+    var bStart=(document.getElementById('adm-bill-start')||{}).value||'';
+    var bcode='javascript:(function(){'
+      +'var G='+JSON.stringify(gas)+';var S='+JSON.stringify(secret)+';var START='+JSON.stringify(bStart)+';'
+      +'var show=function(t){var e=document.getElementById("_lbm");if(!e){e=document.createElement("div");e.id="_lbm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#101a2a",border:"1px solid #35507f",borderRadius:"10px",padding:"12px 16px",color:"#8fc0ff",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"340px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+      +'if(location.hostname.indexOf("trust-operation.com")<0){show("&#9888; これは<b>TRUSTの画面で</b>押すボタンです。<br>今いるのは <b>"+location.hostname+"</b>。<br>TRUST(admin.trust-operation.com)を開いて<b>ログインしてから</b>押してください。");return;}'
+      +'function pad(n){return ("0"+n).slice(-2);}function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}'
+      +'var end=new Date();end.setDate(end.getDate()-1);var cur=START?new Date(START+"T00:00:00"):new Date(end);'
+      +'var days=[];var g=0;while(cur<=end&&g++<45){days.push(fmt(cur));cur.setDate(cur.getDate()+1);}'
+      +'if(!days.length){show("取得対象の日がありません（開始日が前日より後）");return;}'
+      +'var i=0,okc=0,addc=0;'
+      +'function step(){if(i>=days.length){show("✅ 伝票取得 完了<br><small>"+okc+"/"+days.length+"日・追加"+addc+"件</small>");setTimeout(function(){var e=document.getElementById("_lbm");if(e)e.remove();},9000);return;}'
+      +'var dk=days[i];show("伝票取得中 "+dk+" ("+(i+1)+"/"+days.length+")");'
+      +'fetch("/sales/daily/"+dk).then(function(r){return r.text();}).then(function(html){'
+      +'if(html.indexOf("daily_bill_detail")<0&&/(password|passwd|ログイン|パスワード)/i.test(html)){throw new Error("__login__");}'
+      +'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustBills",syncSecret:S,dateKey:dk,html:html})}).then(function(r){return r.json();});})'
+      +'.then(function(res){if(res&&res.ok){okc++;addc+=(res.added||0);}i++;step();})'
+      +'.catch(function(e){if(String(e.message||e).indexOf("__login__")>=0){show("❌ TRUSTに<b>ログインできていない</b>ようです。<br>ログインし直してから、もう一度押してください。");return;}i++;step();});}'
+      +'step();})();';
+    billEl.href=bcode;
+  }
   // 売上取得
   var bmEl=document.getElementById('adm-trust-bm');
   if(bmEl){

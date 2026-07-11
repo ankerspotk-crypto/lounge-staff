@@ -619,6 +619,21 @@ function handleApiRequest_(body) {
       '日払い合計 ¥' + (Number(body.dayPayTotal) || 0).toLocaleString() + ' / 経費合計 ¥' + (Number(body.costOutTotal) || 0).toLocaleString());
     return dailyRes;
   }
+  // TRUST「売上>日別」ページのHTMLをブラウザ経由でリレー → サーバー側で既存パーサ→伝票シートへupsert
+  if (body.action === 'syncTrustBills') {
+    const secret = prop('SYNC_SECRET');
+    const bySecret = secret && body.syncSecret === secret;
+    if (!bySecret) {
+      const adminName = getStaffName(body.userId);
+      if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    }
+    if (!body.dateKey) return { ok: false, error: 'dateKey required' };
+    const bills = parseTrustBillList_(String(body.html || ''), String(body.dateKey));
+    const r = billWriteRows_(String(body.dateKey), bills);
+    logTrustImport_('伝票', body.dateKey, (r && r.fetched) || 0, bySecret ? 'ブックマークレット' : 'コンソール',
+      (r && r.ok === false) ? '失敗' : '完了', '追加' + ((r && r.added) || 0) + '件／更新' + ((r && r.updated) || 0) + '件');
+    return r;
+  }
   // ---- シフト管理（管理者専用）----
   if (body.action === 'writeShiftCellPortal') {
     const adminName = getStaffName(body.userId);
@@ -1119,8 +1134,21 @@ function adminGetTrustImport(userId) {
     } catch (e) { loginCode = -1; }
     var latest = '';
     try { var bs = billSheet_(); var last = bs.getLastRow(); if (last >= 2) latest = bs.getRange(2, 1, last - 1, 1).getValues().map(function (x) { return x[0] instanceof Date ? Utilities.formatDate(x[0], TZ, 'yyyy-MM-dd') : String(x[0]).trim(); }).sort().reverse()[0]; } catch (e) {}
+    // 伝票カバレッジ：前日から遡って直近35日、各日の取得件数＋店休/定休フラグ
+    var cov = [];
+    try {
+      var covMap = billCoverageMap_(ss);
+      var hol = {}; getHolidays_().forEach(function (h) { hol[h.date] = h.label || '店休日'; });
+      var d = new Date(); d.setDate(d.getDate() - 1); // 前日から
+      for (var k = 0; k < 35; k++) {
+        var dk = Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+        var dow = Number(Utilities.formatDate(d, TZ, 'u')); // 7=日
+        cov.push({ date: dk, count: covMap[dk] || 0, closed: (dow === 7 || !!hol[dk]), holiday: hol[dk] || '', dow: dow });
+        d.setDate(d.getDate() - 1);
+      }
+    } catch (e) {}
     return {
-      ok: true, log: log,
+      ok: true, log: log, coverage: cov,
       status: { gasToTrustLoginCode: loginCode, gasBlocked: loginCode !== 200, latestBillDate: latest, today: bizDateStr_(), salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}') },
       syncSecret: prop('SYNC_SECRET') || 'lounge-sync-2026'
     };
@@ -3908,6 +3936,23 @@ function checkRainAlert_() {
 
 // ============================================================
 
+// 管理者（ADMIN_NAMES_ or スタッフマスタD列○）でLINE登録済みの全員へDM。送信数を返す
+function pushAdmins_(message) {
+  var sent = 0;
+  try {
+    var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (!sh) return 0;
+    var rows = sh.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      var lineId = String(rows[i][0]).trim(), name = String(rows[i][1]).trim();
+      if (!lineId || !name) continue;
+      if (!isAdmin_(name)) continue;
+      push_(lineId, message); sent++;
+    }
+  } catch (e) {}
+  return sent;
+}
+
 function scheduledJobs() {
   // 二重実行防止: 前の毎分実行がまだ走っている/毎分トリガーが二重の場合、同時に走ると
   // once() のガードをすり抜けて通知が2回出る。ロックが取れなければこの実行はスキップ（終了時に自動解放）。
@@ -3972,6 +4017,14 @@ function scheduledJobs() {
     }
   });
 
+  // 月初1回(毎月1日 11:00台): 先月のTRUST売上を取り込むよう管理者へDM（給与を締める前に）。店休判定より前＝1日が日曜でも送る
+  if (Number(Utilities.formatDate(new Date(), TZ, 'd')) === 1 && hhmm >= '11:00' && hhmm <= '11:09') {
+    once('TRUST_SALES_MONTHLY', () => {
+      var lm = mkShift_(Utilities.formatDate(new Date(), TZ, 'yyyy/MM'), -1);
+      pushAdmins_('📅【月次TRUST売上の取込】\n先月（' + lm + '）の売上が確定しました。給与を締める前に取り込んでください。\n① TRUSTにログイン →② コンソール「📥TRUST取込」で対象月を ' + lm.replace('/', '-') + ' にして「売上を取得」をクリック。');
+    });
+  }
+
   // 定休日(日曜)の営業ぶんはスキップ。ただし日曜早朝=土曜の閉店作業なので bizDow で判定し、土曜クローズ通知(照明/終了現金/未退勤)は通す
   if (isClosed) return;
 
@@ -3979,6 +4032,13 @@ function scheduledJobs() {
   if (dow === 1 && hhmm < '12:00') return;
 
   // ---- 定時送信（月〜土のみ、月曜は12:00以降から） ----
+
+  // 毎営業後 01:00台: 当日営業ぶんの伝票・現金を取り込むよう管理者へDM（GAS夜間自動取得が403で停止中の手動代替）
+  if (hhmm >= '01:00' && hhmm <= '01:09') {
+    once('TRUST_RELAY_NIGHTLY', () => {
+      pushAdmins_('🌙【TRUST取得のお願い】\n今日の営業ぶんを取り込んでください（各キャストの伝票・現金チェック用）。\n① TRUSTにログイン →② コンソール「📥TRUST取込」で\n　・「伝票を取得」\n　・「日払い・経費を取得」\nを順にクリック。\n※取れていない日はコンソールのカバレッジ表示（❌）で分かります。');
+    });
+  }
 
   notif_('ieyas_url', () => {
     push_(prop('GROUP_KUROFUKU'), ns_['ieyas_url'].message || ns_['ieyas_url'].defaultMsg);
@@ -9977,10 +10037,15 @@ function fetchTrustBillList_(dateKey, session) {
   return { ok: true, bills: parseTrustBillList_(resp.getContentText('UTF-8'), dateKey) };
 }
 
-// 指定営業日の伝票一覧を取得し 伝票シートへupsert（キー=営業日|UUID）
+// 指定営業日の伝票一覧を取得し 伝票シートへupsert（キー=営業日|UUID）。GAS→TRUST直取得（現在403でブロック中）
 function billUpsertDay_(dateKey, session) {
   const r = fetchTrustBillList_(dateKey, session);
   if (!r.ok) return r;
+  return billWriteRows_(dateKey, r.bills);
+}
+// 伝票行を 伝票シートへupsert（書き込みのみ・取得経路に依存しない＝ブックマークレットのリレーからも使う）
+function billWriteRows_(dateKey, bills) {
+  bills = bills || [];
   const sh = billSheet_();
   const now = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
   const last = sh.getLastRow();
@@ -9993,7 +10058,7 @@ function billUpsertDay_(dateKey, session) {
     });
   }
   const append = [];
-  r.bills.forEach(b => {
+  bills.forEach(b => {
     const row = [dateKey, b.uuid, b.inTime, b.outTime, b.table, b.guests, b.cust, b.member,
       b.primary, b.tantoAmt, b.dohanCast, b.dohanAmt, b.total, b.tanto, now];
     const at = existing[dateKey + '|' + b.uuid];
@@ -10001,7 +10066,16 @@ function billUpsertDay_(dateKey, session) {
     else append.push(row);
   });
   if (append.length) sh.getRange(sh.getLastRow() + 1, 1, append.length, BILL_HEAD_.length).setValues(append);
-  return { ok: true, date: dateKey, fetched: r.bills.length, added: append.length, updated: r.bills.length - append.length };
+  return { ok: true, date: dateKey, fetched: bills.length, added: append.length, updated: bills.length - append.length };
+}
+// 伝票シートの日別件数マップ { 'yyyy-MM-dd': 件数 }（カバレッジ表示用）
+function billCoverageMap_(ss) {
+  var m = {};
+  var sh = ss.getSheetByName(BILL_TAB);
+  if (!sh || sh.getLastRow() < 2) return m;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  vals.forEach(function (r) { var d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim(); if (d) m[d] = (m[d] || 0) + 1; });
+  return m;
 }
 
 // 夜間: 前日分の伝票をenrich（fetchTrustSalesNightlyの末尾から相乗り呼び出し）
