@@ -3010,9 +3010,11 @@ function renderBirthday(d) {
   h += '<div style="' + box + '">'
     + '<div style="font-size:15px;font-weight:700;color:#c0d4f0;margin-bottom:4px">🎂 あなたの誕生日</div>'
     + '<div style="font-size:11px;color:#7a9cc8;margin-bottom:12px;line-height:1.6">月/日で入力してください（例: 8/15）。誕生日バックの対象月判定に使われます。</div>'
-    + '<label style="' + lbl + '">誕生日（月/日）</label>'
-    + '<input id="bday-md" type="text" inputmode="text" placeholder="例: 8/15" value="' + esc(d.birthday || '') + '" style="' + inp + ';max-width:180px">'
-    + '<button onclick="saveBirthdayMd()" style="margin-left:10px;padding:11px 18px;background:#1a50a0;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">保存</button>'
+    + '<label style="' + lbl + '">誕生日</label>'
+    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +   bdayMonthDaySelects(d.birthday || '')
+    +   '<button onclick="saveBirthdayMd()" style="padding:11px 18px;background:#1a50a0;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">保存</button>'
+    + '</div>'
     + '</div>';
 
   // ── 誕生日週間 ──
@@ -3055,8 +3057,28 @@ function statusBadge(st) {
   return '<span style="display:inline-block;font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px;background:' + m.bg + ';border:1px solid ' + m.bd + ';color:' + m.c + '">' + m.t + '</span>';
 }
 
+// 誕生日の月/日セレクトを生成。cur='M/d'（例 8/15）を初期選択
+function bdayMonthDaySelects(cur) {
+  var mo = '', da = '';
+  var p = String(cur || '').split(/[^\d]+/).filter(Boolean);
+  if (p.length >= 2) { mo = String(+p[0] || ''); da = String(+p[1] || ''); }
+  var selSt = 'padding:11px;background:#0d1626;border:1px solid #24365a;border-radius:9px;color:#e8f0ff;font-size:15px';
+  function opts(n, sel) {
+    var o = '<option value="">—</option>';
+    for (var i = 1; i <= n; i++) o += '<option value="' + i + '"' + (String(i) === sel ? ' selected' : '') + '>' + i + '</option>';
+    return o;
+  }
+  return '<select id="bday-mo" style="' + selSt + '">' + opts(12, mo) + '</select>'
+    + '<span style="color:#8aabcc;font-size:14px">月</span>'
+    + '<select id="bday-da" style="' + selSt + '">' + opts(31, da) + '</select>'
+    + '<span style="color:#8aabcc;font-size:14px">日</span>';
+}
+
 function saveBirthdayMd() {
-  var md = (document.getElementById('bday-md').value || '').trim();
+  var mo = (document.getElementById('bday-mo').value || '').trim();
+  var da = (document.getElementById('bday-da').value || '').trim();
+  if ((mo && !da) || (!mo && da)) { alert('月と日の両方を選んでください'); return; }
+  var md = (mo && da) ? (mo + '/' + da) : ''; // 両方空＝誕生日を消去
   gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castSetBirthday', userId: userId, targetName: bdayTargetName(), mmdd: md }) })
     .then(function(r){ return r.json(); })
     .then(function(d){ if (!d.ok) { alert(d.error || '保存に失敗しました'); return; } alert('誕生日を保存しました'); loadBirthday(); })
