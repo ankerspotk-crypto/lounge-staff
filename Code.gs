@@ -9564,12 +9564,15 @@ function getOpeningCheckInit() {
   const prevClose = getPrevClosingCheck_();
   if (rowIdx < 0) return { dateKey, locked: false, prevClose };
   const row = sh.getRange(rowIdx, 1, 1, OPENING_CHECK_HEADERS_.length).getValues()[0];
+  let safeUnchecked = false;
+  try { safeUnchecked = !!JSON.parse(String(row[3]))._safeUnchecked; } catch (e) {}
   return {
     dateKey, locked: true,
     reporterName: String(row[1]),
     bags: { f5: Number(row[4]) || 0, f2: Number(row[5]) || 0, keihi: Number(row[6]) || 0, safe: Number(row[7]) || 0 },
     total: Number(row[8]) || 0,
     safeAdjust: Number(row[9]) || 0,
+    safeUnchecked,
     prevClose
   };
 }
@@ -9587,6 +9590,7 @@ function submitOpeningCheck(payload) {
     }
 
     const bags = payload.bags || {};
+    const safeUnchecked = !!payload.safeUnchecked;   // 金庫を数えず前日残額を自動入力したか
     const total = bagsTotalYen_(bags);
     const safeNow = denomYen_(bags.safe);
     const prev = getPrevClosingCheck_();
@@ -9594,7 +9598,7 @@ function submitOpeningCheck(payload) {
     const safeAdjust = prev ? safeNow - prevSafe : 0;
 
     sh.appendRow([
-      dateKey, reporterName, new Date(), JSON.stringify(bags),
+      dateKey, reporterName, new Date(), JSON.stringify(safeUnchecked ? Object.assign({}, bags, { _safeUnchecked: 1 }) : bags),
       denomYen_(bags.f5), denomYen_(bags.f2), denomYen_(bags.keihi), safeNow,
       total, safeAdjust
     ]);
@@ -9603,6 +9607,9 @@ function submitOpeningCheck(payload) {
     if (prev && safeAdjust !== 0) {
       lines.push('', '金庫　前日¥' + prevSafe.toLocaleString() + ' → ¥' + safeNow.toLocaleString()
         + '（' + (safeAdjust > 0 ? '+' : '') + safeAdjust.toLocaleString() + '円・営業時間外の運営者の抜き差し）');
+    }
+    if (safeUnchecked) {
+      lines.push('', '🔒 金庫は未確認（前日の残額 ¥' + safeNow.toLocaleString() + ' をそのまま使用）');
     }
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
@@ -9761,6 +9768,7 @@ function getCashCheckInit() {
     approved: false,
     approver: '',
     approvedAt: '',
+    safeUnchecked: false,
     souvenirStock: getSouvenirStock_()
   };
   if (rowIdx > 0) {
@@ -9775,6 +9783,7 @@ function getCashCheckInit() {
       result.diff           = row[12] !== '' ? Number(row[12]) : null;
       result.within         = String(row[13]).trim() === '合';
       try { result.slipDetails = JSON.parse(String(row[14])); } catch (e) { result.slipDetails = []; }
+      try { result.safeUnchecked = !!JSON.parse(String(row[4]))._safeUnchecked; } catch (e) {}
     }
     if (String(row[15]).trim()) {
       result.approved   = true;
@@ -9801,6 +9810,7 @@ function submitCashCheck(payload) {
     }
     const cashSalesInput = Number(payload.cashSalesInput) || 0;
     const bags = payload.bags || {};
+    const safeUnchecked = !!payload.safeUnchecked;   // 金庫を数えず開店時の額を自動入力したか
 
     // 伝票（手入力で写真がある分だけDrive保存。画像読取分は既存のimageUrlを使う）
     const slips = payload.slips || [];
@@ -9838,7 +9848,7 @@ function submitCashCheck(payload) {
     const sh = getCashCheckSheet_();
     const rowIdx = findCashCheckRow_(sh, dateKey);
     const rowData = [
-      dateKey, reporterName, now_(), cashSalesInput, JSON.stringify(bags),
+      dateKey, reporterName, now_(), cashSalesInput, JSON.stringify(safeUnchecked ? Object.assign({}, bags, { _safeUnchecked: 1 }) : bags),
       denomYen_(bags.f5), denomYen_(bags.f2), denomYen_(bags.keihi), denomYen_(bags.safe),
       actual, slipTotal, expected, diff, judg,
       JSON.stringify(slipDetails), '', ''
@@ -9860,6 +9870,7 @@ function submitCashCheck(payload) {
       lines.push(within ? '✅ 合ってます（差額 ¥' + Math.abs(diff).toLocaleString() + '・許容内）'
         : '⚠️ ' + (diff > 0 ? '¥' + Math.abs(diff).toLocaleString() + ' 足りません' : '¥' + Math.abs(diff).toLocaleString() + ' 多いです'));
     }
+    if (safeUnchecked) lines.push('', '🔒 金庫は未確認（開店時の ¥' + denomYen_(bags.safe).toLocaleString() + ' をそのまま使用）');
     lines.push('', '（4袋 ' + formatBagsShort_(bags) + '）', '', '管理者の承認をお待ちください');
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
