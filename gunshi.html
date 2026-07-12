@@ -689,9 +689,74 @@ body{display:flex;flex-direction:column;height:100vh;}
 
 .proto-flag{position:fixed;left:12px;bottom:9px;z-index:60;font-size:10px;color:#8a7a3a;background:#1c1808;border:1px solid #4a3d10;border-radius:20px;padding:4px 11px;font-weight:700;}
 .empty-msg{text-align:center;color:var(--dim);padding:40px 12px;font-size:14px;}
+/* ===== 今やることホーム（landing） ===== */
+.vtoggle{display:flex;border:1px solid var(--line2);border-radius:11px;overflow:hidden;flex-shrink:0;}
+.vtoggle button{border:0;background:var(--panel2);color:var(--sub);font-size:13px;font-weight:800;padding:8px 15px;cursor:pointer;white-space:nowrap;}
+.vtoggle button.on{background:var(--accent-bg);color:var(--accent);}
+.vtoggle button:first-child{border-right:1px solid var(--line2);}
+#homeView{flex:1;overflow-y:auto;min-height:0;padding:14px 16px 44px;display:none;-webkit-overflow-scrolling:touch;}
+body.home-on #homeView{display:block;}
+body.home-on .alertbar,body.home-on .dash{display:none;}
+.hv-wrap{max-width:1000px;margin:0 auto;}
+.hv-phasebar{display:flex;gap:8px;}
+.hv-ptab{flex:1;text-align:center;padding:9px 4px;border-radius:12px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:800;cursor:pointer;}
+.hv-ptab .em{font-size:16px;display:block;margin-bottom:1px;}
+.hv-ptab.on.pre{border-color:#3a6a86;background:#0c1e26;color:#8fd4e6;}
+.hv-ptab.on.mid{border-color:#7a2424;background:#241012;color:#ff9a9a;}
+.hv-ptab.on.post{border-color:#5a4a1a;background:#1e1908;color:#e6c060;}
+.hv-auto{font-size:10px;color:var(--dim);text-align:center;margin:5px 0 2px;}
+.hv-sec{margin:18px 0 9px;display:flex;align-items:center;gap:8px;}
+.hv-sec .st{font-size:13px;font-weight:900;letter-spacing:.5px;}
+.hv-sec .cnt{font-size:12px;color:var(--dim);font-weight:700;}
+.hv-sec.urgent .st{color:var(--red);} .hv-sec.soon .st{color:var(--gold);}
+.hv-sec.todo .st{color:var(--accent);} .hv-sec.done .st{color:var(--green);} .hv-sec.q .st{color:var(--sub);}
+.hv-card{display:flex;align-items:center;gap:13px;padding:15px;border-radius:14px;border:1px solid var(--line2);background:var(--panel2);margin-bottom:9px;cursor:pointer;}
+.hv-card:active{transform:scale(.985);}
+.hv-card .ic{font-size:25px;width:33px;text-align:center;flex:none;}
+.hv-card .bd{flex:1;min-width:0;}
+.hv-card .t{font-size:16px;font-weight:800;line-height:1.25;}
+.hv-card .s{font-size:13px;color:var(--sub);margin-top:3px;}
+.hv-card .go{font-size:21px;color:var(--dim);flex:none;}
+.hv-card.crit{border-color:#7a2424;background:#241012;} .hv-card.crit .t{color:#ffc0c0;} .hv-card.crit .go{color:#ff8a8a;}
+.hv-card.rot{border-color:#7a5010;background:#1e1707;} .hv-card.rot .t{color:#ffd980;} .hv-card.rot .go{color:#e6c060;}
+.hv-card.soon{border-color:#5a4a1a;background:#181405;} .hv-card.soon .t{color:#e6cf80;}
+.hv-card.call{border-color:#245086;background:#0c1c34;} .hv-card.call .t{color:#bcd8ff;}
+@keyframes hvblink{0%,55%{box-shadow:0 0 0 2px rgba(255,70,70,.5);border-color:#ff5a5a;}56%,100%{box-shadow:none;border-color:#7a2424;}}
+.hv-card.blink{animation:hvblink 1.4s infinite;}
+.hv-chk{display:flex;align-items:center;gap:13px;padding:15px;border-radius:14px;border:1px solid var(--line2);background:var(--panel2);margin-bottom:9px;cursor:pointer;}
+.hv-chk:active{transform:scale(.985);}
+.hv-chk .box{width:30px;height:30px;border-radius:9px;border:2px solid var(--line2);flex:none;display:flex;align-items:center;justify-content:center;font-size:17px;color:transparent;}
+.hv-chk.done .box{background:var(--green);border-color:var(--green);color:#06210f;}
+.hv-chk .em{font-size:22px;flex:none;width:28px;text-align:center;}
+.hv-chk .bd{flex:1;min-width:0;}
+.hv-chk .t{font-size:16px;font-weight:800;}
+.hv-chk.done .t{color:var(--dim);text-decoration:line-through;}
+.hv-chk .s{font-size:12.5px;color:var(--sub);margin-top:3px;}
+.hv-chk.done .s{color:var(--dim);}
+.hv-chk .go{font-size:19px;color:var(--dim);flex:none;}
+.hv-chk.done .go{opacity:.25;}
+.hv-prog{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:var(--panel);border:1px solid var(--line);margin-bottom:2px;}
+.hv-prog .big{font-size:25px;font-weight:900;}
+.hv-prog .lbl{font-size:13px;color:var(--sub);font-weight:700;}
+.hv-pbar{flex:1;height:8px;border-radius:6px;background:#0a0a14;overflow:hidden;}
+.hv-pbar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent),#3a80e0);}
+.hv-cd{font-size:13px;font-weight:800;color:var(--gold);white-space:nowrap;}
+.hv-quick{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+.hv-qbtn{padding:16px 8px;border-radius:14px;border:1px solid var(--line2);background:var(--panel2);text-align:center;cursor:pointer;}
+.hv-qbtn:active{background:var(--accent-bg);}
+.hv-qbtn .em{font-size:26px;display:block;}
+.hv-qbtn .t{font-size:13px;font-weight:800;margin-top:5px;color:var(--txt);}
+.hv-qbtn.hot{border-color:var(--accent-line);background:var(--accent-bg);} .hv-qbtn.hot .t{color:var(--accent);}
+.hv-qbtn .bg{font-size:11px;font-weight:800;color:#fff;background:var(--red);border-radius:10px;padding:1px 6px;margin-left:3px;}
+.hv-mini{display:flex;gap:10px;margin-top:12px;}
+.hv-mstat{flex:1;text-align:center;padding:11px;border-radius:12px;background:var(--panel);border:1px solid var(--line);}
+.hv-mstat .n{font-size:21px;font-weight:900;}
+.hv-mstat .l{font-size:11px;color:var(--sub);font-weight:700;margin-top:2px;}
+.hv-clear{text-align:center;padding:30px 16px;color:var(--green);}
+.hv-clear .em{font-size:40px;} .hv-clear .t{font-size:16px;font-weight:800;margin-top:8px;} .hv-clear .s{font-size:13px;color:var(--sub);margin-top:4px;}
 </style>
 </head>
-<body>
+<body class="home-on">
 
 <div class="hdr">
   <div class="brand">⚡IEYAS <span class="z">軍師</span></div>
@@ -701,6 +766,10 @@ body{display:flex;flex-direction:column;height:100vh;}
     <button class="dtoday" onclick="goToday()">今日</button>
     <div class="dlabel" id="dlabel">--</div>
     <button class="dbtn" onclick="shiftDay(1)">›</button>
+  </div>
+  <div class="vtoggle" id="vtoggle">
+    <button id="vt-home" class="on" onclick="setViewMode('home')">📋 今</button>
+    <button id="vt-dash" onclick="setViewMode('dash')">🪑 現場</button>
   </div>
   <div class="spacer"></div>
   <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
@@ -712,6 +781,9 @@ body{display:flex;flex-direction:column;height:100vh;}
     <span class="lo">ログアウト</span>
   </div>
 </div>
+
+<!-- 今やることホーム（landing・時間帯で「今やること」を提示） -->
+<div id="homeView"><div class="hv-wrap" id="hvWrap"></div></div>
 
 <!-- 上部 横長アラート帯 -->
 <div class="alertbar" id="alertbar"></div>
@@ -914,7 +986,7 @@ var TASKS=[]; /* 要対応キュー（時間タスク＋呼び出し）。押し
 function completeTask(id,ev){
   if(ev&&ev.stopPropagation)ev.stopPropagation();
   TASKS=(TASKS||[]).filter(function(t){return t.id!==id;}); // 楽観的に除去
-  renderAlerts();
+  renderAlerts(); renderHome();
   if(typeof toast==='function')toast('✅ 完了しました');
   if(IS_GAS) gsr('completeKioskTask',id).catch(function(){ loadAll(); });
 }
@@ -954,6 +1026,147 @@ function renderAlerts(){
       +'<div class="tk-body"><span class="tk-ic">'+x.ic+'</span><span class="tk-tx"><span class="tk-title">'+esc(x.title)+'</span><span class="tk-sub">'+esc(x.sub)+'</span></span></div></div>';
   }).join('');
   setHtml('alertbar',lead+'<div class="tl-scroll">'+((qHtml+tickets)||'<div class="alert-none">✓ タスクはありません</div>')+'</div>');
+}
+
+/* ============ 今やることホーム（landing） ============ */
+/* 既存の buildTimeline()/TASKS/SEATS/ROT/RSV/SHIFT を流用。加算のみ・既存ロジックは不変 */
+var viewMode='home';                 // 'home' | 'dash'
+var homePhaseOverride='';            // '' なら時刻で自動。'pre'/'mid'/'post' で手動固定
+var HOME_STATUS={opening:false,cash:false};   // 開店/閉店チェックの提出状況（バックエンド由来）
+/* 営業フェーズの境界（27時制・分）。店の営業時間に合わせて調整可 */
+var PH_OPEN_MIN=18*60+30;   // これ以前＝開店前
+var PH_CLOSE_MIN=24*60+30;  // これ以降＝閉店処理
+function autoPhase(){var m=nowBizMin();if(m<PH_OPEN_MIN)return'pre';if(m>=PH_CLOSE_MIN)return'post';return'mid';}
+function curPhase(){return homePhaseOverride||autoPhase();}
+
+/* 手動チェックオフ（その日のみ・端末内保存）。開店/閉店チェックはバックエンド状況が優先 */
+function homeCheckKey(){return 'gunshi_home_chk_'+curDate;}
+function homeChecks(){try{return JSON.parse(localStorage.getItem(homeCheckKey())||'{}')||{};}catch(e){return{};}}
+function toggleHomeCheck(id,ev){if(ev&&ev.stopPropagation)ev.stopPropagation();var c=homeChecks();c[id]=!c[id];try{localStorage.setItem(homeCheckKey(),JSON.stringify(c));}catch(e){}renderHome();}
+
+/* 開店前／閉店のチェックリスト（すべて既存機能へのランチャー） */
+var HOME_LISTS={
+  pre:[
+    {id:'opening',em:'🔓',t:'開店チェック（レジ現金セット）',s:'4袋の現金を数えてスタート金を確定',act:'openOpeningCheck()',status:'opening'},
+    {id:'rsvchk', em:'📋',t:'本日の予約を確認',              s:'来店予定・席未定を把握',       act:"gotoDash('rsv')"},
+    {id:'stock',  em:'📦',t:'在庫・発注チェック',            s:'ボトル残・氷・備品',          act:'openStockManager()'},
+    {id:'castchk',em:'👥',t:'出勤キャストの確認',            s:'当日シフト・早上がり・体験',   act:"gotoDash('shift')"}
+  ],
+  post:[
+    {id:'cash',  em:'🌙',t:'閉店チェック（現金締め）',s:'売上入力・伝票・4袋カウント・自動照合',act:'openCashCheck()',status:'cash'},
+    {id:'okuri', em:'🚗',t:'送り確認',            s:'本日の送りを確定',            act:'openOkuriManager()'},
+    {id:'safe',  em:'🔐',t:'金庫へ収納・出金確認',  s:'残金の金庫収納・臨時出金',     act:'openSafeWithdrawal()'},
+    {id:'denpyo',em:'🧾',t:'伝票を確認',          s:'本日の伝票・売上の突合',       act:'openDenpyoManager()'}
+  ]
+};
+function homeItemDone(it){return !!((it.status&&HOME_STATUS[it.status])||homeChecks()[it.id]);}
+
+function setViewMode(m){
+  viewMode=m;
+  document.body.classList.toggle('home-on',m==='home');
+  var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash');
+  if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash');
+  renderAll();
+}
+function setHomePhase(p){homePhaseOverride=p;renderHome();}
+function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
+
+function hvCard(x,cls,nav){
+  var act=x.act?((nav?"setViewMode('dash');":"")+x.act):"";
+  return '<div class="hv-card '+cls+(x.blink?' blink':'')+'"'+(act?' onclick="'+act+'"':'')+'>'
+    +'<div class="ic">'+x.ic+'</div>'
+    +'<div class="bd"><div class="t">'+esc(x.title)+'</div>'+(x.sub?'<div class="s">'+esc(x.sub)+'</div>':'')+'</div>'
+    +'<div class="go">›</div></div>';
+}
+function hvChk(it){
+  var done=homeItemDone(it);
+  return '<div class="hv-chk'+(done?' done':'')+'" onclick="'+it.act+'">'
+    +'<div class="box" onclick="toggleHomeCheck(\''+it.id+'\',event)">✓</div>'
+    +'<div class="em">'+it.em+'</div>'
+    +'<div class="bd"><div class="t">'+esc(it.t)+'</div><div class="s">'+esc(it.s)+'</div></div>'
+    +'<div class="go">›</div></div>';
+}
+function hvPhaseBar(cur){
+  var tabs=[{p:'pre',em:'🌅',t:'開店前'},{p:'mid',em:'🔥',t:'営業中'},{p:'post',em:'🌙',t:'閉店'}];
+  return '<div class="hv-phasebar">'+tabs.map(function(t){
+    return '<div class="hv-ptab'+(cur===t.p?' on '+t.p:'')+'" onclick="setHomePhase(\''+t.p+'\')"><span class="em">'+t.em+'</span>'+t.t+'</div>';
+  }).join('')+'</div>'
+   +'<div class="hv-auto">'+(homePhaseOverride?'手動表示中・<span style="color:var(--accent)" onclick="setHomePhase(\'\')">時刻の自動判定に戻す</span>':'⏱ 時刻から自動表示中（タブで切替できます）')+'</div>';
+}
+function renderHomeMid(){
+  var tl=buildTimeline();
+  var now=tl.filter(function(x){return x.g<=1;});
+  var soon=tl.filter(function(x){return x.g>=2;});
+  var q=(TASKS||[]);
+  var h='', nowN=q.length+now.length;
+  if(nowN){
+    h+='<div class="hv-sec urgent"><span class="st">🚨 今すぐ</span><span class="cnt">'+nowN+'件</span></div>';
+    h+=q.map(function(t){
+      if(t.type==='admin')return hvCard({ic:t.icon||'📋',title:t.title,sub:'タップで詳細・完了',act:'showTaskDetail(\''+jsStr(t.id)+'\')'},'call',false);
+      return hvCard({ic:t.icon||'🔔',title:t.title,sub:t.type==='call'?(t.sub||'席へ'):'タップで完了',act:'completeTask(\''+jsStr(t.id)+'\',event)'},'call',false);
+    }).join('');
+    h+=now.map(function(x){return hvCard(x,x.kind==='now-rot'?'rot':'crit',true);}).join('');
+  }
+  if(soon.length){
+    h+='<div class="hv-sec soon"><span class="st">⏰ まもなく</span><span class="cnt">'+soon.length+'件</span></div>';
+    h+=soon.map(function(x){return hvCard(x,'soon',true);}).join('');
+  }
+  if(!nowN&&!soon.length){
+    h+='<div class="hv-clear"><div class="em">🍸</div><div class="t">対応待ちなし</div><div class="s">順調です。フロアを見ましょう</div></div>';
+  }
+  var rotN=ROT.filter(needsAction).length;
+  var undecided=RSV.filter(function(r){return r.status==='確定'&&r.table==='未定';}).length;
+  h+='<div class="hv-sec q"><span class="st">開く</span></div>';
+  h+='<div class="hv-quick">'
+    +'<div class="hv-qbtn hot" onclick="gotoDash(\'rot\')"><span class="em">🔄</span><div class="t">付け回し'+(rotN?'<span class="bg">'+rotN+'</span>':'')+'</div></div>'
+    +'<div class="hv-qbtn" onclick="gotoDash(\'\')"><span class="em">🪑</span><div class="t">ホール</div></div>'
+    +'<div class="hv-qbtn" onclick="gotoDash(\'rsv\')"><span class="em">📋</span><div class="t">予約'+(undecided?'<span class="bg">'+undecided+'</span>':'')+'</div></div>'
+    +'</div>';
+  var occ=SEATS.filter(function(s){var st=seatStatus(s);return st==='ok'||st==='warn'||st==='over'||st==='nocast';}).length;
+  var emptyN=SEATS.filter(function(s){return seatStatus(s)==='empty';}).length;
+  var working=(WORKCASTS!=null&&WORKCASTS.length!=null)?WORKCASTS.length:(SHIFT?SHIFT.length:0);
+  h+='<div class="hv-mini">'
+    +'<div class="hv-mstat"><div class="n">'+occ+'</div><div class="l">進行中の卓</div></div>'
+    +'<div class="hv-mstat"><div class="n">'+emptyN+'</div><div class="l">空き卓</div></div>'
+    +'<div class="hv-mstat"><div class="n">'+working+'</div><div class="l">出勤</div></div>'
+    +'</div>';
+  return h;
+}
+function renderHomeChecklist(phase){
+  var list=HOME_LISTS[phase]||[];
+  var doneN=list.filter(homeItemDone).length, total=list.length;
+  var pct=total?Math.round(doneN/total*100):0;
+  var label=phase==='pre'?'開店前の準備':'閉店の締め処理';
+  var cd='';
+  if(phase==='pre'){var left=PH_OPEN_MIN-nowBizMin();if(left>0&&left<=180)cd='開店まで '+left+'分';}
+  var h='<div class="hv-prog"><div class="big">'+doneN+'<span style="font-size:14px;color:var(--dim)">/'+total+'</span></div>'
+    +'<div style="flex:1"><div class="lbl">'+label+'</div><div class="hv-pbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div></div>'
+    +(cd?'<div class="hv-cd">'+cd+'</div>':'')+'</div>';
+  var todo=list.filter(function(it){return !homeItemDone(it);});
+  var fin=list.filter(homeItemDone);
+  if(todo.length){
+    h+='<div class="hv-sec todo"><span class="st">'+(phase==='pre'?'🌅':'🌙')+' やること</span><span class="cnt">残り '+todo.length+'</span></div>';
+    h+=todo.map(hvChk).join('');
+  }else{
+    h+='<div class="hv-clear"><div class="em">✅</div><div class="t">'+label+' 完了</div><div class="s">お疲れさまです</div></div>';
+  }
+  if(fin.length){
+    h+='<div class="hv-sec done"><span class="st">✓ 完了</span><span class="cnt">'+fin.length+'</span></div>';
+    h+=fin.map(hvChk).join('');
+  }
+  return h;
+}
+function renderHome(){
+  if(viewMode!=='home')return;
+  var w=document.getElementById('hvWrap'); if(!w)return;
+  var phase=curPhase();
+  w.innerHTML=hvPhaseBar(phase)+((phase==='mid')?renderHomeMid():renderHomeChecklist(phase));
+}
+/* 開店/閉店チェックの提出状況を取得（完了バッジ用・非ブロッキング） */
+function loadHomeStatus(){
+  if(!IS_GAS)return;
+  gsr('getOpeningCheckInit').then(function(i){HOME_STATUS.opening=!!(i&&i.locked);if(viewMode==='home')renderHome();}).catch(function(){});
+  gsr('getCashCheckInit').then(function(i){HOME_STATUS.cash=!!(i&&i.reportSubmitted);if(viewMode==='home')renderHome();}).catch(function(){});
 }
 
 /* ============ HALL ============ */
@@ -2839,6 +3052,7 @@ function loadAll(){
     SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[]; CASTKUBUN=(r[8]&&typeof r[8]==='object')?r[8]:CASTKUBUN;
     applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
     BOOTED=true; renderAll();
+    if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();}
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
 }
 
@@ -2944,7 +3158,7 @@ function renderAll(){
   document.getElementById('termBadge').textContent=TERM+' 端末';
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
-  renderAlerts();renderHall();renderRight();
+  renderAlerts();renderHall();renderRight();renderHome();
 }
 /* 表示がおかしい時のハード再読み込み（キャッシュ回避・現在のパラメータは維持） */
 function hardReload(){ try{ var u=new URL(location.href); u.searchParams.set('cb',Date.now()); location.replace(u.toString()); }catch(e){ location.reload(); } }
