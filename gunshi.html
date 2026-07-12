@@ -759,6 +759,20 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .safe-seg button{flex:1;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:12px;font-weight:800;padding:9px 6px;border-radius:9px;cursor:pointer;line-height:1.3;}
 .safe-seg button.on{background:#2a1e3a;border-color:#553a88;color:#c9a8f0;}
 .safe-auto-note{font-size:12.5px;color:#c9a8f0;background:rgba(120,80,180,.12);border:1px solid #3a2a5a;border-radius:9px;padding:9px 11px;line-height:1.55;}
+/* 開店前チェック（2F/5F別・同期） */
+.opp-sec-h{display:flex;align-items:baseline;gap:8px;font-size:12px;font-weight:800;color:var(--accent);margin:18px 2px 9px;letter-spacing:.3px;}
+.opp-sec-h .sub{font-size:11px;color:var(--dim);font-weight:700;letter-spacing:0;}
+.opp-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:13px;border:1px solid var(--line2);background:var(--panel2);margin-bottom:8px;}
+.opp-item .lbl{flex:1;min-width:0;font-size:15px;font-weight:800;line-height:1.3;}
+.opp-item.done-all{opacity:.7;}
+.opp-item.done-all .lbl{color:var(--dim);}
+.opp-floors{display:flex;gap:7px;flex:none;}
+.fbox{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line2);background:var(--panel);color:var(--sub);font-size:13px;font-weight:800;cursor:pointer;user-select:none;}
+.fbox:active{transform:scale(.96);}
+.fbox .ck{width:18px;height:18px;border-radius:5px;border:2px solid var(--line2);display:inline-grid;place-items:center;font-size:12px;color:transparent;line-height:1;}
+.fbox.on{border-color:var(--green);color:var(--green);background:rgba(102,204,136,.12);}
+.fbox.on .ck{background:var(--green);border-color:var(--green);color:#06210f;}
+.fbox.cur{box-shadow:0 0 0 2px var(--accent-line);}
 </style>
 </head>
 <body class="home-on">
@@ -1072,7 +1086,7 @@ function setViewMode(m){
   if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash');
   renderAll();
 }
-function setHomePhase(p){homePhaseOverride=p;renderHome();}
+function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
 
 function hvCard(x,cls,nav){
@@ -1173,13 +1187,62 @@ function renderHome(){
   if(viewMode!=='home')return;
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
-  w.innerHTML=hvPhaseBar(phase)+((phase==='mid')?renderHomeMid():renderHomeChecklist(phase))+hvToolsSection();
+  var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderHomeChecklist(phase));
+  w.innerHTML=hvPhaseBar(phase)+mainHtml+hvToolsSection();
 }
 /* 開店/閉店チェックの提出状況を取得（完了バッジ用・非ブロッキング） */
 function loadHomeStatus(){
   if(!IS_GAS)return;
   gsr('getOpeningCheckInit').then(function(i){HOME_STATUS.opening=!!(i&&i.locked);if(viewMode==='home')renderHome();}).catch(function(){});
   gsr('getCashCheckInit').then(function(i){HOME_STATUS.cash=!!(i&&i.reportSubmitted);if(viewMode==='home')renderHome();}).catch(function(){});
+}
+
+/* ---- 開店前チェック（2F/5F別・全端末同期・バックエンド getOpeningPrepInit/toggleOpeningPrep） ---- */
+var OPPREP=null, _oppLoading=false;
+function curFloorSlot(){ var t=String(typeof TERM!=='undefined'?TERM:'').toLowerCase(); return t.indexOf('2')>=0?'2F':(t.indexOf('5')>=0?'5F':''); }
+function loadOpeningPrep(){
+  if(!IS_GAS||_oppLoading)return; _oppLoading=true;
+  gsr('getOpeningPrepInit').then(function(d){ OPPREP=d; _oppLoading=false; if(viewMode==='home'&&curPhase()==='pre')renderHome(); })
+    .catch(function(){ _oppLoading=false; });
+}
+function oppSlot(it,slot){ return slot==='C'?it.c:(slot==='2F'?it.f2:it.f5); }
+function toggleOppPrep(itemId,slot,done){
+  if(!OPPREP)return;
+  var it=OPPREP.items.find(function(x){return x.id===itemId;}); if(!it)return;
+  var tgt=oppSlot(it,slot); if(!tgt)return;
+  tgt.done=done; tgt.by=done?(LOGIN||''):'';            // 楽観的更新
+  renderHome();
+  if(IS_GAS) gsr('toggleOpeningPrep',{itemId:itemId,floor:slot,done:done,reporterName:LOGIN||''}).catch(function(){ loadOpeningPrep(); });
+}
+function oppBox(itemId,slot,label,done){
+  return '<div class="fbox'+(done?' on':'')+(curFloorSlot()===slot?' cur':'')+'" onclick="toggleOppPrep(\''+itemId+'\',\''+slot+'\','+(!done)+')"><span class="ck">✓</span>'+label+'</div>';
+}
+function oppItemsHtml(){
+  return OPPREP.items.map(function(it){
+    var boxes,allDone;
+    if(it.common){ boxes=oppBox(it.id,'C','共通',it.c.done); allDone=it.c.done; }
+    else{ boxes=oppBox(it.id,'2F','2F',it.f2.done)+oppBox(it.id,'5F','5F',it.f5.done); allDone=it.f2.done&&it.f5.done; }
+    return '<div class="opp-item'+(allDone?' done-all':'')+'"><div class="lbl">'+esc(it.label)+'</div><div class="opp-floors">'+boxes+'</div></div>';
+  }).join('');
+}
+/* 開店前フェーズ全体＝現金セット(launcher)＋開店前やること(2F/5F同期) */
+function renderOpeningPre(){
+  var cashDone=!!HOME_STATUS.opening;
+  var prepTotal=0,prepDone=0;
+  if(OPPREP){ OPPREP.items.forEach(function(it){ if(it.common){prepTotal+=1; if(it.c.done)prepDone++;} else {prepTotal+=2; if(it.f2.done)prepDone++; if(it.f5.done)prepDone++;} }); }
+  var total=1+prepTotal, done=(cashDone?1:0)+prepDone, pct=total?Math.round(done/total*100):0;
+  var cd=''; var left=PH_OPEN_MIN-nowBizMin(); if(left>0&&left<=180)cd='開店まで '+left+'分';
+  var h='<div class="hv-prog"><div class="big">'+done+'<span style="font-size:14px;color:var(--dim)">/'+total+'</span></div>'
+    +'<div style="flex:1"><div class="lbl">開店前の準備</div><div class="hv-pbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div></div>'
+    +(cd?'<div class="hv-cd">'+cd+'</div>':'')+'</div>';
+  // 現金セット（レジ）＝別フロー・launcher
+  h+='<div class="hv-sec todo"><span class="st">💰 レジ現金</span></div>';
+  h+=hvChk({id:'opening',em:'🔓',t:'開店チェック（レジ現金セット）',s:'4袋の現金を数えてスタート金を確定',act:'openOpeningCheck()',status:'opening'});
+  // 開店前やること（2F/5F別・同期）
+  h+='<div class="opp-sec-h">🌅 開店前やること<span class="sub">2F / 5F 別・全端末で共有</span></div>';
+  if(!OPPREP){ if(IS_GAS){h+='<div class="hv-clear" style="padding:18px"><div class="s">読み込み中…</div></div>'; loadOpeningPrep();} else {h+='<div class="hv-clear" style="padding:18px"><div class="s">（ローカル）開店前チェックは本番のみ</div></div>';} }
+  else { h+=oppItemsHtml(); }
+  return h;
 }
 
 /* ============ HALL ============ */
@@ -3105,7 +3168,7 @@ function loadAll(){
     SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[]; CASTKUBUN=(r[8]&&typeof r[8]==='object')?r[8]:CASTKUBUN;
     applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
     BOOTED=true; renderAll();
-    if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();}
+    if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();}
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
 }
 
