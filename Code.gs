@@ -4110,17 +4110,20 @@ function scheduledJobs() {
   // 12:00 20時出勤の候補を黒服へ（14:00のシフト連絡までに前倒し依頼→シフト変更を反映できるよう）
   if (hhmm >= '12:00' && hhmm <= '12:09') once('REQ20_1200', sendReq20Candidates);
 
+  // 19:30 開店準備＝軍師の開店前チェックを各フロア完了せよ、の号令（旧11項目の羅列は廃止し軍師へ一本化）
   notif_('kinsen_mae', () => {
-    // 開店チェック未完了の場合はリマインド
+    push_(prop('GROUP_KUROFUKU'), MSG_OPENING_PREP_NUDGE);
+    // レジ現金の開店チェックが未提出なら別途リマインド
     if (!getOpeningCheckInit().locked) {
       push_(prop('GROUP_KUROFUKU'), '⚠️【開店チェック未提出】\nまだ開店チェックが提出されていません。\nIEYAS軍師の「🌅 開店チェック」から入力・送信してください。');
     }
-    push_(prop('GROUP_KUROFUKU'), ns_['kinsen_mae'].message || MSG_KINSEN_MAE);
     recordChecklistSent('KUROFUKU', '1930');
   });
 
+  // 19:45 開店前チェックに漏れがあれば、その項目だけを詳細リマインド（軍師の状態から自動判定）。スタッフ挨拶は従来どおり
   notif_('soganbansen', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['soganbansen'].message || MSG_SOGANBANSEN);
+    const miss = openingPrepMissing_();
+    if (miss.any) push_(prop('GROUP_KUROFUKU'), formatOpeningPrepReminder_(miss));
     recordChecklistSent('KUROFUKU', '1945');
     push_(prop('GROUP_STAFF'), ns_['soganbansen'].staffMessage || MSG_STAFF_OHAYO);
   });
@@ -9639,9 +9642,17 @@ const OPENING_PREP_ITEMS_ = [
   { id: 'bgm',        label: 'USEN BGMモニターON' },
   { id: 'seisou',     label: '店内清掃' },
   { id: 'temiyage',   label: '手土産準備' },
-  { id: 'yoyakuseki', label: '予約席セット' },
-  { id: 'hibarai',    label: '日払い・ドライバー日払い準備', common: true }
+  { id: 'yoyakuseki', label: '予約席セット' }
+  // ※「日払い・ドライバー日払い準備」は23時の作業なので開店前チェックからは除外（23:00通知で対応）
 ];
+const MSG_OPENING_PREP_NUDGE = [
+  '🌅【開店準備チェック】',
+  '',
+  '軍師の「黒服業務 → 🌅開店前」を開いて、',
+  '2F・5F それぞれ チェックを完了してください。',
+  '',
+  '未完了があれば 19:45 に項目を再通知します。'
+].join('\n');
 function openingPrepKey_() { return 'OPPREP_' + bizDateStr_(); }
 function readOpeningPrepState_() { try { return JSON.parse(prop(openingPrepKey_()) || '{}') || {}; } catch (e) { return {}; } }
 
@@ -9680,6 +9691,31 @@ function toggleOpeningPrep(payload) {
   } finally {
     try { lock.releaseLock(); } catch (e) {}
   }
+}
+
+// 開店前チェックの未完了を集計（LINE 19:45 詳細リマインド用）
+function openingPrepMissing_() {
+  const state = readOpeningPrepState_();
+  const byFloor = { '2F': [], '5F': [] };
+  const common = [];
+  OPENING_PREP_ITEMS_.forEach(it => {
+    const st = state[it.id] || {};
+    if (it.common) {
+      if (!(st.C && st.C.d)) common.push(it.label);
+    } else {
+      if (!(st['2F'] && st['2F'].d)) byFloor['2F'].push(it.label);
+      if (!(st['5F'] && st['5F'].d)) byFloor['5F'].push(it.label);
+    }
+  });
+  return { byFloor, common, any: byFloor['2F'].length + byFloor['5F'].length + common.length > 0 };
+}
+// 19:45 詳細リマインドの文面（未完了フロア・項目だけを列挙）
+function formatOpeningPrepReminder_(m) {
+  const lines = ['🔴【開店準備 未完了】19:45'];
+  ['2F', '5F'].forEach(f => { if (m.byFloor[f].length) { lines.push('', '▼' + f + '（未）'); m.byFloor[f].forEach(x => lines.push('・' + x)); } });
+  if (m.common.length) { lines.push('', '▼共通（未）'); m.common.forEach(x => lines.push('・' + x)); }
+  lines.push('', '軍師「黒服業務 → 🌅開店前」で完了させてください。');
+  return lines.join('\n');
 }
 
 const SAFE_WITHDRAWAL_HEADERS_ = ['日付', '時刻', '報告者', '対象フロア', '出金内訳', '出金金額', '出金後金庫残り内訳'];
