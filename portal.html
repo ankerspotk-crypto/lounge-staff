@@ -667,9 +667,11 @@ function homeMenu() {
   var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
   if (isAdmin) {
-    var admKeys = ['requests','shiftmgmt','notif','cashset'];
-    html += '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:20px 2px 10px">管理者メニュー</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + admKeys.map(menuBtn).join('') + '</div>';
+    // 管理者機能(申請管理/シフト管理/通知設定/軍師設定)は管理コンソール(Admin.html)へ集約済み。
+    // ポータルには管理者メニューを出さない。代理(キャスト選択)バーは別系統なので従来通り動く。
+    html += '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:20px 2px 8px">管理者の方へ</div>'
+      + '<div style="background:#111b2e;border:1px solid #1e3050;border-radius:12px;padding:14px;font-size:13px;color:#a0c0e0;line-height:1.7">'
+      + '申請管理・シフト管理・通知設定・軍師設定などの管理機能は<b style="color:#e8f0ff">管理コンソール</b>に集約しました。管理コンソールからご利用ください。</div>';
   }
   return html;
 }
