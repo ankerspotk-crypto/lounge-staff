@@ -5852,6 +5852,10 @@ function handlePortalApi_(e) {
     if (last >= 2) latest = sh.getRange(2, 1, last - 1, 1).getValues().map(x => x[0] instanceof Date ? Utilities.formatDate(x[0], TZ, 'yyyy-MM-dd') : String(x[0]).trim()).sort().reverse()[0];
     return out({ ok: true, gasToTrustLoginCode: loginCode, gasBlocked: loginCode !== 200, billRows: Math.max(0, last - 1), latestBillDate: latest, today: bizDateStr_(), salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}') });
   }
+  // 通知設定の現状ダンプ（読み取り専用・保存版があればそれ＝実際に送信中の設定）
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'notifdump') {
+    return out({ ok: true, customized: !!prop('NOTIF_SETTINGS'), settings: getNotifSettings_() });
+  }
   if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billverify') return out(portalGetMyBills_(e.parameter.cast || '', e.parameter.month || ''));
   if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billmonthbreakdown') {
     const ym = String(e.parameter.month || '').replace(/\//g, '-').slice(0, 7);
