@@ -491,11 +491,14 @@ function drawShift(){
   }).join('');
   var dateOpts=H.map(function(d){return '<option value="'+esc(d)+'">'+esc(d)+'</option>';}).join('');
 
+  var confirmBar='<div class="sec compact"><div class="sec-t">📅 シフト確定 → 黒服へLINE通知</div><div class="addbar"><select class="finput" id="sh-confirm-week">'+admWeekOpts()+'</select><button class="btn pri" onclick="admConfirmShift()">確定通知を送信</button></div><div class="hint" style="margin-top:6px">選んだ週の確定シフト（シフト表に入っている分）を黒服全員に個別LINEで通知します。</div></div>';
   setBody(
     '<div class="shift-top">'+
       '<div class="sec compact"><div class="sec-t">📩 承認リクエスト <span class="cnt">'+reqPend.length+'件</span><span class="sp" style="flex:1"></span>'+(reqPend.length?'<button class="btn dng sm" onclick="clearAllReq('+reqPend.length+')">🗑 全てクリア</button>':'')+'</div>'+reqHtml+'</div>'+
+      confirmBar+
       '<div class="sec compact"><div class="sec-t">➕ 派遣/体験を追加</div><div class="addbar"><input class="finput" id="as-name" placeholder="氏名"><select class="finput" id="as-role"><option value="派遣">派遣</option><option value="体験">体験</option></select><select class="finput" id="as-date">'+dateOpts+'</select><input class="finput" id="as-time" placeholder="時刻 例20:00"><button class="btn pri" onclick="addShiftStaff()">追加</button></div></div>'+
     '</div>'+
+    admShiftHistoryHtml()+
     '<div class="sec"><div class="sec-t">🗓 シフト表 <span class="sub">今日以降・セルをタップで編集</span></div><div class="chips shift-filter">'+rchips+'</div><div class="mtx-scroll"><table class="mtx sm">'+thead+tbody+'</table></div></div>'
   );
 }
@@ -538,6 +541,61 @@ function addShiftStaff(){
   var date=document.getElementById('as-date').value; var time=(document.getElementById('as-time').value||'').trim();
   if(!name){toast('氏名を入力',true);return;}
   api('addShiftStaff',{staffName:name,role:role,date:date,timeVal:time}).then(function(r){ if(res(r,'追加しました'))renderShift(); });
+}
+/* 📅 シフト確定→黒服へLINE通知（ポータルから集約） */
+function admWeekOpts(){
+  var today=new Date(),dow=today.getDay(),diff=(dow===0)?-6:(1-dow);
+  var mon=new Date(today); mon.setDate(today.getDate()+diff); mon.setHours(0,0,0,0);
+  var p2=function(n){return n<10?'0'+n:''+n;},o='';
+  for(var i=0;i<6;i++){
+    var s=new Date(mon); s.setDate(mon.getDate()+i*7); var e=new Date(s); e.setDate(s.getDate()+6);
+    var val=s.getFullYear()+'-'+p2(s.getMonth()+1)+'-'+p2(s.getDate());
+    var lab=(s.getMonth()+1)+'/'+s.getDate()+'〜'+(e.getMonth()+1)+'/'+e.getDate()+'週';
+    o+='<option value="'+val+'">'+lab+'</option>';
+  }
+  return o;
+}
+function admConfirmShift(){
+  var sel=document.getElementById('sh-confirm-week'); if(!sel)return;
+  var ws=sel.value, lab=sel.options[sel.selectedIndex].textContent;
+  if(!confirm(lab+'の確定シフトを黒服全員にLINEで個別通知します。よろしいですか？'))return;
+  api('notifyKurofukuShiftConfirmed',{weekStart:ws}).then(function(r){
+    if(r&&r.ok){ var m=(r.sent||0)+'名に通知しました。'; if(r.skipped&&r.skipped.length)m+='（スキップ '+r.skipped.length+'名）'; toast(m); }
+    else toast((r&&r.error)||'失敗',true);
+  }).catch(function(){toast('通信エラー',true);});
+}
+/* 🕓 出勤希望の履歴（確定後の再調整で「元々出したい子」を確認。全ステータスの申請を日付ごとに表示） */
+function admReqStatus(s){
+  if(s==='承諾')return{c:'#7ee0a0',t:'✓承諾済（出勤）'};
+  if(s==='休み'||s==='却下')return{c:'#ff9aa0',t:'✗休み'};
+  if(s==='クリア')return{c:'#8aabcc',t:'—クリア'};
+  return{c:'#e0d07e',t:'⏳未処理'};
+}
+function admMdKey(md){
+  var m=String(md||'').match(/^(\d{1,2})\/(\d{1,2})/); if(!m)return null;
+  var mo=+m[1],da=+m[2],now=new Date(),y=now.getFullYear();
+  if(mo<(now.getMonth()+1)-6)y+=1;
+  var wd=['日','月','火','水','木','金','土'][new Date(y,mo-1,da).getDay()];
+  return{key:y*10000+mo*100+da,label:mo+'/'+da+'（'+wd+'）'};
+}
+function admShiftHistoryHtml(){
+  var list=shiftReq||[]; if(!list.length)return '';
+  var groups={},order=[];
+  list.forEach(function(r){ var p=admMdKey(r.date),k=p?p.key:99999999;
+    if(!groups[k]){groups[k]={label:(p?p.label:(r.date||'?')),items:[]};order.push(k);} groups[k].items.push(r); });
+  order.sort(function(a,b){return a-b;});
+  var inner=order.map(function(k){
+    var g=groups[k];
+    var rows=g.items.map(function(x){
+      var st=admReqStatus(x.status);
+      return '<div class="lrow"><div class="main"><div class="nm">'+esc(x.name)+' <span style="font-size:11px;color:'+st.c+'">'+st.t+'</span></div>'
+        +'<div class="meta">'+esc(x.time||'')+(x.role?' ・'+esc(x.role):'')+(x.submittedAt?' ・申請'+esc(x.submittedAt):'')+'</div></div>'
+        +'<button class="btn ok sm" onclick="approveShift('+x.rowIdx+',\''+jstr(x.name)+'\',\''+jstr(x.date||'')+'\',\''+jstr(x.time||'')+'\',\'承諾\')">出勤に</button>'
+        +'<button class="btn dng sm" onclick="approveShift('+x.rowIdx+',\''+jstr(x.name)+'\',\''+jstr(x.date||'')+'\',\''+jstr(x.time||'')+'\',\'却下\')">休みに</button></div>';
+    }).join('');
+    return '<div style="font-size:12px;font-weight:700;color:#7ab0f0;margin:14px 0 6px;border-bottom:1px solid #2a3a55;padding-bottom:4px">📅 '+esc(g.label)+'</div>'+rows;
+  }).join('');
+  return '<details class="sec"><summary class="sec-t" style="cursor:pointer;list-style:revert">🕓 出勤希望の履歴 <span class="sub">確定後の欠員・変更で「元々出したい子」を確認して再調整</span></summary><div style="margin-top:8px">'+inner+'</div></details>';
 }
 
 /* ===== 🔔 通知設定 ===== */
