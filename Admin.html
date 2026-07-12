@@ -599,24 +599,41 @@ function admShiftHistoryHtml(){
 }
 
 /* ===== 🔔 通知設定 ===== */
-var notif=null;
+var notif=null, notifFilter='all';
 function renderNotif(){
   loading();
   api('getNotifSettings').then(function(r){ notif=(r&&r.settings)||{}; drawNotif(); }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
 }
+/* 営業日の時系列キー（0〜5時台は翌日ぶん＝27時制で末尾に回す）。時刻なし/自動は最後 */
+function notifBizMin_(t){ var p=String(t||'').split(':'); var h=parseInt(p[0],10); if(isNaN(h))return 999999; if(h<6)h+=24; return h*60+(parseInt(p[1],10)||0); }
+/* フィルタ切替や保存の前に、編集中の入力値をnotifへ退避（フィルタで消える行のロスト防止） */
+function syncNotifInputs(){ if(!notif)return; Object.keys(notif).forEach(function(k){ var ti=document.getElementById('nt-'+k); if(ti)notif[k].time=ti.value.trim(); var mi=document.getElementById('nm-'+k); if(mi)notif[k].message=mi.value; }); }
+function setNotifFilter(f){ syncNotifInputs(); notifFilter=f; drawNotif(); }
+function notifRow_(k){
+  var s=notif[k]; var auto=(s.type==='auto'); var on=(s.enabled!==false);
+  var tprefix=auto?'':'<span style="color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums;margin-right:9px">'+esc(s.time||'--:--')+'</span>';
+  var timeInput=auto?'<span class="badge kiosk">自動</span>':'<input class="tin" id="nt-'+k+'" value="'+esc(s.time||'')+'" style="width:64px">';
+  var msg=s.msgEditable?'<textarea class="ta" id="nm-'+k+'" rows="2" placeholder="（既定文）">'+esc(s.message||'')+'</textarea>':'';
+  return '<div class="lrow" style="align-items:flex-start"><div class="main"><div class="nm">'+tprefix+esc(s.label||k)+'</div><div class="meta">'+esc(s.group||'')+(s.desc?' ・'+esc(s.desc):'')+'</div>'+msg+'</div>'+timeInput+'<span class="sw'+(on?' on':'')+'" id="ne-'+k+'" onclick="toggleNotif(\''+jstr(k)+'\')">'+(on?'ON':'OFF')+'</span></div>';
+}
 function drawNotif(){
   var keys=Object.keys(notif);
-  var rows=keys.map(function(k){
-    var s=notif[k]; var auto=(s.type==='auto');
-    var timeInput=auto?'<span class="badge kiosk">自動</span>':'<input class="tin" id="nt-'+k+'" value="'+esc(s.time||'')+'" style="width:64px">';
-    var msg=s.msgEditable?'<textarea class="ta" id="nm-'+k+'" rows="2" placeholder="（既定文）">'+esc(s.message||'')+'</textarea>':'';
-    return '<div class="lrow" style="align-items:flex-start"><div class="main"><div class="nm">'+esc(s.label||k)+'</div><div class="meta">'+esc(s.group||'')+(s.desc?' ・'+esc(s.desc):'')+'</div>'+msg+'</div>'+timeInput+'<span class="sw'+(s.enabled!==false?' on':'')+'" id="ne-'+k+'" onclick="toggleNotif(\''+jstr(k)+'\')">'+(s.enabled!==false?'ON':'OFF')+'</span></div>';
-  }).join('');
-  setBody('<div class="toolbar"><span class="cnt">定時・自動通知の設定（変更後は「保存」）</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="saveNotif()">💾 保存</button></div>'+(rows||'<div class="empty">設定なし</div>'));
+  var onCount=keys.filter(function(k){return notif[k].enabled!==false;}).length, offCount=keys.length-onCount;
+  function pass(k){ var en=notif[k].enabled!==false; return notifFilter==='all'||(notifFilter==='on'&&en)||(notifFilter==='off'&&!en); }
+  var timed=keys.filter(function(k){return notif[k].type!=='auto'&&pass(k);}).sort(function(a,b){return notifBizMin_(notif[a].time)-notifBizMin_(notif[b].time);});
+  var autos=keys.filter(function(k){return notif[k].type==='auto'&&pass(k);}).sort(function(a,b){return String(notif[a].label||a).localeCompare(String(notif[b].label||b));});
+  function chip(f,label){ return '<div class="chip'+(notifFilter===f?' on':'')+'" onclick="setNotifFilter(\''+f+'\')">'+label+'</div>'; }
+  var filters='<div class="chips" style="margin-bottom:12px">'+chip('all','すべて '+keys.length)+chip('on','🟢 ON '+onCount)+chip('off','⚪️ OFF '+offCount)+'</div>';
+  var gh=function(t){return '<div style="font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.3px;margin:16px 2px 9px">'+t+'</div>';};
+  var html='';
+  if(timed.length) html+=gh('⏰ 定時通知（営業日の時系列）')+timed.map(notifRow_).join('');
+  if(autos.length) html+=gh('⚙️ 自動トリガー（条件で発火）')+autos.map(notifRow_).join('');
+  if(!html) html='<div class="empty">該当する通知はありません</div>';
+  setBody('<div class="toolbar"><span class="cnt">定時・自動通知の設定（変更後は「保存」）</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="saveNotif()">💾 保存</button></div>'+filters+html);
 }
-function toggleNotif(k){ notif[k].enabled=!(notif[k].enabled!==false); var el=document.getElementById('ne-'+k); el.classList.toggle('on',notif[k].enabled); el.textContent=notif[k].enabled?'ON':'OFF'; }
+function toggleNotif(k){ notif[k].enabled=!(notif[k].enabled!==false); var el=document.getElementById('ne-'+k); if(el){el.classList.toggle('on',notif[k].enabled); el.textContent=notif[k].enabled?'ON':'OFF';} if(notifFilter!=='all')drawNotif(); }
 function saveNotif(){
-  Object.keys(notif).forEach(function(k){ var ti=document.getElementById('nt-'+k); if(ti)notif[k].time=ti.value.trim(); var mi=document.getElementById('nm-'+k); if(mi)notif[k].message=mi.value; });
+  syncNotifInputs();
   api('saveNotifSettings',{settings:notif}).then(function(r){ res(r,'通知設定を保存しました'); });
 }
 
