@@ -194,6 +194,8 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-status.ok  { color: #88ffaa; }
 .req-status.off { color: #ff8866; }
 .req-empty { text-align: center; color: #6a8ab0; padding: 40px 0; font-size: 14px; }
+.reqhist-date { font-size: 13px; font-weight: 700; color: #7ab0f0; margin: 18px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #1e3050; }
+.reqhist-date:first-of-type { margin-top: 4px; }
 .req-filter { display: flex; gap: 6px; margin-bottom: 14px; }
 .req-filter-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #1e3050; background: #141d30; color: #8aabcc; font-size: 13px; cursor: pointer; }
 .req-filter-btn.active { background: #0f2040; border-color: #2a5aaa; color: #7ab0f0; }
@@ -2402,7 +2404,11 @@ function calHtml() {
     var isKyukin = sel === '欠勤' || (!sel && existShift === '休み') || (!sel && !existShift && isPending === '欠勤');
     var role = portalData && portalData.staffRole;
     var isKurofukuRole = role === '黒服社員' || role === '黒服バイト';
-    var isConfirmed = portalData && portalData.confirmedShifts && portalData.confirmedShifts.indexOf(key) !== -1;
+    // 黒服はシフト表/承諾済みに載っている(=existShift)時点で確定＝ピッカーの「欠勤申請」表示条件と一致させる。
+    // 承認待ち(申請中)は existShift ではなく pendingShifts 側に入るので、両者は綺麗に分離される。
+    // （旧: confirmedShifts[SHIFT_CONFIRMED_] は「シフト確定通知」を押した日のみ＝押し忘れると確定日も申請中表示になっていた）
+    var isConfirmed = (isKurofukuRole && existShift && !isKyukin)
+      || (portalData && portalData.confirmedShifts && portalData.confirmedShifts.indexOf(key) !== -1);
     // 黒服のみ「申請中(未確定)」と「確定済み」を区別する。それ以外の役職は従来通りscheduled扱い
     var notYetConfirmed = isKurofukuRole && existShift && !isKyukin && !isConfirmed;
     var dkey = viewYear+'-'+('0'+(viewMonth+1)).slice(-2)+'-'+('0'+d).slice(-2);
@@ -2737,7 +2743,7 @@ function loadRequests() {
 function renderRequests(list) {
   var filters = [
     { key: 'pending', label: '未処理' },
-    { key: 'all',     label: 'すべて' },
+    { key: 'all',     label: 'すべて（履歴）' },
   ];
   var filterHtml = '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
     + buildWeekOptionsHtml_() + '</select>'
@@ -2750,41 +2756,101 @@ function renderRequests(list) {
       }).join('')
     + '</div>';
 
-  var filtered = list.filter(function(r) {
-    return reqFilter === 'all' || r.status === 'pending';
-  });
-
-  if (filtered.length === 0) {
-    setContent(filterHtml + '<div class="req-empty">'
-      + (reqFilter === 'pending' ? '未処理の申請はありません' : '申請がありません') + '</div>');
+  if (reqFilter !== 'all') {
+    // 未処理（承認待ち）＝アクションキュー。承諾/休みを即決する
+    var pend = list.filter(function(r) { return r.status === 'pending'; });
+    if (pend.length === 0) {
+      setContent(filterHtml + '<div class="req-empty">未処理の申請はありません</div>');
+      return;
+    }
+    var ph = filterHtml;
+    pend.forEach(function(r) { ph += reqCardHtml_(r, false); });
+    setContent(ph);
     return;
   }
 
-  var html = filterHtml;
-  filtered.forEach(function(r) {
-    var isDone = r.status !== 'pending';
-    html += '<div class="req-card' + (r.status === '承諾' ? ' approved' : r.status === '休み' ? ' rejected' : '') + '">'
-      + '<div class="req-head">'
-      + '<span class="req-name">' + esc(r.name) + '</span>'
-      + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
-      + '</div>'
-      + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time)
-      + (r.role ? '　👤 ' + esc(r.role) : '') + '</div>';
-
-    if (isDone) {
-      html += '<div class="req-status ' + (r.status === '承諾' ? 'ok' : 'off') + '">'
-        + (r.status === '承諾' ? '✓ 承諾済み' : '✗ 休み決定') + '</div>';
-    } else {
-      html += '<div class="req-actions">'
-        + '<button class="req-btn approve" onclick="processReq(event,' + r.rowIdx + ',\''
-          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 承諾</button>'
-        + '<button class="req-btn reject" onclick="processReq(event,' + r.rowIdx + ',\''
-          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休み</button>'
-        + '</div>';
-    }
-    html += '</div>';
+  // すべて（履歴）＝黒服の出勤希望を日付ごとにまとめて表示。
+  // 一旦確定したあとの欠員・シフト変更時に「元々出勤希望を出していた子」を確認して再調整するため。
+  if (list.length === 0) {
+    setContent(filterHtml + '<div class="req-empty">申請履歴はありません</div>');
+    return;
+  }
+  var groups = {}, order = [];
+  list.forEach(function(r) {
+    var p = mdParse_(r.date);
+    var gkey = p ? p.key : 99999999;
+    if (!groups[gkey]) { groups[gkey] = { label: (p ? p.label : r.date), items: [] }; order.push(gkey); }
+    groups[gkey].items.push(r);
   });
-  setContent(html);
+  order.sort(function(a, b) { return a - b; });
+  var hh = filterHtml
+    + '<div style="font-size:12px;color:#7a9cc8;margin:2px 0 6px;line-height:1.6">'
+    + '黒服の出勤希望を日付ごとに表示。確定後の欠員・変更時に「元々出したい子」を確認して調整できます。</div>';
+  order.forEach(function(gkey) {
+    var g = groups[gkey];
+    hh += '<div class="reqhist-date">📅 ' + esc(g.label) + '</div>';
+    g.items.forEach(function(r) { hh += reqCardHtml_(r, true); });
+  });
+  setContent(hh);
+}
+
+// "M/d" を並べ替え用キー＋曜日付きラベルに変換（年は現在基準で推定、半年以上前の月は翌年扱い＝年跨ぎ対応）
+function mdParse_(md) {
+  var m = String(md).match(/^(\d{1,2})\/(\d{1,2})/);
+  if (!m) return null;
+  var mo = parseInt(m[1], 10), da = parseInt(m[2], 10);
+  var now = new Date();
+  var yr = now.getFullYear();
+  if (mo < (now.getMonth() + 1) - 6) yr += 1;
+  var dt = new Date(yr, mo - 1, da);
+  var wd = ['日','月','火','水','木','金','土'][dt.getDay()];
+  return { key: yr * 10000 + mo * 100 + da, label: mo + '/' + da + '（' + wd + '）' };
+}
+
+function reqStatusInfo_(s) {
+  if (s === '承諾') return { cls: 'ok',  txt: '✓ 承諾済み（出勤）' };
+  if (s === '休み' || s === '却下') return { cls: 'off', txt: '✗ 休み決定' };
+  if (s === 'クリア') return { cls: 'off', txt: '— クリア済み' };
+  return { cls: '', txt: '⏳ 未処理' };
+}
+
+function reqCardHtml_(r, isHistory) {
+  var st = reqStatusInfo_(r.status);
+  var cardCls = 'req-card' + (r.status === '承諾' ? ' approved'
+    : (r.status === '休み' || r.status === '却下') ? ' rejected' : '');
+  var h = '<div class="' + cardCls + '">'
+    + '<div class="req-head">'
+    + '<span class="req-name">' + esc(r.name) + '</span>'
+    + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
+    + '</div>'
+    + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time)
+    + (r.role ? '　👤 ' + esc(r.role) : '') + '</div>';
+
+  if (!isHistory) {
+    h += '<div class="req-actions">'
+      + '<button class="req-btn approve" onclick="processReq(event,' + r.rowIdx + ',\''
+        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 承諾</button>'
+      + '<button class="req-btn reject" onclick="processReq(event,' + r.rowIdx + ',\''
+        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休み</button>'
+      + '</div>';
+  } else {
+    // 履歴ビュー：現在の状態を明示しつつ、再調整（出勤に戻す／休みにする）を確認付きで可能に
+    h += '<div class="req-status ' + st.cls + '">' + st.txt + '</div>'
+      + '<div class="req-actions">'
+      + '<button class="req-btn approve" onclick="readjustReq(event,' + r.rowIdx + ',\''
+        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 出勤に</button>'
+      + '<button class="req-btn reject" onclick="readjustReq(event,' + r.rowIdx + ',\''
+        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休みに</button>'
+      + '</div>';
+  }
+  return h + '</div>';
+}
+
+// 履歴からの再調整（確定後のシフト変更）。誤操作防止で確認を挟んでから承諾/休みを反映
+function readjustReq(ev, rowIdx, name, date, time, decision) {
+  var label = decision === '承諾' ? '出勤（承諾）' : '休み';
+  if (!confirm(name + 'さんの ' + date + ' を「' + label + '」に変更します。よろしいですか？')) return;
+  processReq(ev, rowIdx, name, date, time, decision);
 }
 
 function setReqFilter(f) {
