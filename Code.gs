@@ -696,7 +696,7 @@ function getNotifSettings_() {
     okuri_summary: { label: '送りサマリー',              time: '22:30', enabled: true, group: '黒服',           days: D,     msgEditable: false, defaultMsg: null },
     okuri_confirm: { label: '送り確認',                  time: '23:30', enabled: true, group: '黒服',           days: D,     msgEditable: false, defaultMsg: null },
     seki_check:    { label: '各席チェック',              time: '23:45', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: '各席チェックを出してください' },
-    shoumei:       { label: '照明消灯',                  time: '00:15', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: '2階及び5階ラウンジ入口照明を消灯してください' },
+    shoumei:       { label: '照明消灯',                  time: '00:15', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: '【24:30までに消灯】\n・外看板／外照明\n・2階／5階ラウンジ入口照明' },
     kinsen_go:     { label: '現金チェック（終了）+退勤', time: '00:30', enabled: true, group: '黒服・スタッフ', days: D,     msgEditable: true,  defaultMsg: MSG_KINSEN_GO, staffMsgEditable: true, defaultStaffMsg: MSG_TAIKIN },
     oshibori:      { label: 'おしぼり発注（木・日）',   time: '00:50', enabled: true, group: '黒服',           days: [4,7], msgEditable: true,  defaultMsg: '今日の閉店後おしぼりを通路に出して発注数に紙を置いておくこと' },
     // 自動トリガー・自動応答
@@ -4155,7 +4155,7 @@ function scheduledJobs() {
   });
 
   notif_('shoumei', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['shoumei'].message || '2階及び5階ラウンジ入口照明を消灯してください');
+    push_(prop('GROUP_KUROFUKU'), ns_['shoumei'].message || '【24:30までに消灯】\n・外看板／外照明\n・2階／5階ラウンジ入口照明');
   });
 
   notif_('kinsen_go', () => {
