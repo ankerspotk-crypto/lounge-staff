@@ -152,6 +152,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab" data-t="matrix" onclick="switchTab('matrix')">🔐 権限</button>
     <button class="tab" data-t="shift" onclick="switchTab('shift')">🗓 シフト</button>
     <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
+    <button class="tab" data-t="checklist" onclick="switchTab('checklist')">✅ チェック</button>
     <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
     <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
     <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
@@ -271,7 +272,7 @@ function pollAdminAuth(token){
 function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
 function render(){
   document.getElementById('tabs').style.display='flex';
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,checklist:renderChecklist,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -635,6 +636,55 @@ function toggleNotif(k){ notif[k].enabled=!(notif[k].enabled!==false); var el=do
 function saveNotif(){
   syncNotifInputs();
   api('saveNotifSettings',{settings:notif}).then(function(r){ res(r,'通知設定を保存しました'); });
+}
+
+/* ===== ✅ チェックリスト（開店前・閉店後のやること編集） ===== */
+var chk=null;
+function newChkId(){ return 'c'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
+function renderChecklist(){
+  loading();
+  api('getChecklistConfig').then(function(r){ chk=(r&&r.config)||{opening:[],closing:[]}; chk.opening=chk.opening||[]; chk.closing=chk.closing||[]; drawChecklist(); }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+}
+function chkMoveBtns(list,i,n){
+  var b='padding:6px 10px;min-width:0;font-size:13px';
+  return '<div style="display:flex;gap:4px;flex:none">'
+    +'<button class="btn" style="'+b+'" '+(i===0?'disabled':'')+' onclick="chkMove(\''+list+'\','+i+',-1)">↑</button>'
+    +'<button class="btn" style="'+b+'" '+(i===n-1?'disabled':'')+' onclick="chkMove(\''+list+'\','+i+',1)">↓</button>'
+    +'<button class="btn" style="'+b+';color:#ff9a9a;border-color:#5a2226" onclick="chkRemove(\''+list+'\','+i+')">✕</button></div>';
+}
+function chkOpenRow(it,i,n){
+  return '<div class="lrow" style="align-items:center;gap:8px">'
+    +'<div class="main"><input class="finput" style="width:100%" value="'+esc(it.label)+'" placeholder="項目名" oninput="chk.opening['+i+'].label=this.value"></div>'
+    +'<span class="chip'+(it.common?'':' on')+'" style="cursor:pointer;flex:none;white-space:nowrap" onclick="chkToggleFloor('+i+')">'+(it.common?'共通':'2F/5F別')+'</span>'
+    +chkMoveBtns('opening',i,n)+'</div>';
+}
+function chkCloseRow(it,i,n){
+  return '<div class="lrow" style="align-items:flex-start;gap:8px">'
+    +'<div class="main"><input class="finput" style="width:100%;margin-bottom:5px" value="'+esc(it.label)+'" placeholder="タスク名" oninput="chk.closing['+i+'].label=this.value">'
+    +'<input class="finput" style="width:100%;font-size:12px" value="'+esc(it.sub||'')+'" placeholder="補足（任意・例: 24:30までに）" oninput="chk.closing['+i+'].sub=this.value"></div>'
+    +chkMoveBtns('closing',i,n)+'</div>';
+}
+function chkToggleFloor(i){ chk.opening[i].common=!chk.opening[i].common; drawChecklist(); }
+function chkMove(list,i,dir){ var a=chk[list]; var j=i+dir; if(j<0||j>=a.length)return; var t=a[i];a[i]=a[j];a[j]=t; drawChecklist(); }
+function chkRemove(list,i){ chk[list].splice(i,1); drawChecklist(); }
+function chkAddOpen(){ chk.opening.push({id:newChkId(),label:'',common:false}); drawChecklist(); }
+function chkAddClose(){ chk.closing.push({id:newChkId(),label:'',sub:''}); drawChecklist(); }
+function drawChecklist(){
+  var op=chk.opening.map(function(it,i){return chkOpenRow(it,i,chk.opening.length);}).join('')||'<div class="empty" style="padding:10px">項目なし</div>';
+  var cl=chk.closing.map(function(it,i){return chkCloseRow(it,i,chk.closing.length);}).join('')||'<div class="empty" style="padding:10px">追加タスクなし</div>';
+  setBody(
+    '<div class="toolbar"><span class="cnt">開店前・閉店後の「やること」を編集（変更後は「保存」）</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="saveChecklist()">💾 保存</button></div>'
+    +'<div class="sec"><div class="sec-t">🌅 開店前やること <span style="font-weight:400;color:var(--dim);font-size:12px">2F/5F別 or 共通・全端末同期</span></div>'
+      +op+'<button class="btn" style="margin-top:8px" onclick="chkAddOpen()">＋ 項目を追加</button></div>'
+    +'<div class="sec"><div class="sec-t">🌙 閉店後の追加タスク <span style="font-weight:400;color:var(--dim);font-size:12px">店全体で1つ・チェックオフ</span></div>'
+      +cl+'<button class="btn" style="margin-top:8px" onclick="chkAddClose()">＋ タスクを追加</button>'
+      +'<div class="hint" style="margin-top:8px">「現金締め・送り・金庫・伝票」は軍師のシステム機能なので固定です（ここには出ません）。</div></div>'
+  );
+}
+function saveChecklist(){
+  var op=chk.opening.filter(function(x){return String(x.label||'').trim();});
+  var cl=chk.closing.filter(function(x){return String(x.label||'').trim();});
+  api('saveChecklistConfig',{config:{opening:op,closing:cl}}).then(function(r){ res(r,'チェックリストを保存しました'); });
 }
 
 /* ===== 💰 給与・ランキング ===== */
