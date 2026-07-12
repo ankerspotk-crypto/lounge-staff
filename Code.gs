@@ -224,7 +224,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -348,6 +348,22 @@ function handleApiRequest_(body) {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return { ok: true, settings: getNotifSettings_() };
+  }
+  if (body.action === 'getChecklistConfig') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return { ok: true, config: getChecklistConfig_() };
+  }
+  if (body.action === 'saveChecklistConfig') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    const c = body.config || {};
+    const cleanOpen = (c.opening || []).filter(x => x && x.id && String(x.label || '').trim())
+      .map(x => ({ id: String(x.id), label: String(x.label).trim(), common: !!x.common }));
+    const cleanClose = (c.closing || []).filter(x => x && x.id && String(x.label || '').trim())
+      .map(x => ({ id: String(x.id), label: String(x.label).trim(), sub: String(x.sub || '').trim() }));
+    PropertiesService.getScriptProperties().setProperty('CHECKLIST_CONFIG', JSON.stringify({ opening: cleanOpen, closing: cleanClose }));
+    return { ok: true };
   }
   if (body.action === 'saveNotifSettings') {
     const adminName = getStaffName(body.userId);
@@ -7215,7 +7231,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG'];
   const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
@@ -9633,18 +9649,41 @@ function submitOpeningCheck(payload) {
 //   スロット: フロア別項目は '2F'/'5F'、共通項目は 'C'。common:true は店全体で1回。
 //   共通/フロア別の振り分けはこの配列だけで変更可（idはフロントと共有）。
 // ============================================================
-const OPENING_PREP_ITEMS_ = [
-  { id: 'kaidashi',   label: '買出し' },
-  { id: 'zenjitsu',   label: '前日残作業' },
-  { id: 'yons',       label: '運営からの4Sチェックに基づいた作業' },
-  { id: 'oshibori',   label: 'おしぼりウォーマーON' },
-  { id: 'nouhin',     label: '納品在庫ノート入力' },
-  { id: 'bgm',        label: 'USEN BGMモニターON' },
-  { id: 'seisou',     label: '店内清掃' },
-  { id: 'temiyage',   label: '手土産準備' },
-  { id: 'yoyakuseki', label: '予約席セット' }
-  // ※「日払い・ドライバー日払い準備」は23時の作業なので開店前チェックからは除外（23:00通知で対応）
-];
+// チェックリスト項目の既定値。コンソールで編集すると CHECKLIST_CONFIG(ScriptProperty)が優先される。
+// opening=開店前(2F/5F別 or common)・全端末同期／closing=閉店後の追加タスク(店全体1つ・チェックオフ)。
+// 閉店の「現金締め/送り/金庫/伝票」はシステム機能なのでここでは扱わない(フロント固定)。
+const CHECKLIST_DEFAULTS_ = {
+  opening: [
+    { id: 'kaidashi',   label: '買出し' },
+    { id: 'zenjitsu',   label: '前日残作業' },
+    { id: 'yons',       label: '運営からの4Sチェックに基づいた作業' },
+    { id: 'oshibori',   label: 'おしぼりウォーマーON' },
+    { id: 'nouhin',     label: '納品在庫ノート入力' },
+    { id: 'bgm',        label: 'USEN BGMモニターON' },
+    { id: 'seisou',     label: '店内清掃' },
+    { id: 'temiyage',   label: '手土産準備' },
+    { id: 'yoyakuseki', label: '予約席セット' }
+    // ※「日払い・ドライバー日払い準備」は23時の作業なので除外（23:00通知で対応）
+  ],
+  closing: [
+    { id: 'kanban_shoumei', label: '外看板・照明の消灯', sub: '24時閉店後〜24:30までに消灯' }
+  ]
+};
+// 保存済み設定（あれば）を正規化して返す。無ければ既定値。
+function getChecklistConfig_() {
+  let cfg = null;
+  try { cfg = JSON.parse(prop('CHECKLIST_CONFIG') || 'null'); } catch (e) { cfg = null; }
+  if (!cfg || !Array.isArray(cfg.opening) || !Array.isArray(cfg.closing)) return CHECKLIST_DEFAULTS_;
+  const cleanOpen = (cfg.opening || []).filter(x => x && x.id && String(x.label || '').trim())
+    .map(x => ({ id: String(x.id), label: String(x.label).trim(), common: !!x.common }));
+  const cleanClose = (cfg.closing || []).filter(x => x && x.id && String(x.label || '').trim())
+    .map(x => ({ id: String(x.id), label: String(x.label).trim(), sub: String(x.sub || '').trim() }));
+  // 全部消してしまうと開店前チェックが空になるので、openingが空なら既定に戻す
+  return { opening: cleanOpen.length ? cleanOpen : CHECKLIST_DEFAULTS_.opening, closing: cleanClose };
+}
+function openingPrepItems_() { return getChecklistConfig_().opening; }
+// 読み取りAPI（gunshi＝閉店タスク取得用・GUNSHI_API_FNS）
+function getChecklistConfig() { return getChecklistConfig_(); }
 const MSG_OPENING_PREP_NUDGE = [
   '🌅【開店準備チェック】',
   '',
@@ -9660,7 +9699,7 @@ function readOpeningPrepState_() { try { return JSON.parse(prop(openingPrepKey_(
 function getOpeningPrepInit() {
   const state = readOpeningPrepState_();
   const slot = (id, s) => { const v = (state[id] || {})[s]; return { done: !!(v && v.d), by: v ? v.by : '', at: v ? v.at : '' }; };
-  const items = OPENING_PREP_ITEMS_.map(it => it.common
+  const items = openingPrepItems_().map(it => it.common
     ? { id: it.id, label: it.label, common: true, c: slot(it.id, 'C') }
     : { id: it.id, label: it.label, common: false, f2: slot(it.id, '2F'), f5: slot(it.id, '5F') });
   return { dateKey: bizDateStr_(), items };
@@ -9675,7 +9714,7 @@ function toggleOpeningPrep(payload) {
     const s = String(payload.floor || '');   // '2F' | '5F' | 'C'
     const done = !!payload.done;
     const by = String(payload.reporterName || '').trim();
-    const cfg = OPENING_PREP_ITEMS_.find(i => i.id === itemId);
+    const cfg = openingPrepItems_().find(i => i.id === itemId);
     if (!cfg) return { ok: false, error: '不明な項目です' };
     const okSlot = cfg.common ? (s === 'C') : (s === '2F' || s === '5F');
     if (!okSlot) return { ok: false, error: 'フロア指定が不正です' };
@@ -9698,7 +9737,7 @@ function openingPrepMissing_() {
   const state = readOpeningPrepState_();
   const byFloor = { '2F': [], '5F': [] };
   const common = [];
-  OPENING_PREP_ITEMS_.forEach(it => {
+  openingPrepItems_().forEach(it => {
     const st = state[it.id] || {};
     if (it.common) {
       if (!(st.C && st.C.d)) common.push(it.label);
