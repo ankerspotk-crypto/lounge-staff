@@ -768,12 +768,11 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
     <button class="dbtn" onclick="shiftDay(1)">›</button>
   </div>
   <div class="vtoggle" id="vtoggle">
-    <button id="vt-home" class="on" onclick="setViewMode('home')">📋 今</button>
-    <button id="vt-dash" onclick="setViewMode('dash')">🪑 現場</button>
+    <button id="vt-home" class="on" onclick="setViewMode('home')">👔 黒服業務</button>
+    <button id="vt-dash" onclick="setViewMode('dash')">🪑 ホール状況</button>
   </div>
   <div class="spacer"></div>
   <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
-  <button class="menu-btn" onclick="openMenu()">☰ メニュー</button>
   <button class="menu-btn reload" onclick="hardReload()" title="表示がおかしい時はここ">🔄 再読込</button>
   <div class="clock" id="clock"><b>--:--</b><br>更新 --:--</div>
   <div class="who" onclick="doLogout()">
@@ -1156,11 +1155,20 @@ function renderHomeChecklist(phase){
   }
   return h;
 }
+/* 業務メニュー（旧☰メニューを黒服業務に集約・全フェーズ常時表示） */
+function hvToolsSection(){
+  return '<div class="hv-sec q" style="margin-top:24px"><span class="st">🗂 業務メニュー</span></div>'
+    +'<div class="hv-tools">'+MENU_TILES.map(function(g){
+      return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
+        return '<div class="menu-tile" onclick="'+it.act+'"><span class="mt-ic">'+it.ic+'</span><span class="mt-t">'+esc(it.t)+'</span></div>';
+      }).join('')+'</div>';
+    }).join('')+'</div>';
+}
 function renderHome(){
   if(viewMode!=='home')return;
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
-  w.innerHTML=hvPhaseBar(phase)+((phase==='mid')?renderHomeMid():renderHomeChecklist(phase));
+  w.innerHTML=hvPhaseBar(phase)+((phase==='mid')?renderHomeMid():renderHomeChecklist(phase))+hvToolsSection();
 }
 /* 開店/閉店チェックの提出状況を取得（完了バッジ用・非ブロッキング） */
 function loadHomeStatus(){
@@ -1964,7 +1972,7 @@ var MENU_TILES=[
     {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"}
   ]},
   {group:'管理', items:[
-    {ic:'👤', t:'顧客管理',           act:"menuCustomer()"},
+    {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
