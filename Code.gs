@@ -224,7 +224,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -9621,6 +9621,64 @@ function submitOpeningCheck(payload) {
   } catch (e) {
     console.error('submitOpeningCheck error:', e);
     return { ok: false, error: String(e) };
+  }
+}
+
+// ============================================================
+// 開店前チェック（黒服業務・2F/5F別・全端末同期）＝旧19:30 LINEリストを軍師へ移行
+//   状態は営業日ごとのScriptProperty(OPPREP_<date>)にJSONで保持＝日次で自然リセット。
+//   スロット: フロア別項目は '2F'/'5F'、共通項目は 'C'。common:true は店全体で1回。
+//   共通/フロア別の振り分けはこの配列だけで変更可（idはフロントと共有）。
+// ============================================================
+const OPENING_PREP_ITEMS_ = [
+  { id: 'kaidashi',   label: '買出し' },
+  { id: 'zenjitsu',   label: '前日残作業' },
+  { id: 'yons',       label: '運営からの4Sチェックに基づいた作業' },
+  { id: 'oshibori',   label: 'おしぼりウォーマーON' },
+  { id: 'nouhin',     label: '納品在庫ノート入力' },
+  { id: 'bgm',        label: 'USEN BGMモニターON' },
+  { id: 'seisou',     label: '店内清掃' },
+  { id: 'temiyage',   label: '手土産準備' },
+  { id: 'yoyakuseki', label: '予約席セット' },
+  { id: 'hibarai',    label: '日払い・ドライバー日払い準備', common: true }
+];
+function openingPrepKey_() { return 'OPPREP_' + bizDateStr_(); }
+function readOpeningPrepState_() { try { return JSON.parse(prop(openingPrepKey_()) || '{}') || {}; } catch (e) { return {}; } }
+
+// 開店前チェックの現状（フロント描画用・GUNSHI_API_FNS）
+function getOpeningPrepInit() {
+  const state = readOpeningPrepState_();
+  const slot = (id, s) => { const v = (state[id] || {})[s]; return { done: !!(v && v.d), by: v ? v.by : '', at: v ? v.at : '' }; };
+  const items = OPENING_PREP_ITEMS_.map(it => it.common
+    ? { id: it.id, label: it.label, common: true, c: slot(it.id, 'C') }
+    : { id: it.id, label: it.label, common: false, f2: slot(it.id, '2F'), f5: slot(it.id, '5F') });
+  return { dateKey: bizDateStr_(), items };
+}
+
+// 開店前チェックの1項目×フロアをON/OFF（全端末同期・GUNSHI_API_FNS）
+function toggleOpeningPrep(payload) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(8000);
+    const itemId = String(payload.itemId || '');
+    const s = String(payload.floor || '');   // '2F' | '5F' | 'C'
+    const done = !!payload.done;
+    const by = String(payload.reporterName || '').trim();
+    const cfg = OPENING_PREP_ITEMS_.find(i => i.id === itemId);
+    if (!cfg) return { ok: false, error: '不明な項目です' };
+    const okSlot = cfg.common ? (s === 'C') : (s === '2F' || s === '5F');
+    if (!okSlot) return { ok: false, error: 'フロア指定が不正です' };
+    const key = openingPrepKey_();
+    const state = readOpeningPrepState_();
+    if (!state[itemId]) state[itemId] = {};
+    if (done) state[itemId][s] = { d: 1, by: by, at: Utilities.formatDate(new Date(), TZ, 'HH:mm') };
+    else delete state[itemId][s];
+    setProp(key, JSON.stringify(state));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
   }
 }
 
