@@ -5494,23 +5494,27 @@ function getShiftRequests_() {
   const rows = sh.getDataRange().getValues();
   const list = [];
   for (let i = 1; i < rows.length; i++) {
-    const status = String(rows[i][4]) || 'pending';
-    if (status !== 'pending') continue;
     const role = String(rows[i][6]) || 'キャスト';
-    if (role !== '黒服社員' && role !== '黒服バイト') continue; // 黒服のみ承認制
+    if (role !== '黒服社員' && role !== '黒服バイト') continue; // 黒服のみ承認制＝黒服の申請だけ残す
+    // pending 以外(承諾/休み/クリア)も返す。確定後のシフト変更で「元々出勤希望を出していた子」を
+    // 履歴として辿れるようにするため（フロントの「すべて（履歴）」タブで日付ごとに表示）。
+    const status = String(rows[i][4]) || 'pending';
     const submittedAt = rows[i][0] instanceof Date
       ? Utilities.formatDate(rows[i][0], TZ, 'M/d HH:mm')
       : String(rows[i][0]);
     const dateCell = rows[i][2];
     const dateStr = (dateCell instanceof Date) ? Utilities.formatDate(dateCell, TZ, 'M/d') : String(dateCell);
+    const procCell = rows[i][5];
+    const processedAt = (procCell instanceof Date) ? Utilities.formatDate(procCell, TZ, 'M/d HH:mm') : String(procCell || '');
     list.push({
       rowIdx: i + 1,
       submittedAt,
+      processedAt,
       name:   String(rows[i][1]),
       date:   dateStr,
       time:   String(rows[i][3]),
       status,
-      role:   String(rows[i][6]) || 'キャスト',
+      role,
     });
   }
   return list.reverse();
