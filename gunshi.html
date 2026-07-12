@@ -1071,7 +1071,6 @@ var HOME_LISTS={
     {id:'castchk',em:'👥',t:'出勤キャストの確認',            s:'当日シフト・早上がり・体験',   act:"gotoDash('shift')"}
   ],
   post:[
-    {id:'kanban_shoumei',em:'🪧',t:'外看板・照明の消灯',s:'24時閉店後〜24:30までに消灯',act:"toggleHomeCheck('kanban_shoumei')"},
     {id:'cash',  em:'🌙',t:'閉店チェック（現金締め）',s:'売上入力・伝票・4袋カウント・自動照合',act:'openCashCheck()',status:'cash'},
     {id:'okuri', em:'🚗',t:'送り確認',            s:'本日の送りを確定',            act:'openOkuriManager()'},
     {id:'safe',  em:'🔐',t:'金庫へ収納・出金確認',  s:'残金の金庫収納・臨時出金',     act:'openSafeWithdrawal()'},
@@ -1087,7 +1086,7 @@ function setViewMode(m){
   if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash');
   renderAll();
 }
-function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();}
+function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();if(p==='post')loadChecklistConfig();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
 
 function hvCard(x,cls,nav){
@@ -1152,7 +1151,12 @@ function renderHomeMid(){
   return h;
 }
 function renderHomeChecklist(phase){
-  var list=HOME_LISTS[phase]||[];
+  var list=(HOME_LISTS[phase]||[]).slice();
+  if(phase==='post'&&CLOSING_TASKS==null&&IS_GAS)loadChecklistConfig();
+  // 閉店の追加タスク（コンソール編集・設定から）＝チェックオフ式。システム機能4つの後ろに並べる
+  if(phase==='post'&&CLOSING_TASKS&&CLOSING_TASKS.length){
+    CLOSING_TASKS.forEach(function(t){ list.push({id:t.id,em:'🪧',t:t.label,s:t.sub||'',act:"toggleHomeCheck('"+t.id+"')"}); });
+  }
   var doneN=list.filter(homeItemDone).length, total=list.length;
   var pct=total?Math.round(doneN/total*100):0;
   var label=phase==='pre'?'開店前の準備':'閉店の締め処理';
@@ -1200,6 +1204,12 @@ function loadHomeStatus(){
 
 /* ---- 開店前チェック（2F/5F別・全端末同期・バックエンド getOpeningPrepInit/toggleOpeningPrep） ---- */
 var OPPREP=null, _oppLoading=false;
+var CLOSING_TASKS=null, _cfgLoading=false;   // 閉店の追加タスク（コンソール編集・設定から）
+function loadChecklistConfig(){
+  if(!IS_GAS||_cfgLoading)return; _cfgLoading=true;
+  gsr('getChecklistConfig').then(function(c){ CLOSING_TASKS=(c&&c.closing)||[]; _cfgLoading=false; if(viewMode==='home'&&curPhase()==='post')renderHome(); })
+    .catch(function(){ _cfgLoading=false; });
+}
 function curFloorSlot(){ var t=String(typeof TERM!=='undefined'?TERM:'').toLowerCase(); return t.indexOf('2')>=0?'2F':(t.indexOf('5')>=0?'5F':''); }
 function loadOpeningPrep(){
   if(!IS_GAS||_oppLoading)return; _oppLoading=true;
@@ -3169,7 +3179,7 @@ function loadAll(){
     SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[]; CASTKUBUN=(r[8]&&typeof r[8]==='object')?r[8]:CASTKUBUN;
     applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
     BOOTED=true; renderAll();
-    if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();}
+    if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
 }
 
