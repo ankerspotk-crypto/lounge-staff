@@ -4336,6 +4336,7 @@ function renderYoyakuAdd() {
         '<div class="yform-label">お客様名</div>'
         + '<input type="text" class="yform-input" id="yrsv-cust-manual" placeholder="山田 貴志 様" value="'+esc(yoyakuRsvCustManual)+'" style="margin-bottom:8px">'
       : '')
+    + renderYoyakuSubs()
     + '<div class="yform-label">来店日</div>'
     + renderRsvCal()
     + '<div class="yform-label">時間</div>'
@@ -4385,7 +4386,6 @@ function renderYoyakuAdd() {
         }).join('');
         return '<div id="yrsv-tantou-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
       })()
-    + renderYoyakuSubs()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
     + (canEditYoyaku() ? '<div class="notif-save-btn" id="yrsv-submit-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : (yoyakuRsvMode === '仮予約' ? '仮予約として登録する' : '予約を確定する'))+'</div>' : '')

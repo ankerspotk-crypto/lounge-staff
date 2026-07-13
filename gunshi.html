@@ -1913,6 +1913,7 @@ function addFormHtml(isEdit){
   var times=['同伴','20:00','20:30','21:00','21:30','22:00','22:30','23:00'];
   var st=addSel.time,sp=String(addSel.pax),tb=addSel.tables,tn=addSel.tantou,dh=addSel.dohan,yk=addSel.yoyaku||[];
   return afCustSection()
+    +afSubSection()
     +'<div class="flabel">時間</div><div class="chips">'+times.map(function(t){return '<div class="chip'+(st===t?' sel':'')+'" onclick="afToggle(\'time\',this,\''+t+'\',1)">'+t+'</div>';}).join('')+'</div>'
     +'<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(sp===String(n)?' sel':'')+'" onclick="afToggle(\'pax\',this,\''+n+'\',1)">'+n+'名</div>';}).join('')+'</div>'
     +'<div class="flabel">席（複数選択可）</div><div style="font-size:10px;color:#5a6a90;margin-bottom:4px">2F</div><div class="chips">'+TABLES_2F.map(function(t){return '<div class="chip'+(tb.indexOf('2F '+t)>=0?' sel':'')+'" onclick="afToggle(\'tables\',this,\'2F '+t+'\')">'+t+'</div>';}).join('')+'</div>'
@@ -1920,7 +1921,6 @@ function addFormHtml(isEdit){
     +'<div class="flabel">担当キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip cast'+(tn.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'tantou\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
     +'<div class="flabel">同伴キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip dohan'+(dh.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'dohan\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
     +'<div class="flabel">予約キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip yoyaku'+(yk.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'yoyaku\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
-    +afSubSection()
     +'<div class="flabel">要望・備考</div><textarea id="af-note" class="finput" rows="3" style="resize:none" placeholder="VIP対応・誕生日・ボトル・席希望など...">'+esc(addSel.note||'')+'</textarea>'
     +'<div class="savebtn" onclick="submitRsv()">'+(isEdit?'変更を保存':'予約を確定する')+'</div>'
     +(isEdit?'<div class="act dng" style="margin-top:9px" onclick="cancelRsv()">🚫 この予約をキャンセル</div>':'');
