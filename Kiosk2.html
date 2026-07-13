@@ -717,6 +717,7 @@ var IS_GAS = (typeof google!=='undefined' && google.script && google.script.run)
 var KIOSK_USER_ID='<?= KIOSK_USER_ID ?>'; if(KIOSK_USER_ID.indexOf('?')>=0) KIOSK_USER_ID='';
 var TERM_RAW='<?= TERM_LABEL ?>';
 var TERM = /端末/.test(TERM_RAW) ? TERM_RAW.replace('端末','') : '2F';
+var BUILD_K2='2026-07-13';  /* ⚠️これは旧GAS版(Kiosk2)。バッジに『旧v』表示で本命gunshiと区別。デプロイ毎に更新 */
 var LOGIN = IS_GAS ? '' : 'りく';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 var TODAY_RAW='<?= TODAY ?>';
@@ -2638,7 +2639,7 @@ function doLogout(){ if(!IS_GAS){ alert('（ローカル）ログアウト'); re
 
 /* ============ BOOT ============ */
 function renderAll(){
-  document.getElementById('termBadge').textContent=TERM+' 端末';
+  document.getElementById('termBadge').textContent=TERM+' 端末 · 旧v'+BUILD_K2;
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
   renderAlerts();renderHall();renderRight();

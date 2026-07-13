@@ -779,7 +779,7 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 
 <div class="hdr">
   <div class="brand">⚡IEYAS <span class="z">軍師</span></div>
-  <div class="term-badge" id="termBadge">2F 端末</div>
+  <div class="term-badge" id="termBadge" onclick="hardReload()" title="タップで最新版に更新">2F 端末 · v…</div>
   <div class="datenav">
     <button class="dbtn" onclick="shiftDay(-1)">‹</button>
     <button class="dtoday" onclick="goToday()">今日</button>
@@ -855,6 +855,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
+var BUILD='2026-07-13';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3282,7 +3283,7 @@ function doLogout(){ if(!IS_GAS){ alert('（ローカル）ログアウト'); re
 
 /* ============ BOOT ============ */
 function renderAll(){
-  document.getElementById('termBadge').textContent=TERM+' 端末';
+  document.getElementById('termBadge').textContent=TERM+' 端末 · v'+BUILD;
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
   renderAlerts();renderHall();renderRight();renderHome();
