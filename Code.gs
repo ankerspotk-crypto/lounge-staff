@@ -4762,10 +4762,22 @@ function buildLineupMessage_() {
 
   if (detail.cast.length > 0) {
     const dohanSet = getTodayDohanNames_();
+    // 本日の予約見込みをキャスト別に集計（予約管理シートの当日分＝今夜の予約。TRUST実績ではない）
+    // 帰属は「予約キャスト」優先・空なら「担当キャスト」で補完。名前は内部スペース除去で照合（源氏名/元名の表記ゆれ対策）
+    const rsvNorm_  = n => String(n || '').replace(/\s/g, '').trim();
+    const rsvByCast = {};
+    try {
+      (getYoyakuReservations_(bizDateStr_()) || []).forEach(r => {
+        const c = rsvNorm_(r.yoyakuCast) || rsvNorm_(r.tantouCast);
+        if (c) rsvByCast[c] = (rsvByCast[c] || 0) + 1;
+      });
+    } catch (e) {}
     lines.push('キャスト（' + detail.cast.length + '名）');
     detail.cast.forEach(s => {
-      const eff = castEffectiveArrival_(s.name, s.shift, dohanSet);
-      lines.push('  ' + (s.role === '体験' ? '体' : '') + s.name + '　' + eff.time + (eff.dohan ? '（同伴）' : ''));
+      const eff  = castEffectiveArrival_(s.name, s.shift, dohanSet);
+      const keys = Array.from(new Set([rsvNorm_(s.name), rsvNorm_(s.origName)].filter(Boolean)));
+      const rc   = keys.reduce((n, k) => n + (rsvByCast[k] || 0), 0);
+      lines.push('  ' + (s.role === '体験' ? '体' : '') + s.name + '　' + eff.time + (eff.dohan ? '（同伴）' : '') + '　予約' + rc + '件');
     });
     lines.push('');
   }
