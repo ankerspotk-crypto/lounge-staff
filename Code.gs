@@ -346,6 +346,11 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return computeShiftSubmitStatus_();
   }
+  if (body.action === 'runShiftOpenNow') { // 管理者が来週シフト号令を今すぐ手動発火（月曜の窓を逃した時等）
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return broadcastShiftSubmitOpen_();
+  }
   if (body.action === 'sendCastSeatRequest') return sendCastSeatRequest_(body);
   if (body.action === 'castCall') return castCall_(body);
   if (body.action === 'getCastSeats') return getCastSeats_(body);

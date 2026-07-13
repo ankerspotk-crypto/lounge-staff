@@ -133,6 +133,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .sss-n{font-size:12px;background:#2a3550;color:#cdd8ee;padding:3px 9px;border-radius:8px;}
 .sss-n.ok{background:#1e3a2a;color:#a8d8b8;}
 .sss-n.unreg{background:#4a2a2a;color:#e0b0b0;}
+.sss-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--line,#2a3550);}
 .who .logout{color:var(--accent);cursor:pointer;margin-left:10px;font-weight:800;}
 /* QRログインゲート */
 .qrgate{max-width:400px;margin:60px auto;text-align:center;display:flex;flex-direction:column;align-items:center;}
@@ -464,7 +465,15 @@ function admShiftSubmitStatusHtml(){
   if(miss.length)body+='<div class="sss-block"><div class="sss-h">未提出（木19:00/金19:00に個別DM）</div><div class="sss-names">'+miss.map(function(m){return '<span class="sss-n'+(m.registered?'':' unreg')+'">'+esc(m.name)+(m.registered?'':'（LINE未登録）')+'</span>';}).join('')+'</div></div>';
   if((st.declined||[]).length)body+='<div class="sss-block"><div class="sss-h">来週なし報告済</div><div class="sss-names">'+st.declined.map(function(n){return '<span class="sss-n ok">'+esc(n)+'</span>';}).join('')+'</div></div>';
   if((st.submitted||[]).length)body+='<div class="sss-block"><div class="sss-h">提出済</div><div class="sss-names">'+st.submitted.map(function(n){return '<span class="sss-n ok">'+esc(n)+'</span>';}).join('')+'</div></div>';
+  body+='<div class="sss-actions"><button class="btn pri sm" onclick="admRunShiftOpenNow()">📣 今すぐ号令を送る</button><span class="hint" style="margin:0">対象者全員へ来週('+esc(st.weekLabel||'')+')分の提出依頼を個別LINE送信</span></div>';
   return '<div class="sec compact"><div class="sec-t">🗒 来週シフト提出状況 <span class="sub">'+esc(st.weekLabel||'')+' ・ 締切 木曜</span></div>'+body+'</div>';
+}
+function admRunShiftOpenNow(){
+  var st=shiftSubmitStat, label=st?st.weekLabel:'';
+  if(!confirm('来週('+label+')のシフト提出依頼を、対象者（キャスト/体験/黒服）全員へ今すぐ個別LINE送信します。\nよろしいですか？'))return;
+  api('runShiftOpenNow').then(function(r){
+    if(res(r, r&&r.sent!=null?(r.sent+'名へ号令を送信しました'+(r.total-r.sent>0?'（LINE未登録'+(r.total-r.sent)+'名スキップ）':'')):'送信しました')) renderShift();
+  });
 }
 function drawShift(){
   var reqPend=shiftReq.filter(function(x){return (x.status||'pending')==='pending'||!x.status;});
@@ -1663,6 +1672,7 @@ function MOCKAPI(action,body){
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
   if(action==='getShiftMgmt')return {ok:true,data:{closedDays:{'2026-07-07':'テスト店休'},headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
   if(action==='getShiftSubmitStatus')return {ok:true,weekLabel:'7/14〜7/20',weekKey8:'20260714',total:5,submitted:['まや','たかし'],declined:['ゆうた'],missing:[{name:'鈴木海',registered:true},{name:'あや',registered:false}]};
+  if(action==='runShiftOpenNow')return {ok:true,sent:4,total:5,label:'7/14〜7/20'};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
   if(action==='getPublishStatus')return {ok:true,month:body.month,payPublished:false,rankPublished:true,salesDate:''};
   if(action==='getOkuriMode')return {ok:true,mode:'driver'};
