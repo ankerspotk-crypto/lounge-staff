@@ -434,6 +434,10 @@ header h1 { font-size: 17px; font-weight: 600; }
   </div>
 </div>
 
+<div class="overlay" id="notice-overlay" style="align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeNoticeModal()">
+  <div id="notice-modal-box" style="background:#0e1726;border:1px solid #2a4a7a;border-radius:16px;padding:22px;max-width:440px;width:100%;max-height:80vh;overflow-y:auto"></div>
+</div>
+
 <div class="submit-bar" id="submit-bar" style="display:none">
   <button class="submit-btn" id="submit-btn" onclick="doSubmit()">シフトを提出する</button>
   <div class="shift-count" id="shift-count"></div>
@@ -624,6 +628,7 @@ function adminChange(name) {
 
 // セクション名（戻るバー・メニュー用）
 var SECTIONS = {
+  board:    { t:'お知らせ',     i:'📢' },
   shift:    { t:'シフト提出',   i:'📅' },
   yoyaku:   { t:'予約管理',     i:'🗓' },
   stats:    { t:'売上・給与',   i:'💰' },
@@ -658,12 +663,19 @@ function updateNav(tab) {
 // ホームのメニュー（タブの代わりに全機能をボタン集約）
 function menuBtn(key) {
   var s = SECTIONS[key];
-  return '<button onclick="switchTab(\'' + key + '\')" style="display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:#111b2e;border:1px solid #1e3050;border-radius:12px;text-align:left;cursor:pointer;width:100%">'
+  // お知らせボタンは未読件数を赤バッジで表示（見る側が一目で未読を判断できる）
+  var badge = '';
+  if (key === 'board') {
+    var un = noticeUnread().length;
+    if (un) badge = '<span style="position:absolute;top:10px;right:10px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;background:#c0405a;color:#fff;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">' + un + '</span>';
+  }
+  return '<button onclick="switchTab(\'' + key + '\')" style="position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:#111b2e;border:1px solid #1e3050;border-radius:12px;text-align:left;cursor:pointer;width:100%">'
+    + badge
     + '<span style="font-size:23px;line-height:1">' + s.i + '</span>'
     + '<span style="font-size:14px;font-weight:700;color:#e8f0ff">' + s.t + '</span></button>';
 }
 function homeMenu() {
-  var castKeys = ['shift','yoyaku','stats','hair','seatreq','customers','bday'];
+  var castKeys = ['board','shift','yoyaku','stats','hair','seatreq','customers','bday'];
   var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
   if (isAdmin) {
@@ -692,6 +704,7 @@ function switchTab(tab) {
   contentTargetId = 'content';
   switchTabActive(tab);
   if (tab === 'home') { renderHome(); return; }
+  if (tab === 'board') { loadBoard(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
@@ -787,6 +800,118 @@ function homeCallCard(){
     + '</div>';
 }
 
+// ===== お知らせ（バナー＋モーダル＋既読打刻） =====
+function noticeEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function noticeClip(s,n){ s=noticeEsc(s); return s.length>n ? s.slice(0,n)+'…' : s; }
+function noticeUnread(){ return ((portalData && portalData.notices) || []).filter(function(n){ return n && !n.read; }); }
+// 重要度3段階の見た目メタ（バナー・モーダル・掲示板で共通）: normal(通常)/high(重要)/urgent(最重要)
+function noticeTier(imp){
+  if (imp === 'urgent') return { label:'最重要', icon:'📌', accent:'#ffce7a', bg:'linear-gradient(135deg,#3a2c0c,#241b06)', border:'#d99a2b' };
+  if (imp === 'high')   return { label:'重要なお知らせ', icon:'📢', accent:'#ff9db0', bg:'linear-gradient(135deg,#3a1520,#2a1018)', border:'#c0405a' };
+  return { label:'お知らせ', icon:'📣', accent:'#8ec2ff', bg:'linear-gradient(135deg,#14324f,#111b2e)', border:'#2a6ab0' };
+}
+function noticeBanner(){
+  var un = noticeUnread();
+  if (!un.length) return '';
+  return un.map(function(n){
+    var t = noticeTier(n.importance);
+    return '<div class="card" onclick="openNoticeModal(\''+n.id+'\')" style="cursor:pointer;background:'+t.bg+';border-color:'+t.border+'">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'
+      +   '<span style="font-size:18px">'+t.icon+'</span>'
+      +   '<span style="font-size:13px;font-weight:700;color:'+t.accent+'">'+t.label+'</span>'
+      +   '<span style="margin-left:auto;font-size:11px;padding:2px 9px;background:#c0405a;color:#fff;border-radius:8px;font-weight:700">未読</span>'
+      + '</div>'
+      + '<div style="font-size:14px;color:#e8f0ff;line-height:1.5">'+ noticeClip(n.body,52) +'</div>'
+      + '<div style="margin-top:8px;font-size:11px;color:#8aabcc">タップで全文を表示</div>'
+      + '</div>';
+  }).join('');
+}
+function openNoticeModal(id){
+  var arr = (portalData && portalData.notices) || [];
+  var n = null; for (var i=0;i<arr.length;i++){ if (arr[i].id===id){ n=arr[i]; break; } }
+  if (!n) return;
+  var t = noticeTier(n.importance);
+  var bodyHtml = noticeEsc(n.body).replace(/\n/g,'<br>');
+  document.getElementById('notice-modal-box').innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">'
+    +   '<span style="font-size:22px">'+t.icon+'</span>'
+    +   '<span style="font-size:15px;font-weight:700;color:'+t.accent+'">'+t.label+'</span>'
+    + '</div>'
+    + '<div style="font-size:15px;color:#e8f0ff;line-height:1.75">'+bodyHtml+'</div>'
+    + '<div style="margin-top:12px;font-size:11px;color:#6a8ab0">'+noticeEsc(n.createdAt||'')+(n.author?(' ・ '+noticeEsc(n.author)):'')+'</div>'
+    + '<button onclick="closeNoticeModal()" style="margin-top:18px;width:100%;padding:13px;background:#1a50a0;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700">確認しました</button>';
+  document.getElementById('notice-overlay').classList.add('show');
+  markNoticeReadNow(n); // 開いた時点で既読（=画面を開いたら既読）
+}
+function markNoticeReadNow(n){
+  if (!n || n.read) return;
+  n.read = true; // 楽観更新
+  try {
+    gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'markNoticeRead', userId: userId, noticeId: n.id }) })
+      .then(function(r){ return r.json(); }).catch(function(){});
+  } catch(e){}
+}
+function closeNoticeModal(){
+  document.getElementById('notice-overlay').classList.remove('show');
+  var box = document.getElementById('home-notice'); // ホーム表示中ならバナーから既読分を消す
+  if (box) box.innerHTML = noticeBanner();
+  if (currentTab === 'board') loadBoard(); // 掲示板表示中は既読反映で並びを更新
+}
+
+// ===== お知らせ掲示板タブ：既読も含め全件を一覧（未読は色付き＋バッジ、既読はグレーで残る） =====
+function loadBoard(){
+  var src = (portalData && portalData.notices) || [];
+  var un = src.filter(function(n){ return n && !n.read; }).length;
+  // 最重要(urgent)を先頭にピン留め。同ランク内は元の並び（新しい順）を維持（sortは安定）
+  var arr = src.slice().sort(function(a,b){
+    return (a.importance==='urgent'?0:1) - (b.importance==='urgent'?0:1);
+  });
+  var head = '<div style="display:flex;align-items:center;gap:8px;margin:6px 2px 14px">'
+    + '<span style="font-size:20px">📢</span>'
+    + '<span style="font-size:16px;font-weight:800;color:#e8f0ff">お知らせ</span>'
+    + (un
+        ? '<span style="margin-left:auto;font-size:12px;padding:3px 11px;background:#c0405a;color:#fff;border-radius:10px;font-weight:700">未読 ' + un + '</span>'
+        : '<span style="margin-left:auto;font-size:12px;color:#3fae6a;font-weight:700">すべて既読 ✓</span>')
+    + '</div>';
+  if (!arr.length){
+    setContent(head + '<div style="text-align:center;color:#6a8ab0;padding:50px 0;font-size:14px">お知らせはまだありません</div>');
+    return;
+  }
+  var cards = arr.map(function(n){
+    var t = noticeTier(n.importance);
+    var isUrgent = n.importance === 'urgent';
+    // 最重要は既読でも色付きのまま残す（ピン留め）。通常・重要は既読でグレー化。
+    var colored = isUrgent || !n.read;
+    var readBadge = n.read
+      ? '<span style="margin-left:auto;font-size:11px;padding:2px 9px;background:#16351f;color:#5fca88;border-radius:8px;font-weight:700">既読 ✓</span>'
+      : '<span style="margin-left:auto;font-size:11px;padding:2px 9px;background:#c0405a;color:#fff;border-radius:8px;font-weight:700">未読</span>';
+    var pin = isUrgent ? '<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:#d99a2b;color:#241b06;font-weight:800">📌 ピン留め</span>' : '';
+    if (colored){
+      return '<div class="card" onclick="openNoticeModal(\''+n.id+'\')" style="cursor:pointer;background:'+t.bg+';border-color:'+t.border+(isUrgent?';box-shadow:0 0 0 1px '+t.border+' inset':'')+'">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">'
+        +   '<span style="font-size:18px">'+t.icon+'</span>'
+        +   '<span style="font-size:13px;font-weight:700;color:'+t.accent+'">'+t.label+'</span>'
+        +   pin
+        +   readBadge
+        + '</div>'
+        + '<div style="font-size:14px;color:#e8f0ff;line-height:1.5">'+ noticeClip(n.body,64) +'</div>'
+        + '<div style="margin-top:8px;font-size:11px;color:#8aabcc">'+ noticeEsc(n.createdAt||'') + (n.author?(' ・ '+noticeEsc(n.author)):'') +'</div>'
+        + '</div>';
+    }
+    // 既読（通常・重要）＝グレーで残す（あとから見返せる）
+    return '<div class="card" onclick="openNoticeModal(\''+n.id+'\')" style="cursor:pointer;background:#0d1420;border-color:#1c2942;opacity:.72">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      +   '<span style="font-size:15px;filter:grayscale(1)">'+t.icon+'</span>'
+      +   '<span style="font-size:12px;font-weight:700;color:#6f89ad">'+t.label+'</span>'
+      +   readBadge
+      + '</div>'
+      + '<div style="font-size:13px;color:#9fb3cc;line-height:1.5">'+ noticeClip(n.body,64) +'</div>'
+      + '<div style="margin-top:7px;font-size:11px;color:#546b8a">'+ noticeEsc(n.createdAt||'') + (n.author?(' ・ '+noticeEsc(n.author)):'') +'</div>'
+      + '</div>';
+  }).join('');
+  setContent(head + cards);
+}
+
 function renderHome(){
   contentTargetId = 'content';
   // 管理者でキャスト未選択 → 呼び出し＋案内＋メニュー
@@ -841,7 +966,7 @@ function renderHome(){
   }
 
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める） ---
-  var html = shiftCard + homeCallCard()
+  var html = '<div id="home-notice">' + noticeBanner() + '</div>' + shiftCard + homeCallCard()
     + '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +     '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">今日の予約</span>'

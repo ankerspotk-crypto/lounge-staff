@@ -314,6 +314,31 @@ function clearClockDrift() {
 }
 
 function handleApiRequest_(body) {
+  // === お知らせ配信＋既読 ===
+  if (body.action === 'createNotice') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return createNotice_(body.body, body.target, body.importance, body.expire, adminName);
+  }
+  if (body.action === 'getNoticeReadMap') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return getNoticeReadMap_();
+  }
+  if (body.action === 'repushNotice') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return repushNotice_(body.noticeId);
+  }
+  if (body.action === 'archiveNotice') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return archiveNotice_(body.noticeId);
+  }
+  if (body.action === 'markNoticeRead') {
+    const staffName = getStaffName(body.userId);
+    return markNoticeRead_(body.noticeId, body.userId, staffName || body.name || '', body.route || 'portal');
+  }
   if (body.action === 'submitShift') return submitShift(body);
   if (body.action === 'sendCastSeatRequest') return sendCastSeatRequest_(body);
   if (body.action === 'castCall') return castCall_(body);
@@ -724,6 +749,7 @@ function getNotifSettings_() {
     early_taikin:       { label: '🕐 早退勤予告',         type: 'auto', enabled: true, group: '黒服',       desc: '退勤時間が近いキャストを10分前に黒服へ通知' },
     driver_notice_1600: { label: '🚗 16時ドライバー連絡', type: 'auto', enabled: true, group: 'ドライバー', desc: '16:00にドライバーへ連絡（ドライバーモード=本日もよろしく／自社便モード=本日は送りなし・お休み）' },
     stocktake_reminder: { label: '📋 棚卸しリマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '毎週月曜19:00に黒服グループへ棚卸し通知' },
+    notice_reminder:    { label: '📢 お知らせ未読リマインド', time: '19:00', enabled: true, group: 'スタッフ', days: [1,2,3,4,5,6,7], msgEditable: false, defaultMsg: null, desc: '未読のお知らせがある人へ毎日この時刻に1通まとめてDM（既読になれば止まる／投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了）' },
   };
   const saved = prop('NOTIF_SETTINGS');
   if (!saved) return defaults;
@@ -4092,6 +4118,10 @@ function scheduledJobs() {
     });
   }
 
+  // お知らせ未読リマインド: 設定時刻(既定19:00)に、未読のお知らせがある人へ1日1通まとめてDM。
+  // 既読になれば当然対象外、投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了。店休日(お盆等)でも周知したいので isClosed 判定より前に置く。
+  notif_('notice_reminder', () => { sendNoticeUnreadReminders_(); });
+
   // 定休日(日曜)の営業ぶんはスキップ。ただし日曜早朝=土曜の閉店作業なので bizDow で判定し、土曜クローズ通知(照明/終了現金/未退勤)は通す
   if (isClosed) return;
 
@@ -6072,7 +6102,8 @@ function handlePortalApi_(e) {
     return out({ ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH,
       shifts: shiftsH, confirmedShifts: confirmedShiftsH, pendingShifts: pendingShiftsH,
       todayArrival: todayArrivalH, seats: seatsH, working: workingH,
-      reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH });
+      reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH,
+      notices: getNoticesFor_(lookupNameH, staffRoleH, userId) });
   }
 
   // === 成績ペイロード（成績タブを開いた時に遅延ロード） ===
@@ -7231,7 +7262,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','PORTAL_URL'];
   const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
@@ -7952,6 +7983,289 @@ function testLateReservationNotice() {
   if (!KF) return { ok: false, error: 'GROUP_KUROFUKU未設定' };
   push_(KF, '🧪【テスト送信】\n🕘 来店確認\nサンプル様（20:00予約・3名）が来店予定を30分過ぎています。\n担当：まや\n来店可否を担当に確認してください。\n（IEYAS軍師の新機能「来店30分超過の確認通知」の動作テストです）');
   return { ok: true };
+}
+
+// ============================================================
+// お知らせ配信＋既読トラッキング
+//   Adminで作成 → 対象者へLINE通知 → ポータルで開くと既読打刻 → Adminの既読マップで✓/✕を管理。
+//   お知らせ本体/既読はシートで保持（ScriptPropertyでないので軍師設定リセットの巻き添え非対象＝安全）。
+//   LINEは「📢来たよ→ポータルで確認」の通知に徹する（本文全文はポータルで既読を取る＝既読=画面を開く）。
+// ============================================================
+const NOTICE_TAB = 'お知らせ';
+const NOTICE_HEAD_ = ['ID', '作成日時', '作成者', '対象', '重要度', '本文', '表示期限', '状態'];
+const NOTICE_READ_TAB = 'お知らせ既読';
+const NOTICE_READ_HEAD_ = ['お知らせID', 'lineId', '名前', '既読日時', '経路'];
+
+function getNoticeSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(NOTICE_TAB);
+  if (!sh) { sh = ss.insertSheet(NOTICE_TAB); sh.appendRow(NOTICE_HEAD_); sh.setFrozenRows(1); }
+  return sh;
+}
+function getNoticeReadSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(NOTICE_READ_TAB);
+  if (!sh) { sh = ss.insertSheet(NOTICE_READ_TAB); sh.appendRow(NOTICE_READ_HEAD_); sh.setFrozenRows(1); }
+  return sh;
+}
+
+// 役割 → 配信グループ（cast=キャスト/体験, kurofuku=黒服系, other=それ以外）
+function noticeRoleGroup_(role) {
+  const r = String(role || '');
+  if (r.indexOf('キャスト') >= 0 || r.indexOf('体験') >= 0) return 'cast';
+  if (r.indexOf('黒服') >= 0) return 'kurofuku';
+  return 'other';
+}
+// 対象('all'/'cast'/'kurofuku')に、この役割は含まれるか
+function noticeTargetMatches_(target, role) {
+  if (target === 'all') return true;
+  const g = noticeRoleGroup_(role);
+  if (target === 'cast') return g === 'cast';
+  if (target === 'kurofuku') return g === 'kurofuku';
+  return false;
+}
+// 配信対象スタッフ名簿（未読管理のため全員返す。LINE配信はlineId登録者のみ）
+function noticeAudience_(target) {
+  return getAllStaff_(getOrOpenSS_()).filter(function (s) { return noticeTargetMatches_(target, s.role); });
+}
+// 期限セルを 'yyyy-MM-dd' に（Date値のString()流出を防ぐ）
+function noticeDateOnly_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); }
+
+// LINE通知メッセージ本文を組み立て（全text。ポータルURLは任意=PORTAL_URL未設定なら文言のみ）
+function noticeLineMessage_(head, bodyText) {
+  const portalUrl = prop('PORTAL_URL') || '';
+  const preview = bodyText.length > 60 ? bodyText.slice(0, 60) + '…' : bodyText;
+  const linkLine = portalUrl ? ('\n\n▼確認はこちら\n' + portalUrl) : '\n\n▼ポータルの「お知らせ」を開いて確認してください';
+  return head + '\n' + preview + linkLine;
+}
+// 指定lineId群へtext pushを一斉送信。{sent, failed, failedIds}
+function noticePushTo_(lineIds, message) {
+  const token = prop('LINE_TOKEN');
+  let sent = 0, failed = 0; const failedIds = [];
+  if (!token) return { sent: 0, failed: lineIds.length, failedIds: lineIds.slice() };
+  lineIds.forEach(function (to) {
+    if (!to) return;
+    try {
+      const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'post', contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + token },
+        payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: message }] }),
+        muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 200) sent++;
+      else { failed++; failedIds.push(to); console.error('notice push error', res.getResponseCode(), res.getContentText()); }
+    } catch (e) { failed++; failedIds.push(to); }
+  });
+  return { sent: sent, failed: failed, failedIds: failedIds };
+}
+
+// お知らせ作成＋対象者へLINE通知。{ok, id, total, sent, failed, skipped, skippedNames}
+function createNotice_(bodyText, target, importance, expireDate, author) {
+  bodyText = String(bodyText == null ? '' : bodyText).trim();
+  if (!bodyText) return { ok: false, error: '本文が空です' };
+  if (bodyText.length > 4500) return { ok: false, error: '本文が長すぎます（4500文字以内）' };
+  target = (['all', 'cast', 'kurofuku'].indexOf(target) >= 0) ? target : 'all';
+  importance = (importance === 'high' || importance === 'urgent') ? importance : 'normal'; // normal(通常)/high(重要)/urgent(最重要)
+  expireDate = String(expireDate || '').trim(); // '' or yyyy-MM-dd
+  const id = Utilities.getUuid().replace(/-/g, '').slice(0, 8);
+  getNoticeSheet_().appendRow([id, nowStamp_(), String(author || ''), target, importance, bodyText, expireDate, 'active']);
+  // LINE通知（対象者・lineId登録者のみ）
+  const audience = noticeAudience_(target);
+  const registered = audience.filter(function (s) { return !!s.lineId; });
+  const skippedNames = audience.filter(function (s) { return !s.lineId; }).map(function (s) { return s.name; });
+  const head = noticeImpHead_(importance, '');
+  const r = noticePushTo_(registered.map(function (s) { return s.lineId; }), noticeLineMessage_(head, bodyText));
+  return { ok: true, id: id, total: audience.length, sent: r.sent, failed: r.failed, skipped: skippedNames.length, skippedNames: skippedNames };
+}
+
+// 指定スタッフの既読お知らせIDセット（lineId一致 or 名前一致）
+function noticeReadSetFor_(lineId, name) {
+  const rows = getNoticeReadSheet_().getDataRange().getValues();
+  const key = normalizeName_(String(name || ''));
+  const lid = String(lineId || '').trim();
+  const set = {};
+  for (let i = 1; i < rows.length; i++) {
+    const nid = String(rows[i][0]).trim(); if (!nid) continue;
+    const rLine = String(rows[i][1]).trim();
+    const rName = normalizeName_(String(rows[i][2] || ''));
+    if ((lid && rLine && rLine === lid) || (key && rName === key)) set[nid] = true;
+  }
+  return set;
+}
+
+// 指定スタッフ(name,role,lineId)向けに表示すべきお知らせ一覧（期限内・active）。既読フラグ付き・新しい順。
+function getNoticesFor_(name, role, lineId) {
+  const rows = getNoticeSheet_().getDataRange().getValues();
+  const today = todayStr();
+  const readSet = noticeReadSetFor_(lineId, name);
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const id = String(rows[i][0]).trim(); if (!id) continue;
+    if (String(rows[i][7]).trim() !== 'active') continue;
+    if (!noticeTargetMatches_(String(rows[i][3]).trim(), role)) continue;
+    const expire = noticeDateOnly_(rows[i][6]);
+    if (expire && expire < today) continue; // 期限切れ
+    out.push({
+      id: id, createdAt: fmtStamp_(rows[i][1]), author: String(rows[i][2]).trim(),
+      importance: String(rows[i][4]).trim() || 'normal', body: String(rows[i][5]),
+      read: readSet[id] === true
+    });
+  }
+  out.reverse(); // appendは末尾＝新しい順に
+  return out;
+}
+
+// 既読打刻（重複ガード＝同じ人が同じお知らせを2度記録しない）
+function markNoticeRead_(noticeId, lineId, name, route) {
+  noticeId = String(noticeId || '').trim();
+  if (!noticeId) return { ok: false, error: 'noticeId required' };
+  const sh = getNoticeReadSheet_();
+  const rows = sh.getDataRange().getValues();
+  const key = normalizeName_(String(name || ''));
+  const lid = String(lineId || '').trim();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() !== noticeId) continue;
+    const rLine = String(rows[i][1]).trim();
+    const rName = normalizeName_(String(rows[i][2] || ''));
+    if ((lid && rLine && rLine === lid) || (key && rName === key)) return { ok: true, already: true };
+  }
+  sh.appendRow([noticeId, lid, String(name || ''), nowStamp_(), String(route || 'portal')]);
+  return { ok: true, already: false };
+}
+
+// Admin既読マップ用: お知らせ一覧＋各件の対象者名簿×既読/未読
+function getNoticeReadMap_() {
+  const nRows = getNoticeSheet_().getDataRange().getValues();
+  const readRows = getNoticeReadSheet_().getDataRange().getValues();
+  // noticeId -> {line:{}, name:{}}
+  const readByNotice = {};
+  for (let i = 1; i < readRows.length; i++) {
+    const nid = String(readRows[i][0]).trim(); if (!nid) continue;
+    const rec = (readByNotice[nid] = readByNotice[nid] || { line: {}, name: {} });
+    const l = String(readRows[i][1]).trim(); if (l) rec.line[l] = true;
+    const nm = normalizeName_(String(readRows[i][2] || '')); if (nm) rec.name[nm] = true;
+  }
+  const allStaff = getAllStaff_(getOrOpenSS_());
+  const list = [];
+  for (let i = 1; i < nRows.length; i++) {
+    const id = String(nRows[i][0]).trim(); if (!id) continue;
+    const target = String(nRows[i][3]).trim();
+    const audience = allStaff.filter(function (s) { return noticeTargetMatches_(target, s.role); });
+    const rd = readByNotice[id] || { line: {}, name: {} };
+    const readNames = [], unreadNames = [], unreadLineIds = [];
+    audience.forEach(function (s) {
+      const isRead = (s.lineId && rd.line[s.lineId]) || rd.name[normalizeName_(s.name)];
+      if (isRead) readNames.push(s.name);
+      else { unreadNames.push(s.name); if (s.lineId) unreadLineIds.push(s.lineId); }
+    });
+    list.push({
+      id: id, createdAt: fmtStamp_(nRows[i][1]), author: String(nRows[i][2]).trim(),
+      target: target, importance: String(nRows[i][4]).trim() || 'normal', body: String(nRows[i][5]),
+      expire: noticeDateOnly_(nRows[i][6]), status: String(nRows[i][7]).trim() || 'active',
+      total: audience.length, readCount: readNames.length,
+      readNames: readNames, unreadNames: unreadNames, unreadLineIds: unreadLineIds
+    });
+  }
+  list.reverse();
+  return { ok: true, list: list };
+}
+
+// 未読者だけへ再プッシュ
+function repushNotice_(noticeId) {
+  noticeId = String(noticeId || '').trim();
+  if (!noticeId) return { ok: false, error: 'noticeId required' };
+  const nRows = getNoticeSheet_().getDataRange().getValues();
+  let row = null;
+  for (let i = 1; i < nRows.length; i++) { if (String(nRows[i][0]).trim() === noticeId) { row = nRows[i]; break; } }
+  if (!row) return { ok: false, error: 'お知らせが見つかりません' };
+  const item = (getNoticeReadMap_().list || []).filter(function (x) { return x.id === noticeId; })[0];
+  const unreadLineIds = (item && item.unreadLineIds) || [];
+  if (!unreadLineIds.length) return { ok: true, sent: 0, failed: 0, target: 0 };
+  const head = noticeImpHead_(String(row[4]).trim(), '再送');
+  const r = noticePushTo_(unreadLineIds, noticeLineMessage_(head, String(row[5])));
+  return { ok: true, sent: r.sent, failed: r.failed, target: unreadLineIds.length };
+}
+
+// LINE通知の見出し。importance: normal(通常)/high(重要)/urgent(最重要)。suffix='再送' 等で末尾装飾。
+function noticeImpHead_(importance, suffix) {
+  const s = suffix ? ('・' + suffix) : '';
+  const i = String(importance).trim();
+  if (i === 'urgent') return '📌【最重要' + s + '】お知らせ';
+  if (i === 'high')   return '📢【重要' + s + '】お知らせ';
+  return suffix ? ('📢 お知らせ（' + suffix + '）') : '📢 お知らせ';
+}
+
+// お知らせを投稿してから、未読者を自動で追いかける日数の上限。投稿日を0日目として、翌日〜この日数まで毎日1回リマインド。
+// ※ importance==='urgent'(最重要) はこの上限を無視し、既読になるまで毎日追い続ける。
+const NOTICE_REMINDER_MAX_DAYS = 3;
+
+// 'yyyy-MM-dd' 同士の日数差（to - from）。JSTの日付境界で計算。
+function noticeDaysBetween_(fromYmd, toYmd) {
+  const a = new Date(String(fromYmd).slice(0, 10) + 'T00:00:00+09:00').getTime();
+  const b = new Date(String(toYmd).slice(0, 10) + 'T00:00:00+09:00').getTime();
+  if (isNaN(a) || isNaN(b)) return -1;
+  return Math.round((b - a) / 86400000);
+}
+
+// 未読者へのまとめDM本文。1人が複数のお知らせを未読でも1通に集約する。
+function formatNoticeReminder_(notices, portalUrl) {
+  const n = notices.length;
+  let m = '📢【未読のお知らせが' + n + '件あります】\nまだ確認していないお知らせがあります。ご確認をお願いします。\n';
+  notices.slice(0, 5).forEach(function (x) {
+    const imp = String(x.importance).trim();
+    const mark = imp === 'urgent' ? '📌' : imp === 'high' ? '❗' : '・';
+    const firstLine = String(x.body || '').split('\n')[0];
+    const title = firstLine.length > 28 ? firstLine.slice(0, 28) + '…' : firstLine;
+    m += '\n' + mark + title;
+  });
+  if (n > 5) m += '\n…ほか' + (n - 5) + '件';
+  m += portalUrl ? ('\n\n▼ポータルで確認\n' + portalUrl) : '\n\n▼ポータルの「お知らせ」から確認してください';
+  return m;
+}
+
+// 未読のお知らせがあるスタッフへ、1日1通まとめてリマインドDM。scheduledJobs の notif_('notice_reminder') から毎日呼ばれる。
+// 対象お知らせ = active・期限内・投稿の翌日〜NOTICE_REMINDER_MAX_DAYS日以内。全員既読になれば送信対象ゼロで自然終了。
+function sendNoticeUnreadReminders_() {
+  const today = todayStr();
+  const list = (getNoticeReadMap_().list || []).filter(function (n) {
+    if (n.status !== 'active') return false;
+    if (n.expire && n.expire < today) return false; // 期限切れ
+    const days = noticeDaysBetween_(n.createdAt, today);
+    if (days < 1) return false; // 投稿当日は初回通知済みなので翌日から
+    // 最重要(urgent)は上限なしで既読になるまで毎日。それ以外は投稿翌日〜MAX_DAYS日で自動終了
+    if (String(n.importance).trim() !== 'urgent' && days > NOTICE_REMINDER_MAX_DAYS) return false;
+    return (n.unreadLineIds || []).length > 0;
+  });
+  if (!list.length) return { ok: true, staff: 0, sent: 0 };
+
+  // lineId -> 未読お知らせ配列（新しい順を維持）
+  const perLine = {};
+  list.forEach(function (n) {
+    (n.unreadLineIds || []).forEach(function (lid) {
+      (perLine[lid] = perLine[lid] || []).push(n);
+    });
+  });
+
+  const portalUrl = prop('PORTAL_URL') || '';
+  const lineIds = Object.keys(perLine);
+  let sent = 0, failed = 0;
+  lineIds.forEach(function (lid) {
+    const r = noticePushTo_([lid], formatNoticeReminder_(perLine[lid], portalUrl));
+    sent += r.sent; failed += r.failed;
+  });
+  console.log('notice reminder: staff=' + lineIds.length + ' sent=' + sent + ' failed=' + failed);
+  return { ok: true, staff: lineIds.length, sent: sent, failed: failed };
+}
+
+// お知らせをアーカイブ（一覧・バナーから外す）
+function archiveNotice_(noticeId) {
+  noticeId = String(noticeId || '').trim();
+  const sh = getNoticeSheet_();
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === noticeId) { sh.getRange(i + 1, 8).setValue('archived'); return { ok: true }; }
+  }
+  return { ok: false, error: 'お知らせが見つかりません' };
 }
 
 // ============================================================
