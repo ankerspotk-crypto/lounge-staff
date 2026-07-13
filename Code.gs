@@ -6138,6 +6138,11 @@ function handlePortalApi_(e) {
   const name = getStaffName(userId);
   if (!name) return out({ ok: false, error: 'unregistered' });
 
+  // 退職済みスタッフはポータル利用不可
+  if (isRetiredName_(name)) {
+    return out({ ok: false, error: 'retired', message: 'このアカウントは退職済みのためご利用いただけません。' });
+  }
+
   // ドライバーはポータルにアクセス不可（送り依頼登録用の属性）
   if (getStaffRoleByName_(normalizeName_(name)) === 'ドライバー') {
     return out({ ok: false, error: 'forbidden', role: 'ドライバー', message: 'ドライバーはポータルをご利用いただけません。' });
@@ -6486,6 +6491,7 @@ function getAdminConsoleData(userId) {
   const rows = sh ? sh.getDataRange().getValues() : [];
   const termCols = sh ? getStaffTermCols_(sh, false) : {};
   const backCols = sh ? getStaffBackRuleCols_(sh, false) : {};
+  const retireCols = sh ? getStaffRetireCols_(sh, false) : {};
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
@@ -6512,10 +6518,71 @@ function getAdminConsoleData(userId) {
       bdayWeek: bWeekMap[normalizeName_(name)] || { status: 'none', start: '', end: '', reason: '', applied: '' },
       // 給与バック方式（新ルール/固定）。未設定は新ルール扱い
       backMode: (backCols['バック方式'] >= 0 && String(rows[i][backCols['バック方式']]).trim() === '固定') ? 'fixed' : 'rule',
-      backRate: (backCols['固定バック率(%)'] >= 0 ? (Number(rows[i][backCols['固定バック率(%)']]) || 0) : 0)
+      backRate: (backCols['固定バック率(%)'] >= 0 ? (Number(rows[i][backCols['固定バック率(%)']]) || 0) : 0),
+      // 退職状態: フラグ列'退職' / 退職日（Date流出を吸収して文字列化）
+      retired: (retireCols['退職'] >= 0 && String(rows[i][retireCols['退職']]).trim() === '退職'),
+      retiredAt: (function () { var c = retireCols['退職日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })()
     });
   }
   return { ok: true, caller: caller, staff: staff, roles: ADMIN_ROLES_, kioskRoles: KIOSK_LOGIN_ROLES_, masterPin: prop('KIOSK_PIN') || '1234', consolePinSet: !!prop('ADMIN_CONSOLE_PIN') };
+}
+
+/* ===== 退職スタッフ管理 =====
+ * スタッフマスタに「退職」「退職日」列を「ヘッダー名で探索→無ければ末尾追加」で持たせる（既存A〜H列は非破壊）。
+ * 退職＝行を消さずフラグを立てるだけ。名前で紐づく履歴（給与照合/改名/来店等）は温存し、
+ * ポータル・軍師・管理コンソールの各ログイン入口で締め出す。復帰も可。 */
+var STAFF_RETIRE_HEADERS = ['退職', '退職日'];
+
+// スタッフマスタ1行目ヘッダーから退職各列の0-based indexを解決。create=trueで無い列を末尾に新設。
+function getStaffRetireCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_RETIRE_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) {
+      lastCol += 1;
+      sh.getRange(1, lastCol).setValue(name);
+      idx = lastCol - 1;
+    }
+    cols[name] = idx; // 無く未作成なら -1
+  });
+  return cols;
+}
+
+// 退職者かどうか（正規化名で照合）。退職列が無ければ常に false。全ログインゲートの共通判定。
+function isRetiredName_(name) {
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return false;
+  var rc = getStaffRetireCols_(sh, false)['退職'];
+  if (rc < 0) return false;
+  var rows = sh.getDataRange().getValues();
+  var key = normalizeName_(String(name || '').trim());
+  for (var i = 1; i < rows.length; i++) {
+    if (normalizeName_(String(rows[i][1]).trim()) === key) return String(rows[i][rc]).trim() === '退職';
+  }
+  return false;
+}
+
+// 管理コンソール：退職/復帰の切替（動的「退職」「退職日」列）。物理削除しない＝履歴・別管理が残る。
+function adminSetRetired(userId, targetName, retired) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  targetName = String(targetName || '').trim();
+  // ハードコード管理者は退職不可（自分をコンソールから締め出す事故を防ぐ）
+  if (retired && ADMIN_NAMES_.includes(targetName)) return { ok: false, error: 'この管理者は退職にできません（コード保護）' };
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  var cols = getStaffRetireCols_(sh, true); // 無ければ列作成
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, cols['退職'] + 1).setValue(retired ? '退職' : '');
+      // 退職日は文字列で記録（Sheetsの日付自動変換によるString()流出を避け、表示時はそのまま読む）
+      sh.getRange(i + 1, cols['退職日'] + 1).setValue(retired ? bizDateStr_() : '');
+      return { ok: true, name: targetName, retired: !!retired };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
 }
 
 /* ===== キャスト個別条件（参照メモ。給与計算には非連動） =====
@@ -6642,8 +6709,10 @@ function adminPinLogin(pin) {
     const n = String(rows[i][1]).trim(), uid = String(rows[i][0]).trim();
     if (uid && ADMIN_NAMES_.includes(n)) return { ok: true, userId: uid, name: n };
   }
+  const rcAdmin = getStaffRetireCols_(sh, false)['退職'];
   for (let i = 1; i < rows.length; i++) {          // フォールバック: 管理者フラグ(D列○)
     const uid = String(rows[i][0]).trim();
+    if (rcAdmin >= 0 && String(rows[i][rcAdmin]).trim() === '退職') continue; // 退職者は除外
     if (uid && String(rows[i][3]).trim() === '○') return { ok: true, userId: uid, name: String(rows[i][1]).trim() };
   }
   return { ok: false, error: '管理者アカウントが見つかりません' };
@@ -7916,9 +7985,11 @@ function getKioskStaffList() {
   if (!sh) return [];
   const out = [];
   const rows = sh.getDataRange().getValues();
+  const rc = getStaffRetireCols_(sh, false)['退職']; // 退職者は軍師ログイン一覧から除外
   for (let i = 1; i < rows.length; i++) {
     const name = String(rows[i][1]).trim();
     if (!name) continue;
+    if (rc >= 0 && String(rows[i][rc]).trim() === '退職') continue;
     if (hasGunshiLoginByRow_(name, rows[i][2], rows[i][5])) out.push(name);
   }
   return out;
@@ -7980,6 +8051,7 @@ function kioskAuthConfirm_(token, userId) {
   const name = getStaffName(userId);
   if (!name) return { ok: false, error: '未登録のLINEアカウントです' };
   if (scope === 'admin') {
+    if (isRetiredName_(name)) return { ok: false, error: name + ' さんは退職済みのためアクセスできません' };
     if (!isAdmin_(name)) return { ok: false, error: name + ' さんは管理コンソールにアクセスできません（管理者のみ）' };
   } else {
     if (getKioskStaffList().indexOf(name) < 0) return { ok: false, error: name + ' さんは軍師にログインできません（黒服社員/黒服バイトのみ）' };

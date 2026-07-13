@@ -291,12 +291,20 @@ function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
 function filtered(){ return ST.staff.filter(function(s){ if(roleFilter!=='all'&&s.role!==roleFilter)return false; if(q&&s.name.indexOf(q)<0)return false; return true; }); }
 function renderStaff(){
   var fchips='<div class="chip'+(roleFilter==='all'?' on':'')+'" onclick="setFilter(\'all\')">全て</div>'+ST.roles.map(function(r){return '<div class="chip'+(roleFilter===r?' on':'')+'" onclick="setFilter(\''+jstr(r)+'\')">'+esc(r)+'</div>';}).join('');
-  var list=filtered();
+  var all=filtered();
+  var list=all.filter(function(s){return !s.retired;});      // 在籍
+  var retired=all.filter(function(s){return s.retired;});     // 退職済み
   var renameTool='<details class="sec compact" style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:800;color:var(--accent)">✏️ スタッフ改名（名前変更の統一）</summary>'
     +'<div class="hint" style="margin-top:8px">既存スタッフが <b>#登録</b> で名前を変えた時、旧名が残るシフト・シフト申請・勤怠・給与・領収書・顧客担当・予約などを新名に一括統一します。まず🔍プレビューで件数を確認してから実行してください。</div>'
     +'<div class="toolbar"><input class="finput grow" id="rn-old" placeholder="旧名（今シフト等に残る名前）"><span style="color:var(--dim);font-weight:800">→</span><input class="finput grow" id="rn-new" placeholder="新名（#登録した名前）"><button class="btn" onclick="renamePreview()">🔍 プレビュー</button></div>'
     +'<div id="rn-result"></div></details>';
-  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">該当スタッフなし</div>'));
+  var retiredHtml='';
+  if(retired.length){
+    retiredHtml='<details class="sec compact" style="margin-top:16px"><summary style="cursor:pointer;font-weight:800;color:var(--dim)">🗄 退職済みスタッフ（'+retired.length+'名）</summary>'
+      +'<div class="hint" style="margin-top:8px">退職者はポータル・軍師・管理コンソールにログインできません。履歴（給与・来店・改名など）は名前で保持されています。「復帰」で在籍に戻せます。</div>'
+      +'<div class="grid" style="margin-top:10px">'+retired.map(cardHtml).join('')+'</div></details>';
+  }
+  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">在籍スタッフなし</div>')+retiredHtml);
   var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 function renameGetIn(){ return {o:(document.getElementById('rn-old').value||'').trim(), n:(document.getElementById('rn-new').value||'').trim()}; }
@@ -375,9 +383,14 @@ function cardHtml(s,i){
       '<div id="tmp'+i+'" style="display:none">'+fh+
       '<button class="btn pri sm" style="width:100%;margin-top:8px" onclick="saveTerms('+i+',\''+jstr(s.name)+'\')">💾 条件を保存</button></div></div>';
   }
-  return '<div class="card"><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
+  var retiredBadge=s.retired?'<span class="badge" style="background:#4a2b2b;color:#ff9aa0;border:1px solid #6b3a3a">退職'+(s.retiredAt?' '+esc(s.retiredAt):'')+'</span>':'';
+  var retireRow=s.hardAdmin?'' :
+    (s.retired
+      ? '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px"><button class="btn ok sm" onclick="unretireStaff(\''+jstr(s.name)+'\')">↩ 復帰させる</button></div>'
+      : '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px"><button class="btn sm" style="color:#ff9aa0;border-color:#6b3a3a" onclick="retireStaff(\''+jstr(s.name)+'\')">🚪 退職にする</button></div>');
+  return '<div class="card"'+(s.retired?' style="opacity:.72"':'')+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+termHtml+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+termHtml+retireRow+'</div>';
 }
 /* バック方式（新ルール/固定率）＝キャスト永続設定・給与計算に直結 */
 function onBackModeChange(i,name){
@@ -424,6 +437,18 @@ function clearPin(name){ if(!confirm(name+' の個別PINをクリアしますか
 function saveMasterPin(){ var p=(document.getElementById('mpin').value||'').trim(); if(!/^\d{4}$/.test(p)){toast('PINは4桁の数字で入力してください',true);return;} if(!IS_GAS){ST.masterPin=p;toast('マスターPIN保存');return;} gsr('adminSetMasterPin',USER_ID,p).then(function(r){ if(res(r,'マスターPINを保存しました'))ST.masterPin=p; }).catch(function(){toast('通信エラー',true);}); }
 function saveConsolePin(){ var el=document.getElementById('cpin'); var p=(el&&el.value||'').trim(); if(!/^\d{4,6}$/.test(p)){toast('PINは4〜6桁の数字で入力してください',true);return;} if(!IS_GAS){ST.consolePinSet=true;toast('コンソールPIN設定（ローカル）');drawOps();return;} gsr('adminSetConsolePin',USER_ID,p).then(function(r){ if(res(r,'管理コンソールPINを設定しました')){ST.consolePinSet=true;drawOps();} }).catch(function(){toast('通信エラー',true);}); }
 function clearConsolePin(){ if(!confirm('管理コンソールPINを解除しますか？（次回からQRログインに戻ります）'))return; if(!IS_GAS){ST.consolePinSet=false;toast('解除（ローカル）');drawOps();return;} gsr('adminSetConsolePin',USER_ID,'').then(function(r){ if(res(r,'PINを解除しました')){ST.consolePinSet=false;drawOps();} }).catch(function(){toast('通信エラー',true);}); }
+function retireStaff(name){
+  if(!confirm(name+' を退職にします。\n\n・ポータル / 軍師 / 管理コンソールにログインできなくなります\n・給与・来店などの履歴は名前で保持されます\n・あとで「復帰」で在籍に戻せます\n\nよろしいですか？'))return;
+  var s=findStaff(name); if(s){s.retired=true;} render();
+  if(!IS_GAS){toast(name+' を退職にしました');return;}
+  gsr('adminSetRetired',USER_ID,name,true).then(function(r){res(r,name+' を退職にしました')||load();}).catch(function(){toast('通信エラー',true);load();});
+}
+function unretireStaff(name){
+  if(!confirm(name+' を在籍に戻します（復帰）。よろしいですか？'))return;
+  var s=findStaff(name); if(s){s.retired=false;s.retiredAt='';} render();
+  if(!IS_GAS){toast(name+' を復帰させました');return;}
+  gsr('adminSetRetired',USER_ID,name,false).then(function(r){res(r,name+' を復帰させました')||load();}).catch(function(){toast('通信エラー',true);load();});
+}
 function setFilter(f){ roleFilter=f; renderStaff(); }
 function onSearch(){ q=(document.getElementById('q').value||'').trim(); renderStaff(); }
 function findStaff(n){ return ST.staff.find(function(s){return s.name===n;}); }
