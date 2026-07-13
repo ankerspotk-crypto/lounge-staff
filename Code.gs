@@ -755,6 +755,7 @@ function getNotifSettings_() {
     early_taikin:       { label: '🕐 早退勤予告',         type: 'auto', enabled: true, group: '黒服',       desc: '退勤時間が近いキャストを10分前に黒服へ通知' },
     driver_notice_1600: { label: '🚗 16時ドライバー連絡', type: 'auto', enabled: true, group: 'ドライバー', desc: '16:00にドライバーへ連絡（ドライバーモード=本日もよろしく／自社便モード=本日は送りなし・お休み）' },
     stocktake_reminder: { label: '📋 棚卸しリマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '毎週月曜19:00に黒服グループへ棚卸し通知' },
+    trust_cash_notice:  { label: '💴 TRUST日次現金の参照通知', type: 'auto', enabled: false, group: '黒服', desc: 'TRUST取得（日払い・経費）実行時に黒服グループへ合計¥を通知。¥0でも流れるため既定OFF（コンソール取込履歴には残る）' },
     notice_reminder:    { label: '📢 お知らせ未読リマインド', time: '19:00', enabled: true, group: 'スタッフ', days: [1,2,3,4,5,6,7], msgEditable: false, defaultMsg: null, desc: '未読のお知らせがある人へ毎日この時刻に1通まとめてDM（既読になれば止まる／投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了）' },
     shift_open:         { label: '📅 来週シフト号令（月）',   time: '13:00', enabled: true, group: 'キャスト・黒服', days: [1], msgEditable: false, defaultMsg: null, desc: '毎週月曜13:00に対象者（キャスト/体験/黒服）へ来週分シフトの提出を号令（締切=木曜）。店休日でも配信' },
     shift_remind:       { label: '⏰ 来週シフト催促（木）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [4], msgEditable: false, defaultMsg: null, desc: '毎週木曜19:00に来週分が未提出＆来週なし未報告の人へ個別DM＋黒服グループへ提出状況一覧' },
@@ -9882,6 +9883,11 @@ function writeTrustDailyCash_(dateKey, dayPayTotal, costOutTotal, costOutDetail)
   ];
   if (detailStr) lines.push('（' + detailStr + '）');
   lines.push('', 'IEYAS軍師の「現金管理」からチェック申請をお願いします');
+  // コンソール通知タブの trust_cash_notice がOFFなら黒服グループへは流さない（取込履歴には残る）
+  const ns = getNotifSettings_();
+  if (ns['trust_cash_notice'] && ns['trust_cash_notice'].enabled === false) {
+    return { ok: true, dateKey, dayPayTotal, costOutTotal, suppressed: true };
+  }
   push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
   return { ok: true, dateKey, dayPayTotal, costOutTotal };
