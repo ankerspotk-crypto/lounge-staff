@@ -1496,7 +1496,7 @@ function drawNotice(){
     +'<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">'
     +'<label style="font-size:13px">対象 <select class="finput" id="nt-target"><option value="all">全員</option><option value="cast">キャストのみ</option><option value="kurofuku">黒服のみ</option></select></label>'
     +'<label style="font-size:13px">重要度 <select class="finput" id="nt-imp"><option value="normal">通常</option><option value="high">重要</option><option value="urgent">📌 最重要（既読でも残る）</option></select></label>'
-    +'<label style="font-size:13px">表示期限 <input class="finput" type="date" id="nt-expire"></label>'
+    +'<label style="font-size:13px">表示期限 <input class="finput" type="date" id="nt-expire" style="cursor:pointer" onclick="try{this.showPicker()}catch(e){}"></label>'
     +'<button class="btn pri" onclick="submitNotice()">📢 配信する</button>'
     +'</div>'
     +'<div class="hint" style="margin-top:6px">表示期限を空にすると無期限。LINE未登録のスタッフには通知が届きませんが、ポータルには表示されます。</div>'
