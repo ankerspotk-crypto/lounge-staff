@@ -125,6 +125,14 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#0d2618;border:1px solid #2a6a44;color:#9fe8c0;font-size:13px;font-weight:700;padding:11px 20px;border-radius:12px;z-index:70;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center;}
 .toast.show{opacity:1;} .toast.err{background:#241014;border-color:#5a2430;color:#e0a0b0;}
 .hint{font-size:12px;color:var(--dim);margin:-4px 0 10px;}
+.sss-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.sss-chip{font-size:12px;font-weight:800;color:#fff;padding:5px 12px;border-radius:20px;}
+.sss-block{margin-top:8px;}
+.sss-h{font-size:11px;color:var(--dim);font-weight:700;margin-bottom:5px;}
+.sss-names{display:flex;gap:6px;flex-wrap:wrap;}
+.sss-n{font-size:12px;background:#2a3550;color:#cdd8ee;padding:3px 9px;border-radius:8px;}
+.sss-n.ok{background:#1e3a2a;color:#a8d8b8;}
+.sss-n.unreg{background:#4a2a2a;color:#e0b0b0;}
 .who .logout{color:var(--accent);cursor:pointer;margin-left:10px;font-weight:800;}
 /* QRログインゲート */
 .qrgate{max-width:400px;margin:60px auto;text-align:center;display:flex;flex-direction:column;align-items:center;}
@@ -436,15 +444,27 @@ function renderRef(){
 }
 
 /* ===== 🗓 シフト ===== */
-var shiftReq=null, shiftMgmt=null, shiftRoleFilter='all';
+var shiftReq=null, shiftMgmt=null, shiftRoleFilter='all', shiftSubmitStat=null;
 function shiftRoleMatch(role){ var f=shiftRoleFilter; if(f==='all')return true; if(f==='黒服')return String(role||'').indexOf('黒服')>=0; return role===f; }
 function setShiftRole(f){ shiftRoleFilter=f; drawShift(); }
 function renderShift(){
   loading();
-  Promise.all([api('getShiftRequests'),api('getShiftMgmt')]).then(function(r){
+  Promise.all([api('getShiftRequests'),api('getShiftMgmt'),api('getShiftSubmitStatus')]).then(function(r){
     shiftReq=(r[0]&&r[0].requests)||[]; shiftMgmt=(r[1]&&r[1].data)||{headers:[],rows:[]};
+    shiftSubmitStat=(r[2]&&r[2].ok)?r[2]:null;
     drawShift();
   }).catch(function(){setBody('<div class="empty">読み込みエラー</div>');});
+}
+// 来週シフト提出状況パネル（提出済/未提出/来週なし）。木金の自動リマインドと同じ集計。
+function admShiftSubmitStatusHtml(){
+  var st=shiftSubmitStat; if(!st)return '';
+  var miss=(st.missing||[]).map(function(m){return typeof m==='string'?{name:m,registered:true}:m;});
+  var chip=function(t,n,c){return '<span class="sss-chip" style="background:'+c+'">'+t+' '+n+'</span>';};
+  var body='<div class="sss-chips">'+chip('提出済',(st.submitted||[]).length,'#1e4429')+chip('未提出',miss.length,miss.length?'#5a2a2a':'#2a3550')+chip('来週なし',(st.declined||[]).length,'#3a3050')+'</div>';
+  if(miss.length)body+='<div class="sss-block"><div class="sss-h">未提出（木19:00/金19:00に個別DM）</div><div class="sss-names">'+miss.map(function(m){return '<span class="sss-n'+(m.registered?'':' unreg')+'">'+esc(m.name)+(m.registered?'':'（LINE未登録）')+'</span>';}).join('')+'</div></div>';
+  if((st.declined||[]).length)body+='<div class="sss-block"><div class="sss-h">来週なし報告済</div><div class="sss-names">'+st.declined.map(function(n){return '<span class="sss-n ok">'+esc(n)+'</span>';}).join('')+'</div></div>';
+  if((st.submitted||[]).length)body+='<div class="sss-block"><div class="sss-h">提出済</div><div class="sss-names">'+st.submitted.map(function(n){return '<span class="sss-n ok">'+esc(n)+'</span>';}).join('')+'</div></div>';
+  return '<div class="sec compact"><div class="sec-t">🗒 来週シフト提出状況 <span class="sub">'+esc(st.weekLabel||'')+' ・ 締切 木曜</span></div>'+body+'</div>';
 }
 function drawShift(){
   var reqPend=shiftReq.filter(function(x){return (x.status||'pending')==='pending'||!x.status;});
@@ -496,6 +516,7 @@ function drawShift(){
   var confirmBar='<div class="sec compact"><div class="sec-t">📅 シフト確定 → 黒服へLINE通知</div><div class="addbar"><select class="finput" id="sh-confirm-week">'+admWeekOpts()+'</select><button class="btn pri" onclick="admConfirmShift()">確定通知を送信</button></div><div class="hint" style="margin-top:6px">選んだ週の確定シフト（シフト表に入っている分）を黒服全員に個別LINEで通知します。</div></div>';
   setBody(
     '<div class="shift-top">'+
+      admShiftSubmitStatusHtml()+
       '<div class="sec compact"><div class="sec-t">📩 承認リクエスト <span class="cnt">'+reqPend.length+'件</span><span class="sp" style="flex:1"></span>'+(reqPend.length?'<button class="btn dng sm" onclick="clearAllReq('+reqPend.length+')">🗑 全てクリア</button>':'')+'</div>'+reqHtml+'</div>'+
       confirmBar+
       '<div class="sec compact"><div class="sec-t">➕ 派遣/体験を追加</div><div class="addbar"><input class="finput" id="as-name" placeholder="氏名"><select class="finput" id="as-role"><option value="派遣">派遣</option><option value="体験">体験</option></select><select class="finput" id="as-date">'+dateOpts+'</select><input class="finput" id="as-time" placeholder="時刻 例20:00"><button class="btn pri" onclick="addShiftStaff()">追加</button></div></div>'+
@@ -1641,6 +1662,7 @@ function MOCKAPI(action,body){
   if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
   if(action==='getShiftMgmt')return {ok:true,data:{closedDays:{'2026-07-07':'テスト店休'},headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'20:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
+  if(action==='getShiftSubmitStatus')return {ok:true,weekLabel:'7/14〜7/20',weekKey8:'20260714',total:5,submitted:['まや','たかし'],declined:['ゆうた'],missing:[{name:'鈴木海',registered:true},{name:'あや',registered:false}]};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
   if(action==='getPublishStatus')return {ok:true,month:body.month,payPublished:false,rankPublished:true,salesDate:''};
   if(action==='getOkuriMode')return {ok:true,mode:'driver'};

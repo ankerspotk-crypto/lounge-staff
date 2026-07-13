@@ -340,6 +340,12 @@ function handleApiRequest_(body) {
     return markNoticeRead_(body.noticeId, body.userId, staffName || body.name || '', body.route || 'portal');
   }
   if (body.action === 'submitShift') return submitShift(body);
+  if (body.action === 'declineNextWeek') return declineNextWeek(body);
+  if (body.action === 'getShiftSubmitStatus') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return computeShiftSubmitStatus_();
+  }
   if (body.action === 'sendCastSeatRequest') return sendCastSeatRequest_(body);
   if (body.action === 'castCall') return castCall_(body);
   if (body.action === 'getCastSeats') return getCastSeats_(body);
@@ -750,6 +756,9 @@ function getNotifSettings_() {
     driver_notice_1600: { label: '🚗 16時ドライバー連絡', type: 'auto', enabled: true, group: 'ドライバー', desc: '16:00にドライバーへ連絡（ドライバーモード=本日もよろしく／自社便モード=本日は送りなし・お休み）' },
     stocktake_reminder: { label: '📋 棚卸しリマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '毎週月曜19:00に黒服グループへ棚卸し通知' },
     notice_reminder:    { label: '📢 お知らせ未読リマインド', time: '19:00', enabled: true, group: 'スタッフ', days: [1,2,3,4,5,6,7], msgEditable: false, defaultMsg: null, desc: '未読のお知らせがある人へ毎日この時刻に1通まとめてDM（既読になれば止まる／投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了）' },
+    shift_open:         { label: '📅 来週シフト号令（月）',   time: '13:00', enabled: true, group: 'キャスト・黒服', days: [1], msgEditable: false, defaultMsg: null, desc: '毎週月曜13:00に対象者（キャスト/体験/黒服）へ来週分シフトの提出を号令（締切=木曜）。店休日でも配信' },
+    shift_remind:       { label: '⏰ 来週シフト催促（木）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [4], msgEditable: false, defaultMsg: null, desc: '毎週木曜19:00に来週分が未提出＆来週なし未報告の人へ個別DM＋黒服グループへ提出状況一覧' },
+    shift_remind2:      { label: '⏰ 来週シフト催促（金）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [5], msgEditable: false, defaultMsg: null, desc: '毎週金曜19:00にまだ未提出の人へ再度個別DM＋黒服グループへ一覧（無反応防止の追撃）' },
   };
   const saved = prop('NOTIF_SETTINGS');
   if (!saved) return defaults;
@@ -4122,6 +4131,11 @@ function scheduledJobs() {
   // 既読になれば当然対象外、投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了。店休日(お盆等)でも周知したいので isClosed 判定より前に置く。
   notif_('notice_reminder', () => { sendNoticeUnreadReminders_(); });
 
+  // 来週シフト提出: 月曜号令 / 木・金の未提出者リマインド。提出は営業有無と独立なので店休日でも回す＝isClosed 判定より前に置く。
+  notif_('shift_open',    () => { broadcastShiftSubmitOpen_(); });
+  notif_('shift_remind',  () => { remindShiftSubmitMissing_(1); });
+  notif_('shift_remind2', () => { remindShiftSubmitMissing_(2); });
+
   // 定休日(日曜)の営業ぶんはスキップ。ただし日曜早朝=土曜の閉店作業なので bizDow で判定し、土曜クローズ通知(照明/終了現金/未退勤)は通す
   if (isClosed) return;
 
@@ -5172,9 +5186,16 @@ function cleanOldProperties() {
   const props = PropertiesService.getScriptProperties().getProperties();
   const today = todayStr();
   const keep  = ['LINE_TOKEN','GROUP_YOYAKU','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN'];
+  const todayYmd8 = Utilities.formatDate(new Date(), TZ, 'yyyyMMdd');
   Object.keys(props).forEach(k => {
     if (keep.includes(k)) return;
     if (k.startsWith('ID_REPLIED_')) return;
+    // 来週なし報告(WEEKDECL_YYYYMMDD)は対象週の月曜より前になったら掃除（キーにハイフンが無く上のregexに掛からないので明示削除）
+    if (k.startsWith('WEEKDECL_')) {
+      const ymd = k.slice('WEEKDECL_'.length);
+      if (/^\d{8}$/.test(ymd) && ymd < todayYmd8) PropertiesService.getScriptProperties().deleteProperty(k);
+      return;
+    }
     const m = k.match(/(\d{4}-\d{2}-\d{2})/);
     if (m && m[1] !== today) PropertiesService.getScriptProperties().deleteProperty(k);
   });
@@ -5584,6 +5605,164 @@ function clearPendingShiftRequests_() {
     }
   }
   return { ok: true, cleared: n };
+}
+
+// ============================================================
+// 来週シフト提出リマインド
+//   週始め(月)に来週分の提出を号令 → 木/金に未提出者へ個別DM＋黒服へ一覧。
+//   「来週なし」報告(ポータルボタン)で無反応を防止。対象＝キャスト/体験/黒服。
+// ============================================================
+
+// 来週（次の月曜〜日曜）の範囲。weekKey8='YYYYMMDD'(月曜)＝プロパティキー用（ハイフン無し＝cleanOldProperties の日次掃除regexを回避）
+function nextWeekRange_() {
+  const now = new Date();
+  const dow = Number(Utilities.formatDate(now, TZ, 'u')); // 1=月..7=日
+  const thisMon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (dow - 1)); // 今週の月曜
+  const mon     = new Date(thisMon.getFullYear(), thisMon.getMonth(), thisMon.getDate() + 7); // 来週の月曜
+  const dates = [], mdSet = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
+    dates.push(d);
+    mdSet[Utilities.formatDate(d, TZ, 'M/d')] = true; // '7/14' 形式（ポータル提出キーと一致）
+  }
+  const sun = dates[6];
+  return {
+    weekKey8: Utilities.formatDate(mon, TZ, 'yyyyMMdd'),
+    startMD:  Utilities.formatDate(mon, TZ, 'M/d'),
+    endMD:    Utilities.formatDate(sun, TZ, 'M/d'),
+    label:    Utilities.formatDate(mon, TZ, 'M/d') + '〜' + Utilities.formatDate(sun, TZ, 'M/d'),
+    mdSet:    mdSet
+  };
+}
+
+// 提出リマインド対象名簿＝スタッフマスタでキャスト/体験/黒服。管理者・徳子(kintaiExemptKeys_)は除外。
+function shiftSubmitRoster_() {
+  const all = getAllStaff_(getOrOpenSS_());
+  const exempt = kintaiExemptKeys_();
+  const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  return all.filter(function (s) {
+    const r = String(s.role || '');
+    if (r.indexOf('キャスト') < 0 && r.indexOf('体験') < 0 && r.indexOf('黒服') < 0) return false;
+    if (exempt[norm(s.name)]) return false;
+    return true;
+  });
+}
+
+// 来週分を1日でも提出済みの人の正規化キー集合（却下/クリアは提出扱いにしない）
+function submittedKeysForWeek_(mdSet) {
+  const set = {};
+  const sh = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+  if (!sh || sh.getLastRow() < 2) return set;
+  const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  const rows = sh.getRange(2, 2, sh.getLastRow() - 1, 4).getValues(); // B名前 C日付 D希望 Eステータス
+  rows.forEach(function (r) {
+    let md = r[1];
+    if (md instanceof Date) md = Utilities.formatDate(md, TZ, 'M/d');
+    else md = String(md).trim();
+    const status = String(r[3] || '');
+    if (status === '却下' || status === 'クリア') return;
+    if (mdSet[md]) set[norm(r[0])] = true;
+  });
+  return set;
+}
+
+function weekDeclineKey_(weekKey8) { return 'WEEKDECL_' + weekKey8; }
+function getWeekDeclineKeys_(weekKey8) {
+  const raw = prop(weekDeclineKey_(weekKey8));
+  if (!raw) return [];
+  try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+
+// 来週の提出状況（コンソール表示・木金リマインド共通）
+function computeShiftSubmitStatus_() {
+  const wk = nextWeekRange_();
+  const roster = shiftSubmitRoster_();
+  const submitted = submittedKeysForWeek_(wk.mdSet);
+  const declines = getWeekDeclineKeys_(wk.weekKey8);
+  const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  const submittedNames = [], declinedNames = [], missing = [];
+  roster.forEach(function (s) {
+    const k = norm(s.name);
+    if (submitted[k]) submittedNames.push(s.name);
+    else if (declines.indexOf(k) >= 0) declinedNames.push(s.name);
+    else missing.push({ name: s.name, registered: !!s.lineId, lineId: s.lineId });
+  });
+  return {
+    ok: true, weekLabel: wk.label, weekKey8: wk.weekKey8, total: roster.length,
+    submitted: submittedNames, declined: declinedNames, missing: missing
+  };
+}
+
+// ポータル「来週は出勤なし」報告（declined=false で取消）。本人 or 管理者の代理。
+function declineNextWeek(payload) {
+  const callerName = getStaffName(payload.userId);
+  if (!callerName) return { ok: false, error: '登録されていません' };
+  let name = callerName;
+  const target = payload.targetName ? String(payload.targetName).trim() : '';
+  if (target && isAdmin_(normalizeName_(callerName)) && normalizeName_(target) !== normalizeName_(callerName)) name = target;
+  const wk = nextWeekRange_();
+  const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  const key = norm(name);
+  const list = getWeekDeclineKeys_(wk.weekKey8);
+  const declined = payload.declined !== false; // 既定=報告
+  const idx = list.indexOf(key);
+  const wasNew = declined && idx < 0;
+  if (declined && idx < 0) list.push(key);
+  if (!declined && idx >= 0) list.splice(idx, 1);
+  setProp(weekDeclineKey_(wk.weekKey8), JSON.stringify(list));
+  if (wasNew) { // 新規報告時だけ黒服へ通知（トグル連打で二重に流さない）
+    const KF = prop('GROUP_KUROFUKU');
+    if (KF) push_(KF, '🗒【来週シフト】' + name + 'さんが「来週(' + wk.label + ')は出勤なし」と報告しました。');
+  }
+  return { ok: true, declined: declined, label: wk.label };
+}
+
+// ポータルペイロード同梱用：本人の来週なし報告状況
+function nextWeekDeclineInfo_(lookupName) {
+  const wk = nextWeekRange_();
+  const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
+  return { label: wk.label, declined: getWeekDeclineKeys_(wk.weekKey8).indexOf(norm(lookupName)) >= 0 };
+}
+
+// 月曜号令：対象者へ来週シフト提出をLINE個別配信
+function broadcastShiftSubmitOpen_() {
+  const wk = nextWeekRange_();
+  const roster = shiftSubmitRoster_();
+  const url = prop('PORTAL_URL') || '';
+  const msg = '📅【来週シフトの提出をお願いします】\n'
+    + '対象週：' + wk.label + '\n'
+    + '締切：今週の木曜まで\n\n'
+    + 'マイページ →「シフト提出」から希望を入力してください。'
+    + (url ? '\n' + url : '')
+    + '\n\n※来週は出勤予定がない場合は、シフト提出画面の「来週は出勤なし」ボタンで報告してください。';
+  let sent = 0;
+  roster.forEach(function (s) { if (s.lineId) { try { push_(s.lineId, msg); sent++; } catch (e) {} } });
+  return { ok: true, sent: sent, total: roster.length, label: wk.label };
+}
+
+// 木(round=1)/金(round=2)：未提出者へ個別DM＋黒服グループへ提出状況一覧
+function remindShiftSubmitMissing_(round) {
+  const st = computeShiftSubmitStatus_();
+  const url = prop('PORTAL_URL') || '';
+  const head = (round === 2 ? '⏰【再度：来週シフトが未提出です】\n' : '⏰【来週シフトが未提出です】\n');
+  const dm = head
+    + '対象週：' + st.weekLabel + '\n'
+    + '本日中に提出をお願いします（締切：木曜）。\n\n'
+    + 'マイページ →「シフト提出」から入力してください。'
+    + (url ? '\n' + url : '')
+    + '\n\n※来週は出勤なしの場合は「来週は出勤なし」ボタンで報告を。';
+  let dmSent = 0;
+  st.missing.forEach(function (m) { if (m.lineId) { try { push_(m.lineId, dm); dmSent++; } catch (e) {} } });
+  const KF = prop('GROUP_KUROFUKU');
+  if (KF) {
+    const lines = [];
+    lines.push('🗒【来週シフト提出状況】' + st.weekLabel + (round === 2 ? '（金曜・最終）' : '（木曜）'));
+    lines.push('提出済 ' + st.submitted.length + '名 ／ 来週なし ' + st.declined.length + '名 ／ 未提出 ' + st.missing.length + '名');
+    if (st.missing.length) lines.push('\n■未提出（催促DM送信）\n' + st.missing.map(function (m) { return '・' + m.name + (m.lineId ? '' : '（LINE未登録）'); }).join('\n'));
+    if (st.declined.length) lines.push('\n■来週なし報告済\n' + st.declined.map(function (n) { return '・' + n; }).join('\n'));
+    push_(KF, lines.join('\n'));
+  }
+  return { ok: true, round: round, dmSent: dmSent, missing: st.missing.length, label: st.weekLabel };
 }
 
 // 管理者：承諾（シフト表に書き込む）または休み決定。newTime指定時は「時間変更で承諾」＝希望時間を上書きして確定
@@ -6103,6 +6282,7 @@ function handlePortalApi_(e) {
       shifts: shiftsH, confirmedShifts: confirmedShiftsH, pendingShifts: pendingShiftsH,
       todayArrival: todayArrivalH, seats: seatsH, working: workingH,
       reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH,
+      nextWeek: nextWeekDeclineInfo_(lookupNameH),
       notices: getNoticesFor_(lookupNameH, staffRoleH, userId) });
   }
 
@@ -6165,7 +6345,7 @@ function handlePortalApi_(e) {
     todayArrival = { key: todayKey, time: eff.time, pending: eff.pending, dohan: eff.dohan };
   }
 
-  return out({ ok: true, name, isAdmin, viewAs: lookupName, months, sales, pay, shifts, confirmedShifts, pendingShifts, staffRole, payPublished, hairTotals, salesDataDates, payReceipt, todayArrival });
+  return out({ ok: true, name, isAdmin, viewAs: lookupName, months, sales, pay, shifts, confirmedShifts, pendingShifts, staffRole, payPublished, hairTotals, salesDataDates, payReceipt, todayArrival, nextWeek: nextWeekDeclineInfo_(lookupName) });
 }
 
 function portalCastList_(ss) {
@@ -7263,7 +7443,7 @@ function resetGunshiSettings_() {
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
     'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','PORTAL_URL'];
-  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_'];
+  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
     if (KEEP_PREFIX.some(p => k.startsWith(p))) return;
