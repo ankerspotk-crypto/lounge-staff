@@ -19,8 +19,8 @@
   --green:#66cc88; --gold:#e6b23a; --pink:#e08ad0;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;font-family:-apple-system,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;}
-body{display:flex;flex-direction:column;height:100vh;}
+html,body{height:100%;font-family:-apple-system,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;overscroll-behavior:none;}
+body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 
 /* ---------- Header ---------- */
 /* iPad/iPhoneのPWA全画面ではステータスバー(時計等)がヘッダーに重なるため、セーフエリア分だけ上部を下げてボタンの当たり判定を確保 */
