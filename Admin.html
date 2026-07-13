@@ -1479,6 +1479,61 @@ function setVoiceStatus(row,status){
   }).catch(function(){toast('通信エラー',true);});
 }
 
+/* ===== 汎用カレンダー日付ピッカー =====
+   GASの管理コンソールはクロスオリジンiframe内で動くため input[type=date] の showPicker() が
+   SecurityErrorで使えない（タップしてもカレンダーが開かない）。そこで自前のカレンダーUIで代替。
+   使い方: HTMLに calFieldHtml('id','placeholder') を差し込む → 値は calVal('id') で 'yyyy-MM-dd' or '' を取得。
+   初期値を入れるときは描画後に calSet('id','yyyy-MM-dd')。 */
+var _cal={id:null,y:0,m:0};
+function _calP2(n){return (n<10?'0':'')+n;}
+function calFieldHtml(id,ph){
+  return '<span style="position:relative;display:inline-block">'
+    +'<input type="hidden" id="'+id+'">'
+    +'<button type="button" id="'+id+'-btn" onclick="calOpen(\''+id+'\')" style="min-width:170px;text-align:left;background:var(--panel2,#1a2438);border:1px solid var(--line2,#33406a);border-radius:9px;padding:9px 12px;color:var(--txt,#e8f0ff);font-size:14px;cursor:pointer">'
+    +'📅 <span id="'+id+'-lbl" style="color:#8aabcc">'+(ph||'日付を選択')+'</span></button>'
+    +'<div id="'+id+'-pop" style="display:none;position:fixed;z-index:9999;background:#0e1726;border:1px solid #2a4a7a;border-radius:12px;padding:12px;box-shadow:0 12px 34px rgba(0,0,0,.55);width:252px"></div>'
+    +'</span>';
+}
+function calVal(id){var i=document.getElementById(id);return i?(i.value||''):'';}
+function calSet(id,ymd){var i=document.getElementById(id);if(!i)return;i.value=ymd||'';var l=document.getElementById(id+'-lbl');if(!l)return;if(ymd){l.textContent=ymd;l.style.color='#e8f0ff';}else{l.textContent=(l.getAttribute('data-ph')||'日付を選択');l.style.color='#8aabcc';}}
+function calOpen(id){
+  if(_cal.id&&_cal.id!==id)calClose();
+  var pop=document.getElementById(id+'-pop');
+  if(pop.style.display==='block'){calClose();return;}
+  // placeholderを保持（クリア時に戻すため）
+  var l=document.getElementById(id+'-lbl'); if(l&&!l.getAttribute('data-ph')&&!calVal(id))l.setAttribute('data-ph',l.textContent);
+  var v=calVal(id),d=v?new Date(v+'T00:00:00'):new Date();
+  _cal={id:id,y:d.getFullYear(),m:d.getMonth()};
+  var r=document.getElementById(id+'-btn').getBoundingClientRect();
+  pop.style.top=(r.bottom+6)+'px';
+  pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-260))+'px';
+  pop.style.display='block';calDraw();
+  setTimeout(function(){document.addEventListener('click',calOutside);},0);
+}
+// innerHTML再構築でクリック対象がDOMから外れても誤判定しないよう、座標でポップアップ内外を判定
+function calOutside(e){if(!_cal.id)return;var pop=document.getElementById(_cal.id+'-pop'),btn=document.getElementById(_cal.id+'-btn');var inBtn=btn&&btn.contains(e.target);var inPop=false;if(pop){var r=pop.getBoundingClientRect();inPop=e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom;}if(!inBtn&&!inPop)calClose();}
+function calClose(){if(!_cal.id)return;var pop=document.getElementById(_cal.id+'-pop');if(pop)pop.style.display='none';document.removeEventListener('click',calOutside);_cal.id=null;}
+function calNav(delta){_cal.m+=delta;if(_cal.m<0){_cal.m=11;_cal.y--;}if(_cal.m>11){_cal.m=0;_cal.y++;}calDraw();}
+function calPick(ymd){calSet(_cal.id,ymd);calClose();}
+function calClearCur(){calSet(_cal.id,'');calClose();}
+function calDraw(){
+  var id=_cal.id,y=_cal.y,m=_cal.m,pop=document.getElementById(id+'-pop');
+  var startDow=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),sel=calVal(id);
+  var wd=['日','月','火','水','木','金','土'];
+  var nav='background:#162848;border:1px solid #2a5aaa;border-radius:8px;color:#bcd6f0;width:34px;height:30px;cursor:pointer;font-size:16px';
+  var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<button type="button" onclick="calNav(-1)" style="'+nav+'">‹</button>'
+    +'<span style="font-weight:700;color:#e8f0ff;font-size:14px">'+y+'年 '+(m+1)+'月</span>'
+    +'<button type="button" onclick="calNav(1)" style="'+nav+'">›</button></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  wd.forEach(function(w,i){h+='<div style="text-align:center;font-size:11px;padding:2px 0;color:'+(i===0?'#e08794':i===6?'#7ab0f0':'#8aabcc')+'">'+w+'</div>';});
+  for(var i=0;i<startDow;i++)h+='<div></div>';
+  for(var day=1;day<=days;day++){var ymd=y+'-'+_calP2(m+1)+'-'+_calP2(day),isSel=ymd===sel;
+    h+='<button type="button" onclick="calPick(\''+ymd+'\')" style="padding:8px 0;border:none;border-radius:7px;cursor:pointer;font-size:13px;'+(isSel?'background:#1a50a0;color:#fff;font-weight:700':'background:transparent;color:#cdd8e8')+'">'+day+'</button>';}
+  h+='</div><button type="button" onclick="calClearCur()" style="width:100%;margin-top:8px;padding:8px;background:transparent;border:1px solid #33406a;border-radius:8px;color:#8aabcc;font-size:12px;cursor:pointer">クリア（無期限にする）</button>';
+  pop.innerHTML=h;
+}
+
 /* ===== 📢 お知らせ（作成＋配信＋既読マップ）===== */
 var noticeList=[], noticeOpen={};
 var NOTICE_TARGETS={all:'全員',cast:'キャスト',kurofuku:'黒服'};
@@ -1496,7 +1551,7 @@ function drawNotice(){
     +'<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px">'
     +'<label style="font-size:13px">対象 <select class="finput" id="nt-target"><option value="all">全員</option><option value="cast">キャストのみ</option><option value="kurofuku">黒服のみ</option></select></label>'
     +'<label style="font-size:13px">重要度 <select class="finput" id="nt-imp"><option value="normal">通常</option><option value="high">重要</option><option value="urgent">📌 最重要（既読でも残る）</option></select></label>'
-    +'<label style="font-size:13px">表示期限 <input class="finput" type="date" id="nt-expire" style="cursor:pointer" onclick="try{this.showPicker()}catch(e){}"></label>'
+    +'<span style="font-size:13px;display:inline-flex;align-items:center;gap:6px">表示期限 '+calFieldHtml('nt-expire','無期限（タップで選択）')+'</span>'
     +'<button class="btn pri" onclick="submitNotice()">📢 配信する</button>'
     +'</div>'
     +'<div class="hint" style="margin-top:6px">表示期限を空にすると無期限。LINE未登録のスタッフには通知が届きませんが、ポータルには表示されます。</div>'
