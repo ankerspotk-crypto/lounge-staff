@@ -11873,7 +11873,8 @@ function getStocktakeTargets() {
 // 【1回だけ手動実行】在庫マスタの「共通」品を 2F/5F の各行に分割（在庫0スタート・初回棚卸しで実数登録）。
 // 既存の共通行を 2F・在庫0 に変え、同じ品の 5F・在庫0 行を新規追加する。
 // べき等: 実行後は floor==='共通' が無くなるため、再実行しても無害（0件変換）。
-function migrateCommonStockToFloors_() {
+// ※末尾アンダースコア無し＝GASの実行メニューから手動起動できるように（1回だけ実行する運用関数）。
+function migrateCommonStockToFloors() {
   const sh = getStockMasterSheet_();
   const rows = sh.getDataRange().getValues();
   const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
