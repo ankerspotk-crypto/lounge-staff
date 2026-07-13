@@ -190,22 +190,22 @@ function kioskCodeToTable_(code) {
   var m = String(code || '').match(/^(2F|5F)-([CB])(\d+)$/);
   return m ? (m[1] + ' ' + (m[2] === 'C' ? 'カウンター' : 'ボックス') + m[3]) : null;
 }
-function kioskChangeTable(fromCode, toCode) {
+function kioskChangeTable(fromCode, toCode, rowIdx) {
   try {
     if (!fromCode || !toCode || fromCode === toCode) return { ok: false, error: '移動元/先が不正です' };
     var fromLabel = kioskCodeToTable_(fromCode), toLabel = kioskCodeToTable_(toCode);
     if (!fromLabel || !toLabel) return { ok: false, error: '席コードが不正です' };
     var sp = PropertiesService.getScriptProperties();
-    var rsrvRaw = sp.getProperty('RSRV_' + fromCode);
-    if (!rsrvRaw) return { ok: false, error: '移動元に来店中のお客様がいません' };
-    if (sp.getProperty('RSRV_' + toCode)) return { ok: false, error: '移動先は使用中です' };
-    var rsrv = {}; try { rsrv = JSON.parse(rsrvRaw) || {}; } catch (e) {}
+    var fromList = readRsrv_(fromCode);
+    if (!fromList.length) return { ok: false, error: '移動元に来店中のお客様がいません' };
+    // 移動先が使用中なら不可（相席させたい時は予約のテーブル指定＋来店で同居する運用）
+    if (readRsrv_(toCode).length) return { ok: false, error: '移動先は使用中です' };
+    // 同居している場合は rowIdx で対象組を特定（未指定は先頭組）
+    var rsrv = rowIdx ? (fromList.filter(function (e) { return String(e.rowIdx || '') === String(rowIdx); })[0] || fromList[0]) : fromList[0];
     // 来店済み予約のテーブル欄を更新（あれば）→ 同期でゾンビ削除されないように
     updateReservationTableForMove_(rsrv.customer, fromLabel, toLabel);
-    // 席状態(RSRV_/タグ/NG/予定)＋キャスト出席を移送（既存の移譲ロジックを再利用）
-    transferSeatState_(fromLabel, toLabel, rsrv.customer, rsrv.pax || 1);
-    // 担当キャスト情報を保持（transferSeatState_は{customer,pax}のみ書くため上書き補完）
-    if (rsrv.tantouCast) sp.setProperty('RSRV_' + toCode, JSON.stringify({ customer: rsrv.customer, pax: rsrv.pax || 1, tantouCast: rsrv.tantouCast }));
+    // 席状態(RSRV_/タグ/NG/予定)＋キャスト出席を移送（当該組をrowIdxで特定・全項目を新席へ複製）
+    transferSeatState_(fromLabel, toLabel, rsrv.customer, rsrv.pax || 1, rsrv.rowIdx, rsrv.memberId || '', rsrv.tantouCast || '');
     sp.deleteProperty('RSRV_SYNC_AT');
     return { ok: true, from: fromLabel, to: toLabel };
   } catch (e) { return { ok: false, error: e.message }; }

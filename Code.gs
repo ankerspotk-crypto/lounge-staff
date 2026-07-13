@@ -3541,8 +3541,7 @@ function startAtendou_(seatCode, seatLabel, staffName, mins) {
 
   // カスタマー席に来店済み予約がない場合は黒服へ通知
   if (targetSeat && (targetSeat.type === 'C' || targetSeat.type === 'B')) {
-    const rsrv = PropertiesService.getScriptProperties().getProperty('RSRV_' + seatCode);
-    if (!rsrv) {
+    if (readRsrv_(seatCode).length === 0) {
       const KF = prop('GROUP_KUROFUKU');
       if (KF) push_(KF, '⚠️ 予約管理でテーブル指定してください（席: ' + seatLabel + '）');
     }
@@ -5384,10 +5383,7 @@ function getSekiJokyouData() {
       const v = allProps['PLANCAST_' + code];
       return v ? JSON.parse(v) : [];
     };
-    const getRsrvCached = code => {
-      const v = allProps['RSRV_' + code];
-      return v ? JSON.parse(v) : null;
-    };
+    const getRsrvListCached = code => parseRsrvVal_(allProps['RSRV_' + code]);
     const getYrsrvCached = code => {
       const v = allProps['YRSRV_' + code];
       return v ? JSON.parse(v) : null;
@@ -5418,10 +5414,11 @@ function getSekiJokyouData() {
       const tags = getTagsCached(s.code);
       const ngCast = getNgCached(s.code);
       const planCast = getPlanCached(s.code);
-      const rsrv = getRsrvCached(s.code);
+      const rsrvList = getRsrvListCached(s.code);
+      const rsrv = rsrvList[0] || null; // 旧フロント互換（先頭組）
       const yrsrv = getYrsrvCached(s.code);
       const recentLeft = leftByCode[s.code] || {};
-      if (list.length === 0) return Object.assign({}, s, { occupied: false, casts: [], tags, ngCast, planCast, rsrv, yrsrv, recentLeft });
+      if (list.length === 0) return Object.assign({}, s, { occupied: false, casts: [], tags, ngCast, planCast, rsrv, rsrvList, yrsrv, recentLeft });
 
       const casts = list.map(r => {
         const el = elapsedMins_(r.start);
@@ -5433,7 +5430,7 @@ function getSekiJokyouData() {
       const worstStatus = (s.type === 'W' || s.type === 'K') ? 'ok'
                         : casts.some(c => c.status === 'over') ? 'over'
                         : casts.some(c => c.status === 'warn') ? 'warn' : 'ok';
-      return Object.assign({}, s, { occupied: true, casts, status: worstStatus, tags, ngCast, planCast, rsrv, yrsrv, recentLeft });
+      return Object.assign({}, s, { occupied: true, casts, status: worstStatus, tags, ngCast, planCast, rsrv, rsrvList, yrsrv, recentLeft });
     });
   } catch(e) {
     console.error('getSekiJokyouData error:', e);
@@ -7564,9 +7561,16 @@ function getYoyakuRsrvSheet_() {
   let sh = ss.getSheetByName(YOYAKU_RSRV_TAB);
   if (!sh) {
     sh = ss.insertSheet(YOYAKU_RSRV_TAB);
-    sh.appendRow(['予約日','来店時刻','お客様名','会員番号','人数','テーブル','担当キャスト','要望','ステータス','予約担当者','登録日時','予約キャスト','同伴キャスト','席料','同伴料','サブ内訳']);
+    sh.appendRow(['予約日','来店時刻','お客様名','会員番号','人数','テーブル','担当キャスト','要望','ステータス','予約担当者','登録日時','予約キャスト','同伴キャスト','席料','同伴料','サブ内訳','集計モード']);
   }
   return sh;
+}
+
+// 既存シートに列17「集計モード」ヘッダが無ければ補う（本番の既存シート向け・書込パスからのみ呼ぶ）
+function ensureRsrvHeaders_(sh) {
+  try {
+    if (String(sh.getRange(1, 17).getValue()).trim() !== '集計モード') sh.getRange(1, 17).setValue('集計モード');
+  } catch (e) {}
 }
 
 function getYoyakuReqSheet_() {
@@ -7668,7 +7672,7 @@ function syncYrsrv_() {
   // あるべきYRSRV_を先に確定（RSRV_＝来店済みがある席は予告不要なので除外）
   const desired = {}; // 'YRSRV_<code>' -> json文字列
   Object.entries(seatMap).forEach(([code, data]) => {
-    if (!allProps['RSRV_' + code]) desired['YRSRV_' + code] = JSON.stringify(data);
+    if (parseRsrvVal_(allProps['RSRV_' + code]).length === 0) desired['YRSRV_' + code] = JSON.stringify(data);
   });
   // 追加・変更のみ書き込む（同じ値は触らない＝安定している席は一瞬も消えない）
   Object.keys(desired).forEach(k => { if (allProps[k] !== desired[k]) sp.setProperty(k, desired[k]); });
@@ -7678,30 +7682,40 @@ function syncYrsrv_() {
   });
 }
 
-// 予約システムと整合を取り、ゾンビRSRV_を削除
+// 予約システムと整合を取り、ゾンビRSRV_エントリを削除（同居対応: 席単位ではなく組(rowIdx)単位で照合）
 function syncRsrvWithReservations_() {
   const today = bizDateStr_();
   const sh = getYoyakuRsrvSheet_();
   const rows = sh.getDataRange().getValues();
-  // 本日の来店済み予約から有効な席コードを収集
-  const validCodes = new Set();
+  // 本日の来店済み予約から、席コード→期待エントリ(rowIdx集合)を再構築
+  const expected = {}; // code -> Set(rowIdxの文字列)
   for (let i = 1; i < rows.length; i++) {
     const d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], TZ, 'yyyy-MM-dd') : String(rows[i][0]);
     if (d !== today || String(rows[i][8]) !== '来店済み') continue;
+    const rowIdx = i + 1;
     String(rows[i][5]).split('、').forEach(t => {
       const code = tableNameToSeatCode_(t.trim());
-      if (code) validCodes.add(code);
+      if (!code) return;
+      (expected[code] = expected[code] || {})[String(rowIdx)] = true;
     });
   }
-  // validCodesに含まれないRSRV_を削除
   const sp = PropertiesService.getScriptProperties();
   const props = sp.getProperties();
   let cleared = 0;
   Object.keys(props).forEach(k => {
     if (!k.startsWith('RSRV_')) return;
-    if (!validCodes.has(k.slice(5))) { sp.deleteProperty(k); cleared++; }
+    const code = k.slice(5);
+    const arr = parseRsrvVal_(props[k]);
+    const exp = expected[code];
+    if (!exp) {
+      // この席に来店済み予約が1件も無い → 全エントリがゾンビ（RSRV_SYNC_AT等の非配列値もここで従来通り削除される）
+      sp.deleteProperty(k); cleared += (arr.length || 1); return;
+    }
+    // rowIdxを持つエントリのうち期待集合に無いものを除去。rowIdx無し(旧値/手動着席)は温存。
+    const kept = arr.filter(e => !e.rowIdx || exp[String(e.rowIdx)]);
+    if (kept.length !== arr.length) { writeRsrv_(code, kept); cleared += (arr.length - kept.length); }
   });
-  return { ok: true, cleared, validSeats: [...validCodes] };
+  return { ok: true, cleared };
 }
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
@@ -7944,7 +7958,8 @@ function getYoyakuReservations_(dateKey) {
       seatFee: (row[13] !== undefined && row[13] !== '') ? Number(row[13]) : null,
       dohanFee: (row[14] !== undefined && row[14] !== '') ? Number(row[14]) : null,
       checkInAt: Number(_props['KCHECKIN_' + rowIdx]) || null,
-      subCustomers: (function() { try { return row[15] ? JSON.parse(row[15]) : []; } catch (e) { return []; } })()
+      subCustomers: (function() { try { return row[15] ? JSON.parse(row[15]) : []; } catch (e) { return []; } })(),
+      aggMode: String(row[16] || '').trim() === 'split' ? 'split' : 'merge'
     });
   }
   return result;
@@ -8156,6 +8171,8 @@ function addReservation_(payload, regBy) {
   ]);
   const subCustomers = Array.isArray(payload.subCustomers) ? payload.subCustomers : [];
   if (subCustomers.length) sh.getRange(sh.getLastRow(), 16).setValue(JSON.stringify(subCustomers));
+  ensureRsrvHeaders_(sh);
+  sh.getRange(sh.getLastRow(), 17).setValue(payload.aggMode === 'split' ? 'split' : 'merge');
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true, dateKey, rowIdx: sh.getLastRow() };
  });
@@ -8179,9 +8196,13 @@ function updateReservation_(rowIdx, payload) {
   sh.getRange(rowIdx, 13).setValue(String(payload.dohanCast || ''));
   const subCustomers = Array.isArray(payload.subCustomers) ? payload.subCustomers : [];
   sh.getRange(rowIdx, 16).setValue(subCustomers.length ? JSON.stringify(subCustomers) : '');
+  if (payload.aggMode === 'merge' || payload.aggMode === 'split') {
+    ensureRsrvHeaders_(sh);
+    sh.getRange(rowIdx, 17).setValue(payload.aggMode);
+  }
   // 来店済み状態でテーブルが変わった場合、軍師システムに即時反映
   if ((oldStatus === '来店済み' || newStatus === '来店済み') && oldTable !== newTable) {
-    transferSeatState_(oldTable, newTable, String(payload.customer || oldRow[2]), Number(payload.pax) || Number(oldRow[4]) || 1);
+    transferSeatState_(oldTable, newTable, String(payload.customer || oldRow[2]), Number(payload.pax) || Number(oldRow[4]) || 1, rowIdx, String(payload.memberId || ''), String(payload.tantouCast || ''));
   }
   // 予約変更でYRSRV_を即時更新
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
@@ -8196,15 +8217,18 @@ function cancelReservation_(rowIdx) {
   sh.getRange(rowIdx, 9).setValue('キャンセル');
   const sp = PropertiesService.getScriptProperties();
   if (status === '来店済み') {
-    // 来店済み予約のキャンセル → ホールの席を全リセット（席・キャスト・タグ・NG・予定・来店時刻）
+    // 来店済み予約のキャンセル → 当該組を席から除去。席が空になった卓のみタグ/NG/予定/アテンドも掃除（残組は温存）
+    const customer = String(row[2] || '');
     sp.deleteProperty('KCHECKIN_' + rowIdx);
     seatCodes.forEach(code => {
-      sp.deleteProperty('RSRV_' + code);
+      removeRsrvEntry_(code, rowIdx, customer);
       sp.deleteProperty('YRSRV_' + code);
-      sp.deleteProperty('STAG_' + code);
-      sp.deleteProperty('NGCAST_' + code);
-      sp.deleteProperty('PLANCAST_' + code);
-      endAtendou_(code); // キャストのアテンドを終了（付け回し中含む）
+      if (readRsrv_(code).length === 0) {
+        sp.deleteProperty('STAG_' + code);
+        sp.deleteProperty('NGCAST_' + code);
+        sp.deleteProperty('PLANCAST_' + code);
+        endAtendou_(code); // キャストのアテンドを終了（付け回し中含む）
+      }
     });
   } else {
     // 未来店予約は席予告(YRSRV_)だけ掃除
@@ -8214,8 +8238,8 @@ function cancelReservation_(rowIdx) {
   return { ok: true, wasSeated: status === '来店済み' };
 }
 
-// 席移譲：旧テーブル文字列→新テーブル文字列（来店済みテーブルチェンジ時）
-function transferSeatState_(oldTableStr, newTableStr, customer, pax) {
+// 席移譲：旧テーブル文字列→新テーブル文字列（来店済みテーブルチェンジ時）。rowIdxで当該組を一意特定（同居対応）
+function transferSeatState_(oldTableStr, newTableStr, customer, pax, rowIdx, memberId, tantouCast) {
   const parseCodes = str => String(str).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   const oldCodes = parseCodes(oldTableStr);
   const newCodes = parseCodes(newTableStr);
@@ -8224,19 +8248,24 @@ function transferSeatState_(oldTableStr, newTableStr, customer, pax) {
   if (!removed.length && !added.length) return;
   const sp = PropertiesService.getScriptProperties();
   const allProps = sp.getProperties();
-  // 旧席からSTAG_・NGCAST_・PLANCAST_を回収
-  const stagData = removed.length ? (allProps['STAG_' + removed[0]] || null) : null;
-  const ngData   = removed.length ? (allProps['NGCAST_' + removed[0]] || null) : null;
-  const planData = removed.length ? (allProps['PLANCAST_' + removed[0]] || null) : null;
-  // 旧席をクリア
+  // 旧席から当該組を除去。空になった卓のみSTAG_・NGCAST_・PLANCAST_を回収してクリア（残組があれば温存）
+  let stagData = null, ngData = null, planData = null, tagsPicked = false;
   removed.forEach(code => {
-    sp.deleteProperty('RSRV_' + code);
-    sp.deleteProperty('STAG_' + code);
-    sp.deleteProperty('NGCAST_' + code);
-    sp.deleteProperty('PLANCAST_' + code);
+    removeRsrvEntry_(code, rowIdx, customer);
+    if (readRsrv_(code).length === 0) {
+      if (!tagsPicked) {
+        stagData = allProps['STAG_' + code] || null;
+        ngData   = allProps['NGCAST_' + code] || null;
+        planData = allProps['PLANCAST_' + code] || null;
+        tagsPicked = true;
+      }
+      sp.deleteProperty('STAG_' + code);
+      sp.deleteProperty('NGCAST_' + code);
+      sp.deleteProperty('PLANCAST_' + code);
+    }
   });
-  // 新席にRSRV_をセット
-  added.forEach(code => sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax })));
+  // 新席に当該組を追加（同居可）
+  added.forEach(code => upsertRsrvEntry_(code, { rowIdx: rowIdx || 0, customer, memberId: memberId || '', pax, tantouCast: tantouCast || '' }));
   // 最初の新席にSTAG_・NGCAST_・PLANCAST_を移行
   if (added.length > 0) {
     if (stagData) sp.setProperty('STAG_' + added[0], stagData);
@@ -8643,67 +8672,101 @@ function visitFeeVal_(v) { return (v !== '' && v != null) ? (Number(v) || 0) : '
 function visitCacheClear_() { try { CacheService.getScriptCache().remove('VISITMAP_v1'); } catch (e) {} }
 
 // 予約行rowIdx＋来店日で来店記録の行番号を返す（後ろから検索=直近優先）。無ければ0
-function findVisitRowByRsv_(sh, rsvRowIdx, dateKey) {
+// 同一予約(rsvRowIdx)に紐づく来店記録の全行を上から順に返す（先頭=代表行）。
+// split集計モードでは代表＋サブ会員が複数行になるため、退店/取消は全行を対象にする。
+function findVisitRowsByRsv_(sh, rsvRowIdx, dateKey) {
   const rows = sh.getDataRange().getValues();
-  for (let i = rows.length - 1; i >= 1; i--) {
-    if (String(rows[i][12]) === String(rsvRowIdx) && visitDateStr_(rows[i][0]) === dateKey) return i + 1;
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][12]) === String(rsvRowIdx) && visitDateStr_(rows[i][0]) === dateKey) out.push(i + 1);
   }
-  return 0;
+  return out;
+}
+// 代表行（先頭＝最初にappendした行。席料/同伴料/最終値の反映先）を返す。
+function findVisitRowByRsv_(sh, rsvRowIdx, dateKey) {
+  const rows = findVisitRowsByRsv_(sh, rsvRowIdx, dateKey);
+  return rows.length ? rows[0] : 0;
 }
 
-// チェックイン時に来店記録を1行追加（同予約の行が既にあれば来店時刻のみ更新=戻す→再来店の重複防止）
+// チェックイン時に来店記録を追加（同予約の行が既にあれば来店時刻のみ更新=戻す→再来店の重複防止）
+// 集計モード=split の予約は「代表＋各サブ会員」を会員ごと複数行に展開（来店回数・TRUST売上突合を会員別に）。
+// 席料/同伴料は二重計上を避けるため代表行にのみ集約し、サブ会員行は空にする。
 function logVisitOnCheckIn_(rsvRowIdx) {
   try {
-    const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 16).getValues()[0];
+    const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 17).getValues()[0];
     const customer = String(row[2] || '').trim();
     if (!customer) return;
     const dateKey = visitDateStr_(row[0]) || bizDateStr_();
     const vs = getVisitSheet_();
     const nowHm = Utilities.formatDate(new Date(), TZ, 'HH:mm');
-    const exist = findVisitRowByRsv_(vs, rsvRowIdx, dateKey);
-    if (exist) {
-      vs.getRange(exist, 2, 1, 2).setValues([[nowHm, '']]);
-    } else {
-      vs.appendRow([dateKey, nowHm, '', customer, String(row[3] || ''), Number(row[4]) || 1,
-        String(row[5] || ''), String(row[6] || ''), String(row[12] || ''),
-        visitFeeVal_(row[13]), visitFeeVal_(row[14]),
-        '軍師', rsvRowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')]);
+    const nowStamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
+    const existRows = findVisitRowsByRsv_(vs, rsvRowIdx, dateKey);
+    if (existRows.length) {
+      // 既存（戻す→再来店）: 全行の来店時刻のみ更新し退店時刻クリア
+      existRows.forEach(function (rr) { vs.getRange(rr, 2, 1, 2).setValues([[nowHm, '']]); });
+      visitCacheClear_();
+      return;
+    }
+    const aggMode = String(row[16] || '').trim() === 'split' ? 'split' : 'merge';
+    const table = String(row[5] || ''), tantou = String(row[6] || '');
+    // 代表行（従来通り・席料/同伴料はここに集約）
+    vs.appendRow([dateKey, nowHm, '', customer, String(row[3] || ''), Number(row[4]) || 1,
+      table, tantou, String(row[12] || ''),
+      visitFeeVal_(row[13]), visitFeeVal_(row[14]),
+      '軍師', rsvRowIdx, nowStamp]);
+    if (aggMode === 'split') {
+      const subs = (function () { try { return row[15] ? JSON.parse(row[15]) : []; } catch (e) { return []; } })();
+      subs.forEach(function (sc) {
+        const nm = String((sc && sc.name) || '').trim();
+        if (!nm) return;
+        // サブ会員行: 各自の会員番号/人数/担当。席料・同伴料は代表に集約済みのため空。ソースで代表と区別。
+        vs.appendRow([dateKey, nowHm, '', nm, String(sc.memberId || ''), Number(sc.pax) || 1,
+          table, String(sc.tantouCast || ''), '',
+          '', '', '軍師同席', rsvRowIdx, nowStamp]);
+      });
     }
     visitCacheClear_();
   } catch (e) { /* 来店記録は本処理(チェックイン)を止めない */ }
 }
 
 // チェックアウト時: 退店時刻を記録し、来店中に更新された人数・卓・キャスト・料金を最終値で確定
+// split展開の場合、代表行に最終値を反映し、サブ会員行は退店時刻のみ打つ。
 function closeVisitOnCheckOut_(rsvRowIdx) {
   try {
     const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 16).getValues()[0];
     const dateKey = visitDateStr_(row[0]) || bizDateStr_();
     const vs = getVisitSheet_();
-    let r = findVisitRowByRsv_(vs, rsvRowIdx, dateKey);
-    if (!r) {
-      // 機能導入前にチェックイン済みだった来店など: この場で1行起こす（来店時刻はKCHECKIN_から復元）
+    let rows = findVisitRowsByRsv_(vs, rsvRowIdx, dateKey);
+    if (!rows.length) {
+      // 機能導入前にチェックイン済みだった来店など: この場で代表行を1行起こす（来店時刻はKCHECKIN_から復元）
       const ci = Number(PropertiesService.getScriptProperties().getProperty('KCHECKIN_' + rsvRowIdx) || 0);
       const inHm = ci ? Utilities.formatDate(new Date(ci), TZ, 'HH:mm') : visitHmStr_(row[1]);
       vs.appendRow([dateKey, inHm, '', String(row[2] || ''), String(row[3] || ''), Number(row[4]) || 1,
         String(row[5] || ''), String(row[6] || ''), String(row[12] || ''), '', '',
         '軍師', rsvRowIdx, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss')]);
-      r = vs.getLastRow();
+      rows = [vs.getLastRow()];
     }
-    vs.getRange(r, 3).setValue(Utilities.formatDate(new Date(), TZ, 'HH:mm'));
-    vs.getRange(r, 6, 1, 6).setValues([[Number(row[4]) || 1, String(row[5] || ''), String(row[6] || ''),
+    const outHm = Utilities.formatDate(new Date(), TZ, 'HH:mm');
+    const repRow = rows[0]; // 代表行（先頭）
+    vs.getRange(repRow, 3).setValue(outHm);
+    vs.getRange(repRow, 6, 1, 6).setValues([[Number(row[4]) || 1, String(row[5] || ''), String(row[6] || ''),
       String(row[12] || ''), visitFeeVal_(row[13]), visitFeeVal_(row[14])]]);
+    rows.slice(1).forEach(function (rr) { vs.getRange(rr, 3).setValue(outHm); }); // サブ会員行は退店時刻のみ
     visitCacheClear_();
   } catch (e) { /* 来店記録は本処理(チェックアウト)を止めない */ }
 }
 
-// 「来店前に戻す」（誤操作取消）時: 当該来店記録行を削除
+// 「来店前に戻す」（誤操作取消）時: 当該来店記録行を全て削除（split展開分も含む）
 function deleteVisitOnRevert_(rsvRowIdx) {
   try {
     const row = getYoyakuRsrvSheet_().getRange(rsvRowIdx, 1, 1, 1).getValues()[0];
     const dateKey = visitDateStr_(row[0]) || bizDateStr_();
     const vs = getVisitSheet_();
-    const r = findVisitRowByRsv_(vs, rsvRowIdx, dateKey);
-    if (r) { vs.deleteRow(r); visitCacheClear_(); }
+    const rows = findVisitRowsByRsv_(vs, rsvRowIdx, dateKey);
+    if (rows.length) {
+      rows.slice().sort(function (a, b) { return b - a; }).forEach(function (rr) { vs.deleteRow(rr); }); // 下から削除で行番号ズレ防止
+      visitCacheClear_();
+    }
   } catch (e) {}
 }
 
@@ -8899,6 +8962,52 @@ function gunshiImportTrustVisits(items, commit) {
     sample: toAppend.slice(0, 5).map(function (r) { return r[0] + ' ' + r[3] + ' ¥' + r[14]; }) };
 }
 
+// ── 席の来店客(RSRV_)の読み書きヘルパー（複数組同居対応の後方互換レイヤ）──
+// 値は組(予約)エントリの配列 [{rowIdx,customer,memberId,pax,tantouCast}]。
+// 旧形式（単一オブジェクト）も透過的に配列化して読む＝データ移行不要。
+function readRsrv_(code) {
+  const v = PropertiesService.getScriptProperties().getProperty('RSRV_' + code);
+  return parseRsrvVal_(v);
+}
+// プロパティ値(文字列)→配列。getSekiJokyouDataの一括取得プロパティからも使う。
+function parseRsrvVal_(v) {
+  if (!v) return [];
+  try {
+    const p = JSON.parse(v);
+    if (Array.isArray(p)) return p.filter(function (e) { return e && e.customer; });
+    if (p && p.customer) return [p]; // 旧単一オブジェクト（rowIdxなし）
+    return [];
+  } catch (e) { return []; }
+}
+function writeRsrv_(code, arr) {
+  const sp = PropertiesService.getScriptProperties();
+  if (!arr || !arr.length) sp.deleteProperty('RSRV_' + code);
+  else sp.setProperty('RSRV_' + code, JSON.stringify(arr));
+}
+// エントリを追加/更新（同一rowIdxがあれば置換、無ければ追加）
+function upsertRsrvEntry_(code, entry) {
+  const arr = readRsrv_(code);
+  let replaced = false;
+  for (let i = 0; i < arr.length; i++) {
+    if (entry.rowIdx && arr[i].rowIdx && String(arr[i].rowIdx) === String(entry.rowIdx)) { arr[i] = entry; replaced = true; break; }
+  }
+  if (!replaced) arr.push(entry);
+  writeRsrv_(code, arr);
+}
+// エントリを除去。rowIdx一致のみ除去し他組は温存（相席の二度押し等で残組を誤消去しない）。
+// 旧単一値（rowIdxなし・1件のみ）は従来のdeleteProperty相当で全消し＝後方互換。
+function removeRsrvEntry_(code, rowIdx, customer) {
+  const arr = readRsrv_(code);
+  if (!arr.length) return;
+  if (arr.length === 1 && !arr[0].rowIdx) { writeRsrv_(code, []); return; }
+  const rest = arr.filter(function (e) {
+    const isTarget = (rowIdx && e.rowIdx && String(e.rowIdx) === String(rowIdx)) ||
+      (!e.rowIdx && customer && e.customer === customer); // 旧値(rowIdxなし)はcustomer一致で除去
+    return !isTarget; // 対象以外を残す
+  });
+  writeRsrv_(code, rest);
+}
+
 function checkInReservation_(rowIdx) {
   const sh = getYoyakuRsrvSheet_();
   const row = sh.getRange(rowIdx, 1, 1, 12).getValues()[0];
@@ -8907,22 +9016,20 @@ function checkInReservation_(rowIdx) {
   const tantouCast = String(row[6] || '');
   const tableStr = String(row[5]).trim();
   const seatCodes = tableStr.split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
+  const memberId = String(row[3] || '');
   sh.getRange(rowIdx, 9).setValue('来店済み');
   const sp = PropertiesService.getScriptProperties();
   sp.setProperty('KCHECKIN_' + rowIdx, String(Date.now())); // 来店時刻（10分以内のみ来店前に戻せる判定用）
   seatCodes.forEach(code => {
-    // 席の重複検知: 既に別のお客様が着席中の卓へ来店させた場合、黒服へ警告（来店処理自体は止めない）
-    const _ex = sp.getProperty('RSRV_' + code);
-    if (_ex) {
-      try {
-        const _p = JSON.parse(_ex);
-        if (_p && _p.customer && _p.customer !== customer) {
-          const _KF = prop('GROUP_KUROFUKU');
-          if (_KF) push_(_KF, '⚠️【席の重複注意】' + code + ' には既に ' + _p.customer + '様が着席中です。そこへ ' + customer + '様を来店させました。席割りを確認してください。');
-        }
-      } catch (e) {}
+    // 相席検知: 既に別のお客様が着席中の卓へ来店（同居は正常系なので黒服へは「相席」の案内のみ）
+    const _ex = readRsrv_(code);
+    const _other = _ex.filter(function (e) { return e.customer && e.customer !== customer && String(e.rowIdx || '') !== String(rowIdx); })[0];
+    if (_other) {
+      const _KF = prop('GROUP_KUROFUKU');
+      if (_KF) push_(_KF, 'ℹ️【相席】' + code + ' に ' + customer + '様を追加しました（既に ' + _other.customer + '様が着席中）。席割りをご確認ください。');
     }
-    sp.setProperty('RSRV_' + code, JSON.stringify({ customer, pax, tantouCast }));
+    // 同居可: 同一rowIdxは置換、別組は追加（上書きしない）
+    upsertRsrvEntry_(code, { rowIdx, customer, memberId, pax, tantouCast });
     sp.deleteProperty('YRSRV_' + code);
   });
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
@@ -8939,13 +9046,15 @@ function checkOutReservation_(rowIdx) {
   const row = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
   const pax = Number(row[4]) || 1;
   const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
+  const customer = String(row[2] || '');
   sh.getRange(rowIdx, 9).setValue('退店済み');
   closeVisitOnCheckOut_(rowIdx); // 来店記録DBを確定（KCHECKIN_削除より先に呼ぶ=来店時刻の復元用）
   const sp = PropertiesService.getScriptProperties();
   sp.deleteProperty('KCHECKIN_' + rowIdx);
   seatCodes.forEach(code => {
-    sp.deleteProperty('RSRV_' + code);
-    endAtendou_(code); // 退店と同時にキャストのアテンドを終了
+    removeRsrvEntry_(code, rowIdx, customer); // 当該組を席から除去（段階1は単一＝全消し）
+    // 【段階1】従来通り席のアテンドを終了。段階2で「席が空になった時のみ」に変更し残組を温存。
+    if (readRsrv_(code).length === 0) endAtendou_(code);
   });
   sp.deleteProperty('RSRV_SYNC_AT');
   consumeSouvenirOnCheckout_(seatCodes, pax);
@@ -9038,9 +9147,10 @@ function setReservationStatus_(rowIdx, status) {
   sh.getRange(rowIdx, 9).setValue(status);
   if (status === '確定') {
     const row = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
+    const customer = String(row[2] || '');
     const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
     const sp = PropertiesService.getScriptProperties();
-    seatCodes.forEach(code => sp.deleteProperty('RSRV_' + code));
+    seatCodes.forEach(code => removeRsrvEntry_(code, rowIdx, customer)); // 当該組のみ除去（同居の残組は温存）
     sp.deleteProperty('RSRV_SYNC_AT');
   }
   return { ok: true };
@@ -9077,11 +9187,20 @@ function setupTableSession(payload) {
     dohanCast: (payload.dohanCast || []).join('、'),
     yoyakuCast: String(payload.yoyakuCast || ''),
     youbou: '',
+    // サブ会員（同席の会員）: 名前・会員番号・人数・担当を保持（Feature1）。旧形式 {pax,yoyakuCast} も部分集合として通す。
     subCustomers: Array.isArray(payload.subCustomers) ? payload.subCustomers
-      .filter(function(sc) { return sc && Number(sc.pax) > 0; })
-      .map(function(sc) { return { pax: Number(sc.pax) || 1, yoyakuCast: String(sc.yoyakuCast || '') }; })
+      .filter(function(sc) { return sc && (String(sc.name || '').trim() || Number(sc.pax) > 0); })
+      .map(function(sc) { return {
+        name: String(sc.name || ''),
+        memberId: String(sc.memberId || ''),
+        pax: Number(sc.pax) || 1,
+        tantouCast: String(sc.tantouCast || ''),
+        yoyakuCast: String(sc.yoyakuCast || ''),
+        splitSales: !!sc.splitSales
+      }; })
       : []
   };
+  if (payload.aggMode === 'merge' || payload.aggMode === 'split') fields.aggMode = payload.aggMode;
   let rowIdx = Number(payload.rowIdx) || 0;
   if (rowIdx) {
     const sh = getYoyakuRsrvSheet_();
@@ -9103,19 +9222,23 @@ function getTodayCheckedInReservations() {
   return getYoyakuReservations_(bizDateStr_()).filter(r => r.status === '来店済み');
 }
 
-// 席コードから本日の来店済み予約を1件返す（IEYAS POSの席詳細表示用）
-function getReservationBySeat(seatCode) {
-  const list = getYoyakuReservations_(bizDateStr_());
-  for (const r of list) {
-    if (r.status !== '来店済み') continue;
+// 席コードから本日の来店済み予約を返す（同居対応: 複数組を全て返す）
+function getReservationsBySeat(seatCode) {
+  return getYoyakuReservations_(bizDateStr_()).filter(r => {
+    if (r.status !== '来店済み') return false;
     const codes = String(r.table || '').split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
-    if (codes.includes(seatCode)) return r;
-  }
-  return null;
+    return codes.includes(seatCode);
+  });
+}
+// 席コードから本日の来店済み予約を1件返す（旧IF互換・先頭組）
+function getReservationBySeat(seatCode) {
+  return getReservationsBySeat(seatCode)[0] || null;
 }
 
-// 席コードを指定して退店処理（IEYAS POSの席詳細から呼ぶ）
-function checkOutBySeat(seatCode) {
+// 席コードを指定して退店処理（IEYAS POSの席詳細から呼ぶ）。同居時は先頭組を退店。
+// rowIdx指定があればその組のみ退店（軍師の組別チェックアウト用）。
+function checkOutBySeat(seatCode, rowIdx) {
+  if (rowIdx) return checkOutReservation_(Number(rowIdx));
   const r = getReservationBySeat(seatCode);
   if (!r) return { ok: false, error: '対象の予約が見つかりません' };
   return checkOutReservation_(r.rowIdx);

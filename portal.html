@@ -3861,6 +3861,10 @@ var yoyakuRsvDohan = '';     // 再描画時に保持: 同伴キャスト
 var yoyakuEditRsv = null;    // 編集中の予約オブジェクト（null=新規追加モード）
 var yoyakuSubmitBusy = false; // 予約追加/変更の二重送信防止フラグ
 var yoyakuRsvMode = '本予約'; // '本予約' or '仮予約'（仮予約は席・フロア指定なしの仮押さえ）
+var yoyakuRsvSubs = [];       // 同席の追加会員 [{name,memberId,pax,tantouCast,splitSales}]（Feature1）
+var yoyakuSubSearchOpen = false; // 会員追加の検索ボックス表示中か
+var yoyakuSubCustResults = [];   // 会員追加の検索結果キャッシュ
+var yoyakuRsvAggMode = 'merge';  // 売上/来店の集計モード merge=代表に集約 / split=会員ごとに分ける（Feature3）
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -3892,6 +3896,7 @@ function loadYoyaku() {
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
+      yoyakuRsvSubs = []; yoyakuSubSearchOpen = false; yoyakuRsvAggMode = 'merge';
       yoyakuEditRsv = null;
       yoyakuSelfSeeded = false;
       renderYoyaku();
@@ -4084,7 +4089,10 @@ function renderYoyakuList() {
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
       + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#7a9cc8">'+esc(r.memberId)+'</span>'+memberInfo:'')+'</span>'+statusBtns+'</div>'
       + castRow
-      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span></div>'
+      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'
+      + ((r.subCustomers && r.subCustomers.length) ? '<span class="yb" style="background:#0d2010;border:1px solid #1a4a22;color:#66cc88">👥 +'+r.subCustomers.length+'名</span>' : '')
+      + '</div>'
+      + ((r.subCustomers && r.subCustomers.length) ? '<div class="yc-note" style="color:#66cc88">同席: '+r.subCustomers.map(function(s){ return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':''); }).join('、')+'</div>' : '')
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#6a8ab0">予約入力: '+esc(r.regBy)+'</div>' : '')
       + '</div>';
@@ -4377,6 +4385,7 @@ function renderYoyakuAdd() {
         }).join('');
         return '<div id="yrsv-tantou-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+(chips||'<span style="font-size:12px;color:#6a8ab0">キャストが登録されていません</span>')+'</div>';
       })()
+    + renderYoyakuSubs()
     + '<div class="yform-label">要望・備考</div>'
     + '<textarea class="yform-input" id="yrsv-youbou" rows="3" placeholder="VIP対応・誕生日・ボトル・アレルギー・席希望など..." style="resize:none;margin-bottom:8px">'+esc(yoyakuRsvYoubou)+'</textarea>'
     + (canEditYoyaku() ? '<div class="notif-save-btn" id="yrsv-submit-btn" onclick="yoyakuSubmitRsv()" style="cursor:pointer">'+(yoyakuEditRsv ? '変更を保存' : (yoyakuRsvMode === '仮予約' ? '仮予約として登録する' : '予約を確定する'))+'</div>' : '')
@@ -4545,6 +4554,82 @@ function yoyakuSelectCust(i) {
   renderYoyaku();
 }
 
+// ── 同席の追加会員（Feature1）: 1予約に複数会員をフル情報で登録 ──
+function renderYoyakuSubs() {
+  var h = '<div class="yform-label" style="display:flex;align-items:center;gap:8px;margin-top:4px">同席の会員'
+    + '<span style="font-size:10px;color:#6a8ab0">（複数会員をまとめて登録）</span></div>';
+  if (yoyakuRsvSubs.length) {
+    h += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">';
+    yoyakuRsvSubs.forEach(function(s, i) {
+      var paxOpts = [1,2,3,4,5].map(function(n){ return '<option'+(n===(s.pax||1)?' selected':'')+'>'+n+'名</option>'; }).join('');
+      var tantouOpts = '<option value="">担当なし</option>' + yoyakuCastList.map(function(c){ return '<option value="'+esc(c)+'"'+(c===(s.tantouCast||'')?' selected':'')+'>'+esc(c)+'</option>'; }).join('');
+      h += '<div style="background:#0a1428;border:1px solid #1e3a6a;border-radius:8px;padding:8px 10px">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        + '<div style="font-size:13px;font-weight:600;color:#7ab0f0">'+esc(s.name||'')+'様'+(s.memberId?'<span style="font-size:10px;color:#6a8ab0;margin-left:6px">会員'+esc(s.memberId)+'</span>':'')+'</div>'
+        + '<span onclick="yoyakuRemoveSub('+i+')" style="font-size:11px;color:#cc6666;cursor:pointer;white-space:nowrap">✕ 削除</span>'
+        + '</div>'
+        + '<div style="display:flex;gap:6px;margin-top:6px">'
+        + '<select onchange="yoyakuSubSetPax('+i+',this.value)" style="flex:0 0 auto;background:#0d1526;color:#c0d4f0;border:1px solid #1e3050;border-radius:6px;padding:4px 6px;font-size:12px">'+paxOpts+'</select>'
+        + '<select onchange="yoyakuSubSetTantou('+i+',this.value)" style="flex:1;background:#0d1526;color:#c0d4f0;border:1px solid #1e3050;border-radius:6px;padding:4px 6px;font-size:12px">'+tantouOpts+'</select>'
+        + '</div></div>';
+    });
+    h += '</div>';
+  }
+  if (yoyakuSubSearchOpen) {
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      + '<span style="font-size:12px;color:#7a9cc8;cursor:pointer" onclick="yoyakuSubSearchOpen=false;renderYoyaku()">← 閉じる</span>'
+      + '<span style="font-size:12px;color:#7ab0f0">会員を検索して追加</span></div>'
+      + '<input type="text" class="ycust-search" id="ysub-q" placeholder="顧客名・会員番号で検索" oninput="custSearchInput(event,yoyakuSubSearch)" oncompositionend="custSearchInput(event,yoyakuSubSearch)" onkeydown="custSearchKey(event,yoyakuSubSearch)" style="margin-bottom:6px">'
+      + '<div id="ysub-results"></div>';
+  } else {
+    h += '<div onclick="yoyakuSubSearchOpen=true;renderYoyaku()" style="text-align:center;padding:9px;background:#0d2010;border:1px dashed #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88;margin-bottom:'+(yoyakuRsvSubs.length?'8px':'12px')+'">＋ 会員を追加</div>';
+  }
+  // 売上/来店の集計モード（会員が複数いる時だけ選べる）
+  if (yoyakuRsvSubs.length) {
+    h += '<div style="font-size:11px;color:#7a9cc8;margin-bottom:5px">売上・来店回数の付け方</div>'
+      + '<div style="display:flex;gap:6px;margin-bottom:12px">'
+      + [['merge','まとめる','代表者に集約'],['split','会員ごとに分ける','各会員に記録']].map(function(m){
+          var active = yoyakuRsvAggMode === m[0];
+          return '<div onclick="yoyakuRsvAggMode=\''+m[0]+'\';renderYoyaku()" style="flex:1;text-align:center;padding:8px 6px;border-radius:8px;cursor:pointer;'
+            + (active ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a55bb' : 'background:#141d30;color:#6a8ab0;border:1px solid #1e3050')
+            + '"><div style="font-size:12px;font-weight:600">'+m[1]+'</div><div style="font-size:9px;opacity:.8;margin-top:1px">'+m[2]+'</div></div>';
+        }).join('')
+      + '</div>';
+  }
+  return h;
+}
+function yoyakuSubSearch(q) {
+  q = (q||'').trim();
+  var res = document.getElementById('ysub-results');
+  if (!res) return;
+  if (q.length < 1) { res.innerHTML = ''; clearTimeout(_searchTimer); return; }
+  res.innerHTML = '<div style="font-size:11px;color:#7a9cc8;padding:4px 0">検索中...</div>';
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(function() {
+    gasFetch(GAS_URL + '?action=portal&tab=yoyakuCustomers&userId=' + encodeURIComponent(userId) + '&q=' + encodeURIComponent(q))
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        if (!d.ok || !d.customers || !d.customers.length) { res.innerHTML = '<div style="font-size:11px;color:#6a8ab0;padding:4px 0">見つかりませんでした</div>'; return; }
+        yoyakuSubCustResults = d.customers;
+        res.innerHTML = d.customers.map(function(c, i) {
+          return '<div class="ycust-row" onclick="yoyakuSubSelectCust('+i+')">'
+            + '<div><div class="ycust-name">'+esc(c.name||c.card||'')+'様</div>'
+            + '<div class="ycust-sub">'+(c.no?'会員'+c.no:'')+' '+(c.tantou?'担当:'+c.tantou:'')+'</div></div></div>';
+        }).join('');
+      }).catch(function(){ res.innerHTML = '<div style="font-size:11px;color:#7a9cc8">通信エラー</div>'; });
+  }, 400);
+}
+function yoyakuSubSelectCust(i) {
+  var c = yoyakuSubCustResults[i];
+  if (!c) return;
+  yoyakuRsvSubs.push({ name: c.name || c.card || '', memberId: c.no || '', pax: 1, tantouCast: c.tantou || '', splitSales: false });
+  yoyakuSubSearchOpen = false;
+  renderYoyaku();
+}
+function yoyakuRemoveSub(i) { yoyakuRsvSubs.splice(i, 1); renderYoyaku(); }
+function yoyakuSubSetPax(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].pax = parseInt(v) || 1; }
+function yoyakuSubSetTantou(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].tantouCast = v; }
+
 
 function toggleTantouChip(el) { el.classList.toggle('sel'); }
 function toggleDohanChip(el) { el.classList.toggle('sel'); }
@@ -4590,6 +4675,11 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvTantou = rsv.tantouCast || '';
   yoyakuRsvYoyakuCast = rsv.yoyakuCast || '';
   yoyakuRsvDohan = rsv.dohanCast || '';
+  yoyakuRsvSubs = (rsv.subCustomers || []).filter(function(s){ return s && String(s.name||'').trim(); }).map(function(s){
+    return { name: s.name||'', memberId: s.memberId||'', pax: Number(s.pax)||1, tantouCast: s.tantouCast||'', splitSales: !!s.splitSales };
+  });
+  yoyakuRsvAggMode = rsv.aggMode === 'split' ? 'split' : 'merge';
+  yoyakuSubSearchOpen = false;
   yoyakuRsvMode = rsv.status === '仮予約' ? '仮予約' : '本予約';
   yoyakuSubTab = 'add';
   renderYoyaku();
@@ -4659,6 +4749,7 @@ function yoyakuCancelEdit() {
   yoyakuRsvYoyakuCast = '';
   yoyakuRsvDohan = '';
   yoyakuRsvMode = '本予約';
+  yoyakuRsvSubs = []; yoyakuSubSearchOpen = false; yoyakuRsvAggMode = 'merge';
   yoyakuSelfSeeded = false;
   yoyakuSubTab = 'list';
   renderYoyaku();
@@ -4689,6 +4780,8 @@ function yoyakuSubmitRsv() {
     yoyakuCast: yoyakuRsvTime === '同伴' ? '' : (document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : ''),
     dohanCast: (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : ''); })(),
     youbou: document.getElementById('yrsv-youbou').value,
+    subCustomers: yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); }),
+    aggMode: yoyakuRsvSubs.length ? yoyakuRsvAggMode : 'merge',
     status: yoyakuEditRsv
       ? (yoyakuRsvMode === '仮予約' ? '仮予約' : (yoyakuEditRsv.status === '仮予約' ? '確定' : (yoyakuEditRsv.status || '確定')))
       : (yoyakuRsvMode === '仮予約' ? '仮予約' : '確定'),
@@ -4712,6 +4805,7 @@ function yoyakuSubmitRsv() {
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
       yoyakuRsvMode = '本予約';
+      yoyakuRsvSubs = []; yoyakuSubSearchOpen = false; yoyakuRsvAggMode = 'merge';
       yoyakuEditRsv = null;
       yoyakuSelfSeeded = false;
       yoyakuSubTab = 'list';
