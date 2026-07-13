@@ -11525,7 +11525,7 @@ function addOrderDraftItem(payload) {
   if (!name) return { ok: false, error: '登録されていません。グループLINEで #登録 名前 を送ってください。' };
   const itemName = String(payload.name || '').trim();
   if (!itemName) return { ok: false, error: '品名が指定されていません' };
-  const floor = String(payload.floor || '共通');
+  const floor = (payload.floor === '2F' || payload.floor === '5F') ? payload.floor : '2F'; // 共通廃止
   const qty   = String(payload.qty || '').trim();
   const memo  = String(payload.memo || '').trim();
 
@@ -11706,7 +11706,7 @@ function getStockList() {
     const name = String(rows[i][0]).trim();
     if (!name) continue;
     list.push({
-      rowIdx: i + 1, name, category: String(rows[i][1] || ''), floor: String(rows[i][2] || '共通'),
+      rowIdx: i + 1, name, category: String(rows[i][1] || ''), floor: String(rows[i][2] || '2F'),
       qty: Number(rows[i][3]) || 0, minStock: String(rows[i][4] || ''),
       expiryManaged: String(rows[i][5]).trim() === '○'
     });
@@ -11718,7 +11718,7 @@ function addStockItem(payload) {
   const name = String(payload.name || '').trim();
   if (!name) return { ok: false, error: '品名を入力してください' };
   const category = STOCK_CATEGORIES.includes(payload.category) ? payload.category : '消耗品';
-  const floor = String(payload.floor || '共通');
+  const floor = (payload.floor === '2F' || payload.floor === '5F') ? payload.floor : '2F'; // 共通廃止＝必ず2F/5F
   const minStock = String(payload.minStock || '');
   const expiryManaged = !!payload.expiryManaged;
   const sh = getStockMasterSheet_();
@@ -11839,7 +11839,8 @@ function kioskApplyDelivery(payload) {
       const nm = String(sh.getRange(dRow, 5).getValue() || '').trim();
       if (!nm) return;
       const cat = STOCK_CATEGORIES.includes(x.newCategory) ? x.newCategory : 'ボトル';
-      master.appendRow([nm, cat, String(x.newFloor || '共通'), qty, '', '', stamp]);
+      const newFloor = (x.newFloor === '2F' || x.newFloor === '5F') ? x.newFloor : '2F'; // 共通廃止
+      master.appendRow([nm, cat, newFloor, qty, '', '', stamp]);
       mRow = master.getLastRow(); created++;
     } else if (!mRow || mRow < 2) { return; // マスタ未選択はスキップ（未反映のまま残す）
     } else { changeStockQty(mRow, qty); }
@@ -11867,6 +11868,29 @@ function kioskDeleteDelivery(rowIdxList) {
 // 棚卸し対象（消耗品カテゴリ、または賞味期限管理品）
 function getStocktakeTargets() {
   return getStockList().filter(it => it.category === '消耗品' || it.expiryManaged);
+}
+
+// 【1回だけ手動実行】在庫マスタの「共通」品を 2F/5F の各行に分割（在庫0スタート・初回棚卸しで実数登録）。
+// 既存の共通行を 2F・在庫0 に変え、同じ品の 5F・在庫0 行を新規追加する。
+// べき等: 実行後は floor==='共通' が無くなるため、再実行しても無害（0件変換）。
+function migrateCommonStockToFloors_() {
+  const sh = getStockMasterSheet_();
+  const rows = sh.getDataRange().getValues();
+  const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
+  const toAppend = [];
+  let converted = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][2]).trim() !== '共通') continue;
+    sh.getRange(i + 1, 3).setValue('2F'); // C列 floor: 共通→2F
+    sh.getRange(i + 1, 4).setValue(0);     // D列 qty: 0スタート
+    sh.getRange(i + 1, 7).setValue(stamp); // G列 更新日時
+    // 同じ品を 5F・在庫0 で追加（品名/カテゴリ/最低在庫/賞味期限管理を引き継ぐ）
+    toAppend.push([String(rows[i][0]), String(rows[i][1]), '5F', 0, String(rows[i][4] || ''), String(rows[i][5]).trim() === '○' ? '○' : '', stamp]);
+    converted++;
+  }
+  if (toAppend.length) sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, 7).setValues(toAppend);
+  Logger.log('共通→2F/5F 分割: ' + converted + '品を2F化＋5F行' + toAppend.length + '件追加');
+  return { ok: true, converted };
 }
 
 // 棚卸し実数を一括反映（記録在庫数と実数の差異を棚卸しログに記録し、在庫数を実数に上書き）

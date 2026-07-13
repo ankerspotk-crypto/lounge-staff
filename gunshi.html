@@ -2783,7 +2783,7 @@ function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
-var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], STOCK_FLOORS=['合算','2F','5F','共通'];
+var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], STOCK_FLOORS=['合算','2F','5F'];
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
@@ -2806,7 +2806,7 @@ function renderStock(){
   // メイン
   var main='<div class="stk-main"><div class="stk-toolbar"><input id="stk-search" class="finput" placeholder="🔍 品名で検索（カテゴリ・フロア問わず）" oninput="stkListView()"><span id="stk-count" style="font-size:12px;color:var(--dim);font-weight:700"></span></div><div class="stk-scroll"><div id="stk-list"></div>';
   var addFloorSel=st.floor==='合算'?'2F':st.floor;
-  main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F','共通'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
+  main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
   main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#ffbf6a">🛒 マスタにない商品を発注依頼のみ送る</div><div style="display:flex;gap:6px"><input id="stk-free-name" class="finput" placeholder="品名"><input id="stk-free-qty" class="finput" style="width:90px" placeholder="数量"></div><div class="savebtn" style="background:#2a1a10;border-color:#885522;color:#ffaa66;margin-top:10px" onclick="stkFreeOrder()">発注依頼を送信</div></div></div>';
   main+='</div></div>';
   b.innerHTML='<div class="stk-wrap">'+undel+'<div id="sv-card-wrap">'+souvenirCardHtml()+'</div><div class="stk-body">'+nav+main+'</div></div>'; stkListView();
@@ -2867,7 +2867,7 @@ function stkRowsCombined(items){
   order.sort(function(a,b){return a.localeCompare(b,'ja');});
   return '<div class="stk-grid">'+order.map(function(nm){
     var grp=g[nm];
-    var cells=['2F','5F','共通'].map(function(f){
+    var cells=['2F','5F'].map(function(f){
       var it=grp.floors[f];
       if(!it) return '<div class="stk-flc empty">'+f+' <span class="stk-flc-q">—</span></div>';
       return '<div class="stk-flc"><span class="stk-flc-f">'+f+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-flc-q'+(it.qty===0?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>';
@@ -2907,7 +2907,7 @@ function stkFreeOrder(){
   var name=((document.getElementById('stk-free-name')||{}).value||'').trim(); var qty=((document.getElementById('stk-free-qty')||{}).value||'').trim();
   if(!name){alert('品名を入力してください');return;} if(!qty){alert('数量を入力してください');return;}
   if(!confirm(name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
-  var foFloor=stockState.floor==='合算'?'共通':stockState.floor;
+  var foFloor=stockState.floor==='合算'?'2F':stockState.floor;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:name,floor:foFloor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 function stkDelete(rowIdx){
@@ -2937,7 +2937,7 @@ function openStocktake(){
   showSheet('📦 棚卸し','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）本番のみ</div>'; return; }
   gsr('getStocktakeTargets').then(function(list){
-    stkState=(list||[]).map(function(it){var q=Number(it.qty)||0;return {rowIdx:it.rowIdx,name:it.name,floor:it.floor||'共通',category:it.category||'',recorded:q,actual:q};});
+    stkState=(list||[]).map(function(it){var q=Number(it.qty)||0;return {rowIdx:it.rowIdx,name:it.name,floor:it.floor||'2F',category:it.category||'',recorded:q,actual:q};});
     renderStocktake();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -2952,7 +2952,7 @@ function stkOnInput(id,el){
 function renderStocktake(){
   var b=document.getElementById('sheetBody'); if(!b)return;
   if(!stkState.length){ b.innerHTML='<div class="empty-msg" style="padding:40px 0">棚卸し対象の品目がありません<br><span style="font-size:12px;color:var(--dim)">対象＝消耗品カテゴリ、または賞味期限管理品</span></div>'; return; }
-  var order={'5F':0,'2F':1,'共通':2}, byFloor={};
+  var order={'5F':0,'2F':1}, byFloor={};
   stkState.forEach(function(it,i){ it._id=i; (byFloor[it.floor]=byFloor[it.floor]||[]).push(it); });
   var floors=Object.keys(byFloor).sort(function(a,b){return (order[a]==null?9:order[a])-(order[b]==null?9:order[b]);});
   var h='<div class="dr-wrap"><div class="stk-help">各品目の<b>実数</b>を数えて入力してください（初期値＝記録在庫）。差異は棚卸しログに記録され、在庫が実数に更新されます。</div>';
@@ -2984,7 +2984,7 @@ function submitStocktakeUI(){
 
 /* ============ 🚚 納品→在庫反映（フロア振り分け＋候補マッチ） ============ */
 var deliveryState=null, drItems={};
-var DR_FLOORS=['5F','2F','共通'];
+var DR_FLOORS=['5F','2F'];
 function openDeliveryReflect(){
   showSheet('🚚 納品を在庫に反映','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）本番のみ</div>'; return; }
@@ -2995,7 +2995,7 @@ function openDeliveryReflect(){
 function drNorm(s){return String(s||'').normalize('NFKC').toLowerCase().replace(/[\s　・,、。()（）「」【】\-ー_/／\\]/g,'');}
 function drBigrams(s){var a=[];if(s.length<=1){if(s)a.push(s);return a;}for(var i=0;i<s.length-1;i++)a.push(s.substr(i,2));return a;}
 function drSim(a,b){a=drNorm(a);b=drNorm(b);if(!a||!b)return 0;if(a===b)return 1;if(a.indexOf(b)>=0||b.indexOf(a)>=0)return 0.92;var ga=drBigrams(a),gb=drBigrams(b),mb={},hit=0;gb.forEach(function(g){mb[g]=(mb[g]||0)+1;});ga.forEach(function(g){if(mb[g]>0){mb[g]--;hit++;}});return (ga.length+gb.length)?2*hit/(ga.length+gb.length):0;}
-function drPool(floor){var st=(deliveryState&&deliveryState.stock)||[];return st.filter(function(i){return i.floor===floor||i.floor==='共通';});}
+function drPool(floor){var st=(deliveryState&&deliveryState.stock)||[];return st.filter(function(i){return i.floor===floor;});}
 function drBestMatch(name,floor){var best=null,bs=0;drPool(floor).forEach(function(it){var s=drSim(name,it.name);if(s>bs){bs=s;best=it;}});return{item:bs>=0.34?best:null,score:Math.round(bs*100)};}
 function drGuessFloor(name){ // 全フロアで最も近い候補のフロアを初期値に。無ければ5F
   var st=(deliveryState&&deliveryState.stock)||[],best=null,bs=0;
@@ -3048,7 +3048,7 @@ function applyDeliveryReflect(){
     var mv=Number(sel.value); if(mv===0)return;
     var qty=Number((document.getElementById('dr-qty-'+id)||{}).value)||0; if(qty<=0)return;
     var row={deliveryRowIdx:Number(id),masterRowIdx:mv,qty:qty};
-    if(mv===-1){ row.newCategory=(document.getElementById('dr-nc-'+id)||{}).value||'ボトル'; row.newFloor=drItems[id].floor||'共通'; }
+    if(mv===-1){ row.newCategory=(document.getElementById('dr-nc-'+id)||{}).value||'ボトル'; row.newFloor=drItems[id].floor||'2F'; }
     rows.push(row);
   });
   if(!rows.length){alert('反映する品目を1つ以上選んでください');return;}
