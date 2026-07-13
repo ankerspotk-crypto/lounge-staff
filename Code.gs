@@ -404,7 +404,30 @@ function handleApiRequest_(body) {
   if (body.action === 'saveNotifSettings') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
-    PropertiesService.getScriptProperties().setProperty('NOTIF_SETTINGS', JSON.stringify(body.settings));
+    // 派生フィールド(label/desc/type/msgEditable/defaultMsg/partsDef等＝コード側が唯一の正)は保存しない。
+    // 保存するのは管理者が編集しうる値だけ(enabled/time/days/message/staffMessage/parts)。ScriptProperty肥大化と既定文の凍結を防ぐ。
+    const src = body.settings || {};
+    const clean = {};
+    Object.keys(src).forEach(k => {
+      const s = src[k] || {};
+      if (k.indexOf('custom_') === 0) { // ユーザー定義通知は本体がNOTIF_SETTINGSにしか無いので必要フィールドを保持
+        clean[k] = { label: s.label || '', groupKey: s.groupKey || 'both', time: s.time || '', enabled: s.enabled !== false, message: s.message || '', type: s.type, days: s.days };
+        return;
+      }
+      const o = {};
+      if (s.enabled != null) o.enabled = s.enabled;
+      if (s.time != null && s.time !== '') o.time = s.time;
+      if (s.days != null) o.days = s.days;
+      if (s.message) o.message = s.message;
+      if (s.staffMessage) o.staffMessage = s.staffMessage;
+      if (s.parts) {
+        const p = {};
+        Object.keys(s.parts).forEach(pk => { if (String(s.parts[pk] == null ? '' : s.parts[pk]).trim() !== '') p[pk] = s.parts[pk]; });
+        if (Object.keys(p).length) o.parts = p;
+      }
+      clean[k] = o;
+    });
+    PropertiesService.getScriptProperties().setProperty('NOTIF_SETTINGS', JSON.stringify(clean));
     return { ok: true };
   }
   if (body.action === 'getCashThresholds') {
@@ -742,8 +765,8 @@ function getNotifSettings_() {
     ieyas_url:     { label: 'IEYAS軍師URL通知',          time: '18:00', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: '🏯 IEYAS軍師システム\nhttps://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec' },
     kaiten_check:  { label: '開店チェック誘導（18:30）', time: '18:30', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: '🌅【開店チェックをお願いします】\n\n① 軍師（iPad）を開く\n②「☰ メニュー」→「🌅 開店チェック」\n③ 5F・2Fのレジ現金を紙幣別に入力して送信\n（送信後は修正不可）' },
     lineup:        { label: '本日出勤ラインナップ',      time: '14:00', enabled: true, group: 'スタッフ',      days: D,     msgEditable: false, defaultMsg: null },
-    kinsen_mae:    { label: '現金チェック（営業前）',    time: '19:30', enabled: true, group: '黒服',           days: D,     msgEditable: true,  defaultMsg: MSG_KINSEN_MAE },
-    soganbansen:   { label: '総願盤線・スタッフ挨拶',   time: '19:45', enabled: true, group: '黒服・スタッフ', days: D,     msgEditable: true,  defaultMsg: MSG_SOGANBANSEN, staffMsgEditable: true, defaultStaffMsg: MSG_STAFF_OHAYO },
+    kinsen_mae:    { label: '現金チェック（営業前）',    time: '19:30', enabled: true, group: '黒服',           days: D,     msgEditable: false, defaultMsg: null },
+    soganbansen:   { label: '総願盤線・スタッフ挨拶',   time: '19:45', enabled: true, group: '黒服・スタッフ', days: D,     msgEditable: false, defaultMsg: null, staffMsgEditable: true, defaultStaffMsg: MSG_STAFF_OHAYO },
     dohan_check:   { label: '同伴チェック',              time: '22:00', enabled: true, group: 'スタッフ',      days: D,     msgEditable: true,  defaultMsg: MSG_DOHAN_CHECK },
     okuri_summary: { label: '送りサマリー',              time: '22:30', enabled: true, group: '黒服',           days: D,     msgEditable: false, defaultMsg: null },
     okuri_confirm: { label: '送り確認',                  time: '23:30', enabled: true, group: '黒服',           days: D,     msgEditable: false, defaultMsg: null },
@@ -766,6 +789,9 @@ function getNotifSettings_() {
     shift_remind:       { label: '⏰ 来週シフト催促（木）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [4], msgEditable: false, defaultMsg: null, desc: '毎週木曜19:00に来週分が未提出＆来週なし未報告の人へ個別DM＋黒服グループへ提出状況一覧' },
     shift_remind2:      { label: '⏰ 来週シフト催促（金）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [5], msgEditable: false, defaultMsg: null, desc: '毎週金曜19:00にまだ未提出の人へ再度個別DM＋黒服グループへ一覧（無反応防止の追撃）' },
   };
+  // 動的通知に編集可能ブロック定義（partsDef）を付与。既定文の唯一の正はここ。
+  const PARTS = notifPartsDefs_();
+  Object.keys(PARTS).forEach(k => { if (defaults[k]) defaults[k].partsDef = PARTS[k]; });
   const saved = prop('NOTIF_SETTINGS');
   if (!saved) return defaults;
   try {
@@ -779,6 +805,7 @@ function getNotifSettings_() {
         parsed[k].defaultMsg  = defaults[k].defaultMsg; // 常にシステム定義値
         parsed[k].staffMsgEditable = defaults[k].staffMsgEditable;
         parsed[k].defaultStaffMsg  = defaults[k].defaultStaffMsg; // 常にシステム定義値
+        parsed[k].partsDef = defaults[k].partsDef; // 常にシステム定義値（ブロック定義・既定文）。上書き値は parsed[k].parts に保持
         if (!parsed[k].days) parsed[k].days = defaults[k].days;
         parsed[k].type = defaults[k].type;
         parsed[k].desc = defaults[k].desc;
@@ -786,6 +813,65 @@ function getNotifSettings_() {
     });
     return parsed;
   } catch(e) { return defaults; }
+}
+
+// 動的通知（本文を実データで生成する系）の「編集可能な固定文ブロック」定義。
+// part=ブロックのキー / label=コンソール表示名 / ph=使えるプレースホルダ[{t,d}] / def=既定文（＝実際の送信文の唯一の正）。
+// 保存済みの上書きは各通知の .parts[part] に入る。builderは notifTpl_() で「上書き→既定」を取り出し fillTpl_() で {token} を差し込む。
+function notifPartsDefs_() {
+  return {
+    lineup: [
+      { part:'footer', label:'フッター（各自の確認・営業のお願い）', ph:[], def:'各自出勤時間の確認をお願いします\n送りが必要なキャストは送り先も併せて先に教えてください🙏\n\n連絡先を知っているお客様に営業の連絡もお願いします\n1人1予約取れるように頑張りましょう！！！' }
+    ],
+    kinsen_mae: [
+      { part:'nudge',       label:'開店準備チェック号令', ph:[], def:MSG_OPENING_PREP_NUDGE },
+      { part:'unsubmitted', label:'開店チェック未提出リマインド（未提出のときだけ追送）', ph:[], def:'⚠️【開店チェック未提出】\nまだ開店チェックが提出されていません。\nIEYAS軍師の「🌅 開店チェック」から入力・送信してください。' }
+    ],
+    okuri_summary: [
+      { part:'staff',         label:'送迎リスト確認（スタッフ）', ph:[{t:'list',d:'送迎リスト'},{t:'count',d:'人数'}], def:'【送迎リスト確認 22:30】\n{list}\n\n送り依頼を出していないキャストはいませんか？\nキャンセルは「送りキャンセル」と送信してください。' },
+      { part:'kurofuku',      label:'送迎確認（黒服）', ph:[{t:'list',d:'送迎リスト'},{t:'count',d:'人数'},{t:'mode',d:'自社送り/ドライバー手配済み'}], def:'【22:30 送迎確認】本日の送りが必要なキャストです\n{list}\n\n全{count}名（{mode}）' },
+      { part:'driver',        label:'送迎予告（ドライバー）', ph:[{t:'list',d:'送迎リスト'},{t:'count',d:'人数'},{t:'fare',d:'料金'},{t:'farenote',d:'料金内訳'}], def:'【送迎予告】本日もよろしくお願いします\n\n{list}\n\n全{count}名\n待機時間：24:10頃\n本日料金：{fare}円（{farenote}）\n\n※23:30に確定連絡します' },
+      { part:'none_kurofuku', label:'送迎なし（黒服）', ph:[], def:'【22:30 送迎】本日の送迎依頼はありません' },
+      { part:'none_driver',   label:'送迎なし（ドライバー）', ph:[], def:'本日の送迎はなくなりました。お休みでお願いします。' }
+    ],
+    okuri_confirm: [
+      { part:'jisha_kurofuku', label:'確定・自社送り（黒服）', ph:[{t:'list',d:'送迎リスト'},{t:'count',d:'人数'}], def:'【送迎確認 23:30】自社送り\n{list}\n全{count}名（ドライバーへの連絡はありません）' },
+      { part:'driver',         label:'確定（ドライバー）', ph:[{t:'list',d:'送迎リスト'},{t:'count',d:'人数'},{t:'fare',d:'料金'},{t:'farenote',d:'料金内訳'}], def:'【送迎確定】よろしくお願いします\n\n{list}\n\n全{count}名\n店舗出発：24:10頃\n本日料金：{fare}円（{farenote}）' },
+      { part:'driver_kurofuku',label:'確定連絡済み（黒服）', ph:[{t:'list',d:'送迎リスト'}], def:'【送迎確定】ドライバーに確定連絡済み\n{list}' },
+      { part:'none_driver',    label:'送迎なし（ドライバー）', ph:[], def:'本日の送迎はなくなりました。お休みでお願いします。' },
+      { part:'none_kurofuku',  label:'送迎なし（黒服）', ph:[{t:'tail',d:'モードに応じた補足'}], def:'【送迎】本日送りなし{tail}' }
+    ],
+    shift_open: [
+      { part:'msg', label:'号令本文', ph:[{t:'week',d:'対象週'},{t:'url',d:'ポータルURL(改行込)'}], def:'📅【来週シフトの提出をお願いします】\n対象週：{week}\n締切：今週の木曜まで\n\nマイページ →「シフト提出」から希望を入力してください。{url}\n\n※来週は出勤予定がない場合は、シフト提出画面の「来週は出勤なし」ボタンで報告してください。' }
+    ],
+    shift_remind: [
+      { part:'dm', label:'未提出者への催促DM（木）', ph:[{t:'week',d:'対象週'},{t:'url',d:'ポータルURL(改行込)'}], def:'⏰【来週シフトが未提出です】\n対象週：{week}\n本日中に提出をお願いします（締切：木曜）。\n\nマイページ →「シフト提出」から入力してください。{url}\n\n※来週は出勤なしの場合は「来週は出勤なし」ボタンで報告を。' }
+    ],
+    shift_remind2: [
+      { part:'dm', label:'未提出者への催促DM（金・最終）', ph:[{t:'week',d:'対象週'},{t:'url',d:'ポータルURL(改行込)'}], def:'⏰【再度：来週シフトが未提出です】\n対象週：{week}\n本日中に提出をお願いします（締切：木曜）。\n\nマイページ →「シフト提出」から入力してください。{url}\n\n※来週は出勤なしの場合は「来週は出勤なし」ボタンで報告を。' }
+    ],
+    notice_reminder: [
+      { part:'header', label:'ヘッダー（件数の案内）', ph:[{t:'count',d:'未読件数'}], def:'📢【未読のお知らせが{count}件あります】\nまだ確認していないお知らせがあります。ご確認をお願いします。' },
+      { part:'footer', label:'フッター（確認導線）', ph:[{t:'url',d:'ポータルURL'}], def:'▼ポータルで確認\n{url}' }
+    ]
+  };
+}
+
+// 通知テンプレの現在値を返す（保存済み上書き → 既定文 partsDef.def）。
+function notifTpl_(ns, key, part) {
+  var s = (ns && ns[key]) || {};
+  var ov = s.parts && s.parts[part];
+  if (ov != null && String(ov).trim() !== '') return String(ov);
+  var def = '';
+  (s.partsDef || []).forEach(function (d) { if (d.part === part) def = d.def; });
+  return def;
+}
+
+// テンプレ内の {token} を map の値で差し込む（未定義tokenはそのまま残す）。
+function fillTpl_(tpl, map) {
+  return String(tpl == null ? '' : tpl).replace(/\{(\w+)\}/g, function (m, k) {
+    return (map && map[k] != null) ? String(map[k]) : m;
+  });
 }
 
 function ok_() {
@@ -1675,7 +1761,8 @@ function castsBirthdayByMonth_(ss) {
   for (var i = 1; i < rows.length; i++) {
     var nm = String(rows[i][1]).trim();
     if (!nm || EX[String(rows[i][2]).trim()]) continue;
-    var bd = String(rows[i][bcol] || '').trim();
+    var bdRaw = rows[i][bcol];
+    var bd = (bdRaw instanceof Date) ? Utilities.formatDate(bdRaw, TZ, 'M/d') : String(bdRaw || '').trim();
     var mo = birthdayMonth_(bd);
     if (!mo) continue;
     (map[mo] = map[mo] || []).push({ name: nm, mmdd: bd });
@@ -3228,48 +3315,33 @@ function jobOkuriSummary() {
   const today = todayStr();
   const list  = getOkuriList(today);
   const mode  = prop('OKURI_MODE') || 'driver';
+  const ns    = getNotifSettings_(); // 固定文はコンソール編集可（partsDef）
 
   if (list.length === 0) {
-    push_(prop('GROUP_KUROFUKU'), '【22:30 送迎】本日の送迎依頼はありません');
+    push_(prop('GROUP_KUROFUKU'), notifTpl_(ns, 'okuri_summary', 'none_kurofuku'));
     if (mode !== 'jisha') {
-      push_(prop('GROUP_DRIVER'), '本日の送迎はなくなりました。お休みでお願いします。');
+      push_(prop('GROUP_DRIVER'), notifTpl_(ns, 'okuri_summary', 'none_driver'));
     }
     return;
   }
 
-  const lines = list.map((r, i) => (i + 1) + '. ' + r.name + ' → ' + r.dest);
+  const lines = list.map((r, i) => (i + 1) + '. ' + r.name + ' → ' + r.dest).join('\n');
   const fare  = calcFare(list);
+  const modeLabel = (mode === 'jisha' ? '自社送り' : 'ドライバー手配済み');
 
   // スタッフグループ（キャスト確認用）
-  push_(prop('GROUP_STAFF'), [
-    '【送迎リスト確認 22:30】',
-    lines.join('\n'),
-    '',
-    '送り依頼を出していないキャストはいませんか？',
-    'キャンセルは「送りキャンセル」と送信してください。'
-  ].join('\n'));
+  push_(prop('GROUP_STAFF'),
+    fillTpl_(notifTpl_(ns, 'okuri_summary', 'staff'), { list: lines, count: list.length }));
 
   // 黒服グループ（確認用）
-  push_(prop('GROUP_KUROFUKU'), [
-    '【22:30 送迎確認】本日の送りが必要なキャストです',
-    lines.join('\n'),
-    '',
-    '全' + list.length + '名（' + (mode === 'jisha' ? '自社送り' : 'ドライバー手配済み') + '）'
-  ].join('\n'));
+  push_(prop('GROUP_KUROFUKU'),
+    fillTpl_(notifTpl_(ns, 'okuri_summary', 'kurofuku'), { list: lines, count: list.length, mode: modeLabel }));
 
   if (mode !== 'jisha') {
     // ドライバーに22:30予告（リスト確定前の案内）
-    push_(prop('GROUP_DRIVER'), [
-      '【送迎予告】本日もよろしくお願いします',
-      '',
-      lines.join('\n'),
-      '',
-      '全' + list.length + '名',
-      '待機時間：24:10頃',
-      '本日料金：' + fare.yen.toLocaleString() + '円（' + fare.note + '）',
-      '',
-      '※23:30に確定連絡します'
-    ].join('\n'));
+    push_(prop('GROUP_DRIVER'),
+      fillTpl_(notifTpl_(ns, 'okuri_summary', 'driver'),
+        { list: lines, count: list.length, fare: fare.yen.toLocaleString(), farenote: fare.note }));
   }
 }
 
@@ -3278,40 +3350,31 @@ function jobOkuriConfirm() {
   const today = todayStr();
   const list  = getOkuriList(today);
   const mode  = prop('OKURI_MODE') || 'driver'; // 未設定はドライバー扱い
+  const ns    = getNotifSettings_(); // 固定文はコンソール編集可（partsDef）
 
   if (list.length === 0) {
     if (mode !== 'jisha') {
-      push_(prop('GROUP_DRIVER'), '本日の送迎はなくなりました。お休みでお願いします。');
+      push_(prop('GROUP_DRIVER'), notifTpl_(ns, 'okuri_confirm', 'none_driver'));
     }
-    push_(prop('GROUP_KUROFUKU'), '【送迎】本日送りなし' + (mode !== 'jisha' ? ' → ドライバーに連絡済み' : '（自社送りのため連絡なし）'));
+    const tail = (mode !== 'jisha' ? ' → ドライバーに連絡済み' : '（自社送りのため連絡なし）');
+    push_(prop('GROUP_KUROFUKU'), fillTpl_(notifTpl_(ns, 'okuri_confirm', 'none_kurofuku'), { tail: tail }));
     return;
   }
 
-  const lines = list.map((r, i) => (i + 1) + '. ' + r.name + ' → ' + r.dest);
+  const lines = list.map((r, i) => (i + 1) + '. ' + r.name + ' → ' + r.dest).join('\n');
   const fare  = calcFare(list);
 
   if (mode === 'jisha') {
     // 自社送り：ドライバーには通知しない
-    push_(prop('GROUP_KUROFUKU'), [
-      '【送迎確認 23:30】自社送り',
-      lines.join('\n'),
-      '全' + list.length + '名（ドライバーへの連絡はありません）'
-    ].join('\n'));
+    push_(prop('GROUP_KUROFUKU'),
+      fillTpl_(notifTpl_(ns, 'okuri_confirm', 'jisha_kurofuku'), { list: lines, count: list.length }));
   } else {
     // ドライバー送り
-    push_(prop('GROUP_DRIVER'), [
-      '【送迎確定】よろしくお願いします',
-      '',
-      lines.join('\n'),
-      '',
-      '全' + list.length + '名',
-      '店舗出発：24:10頃',
-      '本日料金：' + fare.yen.toLocaleString() + '円（' + fare.note + '）'
-    ].join('\n'));
-    push_(prop('GROUP_KUROFUKU'), [
-      '【送迎確定】ドライバーに確定連絡済み',
-      lines.join('\n')
-    ].join('\n'));
+    push_(prop('GROUP_DRIVER'),
+      fillTpl_(notifTpl_(ns, 'okuri_confirm', 'driver'),
+        { list: lines, count: list.length, fare: fare.yen.toLocaleString(), farenote: fare.note }));
+    push_(prop('GROUP_KUROFUKU'),
+      fillTpl_(notifTpl_(ns, 'okuri_confirm', 'driver_kurofuku'), { list: lines }));
   }
 }
 
@@ -4178,10 +4241,10 @@ function scheduledJobs() {
 
   // 19:30 開店準備＝軍師の開店前チェックを各フロア完了せよ、の号令（旧11項目の羅列は廃止し軍師へ一本化）
   notif_('kinsen_mae', () => {
-    push_(prop('GROUP_KUROFUKU'), MSG_OPENING_PREP_NUDGE);
+    push_(prop('GROUP_KUROFUKU'), notifTpl_(ns_, 'kinsen_mae', 'nudge'));
     // レジ現金の開店チェックが未提出なら別途リマインド
     if (!getOpeningCheckInit().locked) {
-      push_(prop('GROUP_KUROFUKU'), '⚠️【開店チェック未提出】\nまだ開店チェックが提出されていません。\nIEYAS軍師の「🌅 開店チェック」から入力・送信してください。');
+      push_(prop('GROUP_KUROFUKU'), notifTpl_(ns_, 'kinsen_mae', 'unsubmitted'));
     }
     recordChecklistSent('KUROFUKU', '1930');
   });
@@ -4754,6 +4817,7 @@ function buildLineupMessage_() {
   const detail = getTodayShiftDetail_();
   const total  = detail.cast.length + detail.kurofuku.length + detail.haken.length;
   if (total === 0) return null;
+  const ns = getNotifSettings_(); // フッター等の編集可能文をコンソール設定から取得
 
   const today = new Date();
   const mm    = (today.getMonth() + 1) + '月' + today.getDate() + '日';
@@ -4792,7 +4856,7 @@ function buildLineupMessage_() {
     lines.push('');
   }
 
-  lines.push('各自出勤時間の確認をお願いします\n送りが必要なキャストは送り先も併せて先に教えてください🙏\n\n連絡先を知っているお客様に営業の連絡もお願いします\n1人1予約取れるように頑張りましょう！！！');
+  lines.push(notifTpl_(ns, 'lineup', 'footer'));
   return { text: lines.join('\n'), total };
 }
 
@@ -5747,12 +5811,8 @@ function broadcastShiftSubmitOpen_() {
   const wk = nextWeekRange_();
   const roster = shiftSubmitRoster_();
   const url = prop('PORTAL_URL') || '';
-  const msg = '📅【来週シフトの提出をお願いします】\n'
-    + '対象週：' + wk.label + '\n'
-    + '締切：今週の木曜まで\n\n'
-    + 'マイページ →「シフト提出」から希望を入力してください。'
-    + (url ? '\n' + url : '')
-    + '\n\n※来週は出勤予定がない場合は、シフト提出画面の「来週は出勤なし」ボタンで報告してください。';
+  const ns  = getNotifSettings_(); // 号令本文はコンソール編集可（partsDef）
+  const msg = fillTpl_(notifTpl_(ns, 'shift_open', 'msg'), { week: wk.label, url: (url ? '\n' + url : '') });
   let sent = 0;
   roster.forEach(function (s) { if (s.lineId) { try { push_(s.lineId, msg); sent++; } catch (e) {} } });
   return { ok: true, sent: sent, total: roster.length, label: wk.label };
@@ -5762,13 +5822,9 @@ function broadcastShiftSubmitOpen_() {
 function remindShiftSubmitMissing_(round) {
   const st = computeShiftSubmitStatus_();
   const url = prop('PORTAL_URL') || '';
-  const head = (round === 2 ? '⏰【再度：来週シフトが未提出です】\n' : '⏰【来週シフトが未提出です】\n');
-  const dm = head
-    + '対象週：' + st.weekLabel + '\n'
-    + '本日中に提出をお願いします（締切：木曜）。\n\n'
-    + 'マイページ →「シフト提出」から入力してください。'
-    + (url ? '\n' + url : '')
-    + '\n\n※来週は出勤なしの場合は「来週は出勤なし」ボタンで報告を。';
+  const ns  = getNotifSettings_(); // 催促DM本文はコンソール編集可（partsDef）。round=1→shift_remind / round=2→shift_remind2
+  const dm  = fillTpl_(notifTpl_(ns, round === 2 ? 'shift_remind2' : 'shift_remind', 'dm'),
+    { week: st.weekLabel, url: (url ? '\n' + url : '') });
   let dmSent = 0;
   st.missing.forEach(function (m) { if (m.lineId) { try { push_(m.lineId, dm); dmSent++; } catch (e) {} } });
   const KF = prop('GROUP_KUROFUKU');
@@ -6514,7 +6570,7 @@ function getAdminConsoleData(userId) {
       kioskLogin: isAdminAll || (gunshiRaw === '○') || (gunshiRaw === '×' ? false : (role === '黒服社員' || role === '黒服バイト')),
       gunshiFlag: gunshiRaw, hardGunshi: isAdminAll,
       hasPin: !!allProps['KIOSK_PIN_' + name.replace(/[\s　]/g, '_')], // 個別PIN設定済みか
-      terms: (function () { var t = {}; STAFF_TERM_HEADERS.forEach(function (h) { var c = termCols[h]; t[h] = (c >= 0) ? String(rows[i][c] == null ? '' : rows[i][c]) : ''; }); return t; })(),
+      terms: (function () { var t = {}; STAFF_TERM_HEADERS.forEach(function (h) { var c = termCols[h]; var v = (c >= 0) ? rows[i][c] : ''; t[h] = (v instanceof Date) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v); }); return t; })(),
       bdayWeek: bWeekMap[normalizeName_(name)] || { status: 'none', start: '', end: '', reason: '', applied: '' },
       // 給与バック方式（新ルール/固定）。未設定は新ルール扱い
       backMode: (backCols['バック方式'] >= 0 && String(rows[i][backCols['バック方式']]).trim() === '固定') ? 'fixed' : 'rule',
@@ -8478,9 +8534,12 @@ function noticeDaysBetween_(fromYmd, toYmd) {
 }
 
 // 未読者へのまとめDM本文。1人が複数のお知らせを未読でも1通に集約する。
-function formatNoticeReminder_(notices, portalUrl) {
+// ヘッダー/フッターの固定文はコンソール編集可（partsDef）。真ん中の未読一覧は実データで動的生成。
+// ns は呼び出し側で1回だけ取得して渡す（DMを人数分ループするため）。
+function formatNoticeReminder_(notices, portalUrl, ns) {
+  ns = ns || getNotifSettings_();
   const n = notices.length;
-  let m = '📢【未読のお知らせが' + n + '件あります】\nまだ確認していないお知らせがあります。ご確認をお願いします。\n';
+  let m = fillTpl_(notifTpl_(ns, 'notice_reminder', 'header'), { count: n }) + '\n';
   notices.slice(0, 5).forEach(function (x) {
     const imp = String(x.importance).trim();
     const mark = imp === 'urgent' ? '📌' : imp === 'high' ? '❗' : '・';
@@ -8489,7 +8548,8 @@ function formatNoticeReminder_(notices, portalUrl) {
     m += '\n' + mark + title;
   });
   if (n > 5) m += '\n…ほか' + (n - 5) + '件';
-  m += portalUrl ? ('\n\n▼ポータルで確認\n' + portalUrl) : '\n\n▼ポータルの「お知らせ」から確認してください';
+  m += portalUrl ? ('\n\n' + fillTpl_(notifTpl_(ns, 'notice_reminder', 'footer'), { url: portalUrl }))
+                 : '\n\n▼ポータルの「お知らせ」から確認してください';
   return m;
 }
 
@@ -8517,10 +8577,11 @@ function sendNoticeUnreadReminders_() {
   });
 
   const portalUrl = prop('PORTAL_URL') || '';
+  const ns = getNotifSettings_(); // 人数分ループするので設定は1回だけ取得
   const lineIds = Object.keys(perLine);
   let sent = 0, failed = 0;
   lineIds.forEach(function (lid) {
-    const r = noticePushTo_([lid], formatNoticeReminder_(perLine[lid], portalUrl));
+    const r = noticePushTo_([lid], formatNoticeReminder_(perLine[lid], portalUrl, ns));
     sent += r.sent; failed += r.failed;
   });
   console.log('notice reminder: staff=' + lineIds.length + ' sent=' + sent + ' failed=' + failed);
