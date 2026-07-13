@@ -322,6 +322,20 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .stk-floor-btn{flex:1;padding:9px 0;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:700;cursor:pointer;text-align:center;}
 .stk-floor-btn.sel{background:#0d2233;border-color:#2a6a9a;color:#7ac8ff;}
 .stk-stocktake{margin:2px 12px 12px;text-align:center;padding:11px;border:1px dashed var(--line2);border-radius:10px;color:#b9a6ff;font-size:13px;font-weight:700;cursor:pointer;}
+/* 棚卸し */
+.stk-help{color:var(--sub);font-size:12.5px;line-height:1.6;padding:2px 2px 12px;}
+.stk-fgroup{margin-bottom:16px;}
+.stk-fhead{font-size:13px;font-weight:800;color:#7ac8ff;padding:8px 2px;border-bottom:1px solid var(--line);margin-bottom:4px;}
+.stk-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line);}
+.stk-nm{flex:1;min-width:0;font-size:14px;font-weight:700;color:var(--txt);}
+.stk-cat{font-size:11px;color:var(--dim);font-weight:600;margin-left:4px;}
+.stk-ctl{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.stk-rec{font-size:12px;color:var(--dim);white-space:nowrap;}
+.stk-in{width:76px;text-align:center;font-size:15px;font-weight:800;}
+.stk-diff{min-width:42px;text-align:center;font-size:13px;font-weight:800;padding:3px 6px;border-radius:8px;}
+.stk-diff.zero{color:var(--dim);background:transparent;}
+.stk-diff.plus{color:#7be0a8;background:#0d2618;}
+.stk-diff.minus{color:#ff9a9a;background:#2a1414;}
 /* 納品→在庫反映 */
 .dr-wrap{padding:14px 16px 90px;overflow-y:auto;height:100%;}
 .dr-slip{border:1px solid var(--line2);border-radius:12px;margin-bottom:16px;overflow:hidden;}
@@ -2917,7 +2931,56 @@ function stkSubmitPurchase(rowIdx){
   if(!qty||qty<=0){alert('数量を入力してください');return;} if(!pd){alert('購入日を入力してください');return;}
   gsr('registerStockPurchase',{userId:KIOSK_USER_ID,rowIdx:rowIdx,qty:qty,purchaseDate:pd}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('購入登録に失敗');});
 }
-function openStocktake(){ alert('📦 棚卸しは次のアップデートで対応します'); }
+/* ============ 📦 棚卸し（実数登録→差異記録→在庫を実数に更新） ============ */
+var stkState=null;
+function openStocktake(){
+  showSheet('📦 棚卸し','<div class="empty-msg">読み込み中...</div>','full');
+  if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）本番のみ</div>'; return; }
+  gsr('getStocktakeTargets').then(function(list){
+    stkState=(list||[]).map(function(it){var q=Number(it.qty)||0;return {rowIdx:it.rowIdx,name:it.name,floor:it.floor||'共通',category:it.category||'',recorded:q,actual:q};});
+    renderStocktake();
+  }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
+}
+function stkOnInput(id,el){
+  var v=Number(el.value); if(isNaN(v)||v<0){v=0;}
+  stkState[id].actual=v;
+  var badge=document.getElementById('stk-d-'+id); if(!badge)return;
+  var d=v-stkState[id].recorded;
+  badge.textContent=(d===0?'±0':(d>0?'+'+d:''+d));
+  badge.className='stk-diff '+(d===0?'zero':(d>0?'plus':'minus'));
+}
+function renderStocktake(){
+  var b=document.getElementById('sheetBody'); if(!b)return;
+  if(!stkState.length){ b.innerHTML='<div class="empty-msg" style="padding:40px 0">棚卸し対象の品目がありません<br><span style="font-size:12px;color:var(--dim)">対象＝消耗品カテゴリ、または賞味期限管理品</span></div>'; return; }
+  var order={'5F':0,'2F':1,'共通':2}, byFloor={};
+  stkState.forEach(function(it,i){ it._id=i; (byFloor[it.floor]=byFloor[it.floor]||[]).push(it); });
+  var floors=Object.keys(byFloor).sort(function(a,b){return (order[a]==null?9:order[a])-(order[b]==null?9:order[b]);});
+  var h='<div class="dr-wrap"><div class="stk-help">各品目の<b>実数</b>を数えて入力してください（初期値＝記録在庫）。差異は棚卸しログに記録され、在庫が実数に更新されます。</div>';
+  floors.forEach(function(f){
+    h+='<div class="stk-fgroup"><div class="stk-fhead">'+esc(f)+'（'+byFloor[f].length+'品）</div>';
+    byFloor[f].forEach(function(it){
+      var id=it._id;
+      h+='<div class="stk-row"><div class="stk-nm">'+esc(it.name)+(it.category?' <span class="stk-cat">'+esc(it.category)+'</span>':'')+'</div>'
+        +'<div class="stk-ctl"><span class="stk-rec">記録 '+it.recorded+'</span>'
+        +'<input class="finput stk-in" id="stk-in-'+id+'" type="number" min="0" inputmode="numeric" value="'+it.recorded+'" oninput="stkOnInput('+id+',this)">'
+        +'<span class="stk-diff zero" id="stk-d-'+id+'">±0</span></div></div>';
+    });
+    h+='</div>';
+  });
+  h+='<div class="dr-actions"><button class="savebtn stk-apply" onclick="submitStocktakeUI()">✅ 棚卸しを確定（在庫を実数に更新）</button></div></div>';
+  b.innerHTML=h;
+}
+function submitStocktakeUI(){
+  if(!stkState||!stkState.length)return;
+  var items=stkState.map(function(it){return {rowIdx:it.rowIdx,actualQty:it.actual};});
+  var diffN=stkState.filter(function(it){return it.actual!==it.recorded;}).length;
+  if(!confirm('棚卸しを確定します（対象 '+items.length+'品／差異 '+diffN+'品）。\n在庫が実数に更新され、黒服グループに通知されます。よろしいですか？'))return;
+  var btn=document.querySelector('.stk-apply'); if(btn){btn.disabled=true;btn.textContent='送信中...';}
+  gsr('submitStocktake',{userId:KIOSK_USER_ID,items:items}).then(function(res){
+    if(res&&res.ok){ alert('📦 棚卸し完了：'+res.count+'件'+(res.diffCount?'（差異 '+res.diffCount+'件）':'（差異なし）')); closeSheet(); }
+    else { alert('エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='✅ 棚卸しを確定（在庫を実数に更新）';} }
+  }).catch(function(e){ alert('送信に失敗しました: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='✅ 棚卸しを確定（在庫を実数に更新）';} });
+}
 
 /* ============ 🚚 納品→在庫反映（フロア振り分け＋候補マッチ） ============ */
 var deliveryState=null, drItems={};
