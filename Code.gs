@@ -7881,7 +7881,8 @@ function getCastNamesForYoyaku_(ss) {
   if (!sh) return [];
   // 黒服/管理者に加えて「ドライバー」も除外（送り依頼の都合で登録しているだけで、
   // キャスト・付け回し・予約担当・シフト等どこにも名前を出さない）
-  const KURO = ['黒服社員', '黒服バイト', '管理者', 'ドライバー', '管理アカウント', 'テストスタッフ'];
+  // テストスタッフは軍師の担当/同伴/予約チップ＝付け回し候補に「出す」（盤面テスト用）。実データ集計側は別途isGhostRole_で不参加。管理アカウントは完全除外。
+  const KURO = ['黒服社員', '黒服バイト', '管理者', 'ドライバー', '管理アカウント'];
   const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は候補から除外（コンソールで退職にした子は現場に出さない）
   return sh.getDataRange().getValues().slice(1)
     .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role) && !(retireC >= 0 && String(r[retireC]).trim() === '退職'); })
