@@ -6172,6 +6172,31 @@ function handlePortalApi_(e) {
     return out({ ok: true, customized: !!prop('NOTIF_SETTINGS'), settings: getNotifSettings_() });
   }
   if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billverify') return out(portalGetMyBills_(e.parameter.cast || '', e.parameter.month || ''));
+  // 給与ロール許可リストの読み取り専用診断(本番給与は書かない)。名簿×売上でフィルタを走らせ除外/未照合を返す。
+  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'payrolldiag') {
+    const ssD = getOrOpenSS_();
+    const staffShD = ssD.getSheetByName(STAFF_TAB);
+    const salesShD = ssD.getSheetByName(URIAGE_TAB);
+    const ALLOWD = { 'キャスト': 1, '体験': 1, '派遣': 1, '黒服バイト': 1, '黒服社員': 1, '黒服': 1 };
+    const nkeyD = s => String(s || '').replace(/[\s　]/g, '');
+    const roleByKeyD = {};
+    if (staffShD) { const srD = staffShD.getDataRange().getValues();
+      for (let k = 1; k < srD.length; k++) { const rnD = String(srD[k][1]).trim(); if (rnD) roleByKeyD[nkeyD(rnD)] = String(srD[k][2]).trim(); } }
+    const ymD = String(e.parameter.month || '').replace(/-/g, '/').slice(0, 7);
+    const rowsD = salesShD ? salesShD.getDataRange().getValues() : [];
+    const iNameD = rowsD.length ? rowsD[0].map(String).indexOf('名前') : -1;
+    const excludedD = [], unmatchedD = []; let keptD = 0, totalD = 0;
+    for (let i = 1; i < rowsD.length; i++) {
+      if (ymD && mStr_(rowsD[i][0]) !== ymD) continue;
+      totalD++;
+      const nmD = String(rowsD[i][iNameD] || rowsD[i][1]);
+      const rlD = roleByKeyD[nkeyD(nmD)];
+      if (rlD === undefined) { unmatchedD.push(nmD); keptD++; }
+      else if (!ALLOWD[rlD]) { excludedD.push(nmD + '(' + rlD + ')'); }
+      else { keptD++; }
+    }
+    return out({ ok: true, month: ymD || '(all)', salesRows: totalD, kept: keptD, excludedCount: excludedD.length, excluded: excludedD, unmatchedCount: unmatchedD.length, unmatched: unmatchedD });
+  }
   if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billmonthbreakdown') {
     const ym = String(e.parameter.month || '').replace(/\//g, '-').slice(0, 7);
     const sh = billSheet_(); const last = sh.getLastRow(); const agg = {}; let total = 0, cnt = 0;
