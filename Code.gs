@@ -737,6 +737,21 @@ function handleApiRequest_(body) {
     const bottles = items.filter(function (it) { return it.isBottle; });
     return billWriteDetail_(String(body.dateKey), String(body.uuid), items, bottles);
   }
+  // 統合ワンクリック用：最新伝票取得日と当日基準日を返す（ブックマークレットが取得起点を自動算出するため）
+  if (body.action === 'getTrustSyncState') {
+    const secret = prop('SYNC_SECRET');
+    const bySecret = secret && body.syncSecret === secret;
+    if (!bySecret) {
+      const adminName = getStaffName(body.userId);
+      if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    }
+    var latest = '';
+    try {
+      var bs = billSheet_(); var last = bs.getLastRow();
+      if (last >= 2) latest = bs.getRange(2, 1, last - 1, 1).getValues().map(function (x) { return x[0] instanceof Date ? Utilities.formatDate(x[0], TZ, 'yyyy-MM-dd') : String(x[0]).trim(); }).sort().reverse()[0];
+    } catch (e) {}
+    return { ok: true, latestBillDate: latest, today: bizDateStr_() };
+  }
   // ---- シフト管理（管理者専用）----
   if (body.action === 'writeShiftCellPortal') {
     const adminName = getStaffName(body.userId);
@@ -5968,8 +5983,9 @@ function getStaffList() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const sh = ss.getSheetByName(STAFF_TAB);
   if (!sh) return [];
+  const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は除外（コンソールで退職にした子は現場に出さない）
   return sh.getDataRange().getValues().slice(1)
-    .filter(r => r[1] && String(r[2]).trim() !== 'ドライバー').map(r => String(r[1])).sort();
+    .filter(r => r[1] && String(r[2]).trim() !== 'ドライバー' && !(retireC >= 0 && String(r[retireC]).trim() === '退職')).map(r => String(r[1])).sort();
 }
 
 // キャストのみ（黒服は別途末尾に）
@@ -6428,12 +6444,14 @@ function portalCastList_(ss) {
   const sh = ss.getSheetByName(STAFF_TAB);
   if (!sh) return { castNames: [], castRoles: {} };
   const rows = sh.getDataRange().getValues();
+  const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は除外（コンソールで退職にした子は現場に出さない）
   const EXCLUDE = ['管理者'];
   const castNames = [], castRoles = {};
   for (let i = 1; i < rows.length; i++) {
     const name = String(rows[i][1]).trim();
     const role = String(rows[i][2]).trim() || 'キャスト';
-    if (name && !EXCLUDE.includes(name)) {
+    if (retireC >= 0 && String(rows[i][retireC]).trim() === '退職') continue;
+    if (name && !EXCLUDE.includes(role)) { // 役割で除外（従来は名前と誤照合し役割'管理者'を除外できていなかったバグを修正）
       castNames.push(name);
       castRoles[name] = role;
     }
@@ -6545,6 +6563,7 @@ function getAdminConsoleData(userId) {
   const termCols = sh ? getStaffTermCols_(sh, false) : {};
   const backCols = sh ? getStaffBackRuleCols_(sh, false) : {};
   const retireCols = sh ? getStaffRetireCols_(sh, false) : {};
+  const noticeCols = sh ? getStaffNoticeCols_(sh, false) : {};
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
@@ -6574,7 +6593,9 @@ function getAdminConsoleData(userId) {
       backRate: (backCols['固定バック率(%)'] >= 0 ? (Number(rows[i][backCols['固定バック率(%)']]) || 0) : 0),
       // 退職状態: フラグ列'退職' / 退職日（Date流出を吸収して文字列化）
       retired: (retireCols['退職'] >= 0 && String(rows[i][retireCols['退職']]).trim() === '退職'),
-      retiredAt: (function () { var c = retireCols['退職日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })()
+      retiredAt: (function () { var c = retireCols['退職日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })(),
+      // お知らせ配信対象: '×'のときだけOFF。列が無い/空欄は配信ON（既定）
+      noticeOn: !(noticeCols['お知らせ配信'] >= 0 && String(rows[i][noticeCols['お知らせ配信']]).trim() === '×')
     });
   }
   return { ok: true, caller: caller, staff: staff, roles: ADMIN_ROLES_, kioskRoles: KIOSK_LOGIN_ROLES_, masterPin: prop('KIOSK_PIN') || '1234', consolePinSet: !!prop('ADMIN_CONSOLE_PIN') };
@@ -6592,6 +6613,28 @@ function getStaffRetireCols_(sh, create) {
   var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
   var cols = {};
   STAFF_RETIRE_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) {
+      lastCol += 1;
+      sh.getRange(1, lastCol).setValue(name);
+      idx = lastCol - 1;
+    }
+    cols[name] = idx; // 無く未作成なら -1
+  });
+  return cols;
+}
+
+/* ===== お知らせ配信対象 =====
+ * スタッフマスタに「お知らせ配信」列を退職列と同じ流儀（ヘッダー名で探索→無ければ末尾追加）で持たせる。
+ * 空欄＝配信する（既定・既存全員の挙動を維持）／'×'＝配信しない。名簿の📢トグルで切替。 */
+var STAFF_NOTICE_HEADERS = ['お知らせ配信'];
+
+// スタッフマスタ1行目ヘッダーから「お知らせ配信」列の0-based indexを解決。create=trueで無い列を末尾に新設。
+function getStaffNoticeCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_NOTICE_HEADERS.forEach(function (name) {
     var idx = headers.indexOf(name);
     if (idx < 0 && create) {
       lastCol += 1;
@@ -6633,6 +6676,23 @@ function adminSetRetired(userId, targetName, retired) {
       // 退職日は文字列で記録（Sheetsの日付自動変換によるString()流出を避け、表示時はそのまま読む）
       sh.getRange(i + 1, cols['退職日'] + 1).setValue(retired ? bizDateStr_() : '');
       return { ok: true, name: targetName, retired: !!retired };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+
+// 管理コンソール：お知らせ配信対象のON/OFF切替（動的「お知らせ配信」列）。ON=空欄・OFF='×'。
+function adminSetNoticeTarget(userId, targetName, on) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  targetName = String(targetName || '').trim();
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  var col = getStaffNoticeCols_(sh, true)['お知らせ配信']; // 無ければ列作成
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, col + 1).setValue(on ? '' : '×'); // 配信する=空欄 / 配信しない='×'
+      return { ok: true, name: targetName, noticeOn: !!on };
     }
   }
   return { ok: false, error: targetName + ' が見つかりません' };
@@ -7725,8 +7785,9 @@ function getCastNamesForYoyaku_(ss) {
   // 黒服/管理者に加えて「ドライバー」も除外（送り依頼の都合で登録しているだけで、
   // キャスト・付け回し・予約担当・シフト等どこにも名前を出さない）
   const KURO = ['黒服社員', '黒服バイト', '管理者', 'ドライバー'];
+  const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は候補から除外（コンソールで退職にした子は現場に出さない）
   return sh.getDataRange().getValues().slice(1)
-    .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role); })
+    .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role) && !(retireC >= 0 && String(r[retireC]).trim() === '退職'); })
     .map(r => String(r[1]).trim());
 }
 
@@ -8379,9 +8440,34 @@ function noticeTargetMatches_(target, role) {
   if (target === 'kurofuku') return g === 'kurofuku';
   return false;
 }
-// 配信対象スタッフ名簿（未読管理のため全員返す。LINE配信はlineId登録者のみ）
+// お知らせの母集団＝在籍かつ配信ONのスタッフ（役割フィルタ前の全員）。
+// 退職者（退職列='退職'）と配信OFF（お知らせ配信列='×'）を除外。両列とも無ければ従来通り全員返す。
+// 配信・既読/未読マップ・未読リマインドの3経路すべてがこの1関数を土台にする（除外条件の一元管理）。
+function noticeRoster_() {
+  var ss = getOrOpenSS_();
+  var all = getAllStaff_(ss); // {lineId,name,role,...}
+  var sh = ss.getSheetByName(STAFF_TAB);
+  if (!sh) return all;
+  var retireC = getStaffRetireCols_(sh, false)['退職'];
+  var noticeC = getStaffNoticeCols_(sh, false)['お知らせ配信'];
+  if (retireC < 0 && noticeC < 0) return all; // 両列とも未作成＝除外条件なし
+  var rows = sh.getDataRange().getValues();
+  var flags = {}; // 正規化名 -> {retired, off}
+  for (var i = 1; i < rows.length; i++) {
+    var key = normalizeName_(String(rows[i][1]).trim()); if (!key) continue;
+    flags[key] = {
+      retired: retireC >= 0 && String(rows[i][retireC]).trim() === '退職',
+      off: noticeC >= 0 && String(rows[i][noticeC]).trim() === '×'
+    };
+  }
+  return all.filter(function (s) {
+    var f = flags[normalizeName_(s.name)];
+    return !f || (!f.retired && !f.off);
+  });
+}
+// 配信対象スタッフ名簿（未読管理のため対象母集団を全員返す。LINE配信はlineId登録者のみ）
 function noticeAudience_(target) {
-  return getAllStaff_(getOrOpenSS_()).filter(function (s) { return noticeTargetMatches_(target, s.role); });
+  return noticeRoster_().filter(function (s) { return noticeTargetMatches_(target, s.role); });
 }
 // 期限セルを 'yyyy-MM-dd' に（Date値のString()流出を防ぐ）
 function noticeDateOnly_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); }
@@ -8500,7 +8586,7 @@ function getNoticeReadMap_() {
     const l = String(readRows[i][1]).trim(); if (l) rec.line[l] = true;
     const nm = normalizeName_(String(readRows[i][2] || '')); if (nm) rec.name[nm] = true;
   }
-  const allStaff = getAllStaff_(getOrOpenSS_());
+  const allStaff = noticeRoster_(); // 退職者・配信OFFを除いた在籍母集団（配信経路と同一）
   const list = [];
   for (let i = 1; i < nRows.length; i++) {
     const id = String(nRows[i][0]).trim(); if (!id) continue;

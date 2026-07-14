@@ -56,6 +56,8 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"H
 .toggle.on.admin{background:#241028;border-color:#7a3a6a;color:#f0a0e0;}
 .toggle.on.safe{background:var(--warnbg);border-color:var(--warnline);color:var(--warn);}
 .toggle.on.gunshi{background:#0d2233;border-color:#2a6a9a;color:#7ac8ff;}
+.toggle.on.notice{background:#0d2a1a;border-color:#2a7a4a;color:#6ee0a0;}
+.toggle.off.notice{background:#2a1414;border-color:#6b3a3a;color:#ff9aa0;}
 .toggle.locked{opacity:.5;cursor:not-allowed;}
 
 /* matrix / tables */
@@ -337,6 +339,8 @@ function cardHtml(s,i){
   var gunshiBtn=s.hardGunshi?'<div class="toggle on gunshi locked" title="管理者は常に軍師ログイン可">🏯 軍師 🔒</div>':'<div class="toggle'+(s.kioskLogin?' on gunshi':'')+'" onclick="toggleGunshi(\''+jstr(s.name)+'\','+(!s.kioskLogin)+')">🏯 軍師</div>';
   var adminBtn=s.hardAdmin?'<div class="toggle on admin locked" title="コード保護">🛡 管理者 🔒</div>':'<div class="toggle'+(s.adminFlag?' on admin':'')+'" onclick="toggleAdmin(\''+jstr(s.name)+'\','+(!s.adminFlag)+')">🛡 管理者</div>';
   var safeBtn=s.hardSafe?'<div class="toggle on safe locked" title="コード保護">🔑 金庫管理 🔒</div>':'<div class="toggle'+(s.safeFlag?' on safe':'')+'" onclick="toggleSafe(\''+jstr(s.name)+'\','+(!s.safeFlag)+')">🔑 金庫管理</div>';
+  var noticeOn=(s.noticeOn!==false); // 既定=配信ON。'×'指定のときだけOFF
+  var noticeBtn='<div class="toggle '+(noticeOn?'on':'off')+' notice" title="お知らせの配信・既読/未読名簿の対象。OFFにすると配信されず名簿にも出ません" onclick="toggleNotice(\''+jstr(s.name)+'\','+(!noticeOn)+')">📢 お知らせ'+(noticeOn?'':' 停止中')+'</div>';
   var pinRow=s.kioskLogin?'<div class="pinrow"><span class="pinlbl">🔢 PIN</span><span class="pinstat'+(s.hasPin?' set':'')+'">'+(s.hasPin?'個別PIN設定済み':'マスターPIN使用')+'</span><button class="btn sm" onclick="setPin(\''+jstr(s.name)+'\')">設定</button>'+(s.hasPin?'<button class="btn sm" onclick="clearPin(\''+jstr(s.name)+'\')">クリア</button>':'')+'</div>':'';
   var backRuleHtml='';
   if(isTermRole(s.role)){
@@ -390,7 +394,7 @@ function cardHtml(s,i){
       : '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px"><button class="btn sm" style="color:#ff9aa0;border-color:#6b3a3a" onclick="retireStaff(\''+jstr(s.name)+'\')">🚪 退職にする</button></div>');
   return '<div class="card"'+(s.retired?' style="opacity:.72"':'')+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+termHtml+retireRow+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+termHtml+retireRow+'</div>';
 }
 /* バック方式（新ルール/固定率）＝キャスト永続設定・給与計算に直結 */
 function onBackModeChange(i,name){
@@ -455,6 +459,8 @@ function findStaff(n){ return ST.staff.find(function(s){return s.name===n;}); }
 function setRole(name,role){ var s=findStaff(name); if(s){s.role=role;s.kioskLogin=(ST.kioskRoles.indexOf(role)>=0);} if(!IS_GAS){toast(name+' → '+role);return;} gsr('adminSetStaffRole',USER_ID,name,role).then(function(r){res(r,name+' → '+role)||load();}).catch(function(){toast('通信エラー',true);load();}); }
 function toggleAdmin(name,on){ var s=findStaff(name); if(s){s.adminFlag=on;s.isAdmin=on||s.hardAdmin;} render(); if(!IS_GAS){toast(name+' 管理者'+(on?'ON':'OFF'));return;} gsr('adminSetAdminFlag',USER_ID,name,on).then(function(r){res(r,name+' 管理者 '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
 function toggleSafe(name,on){ var s=findStaff(name); if(s){s.safeFlag=on;s.isSafeAdmin=on||s.hardSafe;} render(); if(!IS_GAS){toast(name+' 金庫'+(on?'ON':'OFF'));return;} gsr('adminSetSafeAdmin',USER_ID,name,on).then(function(r){res(r,name+' 金庫管理 '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
+/* お知らせ配信対象のON/OFF。OFF=配信されず既読/未読名簿にも出ない（退職とは別軸の一時停止） */
+function toggleNotice(name,on){ var s=findStaff(name); if(s){s.noticeOn=on;} render(); if(!IS_GAS){toast(name+' お知らせ配信'+(on?'ON':'OFF'));return;} gsr('adminSetNoticeTarget',USER_ID,name,on).then(function(r){res(r,name+' のお知らせ配信を'+(on?'ON':'停止')+'しました')||load();}).catch(function(){toast('通信エラー',true);load();}); }
 
 /* ===== 🔐 権限 ===== */
 function renderMatrix(){
@@ -819,14 +825,23 @@ function trustAcquireSection(){
   var warn=blocked?'<div class="hint" style="background:#2a1500;border:1px solid #664400;color:#e0b060;margin-top:8px">⚠️ GASからTRUSTへの直接取得は現在ブロック中（'+esc(String((trustInfo.status.gasToTrustLoginCode))) +'）。下のブックマークレット（ブラウザ経由リレー）で取得してください。</div>':'';
   var billStart=trustDefaultBillStart_();
   return '<div class="sec"><div class="sec-t">🔄 TRUSTデータ取得</div>'+
-    '<div class="hint">TRUSTに直接アクセスできるブラウザ経由で取得します。①下のボタンをブックマークバーにドラッグ →②TRUST(admin.trust-operation.com)にログインした状態でクリック →③自動でGASへ反映されます。</div>'+warn+
-    '<div class="toolbar" style="margin-top:12px;gap:8px"><span class="cnt" style="min-width:110px">① 伝票（前日まで）</span><span class="lbl">この日から前日まで</span><input class="finput" id="adm-bill-start" type="date" value="'+esc(billStart)+'" style="width:150px" onchange="trustSetupBookmarklets_()">'+
-      '<a id="adm-bill-bm" href="" style="text-align:center;padding:10px 14px;background:#151f2e;border:1px solid #35507f;border-radius:10px;color:#8fc0ff;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 伝票を取得 ← ドラッグ</a></div>'+
-    '<div class="toolbar" style="margin-top:10px;gap:8px"><span class="cnt" style="min-width:110px">② 日払い・経費</span><span class="lbl">当日ぶん（営業後）</span>'+
-      '<a id="adm-cash-bm" href="" style="text-align:center;padding:10px 14px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 日払い・経費を取得 ← ドラッグ</a></div>'+
-    '<div class="toolbar" style="margin-top:10px;gap:8px"><span class="cnt" style="min-width:110px">③ 月次売上</span><span class="lbl">対象月</span><input class="finput" id="adm-bm-month" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM" onchange="trustSetupBookmarklets_()">'+
+    '<div class="hint">TRUST(admin.trust-operation.com)に<b>ログインした状態</b>で下のボタンを押すと、自動でGASへ反映されます。初回だけボタンをブックマークバーにドラッグしておけば、以降はワンクリック。</div>'+warn+
+    /* 🎯 毎営業後ワンクリック（伝票＋明細＋日払い・経費を一気通貫。取得起点はクリック時に自動算出＝日付入力も再ドラッグも不要） */
+    '<div class="toolbar" style="margin-top:12px;gap:10px;align-items:center"><span class="cnt" style="min-width:110px;font-weight:700;color:var(--fg)">🎯 毎営業後</span>'+
+      '<a id="adm-daily-bm" href="" style="flex:1;text-align:center;padding:14px 18px;background:#12233a;border:1px solid #3a80cc;border-radius:12px;color:#aaddff;font-size:15px;font-weight:800;text-decoration:none;cursor:grab;box-shadow:0 2px 10px rgba(30,90,180,.25)">📌 これ1つで取得（伝票＋明細＋現金）← ドラッグ</a></div>'+
+    '<div class="hint" style="margin-top:6px">前回取得日の翌日から前日までの伝票・明細と、当日の日払い・経費をまとめて取得します。抜けた日も自動で追いつきます。</div>'+
+    /* 月次売上（月1回） */
+    '<div class="toolbar" style="margin-top:14px;gap:8px"><span class="cnt" style="min-width:110px">📅 月次売上（月1）</span><span class="lbl">対象月</span><input class="finput" id="adm-bm-month" value="'+esc(mo)+'" style="width:120px" placeholder="YYYY-MM" onchange="trustSetupBookmarklets_()">'+
       '<a id="adm-trust-bm" href="" style="text-align:center;padding:10px 14px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 売上を取得 ← ドラッグ</a></div>'+
-    '<div class="hint" style="margin-top:8px">①伝票＝各キャストの来店・売上＋<b>品目内訳（ドリンク/ボトル）まで保存</b>（毎営業後・伝票数ぶん取得するので少し時間がかかります）。②日払い・経費＝現金チェック用（毎営業後）。③月次売上＝給与用のキャスト集計（月1回）。①は「この日から前日まで」を順に取得＝抜けた日はここを遡って埋められます。</div></div>';
+    '<div class="hint" style="margin-top:4px">給与用のキャスト集計。月1回でOK。</div>'+
+    /* 🛠 遡って埋める（中抜け補完）＝日付を指定して伝票だけ再取得 */
+    '<details style="margin-top:12px"><summary style="cursor:pointer;color:var(--dim);font-size:13px">🛠 遡って埋める（中抜けした日を手動で補完）</summary>'+
+      '<div class="toolbar" style="margin-top:10px;gap:8px"><span class="cnt" style="min-width:110px">伝票（前日まで）</span><span class="lbl">この日から前日まで</span><input class="finput" id="adm-bill-start" type="date" value="'+esc(billStart)+'" style="width:150px" onchange="trustSetupBookmarklets_()">'+
+        '<a id="adm-bill-bm" href="" style="text-align:center;padding:10px 14px;background:#151f2e;border:1px solid #35507f;border-radius:10px;color:#8fc0ff;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 伝票を取得 ← ドラッグ</a></div>'+
+      '<div class="toolbar" style="margin-top:8px;gap:8px"><span class="cnt" style="min-width:110px">日払い・経費のみ</span><span class="lbl">当日ぶん</span>'+
+        '<a id="adm-cash-bm" href="" style="text-align:center;padding:10px 14px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:700;text-decoration:none;cursor:grab">📌 日払い・経費を取得 ← ドラッグ</a></div>'+
+      '<div class="hint" style="margin-top:6px">通常は上の「これ1つで取得」だけでOK。カバレッジに中抜け（前日以外の未取得日）がある時だけ、開始日を指定して伝票を遡り取得できます。</div></details>'+
+    '</div>';
 }
 /* 伝票取得ブックマークレットの既定開始日＝最新伝票日の翌日（無ければ前日）。最大14日前まで */
 function trustDefaultBillStart_(){
@@ -913,6 +928,23 @@ function trustSetupBookmarklets_(){
   var gas=TRUST_GAS_URL;
   var mSel=(document.getElementById('adm-bm-month')||{}).value||'';
   var ym=/^(\d{4})-(\d{2})$/.exec(String(mSel).trim());
+  // 🎯 毎営業後ワンクリック（getTrustSyncStateで取得起点を自動算出→伝票＋明細→当日の日払い・経費を一気通貫）
+  var dailyEl=document.getElementById('adm-daily-bm');
+  if(dailyEl){
+    var dcode='javascript:(function(){'
+      +'var G='+JSON.stringify(gas)+';var S='+JSON.stringify(secret)+';'
+      +'var show=function(t){var e=document.getElementById("_lbm");if(!e){e=document.createElement("div");e.id="_lbm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#101a2a",border:"1px solid #3a80cc",borderRadius:"10px",padding:"12px 16px",color:"#aaddff",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"340px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
+      +'function pad(n){return ("0"+n).slice(-2);}function fmt(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}function pv(s){var n=parseFloat(String(s).replace(/[￥,]/g,""));return isNaN(n)?0:n;}'
+      +'if(location.hostname.indexOf("trust-operation.com")<0){show("&#9888; これは<b>TRUSTの画面で</b>押すボタンです。<br>今いるのは <b>"+location.hostname+"</b>。<br>TRUST(admin.trust-operation.com)を開いて<b>ログインしてから</b>押してください。");return;}'
+      +'var okc=0,addc=0,detc=0,days=[],i=0;'
+      +'function cash(){var now=new Date();var biz=new Date(now);if(now.getHours()<6)biz.setDate(biz.getDate()-1);var dk=fmt(biz);var path="/report/index/"+biz.getFullYear()+"/"+pad(biz.getMonth()+1)+"/"+pad(biz.getDate());show("現金（日払い・経費）取得中 "+dk+"...");'
+      +'fetch(path).then(function(r){return r.text();}).then(function(html){var p=new DOMParser();var doc=p.parseFromString(html,"text/html");var dayPayTotal=0;doc.querySelectorAll("table#timecard input[name=\\"1\\"]").forEach(function(inp){dayPayTotal+=pv(inp.value);});var costOutTotal=0;var costOutDetail=[];doc.querySelectorAll("table#logCostOut tr").forEach(function(tr){var sel=tr.querySelector("select[name=\\"cost_id\\"]");var priceInp=tr.querySelector("input[name=\\"price\\"]");if(!sel||!priceInp)return;var label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:"";var amount=pv(priceInp.value);costOutTotal+=amount;costOutDetail.push({label:label,amount:amount});});return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustDailyCash",syncSecret:S,dateKey:dk,dayPayTotal:dayPayTotal,costOutTotal:costOutTotal,costOutDetail:costOutDetail})}).then(function(r){return r.json();}).then(function(cr){var dp=(cr&&cr.dayPayTotal!=null)?cr.dayPayTotal:dayPayTotal;var co=(cr&&cr.costOutTotal!=null)?cr.costOutTotal:costOutTotal;show("&#9989; 取得完了<br><small>伝票 "+okc+"/"+(days.length||0)+"日・追加"+addc+"件・明細"+detc+"件<br>現金 日払い¥"+dp.toLocaleString()+" / 経費¥"+co.toLocaleString()+"</small>");setTimeout(function(){var e=document.getElementById("_lbm");if(e)e.remove();},10000);});}).catch(function(e){show("&#9989; 伝票は完了・現金取得でエラー<br><small>"+(e.message||e)+"</small>");setTimeout(function(){var e2=document.getElementById("_lbm");if(e2)e2.remove();},9000);});}'
+      +'function step(){if(i>=days.length){cash();return;}var dk=days[i];show("伝票取得中 "+dk+" ("+(i+1)+"/"+days.length+")");fetch("/sales/daily/"+dk).then(function(r){return r.text();}).then(function(html){if(html.indexOf("daily_bill_detail")<0&&/(password|passwd|ログイン|パスワード)/i.test(html)){throw new Error("__login__");}return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustBills",syncSecret:S,dateKey:dk,html:html})}).then(function(r){return r.json();});}).then(function(res){if(!res||!res.ok){i++;step();return;}okc++;addc+=(res.added||0);var uu=res.uuids||[];var j=0;function dstep(){if(j>=uu.length){i++;step();return;}var id=uu[j];show("明細取得中 "+dk+"<br><small>"+(j+1)+"/"+uu.length+"件</small>");fetch("/sales/daily_bill_detail/"+dk+"/"+id).then(function(r){return r.text();}).then(function(dh){return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustBillItems",syncSecret:S,dateKey:dk,uuid:id,html:dh})}).then(function(r){return r.json();});}).then(function(dr){if(dr&&dr.ok)detc++;j++;dstep();}).catch(function(){j++;dstep();});}dstep();}).catch(function(e){if(String(e.message||e).indexOf("__login__")>=0){show("&#10060; TRUSTに<b>ログインできていない</b>ようです。<br>ログインし直してから、もう一度押してください。");return;}i++;step();});}'
+      +'show("① 前回の取得日を確認中...");'
+      +'fetch(G,{method:"POST",body:JSON.stringify({action:"getTrustSyncState",syncSecret:S})}).then(function(r){return r.json();}).then(function(st){var end=new Date();end.setDate(end.getDate()-1);var cur;if(st&&st.ok&&st.latestBillDate){cur=new Date(st.latestBillDate+"T00:00:00");cur.setDate(cur.getDate()+1);}else{cur=new Date(end);}var g=0;while(cur<=end&&g++<45){days.push(fmt(cur));cur.setDate(cur.getDate()+1);}step();}).catch(function(e){show("&#10060; 前回取得日の確認に失敗: "+(e.message||e)+"<br><small>時間をおいて再度お試しください。</small>");});'
+      +'})();';
+    dailyEl.href=dcode;
+  }
   // 伝票取得（開始日→前日まで順に /sales/daily を取得しHTMLをGASへリレー・パースはサーバー側）
   var billEl=document.getElementById('adm-bill-bm');
   if(billEl){
