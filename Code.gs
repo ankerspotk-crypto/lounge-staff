@@ -10019,6 +10019,31 @@ function calcAndWriteKyuyo_(monthKey) {
   const monthSales = salesRows.filter((r, i) => i > 0 && mStr_(r[0]) === monthKey);
   if (monthSales.length === 0) return;
 
+  // 給与対象＝名簿属性が"稼ぐ側"6属性(キャスト/体験/派遣/黒服バイト/黒服社員/レガシー無印黒服)のみ。
+  // 管理者/ドライバー/管理アカウント/テストスタッフはTRUSTにキャスト扱いで載っても給与行を作らない。
+  // 名簿未照合(名寄せズレ)は誤爆回避で残す＋ログ。照合キーは内部スペースも除去(normalizeName_の弱点補完)。
+  const PAYROLL_ROLES_LOCAL = { 'キャスト': 1, '体験': 1, '派遣': 1, '黒服バイト': 1, '黒服社員': 1, '黒服': 1 };
+  const nkeyKyuyo_ = s => String(s || '').replace(/[\s　]/g, '');
+  const roleByKeyKyuyo = {};
+  const staffShKyuyo = ss.getSheetByName(STAFF_TAB);
+  if (staffShKyuyo) {
+    const stRows = staffShKyuyo.getDataRange().getValues();
+    for (let k = 1; k < stRows.length; k++) {
+      const rn = String(stRows[k][1]).trim();
+      if (rn) roleByKeyKyuyo[nkeyKyuyo_(rn)] = String(stRows[k][2]).trim();
+    }
+  }
+  const kyuExcluded = [], kyuUnmatched = [];
+  const monthSalesFiltered = monthSales.filter(r => {
+    const nm = String(r[iName] || r[1]);
+    const rl = roleByKeyKyuyo[nkeyKyuyo_(nm)];
+    if (rl === undefined) { kyuUnmatched.push(nm); return true; }
+    if (!PAYROLL_ROLES_LOCAL[rl]) { kyuExcluded.push(nm + '(' + rl + ')'); return false; }
+    return true;
+  });
+  if (kyuExcluded.length) Logger.log('給与:6属性外で除外 ' + kyuExcluded.length + '件 → ' + kyuExcluded.join(', '));
+  if (kyuUnmatched.length) Logger.log('給与:名簿未照合だが残した ' + kyuUnmatched.length + '件 → ' + kyuUnmatched.join(', '));
+
   // 既存の給与計算行から手入力値を保持
   const kyuRows = kyuSh.getDataRange().getValues();
   const kyuHdrs = kyuRows[0].map(String);
@@ -10034,7 +10059,7 @@ function calcAndWriteKyuyo_(monthKey) {
     if (mStr_(kyuRows[i][0]) === monthKey) kyuSh.deleteRow(i + 1);
   }
 
-  const writeRows = monthSales.map(r => {
+  const writeRows = monthSalesFiltered.map(r => {
     const name      = String(r[iName] || r[1]);
     const jikanH    = parseFloat(r[iJikan] || r[8]) || 0;
     const tantoK    = parseFloat(r[iTanto] || r[2]) || 0;
