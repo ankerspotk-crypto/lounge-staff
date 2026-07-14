@@ -6190,7 +6190,7 @@ function handlePortalApi_(e) {
       if (ymD && mStr_(rowsD[i][0]) !== ymD) continue;
       totalD++;
       const nmD = String(rowsD[i][iNameD] || rowsD[i][1]);
-      const rlD = roleByKeyD[nkeyD(nmD)];
+      const rlD = resolveSalesRole_(nmD, roleByKeyD, nkeyD, ALLOWD);
       if (rlD === undefined) { unmatchedD.push(nmD); keptD++; }
       else if (!ALLOWD[rlD]) { excludedD.push(nmD + '(' + rlD + ')'); }
       else { keptD++; }
@@ -10028,6 +10028,19 @@ function importPayrollCsv_(monthKey, csvText) {
 }
 
 // 売上明細から給与計算タブを自動計算（手入力列は保持）
+// 売上名→名簿役割の解決。直接一致→「体験、」除去→「P.本名.源氏名…」のドット分割の順で試す。
+// 合成名は稼ぐ側ロールが1つでもあればそれを優先(=給与に残す安全側)。未一致はundefined。
+function resolveSalesRole_(name, roleByKey, nkey, allow) {
+  const cands = [];
+  const push = k => { const r = roleByKey[nkey(k)]; if (r !== undefined) cands.push(r); };
+  const s = String(name || '').replace(/^体験[、,\s]*/, '').trim();
+  push(s);
+  if (/[.．]/.test(s)) s.split(/[.．]/).forEach(seg => { seg = String(seg).trim(); if (seg) push(seg); });
+  if (!cands.length) return undefined;
+  const allowHit = cands.find(r => allow[r]);
+  return allowHit !== undefined ? allowHit : cands[0];
+}
+
 function calcAndWriteKyuyo_(monthKey) {
   const ss = SpreadsheetApp.openById(SHEET_ID);
   const salesSh = ss.getSheetByName(URIAGE_TAB);
@@ -10061,7 +10074,7 @@ function calcAndWriteKyuyo_(monthKey) {
   const kyuExcluded = [], kyuUnmatched = [];
   const monthSalesFiltered = monthSales.filter(r => {
     const nm = String(r[iName] || r[1]);
-    const rl = roleByKeyKyuyo[nkeyKyuyo_(nm)];
+    const rl = resolveSalesRole_(nm, roleByKeyKyuyo, nkeyKyuyo_, PAYROLL_ROLES_LOCAL);
     if (rl === undefined) { kyuUnmatched.push(nm); return true; }
     if (!PAYROLL_ROLES_LOCAL[rl]) { kyuExcluded.push(nm + '(' + rl + ')'); return false; }
     return true;
