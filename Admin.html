@@ -190,7 +190,9 @@ var ROLE_DESC={
   '黒服バイト':'黒服（アルバイト）。軍師（店舗端末）にログイン可。',
   '派遣':'派遣スタッフ。当日シフトから拾われる。',
   'ドライバー':'送迎ドライバー。送り依頼のため登録するだけで、キャスト・付け回し・予約担当などの名前一覧には出ない。',
-  '管理者':'運営管理者の属性。※管理機能へのアクセス権は「管理者」トグルで別途付与。'
+  '管理者':'運営管理者の属性。※管理機能へのアクセス権は「管理者」トグルで別途付与。',
+  '管理アカウント':'店の運用管理用アカウント（実在キャストではない）。給与・ランキング・入店チェック・通知・各種一覧など一切の集計に出ない。',
+  'テストスタッフ':'軍師・ポータルのテスト専用のダミー。データを一切持たず全集計から除外。ポータル＋軍師にログインできる（軍師は既定でログイン可）。'
 };
 var PERM_DESC=[
   {t:'管理者',d:'この管理コンソール、開店/閉店チェックのリセット、通知設定、給与・ランキング公開、シフト承認など全管理機能へのアクセス。'},
@@ -1777,7 +1779,7 @@ function archiveNotice(id){
 
 /* ===== ローカルモック ===== */
 function MOCK(){
-  return {ok:true,caller:'りく',roles:['キャスト','体験','黒服社員','黒服バイト','派遣','ドライバー','管理者'],kioskRoles:['黒服社員','黒服バイト'],masterPin:'1234',staff:[
+  return {ok:true,caller:'りく',roles:['キャスト','体験','黒服社員','黒服バイト','派遣','ドライバー','管理者','管理アカウント','テストスタッフ'],kioskRoles:['黒服社員','黒服バイト'],masterPin:'1234',staff:[
     {name:'りく',role:'管理者',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'ひろき',role:'黒服社員',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'たかし',role:'黒服社員',registered:true,isAdmin:false,adminFlag:true,hardAdmin:false,isSafeAdmin:true,safeFlag:true,hardSafe:false,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},

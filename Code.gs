@@ -752,16 +752,6 @@ function handleApiRequest_(body) {
     } catch (e) {}
     return { ok: true, latestBillDate: latest, today: bizDateStr_() };
   }
-  // 入店チェック一括完了（除外名以外の在籍キャスト・体験）。管理者 or syncSecret。
-  if (body.action === 'bulkOnboardComplete') {
-    const secret = prop('SYNC_SECRET');
-    const bySecret = secret && body.syncSecret === secret;
-    if (!bySecret) {
-      const adminName = getStaffName(body.userId);
-      if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
-    }
-    return bulkOnboardComplete_(body.exclude || []);
-  }
   // ---- シフト管理（管理者専用）----
   if (body.action === 'writeShiftCellPortal') {
     const adminName = getStaffName(body.userId);
@@ -1732,7 +1722,7 @@ function adminGetBirthdayBack(userId, month) {
     const stf = ss.getSheetByName(STAFF_TAB);
     if (stf && stf.getLastRow() >= 2) {
       const srows = stf.getRange(2, 1, stf.getLastRow() - 1, 3).getValues(); // A=userId B=名前 C=役割
-      const EXCLUDE = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1 };
+      const EXCLUDE = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '管理アカウント': 1, 'テストスタッフ': 1 };
       for (let i = 0; i < srows.length; i++) { if (EXCLUDE[String(srows[i][2]).trim()]) continue; add(srows[i][1]); }
     }
     const ts = ss.getSheetByName(TRUST_TAB);
@@ -1754,7 +1744,7 @@ function castRosterNames_(ss) {
   var sh = ss.getSheetByName(STAFF_TAB);
   if (sh && sh.getLastRow() >= 2) {
     var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues(); // A=userId B=名前 C=役割
-    var EX = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '黒服': 1 };
+    var EX = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '黒服': 1, '管理アカウント': 1, 'テストスタッフ': 1 };
     for (var i = 0; i < rows.length; i++) {
       if (EX[String(rows[i][2]).trim()]) continue;
       var nm = String(rows[i][1]).trim();
@@ -1781,7 +1771,7 @@ function castsBirthdayByMonth_(ss) {
   var cols = getStaffTermCols_(sh, false);
   var bcol = cols['誕生日'];
   if (bcol == null || bcol < 0) return map;
-  var EX = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '黒服': 1 };
+  var EX = { '管理者': 1, 'ドライバー': 1, '黒服社員': 1, '黒服バイト': 1, '黒服': 1, '管理アカウント': 1, 'テストスタッフ': 1 };
   var rows = sh.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     var nm = String(rows[i][1]).trim();
@@ -3310,8 +3300,8 @@ function getOkuriStatusToday() {
     const list = getOkuriList(date);
     // 送り管理はキャスト＋黒服社員・バイトも対象（管理者のみ除外）
     const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
-    // 管理者に加えて「ドライバー」も送り対象から除外（ドライバーは送る側であり送られる側ではない）
-    const EXCLUDE = ['管理者', 'ドライバー'];
+    // 管理者に加えて「ドライバー」も送り対象から除外（ドライバーは送る側であり送られる側ではない）＋幽霊ロール
+    const EXCLUDE = ['管理者', 'ドライバー', '管理アカウント', 'テストスタッフ'];
     const casts = sh ? sh.getDataRange().getValues().slice(1)
       .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !EXCLUDE.includes(role); })
       .map(r => String(r[1]).trim()) : [];
@@ -5995,7 +5985,7 @@ function getStaffList() {
   if (!sh) return [];
   const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は除外（コンソールで退職にした子は現場に出さない）
   return sh.getDataRange().getValues().slice(1)
-    .filter(r => r[1] && String(r[2]).trim() !== 'ドライバー' && !(retireC >= 0 && String(r[retireC]).trim() === '退職')).map(r => String(r[1])).sort();
+    .filter(r => r[1] && String(r[2]).trim() !== 'ドライバー' && !isGhostRole_(r[2]) && !(retireC >= 0 && String(r[retireC]).trim() === '退職')).map(r => String(r[1])).sort();
 }
 
 // キャストのみ（黒服は別途末尾に）
@@ -6455,7 +6445,7 @@ function portalCastList_(ss) {
   if (!sh) return { castNames: [], castRoles: {} };
   const rows = sh.getDataRange().getValues();
   const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は除外（コンソールで退職にした子は現場に出さない）
-  const EXCLUDE = ['管理者'];
+  const EXCLUDE = ['管理者', '管理アカウント', 'テストスタッフ']; // 幽霊ロールもキャスト一覧から除外
   const castNames = [], castRoles = {};
   for (let i = 1; i < rows.length; i++) {
     const name = String(rows[i][1]).trim();
@@ -6480,7 +6470,7 @@ function getAllStaff_(ss) {
     const name   = String(rows[i][1]).trim();
     const role   = String(rows[i][2]).trim() || 'キャスト';
     const safeAdmin = SAFE_ADMIN_DEFAULT_.includes(name) || String(rows[i][4]).trim() === '○';
-    if (name) list.push({ lineId, name, role, registered: !!lineId, safeAdmin });
+    if (name && !isGhostRole_(role)) list.push({ lineId, name, role, registered: !!lineId, safeAdmin }); // 幽霊ロールは母集団に載せない
   }
   return list;
 }
@@ -6561,8 +6551,12 @@ function setSafeAdminTag_(targetName, enabled) {
  *  管理コンソール（?page=admin / Admin.html）
  *  スタッフ・属性・アクセス権限の一元管理。呼び出し元userIdで管理者判定。
  * =======================================================*/
-const ADMIN_ROLES_ = ['キャスト', '体験', '黒服社員', '黒服バイト', '派遣', 'ドライバー', '管理者'];
+const ADMIN_ROLES_ = ['キャスト', '体験', '黒服社員', '黒服バイト', '派遣', 'ドライバー', '管理者', '管理アカウント', 'テストスタッフ'];
 const KIOSK_LOGIN_ROLES_ = ['黒服社員', '黒服バイト'];
+// 幽霊ロール＝一切データを持たないアカウント（管理アカウント＝店の運用用／テストスタッフ＝軍師・ポータルのテスト専用）。
+// 母集団・キャスト候補・通知・ランキング等あらゆる集計から除外する。ログインは別経路なので生存（getStaffName/退職ゲート/hasGunshiLogin_）。
+const GHOST_ROLES_ = ['管理アカウント', 'テストスタッフ'];
+function isGhostRole_(role) { return GHOST_ROLES_.indexOf(String(role || '').trim()) >= 0; }
 
 function getAdminConsoleData(userId) {
   const caller = getStaffName(userId);
@@ -7627,7 +7621,7 @@ function getRankingData_(ss, monthKey) {
       const lineId = String(sr[i][0]).trim();
       const n      = String(sr[i][1]).trim();
       const role   = String(sr[i][2]).trim();
-      if (lineId && n && n !== '管理者' && !role.includes('黒服')) lineRegistered.add(normalizeName_(n));
+      if (lineId && n && n !== '管理者' && !role.includes('黒服') && !isGhostRole_(role)) lineRegistered.add(normalizeName_(n));
     }
   }
 
@@ -7887,7 +7881,7 @@ function getCastNamesForYoyaku_(ss) {
   if (!sh) return [];
   // 黒服/管理者に加えて「ドライバー」も除外（送り依頼の都合で登録しているだけで、
   // キャスト・付け回し・予約担当・シフト等どこにも名前を出さない）
-  const KURO = ['黒服社員', '黒服バイト', '管理者', 'ドライバー'];
+  const KURO = ['黒服社員', '黒服バイト', '管理者', 'ドライバー', '管理アカウント', 'テストスタッフ'];
   const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は候補から除外（コンソールで退職にした子は現場に出さない）
   return sh.getDataRange().getValues().slice(1)
     .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role) && !(retireC >= 0 && String(r[retireC]).trim() === '退職'); })
@@ -8198,6 +8192,7 @@ function hasGunshiLoginByRow_(nameRaw, roleRaw, fRaw) {
   if (f === '×') return isAdmin_(String(nameRaw || '').trim()); // 明示OFFでも管理者は可
   const role = String(roleRaw || '').trim();
   if (role === '黒服社員' || role === '黒服バイト') return true;
+  if (role === 'テストスタッフ') return true; // テスト用＝軍師も既定でログイン可（ポータルは退職ゲート非該当で元々可）
   return isAdmin_(String(nameRaw || '').trim());
 }
 function hasGunshiLogin_(name) {
