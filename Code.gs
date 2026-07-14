@@ -39,6 +39,7 @@ const STOCK_CATEGORIES    = ['ボトル', '割り物', 'チャーム', '果物',
 const SOUVENIR_NAME             = 'おみやげ';
 const SOUVENIR_PER_PERSON       = 2;
 const SOUVENIR_ALERT_THRESHOLD  = 50;
+const INVENTORY_LOG_TAB         = '在庫ログ';   // おみやげ在庫の推移（動くたびに1行追記・上書きしない）
 const TZ                = 'Asia/Tokyo';
 
 function prop(k) {
@@ -224,7 +225,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -9297,6 +9298,7 @@ function decrementSouvenirStock_(floor, people) {
       const next = Math.max(0, cur - people * SOUVENIR_PER_PERSON);
       sh.getRange(i + 1, 3).setValue(next);
       sh.getRange(i + 1, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+      logSouvenirChange_(floor, next - cur, next, '退店', people + '名×' + SOUVENIR_PER_PERSON + '個');
       return;
     }
   }
@@ -9339,6 +9341,7 @@ function kioskSetSouvenirStock(floor, qty) {
   const r = ensureSouvenirRow_(floor);
   r.sh.getRange(r.row, 3).setValue(q);
   r.sh.getRange(r.row, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  logSouvenirChange_(floor, q - r.qty, q, '実数入力', '棚卸し／補充後の実数セット');
   return { ok: true, floor: floor, qty: q };
 }
 
@@ -9349,7 +9352,62 @@ function kioskAdjustSouvenirStock(floor, delta) {
   const next = Math.max(0, r.qty + Math.round(Number(delta) || 0));
   r.sh.getRange(r.row, 3).setValue(next);
   r.sh.getRange(r.row, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  logSouvenirChange_(floor, next - r.qty, next, (next - r.qty) >= 0 ? '補充' : '手動調整', '±ボタン操作');
   return { ok: true, floor: floor, qty: next };
+}
+
+// ===== おみやげ在庫の推移ログ（動くたびに1行追記。上書きしないので履歴が残る）=====
+// 在庫ログシート: [日時, 日付, フロア, 品目, 変動, 変動後残数, 種別, メモ]
+function getInventoryLogSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sh = ss.getSheetByName(INVENTORY_LOG_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(INVENTORY_LOG_TAB);
+    sh.appendRow(['日時', '日付', 'フロア', '品目', '変動', '変動後残数', '種別', 'メモ']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+// 1件記録。delta=0（実質変化なし）でも操作の事実として残す。失敗しても在庫更新本体は止めない。
+function logSouvenirChange_(floor, delta, after, kind, memo) {
+  try {
+    const now = new Date();
+    getInventoryLogSheet_().appendRow([
+      Utilities.formatDate(now, TZ, 'yyyy/MM/dd HH:mm:ss'),
+      Utilities.formatDate(now, TZ, 'yyyy-MM-dd'),
+      floor, SOUVENIR_NAME, Math.round(Number(delta) || 0), Math.round(Number(after) || 0),
+      kind || '', memo || ''
+    ]);
+  } catch (e) { /* ログ失敗は在庫更新をブロックしない */ }
+}
+// おみやげ在庫の推移を返す。直近days日ぶんの明細＋日別サマリ（フロア別に 減少/補充/その日の最終残数）。
+function getSouvenirLog(days) {
+  const sh = getInventoryLogSheet_();
+  const rows = sh.getDataRange().getValues();
+  if (rows.length < 2) return { entries: [], daily: [], hasData: false };
+  const N = Math.max(1, Math.min(180, Math.round(Number(days) || 30)));
+  const cutoff = Utilities.formatDate(new Date(Date.now() - (N - 1) * 86400000), TZ, 'yyyy-MM-dd');
+  const entries = [];
+  const dayMap = {}; // date -> {date, f:{'2F':{consumed,added,last},'5F':{...}}}
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const name = String(r[3]);
+    if (name !== SOUVENIR_NAME) continue;
+    const dateKey = String(r[1]);
+    if (dateKey < cutoff) continue;
+    const floor = String(r[2]);
+    const delta = Number(r[4]) || 0;
+    const after = Number(r[5]) || 0;
+    entries.push({ ts: String(r[0]), date: dateKey, floor: floor, delta: delta, after: after, kind: String(r[6] || ''), memo: String(r[7] || '') });
+    if (!dayMap[dateKey]) dayMap[dateKey] = { date: dateKey, f: { '2F': { consumed: 0, added: 0, last: null }, '5F': { consumed: 0, added: 0, last: null } } };
+    const cell = dayMap[dateKey].f[floor];
+    if (cell) {
+      if (delta < 0) cell.consumed += -delta; else if (delta > 0) cell.added += delta;
+      cell.last = after; // 時系列で最後の行がその日の最終残数
+    }
+  }
+  const daily = Object.keys(dayMap).sort().reverse().map(k => dayMap[k]);
+  return { entries: entries.reverse(), daily: daily, hasData: entries.length > 0, days: N };
 }
 
 function setReservationStatus_(rowIdx, status) {
