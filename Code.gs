@@ -6564,6 +6564,7 @@ function getAdminConsoleData(userId) {
   const backCols = sh ? getStaffBackRuleCols_(sh, false) : {};
   const retireCols = sh ? getStaffRetireCols_(sh, false) : {};
   const noticeCols = sh ? getStaffNoticeCols_(sh, false) : {};
+  const onboardCol = sh ? getStaffOnboardCol_(sh, false) : -1;
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
@@ -6595,10 +6596,12 @@ function getAdminConsoleData(userId) {
       retired: (retireCols['退職'] >= 0 && String(rows[i][retireCols['退職']]).trim() === '退職'),
       retiredAt: (function () { var c = retireCols['退職日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })(),
       // お知らせ配信対象: '×'のときだけOFF。列が無い/空欄は配信ON（既定）
-      noticeOn: !(noticeCols['お知らせ配信'] >= 0 && String(rows[i][noticeCols['お知らせ配信']]).trim() === '×')
+      noticeOn: !(noticeCols['お知らせ配信'] >= 0 && String(rows[i][noticeCols['お知らせ配信']]).trim() === '×'),
+      // 入店チェック（新人オンボーディング）: {項目:'対応中'|'完了'}。列が無ければ空
+      onboard: (onboardCol >= 0) ? parseOnboard_(rows[i][onboardCol]) : {}
     });
   }
-  return { ok: true, caller: caller, staff: staff, roles: ADMIN_ROLES_, kioskRoles: KIOSK_LOGIN_ROLES_, masterPin: prop('KIOSK_PIN') || '1234', consolePinSet: !!prop('ADMIN_CONSOLE_PIN') };
+  return { ok: true, caller: caller, staff: staff, roles: ADMIN_ROLES_, kioskRoles: KIOSK_LOGIN_ROLES_, onboardItems: getOnboardItems_(), masterPin: prop('KIOSK_PIN') || '1234', consolePinSet: !!prop('ADMIN_CONSOLE_PIN') };
 }
 
 /* ===== 退職スタッフ管理 =====
@@ -6746,6 +6749,65 @@ function adminSetStaffRole(userId, targetName, role) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
   if (ADMIN_ROLES_.indexOf(role) < 0) return { ok: false, error: '不明な属性: ' + role };
   return setStaffRole_(targetName, role);
+}
+
+/* ===== 入店チェック（新人オンボーディングのステータス管理） =====
+ * 項目リスト＝ScriptProperty ONBOARD_CONFIG（コンソール👥スタッフで編集可）。既定は下記。
+ * 各スタッフのステータス＝名簿(SSOT)の動的列「入店チェック」にJSONで保存 {項目:'対応中'|'完了'}。
+ * 状態は3段階：''=未 / '対応中' / '完了'（未はキーごと削除してスリムに保つ）。 */
+var ONBOARD_DEFAULTS_ = ['名刺発注', 'ポケパラ登録', '身分証（登録・控え）', 'その他登録'];
+var STAFF_ONBOARD_HEADER = '入店チェック';
+function getOnboardItems_() {
+  var arr = null;
+  try { arr = JSON.parse(prop('ONBOARD_CONFIG') || 'null'); } catch (e) { arr = null; }
+  if (!Array.isArray(arr)) return ONBOARD_DEFAULTS_.slice();
+  var clean = arr.map(function (x) { return String(x || '').trim(); }).filter(function (x) { return x; });
+  return clean.length ? clean : ONBOARD_DEFAULTS_.slice();
+}
+// 名簿の「入店チェック」列位置を解決（無ければ末尾に作成）。他の動的列helperと同じ作法。
+function getStaffOnboardCol_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var idx = headers.indexOf(STAFF_ONBOARD_HEADER);
+  if (idx < 0 && create) { lastCol += 1; sh.getRange(1, lastCol).setValue(STAFF_ONBOARD_HEADER); idx = lastCol - 1; }
+  return idx;
+}
+function parseOnboard_(v) {
+  var o = {};
+  try { var p = JSON.parse(String(v || '') || '{}'); if (p && typeof p === 'object' && !Array.isArray(p)) o = p; } catch (e) {}
+  return o;
+}
+// 1項目のステータス更新（''=未でキー削除）。名前で行特定→JSONを読み書き。
+function adminSetOnboardStatus(userId, targetName, item, status) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  targetName = String(targetName || '').trim();
+  item = String(item || '').trim();
+  status = String(status || '').trim();
+  if (!item) return { ok: false, error: '項目が指定されていません' };
+  if (status && status !== '対応中' && status !== '完了') return { ok: false, error: '不明なステータス: ' + status };
+  var col = getStaffOnboardCol_(sh, true);
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      var map = parseOnboard_(rows[i][col]);
+      if (status) map[item] = status; else delete map[item];
+      sh.getRange(i + 1, col + 1).setValue(JSON.stringify(map));
+      return { ok: true, name: targetName, item: item, status: status, onboard: map };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+// 入店チェックの項目リストを保存（コンソール編集）。重複除去＋空行除去。
+function adminSaveOnboardConfig(userId, items) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  if (!Array.isArray(items)) return { ok: false, error: '項目リストが不正です' };
+  var seen = {}, uniq = [];
+  items.map(function (x) { return String(x || '').trim(); }).filter(function (x) { return x; })
+    .forEach(function (x) { if (!seen[x]) { seen[x] = 1; uniq.push(x); } });
+  PropertiesService.getScriptProperties().setProperty('ONBOARD_CONFIG', JSON.stringify(uniq));
+  return { ok: true, items: uniq };
 }
 
 // 管理者フラグ（スタッフマスタ D列）。ハードコード管理者は保護（変更不可）。
@@ -7649,7 +7711,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','PORTAL_URL'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL'];
   const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;

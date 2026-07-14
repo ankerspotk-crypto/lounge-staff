@@ -306,7 +306,12 @@ function renderStaff(){
       +'<div class="hint" style="margin-top:8px">退職者はポータル・軍師・管理コンソールにログインできません。履歴（給与・来店・改名など）は名前で保持されています。「復帰」で在籍に戻せます。</div>'
       +'<div class="grid" style="margin-top:10px">'+retired.map(cardHtml).join('')+'</div></details>';
   }
-  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">在籍スタッフなし</div>')+retiredHtml);
+  var obItems=onboardItems();
+  var obCfg='<details class="sec compact" style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:800;color:var(--accent)">🆕 入店チェック項目の設定</summary>'
+    +'<div class="hint" style="margin-top:8px">新人（キャスト・体験）の入店時チェック項目。ここで追加・編集した項目が、各スタッフカードの「🆕 入店チェック」に反映されます。<b>1行1項目</b>。</div>'
+    +'<textarea class="ta" id="ob-cfg" rows="'+Math.max(4,obItems.length+1)+'" style="width:100%;margin-top:8px" placeholder="名刺発注\nポケパラ登録\n身分証（登録・控え）">'+esc(obItems.join('\n'))+'</textarea>'
+    +'<div class="toolbar" style="margin-top:8px"><button class="btn pri" onclick="saveOnboardConfig()">💾 項目を保存</button></div></details>';
+  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+obCfg+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">在籍スタッフなし</div>')+retiredHtml);
   var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 function renameGetIn(){ return {o:(document.getElementById('rn-old').value||'').trim(), n:(document.getElementById('rn-new').value||'').trim()}; }
@@ -387,6 +392,23 @@ function cardHtml(s,i){
       '<div id="tmp'+i+'" style="display:none">'+fh+
       '<button class="btn pri sm" style="width:100%;margin-top:8px" onclick="saveTerms('+i+',\''+jstr(s.name)+'\')">💾 条件を保存</button></div></div>';
   }
+  var onboardHtml='';
+  if(isNewbieRole(s.role)&&!s.retired){
+    var obItems=onboardItems(), ob=s.onboard||{};
+    var doneN=obItems.filter(function(it){return ob[it]==='完了';}).length;
+    var allDone=obItems.length>0&&doneN===obItems.length;
+    var obRows=obItems.map(function(it){
+      var cur=ob[it]||'';
+      var st=ONBOARD_STATES.find(function(x){return x.v===cur;})||ONBOARD_STATES[0];
+      var opts=ONBOARD_STATES.map(function(o){return '<option value="'+esc(o.v)+'"'+(cur===o.v?' selected':'')+'>'+esc(o.t)+'</option>';}).join('');
+      return '<div class="row" style="justify-content:space-between;gap:8px;margin-top:6px;align-items:center"><span style="font-size:13px">'+esc(it)+'</span>'
+        +'<select class="rolesel" style="min-width:96px;border-color:'+st.c+';color:'+st.c+';font-weight:700" onchange="setOnboard('+i+',\''+jstr(s.name)+'\',\''+jstr(it)+'\',this.value)">'+opts+'</select></div>';
+    }).join('')||'<div class="hint" style="margin-top:6px">項目が未設定です（上の「🆕 入店チェック項目の設定」で追加）</div>';
+    var badge=allDone?'<span style="color:#5cc98a">✅ 完了</span>':'<span style="color:#e0b060">'+doneN+'/'+obItems.length+'完了</span>';
+    onboardHtml='<div style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px">'+
+      '<div onclick="toggleOnboard('+i+')" style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;user-select:none">🆕 入店チェック '+badge+' <span id="obar'+i+'">'+(allDone?'▾':'▴')+'</span></div>'+
+      '<div id="obp'+i+'" style="display:'+(allDone?'none':'block')+'">'+obRows+'</div></div>';
+  }
   var retiredBadge=s.retired?'<span class="badge" style="background:#4a2b2b;color:#ff9aa0;border:1px solid #6b3a3a">退職'+(s.retiredAt?' '+esc(s.retiredAt):'')+'</span>':'';
   var retireRow=s.hardAdmin?'' :
     (s.retired
@@ -394,7 +416,7 @@ function cardHtml(s,i){
       : '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px"><button class="btn sm" style="color:#ff9aa0;border-color:#6b3a3a" onclick="retireStaff(\''+jstr(s.name)+'\')">🚪 退職にする</button></div>');
   return '<div class="card"'+(s.retired?' style="opacity:.72"':'')+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+termHtml+retireRow+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+onboardHtml+termHtml+retireRow+'</div>';
 }
 /* バック方式（新ルール/固定率）＝キャスト永続設定・給与計算に直結 */
 function onBackModeChange(i,name){
@@ -427,6 +449,24 @@ var TERM_FIELDS=[
   {h:'個別メモ',label:'自由メモ',ta:true,ph:'その他メモ（自由記述）'}
 ];
 function isTermRole(role){ role=String(role||''); return role.indexOf('キャスト')>=0||role.indexOf('体験')>=0||role.indexOf('黒服')>=0||role.indexOf('ドライバー')>=0; }
+/* ===== 入店チェック（新人オンボーディング）＝キャスト・体験。3段階 未/対応中/完了 ===== */
+var ONBOARD_DEFAULT_ITEMS=['名刺発注','ポケパラ登録','身分証（登録・控え）','その他登録'];
+var ONBOARD_STATES=[{v:'',t:'未',c:'#7a8aa0'},{v:'対応中',t:'対応中',c:'#e0b060'},{v:'完了',t:'完了',c:'#5cc98a'}];
+function isNewbieRole(role){ role=String(role||''); return role.indexOf('キャスト')>=0||role.indexOf('体験')>=0; }
+function onboardItems(){ return (ST&&ST.onboardItems&&ST.onboardItems.length)?ST.onboardItems:ONBOARD_DEFAULT_ITEMS; }
+function toggleOnboard(i){ var p=document.getElementById('obp'+i),a=document.getElementById('obar'+i); if(!p)return; var open=p.style.display==='none'; p.style.display=open?'block':'none'; if(a)a.textContent=open?'▴':'▾'; }
+function setOnboard(i,name,item,status){
+  var s=findStaff(name); if(s){ s.onboard=s.onboard||{}; if(status)s.onboard[item]=status; else delete s.onboard[item]; }
+  render();
+  if(!IS_GAS){ toast(name+'：'+item+' → '+(status||'未')+'（ローカル）'); return; }
+  gsr('adminSetOnboardStatus',USER_ID,name,item,status).then(function(r){ res(r,name+'：'+item+' → '+(status||'未')); }).catch(function(){ toast('通信エラー',true); load(); });
+}
+function saveOnboardConfig(){
+  var el=document.getElementById('ob-cfg'); if(!el)return;
+  var items=(el.value||'').split('\n').map(function(x){return x.trim();}).filter(function(x){return x;});
+  if(!IS_GAS){ ST.onboardItems=items; toast('入店チェック項目を保存（ローカル）'); renderStaff(); return; }
+  gsr('adminSaveOnboardConfig',USER_ID,items).then(function(r){ if(res(r,'入店チェック項目を保存しました')){ ST.onboardItems=(r&&r.items)||items; renderStaff(); } }).catch(function(){ toast('通信エラー',true); });
+}
 function toggleTerms(i){ var p=document.getElementById('tmp'+i),a=document.getElementById('tmar'+i); if(!p)return; var open=p.style.display==='none'; p.style.display=open?'block':'none'; if(a)a.textContent=open?'▴':'▾'; }
 function saveTerms(i,name){
   var terms={};
