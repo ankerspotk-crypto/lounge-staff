@@ -752,6 +752,16 @@ function handleApiRequest_(body) {
     } catch (e) {}
     return { ok: true, latestBillDate: latest, today: bizDateStr_() };
   }
+  // 入店チェック一括完了（除外名以外の在籍キャスト・体験）。管理者 or syncSecret。
+  if (body.action === 'bulkOnboardComplete') {
+    const secret = prop('SYNC_SECRET');
+    const bySecret = secret && body.syncSecret === secret;
+    if (!bySecret) {
+      const adminName = getStaffName(body.userId);
+      if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    }
+    return bulkOnboardComplete_(body.exclude || []);
+  }
   // ---- シフト管理（管理者専用）----
   if (body.action === 'writeShiftCellPortal') {
     const adminName = getStaffName(body.userId);
@@ -6808,6 +6818,37 @@ function adminSaveOnboardConfig(userId, items) {
     .forEach(function (x) { if (!seen[x]) { seen[x] = 1; uniq.push(x); } });
   PropertiesService.getScriptProperties().setProperty('ONBOARD_CONFIG', JSON.stringify(uniq));
   return { ok: true, items: uniq };
+}
+// 在籍キャスト・体験の入店チェックを一括「完了」にする（除外名リスト以外）。初期一括セット・棚卸し用。
+// 退職者は対象外。名前は名簿B列と trim 完全一致で除外判定。
+function bulkOnboardComplete_(excludeNames) {
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  var ex = {}; (excludeNames || []).forEach(function (n) { var k = String(n || '').trim(); if (k) ex[k] = 1; });
+  var items = getOnboardItems_();
+  if (!items.length) return { ok: false, error: '入店チェック項目が未設定です' };
+  var full = {}; items.forEach(function (it) { full[it] = '完了'; });
+  var col = getStaffOnboardCol_(sh, true);
+  var retireCols = getStaffRetireCols_(sh, false);
+  var rCol = (retireCols && retireCols['退職'] != null) ? retireCols['退職'] : -1;
+  var rows = sh.getDataRange().getValues();
+  var changed = [], skippedExcluded = [], skippedRetired = [];
+  for (var i = 1; i < rows.length; i++) {
+    var name = String(rows[i][1]).trim();
+    if (!name) continue;
+    var role = String(rows[i][2]).trim();
+    if (role.indexOf('キャスト') < 0 && role.indexOf('体験') < 0) continue; // isNewbieRole相当
+    if (ex[name]) { skippedExcluded.push(name); continue; }
+    if (rCol >= 0 && String(rows[i][rCol]).trim() === '退職') { skippedRetired.push(name); continue; }
+    sh.getRange(i + 1, col + 1).setValue(JSON.stringify(full));
+    changed.push(name);
+  }
+  return { ok: true, items: items, changed: changed, skippedExcluded: skippedExcluded, skippedRetired: skippedRetired };
+}
+// gsr（管理者）用の入口。excludeNames以外の在籍キャスト・体験を一括完了。
+function adminBulkOnboardComplete(userId, excludeNames) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  return bulkOnboardComplete_(excludeNames || []);
 }
 
 // 管理者フラグ（スタッフマスタ D列）。ハードコード管理者は保護（変更不可）。
