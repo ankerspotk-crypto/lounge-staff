@@ -152,6 +152,8 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .seat .rsvline{margin-top:4px;font-size:10px;color:#ffcc55;background:#1a1400;border:1px solid #4a3800;border-radius:6px;padding:2px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .req-badge{font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;background:#20203a;color:#9aa8c8;border:1px solid var(--line2);cursor:pointer;}
 .req-badge.un{background:#2a1600;color:#ffb060;border-color:#7a4a10;animation:apulse 1.6s ease-in-out infinite;}
+.hall-reqsum{font-size:11px;font-weight:800;padding:3px 10px;border-radius:7px;background:#20203a;color:#9aa8c8;border:1px solid var(--line2);cursor:pointer;white-space:nowrap;margin-left:8px;}
+.hall-reqsum.un{background:#2a1600;color:#ffb060;border-color:#7a4a10;animation:apulse 1.6s ease-in-out infinite;}
 .req-card{background:var(--panel2);border:1px solid #5a3a20;border-radius:11px;padding:11px 13px;margin-bottom:9px;}
 .req-card.done{opacity:.55;border-color:var(--line2);}
 .rq-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
@@ -827,6 +829,7 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
       <span class="ttl">🪑 ホール状況</span>
       <span class="cnt" id="hallCnt"></span>
       <div class="spacer"></div>
+      <span id="hallReqSum"></span>
     </div>
     <div class="col-scroll" id="hallArea"></div>
   </div>
@@ -1281,7 +1284,15 @@ function renderHall(){
   var cb=SEATS.filter(function(s){return s.type==='C'||s.type==='B';});
   var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
   document.getElementById('hallCnt').textContent='稼働 '+occ+'/'+cb.length+'　超過 '+cb.filter(function(s){return seatStatus(s)==='over';}).length;
+  renderHallReqSum();
   setHtml('hallArea','<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
+}
+// ホール状況ヘッダーの「📣 リクエスト」サマリ（未対応があればパルス）。タップで本日の全リクエスト一覧。
+function renderHallReqSum(){
+  var el=document.getElementById('hallReqSum'); if(!el)return;
+  if(!REQUESTS.length){ el.innerHTML=''; return; }
+  var un=REQUESTS.filter(function(r){return !r.handled;}).length;
+  el.innerHTML='<span class="hall-reqsum'+(un?' un':'')+'" onclick="openAllRequests()">📣 リクエスト '+(un?'未対応'+un+'件':'全'+REQUESTS.length+'件済')+'</span>';
 }
 function floorHtml(fl){
   var seats=SEATS.filter(function(s){return s.floor===fl;});
@@ -1364,9 +1375,11 @@ function seatHtml(s){
   // 空席 / 予約
   if(st==='empty'){
     if(s.rsv){
+      var rrqb=reqBadgeHtml(idx,s.rsv.cust);
       return '<div class="seat reserved'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span><span class="rsv-tag">予約</span></div>'
         +'<div class="cust" style="color:#bcd8ff">'+esc(s.rsv.cust)+'様</div>'
-        +'<div class="rsv-meta"><span class="rt">📅 '+esc(rsvArrT(s.rsv))+'〜</span>'+(s.rsv.tantou?'　担当 '+esc(s.rsv.tantou):'')+'</div></div>';
+        +'<div class="rsv-meta"><span class="rt">📅 '+esc(rsvArrT(s.rsv))+'〜</span>'+(s.rsv.tantou?'　担当 '+esc(s.rsv.tantou):'')+'</div>'
+        +(rrqb?'<div class="tags" style="margin-top:4px">'+rrqb+'</div>':'')+'</div>';
     }
     var planB=(s.planList&&s.planList.length)?'<div class="rsv-meta" style="color:#c8a8f0;margin-top:3px">📋 予定 '+s.planList.map(esc).join('、')+'</div>':'';
     return '<div class="seat'+mt+ct+grp+'" '+oc+'><div class="st"><span class="snm">'+esc(dispNm)+grpBadge+'</span></div><div class="empty">空席</div>'+planB+'</div>';
@@ -2466,7 +2479,7 @@ function reqListHtml(list){
     }).join('');
 }
 function toggleReq(id,checked){var r=REQUESTS.find(function(x){return x.id===id;});if(r)r.handled=checked;renderHall();if(IS_GAS)gsr('setCastRequestHandled',id,checked).catch(function(){});}
-function openReqForSeat(idx,ev){if(ev)ev.stopPropagation();var s=SEATS[idx];showSheet('📣 '+esc(custKey(s.cust))+'様 のリクエスト',reqListHtml(reqsForCust(s.cust)),false);}
+function openReqForSeat(idx,ev){if(ev)ev.stopPropagation();var s=SEATS[idx];var cust=s.cust||(s.rsv&&s.rsv.cust)||'';showSheet('📣 '+esc(custKey(cust))+'様 のリクエスト',reqListHtml(reqsForCust(cust)),false);}
 function openAllRequests(){closeMenu();showSheet('📣 本日のキャストリクエスト',reqListHtml(REQUESTS),false);}
 
 /* ============ 📢 全キャストへお知らせ配信（個別LINE push） ============ */
