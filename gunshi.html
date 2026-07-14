@@ -411,7 +411,27 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .stk-undel-bar .lbl{font-size:11px;color:#ffbf6a;font-weight:800;white-space:nowrap;flex-shrink:0;}
 /* おみやげ在庫カード */
 .sv-card{background:#1c1526;border-bottom:1px solid #4a2f6a;padding:10px 16px;flex-shrink:0;}
-.sv-h{font-size:12px;color:#d0a8ff;font-weight:800;margin-bottom:8px;}
+.sv-h{font-size:12px;color:#d0a8ff;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.sv-trend{margin-left:auto;padding:4px 12px;border-radius:8px;border:1px solid #4a3a6a;background:#221830;color:#d0a8ff;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;}
+.sv-trend:active{background:#2e2040;}
+/* おみやげ推移シート */
+.svl-days{display:flex;flex-direction:column;gap:7px;}
+.svl-day{background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:9px 12px;}
+.svl-date{font-size:12px;font-weight:800;color:#cfe0ff;margin-bottom:6px;}
+.svl-flrow{display:flex;gap:10px;flex-wrap:wrap;}
+.svl-fl{display:inline-flex;align-items:center;gap:8px;background:#171022;border:1px solid #3a2a55;border-radius:9px;padding:5px 10px;}
+.svl-flname{font-weight:800;color:#c9b3ff;font-size:13px;min-width:26px;}
+.svl-consumed{color:#ff9a9a;font-weight:800;font-size:13px;}
+.svl-added{color:#79e0a8;font-weight:800;font-size:13px;}
+.svl-last{color:#e6e6f0;font-weight:700;font-size:12px;}
+.svl-last.low{color:#ff8a8a;}
+.svl-ent{display:flex;align-items:center;gap:8px;font-size:11px;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;}
+.svl-ent-ts{color:var(--sub);font-variant-numeric:tabular-nums;}
+.svl-ent-fl{color:#c9b3ff;font-weight:800;min-width:24px;}
+.svl-ent-kind{color:#9ab0d0;flex:1;overflow:hidden;text-overflow:ellipsis;}
+.svl-ent-d{font-weight:800;font-variant-numeric:tabular-nums;}
+.svl-ent-d.minus{color:#ff9a9a;} .svl-ent-d.plus{color:#79e0a8;} .svl-ent-d.zero{color:var(--sub);}
+.svl-ent-after{color:#e6e6f0;font-weight:700;font-variant-numeric:tabular-nums;}
 .sv-fl{display:inline-flex;align-items:center;gap:8px;margin:0 16px 6px 0;padding:6px 10px;border:1px solid #3a2a55;border-radius:10px;background:#171022;}
 .sv-fl.low{border-color:#7a2a2a;background:#241016;}
 .sv-flname{font-weight:800;color:#c9b3ff;font-size:14px;min-width:28px;}
@@ -2836,7 +2856,45 @@ function souvenirCardHtml(){
       +'<button class="sv-setbtn" onclick="svSet(\''+f+'\')">セット</button>'
       +(low?'<span class="sv-low">要発注</span>':'')+'</div>';
   }
-  return '<div class="sv-card"><div class="sv-h">🎁 おみやげ在庫（退店で自動減算・50個以下で発注アラーム）</div>'+fl('2F')+fl('5F')+'</div>';
+  return '<div class="sv-card"><div class="sv-h">🎁 おみやげ在庫（退店で自動減算・50個以下で発注アラーム）'
+    +'<button class="sv-trend" onclick="openSouvenirLog()">📈 推移</button></div>'+fl('2F')+fl('5F')+'</div>';
+}
+/* 🎁 おみやげ在庫の推移（在庫ログの日別サマリ＋直近の明細） */
+function openSouvenirLog(){
+  showSheet('📈 おみやげ在庫の推移','<div class="empty-msg">読み込み中…</div>',false);
+  var setBody=function(html){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML=html; };
+  gsr('getSouvenirLog',30).then(function(d){
+    setBody(souvenirLogHtml(d||{}));
+  }).catch(function(){ setBody('<div class="empty-msg">取得に失敗しました</div>'); });
+}
+function svDelta_(n){ n=Number(n)||0; return (n>0?'+'+n:''+n); }
+function souvenirLogHtml(d){
+  if(!d.hasData){
+    return '<div class="empty-msg">まだ推移データがありません。<br><span style="font-size:12px;color:var(--sub)">この機能を入れた日から、退店の自動減算・補充・実数セットが記録され、ここに貯まっていきます。</span></div>';
+  }
+  var daily=d.daily||[], entries=d.entries||[];
+  var head='<div style="font-size:12px;color:var(--sub);margin-bottom:10px;font-weight:700">直近'+(d.days||30)+'日・日別サマリ（減った数／補充数／その日の最終残数）</div>';
+  var rows=daily.map(function(day){
+    function fcell(f){ var c=day.f[f]||{consumed:0,added:0,last:null};
+      var last=(c.last==null)?'—':c.last+'個';
+      var low=(c.last!=null&&c.last<=50);
+      return '<div class="svl-fl"><span class="svl-flname">'+f+'</span>'
+        +'<span class="svl-consumed">−'+c.consumed+'</span>'
+        +(c.added?'<span class="svl-added">+'+c.added+'</span>':'')
+        +'<span class="svl-last'+(low?' low':'')+'">残'+last+'</span></div>';
+    }
+    return '<div class="svl-day"><div class="svl-date">'+esc(day.date)+'</div><div class="svl-flrow">'+fcell('2F')+fcell('5F')+'</div></div>';
+  }).join('');
+  var detail='<div style="font-size:12px;color:var(--sub);margin:16px 0 8px;font-weight:700">明細（新しい順）</div>'
+    +entries.slice(0,60).map(function(e){
+      var sign=e.delta<0?'minus':(e.delta>0?'plus':'zero');
+      return '<div class="svl-ent"><span class="svl-ent-ts">'+esc(e.ts)+'</span>'
+        +'<span class="svl-ent-fl">'+esc(e.floor)+'</span>'
+        +'<span class="svl-ent-kind">'+esc(e.kind)+'</span>'
+        +'<span class="svl-ent-d '+sign+'">'+svDelta_(e.delta)+'</span>'
+        +'<span class="svl-ent-after">→'+e.after+'個</span></div>';
+    }).join('');
+  return head+'<div class="svl-days">'+rows+'</div>'+detail;
 }
 function svRerender(){ var el=document.getElementById('sv-card-wrap'); if(el)el.innerHTML=souvenirCardHtml(); }
 function svAdjust(floor,delta){
