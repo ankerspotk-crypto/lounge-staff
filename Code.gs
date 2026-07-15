@@ -265,7 +265,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -12648,6 +12648,23 @@ function setMenuItemStatus(rowIdx, status) {
 }
 
 // 紐づけ先の在庫品名を確定する（人がタップして確定させる唯一の入口）。確定と同時に現在の状態を在庫へ反映する
+/* 紐づけは在庫品名につき1本まで（1:1）。
+   ⚠️これを許すと壊れる: 「山崎(掲載中)」と「山崎12年(メニュー落ち)」が両方とも在庫「山崎」を指すと、
+      setSupplyStatusByName_ は**品名で**書くので、山崎12年を落とした瞬間に掲載中の山崎の仕入れまで止まる。
+      しかも画面上はどちらも「在庫 山崎」に見えるので原因が追えない。→ 後から指した方が勝ち、前のは外す。 */
+function unlinkOtherMenuRows_(sh, stockName, keepRowIdx) {
+  const nm = String(stockName || '').trim();
+  if (!nm) return [];
+  const freed = [];
+  getMenuList().forEach(m => {
+    if (m.rowIdx === keepRowIdx || m.stockName !== nm) return;
+    sh.getRange(m.rowIdx, 4).setValue('');
+    sh.getRange(m.rowIdx, 6).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+    freed.push(m.name);
+  });
+  return freed;
+}
+
 function setMenuItemLink(rowIdx, stockName) {
   const nm = String(stockName || '').trim();
   const sh = getMenuMasterSheet_();
@@ -12657,11 +12674,56 @@ function setMenuItemLink(rowIdx, stockName) {
   const prev = String(row[3] || '').trim();
   // 紐づけ替えのとき、前の在庫の停止は解除しておく（外したのに止まったままになるため）
   if (prev && prev !== nm) setSupplyStatusByName_(prev, '');
+  const freed = unlinkOtherMenuRows_(sh, nm, rowIdx);
   sh.getRange(rowIdx, 4).setValue(nm);
   sh.getRange(rowIdx, 6).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
   const st = String(row[4] || '').trim() || MENU_ON_;
   const n = nm ? setSupplyStatusByName_(nm, st === SUPPLY_STOP_ ? SUPPLY_STOP_ : '') : 0;
-  return { ok: true, stockName: nm, syncedRows: n };
+  return { ok: true, stockName: nm, syncedRows: n, freed: freed };
+}
+
+/* ===== 軍師（黒服）から触る紐づけ =====
+   ボス指示（2026-07-15）＝**黒服は在庫品名の紐づけだけ触れる。メニュー落ちは管理コンソールのみ**。
+   よってここには状態を変える口を作らない。落とす判断は管理者、現物と品名を知っているのは黒服、という分担。
+   ⚠️軍師から呼ぶ＝GUNSHI_API_FNS への登録が必須（漏れると「許可されていない関数」で100%失敗する）。 */
+function gunshiGetMenuLinks() {
+  const menu = getMenuList();
+  const byStock = {};   // 在庫品名 → そこに紐づくメニュー行
+  menu.forEach(m => { if (m.stockName) byStock[m.stockName] = { rowIdx: m.rowIdx, name: m.name, category: m.category, price: m.price, status: m.status }; });
+  return {
+    byStock: byStock,
+    // プルダウン用。分類も返して軍師側で仕分けに使う
+    menu: menu.map(m => ({ rowIdx: m.rowIdx, name: m.name, category: m.category, status: m.status, stockName: m.stockName })),
+    // 分類の並び順＝メニューに出てくる順（WHISKEY→焼酎→CHAMPAGNE→WINE…）。50音順にすると紙のメニューと並びが変わって探せない
+    catOrder: menu.reduce((a, m) => { const c = m.category || ''; if (c && a.indexOf(c) < 0) a.push(c); return a; }, [])
+  };
+}
+
+// 黒服が在庫→メニューの紐づけを確定する。menuRowIdx=0 で紐づけを外す
+function gunshiSetMenuLink(stockName, menuRowIdx) {
+  const nm = String(stockName || '').trim();
+  if (!nm) return { ok: false, error: '在庫品名が空です' };
+  if (!menuLinkableStock_().byName[nm]) return { ok: false, error: '在庫に無い品名です: ' + nm };
+  const idx = Number(menuRowIdx) || 0;
+  const sh = getMenuMasterSheet_();
+  const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
+
+  if (!idx) {
+    // 外す＝この在庫を指しているメニュー行を空にする。⚠️同時に仕入れ区分も戻す（外したのに止まったままにしない）
+    const freed = unlinkOtherMenuRows_(sh, nm, 0);
+    setSupplyStatusByName_(nm, '');
+    return { ok: true, unlinked: freed };
+  }
+  const m = getMenuList().filter(x => x.rowIdx === idx)[0];
+  if (!m) return { ok: false, error: 'メニューに無い行です: ' + idx };
+  // 付け替え元の在庫は停止を戻す
+  if (m.stockName && m.stockName !== nm) setSupplyStatusByName_(m.stockName, '');
+  const freed = unlinkOtherMenuRows_(sh, nm, idx); // 1:1を保つ
+  sh.getRange(idx, 4).setValue(nm);
+  sh.getRange(idx, 6).setValue(stamp);
+  // メニュー側が既にメニュー落ちなら、紐づけた在庫にもそれが伝わる（落とす判断自体は管理者がした結果）
+  const n = setSupplyStatusByName_(nm, m.status === SUPPLY_STOP_ ? SUPPLY_STOP_ : '');
+  return { ok: true, menuName: m.name, stopped: m.status === SUPPLY_STOP_, syncedRows: n, freed: freed };
 }
 
 function addMenuItem(payload) {

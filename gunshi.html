@@ -510,6 +510,19 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .stk-exp{font-size:10px;color:#ffcf6a;font-weight:700;margin-top:2px;}
 /* メニュー落ち。カードは消さず在庫数も出したまま＝現物は数え続けて売り切る。バッジは「もう仕入れない」の意味だけ */
 .stk-drop{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background:#4a3340;color:#ffb0c4;font-size:10px;font-weight:700;vertical-align:middle;white-space:nowrap;}
+/* ボトルの仕分け＝店舗メニューの分類。在庫のカテゴリ(左ナビ)とは別物 */
+.stk-mcat{margin-bottom:12px;}
+.stk-mcat>summary{cursor:pointer;font-size:12px;font-weight:800;color:#8fb8f0;padding:7px 2px;display:flex;align-items:center;gap:8px;list-style:none;}
+.stk-mcat>summary::-webkit-details-marker{display:none;}
+.stk-mcat>summary::before{content:'▾';font-size:10px;color:#5a6688;}
+.stk-mcat:not([open])>summary::before{content:'▸';}
+.stk-mcnt{font-size:10px;font-weight:700;color:#5a6688;}
+.stk-mcnt.off{color:#ffb0c4;}
+.stk-mwarn{font-size:10px;font-weight:800;color:#ffcf6a;}
+/* 紐づけのプルダウン。黒服が触れるのはここだけ＝メニュー落ちの切替は出さない（コンソールのみ） */
+.stk-mrow{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.stk-mlbl{font-size:10px;font-weight:800;color:#5a6688;white-space:nowrap;}
+.stk-msel{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;padding:6px 8px;color:var(--txt);font-size:12px;outline:none;}
 .stk-forms{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;}
 .stk-sec{background:#0f0f1c;border:1px solid var(--line);border-radius:11px;padding:13px;}
 .stk-sec-t{font-size:13px;font-weight:800;margin-bottom:9px;}
@@ -2997,9 +3010,10 @@ function stkSupplyBadge(stopped){ return stopped?'<span class="stk-drop">'+STK_S
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
-  Promise.all([gsr('getStockList').catch(function(){return[];}),gsr('getUndeliveredOrders').catch(function(){return[];}),gsr('kioskGetSouvenirStock').catch(function(){return{'2F':0,'5F':0};})]).then(function(r){
+  // 店舗メニューは在庫と別物なので落ちても在庫画面は開けるようにする（menuは空で続行）
+  Promise.all([gsr('getStockList').catch(function(){return[];}),gsr('getUndeliveredOrders').catch(function(){return[];}),gsr('kioskGetSouvenirStock').catch(function(){return{'2F':0,'5F':0};}),gsr('gunshiGetMenuLinks').catch(function(){return null;})]).then(function(r){
     var pc=stockState?stockState.category:null,pf=stockState?stockState.floor:null;
-    stockState={list:r[0]||[],undelivered:r[1]||[],souvenir:r[2]||{'2F':0,'5F':0},category:pc||STOCK_CATS[0],floor:pf||'合算'};
+    stockState={list:r[0]||[],undelivered:r[1]||[],souvenir:r[2]||{'2F':0,'5F':0},menu:r[3]||{byStock:{},menu:[],catOrder:[]},category:pc||STOCK_CATS[0],floor:pf||'合算'};
     renderStock();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -3117,10 +3131,68 @@ function stkListView(){
   // 判定が2F+5Fの合計なのでフロア絞り込み中でも必ず両フロアを見せる＝itemsを取り直す
   var meishi=(st.category==='名刺'&&!q);
   if(meishi) items=st.list.filter(function(i){return i.category==='名刺';});
+  // ボトルは店舗メニューの分類（WHISKEY/焼酎/CHAMPAGNE/WINE…）で仕分ける
+  var bottle=(st.category===STK_MENU_CAT&&!q&&!meishi);
   var el=document.getElementById('stk-list');
-  if(el)el.innerHTML=meishi?stkRowsMeishi(items):(combined?stkRowsCombined(items):stkRows(items,!!q));
+  if(el)el.innerHTML=meishi?stkRowsMeishi(items):(bottle?stkRowsBottle(items,combined):(combined?stkRowsCombined(items):stkRows(items,!!q)));
   var cnt=document.getElementById('stk-count');
   if(cnt){ if(combined){ var nm={}; items.forEach(function(i){nm[i.name]=1;}); cnt.textContent=Object.keys(nm).length+'品（合算）'; } else cnt.textContent=items.length+'品'+(q?'（検索）':''); }
+}
+/* ===== ボトル＝店舗メニューの分類で仕分ける =====
+   ⚠️これは在庫のカテゴリ(STOCK_CATS)とは別物。在庫側のカテゴリは「ボトル」のまま＝左ナビは触らない。
+      在庫のカテゴリを分類で置き換えると、在庫画面のタブが壊れる（名簿の休職中と同じ地雷）。
+   ⚠️メニュー落ちの**切替は出さない**（ボス指示＝コンソールのみ）。バッジは出す＝現場が理由を知れる。
+      黒服が触れるのは紐づけだけ。落とす判断は管理者、現物と品名を知っているのは黒服、という分担。 */
+var STK_MENU_CAT='ボトル', STK_OFFMENU='メニュー外';
+function stkMenuOf(name){ return ((stockState.menu||{}).byStock||{})[name]||null; }
+/* メニュー紐づけのプルダウン。⚠️品名をonclick属性に埋めない（gunshiにjstrが無い＝クォート入りの品名で壊れる）。
+   行番号だけ渡して品名はstockStateから引く。 */
+function stkMenuSel(rowIdx,name){
+  var ml=stockState.menu||{menu:[]}, cur=stkMenuOf(name);
+  var opts='<option value="0">（メニュー未紐づけ）</option>'+(ml.menu||[]).map(function(m){
+    var taken=m.stockName&&m.stockName!==name;   // 他の在庫が既に押さえている＝選ぶと付け替えになる
+    var lbl=(m.category?'['+m.category+'] ':'')+m.name+(m.status===STK_SUPPLY_STOP?' ⏸メニュー落ち':'')+(taken?'（今: '+m.stockName+'）':'');
+    return '<option value="'+m.rowIdx+'"'+(cur&&cur.rowIdx===m.rowIdx?' selected':'')+'>'+esc(lbl)+'</option>';
+  }).join('');
+  return '<div class="stk-mrow"><span class="stk-mlbl">メニュー</span><select class="stk-msel" onchange="stkLinkMenu('+rowIdx+',this.value)">'+opts+'</select></div>';
+}
+function stkRowsBottle(items,combined){
+  if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">品目がありません</div>';
+  var ml=stockState.menu||{catOrder:[]};
+  var g={},order=[];
+  (ml.catOrder||[]).forEach(function(c){ g[c]=[]; order.push(c); });   // 紙のメニューの並び順を保つ（50音順にすると探せない）
+  items.forEach(function(it){
+    var m=stkMenuOf(it.name), c=(m&&m.category)?m.category:STK_OFFMENU;
+    if(!g[c]){g[c]=[];order.push(c);}
+    g[c].push(it);
+  });
+  order.push(order.splice(order.indexOf(STK_OFFMENU),1)[0]); // メニュー外は最後
+  return order.filter(function(c){return g[c]&&g[c].length;}).map(function(c){
+    var list=g[c], names={};
+    list.forEach(function(i){names[i.name]=1;});
+    var n=combined?Object.keys(names).length:list.length;
+    var stop=list.filter(function(i){return i.supplyStatus===STK_SUPPLY_STOP;}).length;
+    return '<details class="stk-mcat" open><summary>'+esc(c)+'<span class="stk-mcnt">'+n+'品</span>'
+      +(stop?'<span class="stk-mcnt off">メニュー落ち '+(combined?Object.keys(list.filter(function(i){return i.supplyStatus===STK_SUPPLY_STOP;}).reduce(function(a,i){a[i.name]=1;return a;},{})).length:stop)+'</span>':'')
+      +(c===STK_OFFMENU?'<span class="stk-mwarn">メニューに無い＝紐づけてください</span>':'')
+      +'</summary>'+(combined?stkRowsCombined(list):stkRows(list,false))+'</details>';
+  }).join('');
+}
+function stkLinkMenu(rowIdx,menuRowIdx){
+  var it=stockState.list.filter(function(i){return i.rowIdx===Number(rowIdx);})[0]; if(!it)return;
+  var mi=(((stockState.menu||{}).menu)||[]).filter(function(m){return m.rowIdx===Number(menuRowIdx);})[0];
+  // ⚠️確認は必ず1回にまとめる。2連発にすると読まずに押されて警告が死ぬ（席の定員で学んだ）
+  var w=[];
+  if(mi&&mi.stockName&&mi.stockName!==it.name) w.push('・「'+mi.name+'」は今「'+mi.stockName+'」に紐づいています。付け替えると '+mi.stockName+' は未紐づけに戻ります');
+  if(mi&&mi.status===STK_SUPPLY_STOP) w.push('・「'+mi.name+'」はメニュー落ちです。紐づけると「'+it.name+'」も今後は仕入れなくなります（在庫は残ります）');
+  if(w.length&&!confirm('「'+it.name+'」を「'+mi.name+'」に紐づけます。\n\n'+w.join('\n')+'\n\nよろしいですか？')){ openStockManager(); return; }
+  gsr('gunshiSetMenuLink',it.name,Number(menuRowIdx)).then(function(r){
+    if(!r||!r.ok){ alert('エラー: '+((r&&r.error)||'不明')); openStockManager(); return; }
+    var msg=Number(menuRowIdx)?('「'+it.name+'」→ '+r.menuName+' に紐づけました'):('「'+it.name+'」の紐づけを外しました');
+    if(r.freed&&r.freed.length)msg+='（'+r.freed.join('、')+' は未紐づけに戻しました）';
+    toast(msg);
+    openStockManager();
+  }).catch(function(e){ alert('紐づけに失敗\n'+(e&&e.message||e)); }); // 原因を握り潰さない（GUNSHI_API_FNS漏れ等はここに出る）
 }
 /* 名刺ビュー: キャストごとに 2F/5F を感覚3段階で選ぶ。判定は2F+5Fの箱換算合計が1に達しているか。
    在庫数の列に入る値は箱換算（1箱以上=1 / 半分以上=0.5 / 半分以下=0.25、0=未入力）。バックエンドと一致させること。 */
@@ -3162,7 +3234,7 @@ function stkSetMeishi(rowIdx,v){
 function stkRowsCombined(items){
   if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">品目がありません</div>';
   var g={},order=[];
-  items.forEach(function(it){ if(!g[it.name]){g[it.name]={floors:{},total:0,stopped:false};order.push(it.name);} g[it.name].floors[it.floor]=it; g[it.name].total+=it.qty; if(it.supplyStatus===STK_SUPPLY_STOP)g[it.name].stopped=true; });
+  items.forEach(function(it){ if(!g[it.name]){g[it.name]={floors:{},total:0,stopped:false,cat:it.category,row:it.rowIdx};order.push(it.name);} g[it.name].floors[it.floor]=it; g[it.name].total+=it.qty; if(it.supplyStatus===STK_SUPPLY_STOP)g[it.name].stopped=true; });
   order.sort(function(a,b){return a.localeCompare(b,'ja');});
   return '<div class="stk-grid">'+order.map(function(nm){
     var grp=g[nm];
@@ -3171,7 +3243,8 @@ function stkRowsCombined(items){
       if(!it) return '<div class="stk-flc empty">'+f+' <span class="stk-flc-q">—</span></div>';
       return '<div class="stk-flc"><span class="stk-flc-f">'+f+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-flc-q'+(it.qty===0?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>';
     }).join('');
-    return '<div class="stk-card sum'+(grp.total===0?' zero':'')+'"><div class="stk-card-top"><div class="stk-card-nm">'+esc(nm)+stkSupplyBadge(grp.stopped)+'</div><span class="stk-sumtot">合計 <b>'+grp.total+'</b></span></div><div class="stk-flrow">'+cells+'</div></div>';
+    var msel=(grp.cat===STK_MENU_CAT)?stkMenuSel(grp.row,nm):'';
+    return '<div class="stk-card sum'+(grp.total===0?' zero':'')+'"><div class="stk-card-top"><div class="stk-card-nm">'+esc(nm)+stkSupplyBadge(grp.stopped)+'</div><span class="stk-sumtot">合計 <b>'+grp.total+'</b></span></div><div class="stk-flrow">'+cells+'</div>'+msel+'</div>';
   }).join('')+'</div>';
 }
 function stkRows(items,showMeta){
@@ -3182,7 +3255,7 @@ function stkRows(items,showMeta){
     var drop=stkSupplyBadge(it.supplyStatus===STK_SUPPLY_STOP);
     var exp=it.expiryManaged?'<div class="stk-exp">🗓 賞味期限管理</div>':'';
     var purchase=it.expiryManaged?'<button class="stk-mini" onclick="stkPurchaseForm('+it.rowIdx+')">購入登録</button>':'';
-    return '<div class="stk-card'+(zero?' zero':'')+'" id="stk-row-'+it.rowIdx+'"><div class="stk-card-top"><div class="stk-card-nm">'+meta+esc(it.name)+drop+exp+'</div><button class="stk-del" onclick="stkDelete('+it.rowIdx+')">×</button></div><div class="stk-card-qty"><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-qtynum'+(zero?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>'+purchase+'<div id="stk-pf-'+it.rowIdx+'"></div><div class="stk-order"><input id="stk-oq-'+it.rowIdx+'" class="finput" placeholder="発注数"><button class="stk-order-btn" onclick="stkOrder('+it.rowIdx+')">発注依頼</button></div></div>';
+    return '<div class="stk-card'+(zero?' zero':'')+'" id="stk-row-'+it.rowIdx+'"><div class="stk-card-top"><div class="stk-card-nm">'+meta+esc(it.name)+drop+exp+(it.category===STK_MENU_CAT?stkMenuSel(it.rowIdx,it.name):'')+'</div><button class="stk-del" onclick="stkDelete('+it.rowIdx+')">×</button></div><div class="stk-card-qty"><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-qtynum'+(zero?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>'+purchase+'<div id="stk-pf-'+it.rowIdx+'"></div><div class="stk-order"><input id="stk-oq-'+it.rowIdx+'" class="finput" placeholder="発注数"><button class="stk-order-btn" onclick="stkOrder('+it.rowIdx+')">発注依頼</button></div></div>';
   }).join('')+'</div>';
 }
 function stkQty(rowIdx,delta){
