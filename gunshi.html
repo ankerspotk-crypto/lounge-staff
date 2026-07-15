@@ -1729,7 +1729,7 @@ function openSeat(idx){
       +(s.tantou?'<div class="kv"><span class="k">担当</span><span class="v">👤 '+esc(s.tantou)+' <span style="color:#ffbf6a;font-size:11px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span></span></div>':'')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
-      +'<div class="actions"><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
     showSheet(title,body,false); return;
   }
   if(!s.casts||!s.casts.length){
@@ -1755,11 +1755,20 @@ function openSeat(idx){
       +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast" onclick="castAction('+idx+',\''+jsStr(c.n)+'\')" style="cursor:pointer"><span style="font-weight:700">'+esc(c.n)+'</span><span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span><span style="color:#5a6a8a;font-size:15px;margin-left:8px">›</span></span></div>';}).join('')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
-      +'<div class="actions"><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }
   showSheet(title,body,false);
 }
 
+// 席詳細の「🚪退店」ボタン（単一組のみ。相席=複数組は coSeatDetailHtml が組別に出す）。
+// 予約行(rowIdx)が特定できない席では出さない＝誤って別の客を退店させる事故を防ぐ。
+function seatCheckoutBtnHtml(s){
+  var occ=s.occupants||[];
+  if(occ.length!==1) return '';           // 0組(空席)や相席(>1)はここでは出さない
+  var o=occ[0]; if(!o||!o.rowIdx) return '';
+  var cust=o.cust||custKey(s.cust)||'お客様';
+  return '<div class="act" style="border-color:#7a2a2a;color:#e08080" onclick="seatGroupCheckout('+o.rowIdx+',\''+jsStr(cust)+'\')">🚪 退店</div>';
+}
 // 席詳細: 相席（複数組）の一覧＋組ごとの退店ボタン（単一組なら何も出さない）
 function coSeatDetailHtml(s){
   var occ=s.occupants||[];
@@ -1849,7 +1858,7 @@ function renderSeatSession(){
   var ss=seatSel,b=document.getElementById('sheetBody'); if(!b)return;
   var h='<div class="kv"><span class="k">設定する席</span><span class="v">🪑 '+esc(ss.seatLabel)+'</span></div>';
   h+=ssCustSection();
-  if(ss.mode==='picked'||ss.customer){
+  if(ss.mode==='picked'||ss.mode==='new'||ss.customer){
     h+='<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(String(ss.pax)===String(n)?' sel':'')+'" onclick="ssPax(\''+n+'\')">'+n+'名</div>';}).join('')+'</div>';
     h+='<div class="flabel">担当キャスト（任意）</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip cast'+(ss.tantou.indexOf(c)>=0?' sel':'')+'" onclick="ssTantou(this,\''+jsStr(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>';
     h+='<div class="savebtn" onclick="submitSeatSession()">この席に設定する</div>';
@@ -1871,7 +1880,7 @@ function ssCustSection(){
     return '<div class="flabel">既存のお客様を検索</div><input id="ss-q" class="finput" placeholder="お客様名・会員番号で検索" oninput="ssSearch()"><div id="ss-results" class="af-results"><div class="empty-msg" style="padding:14px;font-size:12px">名前や会員番号で検索してください</div></div><div class="af-switch"><button class="af-ms" onclick="ssMode(\'new\')">✨ 新規（飛び込み）で登録</button></div>';
   }
   if(ss.mode==='new'){
-    return '<div class="flabel">新規・飛び込みのお客様</div><input id="ss-name" class="finput" value="'+esc(ss.customer||'')+'" placeholder="お名前を入力（未入力なら「フリー様」）"><div class="af-switch"><button class="af-ms" onclick="ssMode(\'search\')">🔍 既存のお客様を検索</button><button class="af-ms" onclick="ssMode(\'rsv\')">📋 本日の予約から選ぶ</button></div>';
+    return '<div class="flabel">新規・飛び込みのお客様</div><input id="ss-name" class="finput" value="'+esc(ss.customer||'')+'" placeholder="お名前を入力（未入力なら「フリー様」）" oninput="ssSyncName()"><div class="af-switch"><button class="af-ms" onclick="ssMode(\'search\')">🔍 既存のお客様を検索</button><button class="af-ms" onclick="ssMode(\'rsv\')">📋 本日の予約から選ぶ</button></div>';
   }
   // 初期: 選ぶ
   return '<div class="flabel">お客様</div><div class="af-choose"><button class="af-choose-btn" onclick="ssMode(\'rsv\')"><span class="ic">📋</span><span class="tx"><span class="t">予約から席設定</span><span class="s">本日の予約客を選ぶ</span></span></button><button class="af-choose-btn new" onclick="ssMode(\'new\')"><span class="ic">✨</span><span class="tx"><span class="t">飛び込み・新規</span><span class="s">その場で受付して席設定</span></span></button></div>';
