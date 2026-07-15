@@ -176,6 +176,7 @@ header h1 { font-size: 17px; font-weight: 600; }
 .admin-badge { font-size: 10px; background: #553300; color: #ffaa44; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
 .shift-count { text-align: center; font-size: 13px; color: #6a8ab0; margin-top: 10px; }
 .nextweek-decline { text-align: center; margin-top: 10px; }
+.nextweek-decline .nw-guide { font-size: 12px; color: #6a8ab0; margin-bottom: 6px; }
 .nextweek-decline .nw-btn { width: 100%; padding: 11px; border: 1px solid #4a5f80; background: #1a2740; color: #b8c8e0; border-radius: 10px; font-size: 14px; font-weight: 600; }
 .nextweek-decline .nw-btn:active { background: #24365a; }
 .nextweek-decline .nw-reported { font-size: 13px; color: #7fae7f; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -2542,17 +2543,18 @@ function renderDeclineBtn() {
   var nw = portalData && portalData.nextWeek;
   if (!nw) { el.innerHTML = ''; return; }
   if (nw.declined) {
-    el.innerHTML = '<div class="nw-reported">✓ 来週(' + nw.label + ')は「出勤なし」で報告済み'
+    el.innerHTML = '<div class="nw-reported">✓ 来週(' + nw.label + ')の「出勤なし」を報告済み'
       + ' <button class="nw-undo" onclick="toggleNextWeekDecline(false)">取消</button></div>';
   } else {
-    el.innerHTML = '<button class="nw-btn" onclick="toggleNextWeekDecline(true)">🚫 来週(' + nw.label + ')は出勤なし</button>';
+    el.innerHTML = '<div class="nw-guide">来週(' + nw.label + ')に出勤する予定がない方はこちら</div>'
+      + '<button class="nw-btn" onclick="toggleNextWeekDecline(true)">🙋 出勤なしを報告する</button>';
   }
 }
 
 function toggleNextWeekDecline(declined) {
   var nw = portalData && portalData.nextWeek;
   var label = nw ? nw.label : '';
-  if (declined && !confirm('来週(' + label + ')は出勤なしで報告します。よろしいですか？')) return;
+  if (declined && !confirm('来週(' + label + ')は出勤する予定がない、と報告します。よろしいですか？')) return;
   var el = document.getElementById('nextweek-decline');
   if (el) el.innerHTML = '<div class="nw-reported">送信中...</div>';
   gasFetch(GAS_URL, {
