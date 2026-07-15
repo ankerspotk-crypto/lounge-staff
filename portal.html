@@ -4781,6 +4781,33 @@ function yoyakuCancelEdit() {
   renderYoyaku();
 }
 
+/* 選択席の定員合計と頭数を突き合わせ、超過なら確認文を返す（超過は禁止せず通す＝ボス仕様）。
+ * 相席の追加会員も同じ卓に座るので頭数に含める。
+ * 判定できない時は''＝警告しない：誤警告が続けば黒服は読まずにOKを押すようになり、警告自体が死ぬ。 */
+function yoyakuCapWarnMsg_(tableStr, pax, subs) {
+  if (!tableStr || tableStr === '未定') return ''; // 席未定・仮予約は対象外
+  var names = tableStr.split('、');
+  var cap = 0;
+  for (var i = 0; i < names.length; i++) {
+    var hit = null;
+    for (var j = 0; j < YOYAKU_TABLES.length; j++) {
+      if (YOYAKU_TABLES[j].f + ' ' + YOYAKU_TABLES[j].n === names[i]) { hit = YOYAKU_TABLES[j]; break; }
+    }
+    if (!hit) return ''; // 知らない席名が混ざったら判定を捨てる
+    cap += hit.cap;
+  }
+  var total = pax;
+  for (var k = 0; k < (subs || []).length; k++) total += parseInt(subs[k].pax) || 1;
+  if (!cap || total <= cap) return '';
+  var seat = names.length > 1
+    ? names.join('＋') + '（定員合計' + cap + '名）'
+    : cap + '名の席';
+  var who = (subs && subs.length)
+    ? total + '名（本人' + pax + '名＋同席' + (total - pax) + '名）'
+    : total + '名';
+  return seat + 'ですが、' + who + 'で予約しますか？';
+}
+
 function yoyakuSubmitRsv() {
   if (yoyakuSubmitBusy) return; // 二重送信防止（連打・通信が遅い時の多重タップ対策）
   var stat = document.getElementById('yrsv-status');
@@ -4793,6 +4820,11 @@ function yoyakuSubmitRsv() {
     return;
   }
   var paxEl = document.getElementById('yrsv-pax');
+  var rsvPax = parseInt(paxEl ? paxEl.value : '1') || 1;
+  var rsvTable = yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })();
+  var rsvSubs = yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); });
+  var capWarn = yoyakuCapWarnMsg_(rsvTable, rsvPax, rsvSubs);
+  if (capWarn && !confirm(capWarn)) return; // 超過は通すが、黒服に一度必ず目を通させる
   var payload = {
     action: yoyakuEditRsv ? 'updateReservation' : 'addReservation',
     userId: userId,
@@ -4800,13 +4832,13 @@ function yoyakuSubmitRsv() {
     time: yoyakuRsvTime,
     customer: custName,
     memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : (yoyakuEditRsv ? (yoyakuEditRsv.memberId || '') : ''),
-    pax: parseInt(paxEl ? paxEl.value : '1') || 1,
-    table: yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })(),
+    pax: rsvPax,
+    table: rsvTable,
     tantouCast: (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvTantou || (yoyakuSelectedCust ? (yoyakuSelectedCust.tantou || '') : (yoyakuEditRsv ? (yoyakuEditRsv.tantouCast || '') : '')); })(),
     yoyakuCast: yoyakuRsvTime === '同伴' ? '' : (document.getElementById('yrsv-yoyaku-cast') ? document.getElementById('yrsv-yoyaku-cast').value : ''),
     dohanCast: (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } return yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : ''); })(),
     youbou: document.getElementById('yrsv-youbou').value,
-    subCustomers: yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); }),
+    subCustomers: rsvSubs,
     aggMode: yoyakuRsvSubs.length ? yoyakuRsvAggMode : 'merge',
     status: yoyakuEditRsv
       ? (yoyakuRsvMode === '仮予約' ? '仮予約' : (yoyakuEditRsv.status === '仮予約' ? '確定' : (yoyakuEditRsv.status || '確定')))
