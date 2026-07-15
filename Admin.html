@@ -176,6 +176,22 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .mn-pv{display:flex;align-items:center;gap:10px;padding:5px 8px;border-bottom:1px solid var(--line);font-size:12px;}
 .mn-pv-c{color:var(--accent);font-weight:800;min-width:80px;font-size:11px;}
 .mn-pv-n{flex:1;color:var(--txt);font-weight:700;}
+/* 🔧 重複品名。統合は不可逆なので、どちらへ寄せるかを本数とフロアを見せた上で選ばせる */
+.dup-card{display:flex;flex-direction:column;gap:9px;border-color:#4a4030;}
+.dup-card.sure{border-color:#6a5a2a;}
+.dup-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.dup-b-sure{background:#3a2f10;color:var(--warn);}
+.dup-b-may{background:#1a2436;color:var(--accent);}
+.dup-why{font-size:10px;color:var(--dim);font-weight:700;}
+.dup-row{display:flex;align-items:stretch;gap:8px;}
+.dup-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 9px;}
+.dup-nm{font-size:12px;font-weight:800;color:var(--txt);word-break:break-word;}
+.dup-meta{font-size:10px;color:var(--sub);font-weight:700;}
+.dup-meta b{color:var(--txt);font-size:12px;}
+.dup-btn{margin-top:auto;padding:5px 8px;font-size:10px;}
+.dup-arrow{align-self:center;color:var(--dim);font-size:14px;}
+/* 黒服タスクのメモ＝軍師のカードとLINEに同じ文面が出る。ここでも改行を保って確認できるようにする */
+.kf-memo{margin-top:6px;font-size:12px;line-height:1.65;color:var(--sub);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:normal;word-break:break-word;}
 .mn-sug{font-size:11px;color:var(--warn);font-weight:700;white-space:nowrap;}
 .mn-sug b{color:var(--warn);}
 .mn-sug.ex{color:var(--ok);}
@@ -976,7 +992,12 @@ function renderMenu(){
 
   var total=b.menu.length, noLinkAll=b.menu.filter(function(m){return !m.stockName;}).length;
   setBody(
-    '<details class="sec" id="mn-bulk-sec"'+(total?'':' open')+'><summary class="sec-t" style="cursor:pointer">📋 一括登録（メニュー改定のたびにここ）</summary>'
+    '<div class="sec" id="mn-dup-sec"><div class="sec-t">🔧 同じ酒が別名で入っていないか <button class="btn" style="margin-left:auto" onclick="dupScan()">🔍 探す</button></div>'
+    +'<div class="hint">同じ酒が2つの品名で登録されていると、<b>紐づけは1つにしか付かない</b>ので'
+    +'「メニュー落ちにしたのにもう片方の仕入れが止まらない」が起きます。合算の本数も割れて見えます。'
+    +'<b>紐づけ作業の前にここを潰してください。</b></div>'
+    +'<div id="mn-dup"></div></div>'
+    +'<details class="sec" id="mn-bulk-sec"'+(total?'':' open')+'><summary class="sec-t" style="cursor:pointer">📋 一括登録（メニュー改定のたびにここ）</summary>'
     +'<div class="hint">1行1品の <b>カテゴリ⇥メニュー品名⇥価格</b> を貼り付けます（⇥＝タブ）。'
     +'<b>追加のみ</b>＝既にある品名は飛ばします。既存行は書き換えません。<br>'
     +'在庫と<b>品名が完全に一致するものだけ自動で紐づけ</b>ます。残りは未紐づけで作るので、下のカードで選んでください。</div>'
@@ -999,6 +1020,42 @@ function renderMenu(){
   );
 }
 function menuReload(){ menuBoard=null; renderMenu(); }
+/* 🔧 重複品名の検出と統合。
+   ⚠️統合は不可逆（行を消して数量を寄せる）＝どちらへ寄せるかは必ず人に選ばせる。機械に決めさせない。
+   ⚠️②「似ている」はしきい値で切れない（ヴーヴ イエロー/ヴーヴクリコ イエロー=55% と 赤霧島/黒霧島=50%が5pt差）
+      ＝候補を出すだけで、別の酒なら無視してもらう。 */
+function dupCard(d,sure){
+  var pair=function(nm,qty,fl,other){
+    return '<div class="dup-side"><div class="dup-nm">'+esc(nm)+'</div><div class="dup-meta">'+esc(fl)+' ／ 合計 <b>'+qty+'</b>本</div>'
+      +'<button class="btn dup-btn" onclick="dupMerge(\''+jstr(other)+'\',\''+jstr(nm)+'\')">この名前に寄せる</button></div>';
+  };
+  return '<div class="card dup-card'+(sure?' sure':'')+'">'
+    +'<div class="dup-top">'+(sure?'<span class="badge dup-b-sure">ほぼ確実</span>':'<span class="badge dup-b-may">要確認 '+d.score+'%</span>')
+    +(sure?'<span class="dup-why">記号・長音・スペースの違いだけ＝同じ酒のはず</span>':'<span class="dup-why">似ているだけ。別の酒なら無視してください</span>')+'</div>'
+    +'<div class="dup-row">'+pair(d.a,d.aQty,d.aFloors,d.b)+'<span class="dup-arrow">⇄</span>'+pair(d.b,d.bQty,d.bFloors,d.a)+'</div></div>';
+}
+function dupScan(){
+  var box=document.getElementById('mn-dup'); box.innerHTML='<div class="empty">探しています…</div>';
+  api('findDupStockNames').then(function(r){
+    if(!res(r))return;
+    var n=r.sure.length+r.maybe.length;
+    if(!n){ box.innerHTML='<div class="mn-bulk-ok">✅ 重複していそうな品名は見つかりませんでした</div>'; return; }
+    box.innerHTML='<div class="mn-bulk-ok">'+r.sure.length+'組が「ほぼ確実」／'+r.maybe.length+'組が「要確認」</div>'
+      +'<div class="grid mn-grid">'+r.sure.map(function(d){return dupCard(d,true);}).join('')+r.maybe.map(function(d){return dupCard(d,false);}).join('')+'</div>';
+  }).catch(function(e){ box.innerHTML='<div class="mn-bulk-err">失敗: '+esc(e&&e.message||e)+'</div>'; });
+}
+function dupMerge(from,to){
+  if(!confirm('「'+from+'」を「'+to+'」に寄せます。\n\n・同じフロアに両方あれば本数を足します\n・無ければ品名を変えるだけです（本数は消えません）\n・メニューの紐づけも新しい品名に付け替えます\n\n⚠️これは取り消せません。「'+from+'」という品名は無くなります。\n\nよろしいですか？'))return;
+  api('mergeStockNames',{from:from,to:to}).then(function(r){
+    if(!res(r))return;
+    var d=[];
+    if(r.renamed.length)d.push('改名 '+r.renamed.join('、'));
+    if(r.mergedQty.length)d.push('本数を合算 '+r.mergedQty.join('、'));
+    if(r.relinked)d.push('「'+r.relinked+'」の紐づけを付け替え');
+    toast('統合しました：'+(d.join(' / ')||'変更なし'));
+    menuBoard=null; renderMenu(); setTimeout(dupScan,300);   // 残りの重複を続けて潰せるように再スキャン
+  }).catch(function(e){toast('統合に失敗: '+(e&&e.message||e),true);});
+}
 /* 一括登録。⚠️プレビューを挟むのは、50品まとめて間違えると目視では捕まらないため。 */
 function menuLoadSeed(){
   var s=document.getElementById('mn-seed');
@@ -1682,10 +1739,15 @@ function drawOps(){
   var drv=okuriMode!=='jisha';
   // 📋 黒服へタスクを送る（18時にまとめてLINE送信／18時以降は即送信。完了は軍師の「要対応」で）
   var kfList=(kfTasks||[]).map(function(t){
-    return '<div class="lrow"><div class="main"><div class="nm">'+esc(t.title)+'</div><div class="meta">'+(t.sent?'✅ LINE送信済み':'⏳ 18時にまとめて送信')+(t.by?' ・'+esc(t.by):'')+(t.at?' ・'+esc(t.at):'')+(t.memo?' ・'+esc(t.memo):'')+'</div></div><button class="btn dng sm" onclick="delKfTask(\''+jstr(t.id)+'\')">削除</button></div>';
+    // メモは別行で改行を保って出す（metaに連結すると長い手順で行が崩れて読めない）
+    return '<div class="lrow"><div class="main"><div class="nm">'+esc(t.title)+'</div><div class="meta">'+(t.sent?'✅ LINE送信済み':'⏳ 18時にまとめて送信')+(t.by?' ・'+esc(t.by):'')+(t.at?' ・'+esc(t.at):'')+'</div>'
+      +(t.memo?'<div class="kf-memo">'+esc(t.memo).replace(/\n/g,'<br>')+'</div>':'')
+      +'</div><button class="btn dng sm" onclick="delKfTask(\''+jstr(t.id)+'\')">削除</button></div>';
   }).join('')||'<div class="empty" style="padding:14px">未完了のタスクはありません</div>';
   var kfSec='<div class="sec"><div class="sec-t">📋 黒服へタスクを送る <span class="sub">18時にまとめてLINE送信・18時以降の追加は即送信。完了は軍師の「要対応」でチケットを押す</span></div>'
     +'<div class="toolbar"><input class="finput grow" id="kf-title" placeholder="例：お土産の在庫を入力すること" onkeydown="if(event.key===\'Enter\')addKfTask()"><button class="btn pri" onclick="addKfTask()">追加</button></div>'
+    // メモは軍師のタスクカードで改行を保ったまま出る＋LINEにも同じ文面が乗る＝手順はここに書けばいい
+    +'<textarea class="finput" id="kf-memo" rows="3" style="width:100%;margin-top:8px" placeholder="メモ（任意・改行OK）。手順や注意点はここに。軍師のカードとLINEの両方に出ます"></textarea>'
     +'<div style="margin-top:10px">'+kfList+'</div></div>';
   var okuri='<div class="sec"><div class="sec-t">🚗 送りモード</div><div class="chips"><div class="chip'+(drv?' on':'')+'" onclick="setOkuri(\'driver\')">🚗 ドライバー手配</div><div class="chip'+(!drv?' on':'')+'" onclick="setOkuri(\'jisha\')">🏠 自社送り</div></div><div class="hint">自社送りモード中はドライバーへの通知を止めます。</div></div>';
 
@@ -1764,8 +1826,9 @@ function approveCashFromConsole(){
 }
 function addKfTask(){
   var el=document.getElementById('kf-title'); var t=(el&&el.value||'').trim();
+  var me=document.getElementById('kf-memo'); var m=(me&&me.value||'').trim();
   if(!t){toast('タスク内容を入力してください',true);return;}
-  api('addKurofukuTask',{title:t}).then(function(r){ if(res(r,(r&&r.sent)?'追加＋黒服LINEに送信しました':'追加しました（18時にまとめて送信）')){ if(el)el.value=''; renderOps(); } }).catch(function(){toast('通信エラー',true);});
+  api('addKurofukuTask',{title:t,memo:m}).then(function(r){ if(res(r,(r&&r.sent)?'追加＋黒服LINEに送信しました':'追加しました（18時にまとめて送信）')){ if(el)el.value=''; if(me)me.value=''; renderOps(); } }).catch(function(){toast('通信エラー',true);});
 }
 function delKfTask(id){
   if(!confirm('このタスクを削除しますか？（軍師の「要対応」からも消えます）'))return;
@@ -2142,6 +2205,14 @@ function MOCKAPI(action,body){
     S2.menu.splice(i,1); return {ok:true};
   }
   if(action==='setStockSupply'){ mnSetSupply(body.stockName,body.status); return {ok:true,syncedRows:2}; }
+  if(action==='findDupStockNames'){
+    // 実データで見つかった2組を模す（本番は findDuplicateStockNames が返す）
+    return {ok:true,
+      sure:[{a:'ウィリアムフェーブルシャブリ',b:'ウィリアムフェブールシャブリ',aQty:1,bQty:1,aFloors:'2F',bFloors:'5F',score:100}],
+      maybe:[{a:'ヴーヴ イエロー',b:'ヴーヴクリコ イエロー',aQty:3,bQty:5,aFloors:'2F',bFloors:'5F',score:55},
+             {a:'赤霧島',b:'黒霧島',aQty:1,bQty:8,aFloors:'2F',bFloors:'2F',score:50}]};
+  }
+  if(action==='mergeStockNames'){ window.__merged=body; return {ok:true,from:body.from,to:body.to,renamed:['2F: 3本'],mergedQty:[],relinked:''}; }
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
   if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};

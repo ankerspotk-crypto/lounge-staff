@@ -815,9 +815,13 @@ function handleApiRequest_(body) {
   // メニューを落とせるのは管理者だけ＝黒服は軍師から発注時に警告を見るだけ、という分担
   if (body.action === 'getMenuBoard' || body.action === 'addMenuItem' || body.action === 'setMenuItemStatus' ||
       body.action === 'setMenuItemLink' || body.action === 'deleteMenuItem' || body.action === 'suggestStockName' ||
-      body.action === 'setStockSupply' || body.action === 'previewMenuBulk' || body.action === 'importMenuBulk') {
+      body.action === 'setStockSupply' || body.action === 'previewMenuBulk' || body.action === 'importMenuBulk' ||
+      body.action === 'findDupStockNames' || body.action === 'mergeStockNames') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    if (body.action === 'findDupStockNames')  return findDuplicateStockNames();
+    // ⚠️不可逆（行を消して数量を寄せる）＝管理者のみ・画面で必ず確認を取る
+    if (body.action === 'mergeStockNames')    return mergeStockNames(String(body.from || ''), String(body.to || ''));
     if (body.action === 'previewMenuBulk')    return previewMenuBulk(String(body.text || ''));
     if (body.action === 'importMenuBulk')     return importMenuBulk(String(body.text || ''));
     if (body.action === 'getMenuBoard')       return { ok: true, board: getMenuBoard() };
@@ -12680,6 +12684,91 @@ function setMenuItemLink(rowIdx, stockName) {
   const st = String(row[4] || '').trim() || MENU_ON_;
   const n = nm ? setSupplyStatusByName_(nm, st === SUPPLY_STOP_ ? SUPPLY_STOP_ : '') : 0;
   return { ok: true, stockName: nm, syncedRows: n, freed: freed };
+}
+
+/* ===== 在庫の重複品名（同じ酒が別名で入っている）の検出と統合 =====
+   発端＝2026-07-15に実データで発見。「ウィリアムフェーブルシャブリ(2F)」と「ウィリアムフェブールシャブリ(5F)」、
+   「ヴーヴ イエロー(2F)」と「ヴーヴクリコ イエロー(5F)」＝中身は同じ酒なのにフロアごとに別の品名で登録されていた。
+   ⚠️これを放置すると壊れる: 紐づけは在庫品名につき1本（1:1）なので片方しかメニューに紐づかない
+      → メニュー落ちにしても**もう片方の仕入れは止まらない**。合算ビューも品名でまとめるので本数が割れて見える。
+   ⚠️統合が触るのは**在庫発注マスタと店舗メニューの在庫品名だけ**。発注ログは confirmOrderDelivered が
+      行番号で動く＝品名を見ていないので無傷。購入履歴/棚卸しログは当時の記録なので触らない。 */
+
+// ①ほぼ確実な重複＝生の品名は違うのに正規化すると同一になる。
+//   normProd_ は長音符「ー」も記号も空白も落とすので、「フェーブル」と「フェブール」は同じ文字列になる＝誤字を確実に捕まえる。
+// ②要確認＝年数が一致し、包含関係でなく、それなりに似ている組。
+//   ⚠️しきい値では分離できない: ヴーヴ イエロー/ヴーヴクリコ イエロー=55% と 赤霧島/黒霧島=50% が5ptしか離れていない。
+//      よって②は「人が見るための候補リスト」に留める。包含関係は除く＝ドンペリニヨン/ドンペリニヨン ロゼ のような
+//      バリエーション違いを重複と言わないため（年数違いも同じ理由で年数一致を条件にする）。
+function stockNameYears_(s) {
+  return (String(s || '').match(/(\d+)\s*年/g) || []).map(x => x.replace(/\s*年/, '')).sort().join(',');
+}
+function findDuplicateStockNames() {
+  const st = menuLinkableStock_();
+  const names = st.order;
+  const sure = [], maybe = [];
+  for (let i = 0; i < names.length; i++) {
+    for (let j = i + 1; j < names.length; j++) {
+      const a = names[i], b = names[j];
+      const na = normProd_(a), nb = normProd_(b);
+      const info = () => ({
+        a: a, b: b,
+        aQty: st.byName[a].qty, bQty: st.byName[b].qty,
+        aFloors: st.byName[a].rows.map(r => r.floor).join('/'),
+        bFloors: st.byName[b].rows.map(r => r.floor).join('/'),
+        score: Math.round(diceSim_(a, b) * 100)
+      });
+      if (na === nb) { sure.push(info()); continue; }              // ①記号/長音/空白の違いだけ
+      if (stockNameYears_(a) !== stockNameYears_(b)) continue;      // 年数違い＝別の酒
+      if (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0) continue;     // 包含＝バリエーション違い
+      if (diceSim_(a, b) >= 0.5) maybe.push(info());
+    }
+  }
+  maybe.sort((x, y) => y.score - x.score);
+  return { ok: true, sure: sure, maybe: maybe };
+}
+
+/* 在庫品名を統合する。from の行を to に寄せる。
+   同じフロアに両方あれば数量を足して from の行を消す。無ければ from の行を to に改名する。
+   ⚠️不可逆。数量を足す方向を間違えると現物と合わなくなるので、必ずどちらへ寄せるかを人に選ばせる。 */
+function mergeStockNames(fromName, toName) {
+  const from = String(fromName || '').trim(), to = String(toName || '').trim();
+  if (!from || !to) return { ok: false, error: '品名が空です' };
+  if (from === to) return { ok: false, error: '同じ品名です' };
+  const st = menuLinkableStock_();
+  if (!st.byName[from]) return { ok: false, error: '在庫に無い品名です: ' + from };
+  if (!st.byName[to]) return { ok: false, error: '在庫に無い品名です: ' + to };
+
+  const sh = getStockMasterSheet_();
+  const toByFloor = {}; st.byName[to].rows.forEach(r => { toByFloor[r.floor] = r; });
+  const renamed = [], mergedQty = [];
+  // 行を消すとインデックスがずれる＝下の行から処理する
+  const rows = st.byName[from].rows.slice().sort((x, y) => y.rowIdx - x.rowIdx);
+  rows.forEach(r => {
+    const hit = toByFloor[r.floor];
+    if (hit) {
+      const next = (Number(hit.qty) || 0) + (Number(r.qty) || 0);
+      sh.getRange(hit.rowIdx, 4).setValue(next);
+      sh.getRange(hit.rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+      sh.deleteRow(r.rowIdx);
+      mergedQty.push(r.floor + ': ' + hit.qty + '+' + r.qty + '=' + next);
+    } else {
+      sh.getRange(r.rowIdx, 1).setValue(to);
+      sh.getRange(r.rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+      renamed.push(r.floor + ': ' + r.qty + '本');
+    }
+  });
+  // 店舗メニューが from を指していたら to に付け替える。⚠️これを忘れると紐づけが宙に浮く（linkBrokenになる）
+  let relinked = '';
+  const msh = getMenuMasterSheet_();
+  getMenuList().forEach(m => {
+    if (m.stockName !== from) return;
+    msh.getRange(m.rowIdx, 4).setValue(to);
+    msh.getRange(m.rowIdx, 6).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+    relinked = m.name;
+  });
+  if (relinked) unlinkOtherMenuRows_(msh, to, getMenuList().filter(m => m.name === relinked)[0].rowIdx);
+  return { ok: true, from: from, to: to, renamed: renamed, mergedQty: mergedQty, relinked: relinked };
 }
 
 /* ===== 軍師（黒服）から触る紐づけ =====
