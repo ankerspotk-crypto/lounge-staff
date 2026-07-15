@@ -2480,19 +2480,67 @@ function castEffectiveArrival_(name, shift, dohanSet){
   return { time: String(shift), status:'fixed', dohan:false, pending:false };
 }
 
+// 「20:00」「20:00〜24:00」「21出勤」等 → 開始時刻の分。'フル'等の非時刻はnull（isShift2000_と同じ解釈）
+function hhmmStartMin_(s){var m=String(s||'').trim().match(/^(\d{1,2})[:：時]?(\d{2})?/);if(!m)return null;return parseInt(m[1],10)*60+(m[2]!=null?parseInt(m[2],10):0);}
+
+// 候補リスト＋判断材料（同伴・20:30までの予約・20:00時点の在店見込み）の本文を作る
+// 候補に「20:30までに自分の予約がある子」がいれば呼ぶ根拠が最も強いので候補行に印を付ける
+function buildReq20Body_(cands){
+  var rv=[]; try{ rv=getYoyakuReservations_(bizDateStr_())||[]; }catch(e){}
+  var min=function(t){var m=hhmmStartMin_(t);return m==null?9999:m;};
+  var byTime=function(a,b){return min(a.time)-min(b.time);};
+  var fmt=function(r){return (r.time||'--:--')+' '+r.customer+'様 '+(Number(r.pax)||1)+'名';};
+
+  var dohanRv=rv.filter(function(r){return String(r.dohanCast||'').trim();}).sort(byTime);
+  var early=rv.filter(function(r){return !String(r.dohanCast||'').trim() && min(r.time)<=20*60+30;}).sort(byTime);
+  var pax=early.reduce(function(a,r){return a+(Number(r.pax)||1);},0);
+
+  // 20:30までの予約を持つ候補（早い順に1件だけ拾う）
+  var rvOf={};
+  early.slice().reverse().forEach(function(r){
+    String(r.yoyakuCast||r.tantouCast||'').split('、').forEach(function(n){ n=n.trim(); if(n) rvOf[normalizeName_(n)]=r; });
+  });
+
+  // 20:00時点で店にいる見込み（同伴の子・未依頼の名目20:00シフト＝どちらも20:30着なので除外）
+  var at20=[];
+  try{
+    var ds=getTodayDohanNames_();
+    at20=((getTodayShiftDetail_()||{}).cast||[]).filter(function(c){
+      var mn=hhmmStartMin_(castEffectiveArrival_(c.name,c.shift,ds).time);
+      return mn!=null && mn<=20*60;
+    });
+  }catch(e){}
+
+  var out=[];
+  if((cands||[]).length){
+    out.push(cands.map(function(c){
+      var r=rvOf[normalizeName_(c.name)];
+      return '・'+c.name+(r?'　🔥'+r.time+' '+r.customer+'様の予約あり':'');
+    }).join('\n'));
+    out.push('');
+  }
+  out.push('──── 判断材料 ────');
+  out.push('👥 20:00時点の在店見込み：'+at20.length+'名'+((cands||[]).length?'（上の'+cands.length+'名は未依頼＝20:30着）':''));
+  out.push('');
+  out.push(dohanRv.length?('🤝 同伴 '+dohanRv.length+'件（同伴の子は20:30着）\n'+dohanRv.map(function(r){return '・'+fmt(r)+' → '+r.dohanCast;}).join('\n')):'🤝 同伴：なし');
+  out.push('');
+  out.push(early.length?('📋 20:30までの予約 '+early.length+'組'+pax+'名（同伴以外）\n'+early.map(function(r){return '・'+fmt(r)+(r.yoyakuCast?' → '+r.yoyakuCast:'');}).join('\n')):'📋 20:30までの予約：なし');
+  return out.join('\n');
+}
+
 // 14:00 黒服へ候補送信
 function sendReq20Candidates(){
   var KF=prop('GROUP_KUROFUKU'); if(!KF)return;
   var cands=getReq20Candidates_();
   if(!cands.length)return; // 候補なしなら送らない
-  push_(KF,'🕗【20時出勤の依頼】\n本日シフト20:00・同伴なしの子です。\n20時に出てほしい子がいれば\n「（名前） 20時出勤」\nと送ってください。\n\n'+cands.map(function(c){return '・'+c.name;}).join('\n'));
+  push_(KF,'🕗【20時出勤の依頼】\n本日シフト20:00・同伴なしの子です。\n20時に出てほしい子がいれば\n「（名前） 20時出勤」\nと送ってください。\n\n'+buildReq20Body_(cands));
 }
 
 // テスト送信: 実データの候補で🧪付き1通を黒服へ（候補ゼロでも該当なしと明記して送る）
 function testReq20Candidates(){
   var KF=prop('GROUP_KUROFUKU'); if(!KF)return {ok:false,error:'GROUP_KUROFUKU未設定'};
   var cands=getReq20Candidates_();
-  var body=cands.length?cands.map(function(c){return '・'+c.name;}).join('\n'):'（本日、シフト20:00・同伴なしの該当者はいません）';
+  var body=cands.length?buildReq20Body_(cands):'（本日、シフト20:00・同伴なしの該当者はいません）\n\n'+buildReq20Body_([]);
   push_(KF,'🧪【テスト送信】\n🕗 20時出勤の依頼\n本日シフト20:00・同伴なしの子です。20時に出てほしい子がいれば「（名前） 20時出勤」と送ってください。\n\n'+body+'\n\n（20時出勤依頼システムの動作テストです）');
   return {ok:true,count:cands.length};
 }
