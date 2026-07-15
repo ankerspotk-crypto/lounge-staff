@@ -275,6 +275,8 @@ header h1 { font-size: 17px; font-weight: 600; }
 .dohan-chip.sel { background:#2a1800;color:#ffaa44;border-color:#884400;font-weight:700; }
 .table-chip { padding:5px 10px;background:#1c2a42;color:#8aabcc;border:1px solid #2a4068;border-radius:8px;font-size:12px;cursor:pointer;transition:background 0.15s,color 0.15s,border-color 0.15s; }
 .table-chip.sel { background:#0f2040;color:#7ab0f0;border-color:#1a50a0;font-weight:700; }
+.table-chip.booked { background:#2a1a1e;color:#c08080;border-color:#5a2a30; }
+.table-chip.booked.sel { background:#3a1420;color:#ff9999;border-color:#a03050;font-weight:700; }
 .yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
 .yb-pend { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
 /* 顧客検索 */
@@ -3891,6 +3893,10 @@ var yoyakuRsvSubs = [];       // 同席の追加会員 [{name,memberId,pax,tanto
 var yoyakuSubSearchOpen = false; // 会員追加の検索ボックス表示中か
 var yoyakuSubCustResults = [];   // 会員追加の検索結果キャッシュ
 var yoyakuRsvAggMode = 'merge';  // 売上/来店の集計モード merge=代表に集約 / split=会員ごとに分ける（Feature3）
+var yoyakuBookedCache = {};   // 'YYYY-MM-DD' → 予約配列。フォームで一覧と別の日を選んだ時の席の埋まり判定用
+var yoyakuBookedState = {};   // 'YYYY-MM-DD' → 'loading' | 'ok' | 'fail'
+var yoyakuBookedMapCur = null; // 直近の描画で使った 席コード→客名[]。null=判定不能
+var yoyakuBookedAck = {};     // 席名 → true。予約済みと知った上で選んだ席（送信時に二度聞かないため）
 
 var YOYAKU_TABLES = [
   {f:'2F',n:'カウンター1',cap:1},{f:'2F',n:'カウンター2',cap:1},{f:'2F',n:'カウンター3',cap:1},{f:'2F',n:'カウンター4',cap:1},
@@ -3925,6 +3931,8 @@ function loadYoyaku() {
       yoyakuRsvSubs = []; yoyakuSubSearchOpen = false; yoyakuRsvAggMode = 'merge';
       yoyakuEditRsv = null;
       yoyakuSelfSeeded = false;
+      // 予約の追加/変更/削除の後は必ずここを通る＝別日のキャッシュもここで捨てる（古い埋まり具合で警告を出さない）
+      yoyakuBookedCache = {}; yoyakuBookedState = {}; yoyakuBookedAck = {};
       renderYoyaku();
     })
     .catch(function(e){ setContent('<div class="err">通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadYoyaku') + '</div>'); });
@@ -4278,15 +4286,15 @@ function renderYoyakuAdd() {
   if (!yoyakuRsvCalMonth) yoyakuRsvCalMonth = yoyakuRsvDate.slice(0, 7);
   if (!yoyakuRsvTime) yoyakuRsvTime = presetTime;
   var presetTable = yoyakuRsvTable || preset.table || '未定';
-  // 選択日時と被る予約済み席を取得（リスト日付と一致する場合のみ）
-  var bookedTables = {};
-  if (yoyakuRsvDate === yoyakuDateStr(yoyakuDate) && yoyakuRsvTime) {
-    var selMin = (function(t){ var p=t.split(':'),h=parseInt(p[0]),m=parseInt(p[1])||0; if(h<6)h+=24; return h*60+m; })(yoyakuRsvTime);
-    yoyakuRsvs.forEach(function(r) {
-      if (!r.table || r.table === '未定') return;
-      var eMin = (function(t){ var p=(t||'20:00').split(':'),h=parseInt(p[0]),m=parseInt(p[1])||0; if(h<6)h+=24; return h*60+m; })(r.time);
-      if (Math.abs(selMin - eMin) < 120) r.table.split('、').forEach(function(tbl){ bookedTables[tbl.replace(/\s/g,'')] = r.customer; });
-    });
+  // 選択日時と被る予約済み席。別日はGASから取りに行く（取れるまで null＝判定不能）
+  var rsvsForDate = yoyakuRsvsForForm_();
+  var bookedTables = rsvsForDate ? yoyakuBookedMap_(rsvsForDate) : null;
+  yoyakuBookedMapCur = bookedTables;
+  var bookedNote = '';
+  if (!bookedTables) {
+    bookedNote = yoyakuBookedState[yoyakuRsvDate] === 'fail'
+      ? '<div style="font-size:11px;color:#ddaa44;margin-bottom:4px">⚠️ この日の予約状況を取得できません。席の重複は確認できません</div>'
+      : '<div style="font-size:11px;color:#6a8ab0;margin-bottom:4px">この日の予約状況を確認中...</div>';
   }
   // 初期選択席を決定
   var initTables = (yoyakuRsvTable && yoyakuRsvTable !== '未定') ? yoyakuRsvTable.split('、') : [];
@@ -4295,9 +4303,11 @@ function renderYoyakuAdd() {
   var tableChips = YOYAKU_TABLES.map(function(t) {
     var val = t.f + ' ' + t.n;
     var isSel = initTables.indexOf(val) >= 0;
-    var booked = bookedTables[(t.f+t.n).replace(/\s/g,'')];
+    var booked = bookedTables ? bookedTables[(t.f+t.n).replace(/\s/g,'')] : null;
     var floorLabel = t.f !== prevFloor ? (function(){ prevFloor = t.f; return '<div style="width:100%;font-size:10px;color:#6a8ab0;margin-top:'+(prevFloor===t.f?'0':'6')+'px;margin-bottom:2px">'+t.f+'</div>'; })() : '';
-    return floorLabel + '<button type="button" class="table-chip'+(isSel?' sel':'')+'" data-val="'+esc(val)+'" onclick="toggleTableChip(this)">'+esc(t.n)+(booked?'<span style="color:#ff6666;font-size:9px;margin-left:2px">●</span>':'')+'</button>';
+    return floorLabel + '<button type="button" class="table-chip'+(isSel?' sel':'')+(booked?' booked':'')+'" data-val="'+esc(val)+'"'
+      + (booked ? ' data-booked="'+esc(booked.join('・'))+'"' : '')
+      + ' onclick="toggleTableChip(this)">'+esc(t.n)+(booked?'<span style="color:#ff6666;font-size:9px;margin-left:2px">●</span>':'')+'</button>';
   }).join('');
   var presetBanner = preset.table
     ? '<div style="font-size:12px;background:#0f201a;border:1px solid #1a4a22;border-radius:7px;padding:8px 11px;color:#66cc88;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
@@ -4375,7 +4385,8 @@ function renderYoyakuAdd() {
         return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px">'+opts+'</select>';
       })()
     + (yoyakuRsvMode === '仮予約' ? '' :
-        '<div class="yform-label">席<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
+        '<div class="yform-label">席<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可・<span style="color:#ff6666">●</span>=予約済み）</span></div>'
+        + bookedNote
         + '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>')
     + '<div class="yform-label">同伴キャスト<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（複数選択可）</span></div>'
     + (function(){
@@ -4448,11 +4459,13 @@ function yoyakuRsvCalNav(diff) {
 function yoyakuRsvSelectDate(ds) {
   saveFormInputs();
   yoyakuRsvDate = ds;
+  yoyakuBookedAck = {}; // 日が変われば埋まり具合も変わる＝前の日で押したOKは無効
   renderYoyaku();
 }
 function yoyakuRsvSelectTime(t) {
   saveFormInputs();
   yoyakuRsvTime = t;
+  yoyakuBookedAck = {}; // 時刻が変われば被る予約も変わる
   renderYoyaku();
 }
 
@@ -4659,7 +4672,16 @@ function yoyakuSubSetTantou(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].tanto
 
 function toggleTantouChip(el) { el.classList.toggle('sel'); }
 function toggleDohanChip(el) { el.classList.toggle('sel'); }
-function toggleTableChip(el) { el.classList.toggle('sel'); }
+/* 予約済みの席は「押せるが、選ぶ時に必ず一度確認させる」＝相席は残しつつ、うっかりのダブルブッキングを止める。
+ * 外す時は聞かない。OKした席は ack に積んで、送信時にもう一度聞かないようにする。 */
+function toggleTableChip(el) {
+  var who = el.getAttribute('data-booked');
+  if (who && !el.classList.contains('sel')) {
+    if (!confirm(who + '様の予約が入っている席です。\n\n相席として選びますか？')) return;
+    yoyakuBookedAck[el.getAttribute('data-val')] = true;
+  }
+  el.classList.toggle('sel');
+}
 
 function canEditYoyaku() {
   return isAdmin || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === 'キャスト' || staffName === 'りく';
@@ -4689,6 +4711,7 @@ function yoyakuOpenEdit(rowIdx) {
   var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
   if (!rsv) return;
   yoyakuEditRsv = rsv;
+  yoyakuBookedAck = {}; // 既に入っている席を持つ予約を開く＝前の確認は引き継がない
   yoyakuSelectedCust = null;
   yoyakuCustMode = '';
   yoyakuRsvDate = rsv.date;
@@ -4764,6 +4787,7 @@ function yoyakuCancelReservation(rowIdx) {
 
 function yoyakuCancelEdit() {
   yoyakuEditRsv = null;
+  yoyakuBookedAck = {};
   yoyakuRsvDate = '';
   yoyakuRsvCalMonth = '';
   yoyakuRsvTime = '';
@@ -4779,6 +4803,76 @@ function yoyakuCancelEdit() {
   yoyakuSelfSeeded = false;
   yoyakuSubTab = 'list';
   renderYoyaku();
+}
+
+/* 予約時刻 → 分。'同伴'等の時刻でない値は20:00扱い（スケジュール表・空き席判定と同じ規則）。
+ * 深夜は+24hして前夜から連続させる。 */
+function yoyakuTimeMin_(t) {
+  var p = String(t || '').split(':');
+  var h = parseInt(p[0]); if (isNaN(h)) h = 20;
+  var m = parseInt(p[1]) || 0;
+  if (h < 6) h += 24;
+  return h * 60 + m;
+}
+
+/* フォームで選んでいる日の予約一覧。一覧表示中の日ならそれを使い、別日はGASから取って覚える。
+ * まだ取れていない／取れなかった間は null＝判定不能。空配列を返して「全席空き」に見せてはいけない。 */
+function yoyakuRsvsForForm_() {
+  if (yoyakuRsvDate === yoyakuDateStr(yoyakuDate)) return yoyakuRsvs;
+  if (yoyakuBookedState[yoyakuRsvDate] === 'ok') return yoyakuBookedCache[yoyakuRsvDate];
+  if (!yoyakuBookedState[yoyakuRsvDate]) yoyakuFetchBooked_(yoyakuRsvDate);
+  return null;
+}
+
+function yoyakuFetchBooked_(ds) {
+  yoyakuBookedState[ds] = 'loading';
+  gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { yoyakuBookedState[ds] = 'fail'; }
+      else { yoyakuBookedCache[ds] = d.reservations || []; yoyakuBookedState[ds] = 'ok'; }
+      if (yoyakuRsvDate === ds && yoyakuSubTab === 'add') { saveFormInputs(); renderYoyaku(); }
+    })
+    .catch(function() {
+      yoyakuBookedState[ds] = 'fail';
+      if (yoyakuRsvDate === ds && yoyakuSubTab === 'add') { saveFormInputs(); renderYoyaku(); }
+    });
+}
+
+/* 選択中の日時に被っている予約を 席コード→客名[] で返す。被り＝開始時刻の差が2時間未満（＝滞在2時間の既定）。
+ * 編集中の予約それ自身は除く：自分の席を「◯◯様が予約済み」と警告したら、席を変えない修正ができなくなる。
+ * 席未定（仮予約）は席を押さえていないので対象外。キャンセルはサーバ側で既に除かれている。 */
+function yoyakuBookedMap_(rsvs) {
+  var selMin = yoyakuTimeMin_(yoyakuRsvTime);
+  var map = {};
+  rsvs.forEach(function(r) {
+    if (!r.table || r.table === '未定') return;
+    if (yoyakuEditRsv && r.rowIdx === yoyakuEditRsv.rowIdx) return;
+    if (Math.abs(selMin - yoyakuTimeMin_(r.time)) >= 120) return;
+    r.table.split('、').forEach(function(tbl) {
+      var k = tbl.replace(/\s/g, '');
+      if (!map[k]) map[k] = [];
+      if (map[k].indexOf(r.customer) < 0) map[k].push(r.customer);
+    });
+  });
+  return map;
+}
+
+/* 送信直前の最後の網：選択中の席のうち「予約済みだが、まだ一度も確認していない」ものを警告文にする。
+ * チップをタップして選んだ席は既に確認済み＝ここでは聞かない（二度聞けば読まずにOKを押すようになる）。
+ * スケジュール表からの席プリセットはタップを経由しない＝この網でしか捕まえられない。
+ * 判定できない時は''＝警告しない（yoyakuCapWarnMsg_と同じ流儀）。 */
+function yoyakuBookedWarnMsg_(tableStr) {
+  if (!tableStr || tableStr === '未定') return '';
+  if (!yoyakuBookedMapCur) return '';
+  var hits = [];
+  tableStr.split('、').forEach(function(n) {
+    if (yoyakuBookedAck[n]) return;
+    var who = yoyakuBookedMapCur[n.replace(/\s/g, '')];
+    if (who) hits.push(n + '＝' + who.join('・') + '様');
+  });
+  if (!hits.length) return '';
+  return 'すでに予約が入っています。\n\n' + hits.join('\n') + '\n\n相席として登録しますか？';
 }
 
 /* 選択席の定員合計と頭数を突き合わせ、超過なら確認文を返す（超過は禁止せず通す＝ボス仕様）。
@@ -4823,6 +4917,8 @@ function yoyakuSubmitRsv() {
   var rsvPax = parseInt(paxEl ? paxEl.value : '1') || 1;
   var rsvTable = yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })();
   var rsvSubs = yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); });
+  var bookWarn = yoyakuBookedWarnMsg_(rsvTable);
+  if (bookWarn && !confirm(bookWarn)) return; // 予約済みの席も通すが、一度必ず目を通させる
   var capWarn = yoyakuCapWarnMsg_(rsvTable, rsvPax, rsvSubs);
   if (capWarn && !confirm(capWarn)) return; // 超過は通すが、黒服に一度必ず目を通させる
   var payload = {
