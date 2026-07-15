@@ -36,6 +36,14 @@ const STOCK_MASTER_TAB    = '在庫発注マスタ';
 const PURCHASE_LOG_TAB    = '購入履歴ログ';
 const STOCKTAKE_LOG_TAB   = '棚卸しログ';
 const STOCK_CATEGORIES    = ['ボトル', '割り物', 'チャーム', '果物', '消耗品', '名刺']; // 名刺＝品名がキャスト名。1行=1キャスト×1フロア
+const MENU_MASTER_TAB     = '店舗メニュー';
+// 在庫発注マスタ8列目「仕入れ区分」。空欄＝通常（既存行は全部これ＝移行不要）
+// ⚠️カテゴリ(2列目)には絶対に足さない。カテゴリを変えると在庫画面のタブから消え、
+//   現物が残っている酒を数えられず棚卸しとLINE在庫確認からも外れる（名簿の「休職中」と同じ地雷）
+const SUPPLY_STOP_        = 'メニュー落ち';
+// メニュー連動（メニューに無い＝仕入れない）を効かせるカテゴリ。ボス確定＝ボトルのみ
+// ⚠️割り物/チャーム/果物/消耗品/名刺を足してはいけない。メニューに一生載らないが仕入れは止められない＝店が回らない
+const MENU_LINK_CATS_     = ['ボトル'];
 const SOUVENIR_NAME             = 'おみやげ';
 const SOUVENIR_PER_PERSON       = 2;
 const SOUVENIR_ALERT_THRESHOLD  = 50;
@@ -257,7 +265,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -803,6 +811,27 @@ function handleApiRequest_(body) {
   if (body.action === 'castCancelBirthdayWeek')return castCancelBirthdayWeek(body.userId, body.targetName);
   if (body.action === 'adminApproveBirthdayWeek') return adminApproveBirthdayWeek(body.userId, body.name);
   if (body.action === 'adminSendbackBirthdayWeek') return adminSendbackBirthdayWeek(body.userId, body.name, body.reason);
+  // ---- 店舗メニュー（管理者専用。メニュー落ち→在庫の仕入れ区分へ伝播）----
+  // メニューを落とせるのは管理者だけ＝黒服は軍師から発注時に警告を見るだけ、という分担
+  if (body.action === 'getMenuBoard' || body.action === 'addMenuItem' || body.action === 'setMenuItemStatus' ||
+      body.action === 'setMenuItemLink' || body.action === 'deleteMenuItem' || body.action === 'suggestStockName' ||
+      body.action === 'setStockSupply' || body.action === 'previewMenuBulk' || body.action === 'importMenuBulk') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    if (body.action === 'previewMenuBulk')    return previewMenuBulk(String(body.text || ''));
+    if (body.action === 'importMenuBulk')     return importMenuBulk(String(body.text || ''));
+    if (body.action === 'getMenuBoard')       return { ok: true, board: getMenuBoard() };
+    if (body.action === 'addMenuItem')        return addMenuItem({ name: body.name, category: body.category, price: body.price, stockName: body.stockName });
+    if (body.action === 'setMenuItemStatus')  return setMenuItemStatus(Number(body.rowIdx), String(body.status || ''));
+    if (body.action === 'setMenuItemLink')    return setMenuItemLink(Number(body.rowIdx), String(body.stockName || ''));
+    if (body.action === 'deleteMenuItem')     return deleteMenuItem(Number(body.rowIdx));
+    if (body.action === 'suggestStockName')   return { ok: true, suggest: suggestStockNameForMenu(String(body.name || '')) };
+    // メニュー外の在庫を1品まとめて止める/戻す（在庫は品名×フロアで複数行ある）
+    if (body.action === 'setStockSupply') {
+      const n = setSupplyStatusByName_(String(body.stockName || ''), String(body.status || ''));
+      return n ? { ok: true, syncedRows: n } : { ok: false, error: '在庫に無い品名です: ' + body.stockName };
+    }
+  }
   return { ok: false, error: 'unknown action' };
 }
 
@@ -12186,7 +12215,8 @@ function getStockMasterSheet_() {
   let sh = ss.getSheetByName(STOCK_MASTER_TAB);
   if (!sh) {
     sh = ss.insertSheet(STOCK_MASTER_TAB);
-    sh.appendRow(['品名', 'カテゴリ', 'フロア', '在庫数', '最低在庫数', '賞味期限管理', '更新日時']);
+    // ⚠️列の途中に挿してはいけない。4列目=在庫数 / 7列目=更新日時 が全12関数にハードコードされている＝末尾追加のみ
+    sh.appendRow(['品名', 'カテゴリ', 'フロア', '在庫数', '最低在庫数', '賞味期限管理', '更新日時', '仕入れ区分']);
     sh.setFrozenRows(1);
   }
   return sh;
@@ -12242,10 +12272,18 @@ function handleStockCheck_(event, query) {
   reply(event.replyToken, buildStockCheckMessage_(query));
 }
 
+// 本番シートは7列で作られている＝8列目の見出しだけ後から生やす。
+// 既に読み終わった見出し行を渡すので追加の読み取りは発生しない。値は空欄＝通常なので行の移行は不要。
+function ensureSupplyCol_(sh, headRow) {
+  if (String((headRow || [])[7] || '').trim() === '仕入れ区分') return;
+  sh.getRange(1, 8).setValue('仕入れ区分');
+}
+
 // 在庫発注マスタ一覧
 function getStockList() {
   const sh = getStockMasterSheet_();
   const rows = sh.getDataRange().getValues();
+  ensureSupplyCol_(sh, rows[0]);
   const list = [];
   for (let i = 1; i < rows.length; i++) {
     const name = String(rows[i][0]).trim();
@@ -12253,7 +12291,9 @@ function getStockList() {
     list.push({
       rowIdx: i + 1, name, category: String(rows[i][1] || ''), floor: String(rows[i][2] || '2F'),
       qty: Number(rows[i][3]) || 0, minStock: String(rows[i][4] || ''),
-      expiryManaged: String(rows[i][5]).trim() === '○'
+      expiryManaged: String(rows[i][5]).trim() === '○',
+      // 空欄＝通常。SUPPLY_STOP_ なら発注しない（カテゴリは「ボトル」のまま＝在庫画面からは消えない）
+      supplyStatus: String(rows[i][7] || '').trim()
     });
   }
   return list;
@@ -12284,6 +12324,21 @@ function changeStockQty(rowIdx, delta) {
   sh.getRange(rowIdx, 4).setValue(next);
   sh.getRange(rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
   return { ok: true, qty: next };
+}
+
+// 仕入れ区分の切替（8列目）。在庫画面とメニュー登録画面の入口はここだけ。
+// 意味は「この品はもう仕入れない」の一点だけ＝発注する側が全員これを見る（手動発注は警告／自動発注は黙ってスキップ）。
+// ⚠️カテゴリ(2列目)には絶対に書かない。カテゴリを変えると在庫画面のタブから消え、
+//   現物が残っている酒を数えられなくなる＝売り切りたいのに見えない、という一番マズい壊れ方をする。
+function setStockSupplyStatus(rowIdx, status) {
+  const st = String(status || '').trim();
+  if (st && st !== SUPPLY_STOP_) return { ok: false, error: '不正な仕入れ区分: ' + status };
+  const sh = getStockMasterSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 2).getValues()[0];
+  if (!String(row[0]).trim()) return { ok: false, error: '空行です: ' + rowIdx };
+  sh.getRange(rowIdx, 8).setValue(st);
+  sh.getRange(rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  return { ok: true, name: String(row[0]).trim(), supplyStatus: st };
 }
 
 // ============================================================
@@ -12352,6 +12407,9 @@ function checkMeishiStock_(castName) {
   const nm = String(castName || '').trim();
   const st = getMeishiStock_(nm);
   if (!st) return null;
+  // 仕入れ区分で止めた品は自動起票しない。機械が勝手に発注したらフラグが嘘になる＝
+  // 「止めたのに発注が飛ぶ」を一度でも起こすと、この区分自体が現場から信用されなくなる
+  if (st.rows.some(function (x) { return x.supplyStatus === SUPPLY_STOP_; })) return null;
   const f2 = st.rows.filter(function (x) { return x.floor === '2F'; })[0];
   const f5 = st.rows.filter(function (x) { return x.floor === '5F'; })[0];
   // ⚠️2F/5Fの両方に入るまで判定しない。片方だけ入れた時点では合計が必ず1未満になり、
@@ -12444,6 +12502,246 @@ function registerStockPurchase(payload) {
   logSh.getRange(newRow, 1, 1, 7).setValues([[itemName, category, floor, purchaseDate, qty, name, Utilities.formatDate(new Date(), TZ, 'M/d HH:mm')]]);
 
   return { ok: true, qty: next };
+}
+
+// ============================================================
+// 店舗メニュー（ボトルのメニューを持ち、メニュー落ちを在庫の仕入れ区分へ伝播させる）
+//  データモデル: メニュー品名 / カテゴリ / 価格 / 在庫品名(紐づけ先) / 状態(掲載中|メニュー落ち) / 更新日時。
+//    在庫は 品名×フロア で1行ずつある＝1メニュー品は2F/5Fの複数行に紐づく。よって紐づけは品名で持つ。
+//  ⚠️価格は参照専用（ボス確定）。会計はTRUSTが正＝ここの価格で請求してはいけない。
+//    値段を変えたら2箇所直す必要がある＝古い価格が残りうる。表示に使うなら「参照」と分かる出し方をすること。
+//  カテゴリはメニューの分類(WHISKEY/焼酎/CHAMPAGNE/WINE赤…)。在庫発注マスタの STOCK_CATEGORIES とは別物＝あちらは触らない。
+//  ⚠️メニュー連動はボトルのみ(MENU_LINK_CATS_)。割り物/消耗品/名刺はメニューに一生載らないが
+//    仕入れは止められない＝巻き込むと店が回らなくなる。
+//  ⚠️「メニューに無いボトル」を自動で仕入れ停止にしてはいけない。メニュー登録が終わる前に適用すると
+//    まだ1件も紐づいていない＝全ボトルが一斉に停止する。名刺の初期登録で全員分を誤発注しかけたのと同じ形。
+//    → 炙り出して画面に出すだけ。止めるのはボスが押したときだけ。
+// ============================================================
+const MENU_ON_ = '掲載中'; // 状態のもう一方は SUPPLY_STOP_('メニュー落ち')
+
+function getMenuMasterSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sh = ss.getSheetByName(MENU_MASTER_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(MENU_MASTER_TAB);
+    sh.appendRow(['メニュー品名', 'カテゴリ', '価格', '在庫品名', '状態', '更新日時']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function getMenuList() {
+  const rows = getMenuMasterSheet_().getDataRange().getValues();
+  const list = [];
+  for (let i = 1; i < rows.length; i++) {
+    const name = String(rows[i][0]).trim();
+    if (!name) continue;
+    list.push({
+      rowIdx: i + 1, name,
+      category: String(rows[i][1] || '').trim(),
+      price: Number(rows[i][2]) || 0,
+      stockName: String(rows[i][3] || '').trim(),
+      status: String(rows[i][4] || '').trim() || MENU_ON_,
+      updated: String(rows[i][5] || '')
+    });
+  }
+  return list;
+}
+
+// メニュー連動の対象になる在庫を品名でまとめる（在庫は 品名×フロア で複数行）
+function menuLinkableStock_() {
+  const byName = {}, order = [];
+  getStockList().forEach(it => {
+    if (MENU_LINK_CATS_.indexOf(it.category) < 0) return;
+    if (!byName[it.name]) { byName[it.name] = { name: it.name, rows: [], qty: 0, stopped: false }; order.push(it.name); }
+    const g = byName[it.name];
+    g.rows.push({ rowIdx: it.rowIdx, floor: it.floor, qty: it.qty });
+    g.qty += it.qty;
+    if (it.supplyStatus === SUPPLY_STOP_) g.stopped = true;
+  });
+  return { byName, order };
+}
+
+// メニュー登録画面の材料を一度に返す
+function getMenuBoard() {
+  const menu = getMenuList();
+  const st = menuLinkableStock_();
+  const linked = {};
+  menu.forEach(m => { if (m.stockName) linked[m.stockName] = m; });
+  return {
+    menu: menu.map(m => {
+      const g = m.stockName ? st.byName[m.stockName] : null;
+      return {
+        rowIdx: m.rowIdx, name: m.name, category: m.category, price: m.price,
+        stockName: m.stockName, status: m.status, updated: m.updated,
+        qty: g ? g.qty : null, stopped: g ? g.stopped : false,
+        // 在庫側に該当が無い＝紐づけ先が消えた（在庫行を消した/品名を変えた）。画面で赤く出して気づかせる
+        linkBroken: !!m.stockName && !g
+      };
+    }),
+    // メニューに載っていないボトル在庫＝ボスが探していた「店舗メニュー以外にある在庫」。自動では止めない
+    offMenu: st.order.filter(n => !linked[n]).map(n => st.byName[n]),
+    stockNames: st.order
+  };
+}
+
+/* ===== メニュー品名 → 在庫品名 の紐づけ =====
+   ⚠️年数の有無は商品そのものの違い。ボス談＝**年数が無いものはノンビンテージとして別に存在する**。
+      つまり「山崎」と「山崎12年」は別の酒で、「響21年」と「響」も別の酒。完全一致ならこれを取り違えない。 */
+// 完全一致の判定キー。焼酎の「麦/米/芋」はメニュー表記の飾り＝在庫側は素の品名で持っているので外す
+function menuLinkKey_(name, category) {
+  let s = String(name || '').trim();
+  if (String(category || '').trim() === '焼酎') s = s.replace(/^[麦米芋]\s+/, '');
+  return normProd_(s);
+}
+/* 在庫の候補を返す。⚠️**完全一致しか返さない**。あいまい照合はこのドメインでは使えない。
+   理由（2026-07-15にPDFの実50品で確認した事実）:
+     酒の品名空間は「ベース商品＋バリエーション」で埋まっていて、バリエーションはベースを内包する。
+     matchStockName_ の包含ボーナス（片方が他方を含むと0.92）はこれを軒並み「同一」と言う。
+       山崎 → 山崎12年 92%      （年数違い＝別の酒。年数なしはノンビンテージとして実在する＝ボス談）
+       響21年 → 響 92%
+       ドンペリニヨン ロゼ → ドンペリニヨン 92%   （ロゼ/P2/ラベイも別の酒）
+       芋 赤霧島 → 黒霧島 50%    （1文字違いの別銘柄）
+     閾値では解決しない: 上のを消せる閾値まで上げると、拾いたい表記ゆれ
+     （ドンペリニヨン ロゼ → ドンペリロゼ＝61%）も一緒に死ぬ。
+     実測でこのメニューでは **あいまい候補は4件中4件とも誤り**（正解ゼロ）＝害しかない。
+   → 完全一致だけ自動で紐づけ、残りは人がプルダウンで選ぶ。
+     間違った候補を出すのは、候補を出さないより悪い（読まれなくなって形骸化する。席の定員で学んだ）。 */
+function menuLinkCandidate_(name, category, stockNames) {
+  const key = menuLinkKey_(name, category);
+  if (!key) return { name: '', score: 0, exact: false };
+  const exact = stockNames.filter(n => normProd_(n) === key);
+  if (exact.length === 1) return { name: exact[0], score: 100, exact: true };
+  return { name: '', score: 0, exact: false }; // 同名が複数、または一致なし＝人が選ぶ
+}
+
+// 未紐づけのメニュー行へ在庫品名の候補を出す。
+// ⚠️完全一致でない候補は「候補」でしかない＝確定は人がタップする（納品書と同じ流儀）。
+//   誤爆した警告は黒服に読まれなくなり、警告そのものが死ぬ（席の定員で学んだ）。
+function suggestStockNameForMenu(menuName, category) {
+  const st = menuLinkableStock_();
+  const c = menuLinkCandidate_(String(menuName || ''), String(category || ''), st.order);
+  return { name: c.name || null, score: c.score, exact: c.exact };
+}
+
+// 品名で全フロアの在庫行に仕入れ区分を書く
+function setSupplyStatusByName_(stockName, status) {
+  const nm = String(stockName || '').trim();
+  if (!nm) return 0;
+  const g = menuLinkableStock_().byName[nm];
+  if (!g) return 0;
+  g.rows.forEach(r => setStockSupplyStatus(r.rowIdx, status));
+  return g.rows.length;
+}
+
+// メニューの状態を切替 → 紐づく在庫行の仕入れ区分へ伝播。これが「メニュー落ちしたら自動で仕入れない」の実体
+function setMenuItemStatus(rowIdx, status) {
+  const st = String(status || '').trim();
+  if (st !== MENU_ON_ && st !== SUPPLY_STOP_) return { ok: false, error: '不正な状態: ' + status };
+  const sh = getMenuMasterSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 4).getValues()[0]; // 品名/カテゴリ/価格/在庫品名
+  if (!String(row[0]).trim()) return { ok: false, error: '空行です: ' + rowIdx };
+  sh.getRange(rowIdx, 5).setValue(st);
+  sh.getRange(rowIdx, 6).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  const n = setSupplyStatusByName_(row[3], st === SUPPLY_STOP_ ? SUPPLY_STOP_ : '');
+  return { ok: true, status: st, syncedRows: n };
+}
+
+// 紐づけ先の在庫品名を確定する（人がタップして確定させる唯一の入口）。確定と同時に現在の状態を在庫へ反映する
+function setMenuItemLink(rowIdx, stockName) {
+  const nm = String(stockName || '').trim();
+  const sh = getMenuMasterSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 5).getValues()[0]; // 品名/カテゴリ/価格/在庫品名/状態
+  if (!String(row[0]).trim()) return { ok: false, error: '空行です: ' + rowIdx };
+  if (nm && !menuLinkableStock_().byName[nm]) return { ok: false, error: '在庫に無い品名です: ' + nm };
+  const prev = String(row[3] || '').trim();
+  // 紐づけ替えのとき、前の在庫の停止は解除しておく（外したのに止まったままになるため）
+  if (prev && prev !== nm) setSupplyStatusByName_(prev, '');
+  sh.getRange(rowIdx, 4).setValue(nm);
+  sh.getRange(rowIdx, 6).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  const st = String(row[4] || '').trim() || MENU_ON_;
+  const n = nm ? setSupplyStatusByName_(nm, st === SUPPLY_STOP_ ? SUPPLY_STOP_ : '') : 0;
+  return { ok: true, stockName: nm, syncedRows: n };
+}
+
+function addMenuItem(payload) {
+  const p = payload || {};
+  const name = String(p.name || '').trim();
+  if (!name) return { ok: false, error: 'メニュー品名が空です' };
+  if (getMenuList().some(m => m.name === name)) return { ok: false, error: '同じメニュー品名が既にあります: ' + name };
+  const nm = String(p.stockName || '').trim();
+  if (nm && !menuLinkableStock_().byName[nm]) return { ok: false, error: '在庫に無い品名です: ' + nm };
+  getMenuMasterSheet_().appendRow([name, String(p.category || '').trim(), Number(p.price) || 0, nm, MENU_ON_,
+    Utilities.formatDate(new Date(), TZ, 'M/d HH:mm')]);
+  if (nm) setSupplyStatusByName_(nm, '');
+  return { ok: true, name };
+}
+
+// メニュー行を消す＝メニューから消えるだけ。紐づいていた在庫の停止は解除する（消した副作用で止まったままにしない）
+function deleteMenuItem(rowIdx) {
+  const sh = getMenuMasterSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 4).getValues()[0]; // 品名/カテゴリ/価格/在庫品名
+  if (!String(row[0]).trim()) return { ok: false, error: '空行です: ' + rowIdx };
+  if (String(row[3] || '').trim()) setSupplyStatusByName_(row[3], '');
+  sh.deleteRow(rowIdx);
+  return { ok: true };
+}
+
+/* ===== 一括登録（メニュー改定のたびに使う。PDFの初回登録もこれで通す） =====
+   貼り付け形式＝1行1品の TSV: カテゴリ<TAB>メニュー品名<TAB>価格
+   ⚠️純関数にしてある＝nodeで検証できる。パースの誤りは50品まとめて間違うので目視では捕まらない。 */
+function parseMenuBulk_(text) {
+  const rows = [], errors = [];
+  String(text || '').split(/\r?\n/).forEach((line, i) => {
+    const raw = line.trim();
+    if (!raw) return;
+    if (/^#/.test(raw)) return; // コメント行
+    const c = raw.split('\t');
+    if (c.length < 2) { errors.push((i + 1) + '行目: 列が足りません（カテゴリ⇥品名⇥価格）: ' + raw); return; }
+    const category = String(c[0] || '').trim();
+    const name = String(c[1] || '').trim();
+    // 「¥35,000」「35000」どちらも受ける。空欄は0（価格は参照専用＝無くても登録は通す）
+    const price = Number(String(c[2] || '').replace(/[¥￥,\s　]/g, '')) || 0;
+    if (!name) { errors.push((i + 1) + '行目: 品名が空です: ' + raw); return; }
+    rows.push({ category, name, price });
+  });
+  // 貼り付けた中での重複は先に潰す（シートへ2行入れてから気づくと消すのが面倒）
+  const seen = {}, uniq = [];
+  rows.forEach(r => {
+    if (seen[r.name]) { errors.push('貼り付けた中で品名が重複: ' + r.name); return; }
+    seen[r.name] = 1; uniq.push(r);
+  });
+  return { rows: uniq, errors };
+}
+
+// 取り込む前に何が起きるかを返す（登録はしない）。ボスが見てから押す
+function previewMenuBulk(text) {
+  const p = parseMenuBulk_(text);
+  const existing = {}; getMenuList().forEach(m => { existing[m.name] = m; });
+  const st = menuLinkableStock_();
+  const add = [], skip = [];
+  p.rows.forEach(r => {
+    if (existing[r.name]) { skip.push(r.name); return; }
+    const c = menuLinkCandidate_(r.name, r.category, st.order);
+    // exact＝完全一致だけ自動で紐づける。それ以外は候補を見せるだけで空のまま作る
+    add.push({ category: r.category, name: r.name, price: r.price, suggest: c.name, score: c.score, exact: c.exact });
+  });
+  return { ok: true, add, skip, errors: p.errors, total: p.rows.length,
+    autoLink: add.filter(a => a.exact).length };
+}
+
+// 実際に取り込む。⚠️追加のみ＝既存行は触らない。消えた品を自動でメニュー落ちにはしない（人が見て決める）
+function importMenuBulk(text) {
+  const pv = previewMenuBulk(text);
+  if (pv.errors.length) return { ok: false, error: pv.errors.join('\n') };
+  if (!pv.add.length) return { ok: true, created: 0, skipped: pv.skip.length, autoLinked: 0 };
+  const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
+  // 完全一致だけ紐づけて作る。あいまい候補は空＝画面で人が確定させる（納品書と同じ流儀）。
+  // ⚠️仕入れ区分はここでは触らない。手で止めてある在庫を、メニューを入れ直しただけで勝手に再開させないため
+  const vals = pv.add.map(r => [r.name, r.category, r.price, r.exact ? r.suggest : '', MENU_ON_, stamp]);
+  const sh = getMenuMasterSheet_();
+  sh.getRange(sh.getLastRow() + 1, 1, vals.length, 6).setValues(vals);
+  return { ok: true, created: vals.length, skipped: pv.skip.length, autoLinked: pv.autoLink };
 }
 
 /* ===== 納品書→在庫反映（Phase2：確認画面付き突き合わせ） ===== */

@@ -508,6 +508,8 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .stk-order .finput{flex:1;padding:8px;font-size:14px;}
 .stk-order-btn{background:#241800;border:1px solid #7a5010;color:#ffbf5a;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;padding:8px 12px;white-space:nowrap;}
 .stk-exp{font-size:10px;color:#ffcf6a;font-weight:700;margin-top:2px;}
+/* メニュー落ち。カードは消さず在庫数も出したまま＝現物は数え続けて売り切る。バッジは「もう仕入れない」の意味だけ */
+.stk-drop{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background:#4a3340;color:#ffb0c4;font-size:10px;font-weight:700;vertical-align:middle;white-space:nowrap;}
 .stk-forms{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;}
 .stk-sec{background:#0f0f1c;border:1px solid var(--line);border-radius:11px;padding:13px;}
 .stk-sec-t{font-size:13px;font-weight:800;margin-bottom:9px;}
@@ -2978,6 +2980,20 @@ function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 var stockState=null;
 // 名刺＝品名がキャスト名。1行=1キャスト×1フロアで、合算ビューがそのまま「その子の2F/5F/合計」になる
 var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品','名刺'], STOCK_FLOORS=['合算','2F','5F'];
+var STK_SUPPLY_STOP='メニュー落ち'; // 在庫発注マスタ8列目「仕入れ区分」。カテゴリではない＝在庫画面からは消えない
+/* メニュー落ちの品を発注しようとしたときの前置き警告（純関数＝nodeで検証できる）。''＝警告なし。
+   ⚠️禁止はしない（ボス仕様＝席の定員と同じ流儀）。現場の例外を殺さないため。
+   ⚠️在庫に無い品名は判定しない。誤警告が続くと黒服が読まずにOKを押し、警告そのものが死ぬ（席の定員で学んだ）。 */
+function stkSupplyWarn(name,floor){
+  var nm=String(name||'').trim(); if(!nm)return '';
+  // 実フロア(2F/5F)以外は全フロアを見る。合算/共通など見出し表記が系統で割れているため名前で比較しない
+  var byFloor=(floor==='2F'||floor==='5F');
+  var hit=(stockState.list||[]).filter(function(i){return i.name===nm&&(!byFloor||i.floor===floor);});
+  if(!hit.length)return '';
+  if(!hit.some(function(i){return i.supplyStatus===STK_SUPPLY_STOP;}))return '';
+  return '⚠️「'+nm+'」は'+STK_SUPPLY_STOP+'です（今後は仕入れません）。\n\n';
+}
+function stkSupplyBadge(stopped){ return stopped?'<span class="stk-drop">'+STK_SUPPLY_STOP+'</span>':''; }
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
@@ -3146,7 +3162,7 @@ function stkSetMeishi(rowIdx,v){
 function stkRowsCombined(items){
   if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">品目がありません</div>';
   var g={},order=[];
-  items.forEach(function(it){ if(!g[it.name]){g[it.name]={floors:{},total:0};order.push(it.name);} g[it.name].floors[it.floor]=it; g[it.name].total+=it.qty; });
+  items.forEach(function(it){ if(!g[it.name]){g[it.name]={floors:{},total:0,stopped:false};order.push(it.name);} g[it.name].floors[it.floor]=it; g[it.name].total+=it.qty; if(it.supplyStatus===STK_SUPPLY_STOP)g[it.name].stopped=true; });
   order.sort(function(a,b){return a.localeCompare(b,'ja');});
   return '<div class="stk-grid">'+order.map(function(nm){
     var grp=g[nm];
@@ -3155,7 +3171,7 @@ function stkRowsCombined(items){
       if(!it) return '<div class="stk-flc empty">'+f+' <span class="stk-flc-q">—</span></div>';
       return '<div class="stk-flc"><span class="stk-flc-f">'+f+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-flc-q'+(it.qty===0?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn xs" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>';
     }).join('');
-    return '<div class="stk-card sum'+(grp.total===0?' zero':'')+'"><div class="stk-card-top"><div class="stk-card-nm">'+esc(nm)+'</div><span class="stk-sumtot">合計 <b>'+grp.total+'</b></span></div><div class="stk-flrow">'+cells+'</div></div>';
+    return '<div class="stk-card sum'+(grp.total===0?' zero':'')+'"><div class="stk-card-top"><div class="stk-card-nm">'+esc(nm)+stkSupplyBadge(grp.stopped)+'</div><span class="stk-sumtot">合計 <b>'+grp.total+'</b></span></div><div class="stk-flrow">'+cells+'</div></div>';
   }).join('')+'</div>';
 }
 function stkRows(items,showMeta){
@@ -3163,9 +3179,10 @@ function stkRows(items,showMeta){
   return '<div class="stk-grid">'+items.map(function(it){
     var zero=it.qty===0;
     var meta=showMeta?'<span class="stk-floor">['+esc(it.category)+'・'+esc(it.floor)+'] </span>':'';
+    var drop=stkSupplyBadge(it.supplyStatus===STK_SUPPLY_STOP);
     var exp=it.expiryManaged?'<div class="stk-exp">🗓 賞味期限管理</div>':'';
     var purchase=it.expiryManaged?'<button class="stk-mini" onclick="stkPurchaseForm('+it.rowIdx+')">購入登録</button>':'';
-    return '<div class="stk-card'+(zero?' zero':'')+'" id="stk-row-'+it.rowIdx+'"><div class="stk-card-top"><div class="stk-card-nm">'+meta+esc(it.name)+exp+'</div><button class="stk-del" onclick="stkDelete('+it.rowIdx+')">×</button></div><div class="stk-card-qty"><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-qtynum'+(zero?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>'+purchase+'<div id="stk-pf-'+it.rowIdx+'"></div><div class="stk-order"><input id="stk-oq-'+it.rowIdx+'" class="finput" placeholder="発注数"><button class="stk-order-btn" onclick="stkOrder('+it.rowIdx+')">発注依頼</button></div></div>';
+    return '<div class="stk-card'+(zero?' zero':'')+'" id="stk-row-'+it.rowIdx+'"><div class="stk-card-top"><div class="stk-card-nm">'+meta+esc(it.name)+drop+exp+'</div><button class="stk-del" onclick="stkDelete('+it.rowIdx+')">×</button></div><div class="stk-card-qty"><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',-1)">−</button><span class="stk-qtynum'+(zero?' z':'')+'">'+it.qty+'</span><button class="stk-qbtn" onclick="stkQty('+it.rowIdx+',1)">＋</button></div>'+purchase+'<div id="stk-pf-'+it.rowIdx+'"></div><div class="stk-order"><input id="stk-oq-'+it.rowIdx+'" class="finput" placeholder="発注数"><button class="stk-order-btn" onclick="stkOrder('+it.rowIdx+')">発注依頼</button></div></div>';
   }).join('')+'</div>';
 }
 function stkQty(rowIdx,delta){
@@ -3177,7 +3194,7 @@ function stkOrder(rowIdx){
   var it=stockState.list.find(function(i){return i.rowIdx===rowIdx;}); if(!it)return;
   var el=document.getElementById('stk-oq-'+rowIdx); var qty=el?el.value.trim():'';
   if(!qty){alert('数量を入力してください');return;}
-  if(!confirm(it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
+  if(!confirm(stkSupplyWarn(it.name,it.floor)+it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:it.name,floor:it.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok){alert('発注依頼を送信しました');if(el)el.value='';}else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 /* 名刺: 名簿(SSOT)と行を同期する。新入りを追加し、名簿にいない子（退職者）の行は削除する。
@@ -3205,8 +3222,8 @@ function stkAddNew(){
 function stkFreeOrder(){
   var name=((document.getElementById('stk-free-name')||{}).value||'').trim(); var qty=((document.getElementById('stk-free-qty')||{}).value||'').trim();
   if(!name){alert('品名を入力してください');return;} if(!qty){alert('数量を入力してください');return;}
-  if(!confirm(name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   var foFloor=stockState.floor==='合算'?'2F':stockState.floor;
+  if(!confirm(stkSupplyWarn(name,foFloor)+name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:name,floor:foFloor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 function stkDelete(rowIdx){

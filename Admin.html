@@ -150,6 +150,35 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .pinrow .pinlbl{font-size:12px;color:var(--sub);font-weight:800;}
 .pinrow .pinstat{font-size:11px;color:var(--dim);font-weight:700;flex:1;}
 .pinrow .pinstat.set{color:var(--warn);}
+/* 🍶 メニュー。メニュー落ちのカードは沈めるが消さない＝現物は残っており数えて売り切る対象のまま */
+.mn-grid{margin-top:10px;}
+.mn-card{display:flex;flex-direction:column;gap:9px;}
+.mn-card.off{opacity:.72;border-color:#4a3340;}
+.mn-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.mn-lbl{font-size:11px;font-weight:800;color:var(--dim);white-space:nowrap;}
+.mn-qty{font-size:12px;color:var(--sub);font-weight:700;margin-right:auto;}
+.mn-qty b{color:var(--txt);font-size:14px;}
+.mn-nolink{font-size:11px;color:var(--dim);font-weight:700;margin-right:auto;}
+.mn-broken{font-size:11px;color:#ff9db4;font-weight:800;margin-right:auto;}
+.mn-b-off{background:#4a3340;color:#ffb0c4;margin-left:7px;}
+.mn-stop{border-color:#6a4456;color:#ffb0c4;}
+.mn-del{padding:2px 9px;color:var(--dim);}
+/* 価格は参照専用（会計はTRUSTが正）＝主張させない */
+.mn-price{font-size:12px;font-weight:700;color:var(--dim);white-space:nowrap;margin-left:8px;}
+.mn-cat{margin-bottom:14px;}
+.mn-cat>summary{cursor:pointer;font-size:13px;font-weight:800;color:var(--accent);padding:6px 0;display:flex;align-items:center;gap:8px;}
+.mn-cnt{font-size:11px;font-weight:700;color:var(--dim);}
+.mn-cnt.off{color:#ffb0c4;}
+.mn-warn{font-size:11px;font-weight:800;color:var(--warn);}
+.mn-go{border-color:var(--okline);color:var(--ok);}
+.mn-bulk-ok{margin:10px 0 6px;padding:8px 10px;border-radius:8px;background:var(--okbg);border:1px solid var(--okline);color:var(--ok);font-size:12px;font-weight:700;}
+.mn-bulk-err{margin:10px 0;padding:8px 10px;border-radius:8px;background:#2a1016;border:1px solid #6a4456;color:#ffb0c4;font-size:12px;font-weight:700;line-height:1.7;}
+.mn-pv{display:flex;align-items:center;gap:10px;padding:5px 8px;border-bottom:1px solid var(--line);font-size:12px;}
+.mn-pv-c{color:var(--accent);font-weight:800;min-width:80px;font-size:11px;}
+.mn-pv-n{flex:1;color:var(--txt);font-weight:700;}
+.mn-sug{font-size:11px;color:var(--warn);font-weight:700;white-space:nowrap;}
+.mn-sug b{color:var(--warn);}
+.mn-sug.ex{color:var(--ok);}
 </style>
 
 <div class="wrap">
@@ -164,6 +193,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab" data-t="shift" onclick="switchTab('shift')">🗓 シフト</button>
     <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
     <button class="tab" data-t="checklist" onclick="switchTab('checklist')">✅ チェック</button>
+    <button class="tab" data-t="menu" onclick="switchTab('menu')">🍶 メニュー</button>
     <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
     <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
     <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
@@ -175,6 +205,63 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
   <div class="body" id="body"><div class="empty">読み込み中…</div></div>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- 🍶 メニューの初回シード。「ボトルメニュー20260302改.pdf」(全8ページ・50品)から起こしたもの。
+     PDFと機械照合済み＝品数50・合計¥4,203,000が両側一致・取りこぼしと余分ゼロ。
+     ⚠️これは初回登録の下書き。メニューを改定したらこの塊は古くなる＝画面のテキスト欄に新しいTSVを貼るのが正しい運用。
+     形式: カテゴリ⇥メニュー品名⇥価格 -->
+<script type="text/plain" id="mn-seed">
+WHISKEY	山崎	¥35,000
+WHISKEY	山崎12年	¥60,000
+WHISKEY	山崎18年	¥200,000
+WHISKEY	白州	¥35,000
+WHISKEY	白州12年	¥60,000
+WHISKEY	響	¥40,000
+WHISKEY	響21年	¥200,000
+WHISKEY	知多	¥35,000
+WHISKEY	シーバスリーガル12年	¥20,000
+WHISKEY	シーバスリーガル ミズナラ	¥20,000
+WHISKEY	バランタイン17年	¥30,000
+WHISKEY	ロイヤルハウスホールド	¥100,000
+WHISKEY	マッカランダブルカスク12年	¥40,000
+WHISKEY	マッカラン18年	¥130,000
+WHISKEY	ジャックダニエル	¥13,000
+WHISKEY	ブラントン	¥35,000
+焼酎	麦 二階堂吉四六	¥15,000
+焼酎	米 鳥飼 吟香	¥12,000
+焼酎	米 白岳しろ	¥10,000
+焼酎	芋 魔王	¥28,000
+焼酎	芋 赤兎馬	¥13,000
+焼酎	芋 黒霧島	¥12,000
+焼酎	芋 赤霧島	¥15,000
+CHAMPAGNE	ヴーヴクリコ イエローラベル	¥30,000
+CHAMPAGNE	ヴーヴクリコ ローズラベル	¥35,000
+CHAMPAGNE	ヴーヴクリコ ラ・グランダム	¥70,000
+CHAMPAGNE	ドンペリニヨン	¥90,000
+CHAMPAGNE	ドンペリニヨン ロゼ	¥150,000
+CHAMPAGNE	ドンペリニヨン P2	¥200,000
+CHAMPAGNE	ドンペリニヨン ラベイ	¥350,000
+CHAMPAGNE	PJグラン・ブリュット	¥30,000
+CHAMPAGNE	PJブラゾンロゼ	¥35,000
+CHAMPAGNE	PJブラン・ド・ブラン	¥40,000
+CHAMPAGNE	PJベルエポック	¥80,000
+CHAMPAGNE	PJベルエポック フロレサンス	¥110,000
+CHAMPAGNE	PJベルエポック ロゼ	¥150,000
+CHAMPAGNE	PJベルエポック ブラン・ド・ブラン	¥300,000
+CHAMPAGNE	クリュッグ グランド・キュヴェ	¥100,000
+CHAMPAGNE	クリュッグ ロゼ	¥150,000
+CHAMPAGNE	ルイ・ロデレール クリスタル	¥120,000
+CHAMPAGNE	サロン	¥500,000
+WINE赤	ラポストール カベルネ・ソーヴィニヨン	¥15,000
+WINE赤	カレラ ジェンセン レガシー キュヴェ ピノ ノワール23	¥25,000
+WINE赤	ロバートモンダヴィ	¥40,000
+WINE赤	バローロ ブッシア	¥60,000
+WINE赤	オーバーチュア	¥100,000
+WINE赤	オーパスワン	¥170,000
+WINE白	ウィリアム・フェーブル シャブリ シャルドネ	¥15,000
+WINE白	ガーギッチ ヒルズ シャルドネ ナパ ヴァレー22	¥30,000
+WINE白	ムルソー ドメーヌ フィリップ シャヴィ	¥50,000
+</script>
 
 <script>
 var GAS_URL='<?= GAS_URL ?>';
@@ -286,7 +373,7 @@ function pollAdminAuth(token){
 function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
 function render(){
   document.getElementById('tabs').style.display='flex';
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,checklist:renderChecklist,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -834,6 +921,149 @@ function saveChecklist(){
   var op=chk.opening.filter(function(x){return String(x.label||'').trim();});
   var cl=chk.closing.filter(function(x){return String(x.label||'').trim();});
   api('saveChecklistConfig',{config:{opening:op,closing:cl}}).then(function(r){ res(r,'チェックリストを保存しました'); });
+}
+
+/* ===== 🍶 メニュー（店舗メニューの登録／メニュー落ち→在庫の仕入れ区分へ伝播） =====
+   対象はボトルのみ。割り物/チャーム/果物/消耗品/名刺はメニューに一生載らないが仕入れは止められない＝巻き込まない。
+   ⚠️「メニューに無いボトル」は炙り出すだけで自動では止めない。登録が終わる前に自動適用すると全ボトルが一斉に停止する。
+      止めるのは管理者が押したときだけ。 */
+var MENU_OFF='メニュー落ち', MENU_ON='掲載中';
+var menuBoard=null;
+function renderMenu(){
+  if(!menuBoard){ loading(); api('getMenuBoard').then(function(r){ if(!res(r))return; menuBoard=r.board; renderMenu(); }).catch(function(e){ setBody('<div class="empty">読み込みに失敗: '+esc(e&&e.message||e)+'</div>'); }); return; }
+  var b=menuBoard;
+  var opts=function(sel){ return '<option value="">（紐づけなし）</option>'+b.stockNames.map(function(n){return '<option'+(n===sel?' selected':'')+'>'+esc(n)+'</option>';}).join(''); };
+
+  // --- メニュー本体（カテゴリ別に折る。50品をフラットに並べると探せない）---
+  var mnCard=function(m){
+    var off=m.status===MENU_OFF;
+    var qty=m.linkBroken?'<span class="mn-broken">⚠️ 在庫に「'+esc(m.stockName)+'」がありません</span>'
+           :(m.stockName?'<span class="mn-qty">在庫 <b>'+(m.qty||0)+'</b> 本</span>':'<span class="mn-nolink">未紐づけ＝仕入れ判定なし</span>');
+    // 価格は参照専用（会計はTRUSTが正）＝そう分かる出し方にする
+    var price=m.price?'<span class="mn-price" title="参照用。会計はTRUSTが正です">¥'+Number(m.price).toLocaleString()+'</span>':'';
+    return '<div class="card mn-card'+(off?' off':'')+'">'
+      +'<div class="card-top"><div class="card-nm">'+esc(m.name)+(off?'<span class="badge mn-b-off">'+MENU_OFF+'</span>':'')+'</div>'
+      +price+'<button class="btn mn-del" onclick="menuDelete('+m.rowIdx+',\''+jstr(m.name)+'\')">×</button></div>'
+      +'<div class="mn-row"><span class="mn-lbl">在庫品名</span><select class="finput grow" onchange="menuLink('+m.rowIdx+',this.value)">'+opts(m.stockName)+'</select></div>'
+      +'<div class="mn-row">'+qty
+      +'<button class="btn '+(off?'':'mn-stop')+'" onclick="menuStatus('+m.rowIdx+',\''+(off?MENU_ON:MENU_OFF)+'\',\''+jstr(m.name)+'\')">'
+      +(off?'↩︎ メニューに戻す':'⏸ メニュー落ちにする')+'</button></div>'
+      +'</div>';
+  };
+  var byCat={},catOrder=[];
+  b.menu.forEach(function(m){ var c=m.category||'（カテゴリなし）'; if(!byCat[c]){byCat[c]=[];catOrder.push(c);} byCat[c].push(m); });
+  var rows=b.menu.length? catOrder.map(function(c){
+    var items=byCat[c], nOff=items.filter(function(m){return m.status===MENU_OFF;}).length;
+    var noLink=items.filter(function(m){return !m.stockName;}).length;
+    return '<details class="mn-cat" open><summary>'+esc(c)+' <span class="mn-cnt">'+items.length+'品</span>'
+      +(noLink?'<span class="mn-warn">未紐づけ '+noLink+'</span>':'')
+      +(nOff?'<span class="mn-cnt off">メニュー落ち '+nOff+'</span>':'')
+      +'</summary><div class="grid mn-grid">'+items.map(mnCard).join('')+'</div></details>';
+  }).join('') : '<div class="empty">まだメニューが登録されていません。上の「一括登録」からPDFの内容を入れられます。</div>';
+
+  // --- メニュー外の炙り出し＝この機能の目玉 ---
+  var off=b.offMenu;
+  var offHtml=off.length? off.map(function(o){
+    return '<div class="card mn-card'+(o.stopped?' off':'')+'">'
+      +'<div class="card-top"><div class="card-nm">'+esc(o.name)+(o.stopped?'<span class="badge mn-b-off">'+MENU_OFF+'</span>':'')+'</div>'
+      +'<span class="mn-qty">在庫 <b>'+o.qty+'</b> 本</span></div>'
+      +'<div class="mn-row">'
+      +'<button class="btn" onclick="menuAddFromStock(\''+jstr(o.name)+'\')">＋ メニューに追加</button>'
+      +'<button class="btn '+(o.stopped?'':'mn-stop')+'" onclick="menuStockSupply(\''+jstr(o.name)+'\',\''+(o.stopped?'':MENU_OFF)+'\')">'
+      +(o.stopped?'↩︎ 仕入れを戻す':'⏸ 今後仕入れない')+'</button></div>'
+      +'</div>';
+  }).join('') : '<div class="empty">メニュー外のボトル在庫はありません（全部メニューに載っています）</div>';
+
+  var total=b.menu.length, noLinkAll=b.menu.filter(function(m){return !m.stockName;}).length;
+  setBody(
+    '<details class="sec" id="mn-bulk-sec"'+(total?'':' open')+'><summary class="sec-t" style="cursor:pointer">📋 一括登録（メニュー改定のたびにここ）</summary>'
+    +'<div class="hint">1行1品の <b>カテゴリ⇥メニュー品名⇥価格</b> を貼り付けます（⇥＝タブ）。'
+    +'<b>追加のみ</b>＝既にある品名は飛ばします。既存行は書き換えません。<br>'
+    +'在庫と<b>品名が完全に一致するものだけ自動で紐づけ</b>ます。残りは未紐づけで作るので、下のカードで選んでください。</div>'
+    +'<div class="addbar" style="margin-bottom:8px"><button class="btn" onclick="menuLoadSeed()">📄 ボトルメニュー20260302改 を読み込む（50品）</button>'
+    +'<button class="btn" onclick="menuBulkPreview()">🔍 プレビュー</button>'
+    +'<button class="btn mn-go" onclick="menuBulkImport()">⬆️ 登録する</button></div>'
+    +'<textarea class="finput" id="mn-bulk" rows="8" style="width:100%;font-family:ui-monospace,monospace;font-size:12px" placeholder="CHAMPAGNE&#9;サロン&#9;¥500,000"></textarea>'
+    +'<div id="mn-bulk-res"></div></details>'
+    +'<div class="sec"><div class="sec-t">🍶 店舗メニュー（ボトル） <span class="mn-cnt">'+total+'品</span>'
+    +(noLinkAll?'<span class="mn-warn">未紐づけ '+noLinkAll+'</span>':'')+'</div>'
+    +'<div class="hint">メニュー落ちにすると、紐づく在庫の<b>2F/5F両方</b>が「今後仕入れない」になります。'
+    +'在庫カードは消えません＝<b>現物は数え続けて売り切れます</b>。黒服が発注しようとすると警告が出ますが、禁止はしません。<br>'
+    +'価格は<b>参照専用</b>です。会計はTRUSTが正＝ここの数字で請求はしません。</div>'
+    +'<div class="addbar"><input class="finput grow" id="mn-new" placeholder="メニュー品名（例: 獺祭 純米大吟醸45）"><button class="btn" onclick="menuAdd()">＋ 1件追加</button></div>'
+    +rows+'</div>'
+    +'<div class="sec"><div class="sec-t">⚠️ メニューに載っていないボトル在庫（'+off.length+'件）</div>'
+    +'<div class="hint">メニューに紐づいていないボトルです。<b>自動では止めません</b>（登録が終わる前に自動で止めると全部のボトルが一斉に停止するため）。'
+    +'メニューに載せるか、今後仕入れないかを選んでください。</div>'
+    +'<div class="grid mn-grid">'+offHtml+'</div></div>'
+  );
+}
+function menuReload(){ menuBoard=null; renderMenu(); }
+/* 一括登録。⚠️プレビューを挟むのは、50品まとめて間違えると目視では捕まらないため。 */
+function menuLoadSeed(){
+  var s=document.getElementById('mn-seed');
+  if(!s){toast('シードが見つかりません',true);return;}
+  document.getElementById('mn-bulk').value=String(s.textContent||'').replace(/^\n/,'');
+  menuBulkPreview();
+}
+function menuBulkPreview(){
+  var t=(document.getElementById('mn-bulk')||{}).value||'';
+  if(!t.trim()){toast('貼り付けてください',true);return;}
+  api('previewMenuBulk',{text:t}).then(function(r){
+    var box=document.getElementById('mn-bulk-res');
+    if(!r||r.ok===false){ box.innerHTML='<div class="mn-bulk-err">'+esc(r&&r.error||'失敗')+'</div>'; return; }
+    if(r.errors&&r.errors.length){ box.innerHTML='<div class="mn-bulk-err">⚠️ 直してください（この状態では1件も登録しません）<br>'+r.errors.map(esc).join('<br>')+'</div>'; return; }
+    var lines=r.add.map(function(a){
+      // 完全一致だけ自動。似ているだけのものは出さない＝間違った候補は候補なしより悪い
+      var sug=a.exact?'<span class="mn-sug ex">✅ 在庫「'+esc(a.suggest)+'」に自動で紐づけ</span>'
+                     :'<span class="mn-nolink">未紐づけ（あとで選ぶ）</span>';
+      return '<div class="mn-pv"><span class="mn-pv-c">'+esc(a.category)+'</span><span class="mn-pv-n">'+esc(a.name)+'</span>'
+        +'<span class="mn-price">'+(a.price?'¥'+Number(a.price).toLocaleString():'—')+'</span>'+sug+'</div>';
+    }).join('');
+    box.innerHTML='<div class="mn-bulk-ok">✅ '+r.add.length+'品を新規登録します'
+      +(r.autoLink?(' ／ うち <b>'+r.autoLink+'品</b>は在庫と品名が完全一致するので自動で紐づけます'):'')
+      +(r.skip.length?(' ／ '+r.skip.length+'品は登録済みなので飛ばします（'+r.skip.slice(0,3).map(esc).join('、')+(r.skip.length>3?'…':'')+'）'):'')
+      +'</div>'
+      +'<div class="hint" style="margin:6px 0">残りは<b>未紐づけ</b>で作り、登録後にプルダウンで選んでもらいます。'
+      +'似ているだけの候補は<b>出しません</b>——「山崎」と「山崎12年」、「ドンペリニヨン」と「ドンペリニヨン ロゼ」を機械は92%で同じだと言うためです。年数やロゼが付いたら別の酒なので、ここは人が決めます。</div>'
+      +lines;
+  }).catch(function(e){toast('プレビューに失敗: '+(e&&e.message||e),true);});
+}
+function menuBulkImport(){
+  var t=(document.getElementById('mn-bulk')||{}).value||'';
+  if(!t.trim()){toast('貼り付けてください',true);return;}
+  if(!confirm('メニューを一括登録します。\n\n・追加のみです（既にある品名は飛ばします）\n・既存行は書き換えません\n・紐づけは空で作られます（登録後にカードで確定してください）\n\nよろしいですか？'))return;
+  api('importMenuBulk',{text:t}).then(function(r){
+    if(!res(r,null))return;
+    toast('登録しました：新規'+r.created+'品'+(r.skipped?(' / 既存'+r.skipped+'品は飛ばしました'):''));
+    document.getElementById('mn-bulk').value='';
+    menuReload();
+  }).catch(function(e){toast('登録に失敗: '+(e&&e.message||e),true);});
+}
+function menuAdd(){
+  var el=document.getElementById('mn-new'), nm=(el.value||'').trim();
+  if(!nm){toast('メニュー品名を入力してください',true);return;}
+  api('addMenuItem',{name:nm}).then(function(r){ if(res(r,'追加しました'))menuReload(); }).catch(function(e){toast('追加に失敗: '+(e&&e.message||e),true);});
+}
+function menuAddFromStock(nm){
+  api('addMenuItem',{name:nm,stockName:nm}).then(function(r){ if(res(r,'メニューに追加しました'))menuReload(); }).catch(function(e){toast('追加に失敗: '+(e&&e.message||e),true);});
+}
+function menuLink(rowIdx,stockName){
+  api('setMenuItemLink',{rowIdx:rowIdx,stockName:stockName}).then(function(r){ if(res(r,stockName?('「'+stockName+'」に紐づけました'):'紐づけを外しました'))menuReload(); }).catch(function(e){toast('失敗: '+(e&&e.message||e),true);});
+}
+function menuStatus(rowIdx,status,nm){
+  if(status===MENU_OFF && !confirm('「'+nm+'」をメニュー落ちにします。\n\n・2F/5F両方の在庫が「今後仕入れない」になります\n・在庫は残ったままです（数えられるし売り切れます）\n・黒服が発注しようとすると警告が出ます\n\nよろしいですか？'))return;
+  api('setMenuItemStatus',{rowIdx:rowIdx,status:status}).then(function(r){
+    if(res(r,status===MENU_OFF?('メニュー落ちにしました（在庫'+(r.syncedRows||0)+'行に反映）'):'メニューに戻しました'))menuReload();
+  }).catch(function(e){toast('失敗: '+(e&&e.message||e),true);});
+}
+function menuStockSupply(nm,status){
+  if(status===MENU_OFF && !confirm('「'+nm+'」を今後仕入れないようにします。\n\n・2F/5F両方が対象です\n・在庫は残ったままです（数えられるし売り切れます）\n\nよろしいですか？'))return;
+  api('setStockSupply',{stockName:nm,status:status}).then(function(r){ if(res(r,status?'仕入れを止めました':'仕入れを戻しました'))menuReload(); }).catch(function(e){toast('失敗: '+(e&&e.message||e),true);});
+}
+function menuDelete(rowIdx,nm){
+  if(!confirm('「'+nm+'」をメニューから削除しますか？\n\n※在庫は消えません。紐づいていた在庫の「仕入れ停止」は解除されます。'))return;
+  api('deleteMenuItem',{rowIdx:rowIdx}).then(function(r){ if(res(r,'削除しました'))menuReload(); }).catch(function(e){toast('失敗: '+(e&&e.message||e),true);});
 }
 
 /* ===== 💰 給与・ランキング ===== */
@@ -1810,7 +2040,108 @@ function MOCK(){
     {name:'田中',role:'ドライバー',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false}
   ]};
 }
+/* 🍶 メニューのモック。ローカル(IS_GAS=false)で実際に押して動くよう状態を持つ＝GASを叩かずに方向を固めるため。
+   ⚠️これはUIの確認用でしかない。本番の通信経路は通していない＝最終確認はボスに押してもらうしかない。 */
+function mnMock(){
+  if(!window.__mnS) window.__mnS={
+    // 実在庫を模す。⚠️ノンビンテージ(山崎/響)と年数物(山崎12年/響21年)は別商品として両方ある（ボス談）
+    stock:[{name:'山崎',qty:4,stopped:false},{name:'山崎12年',qty:5,stopped:false},{name:'山崎18年',qty:1,stopped:false},
+           {name:'響',qty:1,stopped:false},{name:'響21年',qty:2,stopped:false},{name:'白州',qty:3,stopped:false},
+           {name:'魔王',qty:5,stopped:false},{name:'黒霧島',qty:8,stopped:false},{name:'ドンペリニヨン',qty:2,stopped:false},
+           {name:'サロン',qty:1,stopped:false},{name:'白角',qty:3,stopped:false}],
+    menu:[],
+    seq:1
+  };
+  return window.__mnS;
+}
+/* 貼り付けTSVのパース。⚠️本番は parseMenuBulk_(コード.js)。ここはローカル確認用の写しでしかない */
+function mnParse(text){
+  var rows=[],errors=[],seen={};
+  String(text||'').split(/\r?\n/).forEach(function(line,i){
+    var raw=line.trim(); if(!raw||/^#/.test(raw))return;
+    var c=raw.split('\t');
+    if(c.length<2){errors.push((i+1)+'行目: 列が足りません（カテゴリ⇥品名⇥価格）: '+raw);return;}
+    var name=String(c[1]||'').trim();
+    if(!name){errors.push((i+1)+'行目: 品名が空です: '+raw);return;}
+    if(seen[name]){errors.push('貼り付けた中で品名が重複: '+name);return;}
+    seen[name]=1;
+    rows.push({category:String(c[0]||'').trim(),name:name,price:Number(String(c[2]||'').replace(/[¥￥,\s　]/g,''))||0});
+  });
+  return {rows:rows,errors:errors};
+}
+function mnNorm(s){return String(s||'').normalize('NFKC').toLowerCase().replace(/[\s　・,、。･･()（）「」【】\-ー・_/／\\]/g,'');}
+/* 紐づけは**完全一致のみ**。本番は menuLinkCandidate_(コード.js) ＝ここはローカル確認用の写し。
+   ⚠️あいまい照合はこのドメインでは使えない。酒の品名は「ベース＋バリエーション」で埋まっていて、
+      包含ボーナスが 山崎→山崎12年 / ドンペリニヨン ロゼ→ドンペリニヨン を軒並み92%と言う。
+      年数が無いものはノンビンテージとして別に存在する（ボス談）＝どれも別の酒。 */
+function mnKey(name,cat){ var s=String(name||'').trim(); if(String(cat||'').trim()==='焼酎')s=s.replace(/^[麦米芋]\s+/,''); return mnNorm(s); }
+function mnCandidate(name,cat,stockNames){
+  var key=mnKey(name,cat); if(!key)return {name:'',score:0,exact:false};
+  var ex=stockNames.filter(function(n){return mnNorm(n)===key;});
+  return ex.length===1?{name:ex[0],score:100,exact:true}:{name:'',score:0,exact:false};
+}
+function mnFind(rowIdx){ return mnMock().menu.filter(function(x){return x.rowIdx===Number(rowIdx);})[0]; }
+function mnSetSupply(nm,st){ mnMock().stock.forEach(function(s){ if(s.name===nm)s.stopped=(st==='メニュー落ち'); }); }
+function mnBoard(){
+  var S=mnMock(), by={}, linked={};
+  S.stock.forEach(function(s){by[s.name]=s;});
+  S.menu.forEach(function(m){ if(m.stockName)linked[m.stockName]=m; });
+  return {
+    menu:S.menu.map(function(m){ var g=by[m.stockName];
+      return {rowIdx:m.rowIdx,name:m.name,category:m.category,price:m.price,stockName:m.stockName,status:m.status,
+              qty:g?g.qty:null,stopped:g?g.stopped:false,linkBroken:!!m.stockName&&!g}; }),
+    offMenu:S.stock.filter(function(s){return !linked[s.name];}).map(function(s){return {name:s.name,qty:s.qty,stopped:s.stopped};}),
+    stockNames:S.stock.map(function(s){return s.name;})
+  };
+}
 function MOCKAPI(action,body){
+  if(action==='getMenuBoard')return {ok:true,board:mnBoard()};
+  if(action==='previewMenuBulk'){
+    var pp=mnParse(body.text), ex={}, S3=mnMock();
+    S3.menu.forEach(function(m){ex[m.name]=1;});
+    var add=[],skip=[],names=S3.stock.map(function(s){return s.name;});
+    pp.rows.forEach(function(r){
+      if(ex[r.name]){skip.push(r.name);return;}
+      var c=mnCandidate(r.name,r.category,names);
+      add.push({category:r.category,name:r.name,price:r.price,suggest:c.name,score:c.score,exact:c.exact});
+    });
+    return {ok:true,add:add,skip:skip,errors:pp.errors,total:pp.rows.length,autoLink:add.filter(function(a){return a.exact;}).length};
+  }
+  if(action==='importMenuBulk'){
+    var pv=MOCKAPI('previewMenuBulk',body);
+    if(pv.errors.length)return {ok:false,error:pv.errors.join('\n')};
+    var S4=mnMock();
+    pv.add.forEach(function(a){ S4.menu.push({rowIdx:++S4.seq,name:a.name,category:a.category,price:a.price,stockName:a.exact?a.suggest:'',status:'掲載中'}); });
+    return {ok:true,created:pv.add.length,skipped:pv.skip.length,autoLinked:pv.autoLink};
+  }
+  if(action==='addMenuItem'){
+    var S=mnMock();
+    if(!String(body.name||'').trim())return {ok:false,error:'メニュー品名が空です'};
+    if(S.menu.some(function(m){return m.name===body.name;}))return {ok:false,error:'同じメニュー品名が既にあります: '+body.name};
+    S.menu.push({rowIdx:++S.seq,name:body.name,category:body.category||'',price:body.price||0,stockName:body.stockName||'',status:'掲載中'});
+    if(body.stockName)mnSetSupply(body.stockName,'');
+    return {ok:true,name:body.name};
+  }
+  if(action==='setMenuItemStatus'){
+    var m1=mnFind(body.rowIdx); if(!m1)return {ok:false,error:'空行です'};
+    m1.status=body.status; mnSetSupply(m1.stockName,body.status);
+    return {ok:true,status:body.status,syncedRows:m1.stockName?2:0};
+  }
+  if(action==='setMenuItemLink'){
+    var m2=mnFind(body.rowIdx); if(!m2)return {ok:false,error:'空行です'};
+    if(m2.stockName&&m2.stockName!==body.stockName)mnSetSupply(m2.stockName,'');
+    m2.stockName=body.stockName||'';
+    if(m2.stockName)mnSetSupply(m2.stockName,m2.status);
+    return {ok:true,stockName:m2.stockName};
+  }
+  if(action==='deleteMenuItem'){
+    var S2=mnMock(), i=-1;
+    S2.menu.forEach(function(x,j){ if(x.rowIdx===Number(body.rowIdx))i=j; });
+    if(i<0)return {ok:false,error:'空行です'};
+    if(S2.menu[i].stockName)mnSetSupply(S2.menu[i].stockName,'');
+    S2.menu.splice(i,1); return {ok:true};
+  }
+  if(action==='setStockSupply'){ mnSetSupply(body.stockName,body.status); return {ok:true,syncedRows:2}; }
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
   if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};

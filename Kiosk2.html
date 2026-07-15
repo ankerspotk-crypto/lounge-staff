@@ -2102,6 +2102,20 @@ function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
 var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], STOCK_FLOORS=['共通','5F','2F'];
+var STK_SUPPLY_STOP='メニュー落ち'; // 在庫発注マスタ8列目「仕入れ区分」。カテゴリではない＝在庫画面からは消えない
+/* メニュー落ちの品を発注しようとしたときの前置き警告（純関数＝nodeで検証できる）。''＝警告なし。
+   ⚠️禁止はしない（ボス仕様＝席の定員と同じ流儀）。現場の例外を殺さないため。
+   ⚠️在庫に無い品名は判定しない。誤警告が続くと黒服が読まずにOKを押し、警告そのものが死ぬ（席の定員で学んだ）。
+   ⚠️gunshi.html と同一実装。片方だけ直すと片フロアだけ警告が出ない（2系統併存の既知問題）＝直すときは両方。 */
+function stkSupplyWarn(name,floor){
+  var nm=String(name||'').trim(); if(!nm)return '';
+  // 実フロア(2F/5F)以外は全フロアを見る。合算/共通など見出し表記が系統で割れているため名前で比較しない
+  var byFloor=(floor==='2F'||floor==='5F');
+  var hit=(stockState.list||[]).filter(function(i){return i.name===nm&&(!byFloor||i.floor===floor);});
+  if(!hit.length)return '';
+  if(!hit.some(function(i){return i.supplyStatus===STK_SUPPLY_STOP;}))return '';
+  return '⚠️「'+nm+'」は'+STK_SUPPLY_STOP+'です（今後は仕入れません）。\n\n';
+}
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
@@ -2190,7 +2204,7 @@ function stkOrder(rowIdx){
   var it=stockState.list.find(function(i){return i.rowIdx===rowIdx;}); if(!it)return;
   var el=document.getElementById('stk-oq-'+rowIdx); var qty=el?el.value.trim():'';
   if(!qty){alert('数量を入力してください');return;}
-  if(!confirm(it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
+  if(!confirm(stkSupplyWarn(it.name,it.floor)+it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:it.name,floor:it.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok){alert('発注依頼を送信しました');if(el)el.value='';}else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 function stkAddNew(){
@@ -2201,7 +2215,7 @@ function stkAddNew(){
 function stkFreeOrder(){
   var name=((document.getElementById('stk-free-name')||{}).value||'').trim(); var qty=((document.getElementById('stk-free-qty')||{}).value||'').trim();
   if(!name){alert('品名を入力してください');return;} if(!qty){alert('数量を入力してください');return;}
-  if(!confirm(name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
+  if(!confirm(stkSupplyWarn(name,stockState.floor)+name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:name,floor:stockState.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 function stkDelete(rowIdx){
