@@ -138,25 +138,22 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .hall-map .castchip .cn{overflow:hidden;text-overflow:ellipsis;}
 .hall-map .castchip .tm{font-size:9px;flex:none;}
 .hall-map .castchip .role{font-size:8px;padding:0 3px;flex:none;}
-/* 「空席」はリストでは高さ42px固定＝マップの小セルを突き破るので自動高さに */
+/* 「空席」はリストでは高さ42px固定＝マップのセルを突き破るので自動高さに */
 .hall-map .seat .empty{height:auto;}
-/* 小セルは席名と予約タグを1行に収める（折り返すと2行になって溢れる） */
-.hall-map .seatpos.sm .st{flex-wrap:nowrap;}
-.hall-map .seatpos.sm .snm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* 小セルの「予約」タグは席名を押し出して切るので出さない（青い枠＋客名で予約と分かる）。ボックスには出る */
-.hall-map .seatpos.sm .rsv-tag{display:none;}
-/* 小セルの隅バッジ（🔴超過 / ⚠担当不在）は席名の上に被って名前を潰すので出さない。
-   セルの色そのものが状態を示す（赤=超過・橙=まもなく・黄=担当不在）＝マップは色で読む。詳細はタップ。 */
-.hall-map .seatpos.sm .cnr{display:none;}
-/* カウンター等の小セルは「席名＋客名＋色」だけ。中身を詰め込むと文字が溢れて逆に読めない */
-.hall-map .seatpos.sm>.seat{padding:3px 4px;}
-.hall-map .seatpos.sm>.seat>*:not(.st):not(.cnr):not(.cust):not(.empty){display:none;}
-.hall-map .seatpos.sm>.seat .pax{display:none;}
-.hall-map .seatpos.sm>.seat .empty{font-size:9px;}
-.decor{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:9px;color:var(--dim);pointer-events:none;overflow:hidden;}
-/* バーは縦長なので文字も縦書きにする（横書きだと20px幅からはみ出す） */
-.decor-bar{background:rgba(120,160,210,.10);border:1px solid var(--line2);writing-mode:vertical-rl;letter-spacing:2px;}
-.decor-in{border:1px dashed var(--line2);border-radius:4px;letter-spacing:1px;}
+/* ---- 小セル(カウンター等)専用の2段表示 ----
+   1段目=席名＋残り時間／2段目=アバター(キャスト色+頭文字)＋客名。41pxの枠に「席・時間・誰・客」を収める */
+.hall-map .seat.mini{display:flex;flex-direction:column;justify-content:center;gap:2px;padding:3px 5px;}
+.mini-r1{display:flex;align-items:center;justify-content:space-between;gap:3px;line-height:1.1;min-width:0;}
+.mini-r1 b{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mini-t{font-size:9px;font-weight:800;color:#4dcc84;flex:none;}
+.mini-t.over{color:#ff8a8a;} .mini-t.warn{color:#e6b23a;} .mini-t.rsv{color:#9dc8ff;}
+.mini-r2{display:flex;align-items:center;gap:3px;line-height:1.1;min-width:0;}
+.mini-av{width:14px;height:14px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:800;color:#0b0b12;font-style:normal;}
+.mini-c{font-size:10px;color:#cfe0f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mini-c.rsv{color:#bcd8ff;}
+.mini-e{font-size:10px;color:var(--dim);}
+.mini-p{font-size:9px;font-weight:800;color:var(--sub);flex:none;}
 /* 待機・黒服の帯（座標を持たない＝物理席ではない）。1フロア約300pxなので1列で積む */
 .map-side{display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px;}
 .hall-vtgl{display:inline-flex;gap:3px;margin-left:8px;}
@@ -1348,29 +1345,73 @@ function renderOpeningPre(){
  */
 /* 各フロアのキャンバス（左上原点）。2F・5Fを横に並べて同時表示するので1フロア≒300px＝ほぼ等倍。 */
 var MAP_W=320, MAP_H=360;
+/* 位置はボスの確定どおり。⚠️幅だけ44→96に広げてある＝41pxの枠には情報が入らず、
+ * カウンターの左は空き（目印を消して更に空いた）ためボックス列と同じ幅まで太らせた。
+ * 5Fはカウ6がカウ5の隣（角）なので、カウ5を96にするぶんカウ6を右へ寄せて共存させている。 */
 var SEAT_POS={
-  /* 2F: 入口=左上／カウ1〜4が縦一列／ボックスは下段（B3だけ左下） */
-  '2F-C1':{x:160,y:0,  w:44,h:44}, '2F-C2':{x:160,y:48, w:44,h:44},
-  '2F-C3':{x:160,y:96, w:44,h:44}, '2F-C4':{x:160,y:148,w:44,h:44},
-  '2F-B1':{x:160,y:204,w:96,h:58}, '2F-B2':{x:160,y:288,w:96,h:72},
+  /* 2F: カウ1〜4が縦一列／ボックスは下段（B3だけ左下） */
+  '2F-C1':{x:160,y:0,  w:96,h:44}, '2F-C2':{x:160,y:48, w:96,h:44},
+  '2F-C3':{x:160,y:96, w:96,h:44}, '2F-C4':{x:160,y:148,w:96,h:44},
+  '2F-B1':{x:160,y:204,w:96,h:80}, '2F-B2':{x:160,y:288,w:96,h:72},
   '2F-B3':{x:20, y:312,w:96,h:48},
-  /* 5F: 入口=左上／カウ1〜5が縦一列＋カウ6がカウ5の隣（角）／ボックスは下段に横並び */
-  '5F-C1':{x:140,y:20, w:44,h:44}, '5F-C2':{x:140,y:72, w:44,h:44},
-  '5F-C3':{x:140,y:128,w:44,h:44}, '5F-C4':{x:140,y:180,w:44,h:44},
-  '5F-C5':{x:140,y:232,w:44,h:44}, '5F-C6':{x:196,y:232,w:44,h:44},
+  /* 5F: カウ1〜5が縦一列＋カウ6がカウ5の隣（角）／ボックスは下段に横並び */
+  '5F-C1':{x:140,y:20, w:96,h:44}, '5F-C2':{x:140,y:72, w:96,h:44},
+  '5F-C3':{x:140,y:128,w:96,h:44}, '5F-C4':{x:140,y:180,w:96,h:44},
+  '5F-C5':{x:140,y:232,w:96,h:44}, '5F-C6':{x:244,y:232,w:76,h:44},
   '5F-B1':{x:32, y:296,w:120,h:64},'5F-B2':{x:180,y:296,w:120,h:64}
 };
-/* 目印（席ではない・タップ不可の飾り）。
- * ⚠️バーは縦＝カウンターが縦一列になったため。ボスの確定JSONでは横のままだったが、
- *   それは編集UIに回転機能が無かったせいで、カウ1と入口を貫いていた＝配置意図ではない。
- *   席の左に置いてある。左右が逆／不要なら here を直すだけでよい（席の座標には影響しない）。 */
-var FLOOR_DECOR={
-  '2F':[{nm:'バー',k:'bar',x:136,y:0, w:20,h:192},{nm:'入口',k:'in',x:24,y:8,w:56,h:36}],
-  '5F':[{nm:'バー',k:'bar',x:116,y:20,w:20,h:256},{nm:'入口',k:'in',x:0, y:0,w:56,h:36}]
-};
+/* 目印（入口・バー）はボス指示で廃止＝席だけを出す。 */
 function mapBox_(p){
   return 'left:'+(p.x/MAP_W*100).toFixed(3)+'%;top:'+(p.y/MAP_H*100).toFixed(3)+'%;'
        + 'width:'+(p.w/MAP_W*100).toFixed(3)+'%;height:'+(p.h/MAP_H*100).toFixed(3)+'%;';
+}
+/* ---- マップの小セル（カウンター等）専用の圧縮描画 ----
+ * 既存のseatHtmlは情報が多く、41pxの枠には入らない（＝中身を隠して情報が死んでいた）。
+ * 枠に合わせて作り直し、2段に凝縮する：
+ *   1段目 席名 ＋ 残り時間（超過は赤・まもなくは橙・予約は来店時刻）
+ *   2段目 アバター（キャスト色＋頭文字）＋ 客名
+ * ＝「席・時間・誰・客」が41pxで全部読める。キャストの識別は色（既存のcastColorと同じ配色）。
+ * クリック契約(onSeatClick)と状態クラス(movetarget等)はseatHtmlと同一＝付け回し/結合の操作はそのまま効く。 */
+function mapSeatMini_(s){
+  var st=seatStatus(s), idx=seatIdx(s), nm=shortNm(s.name);
+  var oc='onclick="onSeatClick('+idx+')"';
+  if(s.mergedTo!=null){
+    return '<div class="seat mergedcell mini" '+oc+'><div class="mini-r1"><b>'+esc(nm)+'</b></div>'
+      +'<div class="mini-r2"><span class="mini-c">🔗 '+esc(shortNm(SEATS[s.mergedTo].name))+'へ</span></div></div>';
+  }
+  var isPrimary=s.mergeWith&&s.mergeWith.length;
+  var dispNm=isPrimary?nm+'＋'+s.mergeWith.length:nm;
+  var mt=(moveMode||tableMoveMode)?' movetarget':'';
+  var self=(moveMode&&selCast&&selCast.si===idx)?' moveself':'';
+  var ct=(combineMode&&idx!==combinePrimary)?' combinetarget':'';
+  var cprim=(combineMode&&idx===combinePrimary)?' combineprimary':'';
+  var grp=isPrimary?' grouped':'';
+  var r1='<b>'+esc(dispNm)+'</b>', r2='', cls='';
+  if(st==='empty'){
+    if(s.rsv){
+      cls='reserved';
+      r1+='<span class="mini-t rsv">'+esc(rsvArrT(s.rsv))+'</span>';
+      r2='<span class="mini-c rsv">'+esc(s.rsv.cust)+'様</span>';
+    } else {
+      r2='<span class="mini-e">空席</span>';
+    }
+  } else if(st==='nocast'){
+    cls='nocast';
+    r1+='<span class="mini-t warn">⚠不在</span>';
+    r2='<span class="mini-c">'+esc(s.cust||'')+'</span>';
+  } else {
+    cls=st;
+    var c=(s.casts&&s.casts[0])||null;
+    if(c){
+      var tm=c.unlimited?'∞':(c.mins<0?'超'+(-c.mins)+'分':'残'+c.mins+'分');
+      r1+='<span class="mini-t '+(c.status==='over'?'over':c.status==='warn'?'warn':'')+'">'+tm+'</span>';
+      r2='<i class="mini-av" style="background:'+castColor(c.n)+'">'+esc(c.n.charAt(0))+'</i>';
+    }
+    r2+='<span class="mini-c">'+esc(s.cust||'')+'</span>';
+    if(s.casts&&s.casts.length>1) r2+='<span class="mini-p">+'+(s.casts.length-1)+'</span>';
+  }
+  return '<div class="seat mini '+cls+mt+self+ct+cprim+grp+'" '+oc+'>'
+    +'<div class="mini-r1">'+r1+'</div><div class="mini-r2">'+r2+'</div></div>';
 }
 /* 表示モード（マップ/リスト）。端末ごとにlocalStorageで保持 */
 var hallView=localStorage.getItem('gunshi_hall_view')||'map';
@@ -1387,17 +1428,14 @@ function mapFloorHtml(fl){
   var rest=seats.filter(function(s){return !SEAT_POS[s.code];});   // 待機・黒服＝物理席でないので帯に
   var cb=seats.filter(function(s){return s.type==='C'||s.type==='B';});
   var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
-  var decor=(FLOOR_DECOR[fl]||[]).map(function(d){
-    return '<div class="decor decor-'+d.k+'" style="'+mapBox_(d)+'"><span>'+esc(d.nm)+'</span></div>';
-  }).join('');
-  // 小さいセル(カウンター・低いボックス)は席名＋客名＋色だけに絞る＝詳細はタップで開く（.smで出し分け）
+  // 背の低いセル(カウンター・2Fボックス3)は専用の2段描画、背の高いボックスは従来の席カードを流用
   var cells=placed.map(function(s){
-    var p=SEAT_POS[s.code];
-    return '<div class="seatpos'+(p.h<60?' sm':'')+'" style="'+mapBox_(p)+'">'+seatHtml(s)+'</div>';
+    var p=SEAT_POS[s.code], mini=p.h<60;
+    return '<div class="seatpos'+(mini?' sm':'')+'" style="'+mapBox_(p)+'">'+(mini?mapSeatMini_(s):seatHtml(s))+'</div>';
   }).join('');
   return '<div class="floor">'
        + '<div class="floor-hd"><span class="fl">'+fl+'</span><span class="meta">稼働 '+occ+'/'+cb.length+'</span></div>'
-       + '<div class="hall-map">'+decor+cells+'</div>'
+       + '<div class="hall-map">'+cells+'</div>'
        + (rest.length?'<div class="map-side">'+rest.map(seatHtml).join('')+'</div>':'')
        + '</div>';
 }
