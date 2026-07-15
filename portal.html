@@ -458,6 +458,11 @@ var currentTab = 'home', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
 var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
 var staffRole = 'キャスト';
+// 休職中（名簿の「休職中」フラグ列。属性は変わらない＝キャストのまま）。
+// true の間は シフト提出／お知らせ／給与明細 だけに絞る。予約・顧客・売上明細・伝票・空席・領収書は不可。
+// ⚠️これは表示制御。実データの遮断はサーバー側（PORTAL_LEAVE_DENY_TABS_ ＋ tab=homeで予約/空席を渡さない）が本体。
+var onLeave = false;
+var LEAVE_KEYS = ['board', 'shift', 'stats']; // 休職中に出すメニュー（statsは給与明細サブタブのみに制限）
 var pendingShifts = {};
 
 function fmt(n) {
@@ -584,6 +589,9 @@ function loadPortal(month) {
       }
       isAdmin = d.isAdmin || false;
       if (d.staffRole) staffRole = d.staffRole;
+      onLeave = !!d.onLeave; // 休職中＝メニューを シフト提出／お知らせ／給与明細 に絞る
+      // 休職中が使えないタブに居座ったままリロードした場合はホームへ戻す
+      if (onLeave && currentTab !== 'home' && LEAVE_KEYS.indexOf(currentTab) < 0) currentTab = 'home';
       if (isAdmin) showAdminTab();
       // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
       if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
@@ -669,6 +677,8 @@ function updateNav(tab) {
 // ホームのメニュー（タブの代わりに全機能をボタン集約）
 function menuBtn(key) {
   var s = SECTIONS[key];
+  // 休職中は売上・伝票を出さないので、ボタンの文言も実態（給与明細だけ）に合わせる
+  if (onLeave && key === 'stats') s = { t: '給与明細', i: s.i };
   // お知らせボタンは未読件数を赤バッジで表示（見る側が一目で未読を判断できる）
   var badge = '';
   if (key === 'board') {
@@ -682,6 +692,8 @@ function menuBtn(key) {
 }
 function homeMenu() {
   var castKeys = ['board','shift','yoyaku','stats','hair','seatreq','customers','bday'];
+  // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
+  if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
   if (isAdmin) {
@@ -706,8 +718,12 @@ function updateAdminBar(castList) {
   });
 }
 
+// 休職中が触れる画面か（ボタンを消すだけでなく、直接呼ばれても通さない）
+function leaveAllows_(tab) { return !onLeave || tab === 'home' || LEAVE_KEYS.indexOf(tab) >= 0; }
+
 function switchTab(tab) {
   contentTargetId = 'content';
+  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
   switchTabActive(tab);
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'board') { loadBoard(); return; }
@@ -730,6 +746,7 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
+  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (isAdmin && !adminViewAs) {
@@ -971,8 +988,17 @@ function renderHome(){
       + '</div>';
   }
 
-  // --- 今日の予約カード（枠だけ先に出して非同期で埋める） ---
-  var html = '<div id="home-notice">' + noticeBanner() + '</div>' + shiftCard + homeCallCard()
+  // --- 休職中バッジ（メニューが短い理由を本人に伝える。サーバーは既に予約/空席を返していない） ---
+  var leaveCard = onLeave
+    ? '<div class="card" style="background:#241a2e;border-color:#5a3a7a">'
+      + '<div style="font-size:13px;font-weight:700;color:#c9a0ee;margin-bottom:4px">🌙 休職中</div>'
+      + '<div style="font-size:12px;color:#a890c8;line-height:1.7">シフト提出・お知らせ・給与明細のみご利用いただけます。<br>復帰の際は黒服・管理者にご連絡ください。</div>'
+      + '</div>'
+    : '';
+
+  // --- 今日の予約カード（枠だけ先に出して非同期で埋める）。休職中は予約・空席・呼び出しを出さない ---
+  var html = '<div id="home-notice">' + noticeBanner() + '</div>' + leaveCard + shiftCard
+    + (onLeave ? '' : homeCallCard()
     + '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +     '<span style="font-size:12px;color:#8aabcc;letter-spacing:.5px">今日の予約</span>'
@@ -987,10 +1013,12 @@ function renderHome(){
     +     '<span id="home-vac-at" style="font-size:11px;color:#6a8ab0"></span>'
     +   '</div>'
     +   '<div id="home-vac-list"><div style="color:#6a8ab0;font-size:13px;padding:14px 0;text-align:center">読み込み中...</div></div>'
-    + '</div>'
+    + '</div>')
     // --- メニュー（全機能ボタン） ---
     + homeMenu();
   setContent(html);
+  // 休職中は予約/空席/席の非同期描画そのものを走らせない（要素も無い）
+  if (onLeave) return;
 
   // 本日シフトに入っているかで呼び出しボタンを即ゲート（非同期のgetCastSeats完了を待たない＝タイムアウトでも押せない）
   homeWorking = homeOnShift(); applyWorkingGate();
@@ -1179,8 +1207,11 @@ function loadStatsData(force, cb) {
 
 function renderStats() {
   var labels = { sales: '売上明細', bills: '伝票', pay: '給与明細', ranking: 'ランキング' };
+  // 休職中は給与明細のみ（売上明細・伝票・ランキングは出さない）。サブタブ自体を1本に畳む。
+  var subKeys = onLeave ? ['pay'] : ['sales', 'bills', 'pay', 'ranking'];
+  if (onLeave) statsSubTab = 'pay';
   var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
-    + ['sales', 'bills', 'pay', 'ranking'].map(function(t) {
+    + subKeys.map(function(t) {
         return '<div style="flex:1;min-width:54px;padding:8px 4px;text-align:center;font-size:12px;cursor:pointer;border-radius:7px;'
           + (statsSubTab === t ? 'background:#0f2040;color:#7ab0f0;border:1px solid #1a50a0;' : 'background:#141d30;color:#7a9cc8;border:1px solid #1e3050;')
           + '" onclick="statsSubSwitch(\'' + t + '\')">' + labels[t] + '</div>';
@@ -1296,6 +1327,7 @@ function renderBillItems(d){
 }
 
 function statsSubSwitch(t) {
+  if (onLeave && t !== 'pay') return; // 休職中は給与明細から出さない
   statsSubTab = t;
   renderStats();
 }

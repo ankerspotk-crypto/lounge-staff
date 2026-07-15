@@ -412,11 +412,20 @@ function cardHtml(s,i){
       '<div id="obp'+i+'" style="display:'+(allDone?'none':'block')+'">'+obRows+'</div></div>';
   }
   var retiredBadge=s.retired?'<span class="badge" style="background:#4a2b2b;color:#ff9aa0;border:1px solid #6b3a3a">退職'+(s.retiredAt?' '+esc(s.retiredAt):'')+'</span>':'';
-  var retireRow=s.hardAdmin?'' :
+  // 休職中バッジ（在籍のまま＝属性は変わらない。ポータルはシフト提出/お知らせ/給与明細のみになる）
+  var leaveBadge=(!s.retired&&s.onLeave)?'<span class="badge" style="background:#2e2440;color:#c9a0ee;border:1px solid #5a3a7a">🌙 休職中'+(s.onLeaveAt?' '+esc(s.onLeaveAt):'')+'</span>':'';
+  // 退職者には休職トグルを出さない（退職が上位＝ログイン自体不可）。ハードコード管理者は両方とも保護。
+  var leaveBtn=(s.hardAdmin||s.retired)?'' :
+    (s.onLeave
+      ? '<button class="btn ok sm" onclick="unleaveStaff(\''+jstr(s.name)+'\')">↩ 休職を解除</button>'
+      : '<button class="btn sm" style="color:#c9a0ee;border-color:#5a3a7a" onclick="leaveStaff(\''+jstr(s.name)+'\')">🌙 休職中にする</button>');
+  var retireBtn=s.hardAdmin?'' :
     (s.retired
-      ? '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px"><button class="btn ok sm" onclick="unretireStaff(\''+jstr(s.name)+'\')">↩ 復帰させる</button></div>'
-      : '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px"><button class="btn sm" style="color:#ff9aa0;border-color:#6b3a3a" onclick="retireStaff(\''+jstr(s.name)+'\')">🚪 退職にする</button></div>');
-  return '<div class="card"'+(s.retired?' style="opacity:.72"':'')+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
+      ? '<button class="btn ok sm" onclick="unretireStaff(\''+jstr(s.name)+'\')">↩ 復帰させる</button>'
+      : '<button class="btn sm" style="color:#ff9aa0;border-color:#6b3a3a" onclick="retireStaff(\''+jstr(s.name)+'\')">🚪 退職にする</button>');
+  var retireRow=(leaveBtn||retireBtn)
+    ? '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px;gap:6px">'+leaveBtn+retireBtn+'</div>' : '';
+  return '<div class="card"'+(s.retired?' style="opacity:.72"':(s.onLeave?' style="opacity:.85"':''))+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+leaveBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
     '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+onboardHtml+termHtml+retireRow+'</div>';
 }
@@ -494,6 +503,19 @@ function unretireStaff(name){
   var s=findStaff(name); if(s){s.retired=false;s.retiredAt='';} render();
   if(!IS_GAS){toast(name+' を復帰させました');return;}
   gsr('adminSetRetired',USER_ID,name,false).then(function(r){res(r,name+' を復帰させました')||load();}).catch(function(){toast('通信エラー',true);load();});
+}
+// 休職中＝在籍のまま参照を絞る（属性は変えない）。退職と違いログインは通り、シフト提出/お知らせ/給与明細だけ見える。
+function leaveStaff(name){
+  if(!confirm(name+' を休職中にします。\n\n・ポータルは「シフト提出 / お知らせ / 給与明細」だけになります\n・予約・顧客・売上明細・伝票・空席・領収書は見られません\n・軍師にはログインできなくなります\n・属性(キャスト等)・給与・履歴はそのまま。予約の担当候補にも残ります\n・あとで「休職を解除」で元に戻せます\n\nよろしいですか？'))return;
+  var s=findStaff(name); if(s){s.onLeave=true;} render();
+  if(!IS_GAS){toast(name+' を休職中にしました');return;}
+  gsr('adminSetOnLeave',USER_ID,name,true).then(function(r){res(r,name+' を休職中にしました')||load();}).catch(function(){toast('通信エラー',true);load();});
+}
+function unleaveStaff(name){
+  if(!confirm(name+' の休職を解除します（通常の在籍に戻ります）。よろしいですか？'))return;
+  var s=findStaff(name); if(s){s.onLeave=false;s.onLeaveAt='';} render();
+  if(!IS_GAS){toast(name+' の休職を解除しました');return;}
+  gsr('adminSetOnLeave',USER_ID,name,false).then(function(r){res(r,name+' の休職を解除しました')||load();}).catch(function(){toast('通信エラー',true);load();});
 }
 function setFilter(f){ roleFilter=f; renderStaff(); }
 function onSearch(){ q=(document.getElementById('q').value||'').trim(); renderStaff(); }

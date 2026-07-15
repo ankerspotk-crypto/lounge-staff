@@ -6250,6 +6250,13 @@ function handlePortalApi_(e) {
   const viewAs = e.parameter.viewAs || '';
   const tab    = e.parameter.tab    || '';
 
+  // 休職中は参照できる面を絞る（シフト提出／お知らせ／給与明細のみ）。退職と違いログイン自体は通す。
+  // ※管理者の代理閲覧(viewAs)は name=管理者本人なので false ＝ 従来どおり全部見える。
+  const onLeave = isOnLeaveName_(name);
+  if (onLeave && PORTAL_LEAVE_DENY_TABS_.indexOf(tab) >= 0) {
+    return out({ ok: false, error: 'onleave', message: '休職中のため、この機能はご利用いただけません。' });
+  }
+
   // 申請管理（管理者のみ・viewAs不要）
   if (isAdmin && tab === 'requests') {
     return out({ ok: true, name, isAdmin, requests: getShiftRequests_() });
@@ -6391,12 +6398,13 @@ function handlePortalApi_(e) {
       todayArrivalH = { key: todayKeyH, time: effH.time, pending: effH.pending, dohan: effH.dohan };
     }
     // 同梱: 座席(getCastSeats相当) / 今日の予約(tab=yoyaku相当) / 空席(tab=vacancy相当)
+    // ⚠️休職中は「今日の予約」「空席」を取得も送信もしない（＝フロントで隠すだけにせず、そもそも渡さない）
     const seatsH = castCurrentSeats_(lookupNameH);
-    const workingH = isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin;
-    let reservationsH = []; try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {}
-    let vacancyH = null; try { vacancyH = getPortalVacancy_(); } catch (e) {}
+    const workingH = onLeave ? false : (isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin);
+    let reservationsH = []; if (!onLeave) { try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {} }
+    let vacancyH = null; if (!onLeave) { try { vacancyH = getPortalVacancy_(); } catch (e) {} }
     const closedDaysH = {}; getHolidays_().forEach(h => { closedDaysH[h.date] = h.label || '店休日'; });
-    return out({ ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH,
+    return out({ ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH, onLeave,
       shifts: shiftsH, confirmedShifts: confirmedShiftsH, pendingShifts: pendingShiftsH,
       todayArrival: todayArrivalH, seats: seatsH, working: workingH,
       reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH,
@@ -6593,6 +6601,7 @@ function getAdminConsoleData(userId) {
   const termCols = sh ? getStaffTermCols_(sh, false) : {};
   const backCols = sh ? getStaffBackRuleCols_(sh, false) : {};
   const retireCols = sh ? getStaffRetireCols_(sh, false) : {};
+  const leaveCols  = sh ? getStaffLeaveCols_(sh, false) : {};
   const noticeCols = sh ? getStaffNoticeCols_(sh, false) : {};
   const onboardCol = sh ? getStaffOnboardCol_(sh, false) : -1;
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
@@ -6625,6 +6634,9 @@ function getAdminConsoleData(userId) {
       // 退職状態: フラグ列'退職' / 退職日（Date流出を吸収して文字列化）
       retired: (retireCols['退職'] >= 0 && String(rows[i][retireCols['退職']]).trim() === '退職'),
       retiredAt: (function () { var c = retireCols['退職日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })(),
+      // 休職状態: フラグ列'休職中' / 休職開始日（退職と同じ流儀。属性は変えないので在籍側に並ぶ）
+      onLeave: (leaveCols['休職中'] >= 0 && String(rows[i][leaveCols['休職中']]).trim() === '休職中'),
+      onLeaveAt: (function () { var c = leaveCols['休職開始日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })(),
       // お知らせ配信対象: '×'のときだけOFF。列が無い/空欄は配信ON（既定）
       noticeOn: !(noticeCols['お知らせ配信'] >= 0 && String(rows[i][noticeCols['お知らせ配信']]).trim() === '×'),
       // 入店チェック（新人オンボーディング）: {項目:'対応中'|'完了'}。列が無ければ空
@@ -6709,6 +6721,74 @@ function adminSetRetired(userId, targetName, retired) {
       // 退職日は文字列で記録（Sheetsの日付自動変換によるString()流出を避け、表示時はそのまま読む）
       sh.getRange(i + 1, cols['退職日'] + 1).setValue(retired ? bizDateStr_() : '');
       return { ok: true, name: targetName, retired: !!retired };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+
+/* ===== 休職中スタッフ管理 =====
+ * 退職と同じ「動的列フラグ」方式。⚠️属性(C列)は変えない＝キャストのまま。
+ * 属性を'休職中'にすると、給与母集団（稼ぐ側6属性の許可リスト＝calcAndWriteKyuyo_）と
+ * お知らせの参照範囲（noticeTargetMatches_のcast/kurofuku判定）から同時に外れ、
+ * 「給与と通知だけは見せる」という要件そのものが壊れるため、必ずフラグ列で持つこと。
+ * 休職中＝籍・給与・履歴は温存し、本人が参照できる面だけを絞る：
+ *   見える＝シフト提出／お知らせ／給与明細   見えない＝予約・顧客・売上明細・伝票・空席・領収書・軍師
+ * 運用方針（2026-07-15 ボス確定）＝他スタッフ側の候補（予約担当/付け回し/本日出勤）には残す・
+ * シフト提出リマインドも在籍と同じく催促する ＝ 名簿の母集団からは一切外さない。 */
+var STAFF_LEAVE_HEADERS = ['休職中', '休職開始日'];
+
+// スタッフマスタ1行目ヘッダーから休職各列の0-based indexを解決。create=trueで無い列を末尾に新設。
+function getStaffLeaveCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_LEAVE_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) {
+      lastCol += 1;
+      sh.getRange(1, lastCol).setValue(name);
+      idx = lastCol - 1;
+    }
+    cols[name] = idx; // 無く未作成なら -1
+  });
+  return cols;
+}
+
+// 休職中かどうか（正規化名で照合）。休職中列が無ければ常に false（＝既存挙動を壊さない）。
+function isOnLeaveName_(name) {
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return false;
+  var lc = getStaffLeaveCols_(sh, false)['休職中'];
+  if (lc < 0) return false;
+  var rows = sh.getDataRange().getValues();
+  var key = normalizeName_(String(name || '').trim());
+  for (var i = 1; i < rows.length; i++) {
+    if (normalizeName_(String(rows[i][1]).trim()) === key) return String(rows[i][lc]).trim() === '休職中';
+  }
+  return false;
+}
+
+// 休職中が参照できないポータルのtab（サーバー側で拒否＝フロントを隠すだけにしない）。
+// ⚠️'stats'は含めない：給与明細(renderPay)が同じペイロードのsalesを土台に組み立てるため。
+// 売上明細/伝票/ランキングのサブタブ抑止はフロント側(renderStats)で行う。
+var PORTAL_LEAVE_DENY_TABS_ = ['yoyaku', 'yoyakuMonth', 'yoyakuCustomers', 'customers', 'customerVisits', 'vacancy', 'ranking', 'hair', 'bills', 'billdetail'];
+
+// 管理コンソール：休職中/復帰の切替（動的「休職中」「休職開始日」列）。属性・履歴は非破壊。
+function adminSetOnLeave(userId, targetName, onLeave) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  targetName = String(targetName || '').trim();
+  // ハードコード管理者は休職中にできない（退職と同じ保護。運営の要が参照制限に落ちる事故を防ぐ）
+  if (onLeave && ADMIN_NAMES_.includes(targetName)) return { ok: false, error: 'この管理者は休職中にできません（コード保護）' };
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  var cols = getStaffLeaveCols_(sh, true); // 無ければ列作成
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, cols['休職中'] + 1).setValue(onLeave ? '休職中' : '');
+      // 休職開始日は文字列で記録（Sheetsの日付自動変換によるString()流出を避ける＝退職日と同じ流儀）
+      sh.getRange(i + 1, cols['休職開始日'] + 1).setValue(onLeave ? bizDateStr_() : '');
+      return { ok: true, name: targetName, onLeave: !!onLeave };
     }
   }
   return { ok: false, error: targetName + ' が見つかりません' };
@@ -8243,10 +8323,12 @@ function getKioskStaffList() {
   const out = [];
   const rows = sh.getDataRange().getValues();
   const rc = getStaffRetireCols_(sh, false)['退職']; // 退職者は軍師ログイン一覧から除外
+  const lc = getStaffLeaveCols_(sh, false)['休職中']; // 休職中も同様（軍師は顧客・予約・ホールが全部見える画面のため）
   for (let i = 1; i < rows.length; i++) {
     const name = String(rows[i][1]).trim();
     if (!name) continue;
     if (rc >= 0 && String(rows[i][rc]).trim() === '退職') continue;
+    if (lc >= 0 && String(rows[i][lc]).trim() === '休職中') continue;
     if (hasGunshiLoginByRow_(name, rows[i][2], rows[i][5])) out.push(name);
   }
   return out;
