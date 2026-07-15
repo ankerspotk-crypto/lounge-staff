@@ -380,6 +380,12 @@ function handleApiRequest_(body) {
     const staffName = getStaffName(body.userId);
     return markNoticeRead_(body.noticeId, body.userId, staffName || body.name || '', body.route || 'portal');
   }
+  // 管理コンソール「📅 予約」＝キャスト1人の予約を過去・未来まとめて
+  if (body.action === 'getCastReservations') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return getCastReservations_(body.cast);
+  }
   if (body.action === 'submitShift') return submitShift(body);
   if (body.action === 'declineNextWeek') return declineNextWeek(body);
   if (body.action === 'getShiftSubmitStatus') {
@@ -8345,6 +8351,73 @@ function getYoyakuReservations_(dateKey) {
     });
   }
   return result;
+}
+
+/* ===== 管理コンソール「📅 予約」＝キャスト別の予約一覧（過去・未来） ===== */
+
+/* 予約シートのキャスト欄の照合キー。**内部スペースを除く**のが要点：
+ * normalizeName_ は内部スペースを消さないので「鈴木 海」と「鈴木海」が別人になる（照合が黙って失敗する）。
+ * 「本日の出勤」通知の rsvNorm_ と同じ規則。 */
+function rsvCastKey_(n) { return String(n || '').replace(/\s/g, '').trim(); }
+
+/* 担当キャスト・同伴キャストは「、」区切りの複数名（ポータルのチップを join したもの）。
+ * 予約キャストだけは select＝単一値だが、同じ扱いで問題ない。 */
+function rsvCastKeys_(v) { return String(v || '').split('、').map(rsvCastKey_).filter(Boolean); }
+
+/* 予約キャスト欄に入るがキャスト名ではない値。帰属の判定では「空」と同じに扱う。
+ * これを空扱いしないと「直接来店＋担当さくら」が予約キャスト有りと見なされ、
+ * 担当への補完が働かず**さくらの一覧から黙って消える**（ポータルの select は ''／'直接来店'／キャスト名 の3種）。 */
+function isNonCastRsvValue_(v) { const k = rsvCastKey_(v); return !k || k === '直接来店' || k === '未定'; }
+
+/* この予約でそのキャストがどの立場か（'予約'/'担当'/'同伴'/'同席'）。空配列＝無関係。
+ * 帰属＝**予約キャスト優先／空なら担当キャストで補完**（「本日の出勤」通知 と同じ規則＝同じ子の件数が2画面で割れないため）
+ *       ＋**同伴キャストも拾う**（ボス指定 2026-07-16）。
+ * 相席のサブ会員（列16）の担当/予約キャストも拾う：拾わないと、その子が担当の同席客が一覧から消える。 */
+function castRolesInRsv_(row, key) {
+  const roles = [];
+  const yoyakuRaw = row[11];
+  const yoyaku = isNonCastRsvValue_(yoyakuRaw) ? [] : rsvCastKeys_(yoyakuRaw);
+  if (yoyaku.indexOf(key) >= 0) roles.push('予約');
+  else if (yoyaku.length === 0 && rsvCastKeys_(row[6]).indexOf(key) >= 0) roles.push('担当');
+  if (rsvCastKeys_(row[12]).indexOf(key) >= 0) roles.push('同伴');
+  if (roles.length === 0) {
+    let subs = [];
+    try { subs = row[15] ? JSON.parse(row[15]) : []; } catch (e) { subs = []; }
+    for (let j = 0; j < subs.length; j++) {
+      const sy = isNonCastRsvValue_(subs[j].yoyakuCast) ? [] : rsvCastKeys_(subs[j].yoyakuCast);
+      if (sy.indexOf(key) >= 0 || (sy.length === 0 && rsvCastKeys_(subs[j].tantouCast).indexOf(key) >= 0)) { roles.push('同席'); break; }
+    }
+  }
+  return roles;
+}
+
+/* キャスト1人の予約を過去・未来まとめて返す（新しい順に整列。未来/過去の境目は営業日）。
+ * キャンセルは除外（getYoyakuReservations_ と同じ）。
+ * 予約シートは履歴が積み上がるが、getDataRange は既存の日次取得でも毎回全件読んでいる＝新たな重さではない。 */
+function getCastReservations_(castName) {
+  const key = rsvCastKey_(castName);
+  if (!key) return { ok: false, error: 'キャスト名がありません' };
+  const rows = getYoyakuRsrvSheet_().getDataRange().getValues().slice(1);
+  const today = bizDateStr_();
+  const list = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[8]) === 'キャンセル') continue;
+    const date = String(row[0] instanceof Date ? Utilities.formatDate(row[0], TZ, 'yyyy-MM-dd') : row[0]).trim();
+    if (!date) continue;
+    const roles = castRolesInRsv_(row, key);
+    if (!roles.length) continue;
+    list.push({
+      rowIdx: i + 2, date,
+      time: row[1] instanceof Date ? Utilities.formatDate(row[1], TZ, 'HH:mm') : String(row[1]).trim(),
+      customer: String(row[2]), memberId: String(row[3]), pax: Number(row[4]) || 1,
+      table: String(row[5]), status: String(row[8]),
+      tantouCast: String(row[6] || ''), yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || ''),
+      roles, future: date >= today
+    });
+  }
+  list.sort((a, b) => (a.date === b.date ? String(b.time).localeCompare(String(a.time)) : b.date.localeCompare(a.date)));
+  return { ok: true, today, cast: String(castName), reservations: list };
 }
 
 // 席料・同伴料の保存（IEYAS POSの会計セクションから呼ぶ。N列=席料、O列=同伴料）

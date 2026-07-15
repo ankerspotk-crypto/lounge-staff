@@ -207,6 +207,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab on" data-t="staff" onclick="switchTab('staff')">👥 スタッフ</button>
     <button class="tab" data-t="matrix" onclick="switchTab('matrix')">🔐 権限</button>
     <button class="tab" data-t="shift" onclick="switchTab('shift')">🗓 シフト</button>
+    <button class="tab" data-t="rsv" onclick="switchTab('rsv')">📅 予約</button>
     <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
     <button class="tab" data-t="checklist" onclick="switchTab('checklist')">✅ チェック</button>
     <button class="tab" data-t="menu" onclick="switchTab('menu')">🍶 メニュー</button>
@@ -389,7 +390,7 @@ function pollAdminAuth(token){
 function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
 function render(){
   document.getElementById('tabs').style.display='flex';
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -1851,6 +1852,73 @@ function saveThresholds(){
   api('saveCashThresholds',{thresholds:out}).then(function(r){ res(r,'しきい値を保存しました'); });
 }
 
+/* ===== 📅 予約（キャスト別の予約一覧・過去/未来）=====
+   帰属＝予約キャスト優先／空なら担当キャストで補完（「本日の出勤」通知と同じ規則）＋同伴キャストも拾う（ボス指定 2026-07-16）。
+   判定はサーバの castRolesInRsv_ が唯一の持ち主＝ここでは絶対に数え直さない（2箇所に規則があると必ず割れる）。 */
+var rsvCast='', rsvData=null, rsvBusy=false, rsvShowPast=false;
+function rsvCastList(){ return (ST.staff||[]).filter(function(s){ var r=String(s.role||''); return r.indexOf('キャスト')>=0||r.indexOf('体験')>=0; }); }
+function renderRsv(){
+  var all=rsvCastList();
+  var active=all.filter(function(s){return !s.retired;});
+  var retired=all.filter(function(s){return s.retired;});
+  if(!all.length){ setBody('<div class="empty">キャストが登録されていません</div>'); return; }
+  var chip=function(s){ return '<div class="chip'+(rsvCast===s.name?' on':'')+'" onclick="rsvPick(\''+jstr(s.name)+'\')">'+esc(s.name)+(s.retired?' <span style="opacity:.6">(退職)</span>':'')+'</div>'; };
+  var picker='<div class="sec compact"><div class="hint">キャストを選ぶと、その子の予約が過去・未来まとめて出ます。'
+    +'<b>予約キャスト</b>／（予約キャストが空なら）<b>担当キャスト</b>／<b>同伴キャスト</b>のどれかに名前が入っていれば、その子の予約として数えます。</div>'
+    +'<div class="chips" style="margin-top:10px">'+active.map(chip).join('')+'</div>'
+    +(retired.length?'<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--dim);font-weight:800;font-size:12px">🗄 退職済み（'+retired.length+'名）の履歴を見る</summary><div class="chips" style="margin-top:8px">'+retired.map(chip).join('')+'</div></details>':'')
+    +'</div>';
+  setBody(picker+'<div id="rsv-body">'+(rsvCast?'<div class="empty">読み込み中…</div>':'<div class="empty">キャストを選んでください</div>')+'</div>');
+  if(rsvCast) drawRsv();
+}
+function rsvPick(name){
+  if(rsvBusy) return;
+  if(rsvCast===name){ rsvCast=''; rsvData=null; renderRsv(); return; } // もう一度押したら選択解除
+  rsvCast=name; rsvData=null; rsvShowPast=false;
+  renderRsv();
+  rsvBusy=true;
+  api('getCastReservations',{cast:name}).then(function(r){
+    rsvBusy=false;
+    if(rsvCast!==name) return;                       // 待っている間に別の子へ切り替わった＝古い結果を捨てる
+    if(!r||r.ok===false){ rsvData={error:(r&&r.error)||'読み込みエラー'}; }
+    else rsvData=r;
+    drawRsv();
+  }).catch(function(e){
+    rsvBusy=false;
+    if(rsvCast!==name) return;
+    rsvData={error:(e&&e.message)||'通信エラー'};   // 握り潰さない＝原因をボスが報告できるように
+    drawRsv();
+  });
+}
+function rsvRoleBadges(roles){
+  var col={'予約':'background:#0e2440;color:#7ab0f0','担当':'background:#2a1030;color:#bb99ff','同伴':'background:#2a1800;color:#ffaa44','同席':'background:#0d2418;color:#66cc88'};
+  return (roles||[]).map(function(x){ return '<span class="badge" style="'+(col[x]||'')+'">'+esc(x)+'</span>'; }).join(' ');
+}
+function rsvRowHtml(x,past){
+  var st=x.status&&x.status!=='確定'?'<span class="badge" style="background:#2a2210;color:#ddaa44">'+esc(x.status)+'</span>':'';
+  return '<div class="lrow"'+(past?' style="opacity:.55"':'')+'>'
+    +'<div class="main"><div class="nm">'+esc(x.date)+'（'+hdWeekday(x.date)+'）'+esc(x.time||'')+'　'+esc(x.customer)+'様</div>'
+    +'<div class="meta">'+esc(x.table||'席未定')+'　'+(x.pax||1)+'名'
+    +(x.tantouCast?'　担当: '+esc(x.tantouCast):'')+(x.dohanCast?'　同伴: '+esc(x.dohanCast):'')+'</div></div>'
+    +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'+rsvRoleBadges(x.roles)+st+'</div></div>';
+}
+function drawRsv(){
+  var el=document.getElementById('rsv-body'); if(!el) return;
+  if(!rsvData){ el.innerHTML='<div class="empty">読み込み中…</div>'; return; }
+  if(rsvData.error){ el.innerHTML='<div class="empty">'+esc(rsvData.error)+'</div>'; return; }
+  var list=rsvData.reservations||[];
+  var future=list.filter(function(x){return x.future;});
+  var past=list.filter(function(x){return !x.future;});
+  var head='<div class="toolbar"><span class="cnt">'+esc(rsvCast)+'　これから '+future.length+'件 / 過去 '+past.length+'件</span></div>';
+  var futureHtml='<div class="sec compact"><div style="font-weight:800;color:var(--accent);margin-bottom:8px">これから（'+future.length+'件）</div>'
+    +(future.length?future.map(function(x){return rsvRowHtml(x,false);}).join(''):'<div class="empty" style="padding:14px">これからの予約はありません</div>')+'</div>';
+  // 過去は畳んでおく＝在籍が長い子ほど数百件になり、これからの予約が埋もれるため
+  var pastHtml=past.length
+    ? '<details class="sec compact"'+(rsvShowPast?' open':'')+' ontoggle="rsvShowPast=this.open"><summary style="cursor:pointer;font-weight:800;color:var(--dim)">🗄 過去（'+past.length+'件）</summary><div style="margin-top:10px">'+past.map(function(x){return rsvRowHtml(x,true);}).join('')+'</div></details>'
+    : '<div class="sec compact"><div style="color:var(--dim);font-weight:800">過去の予約はありません</div></div>';
+  el.innerHTML=head+futureHtml+pastHtml;
+}
+
 /* ===== 🏖 店休日（お盆休み・臨時休業など）===== */
 var holidays=[];
 function hdFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -2100,6 +2168,9 @@ function MOCK(){
     {name:'ひろき',role:'黒服社員',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'たかし',role:'黒服社員',registered:true,isAdmin:false,adminFlag:true,hardAdmin:false,isSafeAdmin:true,safeFlag:true,hardSafe:false,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'まや',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'○',hasPin:true},
+    {name:'ゆい',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
+    {name:'あん',role:'体験',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
+    {name:'かな',role:'キャスト',retired:true,registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
     {name:'ゆうた',role:'黒服バイト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'',hasPin:false},
     {name:'田中',role:'ドライバー',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false}
   ]};
@@ -2158,7 +2229,27 @@ function mnBoard(){
     stockNames:S.stock.map(function(s){return s.name;})
   };
 }
+/* 📅 予約のモック。⚠️UIの確認用でしかない＝帰属の判定は本番では必ずサーバ(castRolesInRsv_)が決める。
+   ここで roles を手で書いているのは「サーバがこう返してきた時に画面がどう出るか」を見るためだけ。 */
+function rsvMock(cast){
+  var D=function(o){var n=new Date();n.setDate(n.getDate()+o);return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');};
+  var all={
+    'まや':[
+      {date:D(14),time:'20:00',customer:'田中',pax:2,table:'2F ボックス1',status:'確定',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',roles:['予約'],future:true},
+      {date:D(3), time:'同伴', customer:'佐藤',pax:2,table:'5F ボックス1',status:'確定',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'まや',roles:['予約','同伴'],future:true},
+      {date:D(0), time:'21:00',customer:'鈴木',pax:1,table:'5F カウンター2',status:'確定',tantouCast:'まや',yoyakuCast:'',dohanCast:'',roles:['担当'],future:true},
+      {date:D(-2),time:'20:30',customer:'高橋',pax:4,table:'2F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'まや',roles:['同伴'],future:false},
+      {date:D(-9),time:'22:00',customer:'伊藤',pax:2,table:'2F ボックス3',status:'退店済み',tantouCast:'まや',yoyakuCast:'直接来店',dohanCast:'',roles:['担当'],future:false},
+      {date:D(-21),time:'20:00',customer:'渡辺',pax:3,table:'5F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'',roles:['同席'],future:false}
+    ],
+    'ゆい':[
+      {date:D(-2),time:'20:30',customer:'高橋',pax:4,table:'2F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'まや',roles:['予約'],future:false}
+    ]
+  };
+  return {ok:true,today:D(0),cast:cast,reservations:all[cast]||[]};
+}
 function MOCKAPI(action,body){
+  if(action==='getCastReservations')return rsvMock(body.cast);
   if(action==='getMenuBoard')return {ok:true,board:mnBoard()};
   if(action==='previewMenuBulk'){
     var pp=mnParse(body.text), ex={}, S3=mnMock();
