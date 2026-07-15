@@ -2976,7 +2976,8 @@ function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
-var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品'], STOCK_FLOORS=['合算','2F','5F'];
+// 名刺＝品名がキャスト名。1行=1キャスト×1フロアで、合算ビューがそのまま「その子の2F/5F/合計」になる
+var STOCK_CATS=['ボトル','割り物','チャーム','果物','消耗品','名刺'], STOCK_FLOORS=['合算','2F','5F'];
 function openStockManager(){
   closeMenu(); showSheet('📋 在庫発注管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）在庫発注は本番のみ</div>'; return; }
@@ -2997,7 +2998,10 @@ function renderStock(){
   nav+='<div class="stk-stocktake" onclick="openDeliveryReflect()" style="background:#12202c;border-color:#2a5a7a;color:#7ac6ff">🚚 納品を在庫に反映</div>';
   nav+='<div class="stk-stocktake" onclick="openStocktake()">📦 棚卸し</div></div>';
   // メイン
-  var main='<div class="stk-main"><div class="stk-toolbar"><input id="stk-search" class="finput" placeholder="🔍 品名で検索（カテゴリ・フロア問わず）" oninput="stkListView()"><span id="stk-count" style="font-size:12px;color:var(--dim);font-weight:700"></span></div><div class="stk-scroll"><div id="stk-list"></div>';
+  // 名刺は品名＝キャスト名なので名簿(SSOT)から行を起こす。再実行で新しく入った子の分だけ足される＝同期ボタン。
+  // 左下のmodeFlag(本番でも常時表示・position:fixed)に被らないようサイドバー下端ではなくツールバーに置く
+  var genBtn=(st.category==='名刺')?'<button class="stk-nav-btn" style="width:auto;background:#1b1630;border-color:#4a3a7a;color:#b9a6ff;white-space:nowrap;padding:0 12px" onclick="stkGenMeishi()">👥 名簿から一括生成</button>':'';
+  var main='<div class="stk-main"><div class="stk-toolbar"><input id="stk-search" class="finput" placeholder="🔍 品名で検索（カテゴリ・フロア問わず）" oninput="stkListView()">'+genBtn+'<span id="stk-count" style="font-size:12px;color:var(--dim);font-weight:700"></span></div><div class="stk-scroll"><div id="stk-list"></div>';
   var addFloorSel=st.floor==='合算'?'2F':st.floor;
   main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
   main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#ffbf6a">🛒 マスタにない商品を発注依頼のみ送る</div><div style="display:flex;gap:6px"><input id="stk-free-name" class="finput" placeholder="品名"><input id="stk-free-qty" class="finput" style="width:90px" placeholder="数量"></div><div class="savebtn" style="background:#2a1a10;border-color:#885522;color:#ffaa66;margin-top:10px" onclick="stkFreeOrder()">発注依頼を送信</div></div></div>';
@@ -3127,6 +3131,15 @@ function stkOrder(rowIdx){
   if(!qty){alert('数量を入力してください');return;}
   if(!confirm(it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:it.name,floor:it.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok){alert('発注依頼を送信しました');if(el)el.value='';}else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
+}
+/* 名刺: 名簿の在籍キャスト全員に2F/5Fの行を作る（既存行は触らないので再実行＝新入りの追加） */
+function stkGenMeishi(){
+  if(!confirm('名簿の在籍キャスト全員に、名刺の2F/5F行を作ります。\n\n・既にある行はそのまま（新しく入った子の分だけ追加）\n・在庫数は0で作成 → 実数は棚卸しで入れてください\n\n実行しますか？'))return;
+  gsr('generateMeishiRowsForAllCasts').then(function(res){
+    if(!res||!res.ok){alert('エラー: '+((res&&res.error)||'不明'));return;}
+    toast(res.created?('名刺の行を'+res.created+'件作成（在籍'+res.casts+'名）'):'追加なし（全員登録済み）');
+    openStockManager();
+  }).catch(function(){alert('一括生成に失敗');});
 }
 function stkAddNew(){
   var name=((document.getElementById('stk-new-name')||{}).value||'').trim(); if(!name){alert('品名を入力してください');return;}

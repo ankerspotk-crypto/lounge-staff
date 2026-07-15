@@ -35,7 +35,7 @@ const ORDER_LOG_TAB    = '発注ログ';
 const STOCK_MASTER_TAB    = '在庫発注マスタ';
 const PURCHASE_LOG_TAB    = '購入履歴ログ';
 const STOCKTAKE_LOG_TAB   = '棚卸しログ';
-const STOCK_CATEGORIES    = ['ボトル', '割り物', 'チャーム', '果物', '消耗品'];
+const STOCK_CATEGORIES    = ['ボトル', '割り物', 'チャーム', '果物', '消耗品', '名刺']; // 名刺＝品名がキャスト名。1行=1キャスト×1フロア
 const SOUVENIR_NAME             = 'おみやげ';
 const SOUVENIR_PER_PERSON       = 2;
 const SOUVENIR_ALERT_THRESHOLD  = 50;
@@ -12251,7 +12251,103 @@ function changeStockQty(rowIdx, delta) {
   const next = Math.max(0, cur + Number(delta));
   sh.getRange(rowIdx, 4).setValue(next);
   sh.getRange(rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  // 名刺を「減らした」時だけ判定。増やした時に鳴らす意味は無く、0から+で実数を積む初期登録で
+  // 1タップ目に「1枚＝1箱未満」と誤発注するのを防ぐ（カテゴリで先に絞り、他品目では余計なシート読みをしない）
+  if (Number(delta) < 0) {
+    const _r = sh.getRange(rowIdx, 1, 1, 2).getValues()[0];
+    if (String(_r[1]).trim() === MEISHI_CAT_) { try { checkMeishiStock_(String(_r[0]).trim()); } catch (e) {} }
+  }
   return { ok: true, qty: next };
+}
+
+// ============================================================
+// 名刺の在庫アラート（キャストごとに 2F＋5F の「合計」が1箱未満で発注依頼を自動起票）
+//  データモデル: 在庫発注マスタの カテゴリ='名刺' / 品名=キャスト名 / フロア=2F|5F / 在庫数=枚。
+//    ＝1キャスト×1フロアで1行。既存の合算ビュー（品名でまとめて2F/5F/合計を表示）にそのまま乗る。
+//  ⚠️既存の下限アラート(最低在庫数)は行ごと＝フロア独立の判定なので「2F+5Fの合計」は表現できない。
+//    よって名刺だけ専用に持つ。最低在庫数の列は使わない（二重管理を避けるため空のまま）。
+//  発注ログに動いている発注（申請中／承認済み・未納品）があれば黙る＝納品待ちの間は催促しない。
+// ============================================================
+const MEISHI_CAT_ = '名刺'; // 在庫発注マスタのカテゴリ名
+const MEISHI_BOX_ = 100;    // 1箱の枚数。キャストごとの合計がこれ未満で発注依頼
+
+// キャストの名刺在庫（2F/5F合算）。そのキャストの行が無ければnull
+function getMeishiStock_(castName) {
+  const nm = String(castName || '').trim();
+  if (!nm) return null;
+  const rows = (getStockList() || []).filter(function (x) {
+    return x.category === MEISHI_CAT_ && String(x.name).trim() === nm && (x.floor === '2F' || x.floor === '5F');
+  });
+  if (!rows.length) return null;
+  return { rows: rows, total: rows.reduce(function (a, x) { return a + (Number(x.qty) || 0); }, 0) };
+}
+
+// そのキャストの名刺発注が既に動いているか（申請中＝閉店チェック承認待ち／承認済み・未納品＝納品待ち）
+function hasOpenMeishiOrder_(castName) {
+  const want = MEISHI_CAT_ + ' ' + String(castName || '').trim(); // 発注ログの品名は「名刺 まや」で起票する
+  const rows = getOrderLogSheet_().getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][2]).trim() !== want) continue;
+    const st = String(rows[i][7]).trim();
+    if (st === '申請中' || st === '承認済み・未納品') return true;
+  }
+  return false;
+}
+
+// 在庫を動かした後にキャスト名を渡して呼ぶ。1箱未満かつ発注が動いていなければ発注ログに起票して黒服へ通知
+function checkMeishiStock_(castName) {
+  const nm = String(castName || '').trim();
+  const st = getMeishiStock_(nm);
+  if (!st || st.total >= MEISHI_BOX_) return null; // 未登録 or 足りている
+  if (hasOpenMeishiOrder_(nm)) return null;        // 発注済み・納品待ち
+
+  const breakdown = ['2F', '5F'].map(function (f) {
+    const r = st.rows.filter(function (x) { return x.floor === f; });
+    return r.length ? f + ' ' + r.reduce(function (a, x) { return a + (Number(x.qty) || 0); }, 0) + '枚' : f + ' 未登録';
+  }).join(' / ');
+  // 発注ログはフロア必須。合計ルールなので「残りが少ない方」を宛先にし、内訳はメモに残す
+  const lower = st.rows.slice().sort(function (a, b) { return (Number(a.qty) || 0) - (Number(b.qty) || 0); })[0];
+  const floor = (lower && (lower.floor === '2F' || lower.floor === '5F')) ? lower.floor : '2F';
+  const itemName = MEISHI_CAT_ + ' ' + nm;
+  const memo = breakdown + '（合計' + st.total + '枚＝1箱' + MEISHI_BOX_ + '枚未満）自動起票';
+
+  const sh = getOrderLogSheet_();
+  const newRow = sh.getLastRow() + 1;
+  sh.getRange(newRow, 1).setNumberFormat('@');
+  sh.getRange(newRow, 1, 1, 8).setValues([[bizDateStr_(), floor, itemName, '1箱', memo, 'システム(自動)', now_(), '申請中']]);
+
+  const KF = prop('GROUP_KUROFUKU');
+  if (KF) {
+    push_(KF, '📦【発注依頼】' + nm + 'さんの名刺\n在庫が1箱を切りました。\n' + breakdown + '\n合計 ' + st.total + '枚（1箱＝' + MEISHI_BOX_ + '枚）\n\n' +
+      itemName + ' ×1箱 の発注を起票しました［' + floor + '］\n閉店チェック承認時に確定されます');
+  }
+  return { ok: true, cast: nm, total: st.total, rowIdx: newRow };
+}
+
+// 名簿（スタッフマスタ＝SSOT）の在籍キャスト全員に、名刺の2F/5F行を作る。
+// 既にある行は触らない＝再実行で「新しく入った子の分だけ追加」される同期ボタンとして使える。
+function generateMeishiRowsForAllCasts() {
+  const casts = getCastNamesForYoyaku_(getOrOpenSS_()) || [];
+  if (!casts.length) return { ok: false, error: '名簿から在籍キャストを取得できませんでした' };
+
+  const sh = getStockMasterSheet_();
+  const rows = sh.getDataRange().getValues();
+  const have = {}; // 'まや|2F' => true
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() !== MEISHI_CAT_) continue;
+    have[String(rows[i][0]).trim() + '|' + String(rows[i][2]).trim()] = true;
+  }
+
+  const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
+  const add = [];
+  casts.forEach(function (nm) {
+    ['2F', '5F'].forEach(function (f) {
+      if (have[nm + '|' + f]) return;
+      add.push([nm, MEISHI_CAT_, f, 0, '', '', stamp]); // 在庫数0で作成。実数は棚卸か+/-で入れる
+    });
+  });
+  if (add.length) sh.getRange(sh.getLastRow() + 1, 1, add.length, 7).setValues(add);
+  return { ok: true, created: add.length, casts: casts.length };
 }
 
 // 賞味期限管理品の購入登録（購入日必須・購入履歴ログに記録した上で在庫数を加算）
@@ -12419,6 +12515,7 @@ function submitStocktake(payload) {
   const today = bizDateStr_();
   let count = 0;
   const diffLines = [];
+  const meishiCasts = {}; // 棚卸で実数が入った名刺のキャスト（2F/5Fで重複するので集合にする）
 
   items.forEach(it => {
     const rowIdx = Number(it.rowIdx);
@@ -12436,6 +12533,7 @@ function submitStocktake(payload) {
     logSh.getRange(newRow, 1).setNumberFormat('@');
     logSh.getRange(newRow, 1, 1, 8).setValues([[today, itemName, category, floor, recorded, actual, diff, name]]);
     count++;
+    if (category === MEISHI_CAT_) meishiCasts[itemName] = true;
     if (diff !== 0) diffLines.push(itemName + '：記録' + recorded + '→実数' + actual + '（' + (diff > 0 ? '+' : '') + diff + '）');
   });
 
@@ -12446,6 +12544,8 @@ function submitStocktake(payload) {
     else msg += '\n\n差異なし';
     push_(KF, msg);
   }
+  // 棚卸で名刺の実数が入った結果1箱を切っていれば、そのキャストだけ発注依頼
+  Object.keys(meishiCasts).forEach(function (nm) { try { checkMeishiStock_(nm); } catch (e) {} });
   return { ok: true, count, diffCount: diffLines.length };
 }
 
