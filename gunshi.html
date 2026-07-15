@@ -119,6 +119,51 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .grp-lbl{font-size:10px;color:var(--dim);font-weight:700;letter-spacing:.5px;margin:8px 2px 5px;}
 .seatgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .seatgrid.box{grid-template-columns:1fr;}
+/* ---------- 見取り図（マップ表示） ---------- */
+.hall-map{position:relative;width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;overflow:hidden;}
+.hall-map .seatpos{position:absolute;}
+/* 既存の.seatをそのまま絶対配置で流用＝クリック/バッジ/超過/結合の挙動を一切変えない */
+.hall-map .seatpos>.seat{width:100%;height:100%;min-height:0;padding:4px 5px;border-radius:8px;font-size:11px;}
+.hall-map .seatpos>.seat .st{margin-bottom:1px;}
+.hall-map .seatpos>.seat .snm{font-size:11px;}
+.hall-map .seatpos>.seat .cust{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 席の詳細（予約メタ・組内訳）はマップでは出さない＝タップで開く */
+/* 予約メタ・ボトル情報・担当ctx行はマップでは出さない（担当はチップ側のバッジに出る＝重複）。詳細はタップで開く */
+.hall-map .seatpos>.seat .rsv-meta,
+.hall-map .seatpos>.seat .seat-info,
+.hall-map .seatpos>.seat .sctx-row{display:none;}
+/* キャストのチップはマップでは小さく＋1行固定＝折り返して切れるのを防ぐ（残り時間は残す＝現場が一番見る数字） */
+.hall-map .castchip{font-size:9px;padding:1px 4px;gap:3px;flex-wrap:nowrap;white-space:nowrap;max-width:100%;}
+.hall-map .castchip .ava{width:13px;height:13px;font-size:8px;line-height:13px;flex:none;}
+.hall-map .castchip .cn{overflow:hidden;text-overflow:ellipsis;}
+.hall-map .castchip .tm{font-size:9px;flex:none;}
+.hall-map .castchip .role{font-size:8px;padding:0 3px;flex:none;}
+/* 「空席」はリストでは高さ42px固定＝マップの小セルを突き破るので自動高さに */
+.hall-map .seat .empty{height:auto;}
+/* 小セルは席名と予約タグを1行に収める（折り返すと2行になって溢れる） */
+.hall-map .seatpos.sm .st{flex-wrap:nowrap;}
+.hall-map .seatpos.sm .snm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 小セルの「予約」タグは席名を押し出して切るので出さない（青い枠＋客名で予約と分かる）。ボックスには出る */
+.hall-map .seatpos.sm .rsv-tag{display:none;}
+/* 小セルの隅バッジ（🔴超過 / ⚠担当不在）は席名の上に被って名前を潰すので出さない。
+   セルの色そのものが状態を示す（赤=超過・橙=まもなく・黄=担当不在）＝マップは色で読む。詳細はタップ。 */
+.hall-map .seatpos.sm .cnr{display:none;}
+/* カウンター等の小セルは「席名＋客名＋色」だけ。中身を詰め込むと文字が溢れて逆に読めない */
+.hall-map .seatpos.sm>.seat{padding:3px 4px;}
+.hall-map .seatpos.sm>.seat>*:not(.st):not(.cnr):not(.cust):not(.empty){display:none;}
+.hall-map .seatpos.sm>.seat .pax{display:none;}
+.hall-map .seatpos.sm>.seat .empty{font-size:9px;}
+.decor{position:absolute;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:10px;letter-spacing:1px;color:var(--dim);pointer-events:none;}
+.decor-bar{background:rgba(120,160,210,.10);border:1px solid var(--line2);}
+.decor-in{border:1px dashed var(--line2);border-radius:4px;}
+.map-hd{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.map-tab{padding:4px 14px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:12px;font-weight:700;cursor:pointer;}
+.map-tab.on{background:#0f2040;border-color:#1a50a0;color:#7ab0f0;}
+.map-meta{font-size:10px;color:var(--sub);margin-left:auto;}
+.map-side{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
+.hall-vtgl{display:inline-flex;gap:3px;margin-left:8px;}
+.hall-vtgl b{padding:3px 9px;border-radius:7px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:11px;font-weight:700;cursor:pointer;}
+.hall-vtgl b.on{background:#0f2040;border-color:#1a50a0;color:#7ab0f0;}
 .seat{border-radius:10px;border:1px solid var(--line2);background:var(--panel2);padding:8px 9px;min-height:70px;cursor:pointer;position:relative;overflow:hidden;transition:.1s;}
 .seat:active{transform:scale(.985);}
 .seat .st{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
@@ -848,6 +893,7 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
     <div class="col-hd">
       <span class="ttl">🪑 ホール状況</span>
       <span class="cnt" id="hallCnt"></span>
+      <span id="hallViewTgl"></span>
       <div class="spacer"></div>
       <span id="hallReqSum"></span>
     </div>
@@ -892,7 +938,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-13';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-15';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1294,6 +1340,77 @@ function renderOpeningPre(){
   return h;
 }
 
+/* ============ 見取り図（席マップ）============
+ * 席コード→店内の実位置。2026-07-15にボスがドラッグで確定した実配置そのもの。
+ * キャンバスは 640x370（左上原点）。描画時に%へ変換するので端末幅に自動追従する。
+ * ⚠️座標をここ(gunshi.html)に置く理由：マップは純粋な表示で、GASの`ALL_SEATS`に入れると
+ *   微調整のたびにGASの版を1つ消費する（200上限は再発する恒久制約）。gunshiはPages配信＝push即反映。
+ * ⚠️席の識別は`ALL_SEATS`の配列index。並べ替えると結合(KCOMBINE_)が全部ズレる＝絶対に触らない。
+ *   ここはcodeで引くだけなので順序に非依存。座標を持たない席(待機W/黒服K=物理席でない)はマップ下の帯に出す。
+ */
+var MAP_W=640;
+/* フロアごとに実配置の上端・下端へ切り詰める（=誰も居ない余白を映さない）。y0=切り出し開始・h=高さ */
+var MAP_Y0={'2F':90,'5F':60}, MAP_H={'2F':236,'5F':304};
+var SEAT_POS={
+  /* 2F: 入口=左下／バーが左半分に走り、カウ1〜4がその手前／ボックスは右側 */
+  '2F-C1':{x:30,y:190,w:64,h:52},  '2F-C2':{x:100,y:190,w:64,h:52},
+  '2F-C3':{x:170,y:190,w:64,h:52}, '2F-C4':{x:240,y:190,w:64,h:52},
+  /* ボックスの高さだけ86→104に上げてある。位置はボスの確定どおりで、サイズはモックの初期値＝
+     中身(客名・担当チップ・残り時間)が入りきらず切れるため実測して広げた。重なりは無いことを確認済み。 */
+  '2F-B1':{x:340,y:100,w:120,h:104},'2F-B2':{x:470,y:100,w:170,h:104},
+  '2F-B3':{x:540,y:230,w:96,h:88},
+  /* 5F: 入口=左下／バーは長く、カウ1〜5が手前／カウ6はバーの端で角を回り込む／ボックスは右端に縦積み */
+  '5F-C1':{x:30,y:170,w:64,h:52},  '5F-C2':{x:110,y:170,w:64,h:52},
+  '5F-C3':{x:190,y:170,w:64,h:52}, '5F-C4':{x:270,y:170,w:64,h:52},
+  '5F-C5':{x:350,y:170,w:64,h:52}, '5F-C6':{x:420,y:110,w:64,h:52},
+  '5F-B1':{x:520,y:180,w:120,h:104},'5F-B2':{x:520,y:70,w:120,h:104}
+};
+/* 目印（席ではない・タップ不可の飾り） */
+var FLOOR_DECOR={
+  '2F':[{nm:'バーカウンター',k:'bar',x:0,y:150,w:340,h:34},{nm:'入口',k:'in',x:0,y:260,w:70,h:44}],
+  /* 5Fのバーは420で止める＝カウ6(x420)がバーの端で角を回り込む配置なので、重ねると席がバーの上に乗って見える */
+  '5F':[{nm:'バーカウンター',k:'bar',x:0,y:120,w:420,h:34},{nm:'入口',k:'in',x:0,y:310,w:70,h:44}]
+};
+function mapBox_(p,fl){
+  var H=MAP_H[fl]||370, y0=MAP_Y0[fl]||0;
+  return 'left:'+(p.x/MAP_W*100).toFixed(3)+'%;top:'+((p.y-y0)/H*100).toFixed(3)+'%;'
+       + 'width:'+(p.w/MAP_W*100).toFixed(3)+'%;height:'+(p.h/H*100).toFixed(3)+'%;';
+}
+/* 表示モード（マップ/リスト）と表示フロア。端末フロア(TERM)を既定にする＝自分の階が最初に出る。
+ * ⚠️TERMはinitGunshiがURL/localStorageから後で設定するので、ここで即評価すると常に既定値を掴む。
+ *   初回描画時に遅延解決すること。 */
+var hallView=localStorage.getItem('gunshi_hall_view')||'map';
+var mapFloor=null;
+function curMapFloor(){ if(!mapFloor) mapFloor=(String(TERM).toUpperCase()==='2F')?'2F':'5F'; return mapFloor; }
+function setHallView(v){ hallView=v; try{localStorage.setItem('gunshi_hall_view',v);}catch(e){} renderHall(); }
+function setMapFloor(f){ mapFloor=f; renderHall(); }
+function hallViewTglHtml(){
+  return '<span class="hall-vtgl"><b class="'+(hallView==='map'?'on':'')+'" onclick="setHallView(\'map\')">🗺 マップ</b>'
+       + '<b class="'+(hallView==='list'?'on':'')+'" onclick="setHallView(\'list\')">▦ リスト</b></span>';
+}
+function mapHtml(){
+  var fl=curMapFloor();
+  var seats=SEATS.filter(function(s){return s.floor===fl;});
+  var placed=seats.filter(function(s){return SEAT_POS[s.code];});
+  var rest=seats.filter(function(s){return !SEAT_POS[s.code];});   // 待機・黒服＝物理席でないので帯に
+  var cb=seats.filter(function(s){return s.type==='C'||s.type==='B';});
+  var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
+  var tabs=['2F','5F'].map(function(f){
+    return '<div class="map-tab'+(f===fl?' on':'')+'" onclick="setMapFloor(\''+f+'\')">'+f+'</div>';
+  }).join('');
+  var decor=(FLOOR_DECOR[fl]||[]).map(function(d){
+    return '<div class="decor decor-'+d.k+'" style="'+mapBox_(d,fl)+'"><span>'+esc(d.nm)+'</span></div>';
+  }).join('');
+  // 小さいセル(カウンター)は席名＋客名＋色だけに絞る＝詳細はタップで開く（.smで出し分け）
+  var cells=placed.map(function(s){
+    var p=SEAT_POS[s.code];
+    return '<div class="seatpos'+(p.h<60?' sm':'')+'" style="'+mapBox_(p,fl)+'">'+seatHtml(s)+'</div>';
+  }).join('');
+  return '<div class="map-hd">'+tabs+'<span class="map-meta">稼働 '+occ+'/'+cb.length+'</span></div>'
+       + '<div class="hall-map" style="aspect-ratio:'+MAP_W+'/'+(MAP_H[fl]||370)+'">'+decor+cells+'</div>'
+       + (rest.length?'<div class="map-side">'+rest.map(seatHtml).join('')+'</div>':'');
+}
+
 /* ============ HALL ============ */
 function renderHall(){
   if(!BOOTED&&IS_GAS){
@@ -1305,7 +1422,9 @@ function renderHall(){
   var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
   document.getElementById('hallCnt').textContent='稼働 '+occ+'/'+cb.length+'　超過 '+cb.filter(function(s){return seatStatus(s)==='over';}).length;
   renderHallReqSum();
-  setHtml('hallArea','<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
+  var tgl=document.getElementById('hallViewTgl'); if(tgl) tgl.innerHTML=hallViewTglHtml();
+  // マップ＝見取り図（既定）／リスト＝従来のカードグリッド。切替はlocalStorageに端末ごとで保持。
+  setHtml('hallArea', hallView==='map' ? mapHtml() : '<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
 }
 // ホール状況ヘッダーの「📣 リクエスト」サマリ（未対応があればパルス）。タップで本日の全リクエスト一覧。
 function renderHallReqSum(){
