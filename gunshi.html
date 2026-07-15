@@ -3090,9 +3090,50 @@ function stkListView(){
   if(q) items=st.list.filter(function(i){return i.name.indexOf(q)>=0;});
   else if(combined) items=st.list.filter(function(i){return i.category===st.category;});
   else items=st.list.filter(function(i){return i.category===st.category&&i.floor===st.floor;});
-  var el=document.getElementById('stk-list'); if(el)el.innerHTML=combined?stkRowsCombined(items):stkRows(items,!!q);
+  // 名刺は実数ではなく感覚3段階なので専用描画（+/-の数値カードは使わない）。
+  // 判定が2F+5Fの合計なのでフロア絞り込み中でも必ず両フロアを見せる＝itemsを取り直す
+  var meishi=(st.category==='名刺'&&!q);
+  if(meishi) items=st.list.filter(function(i){return i.category==='名刺';});
+  var el=document.getElementById('stk-list');
+  if(el)el.innerHTML=meishi?stkRowsMeishi(items):(combined?stkRowsCombined(items):stkRows(items,!!q));
   var cnt=document.getElementById('stk-count');
   if(cnt){ if(combined){ var nm={}; items.forEach(function(i){nm[i.name]=1;}); cnt.textContent=Object.keys(nm).length+'品（合算）'; } else cnt.textContent=items.length+'品'+(q?'（検索）':''); }
+}
+/* 名刺ビュー: キャストごとに 2F/5F を感覚3段階で選ぶ。判定は2F+5Fの箱換算合計が1に達しているか。
+   在庫数の列に入る値は箱換算（1箱以上=1 / 半分以上=0.5 / 半分以下=0.25、0=未入力）。バックエンドと一致させること。 */
+var MEISHI_LV=[{v:1,t:'1箱以上'},{v:0.5,t:'半分以上'},{v:0.25,t:'半分以下'}];
+function stkRowsMeishi(items){
+  if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">名刺の登録がありません。右上の「👥 名簿から一括生成」で作成してください。</div>';
+  var g={},order=[];
+  items.forEach(function(it){ if(!g[it.name]){g[it.name]={};order.push(it.name);} g[it.name][it.floor]=it; });
+  order.sort(function(a,b){return a.localeCompare(b,'ja');});
+  return '<div class="stk-grid">'+order.map(function(nm){
+    var grp=g[nm], f2=grp['2F'], f5=grp['5F'];
+    var q2=f2?Number(f2.qty)||0:0, q5=f5?Number(f5.qty)||0:0;
+    var done=(q2>0&&q5>0);                    // 両フロア入力済みで初めて判定できる
+    var ok=done&&(q2+q5>=1);
+    var badge=!done?'<span style="color:var(--dim);font-size:11px;font-weight:800">未入力</span>'
+      :(ok?'<span style="color:#7be0a8;font-size:11px;font-weight:800">✅ 足りてる</span>'
+          :'<span style="color:#ff8a8a;font-size:11px;font-weight:800">⚠️ 1箱に足りない</span>');
+    var rows=['2F','5F'].map(function(f){
+      var it=grp[f]; if(!it) return '<div class="stk-flc empty">'+f+' <span class="stk-flc-q">未登録</span></div>';
+      var cur=Number(it.qty)||0;
+      var btns=MEISHI_LV.map(function(l){
+        var on=(cur===l.v);
+        return '<button class="stk-qbtn xs" style="flex:1;padding:5px 0;font-size:11px;font-weight:800;'+(on?'background:#2a4a6a;border-color:#4a7aaa;color:#cfe8ff':'opacity:.55')+'" onclick="stkSetMeishi('+it.rowIdx+','+l.v+')">'+l.t+'</button>';
+      }).join('');
+      return '<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><span class="stk-flc-f" style="width:22px;flex:none">'+f+'</span><div style="display:flex;gap:3px;flex:1">'+btns+'</div></div>';
+    }).join('');
+    return '<div class="stk-card sum'+(done&&!ok?' zero':'')+'"><div class="stk-card-top"><div class="stk-card-nm">'+esc(nm)+'</div>'+badge+'</div>'+rows+'</div>';
+  }).join('')+'</div>';
+}
+function stkSetMeishi(rowIdx,v){
+  var it=stockState.list.find(function(i){return i.rowIdx===rowIdx;});
+  if(it){it.qty=v;stkListView();} // 楽観更新（サーバ確定値で上書きする）
+  gsr('setMeishiLevel',rowIdx,v).then(function(res){
+    if(!res||!res.ok){alert('保存に失敗\n'+((res&&res.error)||'不明'));openStockManager();return;}
+    if(it){it.qty=res.qty;stkListView();}
+  }).catch(function(e){alert('保存に失敗\n'+(e&&e.message||e));openStockManager();});
 }
 // 合算ビュー: 品名でまとめて 2F/5F/共通 の在庫と合計を表示（同じボトルが両店舗でどれだけあるか一目で分かる）
 function stkRowsCombined(items){
@@ -3185,6 +3226,19 @@ function openStocktake(){
     renderStocktake();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
+/* 棚卸しの名刺行: 実数入力の代わりに感覚3段階（値は箱換算でバックエンドと一致させること） */
+function meishiLvLabel(v){ var h=MEISHI_LV.filter(function(l){return l.v===Number(v);})[0]; return h?h.t:'未入力'; }
+function meishiLvBtns(id,cur){
+  return MEISHI_LV.map(function(l){
+    var on=(Number(cur)===l.v);
+    // white-space:nowrap＝「1箱以上」が2行に折れて潰れるのを防ぐ（iPadでタップできる大きさを確保）
+    return '<button class="stk-qbtn xs" style="flex:1;padding:7px 0;font-size:12px;font-weight:800;white-space:nowrap;'+(on?'background:#2a4a6a;border-color:#4a7aaa;color:#cfe8ff':'opacity:.55')+'" onclick="stkTakeMeishi('+id+','+l.v+')">'+l.t+'</button>';
+  }).join('');
+}
+function stkTakeMeishi(id,v){
+  stkState[id].actual=v;
+  var box=document.getElementById('stk-lv-'+id); if(box)box.innerHTML=meishiLvBtns(id,v);
+}
 function stkOnInput(id,el){
   var v=Number(el.value); if(isNaN(v)||v<0){v=0;}
   stkState[id].actual=v;
@@ -3195,19 +3249,26 @@ function stkOnInput(id,el){
 }
 function renderStocktake(){
   var b=document.getElementById('sheetBody'); if(!b)return;
-  if(!stkState.length){ b.innerHTML='<div class="empty-msg" style="padding:40px 0">棚卸し対象の品目がありません<br><span style="font-size:12px;color:var(--dim)">対象＝消耗品カテゴリ、または賞味期限管理品</span></div>'; return; }
+  if(!stkState.length){ b.innerHTML='<div class="empty-msg" style="padding:40px 0">棚卸し対象の品目がありません<br><span style="font-size:12px;color:var(--dim)">対象＝消耗品カテゴリ、名刺、または賞味期限管理品</span></div>'; return; }
   var order={'5F':0,'2F':1}, byFloor={};
   stkState.forEach(function(it,i){ it._id=i; (byFloor[it.floor]=byFloor[it.floor]||[]).push(it); });
   var floors=Object.keys(byFloor).sort(function(a,b){return (order[a]==null?9:order[a])-(order[b]==null?9:order[b]);});
-  var h='<div class="dr-wrap"><div class="stk-help">各品目の<b>実数</b>を数えて入力してください（初期値＝記録在庫）。差異は棚卸しログに記録され、在庫が実数に更新されます。</div>';
+  var h='<div class="dr-wrap"><div class="stk-help">各品目の<b>実数</b>を数えて入力してください（初期値＝記録在庫）。差異は棚卸しログに記録され、在庫が実数に更新されます。<br>名刺だけは実数ではなく<b>感覚の3段階</b>で選んでください。</div>';
   floors.forEach(function(f){
     h+='<div class="stk-fgroup"><div class="stk-fhead">'+esc(f)+'（'+byFloor[f].length+'品）</div>';
     byFloor[f].forEach(function(it){
       var id=it._id;
+      var ctl;
+      if(it.category==='名刺'){ // 実数ではなく3段階。記録値も数値ではなくラベルで見せる（0.5と出しても読めない）
+        // 親(.stk-ctl)がflex-shrink:0で幅の基準が無く内容幅まで潰れるため、ここで実寸を与える
+        ctl='<span class="stk-rec">記録 '+meishiLvLabel(it.recorded)+'</span><div id="stk-lv-'+id+'" style="display:flex;gap:4px;width:290px;flex:none">'+meishiLvBtns(id,it.actual)+'</div>';
+      }else{
+        ctl='<span class="stk-rec">記録 '+it.recorded+'</span>'
+          +'<input class="finput stk-in" id="stk-in-'+id+'" type="number" min="0" inputmode="numeric" value="'+it.recorded+'" oninput="stkOnInput('+id+',this)">'
+          +'<span class="stk-diff zero" id="stk-d-'+id+'">±0</span>';
+      }
       h+='<div class="stk-row"><div class="stk-nm">'+esc(it.name)+(it.category?' <span class="stk-cat">'+esc(it.category)+'</span>':'')+'</div>'
-        +'<div class="stk-ctl"><span class="stk-rec">記録 '+it.recorded+'</span>'
-        +'<input class="finput stk-in" id="stk-in-'+id+'" type="number" min="0" inputmode="numeric" value="'+it.recorded+'" oninput="stkOnInput('+id+',this)">'
-        +'<span class="stk-diff zero" id="stk-d-'+id+'">±0</span></div></div>';
+        +'<div class="stk-ctl">'+ctl+'</div></div>';
     });
     h+='</div>';
   });

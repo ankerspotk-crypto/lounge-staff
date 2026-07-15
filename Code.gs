@@ -225,7 +225,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'generateMeishiRowsForAllCasts'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'generateMeishiRowsForAllCasts', 'setMeishiLevel'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -12251,27 +12251,35 @@ function changeStockQty(rowIdx, delta) {
   const next = Math.max(0, cur + Number(delta));
   sh.getRange(rowIdx, 4).setValue(next);
   sh.getRange(rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
-  // 名刺を「減らした」時だけ判定。増やした時に鳴らす意味は無く、0から+で実数を積む初期登録で
-  // 1タップ目に「1枚＝1箱未満」と誤発注するのを防ぐ（カテゴリで先に絞り、他品目では余計なシート読みをしない）
-  if (Number(delta) < 0) {
-    const _r = sh.getRange(rowIdx, 1, 1, 2).getValues()[0];
-    if (String(_r[1]).trim() === MEISHI_CAT_) { try { checkMeishiStock_(String(_r[0]).trim()); } catch (e) {} }
-  }
   return { ok: true, qty: next };
 }
 
 // ============================================================
-// 名刺の在庫アラート（キャストごとに 2F＋5F の「合計」が1箱未満で発注依頼を自動起票）
-//  データモデル: 在庫発注マスタの カテゴリ='名刺' / 品名=キャスト名 / フロア=2F|5F / 在庫数=枚。
-//    ＝1キャスト×1フロアで1行。既存の合算ビュー（品名でまとめて2F/5F/合計を表示）にそのまま乗る。
+// 名刺の在庫アラート（キャストごとに 2F＋5F を合わせて1箱に達していなければ発注依頼を自動起票）
+//  データモデル: 在庫発注マスタの カテゴリ='名刺' / 品名=キャスト名 / フロア=2F|5F / 在庫数=箱換算。
+//    ＝1キャスト×1フロアで1行。数えるのは実数ではなく「感覚の3段階」で、在庫数の列には
+//    その箱換算（1箱以上=1 / 半分以上=0.5 / 半分以下=0.25、0=未入力）を入れる。
+//    2F+5Fの箱換算合計が 1 に達していなければ発注。9通り全ての組み合わせで
+//    「半分以上+半分以上=ちょうど1箱=足りてる」「半分以上+半分以下=発注」になる。
 //  ⚠️既存の下限アラート(最低在庫数)は行ごと＝フロア独立の判定なので「2F+5Fの合計」は表現できない。
 //    よって名刺だけ専用に持つ。最低在庫数の列は使わない（二重管理を避けるため空のまま）。
+//  ⚠️名刺は棚卸し対象外（getStocktakeTargets＝消耗品と賞味期限管理品のみ）＝実数を要求される画面は無い。
 //  発注ログに動いている発注（申請中／承認済み・未納品）があれば黙る＝納品待ちの間は催促しない。
 // ============================================================
 const MEISHI_CAT_ = '名刺'; // 在庫発注マスタのカテゴリ名
-const MEISHI_BOX_ = 100;    // 1箱の枚数。キャストごとの合計がこれ未満で発注依頼
+const MEISHI_NEED_ = 1;     // 2F+5Fの箱換算合計がこれに達していなければ発注
+// 感覚3段階。vは箱換算で、在庫数の列に入る実際の値
+const MEISHI_LEVELS_ = [
+  { v: 1,    label: '1箱以上' },
+  { v: 0.5,  label: '半分以上' },
+  { v: 0.25, label: '半分以下' }
+];
+function meishiLabel_(v) {
+  const hit = MEISHI_LEVELS_.filter(function (l) { return l.v === Number(v); })[0];
+  return hit ? hit.label : '未入力';
+}
 
-// キャストの名刺在庫（2F/5F合算）。そのキャストの行が無ければnull
+// キャストの名刺在庫（2F/5F）。そのキャストの行が無ければnull
 function getMeishiStock_(castName) {
   const nm = String(castName || '').trim();
   if (!nm) return null;
@@ -12280,6 +12288,19 @@ function getMeishiStock_(castName) {
   });
   if (!rows.length) return null;
   return { rows: rows, total: rows.reduce(function (a, x) { return a + (Number(x.qty) || 0); }, 0) };
+}
+
+// 感覚3段階をセットして判定。UIの3ボタンから呼ぶ（名刺の入口はここだけ）
+function setMeishiLevel(rowIdx, v) {
+  const val = Number(v);
+  if (!MEISHI_LEVELS_.some(function (l) { return l.v === val; })) return { ok: false, error: '不正なレベル: ' + v };
+  const sh = getStockMasterSheet_();
+  const row = sh.getRange(rowIdx, 1, 1, 2).getValues()[0];
+  if (String(row[1]).trim() !== MEISHI_CAT_) return { ok: false, error: '名刺の行ではありません' };
+  sh.getRange(rowIdx, 4).setValue(val);
+  sh.getRange(rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
+  try { checkMeishiStock_(String(row[0]).trim()); } catch (e) {}
+  return { ok: true, qty: val };
 }
 
 // そのキャストの名刺発注が既に動いているか（申請中＝閉店チェック承認待ち／承認済み・未納品＝納品待ち）
@@ -12294,22 +12315,26 @@ function hasOpenMeishiOrder_(castName) {
   return false;
 }
 
-// 在庫を動かした後にキャスト名を渡して呼ぶ。1箱未満かつ発注が動いていなければ発注ログに起票して黒服へ通知
+// レベルをセットした後にキャスト名を渡して呼ぶ。1箱に達しておらず発注も動いていなければ起票＋通知
 function checkMeishiStock_(castName) {
   const nm = String(castName || '').trim();
   const st = getMeishiStock_(nm);
-  if (!st || st.total >= MEISHI_BOX_) return null; // 未登録 or 足りている
-  if (hasOpenMeishiOrder_(nm)) return null;        // 発注済み・納品待ち
+  if (!st) return null;
+  const f2 = st.rows.filter(function (x) { return x.floor === '2F'; })[0];
+  const f5 = st.rows.filter(function (x) { return x.floor === '5F'; })[0];
+  // ⚠️2F/5Fの両方に入るまで判定しない。片方だけ入れた時点では合計が必ず1未満になり、
+  //   もう片方を入れる前に早合点して発注してしまうため（初期登録で全員分が誤発注される）
+  if (!f2 || !f5 || !(Number(f2.qty) > 0) || !(Number(f5.qty) > 0)) return null;
 
-  const breakdown = ['2F', '5F'].map(function (f) {
-    const r = st.rows.filter(function (x) { return x.floor === f; });
-    return r.length ? f + ' ' + r.reduce(function (a, x) { return a + (Number(x.qty) || 0); }, 0) + '枚' : f + ' 未登録';
-  }).join(' / ');
+  const total = Number(f2.qty) + Number(f5.qty);
+  if (total >= MEISHI_NEED_) return null;   // 1箱に達している
+  if (hasOpenMeishiOrder_(nm)) return null; // 発注済み・納品待ち
+
+  const breakdown = '2F ' + meishiLabel_(f2.qty) + ' / 5F ' + meishiLabel_(f5.qty);
   // 発注ログはフロア必須。合計ルールなので「残りが少ない方」を宛先にし、内訳はメモに残す
-  const lower = st.rows.slice().sort(function (a, b) { return (Number(a.qty) || 0) - (Number(b.qty) || 0); })[0];
-  const floor = (lower && (lower.floor === '2F' || lower.floor === '5F')) ? lower.floor : '2F';
+  const floor = (Number(f2.qty) <= Number(f5.qty)) ? '2F' : '5F';
   const itemName = MEISHI_CAT_ + ' ' + nm;
-  const memo = breakdown + '（合計' + st.total + '枚＝1箱' + MEISHI_BOX_ + '枚未満）自動起票';
+  const memo = breakdown + '（合わせて1箱に足りない）自動起票';
 
   const sh = getOrderLogSheet_();
   const newRow = sh.getLastRow() + 1;
@@ -12318,10 +12343,10 @@ function checkMeishiStock_(castName) {
 
   const KF = prop('GROUP_KUROFUKU');
   if (KF) {
-    push_(KF, '📦【発注依頼】' + nm + 'さんの名刺\n在庫が1箱を切りました。\n' + breakdown + '\n合計 ' + st.total + '枚（1箱＝' + MEISHI_BOX_ + '枚）\n\n' +
+    push_(KF, '📦【発注依頼】' + nm + 'さんの名刺\n2Fと5Fを合わせて1箱に足りません。\n' + breakdown + '\n\n' +
       itemName + ' ×1箱 の発注を起票しました［' + floor + '］\n閉店チェック承認時に確定されます');
   }
-  return { ok: true, cast: nm, total: st.total, rowIdx: newRow };
+  return { ok: true, cast: nm, total: total, rowIdx: newRow };
 }
 
 // 名簿（スタッフマスタ＝SSOT）の在籍キャスト全員に、名刺の2F/5F行を作る。
@@ -12476,7 +12501,8 @@ function kioskDeleteDelivery(rowIdxList) {
 
 // 棚卸し対象（消耗品カテゴリ、または賞味期限管理品）
 function getStocktakeTargets() {
-  return getStockList().filter(it => it.category === '消耗品' || it.expiryManaged);
+  // 名刺は実数ではなく感覚3段階だが、棚卸しで一括更新したいので対象に含める（フロントが3ボタンで出す）
+  return getStockList().filter(it => it.category === '消耗品' || it.category === MEISHI_CAT_ || it.expiryManaged);
 }
 
 // 【1回だけ手動実行】在庫マスタの「共通」品を 2F/5F の各行に分割（在庫0スタート・初回棚卸しで実数登録）。
@@ -12515,7 +12541,7 @@ function submitStocktake(payload) {
   const today = bizDateStr_();
   let count = 0;
   const diffLines = [];
-  const meishiCasts = {}; // 棚卸で実数が入った名刺のキャスト（2F/5Fで重複するので集合にする）
+  const meishiCasts = {}; // 名刺は2F/5Fの2行で1キャストなので集合にして最後に1回だけ判定する
 
   items.forEach(it => {
     const rowIdx = Number(it.rowIdx);
@@ -12525,6 +12551,9 @@ function submitStocktake(payload) {
     const itemName = String(row[0]), category = String(row[1]), floor = String(row[2]);
     const recorded = Number(row[3]) || 0;
     const diff = actual - recorded;
+    // 名刺は感覚3段階なので、箱換算の3値以外が来たら書かずに捨てる（実数入力の混入防止）
+    if (category === MEISHI_CAT_ && !MEISHI_LEVELS_.some(function (l) { return l.v === actual; })) return;
+    if (category === MEISHI_CAT_) meishiCasts[itemName] = true;
 
     sh.getRange(rowIdx, 4).setValue(actual);
     sh.getRange(rowIdx, 7).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
@@ -12533,8 +12562,11 @@ function submitStocktake(payload) {
     logSh.getRange(newRow, 1).setNumberFormat('@');
     logSh.getRange(newRow, 1, 1, 8).setValues([[today, itemName, category, floor, recorded, actual, diff, name]]);
     count++;
-    if (category === MEISHI_CAT_) meishiCasts[itemName] = true;
-    if (diff !== 0) diffLines.push(itemName + '：記録' + recorded + '→実数' + actual + '（' + (diff > 0 ? '+' : '') + diff + '）');
+    if (diff !== 0) {
+      diffLines.push(category === MEISHI_CAT_
+        ? (itemName + 'の名刺[' + floor + ']：' + meishiLabel_(recorded) + '→' + meishiLabel_(actual)) // 0.5→0.25では読めない
+        : (itemName + '：記録' + recorded + '→実数' + actual + '（' + (diff > 0 ? '+' : '') + diff + '）'));
+    }
   });
 
   const KF = prop('GROUP_KUROFUKU');
@@ -12544,7 +12576,7 @@ function submitStocktake(payload) {
     else msg += '\n\n差異なし';
     push_(KF, msg);
   }
-  // 棚卸で名刺の実数が入った結果1箱を切っていれば、そのキャストだけ発注依頼
+  // 棚卸しで名刺のレベルが確定した子だけ判定（2F/5Fが同時に入るので早合点にならない）
   Object.keys(meishiCasts).forEach(function (nm) { try { checkMeishiStock_(nm); } catch (e) {} });
   return { ok: true, count, diffCount: diffLines.length };
 }
