@@ -3000,10 +3000,17 @@ function renderStock(){
   // メイン
   // 名刺は品名＝キャスト名なので名簿(SSOT)から行を起こす。再実行で新しく入った子の分だけ足される＝同期ボタン。
   // 左下のmodeFlag(本番でも常時表示・position:fixed)に被らないようサイドバー下端ではなくツールバーに置く
-  var genBtn=(st.category==='名刺')?'<button class="stk-nav-btn" style="width:auto;background:#1b1630;border-color:#4a3a7a;color:#b9a6ff;white-space:nowrap;padding:0 12px" onclick="stkGenMeishi()">👥 名簿から一括生成</button>':'';
+  var genBtn=(st.category==='名刺')?'<button class="stk-nav-btn" style="width:auto;background:#1b1630;border-color:#4a3a7a;color:#b9a6ff;white-space:nowrap;padding:0 12px" onclick="stkGenMeishi()">👥 名簿と同期</button>':'';
   var main='<div class="stk-main"><div class="stk-toolbar"><input id="stk-search" class="finput" placeholder="🔍 品名で検索（カテゴリ・フロア問わず）" oninput="stkListView()">'+genBtn+'<span id="stk-count" style="font-size:12px;color:var(--dim);font-weight:700"></span></div><div class="stk-scroll"><div id="stk-list"></div>';
   var addFloorSel=st.floor==='合算'?'2F':st.floor;
-  main+='<div class="stk-forms"><div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
+  main+='<div class="stk-forms">';
+  // 名刺は品名＝キャスト名(名簿と完全一致)・2F/5Fの2行セットが前提なので、自由入力の品目追加は出さない。
+  // 打ち間違えれば存在しないキャストのカードができ、片フロアだけだと判定が回らず永久に発注が飛ばない。
+  if(st.category==='名刺'){
+    main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#b9a6ff">👥 名刺は名簿と同期して管理します</div><div style="font-size:12px;color:var(--dim);line-height:1.7">品名＝キャスト名・2F/5Fの2行セットが前提のため、ここからの手動追加はできません。<br>上の「👥 名簿と同期」を押すと、<b>名簿にいて未登録の子を追加</b>し、<b>名簿にいない子（退職者）の行を削除</b>します。</div></div>';
+  }else{
+    main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#aadd66">➕ 新しい品目をマスタに追加</div><div style="display:flex;gap:6px"><input id="stk-new-name" class="finput" placeholder="品名"><select id="stk-new-floor" class="finput" style="width:80px">'+['2F','5F'].map(function(f){return '<option'+(f===addFloorSel?' selected':'')+'>'+f+'</option>';}).join('')+'</select><input id="stk-new-min" class="finput" style="width:110px" placeholder="最低在庫"></div><label class="stk-check"><input type="checkbox" id="stk-new-exp"> 賞味期限管理する（購入日を都度登録）</label><div class="savebtn" style="background:#1a2a10;border-color:#447722;color:#aadd66;margin-top:10px" onclick="stkAddNew()">'+esc(st.category)+'に追加</div></div>';
+  }
   main+='<div class="stk-sec"><div class="stk-sec-t" style="color:#ffbf6a">🛒 マスタにない商品を発注依頼のみ送る</div><div style="display:flex;gap:6px"><input id="stk-free-name" class="finput" placeholder="品名"><input id="stk-free-qty" class="finput" style="width:90px" placeholder="数量"></div><div class="savebtn" style="background:#2a1a10;border-color:#885522;color:#ffaa66;margin-top:10px" onclick="stkFreeOrder()">発注依頼を送信</div></div></div>';
   main+='</div></div>';
   b.innerHTML='<div class="stk-wrap">'+undel+'<div id="sv-card-wrap">'+souvenirCardHtml()+'</div><div class="stk-body">'+nav+main+'</div></div>'; stkListView();
@@ -3103,7 +3110,7 @@ function stkListView(){
    在庫数の列に入る値は箱換算（1箱以上=1 / 半分以上=0.5 / 半分以下=0.25、0=未入力）。バックエンドと一致させること。 */
 var MEISHI_LV=[{v:1,t:'1箱以上'},{v:0.5,t:'半分以上'},{v:0.25,t:'半分以下'}];
 function stkRowsMeishi(items){
-  if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">名刺の登録がありません。右上の「👥 名簿から一括生成」で作成してください。</div>';
+  if(!items.length) return '<div class="empty-msg" style="padding:24px 0;font-size:13px">名刺の登録がありません。上の「👥 名簿と同期」で作成してください。</div>';
   var g={},order=[];
   items.forEach(function(it){ if(!g[it.name]){g[it.name]={};order.push(it.name);} g[it.name][it.floor]=it; });
   order.sort(function(a,b){return a.localeCompare(b,'ja');});
@@ -3173,14 +3180,21 @@ function stkOrder(rowIdx){
   if(!confirm(it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
   gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:it.name,floor:it.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok){alert('発注依頼を送信しました');if(el)el.value='';}else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
-/* 名刺: 名簿の在籍キャスト全員に2F/5Fの行を作る（既存行は触らないので再実行＝新入りの追加） */
+/* 名刺: 名簿(SSOT)と行を同期する。新入りを追加し、名簿にいない子（退職者）の行は削除する。
+   削除は不可逆（入力済みのレベルが消える）ので、何が起きるかを明記して確認を取る。 */
 function stkGenMeishi(){
-  if(!confirm('名簿の在籍キャスト全員に、名刺の2F/5F行を作ります。\n\n・既にある行はそのまま（新しく入った子の分だけ追加）\n・在庫数は0で作成 → 実数は棚卸しで入れてください\n\n実行しますか？'))return;
-  gsr('generateMeishiRowsForAllCasts').then(function(res){
+  if(!confirm('名刺の行を名簿と同期します。\n\n・名簿にいて未登録の子 → 2F/5Fの行を追加（未入力で作成）\n・名簿にいない子（退職者など）→ 名刺の行を削除\n・既に登録済みの子はそのまま（入力したレベルは保持）\n\n⚠️削除は取り消せません。実行しますか？'))return;
+  gsr('syncMeishiRowsWithRoster').then(function(res){
     if(!res||!res.ok){alert('エラー: '+((res&&res.error)||'不明'));return;}
-    toast(res.created?('名刺の行を'+res.created+'件作成（在籍'+res.casts+'名）'):'追加なし（全員登録済み）');
+    var del=res.deleted||[];
+    var msg=[];
+    if(res.created)msg.push('追加 '+res.created+'行');
+    if(del.length)msg.push('削除 '+del.length+'名（'+del.join('、')+'）');
+    // 削除は黙って済ませない＝誰が消えたかは必ず見せる
+    if(del.length)alert('名簿と同期しました（在籍'+res.casts+'名）\n\n'+msg.join('\n')+'\n\n削除された子は名簿で退職になっています。');
+    else toast(msg.length?('名簿と同期：'+msg.join(' / ')):'変更なし（名簿と一致）');
     openStockManager();
-  }).catch(function(e){alert('一括生成に失敗\n'+(e&&e.message||e));}); // 原因を握り潰さない（GUNSHI_API_FNS漏れ等はここに出る）
+  }).catch(function(e){alert('同期に失敗\n'+(e&&e.message||e));}); // 原因を握り潰さない（GUNSHI_API_FNS漏れ等はここに出る）
 }
 function stkAddNew(){
   var name=((document.getElementById('stk-new-name')||{}).value||'').trim(); if(!name){alert('品名を入力してください');return;}

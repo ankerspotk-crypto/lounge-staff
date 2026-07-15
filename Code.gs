@@ -225,7 +225,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'generateMeishiRowsForAllCasts', 'setMeishiLevel'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -12349,30 +12349,41 @@ function checkMeishiStock_(castName) {
   return { ok: true, cast: nm, total: total, rowIdx: newRow };
 }
 
-// 名簿（スタッフマスタ＝SSOT）の在籍キャスト全員に、名刺の2F/5F行を作る。
-// 既にある行は触らない＝再実行で「新しく入った子の分だけ追加」される同期ボタンとして使える。
-function generateMeishiRowsForAllCasts() {
+// 名刺の行を名簿（スタッフマスタ＝SSOT）と同期する。
+//  ・名簿にいて行が無い子   → 2F/5Fの行を作る（既存行は触らない＝入力済みのレベルを保つ）
+//  ・名簿にいない品名の名刺行 → 削除（退職者の掃除）。getCastNamesForYoyaku_ は退職者・黒服・
+//    ドライバーを既に除外しているので、名刺行に残る「名簿にいない名前」＝退職 or 改名。
+//  ⚠️削除は不可逆。名簿が1件も取れなかった時は全行が削除対象になってしまうので何もせず抜ける。
+//  ⚠️deleteRow は行番号がずれるので必ず下から消す。
+function syncMeishiRowsWithRoster() {
   const casts = getCastNamesForYoyaku_(getOrOpenSS_()) || [];
-  if (!casts.length) return { ok: false, error: '名簿から在籍キャストを取得できませんでした' };
+  if (!casts.length) return { ok: false, error: '名簿から在籍キャストを取得できませんでした（安全のため何も変更していません）' };
+  const inRoster = {};
+  casts.forEach(function (n) { inRoster[String(n).trim()] = true; });
 
   const sh = getStockMasterSheet_();
   const rows = sh.getDataRange().getValues();
-  const have = {}; // 'まや|2F' => true
+  const have = {};      // 'まや|2F' => true
+  const delRows = [];   // 削除する行番号
+  const delNames = {};  // 削除したキャスト名（報告用）
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).trim() !== MEISHI_CAT_) continue;
-    have[String(rows[i][0]).trim() + '|' + String(rows[i][2]).trim()] = true;
+    const nm = String(rows[i][0]).trim();
+    if (inRoster[nm]) have[nm + '|' + String(rows[i][2]).trim()] = true;
+    else { delRows.push(i + 1); delNames[nm] = true; }
   }
+  delRows.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); }); // 下から
 
   const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
   const add = [];
   casts.forEach(function (nm) {
     ['2F', '5F'].forEach(function (f) {
       if (have[nm + '|' + f]) return;
-      add.push([nm, MEISHI_CAT_, f, 0, '', '', stamp]); // 在庫数0で作成。実数は棚卸か+/-で入れる
+      add.push([nm, MEISHI_CAT_, f, 0, '', '', stamp]); // 0=未入力で作成。レベルは3ボタンか棚卸しで入れる
     });
   });
   if (add.length) sh.getRange(sh.getLastRow() + 1, 1, add.length, 7).setValues(add);
-  return { ok: true, created: add.length, casts: casts.length };
+  return { ok: true, created: add.length, deleted: Object.keys(delNames), casts: casts.length };
 }
 
 // 賞味期限管理品の購入登録（購入日必須・購入履歴ログに記録した上で在庫数を加算）
