@@ -100,9 +100,11 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .td-close{padding:13px 20px;border-radius:11px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-weight:700;font-size:15px;cursor:pointer;}
 
 /* ---------- Dashboard split ---------- */
-.dash{flex:1;display:flex;gap:12px;padding:12px 15px;min-height:0;}
+.dash{flex:1;display:flex;gap:10px;padding:10px 12px;min-height:0;}
 .col{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;}
-.col-hall{flex:1.65;}
+/* ⚠️ホールを太らせたぶんだけ予約が痩せる。予約はmin-width:330で自分を守る＝狭い端末では
+ *   ホール側が譲る（1024幅のiPadだとここが効いてホールは約650px）。数字を上げすぎない。 */
+.col-hall{flex:2;}
 .col-rsv{flex:1;min-width:330px;}
 .col-hd{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line);flex-shrink:0;}
 .col-hd .ttl{font-size:14px;font-weight:800;}
@@ -110,50 +112,69 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .col-hd .mini-btn{font-size:12px;font-weight:700;padding:6px 11px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--accent);cursor:pointer;}
 .col-hd .mini-btn.add{background:#0d2016;border-color:#25603e;color:var(--ok);}
 .col-scroll{flex:1;overflow-y:auto;padding:12px 13px 16px;min-height:0;}
+/* 見取り図は面積がそのまま文字の大きさになる＝ホール側だけ外周を削る（予約カードは従来の余白のまま） */
+.col-hall>.col-scroll{padding:8px 8px 10px;}
 
 /* ---------- Hall (seats) ---------- */
-.floors{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.floor .floor-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 2px;}
+.floors{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.floor .floor-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;padding:0 2px;}
 .floor .fl{font-size:14px;font-weight:800;letter-spacing:1px;}
 .floor .meta{font-size:10px;color:var(--sub);}
 .grp-lbl{font-size:10px;color:var(--dim);font-weight:700;letter-spacing:.5px;margin:8px 2px 5px;}
 .seatgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .seatgrid.box{grid-template-columns:1fr;}
 /* ---------- 見取り図（マップ表示・2F/5Fを横並びで同時表示） ---------- */
-/* キャンバスは320x360。1フロア≒300px＝ほぼ等倍で、カウンター44 → 約41px */
-.hall-map{position:relative;width:100%;aspect-ratio:320/360;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;overflow:hidden;}
+/* ⚠️縦横比はJS側(MAP_W/MAP_H)がインラインで入れる＝ここに数字を焼かない（切り抜きを変えると黙ってズレる） */
+.hall-map{position:relative;width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;overflow:hidden;}
 .hall-map .seatpos{position:absolute;}
-/* 既存の.seatをそのまま絶対配置で流用＝クリック/バッジ/超過/結合の挙動を一切変えない */
-.hall-map .seatpos>.seat{width:100%;height:100%;min-height:0;padding:3px 4px;border-radius:7px;font-size:10px;}
-.hall-map .seatpos>.seat .st{margin-bottom:1px;}
-.hall-map .seatpos>.seat .snm{font-size:10px;}
-.hall-map .seatpos>.seat .cust{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* 予約メタ・ボトル情報・担当ctx行はマップでは出さない（担当はチップ側のバッジに出る＝重複）。詳細はタップで開く */
-.hall-map .seatpos>.seat .rsv-meta,
-.hall-map .seatpos>.seat .seat-info,
-.hall-map .seatpos>.seat .sctx-row{display:none;}
-/* キャストのチップはマップでは小さく＋1行固定＝折り返して切れるのを防ぐ（残り時間は残す＝現場が一番見る数字） */
-.hall-map .castchip{font-size:9px;padding:1px 4px;gap:3px;flex-wrap:nowrap;white-space:nowrap;max-width:100%;}
-.hall-map .castchip .ava{width:13px;height:13px;font-size:8px;line-height:13px;flex:none;}
+/* マップのセルはmapSeatCell_が描く＝一覧のseatHtmlは入らない（クリック契約と状態クラスだけ共通）。
+ * ボトル情報・会員番号・予約メタは出さない＝枠に入らない。詳細はタップで開く。 */
+.hall-map .seatpos>.seat{width:100%;height:100%;min-height:0;border-radius:7px;}
+/* キャストのチップは1行固定＝折り返して切れるのを防ぐ（残り時間は残す＝現場が一番見る数字）。
+ * 切り抜きで枠が広がったぶんは文字に回す＝キャスト名と残り時間はマップの主役の一つ */
+.hall-map .castchip{font-size:12px;padding:0 5px 0 1px;gap:4px;flex-wrap:nowrap;white-space:nowrap;max-width:100%;}
+.hall-map .castchip .ava{width:17px;height:17px;font-size:10px;line-height:17px;flex:none;}
 .hall-map .castchip .cn{overflow:hidden;text-overflow:ellipsis;}
-.hall-map .castchip .tm{font-size:9px;flex:none;}
-.hall-map .castchip .role{font-size:8px;padding:0 3px;flex:none;}
-/* 「空席」はリストでは高さ42px固定＝マップのセルを突き破るので自動高さに */
-.hall-map .seat .empty{height:auto;}
-/* ---- 小セル(カウンター等)専用の2段表示 ----
-   1段目=席名＋残り時間／2段目=アバター(キャスト色+頭文字)＋客名。41pxの枠に「席・時間・誰・客」を収める */
-.hall-map .seat.mini{display:flex;flex-direction:column;justify-content:center;gap:2px;padding:3px 5px;}
-.mini-r1{display:flex;align-items:center;justify-content:space-between;gap:3px;line-height:1.1;min-width:0;}
-.mini-r1 b{font-size:11px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mini-t{font-size:9px;font-weight:800;color:#4dcc84;flex:none;}
+.hall-map .castchip .tm{font-size:12px;flex:none;}
+.hall-map .castchip .role{font-size:9px;padding:0 3px;flex:none;}
+/* ---- マップのセル（カウンター=2段 / ボックス=3段） ----
+   ⚠️文字を上げる時は必ず実測で追う＝段+gap+paddingが枠の高さ(カウンター約56px・ボックス80〜102px)を
+     超えると黙って切れる。過去に一覧の部品を流用して46px溢れ、キャストが消えていた。 */
+.hall-map .seat.mini{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:3px 6px;}
+.hall-map .seat.box{display:flex;flex-direction:column;justify-content:flex-start;gap:2px;padding:4px 6px;}
+/* キャストのチップ置き場。入り切らないぶんは下から隠れる＝席名と客名は必ず残る */
+.mini-r3{display:flex;flex-direction:column;align-items:flex-start;gap:2px;flex:1;min-height:0;overflow:hidden;}
+.mini-r3 .castchip{margin:0;}
+.mini-sub{font-size:11px;font-weight:700;color:var(--sub);}
+/* 客に付くフラグ＝席名の右（客名の行には置かない）。記号だけ＝1行に収める。
+ * ⚠️shrinkを効かせて席名より先に欠けさせる＝枠が足りない時に削るのはフラグ、席名と客名は死守。
+ *   欠けたフラグは「まだ何かある」の合図として読める＝タップで詳細に出る。 */
+.mflags{display:inline-flex;align-items:center;gap:2px;flex:0 1 auto;min-width:0;overflow:hidden;margin-right:auto;}
+.mflag{font-size:10px;font-weight:800;line-height:15px;padding:0 3px;border-radius:5px;cursor:default;flex:none;}
+.mflag.f-vip{background:#2a1030;color:#e79ad6;border:1px solid #6a2a70;}
+.mflag.f-bottle{background:#12240f;border:1px solid #356020;}
+.mflag.f-bday{background:#151046;border:1px solid #4436a8;}
+.mflag.f-ng{background:#2a0e0e;color:#f08080;border:1px solid #7a2828;}
+.mflag.f-req{background:#20203a;color:#9aa8c8;border:1px solid var(--line2);cursor:pointer;}
+.mflag.f-req.un{background:#2a1600;color:#ffb060;border-color:#7a4a10;animation:apulse 1.6s ease-in-out infinite;}
+.mini-r1{display:flex;align-items:center;justify-content:space-between;gap:4px;line-height:1.15;min-width:0;}
+/* 席名は縮まない＝削っていいのはフラグだけ。極端に長い結合名（カウ1＋2＋3）だけ62%で省略する */
+.mini-r1 b{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;max-width:62%;}
+.mini-t{font-size:12px;font-weight:800;color:#4dcc84;flex:none;}
 .mini-t.over{color:#ff8a8a;} .mini-t.warn{color:#e6b23a;} .mini-t.rsv{color:#9dc8ff;}
-.mini-r2{display:flex;align-items:center;gap:3px;line-height:1.1;min-width:0;}
-.mini-av{width:14px;height:14px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
-  font-size:9px;font-weight:800;color:#0b0b12;font-style:normal;}
-.mini-c{font-size:10px;color:#cfe0f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mini-c.rsv{color:#bcd8ff;}
-.mini-e{font-size:10px;color:var(--dim);}
-.mini-p{font-size:9px;font-weight:800;color:var(--sub);flex:none;}
+.mini-r2{display:flex;align-items:center;gap:4px;line-height:1.15;min-width:0;}
+.mini-av{width:19px;height:19px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:800;color:#0b0b12;font-style:normal;}
+/* 客名＝黒服が一番遠くから読む行。席名より一段大きく、白寄りで抜く。
+ * ⚠️この行に他の要素を足さない＝122pxしかなく、足すと削れるのは必ず客名の側になる */
+.mini-c{font-size:15px;font-weight:700;color:#eaf2ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mini-c.rsv{color:#bcd8ff;font-weight:600;}
+.mini-e{font-size:13px;color:var(--dim);}
+.mini-p{font-size:11px;font-weight:800;color:var(--sub);flex:none;}
+/* 狭い席（5Fカウ6＝角）だけ一段落とす＝1024px幅のiPadで客名が削れるのを防ぐ */
+.hall-map .seatpos.nw .mini-c{font-size:13px;}
+.hall-map .seatpos.nw .mini-r1 b{font-size:13px;}
+.hall-map .seatpos.nw .mini-av{width:17px;height:17px;font-size:10px;}
 /* 待機・黒服の帯（座標を持たない＝物理席ではない）。1フロア約300pxなので1列で積む */
 .map-side{display:grid;grid-template-columns:1fr;gap:6px;margin-top:8px;}
 .hall-vtgl{display:inline-flex;gap:3px;margin-left:8px;}
@@ -963,23 +984,23 @@ function castKubun(name){ return CASTKUBUN[String(name||'').replace(/\s/g,'')]||
 function castBadge(name){ var k=castKubun(name); if(!k)return ''; return '<span class="kubun-badge '+(k==='派遣'?'haken':'taiken')+'">'+k+'</span>'; }
 
 var SEATS=[
-  {floor:'2F',type:'C',name:'カウンター1',pax:1,cust:'田中 様',member:'No.204',bottle:'獺祭 純米',bottlePos:'2F-C棚1',nomikata:'ロック',tantou:'まや',set:60,casts:[{n:'まや',mins:22,status:'ok'}],tags:['bottle']},
-  {floor:'2F',type:'C',name:'カウンター2',pax:0,casts:[]},
-  {floor:'2F',type:'C',name:'カウンター3',pax:1,cust:'佐藤 様',member:'No.156',bday:'7/5',tantou:'のあ',set:60,casts:[{n:'のあ',mins:6,status:'warn'}],tags:['bday']},
-  {floor:'2F',type:'C',name:'カウンター4',pax:0,casts:[],rsv:{time:'21:00',cust:'山本',tantou:'まや'}},
-  {floor:'2F',type:'B',name:'ボックス1',pax:3,cust:'鈴木 様',member:'No.128',bottle:'山崎12年',bottlePos:'2F-B棚3',nomikata:'水割り',bday:'5/12',tantou:'みれい',dohan:'ゆき',set:90,casts:[{n:'みれい',mins:40,status:'ok'},{n:'ゆき',mins:12,status:'ok'}],tags:['vip','bottle']},
-  {floor:'2F',type:'B',name:'ボックス2',pax:5,cust:'高橋 様',member:'No.045',bottle:'モエ',bottlePos:'冷蔵庫',tantou:'りお',set:90,casts:[{n:'りお',mins:-4,status:'over'},{n:'かい',mins:8,status:'warn'}],tags:['vip']},
-  {floor:'2F',type:'B',name:'ボックス3',pax:0,casts:[]},
-  {floor:'2F',type:'W',name:'待機',casts:[{n:'まき',mins:12},{n:'なな',mins:5}]},
-  {floor:'5F',type:'C',name:'カウンター1',pax:1,cust:'伊藤 様',member:'No.220',tantou:'ゆうか',set:60,casts:[{n:'ゆうか',mins:33,status:'ok'}],tags:[]},
-  {floor:'5F',type:'C',name:'カウンター2',pax:0,casts:[]},
-  {floor:'5F',type:'C',name:'カウンター3',pax:1,cust:'渡辺 様',member:'No.301',nomikata:'ハイボール',tantou:'れな',set:60,casts:[{n:'れな',mins:1,status:'warn'}],tags:['ng']},
-  {floor:'5F',type:'C',name:'カウンター4',pax:0,casts:[],rsv:{time:'20:30',cust:'中村',tantou:'ゆうか'}},
-  {floor:'5F',type:'C',name:'カウンター5',pax:0,casts:[]},
-  {floor:'5F',type:'C',name:'カウンター6',pax:1,cust:'小林 様',member:'No.077',tantou:'あん',set:60,casts:[{n:'あん',mins:18,status:'ok'}],tags:[]},
-  {floor:'5F',type:'B',name:'ボックス1',pax:4,cust:'加藤 様',member:'No.312',bottle:'響17年',bottlePos:'5F-A棚1',nomikata:'ロック',tantou:'まや',awayMin:18,set:90,casts:[{n:'ここ',mins:-12,status:'over'}],tags:['vip','bottle']},
-  {floor:'5F',type:'B',name:'ボックス2',pax:0,casts:[]},
-  {floor:'5F',type:'W',name:'待機',casts:[{n:'さく',mins:8}]}
+  {code:'2F-C1',floor:'2F',type:'C',name:'カウンター1',pax:1,cust:'田中 様',member:'No.204',bottle:'獺祭 純米',bottlePos:'2F-C棚1',nomikata:'ロック',tantou:'まや',set:60,casts:[{n:'まや',mins:22,status:'ok'}],tags:['bottle']},
+  {code:'2F-C2',floor:'2F',type:'C',name:'カウンター2',pax:0,casts:[]},
+  {code:'2F-C3',floor:'2F',type:'C',name:'カウンター3',pax:1,cust:'佐藤 様',member:'No.156',bday:'7/5',tantou:'のあ',set:60,casts:[{n:'のあ',mins:6,status:'warn'}],tags:['bday']},
+  {code:'2F-C4',floor:'2F',type:'C',name:'カウンター4',pax:0,casts:[],rsv:{time:'21:00',cust:'山本',tantou:'まや'}},
+  {code:'2F-B1',floor:'2F',type:'B',name:'ボックス1',pax:3,cust:'鈴木 様',member:'No.128',bottle:'山崎12年',bottlePos:'2F-B棚3',nomikata:'水割り',bday:'5/12',tantou:'みれい',dohan:'ゆき',set:90,casts:[{n:'みれい',mins:40,status:'ok'},{n:'ゆき',mins:12,status:'ok'}],tags:['vip','bottle']},
+  {code:'2F-B2',floor:'2F',type:'B',name:'ボックス2',pax:5,cust:'高橋 様',member:'No.045',bottle:'モエ',bottlePos:'冷蔵庫',tantou:'りお',set:90,casts:[{n:'りお',mins:-4,status:'over'},{n:'かい',mins:8,status:'warn'}],tags:['vip']},
+  {code:'2F-B3',floor:'2F',type:'B',name:'ボックス3',pax:0,casts:[]},
+  {code:'2F-W',floor:'2F',type:'W',name:'待機',casts:[{n:'まき',mins:12},{n:'なな',mins:5}]},
+  {code:'5F-C1',floor:'5F',type:'C',name:'カウンター1',pax:1,cust:'伊藤 様',member:'No.220',tantou:'ゆうか',set:60,casts:[{n:'ゆうか',mins:33,status:'ok'}],tags:[]},
+  {code:'5F-C2',floor:'5F',type:'C',name:'カウンター2',pax:0,casts:[]},
+  {code:'5F-C3',floor:'5F',type:'C',name:'カウンター3',pax:1,cust:'渡辺 様',member:'No.301',nomikata:'ハイボール',tantou:'れな',set:60,casts:[{n:'れな',mins:1,status:'warn'}],tags:['ng']},
+  {code:'5F-C4',floor:'5F',type:'C',name:'カウンター4',pax:0,casts:[],rsv:{time:'20:30',cust:'中村',tantou:'ゆうか'}},
+  {code:'5F-C5',floor:'5F',type:'C',name:'カウンター5',pax:0,casts:[]},
+  {code:'5F-C6',floor:'5F',type:'C',name:'カウンター6',pax:1,cust:'小林 様',member:'No.077',tantou:'あん',set:60,casts:[{n:'あん',mins:18,status:'ok'}],tags:[]},
+  {code:'5F-B1',floor:'5F',type:'B',name:'ボックス1',pax:4,cust:'加藤 様',member:'No.312',bottle:'響17年',bottlePos:'5F-A棚1',nomikata:'ロック',tantou:'まや',awayMin:18,set:90,casts:[{n:'ここ',mins:-12,status:'over'}],tags:['vip','bottle']},
+  {code:'5F-B2',floor:'5F',type:'B',name:'ボックス2',pax:0,casts:[]},
+  {code:'5F-W',floor:'5F',type:'W',name:'待機',casts:[{n:'さく',mins:8}]}
 ];
 
 var RSV=[
@@ -1361,8 +1382,6 @@ function renderOpeningPre(){
  * ⚠️席の識別は`ALL_SEATS`の配列index。並べ替えると結合(KCOMBINE_)が全部ズレる＝絶対に触らない。
  *   ここはcodeで引くだけなので順序に非依存。座標を持たない席(待機W/黒服K=物理席でない)はマップ下の帯に出す。
  */
-/* 各フロアのキャンバス（左上原点）。2F・5Fを横に並べて同時表示するので1フロア≒300px＝ほぼ等倍。 */
-var MAP_W=320, MAP_H=360;
 /* 位置はボスの確定どおり。⚠️幅だけ44→96に広げてある＝41pxの枠には情報が入らず、
  * カウンターの左は空き（目印を消して更に空いた）ためボックス列と同じ幅まで太らせた。
  * 5Fはカウ6がカウ5の隣（角）なので、カウ5を96にするぶんカウ6を右へ寄せて共存させている。 */
@@ -1378,23 +1397,69 @@ var SEAT_POS={
   '5F-C5':{x:140,y:232,w:96,h:44}, '5F-C6':{x:244,y:232,w:76,h:44},
   '5F-B1':{x:32, y:296,w:120,h:64},'5F-B2':{x:180,y:296,w:120,h:64}
 };
-/* 目印（入口・バー）はボス指示で廃止＝席だけを出す。 */
-function mapBox_(p){
-  return 'left:'+(p.x/MAP_W*100).toFixed(3)+'%;top:'+(p.y/MAP_H*100).toFixed(3)+'%;'
+/* ---- 描画キャンバス＝各フロアで席が実際に占めている範囲（bbox）だけを映す ----
+ * 320x360の素のキャンバスは外周が死んでいた（2Fは幅の26%が空白）。そのぶん席が小さく、
+ * 客名9〜10pxまで潰れていた。席が使っている範囲で切り抜けば、同じ画面幅で席が約12%大きくなる。
+ * ⚠️SEAT_POSは触らない（ボスがドラッグで確定した実配置）。ここは「どこを映すか」だけ＝席の相対位置は不変。
+ * ⚠️bboxはSEAT_POSから自動算出＝席を動かしても勝手に追従する。手で維持する表は持たない。
+ * ⚠️MAP_W/MAP_Hは全フロアの最大値＝2Fと5Fを同じ縮尺で映すため。フロアごとに変えると縮尺がズレる。 */
+var MAP_VIEW=(function(){
+  var v={};
+  Object.keys(SEAT_POS).forEach(function(code){
+    var fl=code.slice(0,2), p=SEAT_POS[code], o=v[fl];
+    if(!o){ v[fl]={x0:p.x, y0:p.y, x1:p.x+p.w, y1:p.y+p.h}; return; }
+    o.x0=Math.min(o.x0,p.x); o.y0=Math.min(o.y0,p.y);
+    o.x1=Math.max(o.x1,p.x+p.w); o.y1=Math.max(o.y1,p.y+p.h);
+  });
+  Object.keys(v).forEach(function(fl){ var o=v[fl]; o.w=o.x1-o.x0; o.h=o.y1-o.y0; });
+  return v;
+})();
+var MAP_W=Math.max.apply(null,Object.keys(MAP_VIEW).map(function(fl){return MAP_VIEW[fl].w;}));
+var MAP_H=Math.max.apply(null,Object.keys(MAP_VIEW).map(function(fl){return MAP_VIEW[fl].h;}));
+/* 目印（入口・バー）はボス指示で廃止＝席だけを出す。
+ * フロアのbboxがMAP_W×MAP_Hより小さい場合は中央寄せ（＝余りを左右/上下に等分）。 */
+function mapBox_(p,fl){
+  var v=MAP_VIEW[fl], ox=v.x0-(MAP_W-v.w)/2, oy=v.y0-(MAP_H-v.h)/2;
+  return 'left:'+((p.x-ox)/MAP_W*100).toFixed(3)+'%;top:'+((p.y-oy)/MAP_H*100).toFixed(3)+'%;'
        + 'width:'+(p.w/MAP_W*100).toFixed(3)+'%;height:'+(p.h/MAP_H*100).toFixed(3)+'%;';
 }
-/* ---- マップの小セル（カウンター等）専用の圧縮描画 ----
- * 既存のseatHtmlは情報が多く、41pxの枠には入らない（＝中身を隠して情報が死んでいた）。
- * 枠に合わせて作り直し、2段に凝縮する：
- *   1段目 席名 ＋ 残り時間（超過は赤・まもなくは橙・予約は来店時刻）
- *   2段目 アバター（キャスト色＋頭文字）＋ 客名
- * ＝「席・時間・誰・客」が41pxで全部読める。キャストの識別は色（既存のcastColorと同じ配色）。
- * クリック契約(onSeatClick)と状態クラス(movetarget等)はseatHtmlと同一＝付け回し/結合の操作はそのまま効く。 */
-function mapSeatMini_(s){
+/* 客に付くフラグ（リクエスト/NG/誕生日/VIP/ボトル）。マップでは席名の右に短く出す。
+ * ⚠️一覧のTAGLABELは「🍶ボトル」等の語つき＝マップの122px幅では3個で3行に折り返し、
+ *   タグだけで42px（＝キャストの居場所）を食う。マップは記号だけにして1行に収める。
+ * ⚠️客名と同じ行に置かない。122pxに「客名＋フラグ3個」は入らず、削れるのは必ず客名の側だった
+ *   （実測2026-07-15：「鈴木 様」→「鈴..」）。客名は黒服が一番読む情報＝絶対に削らせない。
+ * ⚠️順は「今すぐ効く順」。枠に入らない時はCSSで後ろから欠ける＝呼び出しとNGが最後まで残る。 */
+/* ⚠️語や数字を足さない＝1個30pxになり、2個で客名の行まで押し出す。記号1文字で約20px。
+ *   未対応/対応済みは色で出す（f-req.un＝橙で点滅）＝文字で持つ必要がない。件数はタップで見る。 */
+var MAP_TAG={ng:'⚠',bday:'🎂',vip:'👑',bottle:'🍶'};
+function mapFlags_(s,idx){
+  var f='';
+  var rq=reqsForCust(s.cust);
+  if(rq&&rq.length){
+    var un=rq.filter(function(r){return !r.handled;}).length;
+    f+='<span class="mflag f-req'+(un?' un':'')+'" title="リクエスト'+(un?' 未対応'+un+'件':' 対応済み')
+      +'" onclick="openReqForSeat('+idx+',event)">📣</span>';
+  }
+  Object.keys(MAP_TAG).forEach(function(k){
+    if((s.tags||[]).indexOf(k)<0) return;
+    f+='<span class="mflag f-'+k+'" title="'+esc(TAGLABEL[k]||k)+'">'+MAP_TAG[k]+'</span>';
+  });
+  return f?'<span class="mflags">'+f+'</span>':'';
+}
+/* ---- マップのセル専用の圧縮描画（カウンター=2段／ボックス=3段） ----
+ * 一覧のseatHtmlは幅330px・高さ可変の一覧向けで、マップの枠には構造的に入らない。
+ *   実測(2026-07-15)：2F-BOX1は枠100pxに対し146px必要＝46pxぶんキャストが黙って切れていた。
+ * 枠に合わせて作る。段の構成：
+ *   1段目 席名 ＋ 右肩（カウンター=残り時間／ボックス=人数。超過は赤・まもなくは橙・予約は来店時刻）
+ *   2段目 客名 ＋ フラグ（カウンターはキャストのアバターも。フラグは客に付く情報なので客名の隣）
+ *   3段目 ボックスのみ＝キャストのチップ（chipHtmlを流用＝名前と残り時間が1人ずつ読める）
+ * ⚠️クリック契約(onSeatClick/tapCast)と状態クラス(movetarget等)はseatHtmlと同一＝付け回し/結合はそのまま効く。
+ * ⚠️段を足す/文字を上げる時は必ず実測で追う。枠(カウンター約56px・ボックス80〜102px)を超えると黙って切れる。 */
+function mapSeatCell_(s,tall){
   var st=seatStatus(s), idx=seatIdx(s), nm=shortNm(s.name);
-  var oc='onclick="onSeatClick('+idx+')"';
+  var oc='onclick="onSeatClick('+idx+')"', size=tall?' box':' mini';
   if(s.mergedTo!=null){
-    return '<div class="seat mergedcell mini" '+oc+'><div class="mini-r1"><b>'+esc(nm)+'</b></div>'
+    return '<div class="seat mergedcell'+size+'" '+oc+'><div class="mini-r1"><b>'+esc(nm)+'</b></div>'
       +'<div class="mini-r2"><span class="mini-c">🔗 '+esc(shortNm(SEATS[s.mergedTo].name))+'へ</span></div></div>';
   }
   var isPrimary=s.mergeWith&&s.mergeWith.length;
@@ -1404,12 +1469,17 @@ function mapSeatMini_(s){
   var ct=(combineMode&&idx!==combinePrimary)?' combinetarget':'';
   var cprim=(combineMode&&idx===combinePrimary)?' combineprimary':'';
   var grp=isPrimary?' grouped':'';
-  var r1='<b>'+esc(dispNm)+'</b>', r2='', cls='';
+  var coSeat=(s.occupants&&s.occupants.length>1);   // 相席（同一卓に複数予約）
+  var paxDisp=coSeat?s.occupants.reduce(function(a,o){return a+(Number(o.pax)||0);},0):s.pax;
+  var r1='<b>'+esc(dispNm)+'</b>'+(coSeat?'<span class="mini-p">👥'+s.occupants.length+'</span>':'')
+        +(st==='empty'?'':mapFlags_(s,idx));
+  var r2='', r3='', cls='';
   if(st==='empty'){
     if(s.rsv){
       cls='reserved';
       r1+='<span class="mini-t rsv">'+esc(rsvArrT(s.rsv))+'</span>';
       r2='<span class="mini-c rsv">'+esc(s.rsv.cust)+'様</span>';
+      if(tall&&s.rsv.tantou) r3='<span class="mini-sub">担当 '+esc(s.rsv.tantou)+'</span>';
     } else {
       r2='<span class="mini-e">空席</span>';
     }
@@ -1417,19 +1487,50 @@ function mapSeatMini_(s){
     cls='nocast';
     r1+='<span class="mini-t warn">⚠不在</span>';
     r2='<span class="mini-c">'+esc(s.cust||'')+'</span>';
+    if(tall&&s.tantou) r3=chipHtml(s.tantou,-1,idx,{away:true,awayMin:s.awayMin});
   } else {
     cls=st;
-    var c=(s.casts&&s.casts[0])||null;
-    if(c){
-      var tm=c.unlimited?'∞':(c.mins<0?'超'+(-c.mins)+'分':'残'+c.mins+'分');
-      r1+='<span class="mini-t '+(c.status==='over'?'over':c.status==='warn'?'warn':'')+'">'+tm+'</span>';
-      r2='<i class="mini-av" style="background:'+castColor(c.n)+'">'+esc(c.n.charAt(0))+'</i>';
+    var cs=s.casts||[];
+    if(tall){
+      r1+='<span class="mini-p">'+paxDisp+'名</span>';
+      r2='<span class="mini-c">'+esc(s.cust||'')+'</span>';
+      // ボックスは背が高い＝キャストは名前と残り時間を1人1行で出す（切れる時はCSSで下から隠れる）
+      r3=cs.map(function(c,ci){ return chipHtml(c.n,ci,idx,{mins:c.mins,status:c.status,tantou:c.n===s.tantou}); }).join('');
+    } else {
+      // カウンターは2段しかない＝先頭キャストの残り時間を右肩へ、識別は色アバターで
+      var c=cs[0]||null;
+      if(c){
+        var tm=c.unlimited?'∞':(c.mins<0?'超'+(-c.mins)+'分':'残'+c.mins+'分');
+        r1+='<span class="mini-t '+(c.status==='over'?'over':c.status==='warn'?'warn':'')+'">'+tm+'</span>';
+        r2='<i class="mini-av" style="background:'+castColor(c.n)+'">'+esc(c.n.charAt(0))+'</i>';
+      }
+      r2+='<span class="mini-c">'+esc(s.cust||'')+'</span>';
+      if(cs.length>1) r2+='<span class="mini-p">+'+(cs.length-1)+'</span>';
     }
-    r2+='<span class="mini-c">'+esc(s.cust||'')+'</span>';
-    if(s.casts&&s.casts.length>1) r2+='<span class="mini-p">+'+(s.casts.length-1)+'</span>';
   }
-  return '<div class="seat mini '+cls+mt+self+ct+cprim+grp+'" '+oc+'>'
-    +'<div class="mini-r1">'+r1+'</div><div class="mini-r2">'+r2+'</div></div>';
+  return '<div class="seat'+size+' '+cls+mt+self+ct+cprim+grp+'" '+oc+'>'
+    +'<div class="mini-r1">'+r1+'</div><div class="mini-r2">'+r2+'</div>'
+    +(r3?'<div class="mini-r3">'+r3+'</div>':'')+'</div>';
+}
+/* 3段目に入り切らなかったキャストを「+N」で明示する。
+ * ⚠️切れた事実を黙って捨てない＝黒服が「ついているはずのキャストが居ない」と誤読する。
+ *   キャストが多いボックス（背の低い5Fボックスに3人など）でだけ出る。
+ * 枠の高さは描画後にしか分からない（画面幅→縮尺→セル高の順に決まる）ので、描画後に実測して印を足す。
+ * ⚠️必ず先に消してから足す（＝冪等）。setHtmlは前回と同じHTMLなら書き換えを省くので、
+ *   消さずに足すとポーリングのたびにDOMへ+Nが積み上がる。画面回転で枠が変わった時もこれで測り直る。 */
+function markMapOverflow_(){
+  document.querySelectorAll('.hall-map .mini-more').forEach(function(b){ b.remove(); });
+  document.querySelectorAll('.hall-map .mini-r3').forEach(function(r3){
+    var chips=r3.querySelectorAll('.castchip');
+    if(!chips.length) return;
+    // ⚠️offsetTopは使わない＝基準が.mini-r3ではなく位置指定された祖先(.seatpos)になり、全部隠れている判定になる
+    var lim=r3.getBoundingClientRect().top+r3.clientHeight, shown=0;
+    for(var i=0;i<chips.length;i++){ if(chips[i].getBoundingClientRect().bottom<=lim+1) shown++; }
+    var hid=chips.length-shown;
+    if(!hid) return;
+    var r1=r3.parentNode.querySelector('.mini-r1');
+    if(r1) r1.insertAdjacentHTML('beforeend','<span class="mini-p mini-more">+'+hid+'</span>');
+  });
 }
 /* 表示モード（マップ/リスト）。端末ごとにlocalStorageで保持 */
 var hallView=localStorage.getItem('gunshi_hall_view')||'map';
@@ -1446,14 +1547,16 @@ function mapFloorHtml(fl){
   var rest=seats.filter(function(s){return !SEAT_POS[s.code];});   // 待機・黒服＝物理席でないので帯に
   var cb=seats.filter(function(s){return s.type==='C'||s.type==='B';});
   var occ=cb.filter(function(s){return s.casts&&s.casts.length;}).length;
-  // 背の低いセル(カウンター・2Fボックス3)は専用の2段描画、背の高いボックスは従来の席カードを流用
+  // 背の低いセル(カウンター・2Fボックス3)は2段、背の高いボックスは3段（キャストを1人1行で出せる）
+  // nw=他より2割狭い席（5Fカウ6＝角）。同じ文字だと客名が削れるので少しだけ落とす
   var cells=placed.map(function(s){
-    var p=SEAT_POS[s.code], mini=p.h<60;
-    return '<div class="seatpos'+(mini?' sm':'')+'" style="'+mapBox_(p)+'">'+(mini?mapSeatMini_(s):seatHtml(s))+'</div>';
+    var p=SEAT_POS[s.code], tall=p.h>=60;
+    return '<div class="seatpos'+(tall?'':' sm')+(p.w<90?' nw':'')+'" style="'+mapBox_(p,fl)+'">'+mapSeatCell_(s,tall)+'</div>';
   }).join('');
   return '<div class="floor">'
        + '<div class="floor-hd"><span class="fl">'+fl+'</span><span class="meta">稼働 '+occ+'/'+cb.length+'</span></div>'
-       + '<div class="hall-map">'+cells+'</div>'
+       // 縦横比はMAP_W/MAP_Hから直接引く＝CSSに数字を焼くと切り抜きを変えた時に黙ってズレる
+       + '<div class="hall-map" style="aspect-ratio:'+MAP_W+'/'+MAP_H+'">'+cells+'</div>'
        + (rest.length?'<div class="map-side">'+rest.map(seatHtml).join('')+'</div>':'')
        + '</div>';
 }
@@ -1472,6 +1575,7 @@ function renderHall(){
   var tgl=document.getElementById('hallViewTgl'); if(tgl) tgl.innerHTML=hallViewTglHtml();
   // マップ＝見取り図（既定）／リスト＝従来のカードグリッド。切替はlocalStorageに端末ごとで保持。
   setHtml('hallArea', hallView==='map' ? mapHtml() : '<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
+  if(hallView==='map') markMapOverflow_();
 }
 // ホール状況ヘッダーの「📣 リクエスト」サマリ（未対応があればパルス）。タップで本日の全リクエスト一覧。
 function renderHallReqSum(){
