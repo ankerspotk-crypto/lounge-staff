@@ -3139,7 +3139,7 @@ function stkGenMeishi(){
     if(!res||!res.ok){alert('エラー: '+((res&&res.error)||'不明'));return;}
     toast(res.created?('名刺の行を'+res.created+'件作成（在籍'+res.casts+'名）'):'追加なし（全員登録済み）');
     openStockManager();
-  }).catch(function(){alert('一括生成に失敗');});
+  }).catch(function(e){alert('一括生成に失敗\n'+(e&&e.message||e));}); // 原因を握り潰さない（GUNSHI_API_FNS漏れ等はここに出る）
 }
 function stkAddNew(){
   var name=((document.getElementById('stk-new-name')||{}).value||'').trim(); if(!name){alert('品名を入力してください');return;}
