@@ -851,7 +851,7 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .fbox.cur{box-shadow:0 0 0 2px var(--accent-line);}
 </style>
 </head>
-<body class="home-on">
+<body>
 
 <div class="hdr">
   <div class="brand">⚡IEYAS <span class="z">軍師</span></div>
@@ -863,8 +863,8 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
     <button class="dbtn" onclick="shiftDay(1)">›</button>
   </div>
   <div class="vtoggle" id="vtoggle">
-    <button id="vt-home" class="on" onclick="setViewMode('home')">👔 黒服業務</button>
-    <button id="vt-dash" onclick="setViewMode('dash')">🪑 ホール状況</button>
+    <button id="vt-home" onclick="setViewMode('home')">👔 黒服業務</button>
+    <button id="vt-dash" class="on" onclick="setViewMode('dash')">🪑 ホール状況</button>
   </div>
   <div class="spacer"></div>
   <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
@@ -1127,7 +1127,7 @@ function renderAlerts(){
 
 /* ============ 今やることホーム（landing） ============ */
 /* 既存の buildTimeline()/TASKS/SEATS/ROT/RSV/SHIFT を流用。加算のみ・既存ロジックは不変 */
-var viewMode='home';                 // 'home' | 'dash'
+var viewMode='dash';                 // 'home' | 'dash'。リロード時は必ずホール状況（見取り図）に戻す
 var homePhaseOverride='';            // '' なら時刻で自動。'pre'/'mid'/'post' で手動固定
 var HOME_STATUS={opening:false,cash:false};   // 開店/閉店チェックの提出状況（バックエンド由来）
 /* 営業フェーズの境界（27時制・分）。店の営業時間に合わせて調整可 */
@@ -1164,6 +1164,9 @@ function setViewMode(m){
   var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash');
   if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash');
   renderAll();
+  // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
+  // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
+  if(m==='home'&&BOOTED){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
 }
 function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();if(p==='post')loadChecklistConfig();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
