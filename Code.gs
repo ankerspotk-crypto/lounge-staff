@@ -50,6 +50,38 @@ function setProp(k, v) {
   PropertiesService.getScriptProperties().setProperty(k, String(v));
 }
 
+/* 【テスト専用・手動実行】会費更新の確認通知の文面を、今日の予約から作って黒服グループへ1通だけ送る。
+ * 本物(notifyMemberRenewalOnCheckIn_)は来店をトリガに飛ぶので、実際に客が来るまで文面を確認できない。
+ * それを待たずに見るための関数。判定は本物と同じ getRenewalHitsForReservation_ を使う＝文面の答え合わせになる。
+ * ⚠️関数名に末尾 _ を付けない＝付けるとGASエディタの実行メニューに出ない。
+ * ⚠️KFEE_ を書かない＝書くと「通知済み」と誤認され、今日その客が本当に来た時に本物が飛ばなくなる。
+ * ⚠️担当キャストへのDMは送らない＝テストでキャスト本人を動かしてしまうため。宛先は黒服グループのみ。 */
+function sendFeeRenewalTestToKurofuku() {
+  const KF = prop('GROUP_KUROFUKU');
+  if (!KF) { console.error('GROUP_KUROFUKU が未設定'); return '❌ GROUP_KUROFUKU が未設定'; }
+
+  const day = bizDateStr_();
+  const rsvs = getYoyakuReservations_(day);
+  const blocks = [];
+  rsvs.forEach(function (r) {
+    getRenewalHitsForReservation_(r.rowIdx).forEach(function (h) {
+      blocks.push('・' + h.name + '様' + (h.no ? '（' + h.no + '）' : '') + '　' + h.st.label
+        + '\n　更新期限：' + h.st.renewalStr
+        + '\n　担当：' + (h.tantou || '未設定'));
+    });
+  });
+
+  const body = '🧪【テスト送信】会費更新の確認通知\n※テストです。対応は不要です。\n'
+    + '（' + day + ' の予約' + rsvs.length + '件を判定）\n\n'
+    + (blocks.length
+      ? '本番では、下のお客様が来店した時にこの内容が黒服グループと担当キャストへ飛びます。\n\n' + blocks.join('\n')
+      : '今日の予約に、更新月・更新切れのお客様はいませんでした。\n（＝該当者が出れば上にリスト表示されます）');
+
+  push_(KF, body);
+  console.log(body);
+  return '✅ 黒服グループへ送信しました（予約' + rsvs.length + '件 / 該当' + blocks.length + '件）';
+}
+
 // ============================================================
 // Webhook
 // ============================================================
