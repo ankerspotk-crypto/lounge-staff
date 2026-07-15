@@ -12696,12 +12696,31 @@ function setMenuItemLink(rowIdx, stockName) {
 
 // ①ほぼ確実な重複＝生の品名は違うのに正規化すると同一になる。
 //   normProd_ は長音符「ー」も記号も空白も落とすので、「フェーブル」と「フェブール」は同じ文字列になる＝誤字を確実に捕まえる。
-// ②要確認＝年数が一致し、包含関係でなく、それなりに似ている組。
-//   ⚠️しきい値では分離できない: ヴーヴ イエロー/ヴーヴクリコ イエロー=55% と 赤霧島/黒霧島=50% が5ptしか離れていない。
-//      よって②は「人が見るための候補リスト」に留める。包含関係は除く＝ドンペリニヨン/ドンペリニヨン ロゼ のような
-//      バリエーション違いを重複と言わないため（年数違いも同じ理由で年数一致を条件にする）。
+// ②要確認＝略称違い（「ヴーヴ イエロー」と「ヴーヴクリコ イエロー」）。
+//   ⚠️類似度のしきい値では絶対に分離できない（2026-07-15に実測）:
+//      ヴーヴ イエロー/ヴーヴクリコ イエロー＝55%（同じ酒）に対し 赤霧島/黒霧島＝50%（別の酒）＝5ptしか離れていない。
+//      上げれば本物が死に、下げれば別の酒だらけになる。→ **類似度は使わない。構造で判定する。**
 function stockNameYears_(s) {
   return (String(s || '').match(/(\d+)\s*年/g) || []).map(x => x.replace(/\s*年/, '')).sort().join(',');
+}
+function stockNameToks_(s) {
+  return String(s || '').split(/[\s　]+/).map(x => normProd_(x)).filter(Boolean);
+}
+/* 略称違いか＝共通の語を取り除いた「残り」が、片方がもう片方を含む関係にあるか。
+     ヴーヴ イエロー / ヴーヴクリコ イエロー → 共通=イエロー、残り ヴーヴ⊂ヴーヴクリコ ＝略しただけ＝**同じ酒**
+     PJベルエポック ロゼ / PJベルエポック ブラン・ド・ブラン → 共通=PJベルエポック、残り ロゼ と ブランドブラン は
+       互いに含まない ＝**別のバリエーション**＝別の酒
+     赤霧島 / 黒霧島 → 共通の語が無い ＝別の酒
+   ⚠️これは「同じ酒を別名で登録した」を狙う規則。呼び方がまるごと違う組（イルボンジンロ と JINRO 等）は
+      構造にも類似度にも痕跡が無いので**原理的に検出できない**＝現物を知っている黒服に報告してもらうしかない。 */
+function isAbbrevPair_(a, b) {
+  const ta = stockNameToks_(a), tb = stockNameToks_(b);
+  const shared = ta.filter(x => tb.indexOf(x) >= 0);
+  if (!shared.length) return false;                       // 共通の語が無い＝別の酒
+  const ra = ta.filter(x => shared.indexOf(x) < 0).join('');
+  const rb = tb.filter(x => shared.indexOf(x) < 0).join('');
+  if (!ra || !rb) return false;                           // 片方が空＝包含（バリエーション違いとして別途除外）
+  return ra.indexOf(rb) >= 0 || rb.indexOf(ra) >= 0;      // 残りが含む関係＝略称
 }
 function findDuplicateStockNames() {
   const st = menuLinkableStock_();
@@ -12721,7 +12740,7 @@ function findDuplicateStockNames() {
       if (na === nb) { sure.push(info()); continue; }              // ①記号/長音/空白の違いだけ
       if (stockNameYears_(a) !== stockNameYears_(b)) continue;      // 年数違い＝別の酒
       if (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0) continue;     // 包含＝バリエーション違い
-      if (diceSim_(a, b) >= 0.5) maybe.push(info());
+      if (isAbbrevPair_(a, b)) maybe.push(info());                  // 略称違いだけを拾う（類似度は見ない）
     }
   }
   maybe.sort((x, y) => y.score - x.score);

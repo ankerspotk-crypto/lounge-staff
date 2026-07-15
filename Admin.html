@@ -1030,8 +1030,8 @@ function dupCard(d,sure){
       +'<button class="btn dup-btn" onclick="dupMerge(\''+jstr(other)+'\',\''+jstr(nm)+'\')">この名前に寄せる</button></div>';
   };
   return '<div class="card dup-card'+(sure?' sure':'')+'">'
-    +'<div class="dup-top">'+(sure?'<span class="badge dup-b-sure">ほぼ確実</span>':'<span class="badge dup-b-may">要確認 '+d.score+'%</span>')
-    +(sure?'<span class="dup-why">記号・長音・スペースの違いだけ＝同じ酒のはず</span>':'<span class="dup-why">似ているだけ。別の酒なら無視してください</span>')+'</div>'
+    +'<div class="dup-top">'+(sure?'<span class="badge dup-b-sure">ほぼ確実</span>':'<span class="badge dup-b-may">略称違い？</span>')
+    +(sure?'<span class="dup-why">記号・長音・スペースの違いだけ＝同じ酒のはず</span>':'<span class="dup-why">片方が略した名前に見えます。別の酒なら無視してください</span>')+'</div>'
     +'<div class="dup-row">'+pair(d.a,d.aQty,d.aFloors,d.b)+'<span class="dup-arrow">⇄</span>'+pair(d.b,d.bQty,d.bFloors,d.a)+'</div></div>';
 }
 function dupScan(){
@@ -1040,7 +1040,8 @@ function dupScan(){
     if(!res(r))return;
     var n=r.sure.length+r.maybe.length;
     if(!n){ box.innerHTML='<div class="mn-bulk-ok">✅ 重複していそうな品名は見つかりませんでした</div>'; return; }
-    box.innerHTML='<div class="mn-bulk-ok">'+r.sure.length+'組が「ほぼ確実」／'+r.maybe.length+'組が「要確認」</div>'
+    box.innerHTML='<div class="mn-bulk-ok">'+r.sure.length+'組が「ほぼ確実」／'+r.maybe.length+'組が「略称違い？」</div>'
+      +'<div class="hint" style="margin:6px 0">呼び方がまるごと違う同じ酒（例：イルボンジンロ と JINRO）は機械には見つけられません。現物を知っている黒服の報告が頼りです。</div>'
       +'<div class="grid mn-grid">'+r.sure.map(function(d){return dupCard(d,true);}).join('')+r.maybe.map(function(d){return dupCard(d,false);}).join('')+'</div>';
   }).catch(function(e){ box.innerHTML='<div class="mn-bulk-err">失敗: '+esc(e&&e.message||e)+'</div>'; });
 }
@@ -2209,8 +2210,7 @@ function MOCKAPI(action,body){
     // 実データで見つかった2組を模す（本番は findDuplicateStockNames が返す）
     return {ok:true,
       sure:[{a:'ウィリアムフェーブルシャブリ',b:'ウィリアムフェブールシャブリ',aQty:1,bQty:1,aFloors:'2F',bFloors:'5F',score:100}],
-      maybe:[{a:'ヴーヴ イエロー',b:'ヴーヴクリコ イエロー',aQty:3,bQty:5,aFloors:'2F',bFloors:'5F',score:55},
-             {a:'赤霧島',b:'黒霧島',aQty:1,bQty:8,aFloors:'2F',bFloors:'2F',score:50}]};
+      maybe:[{a:'ヴーヴ イエロー',b:'ヴーヴクリコ イエロー',aQty:3,bQty:5,aFloors:'2F',bFloors:'5F',score:55}]};
   }
   if(action==='mergeStockNames'){ window.__merged=body; return {ok:true,from:body.from,to:body.to,renamed:['2F: 3本'],mergedQty:[],relinked:''}; }
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
