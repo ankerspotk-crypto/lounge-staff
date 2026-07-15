@@ -5319,7 +5319,7 @@ function resetAllAtendou_() {
   // ENCHO_LAST・席タグ もクリア
   const props = PropertiesService.getScriptProperties().getProperties();
   Object.keys(props).forEach(k => {
-    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('PLANCAST_') || k.startsWith('RSRV_') || k.startsWith('YRSRV_') || k.startsWith('KLATE_') || k.startsWith('KCHECKIN_') || k.startsWith('KREQ20_')) {
+    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('PLANCAST_') || k.startsWith('RSRV_') || k.startsWith('YRSRV_') || k.startsWith('KLATE_') || k.startsWith('KCHECKIN_') || k.startsWith('KREQ20_') || k.startsWith('KFEE_')) {
       PropertiesService.getScriptProperties().deleteProperty(k);
     }
   });
@@ -8126,8 +8126,9 @@ function parseMasterDate_(raw) {
     return { ym: raw.getFullYear() * 12 + (raw.getMonth() + 1), d: raw.getDate(), str: Utilities.formatDate(raw, TZ, 'yyyy/M/d') };
   }
   const s0 = String(raw).trim(); if (!s0) return null;
-  // 全角数字→半角、全角ピリオド→半角に正規化
-  const s = s0.replace(/[０-９]/g, d => String.fromCharCode(d.charCodeAt(0) - 0xFEE0)).replace(/．/g, '.');
+  // 全角数字・全角英字（Ｒ/Ｈ/Ｓ）→半角、全角ピリオド→半角に正規化
+  // ⚠️全角Ｒを見落とすと和暦が読めず ym=0 で捨てられ、登録日にフォールバックして🔴会員切れ誤表示になる
+  const s = s0.replace(/[０-９Ａ-Ｚａ-ｚ]/g, d => String.fromCharCode(d.charCodeAt(0) - 0xFEE0)).replace(/．/g, '.');
   const mk = (y, mo, da) => ({ ym: y * 12 + mo, d: da, str: da ? (y + '/' + mo + '/' + da) : (y + '/' + mo) });
   // 和暦（令和/R, 平成/H, 昭和/S）例:「更新済み（R8.7）」「令和8年7月」
   const eraBase = { '令和': 2018, 'R': 2018, '平成': 1988, 'H': 1988, '昭和': 1925, 'S': 1925 };
@@ -8147,10 +8148,10 @@ function parseMasterDate_(raw) {
 function getMemberFeeMap_() {
   // 90秒キャッシュ（マスタ全件読込が重く予約管理/軍師が遅くなるため）。顧客追加・次回メモ更新時に破棄
   const _cache = CacheService.getScriptCache();
-  const _c = _cache.get('MEMFEEMAP_v1');
+  const _c = _cache.get('MEMFEEMAP_v2');
   if (_c) { try { return JSON.parse(_c); } catch (e) {} }
   const _map = getMemberFeeMapRaw_();
-  try { _cache.put('MEMFEEMAP_v1', JSON.stringify(_map), 90); } catch (e) {}
+  try { _cache.put('MEMFEEMAP_v2', JSON.stringify(_map), 90); } catch (e) {}
   return _map;
 }
 function getMemberFeeMapRaw_() {
@@ -8168,6 +8169,7 @@ function getMemberFeeMapRaw_() {
   if (cE < 0) return {};
   const cReg = idx('登録日') >= 0 ? idx('登録日') : idx('入会'); // 入会日 = 登録日（無ければ入会）
   const cMemo = idx('次回対応'); // 次回対応メモ列（無ければ-1）
+  const cTan = idx('担当');      // 担当（会費更新DMの宛先。予約に担当キャストが無い時のフォールバック）
   const renewalCols = []; headers.forEach((hd, ci) => { if (/更新/.test(hd)) renewalCols.push(ci); }); // ◯年目更新 列
   const map = {};
   for (let r = h + 1; r < values.length; r++) {
@@ -8185,7 +8187,9 @@ function getMemberFeeMapRaw_() {
     });
     const annualFeeDate = best ? best.str : memberSince;
     const nextMemo = cMemo >= 0 ? String(row[cMemo] || '').trim() : '';
-    if (annualFeeDate || memberSince || nextMemo) map[no] = { annualFeeDate, memberSince, nextMemo };
+    const tantou = cTan >= 0 ? String(row[cTan] || '').trim() : '';
+    // 収録条件は据え置き（tantouだけの行を新たに載せると既存の突合先の挙動が変わるため）。日付が無い＝更新判定もできない
+    if (annualFeeDate || memberSince || nextMemo) map[no] = { annualFeeDate, memberSince, nextMemo, tantou };
   }
   return map;
 }
@@ -9349,6 +9353,78 @@ function removeRsrvEntry_(code, rowIdx, customer) {
   writeRsrv_(code, rest);
 }
 
+// ============================================================
+// 会費更新の確認通知（来店時）
+//  来店に切り替わった予約に「今月更新」「更新切れ」の会員がいれば黒服グループと担当キャストへ通知。
+//  判定は軍師 gunshi.html の membershipInfo と同一式（経過月数 ms: 12=今月更新 / 13以上=更新切れ）。
+//  ⚠️更新日は和暦テキスト(R8.7)混在。parseMasterDate_ 経由の getMemberFeeMap_ を必ず使う。
+// ============================================================
+// annualFeeDate('2026/7' 等) → 更新ステータス。判定不能はnull
+function memberRenewalStatus_(feeDate){
+  var p = String(feeDate || '').split(/[\/\-\.]/);
+  if (p.length < 2) return null;
+  var ry = parseInt(p[0], 10), rm = parseInt(p[1], 10);
+  if (!(ry > 1900 && rm >= 1)) return null;
+  var today = new Date();
+  var ms = (today.getFullYear() * 12 + (today.getMonth() + 1)) - (ry * 12 + rm); // 前回更新からの経過月数
+  var exp = (ry + 1) + '/' + rm; // 更新期限＝前回更新+1年
+  if (ms >= 13) return { status:'expired',   ms:ms, renewalStr:exp, label:'🔴 更新切れ（期限から' + (ms - 12) + 'ヶ月経過）' };
+  if (ms >= 12) return { status:'thismonth', ms:ms, renewalStr:exp, label:'🟡 今月更新' };
+  return { status:'ok', ms:ms, renewalStr:exp, label:'' };
+}
+
+// 来店した予約の会員（相席のサブ会員含む）を会費マップと突合し、更新が要る人だけ返す
+function getRenewalHitsForReservation_(rowIdx){
+  var sh = getYoyakuRsrvSheet_();
+  var row = sh.getRange(rowIdx, 1, 1, 16).getValues()[0];
+  var targets = [{ name:String(row[2] || ''), memberId:String(row[3] || ''), tantou:String(row[6] || '') }];
+  try { // 相席のサブ会員（1予約に複数会員）
+    (row[15] ? JSON.parse(row[15]) : []).forEach(function(sc){
+      if (sc) targets.push({ name:String(sc.name || ''), memberId:String(sc.memberId || ''), tantou:String(sc.tantouCast || '') });
+    });
+  } catch (e) {}
+
+  var feeMap = getMemberFeeMap_();
+  var byCanon = {}; // 予約「139」/マスタ「0139」「０１３９」の桁・全角差を吸収
+  Object.keys(feeMap).forEach(function(k){ var c = visitCanonNo_(k); if (c) byCanon[c] = feeMap[k]; });
+
+  var hits = [];
+  targets.forEach(function(t){
+    var c = visitCanonNo_(t.memberId); if (!c) return; // 非会員・番号なしは対象外
+    var f = byCanon[c]; if (!f) return;
+    var st = memberRenewalStatus_(f.annualFeeDate);
+    if (!st || (st.status !== 'thismonth' && st.status !== 'expired')) return;
+    hits.push({ name:t.name, no:String(t.memberId || '').trim(), st:st, tantou:(t.tantou || f.tantou || '').trim() });
+  });
+  return hits;
+}
+
+function notifyMemberRenewalOnCheckIn_(rowIdx){
+  var hits = getRenewalHitsForReservation_(rowIdx);
+  if (!hits.length) return;
+  var sp = PropertiesService.getScriptProperties();
+  var gk = 'KFEE_' + bizDateStr_() + '_' + rowIdx; // 来店前に戻して再来店した時の二重通知を防ぐ（0:30の席リセットで掃除）
+  if (sp.getProperty(gk)) return;
+  sp.setProperty(gk, '1');
+
+  var line = function(h){ return '・' + h.name + '様' + (h.no ? '（' + h.no + '）' : '') + '　' + h.st.label + '\n　更新期限：' + h.st.renewalStr; };
+
+  var KF = prop('GROUP_KUROFUKU');
+  if (KF) push_(KF, '💳【会費更新の確認】\n' + hits.map(function(h){
+    return line(h) + '\n　担当：' + (h.tantou || '未設定');
+  }).join('\n') + '\n\n会費の更新があるお客様です。確認お願いします。');
+
+  var byCast = {}; // 担当キャストは「、」区切りの複数あり。1人に複数のお客様が当たる場合は1通にまとめる
+  hits.forEach(function(h){
+    String(h.tantou || '').split('、').forEach(function(n){ n = n.trim(); if (n) (byCast[n] = byCast[n] || []).push(h); });
+  });
+  Object.keys(byCast).forEach(function(n){
+    var c = resolveCastLine_(n);
+    if (!c || !c.lineId) return; // LINE未登録の担当は黒服通知だけで拾う
+    push_(c.lineId, '💳【会費更新のお願い】\n本日ご来店のお客様です。\n' + byCast[n].map(line).join('\n') + '\n\n会費の更新があるお客様です。確認お願いします。');
+  });
+}
+
 function checkInReservation_(rowIdx) {
   const sh = getYoyakuRsrvSheet_();
   const row = sh.getRange(rowIdx, 1, 1, 12).getValues()[0];
@@ -9375,6 +9451,7 @@ function checkInReservation_(rowIdx) {
   });
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   logVisitOnCheckIn_(rowIdx); // 来店記録DBへ追記（失敗してもチェックインは止めない）
+  try { notifyMemberRenewalOnCheckIn_(rowIdx); } catch (e) {} // 会費更新の確認通知（失敗してもチェックインは止めない）
   if (seatCodes.length === 0) {
     const KF = prop('GROUP_KUROFUKU');
     if (KF) push_(KF, '⚠️ テーブル設定おねがいします（' + customer + '様）');
