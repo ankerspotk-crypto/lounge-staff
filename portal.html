@@ -988,16 +988,10 @@ function renderHome(){
       + '</div>';
   }
 
-  // --- 休職中バッジ（メニューが短い理由を本人に伝える。サーバーは既に予約/空席を返していない） ---
-  var leaveCard = onLeave
-    ? '<div class="card" style="background:#241a2e;border-color:#5a3a7a">'
-      + '<div style="font-size:13px;font-weight:700;color:#c9a0ee;margin-bottom:4px">🌙 休職中</div>'
-      + '<div style="font-size:12px;color:#a890c8;line-height:1.7">シフト提出・お知らせ・給与明細のみご利用いただけます。<br>復帰の際は黒服・管理者にご連絡ください。</div>'
-      + '</div>'
-    : '';
-
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める）。休職中は予約・空席・呼び出しを出さない ---
-  var html = '<div id="home-notice">' + noticeBanner() + '</div>' + leaveCard + shiftCard
+  // ⚠️休職中である旨は本人の画面に一切表示しない（ボス指定2026-07-15）。メニューが黙って減るだけ。
+  // ＝本人が「予約が消えた」と黒服に問い合わせてくる可能性がある点は承知の上での判断。
+  var html = '<div id="home-notice">' + noticeBanner() + '</div>' + shiftCard
     + (onLeave ? '' : homeCallCard()
     + '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
