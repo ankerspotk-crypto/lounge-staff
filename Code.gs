@@ -386,6 +386,12 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return getCastReservations_(body.cast);
   }
+  // 管理コンソール「📅 予約」＝店全体の日別マトリクス（縦=キャスト・横=日付）
+  if (body.action === 'getRsvMatrix') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return getRsvMatrix_(body.from, body.days);
+  }
   if (body.action === 'submitShift') return submitShift(body);
   if (body.action === 'declineNextWeek') return declineNextWeek(body);
   if (body.action === 'getShiftSubmitStatus') {
@@ -8369,27 +8375,30 @@ function rsvCastKeys_(v) { return String(v || '').split('、').map(rsvCastKey_).
  * 担当への補完が働かず**さくらの一覧から黙って消える**（ポータルの select は ''／'直接来店'／キャスト名 の3種）。 */
 function isNonCastRsvValue_(v) { const k = rsvCastKey_(v); return !k || k === '直接来店' || k === '未定'; }
 
-/* この予約でそのキャストがどの立場か（'予約'/'担当'/'同伴'/'同席'）。空配列＝無関係。
+/* この予約に関係する全キャストを 照合キー→立場[]（'予約'/'担当'/'同伴'/'同席'）で返す。**帰属規則の唯一の持ち主**。
  * 帰属＝**予約キャスト優先／空なら担当キャストで補完**（「本日の出勤」通知 と同じ規則＝同じ子の件数が2画面で割れないため）
  *       ＋**同伴キャストも拾う**（ボス指定 2026-07-16）。
- * 相席のサブ会員（列16）の担当/予約キャストも拾う：拾わないと、その子が担当の同席客が一覧から消える。 */
-function castRolesInRsv_(row, key) {
-  const roles = [];
-  const yoyakuRaw = row[11];
-  const yoyaku = isNonCastRsvValue_(yoyakuRaw) ? [] : rsvCastKeys_(yoyakuRaw);
-  if (yoyaku.indexOf(key) >= 0) roles.push('予約');
-  else if (yoyaku.length === 0 && rsvCastKeys_(row[6]).indexOf(key) >= 0) roles.push('担当');
-  if (rsvCastKeys_(row[12]).indexOf(key) >= 0) roles.push('同伴');
-  if (roles.length === 0) {
-    let subs = [];
-    try { subs = row[15] ? JSON.parse(row[15]) : []; } catch (e) { subs = []; }
-    for (let j = 0; j < subs.length; j++) {
-      const sy = isNonCastRsvValue_(subs[j].yoyakuCast) ? [] : rsvCastKeys_(subs[j].yoyakuCast);
-      if (sy.indexOf(key) >= 0 || (sy.length === 0 && rsvCastKeys_(subs[j].tantouCast).indexOf(key) >= 0)) { roles.push('同席'); break; }
-    }
-  }
-  return roles;
+ * 相席のサブ会員（列16）の担当/予約キャストも拾う：拾わないと、その子が担当の同席客が一覧から消える。
+ * ⚠️1予約が複数のキャストに属し得る（予約さくら＋同伴まや）＝**店全体の件数はこの合計ではない**。日別の合計は予約そのものを数えること。 */
+function rsvCastRoleMap_(row) {
+  const map = {};
+  const add = (k, role) => { if (!k) return; if (!map[k]) map[k] = []; if (map[k].indexOf(role) < 0) map[k].push(role); };
+  const yoyaku = isNonCastRsvValue_(row[11]) ? [] : rsvCastKeys_(row[11]);
+  if (yoyaku.length) yoyaku.forEach(k => add(k, '予約'));
+  else rsvCastKeys_(row[6]).forEach(k => add(k, '担当'));
+  rsvCastKeys_(row[12]).forEach(k => add(k, '同伴'));
+  let subs = [];
+  try { subs = row[15] ? JSON.parse(row[15]) : []; } catch (e) { subs = []; }
+  subs.forEach(s => {
+    const sy = isNonCastRsvValue_(s.yoyakuCast) ? [] : rsvCastKeys_(s.yoyakuCast);
+    (sy.length ? sy : rsvCastKeys_(s.tantouCast)).forEach(k => { if (k && !map[k]) add(k, '同席'); }); // 本体で既に拾えている子には重ねない
+  });
+  return map;
 }
+
+/* この予約でそのキャストがどの立場か。空配列＝無関係。
+ * ⚠️規則そのものは rsvCastRoleMap_ にしか無い＝ここで書き直さない（2箇所に規則があると必ず割れる）。 */
+function castRolesInRsv_(row, key) { return rsvCastRoleMap_(row)[key] || []; }
 
 /* キャスト1人の予約を過去・未来まとめて返す（新しい順に整列。未来/過去の境目は営業日）。
  * キャンセルは除外（getYoyakuReservations_ と同じ）。
@@ -8418,6 +8427,71 @@ function getCastReservations_(castName) {
   }
   list.sort((a, b) => (a.date === b.date ? String(b.time).localeCompare(String(a.time)) : b.date.localeCompare(a.date)));
   return { ok: true, today, cast: String(castName), reservations: list };
+}
+
+/* 予約マトリクスの行＝集計対象のキャスト（在籍・キャスト/体験のみ）。
+ * getCastNamesForYoyaku_ を使わない理由＝あれは「軍師のチップに出す候補」でテストスタッフを含む（盤面テスト用）。
+ * こちらは実データの集計なので isGhostRole_ で外す。目的が違うので流用しない。 */
+function rsvMatrixCasts_() {
+  const sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(STAFF_TAB);
+  if (!sh) return [];
+  const retireC = getStaffRetireCols_(sh, false)['退職'];
+  return sh.getDataRange().getValues().slice(1)
+    .filter(r => {
+      const name = String(r[1]).trim(), role = String(r[2]).trim() || 'キャスト';
+      if (!name || isGhostRole_(role)) return false;
+      if (role.indexOf('キャスト') < 0 && role.indexOf('体験') < 0) return false;
+      return !(retireC >= 0 && String(r[retireC]).trim() === '退職');
+    })
+    .map(r => ({ name: String(r[1]).trim(), role: String(r[2]).trim() || 'キャスト' }));
+}
+
+/* 管理コンソール「📅 予約」の店全体マトリクス。縦=キャスト・横=日付・マス=予約件数。
+ * fromDate から days 日分（既定14日）。‹›で窓を動かせるので過去も見られる。
+ * ⚠️**合計行はキャスト列の足し算ではない**＝1予約が複数のキャストに属する（予約さくら＋同伴まや＝2列に立つが店の予約は1件）し、
+ *   誰も紐づいていない予約（直接来店・担当なし）はどの行にも立たないが店の予約ではある。
+ *   よって合計は**予約そのものを数える**。「行を足しても合計に合わない」のは仕様。 */
+function getRsvMatrix_(fromDate, days) {
+  const n = Math.min(Math.max(Number(days) || 14, 1), 31);
+  const start = String(fromDate || bizDateStr_()).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return { ok: false, error: '日付の形式が不正です' };
+  const dates = [], seen = {};
+  const d0 = new Date(start + 'T00:00:00');
+  for (let i = 0; i < n; i++) {
+    const d = new Date(d0); d.setDate(d.getDate() + i);
+    const s = Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+    dates.push(s); seen[s] = true;
+  }
+  const rows = getYoyakuRsrvSheet_().getDataRange().getValues().slice(1);
+  const totals = {}, pax = {}, byCast = {};
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[8]) === 'キャンセル') continue;
+    const date = String(row[0] instanceof Date ? Utilities.formatDate(row[0], TZ, 'yyyy-MM-dd') : row[0]).trim();
+    if (!seen[date]) continue;
+    totals[date] = (totals[date] || 0) + 1;                 // 店全体＝予約そのもの（キャストで重複させない）
+    pax[date] = (pax[date] || 0) + (Number(row[4]) || 1);
+    const map = rsvCastRoleMap_(row);
+    Object.keys(map).forEach(k => {
+      if (!byCast[k]) byCast[k] = {};
+      byCast[k][date] = (byCast[k][date] || 0) + 1;
+    });
+  }
+  const casts = rsvMatrixCasts_().map(c => {
+    const counts = byCast[rsvCastKey_(c.name)] || {};
+    let total = 0; dates.forEach(d => { total += counts[d] || 0; });
+    return { name: c.name, role: c.role, counts, total, offRoster: false };
+  });
+  // 名簿に居ないのに予約が立っている子（退職者の先の予約・改名漏れ等）も出す。黙って消すと合計との差が説明不能になる。
+  const known = {}; casts.forEach(c => { known[rsvCastKey_(c.name)] = true; });
+  Object.keys(byCast).forEach(k => {
+    if (known[k]) return;
+    let total = 0; dates.forEach(d => { total += byCast[k][d] || 0; });
+    if (total > 0) casts.push({ name: k, role: '名簿外', counts: byCast[k], total, offRoster: true });
+  });
+  casts.sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name)));
+  const closedDays = {}; getHolidays_().forEach(h => { closedDays[h.date] = h.label || '店休日'; });
+  return { ok: true, from: start, days: n, today: bizDateStr_(), dates, casts, totals, pax, closedDays };
 }
 
 // 席料・同伴料の保存（IEYAS POSの会計セクションから呼ぶ。N列=席料、O列=同伴料）

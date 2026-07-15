@@ -1855,8 +1855,10 @@ function saveThresholds(){
 /* ===== 📅 予約（キャスト別の予約一覧・過去/未来）=====
    帰属＝予約キャスト優先／空なら担当キャストで補完（「本日の出勤」通知と同じ規則）＋同伴キャストも拾う（ボス指定 2026-07-16）。
    判定はサーバの castRolesInRsv_ が唯一の持ち主＝ここでは絶対に数え直さない（2箇所に規則があると必ず割れる）。 */
-var rsvCast='', rsvData=null, rsvBusy=false, rsvShowPast=false;
+var rsvCast='', rsvData=null, rsvShowPast=false;
+var rsvMx=null, rsvMxFrom='', rsvMxDays=14, rsvMxBusy=false;
 function rsvCastList(){ return (ST.staff||[]).filter(function(s){ var r=String(s.role||''); return r.indexOf('キャスト')>=0||r.indexOf('体験')>=0; }); }
+function rsvBizToday(){ var n=new Date(); if(n.getHours()<6)n.setDate(n.getDate()-1); return hdFmt(n); } // 営業日(6時境界)＝シフト表と同じ基準
 function renderRsv(){
   var all=rsvCastList();
   var active=all.filter(function(s){return !s.retired;});
@@ -1868,27 +1870,81 @@ function renderRsv(){
     +'<div class="chips" style="margin-top:10px">'+active.map(chip).join('')+'</div>'
     +(retired.length?'<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--dim);font-weight:800;font-size:12px">🗄 退職済み（'+retired.length+'名）の履歴を見る</summary><div class="chips" style="margin-top:8px">'+retired.map(chip).join('')+'</div></details>':'')
     +'</div>';
-  setBody(picker+'<div id="rsv-body">'+(rsvCast?'<div class="empty">読み込み中…</div>':'<div class="empty">キャストを選んでください</div>')+'</div>');
+  setBody('<div id="rsv-mx"></div>'+picker+'<div id="rsv-body">'+(rsvCast?'<div class="empty">読み込み中…</div>':'<div class="empty">キャストを選んでください</div>')+'</div>');
+  drawRsvMx();
+  if(!rsvMx && !rsvMxBusy) loadRsvMx();
   if(rsvCast) drawRsv();
 }
+
+/* ===== 店全体の日別マトリクス（縦=キャスト・横=日付・マス=予約件数）＝シフト表と同じ見せ方（ボス指定 2026-07-16） ===== */
+function loadRsvMx(){
+  if(rsvMxBusy) return;
+  if(!rsvMxFrom) rsvMxFrom=rsvBizToday();
+  rsvMxBusy=true;
+  var want=rsvMxFrom+'/'+rsvMxDays;
+  // ⚠️窓が動いていたら「捨てて終わり」にせず必ず取り直す。捨てるだけだと、
+  //   飛んでいた要求は古いと判定され・新しい要求は busy で弾かれ＝誰も取りに行かず「読み込み中…」で固まる（連打で踏む）。
+  var done=function(fn){ return function(a){ rsvMxBusy=false; if(rsvMxFrom+'/'+rsvMxDays!==want){ loadRsvMx(); return; } fn(a); drawRsvMx(); }; };
+  api('getRsvMatrix',{from:rsvMxFrom,days:rsvMxDays})
+    .then(done(function(r){ rsvMx=(r&&r.ok===false)?{error:r.error||'読み込みエラー'}:r; }))
+    .catch(done(function(e){ rsvMx={error:(e&&e.message)||'通信エラー'}; }));   // 握り潰さない＝原因をボスが報告できるように
+}
+function rsvMxNav(diff){
+  var d=new Date(rsvMxFrom+'T00:00:00'); d.setDate(d.getDate()+diff*rsvMxDays);
+  rsvMxFrom=hdFmt(d); rsvMx=null; drawRsvMx(); loadRsvMx();
+}
+function rsvMxToday(){ rsvMxFrom=rsvBizToday(); rsvMx=null; drawRsvMx(); loadRsvMx(); }
+function rsvMxSetDays(n){ rsvMxDays=parseInt(n,10)||14; rsvMx=null; drawRsvMx(); loadRsvMx(); }
+function rsvMxMd(ds){ var p=ds.split('-'); return parseInt(p[1],10)+'/'+parseInt(p[2],10); }
+function drawRsvMx(){
+  var el=document.getElementById('rsv-mx'); if(!el) return;
+  var navBar='<div class="toolbar" style="margin-bottom:8px">'
+    +'<button class="btn sm" onclick="rsvMxNav(-1)">‹ 前</button>'
+    +'<button class="btn sm" onclick="rsvMxToday()">今日</button>'
+    +'<button class="btn sm" onclick="rsvMxNav(1)">次 ›</button>'
+    +'<select class="finput" style="width:auto" onchange="rsvMxSetDays(this.value)">'
+    +[7,14,31].map(function(n){return '<option value="'+n+'"'+(rsvMxDays===n?' selected':'')+'>'+n+'日</option>';}).join('')
+    +'</select><span class="hint" style="margin:0">'+esc(rsvMxFrom||'')+' から'+rsvMxDays+'日</span></div>';
+  var head='<div class="sec-t">📅 店全体の予約（日別）</div>';
+  if(!rsvMx){ el.innerHTML='<div class="sec compact">'+head+navBar+'<div class="empty" style="padding:18px">読み込み中…</div></div>'; return; }
+  if(rsvMx.error){ el.innerHTML='<div class="sec compact">'+head+navBar+'<div class="empty" style="padding:18px">'+esc(rsvMx.error)+'</div></div>'; return; }
+  var D=rsvMx.dates||[], C=rsvMx.casts||[], today=rsvMx.today||'';
+  var thead='<tr><th style="text-align:left">名前</th>'+D.map(function(ds){
+    var cl=(rsvMx.closedDays||{})[ds], wd=hdWeekday(ds), isT=(ds===today);
+    var wc=cl?'#c9a8f0':(wd==='日')?'#ee6666':(wd==='土')?'#6688ee':'inherit';
+    return '<th style="color:'+wc+(isT?';box-shadow:inset 0 -2px 0 var(--accent)':'')+'"'+(cl?' title="'+esc(String(cl))+'"':'')+'>'+esc(rsvMxMd(ds))
+      +'<br><span style="font-size:9px;font-weight:400;opacity:.85">'+wd+'</span>'+(cl?'<br><span style="font-size:8px;color:#c9a8f0">🏖休</span>':'')+'</th>';
+  }).join('')+'<th>計</th></tr>';
+  // ⚠️店全体＝予約そのものの数。キャスト列を足しても一致しない（1予約が予約キャスト＋同伴で2列に立つ／誰も紐づかない予約もある）
+  var grand=0; D.forEach(function(ds){ grand+=(rsvMx.totals||{})[ds]||0; });
+  var totalRow='<tr class="total-row"><td class="nm">🏯 店全体</td>'+D.map(function(ds){
+    var n=(rsvMx.totals||{})[ds]||0, p=(rsvMx.pax||{})[ds]||0;
+    return '<td>'+(n?n+'<span style="font-size:9px;opacity:.7;font-weight:400"> '+p+'名</span>':'<span style="opacity:.25">0</span>')+'</td>';
+  }).join('')+'<td>'+grand+'</td></tr>';
+  var body=C.map(function(c){
+    return '<tr'+(c.offRoster?' style="opacity:.7"':'')+'><td class="nm" style="cursor:pointer" onclick="rsvPickFromMx(\''+jstr(c.name)+'\')">'+esc(c.name)
+      +(c.offRoster?' <span class="badge" style="background:#3a2a10;color:#ddaa44">名簿外</span>':'')+'</td>'
+      +D.map(function(ds){
+        var n=(c.counts||{})[ds]||0;
+        return '<td class="cell" onclick="rsvPickFromMx(\''+jstr(c.name)+'\')">'+(n?n:'<span style="opacity:.2">·</span>')+'</td>';
+      }).join('')+'<td style="font-weight:800">'+(c.total||0)+'</td></tr>';
+  }).join('');
+  el.innerHTML='<div class="sec compact">'+head+navBar
+    +'<div class="mtx-scroll"><table class="mtx sm">'+thead+totalRow+body+'</table></div>'
+    +'<div class="hint" style="margin-top:8px">🏯店全体＝その日の予約そのものの件数（小さい数字＝のべ人数）。<b>キャストの行を足しても店全体には一致しません</b>：1つの予約が予約キャストと同伴キャストの2人に立つことがあり、誰も紐づいていない予約（直接来店など）はどの行にも立たないためです。名前かマスを押すと、その子の一覧が下に出ます。</div>'
+    +'</div>';
+}
+function rsvPickFromMx(name){ rsvPick(name); var el=document.getElementById('rsv-body'); if(el) el.scrollIntoView({block:'start',behavior:'smooth'}); }
+/* ⚠️「読み込み中なら無視」にしない：読み込みの最中に別の子を押したタップが黙って消える（押しても何も起きない画面になる）。
+ *   常に受け付けて、古い結果は下の rsvCast!==name で捨てる＝最後に押した子が必ず勝つ。 */
 function rsvPick(name){
-  if(rsvBusy) return;
   if(rsvCast===name){ rsvCast=''; rsvData=null; renderRsv(); return; } // もう一度押したら選択解除
   rsvCast=name; rsvData=null; rsvShowPast=false;
   renderRsv();
-  rsvBusy=true;
-  api('getCastReservations',{cast:name}).then(function(r){
-    rsvBusy=false;
-    if(rsvCast!==name) return;                       // 待っている間に別の子へ切り替わった＝古い結果を捨てる
-    if(!r||r.ok===false){ rsvData={error:(r&&r.error)||'読み込みエラー'}; }
-    else rsvData=r;
-    drawRsv();
-  }).catch(function(e){
-    rsvBusy=false;
-    if(rsvCast!==name) return;
-    rsvData={error:(e&&e.message)||'通信エラー'};   // 握り潰さない＝原因をボスが報告できるように
-    drawRsv();
-  });
+  var done=function(fn){ return function(a){ if(rsvCast!==name) return; fn(a); drawRsv(); }; };  // 古い子の結果は捨てる
+  api('getCastReservations',{cast:name})
+    .then(done(function(r){ rsvData=(!r||r.ok===false)?{error:(r&&r.error)||'読み込みエラー'}:r; }))
+    .catch(done(function(e){ rsvData={error:(e&&e.message)||'通信エラー'}; }));   // 握り潰さない＝原因をボスが報告できるように
 }
 function rsvRoleBadges(roles){
   var col={'予約':'background:#0e2440;color:#7ab0f0','担当':'background:#2a1030;color:#bb99ff','同伴':'background:#2a1800;color:#ffaa44','同席':'background:#0d2418;color:#66cc88'};
@@ -2248,7 +2304,23 @@ function rsvMock(cast){
   };
   return {ok:true,today:D(0),cast:cast,reservations:all[cast]||[]};
 }
+/* 📅 店全体マトリクスのモック。⚠️本番では帰属も合計もサーバ(getRsvMatrix_)が決める。
+   ここでは「合計＝キャスト列の足し算ではない」形を意図的に作って、画面の注意書きが正しいかを目で見るために使う。 */
+function rsvMxMock(from,days){
+  var d0=new Date(from+'T00:00:00'), dates=[];
+  for(var i=0;i<days;i++){ var d=new Date(d0); d.setDate(d.getDate()+i); dates.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
+  var mk=function(name,role,pat,off){ var c={}; pat.forEach(function(n,i){ if(n&&dates[i])c[dates[i]]=n; }); var t=0; for(var k in c)t+=c[k];
+    return {name:name,role:role,counts:c,total:t,offRoster:!!off}; };
+  var casts=[ mk('まや','キャスト',[2,1,0,3,1,0,2]), mk('ゆい','キャスト',[1,0,0,1,2,0,0]), mk('あん','体験',[0,0,0,0,0,0,0]), mk('かな','キャスト',[0,0,1,0,0,0,0],true) ];
+  casts.sort(function(a,b){return b.total-a.total||String(a.name).localeCompare(String(b.name));});
+  // 店全体＝キャスト列の足し算より小さい日（同伴で2人に立つ）も、大きい日（直接来店で誰にも立たない）も作る
+  var totals={}, pax={};
+  [2,1,2,3,2,0,2].forEach(function(n,i){ if(dates[i]&&n){ totals[dates[i]]=n; pax[dates[i]]=n*2+1; } });
+  var closed={}; if(dates[5])closed[dates[5]]='お盆休み';
+  return {ok:true,from:from,days:days,today:dates[0],dates:dates,casts:casts,totals:totals,pax:pax,closedDays:closed};
+}
 function MOCKAPI(action,body){
+  if(action==='getRsvMatrix')return rsvMxMock(body.from,body.days);
   if(action==='getCastReservations')return rsvMock(body.cast);
   if(action==='getMenuBoard')return {ok:true,board:mnBoard()};
   if(action==='previewMenuBulk'){
