@@ -88,6 +88,32 @@ table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
 .mtx-scroll .mtx td.nm{position:sticky;left:0;z-index:2;background:#0d0d1a;box-shadow:1px 0 0 var(--line);}
 .mtx-scroll .mtx tr:nth-child(even) td.nm{background:#111124;}
 .mtx-scroll .mtx th:first-child{left:0;z-index:3;}
+/* 🧾売上伝票: 日別アコーディオン > 伝票 > 明細。色は既存のCSS変数に寄せる（portal.htmlの青系ハードコードを
+   持ち込むとこの画面だけ浮くため移植時に置換した）。 */
+.bill-day{border:1px solid var(--line2);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+.bd-head{padding:11px 13px;background:var(--panel2);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.bd-head:hover{background:#1b1b33;}
+.bd-date{font-size:13px;color:var(--txt);font-weight:700;}
+.bd-cnt{color:var(--sub);font-weight:400;font-size:11px;}
+.bd-pend{font-size:10px;font-weight:800;color:#e0b060;border:1px solid #6a5320;background:#2a2108;border-radius:4px;padding:1px 5px;}
+.bd-total{font-size:14px;font-weight:800;color:var(--accent);white-space:nowrap;}
+.bill-slip{padding:9px 13px;border-top:1px solid var(--line);cursor:pointer;}
+.bill-slip:hover{background:var(--panel);}
+.bs-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.bs-cust{font-size:12px;color:var(--txt);min-width:0;}
+.bs-meta{color:var(--sub);}
+.bs-amt{font-size:13px;font-weight:700;color:#9fd0a0;white-space:nowrap;}
+.bs-sub{font-size:10px;color:var(--sub);margin-top:2px;}
+.bi-box{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:9px 11px;margin-top:8px;}
+.bi-bottle{font-size:11px;color:#e0b060;margin-bottom:7px;font-weight:600;}
+.bi-row{display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:4px 0;border-bottom:1px solid var(--line);}
+.bi-row:last-child{border-bottom:0;}
+.bi-nm{color:var(--sub);min-width:0;}
+.bi-cat{color:var(--dim);}
+.bi-amt{color:var(--txt);font-weight:600;white-space:nowrap;}
+.bi-msg{font-size:11px;color:var(--sub);padding:6px 2px;}
+.bi-msg.err{color:#e88;}
+.bi-msg.warn{color:#c9a066;}
 /* 🧮給与明細の✎列を右固定。表が15列で横スクロールする＝固定しないと初期表示に✎が1つも映らず
    「機能が無い」と読める（実際に迷わせた）。⚠️sticky セルは背景が透けると下の数字と重なる＝
    行の背景を明示する必要があり、偶数行・合計行はそれぞれ別に上書きしないと1行だけ透ける。 */
@@ -1137,16 +1163,106 @@ var payMonth=null, payStat=null, paySub='tatekae';
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
 function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('trust','📥 TRUST取込')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
+  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上伝票')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
 }
 function paySwitch(k){ paySub=k; renderPay(); }
 function renderPay(){
   if(paySub==='tatekae') return renderTatekae();
   if(paySub==='trust')   return renderTrust();
+  if(paySub==='bills')   return renderBillsAdmin();
   if(paySub==='kyuyo')   return renderKyuyo();
   if(paySub==='bday')    return renderBday();
   renderPublish();
 }
+/* --- 🧾 売上伝票（TRUSTから取り込んだ伝票を「店全体」または「キャスト個人」で見る） ---
+   データは伝票シート＝取込済みのものを表示するだけ（TRUSTへ取りに行かない＝403でも見える）。
+   キャスト絞りは「表示」プルダウン1つ＝(店全体)を先頭に置く。全体/個人のチップを別に持つと
+   「どっちが今の状態か」が2箇所に散る。 */
+var billMonth=null, billCast='', billSeq=0;
+/* ⚠️世代カウンタで「古い結果を捨てる」だけにする＝busyガード(読み込み中は無視)は付けないこと。
+   両方を同居させると連打・高速切替で永久に読み込み中から抜けなくなる（既知の罠）。
+   これが無いと、月を素早く切り替えた時に遅れて届いた前の月が最後に描画されて居座る。 */
+function renderBillsAdmin(){
+  var my=++billSeq;
+  loading();
+  api('adminGetBills',{month:billMonth||nowMonth(), cast:billCast}).then(function(r){
+    if(my!==billSeq)return;
+    if(!res(r))return; drawBillsAdmin(r);
+  }).catch(function(){
+    if(my!==billSeq)return;
+    setBody(paySubToggle('bills')+'<div class="empty">読み込みエラー</div>');
+  });
+}
+function onBillMonth(){ billMonth=document.getElementById('bm').value; renderBillsAdmin(); }
+function onBillCast(){ billCast=document.getElementById('bc').value; renderBillsAdmin(); }
+function drawBillsAdmin(r){
+  billMonth=r.month; billCast=r.cast||'';
+  var mo=(r.months||[]).map(function(m){return '<option value="'+esc(m)+'"'+(m===r.month?' selected':'')+'>'+esc(m)+'</option>';}).join('')||'<option>'+esc(r.month||'—')+'</option>';
+  // プルダウンに件数と金額を出す＝開いた瞬間に「誰がどれだけか」が分かる（選ばないと分からないのでは遅い）
+  var co='<option value=""'+(!billCast?' selected':'')+'>（店全体）</option>'
+    +(r.casts||[]).map(function(c){
+      return '<option value="'+esc(c.name)+'"'+(c.name===billCast?' selected':'')+'>'+esc(c.name)+'（'+c.count+'件・'+fmtYen(c.total)+'）</option>';
+    }).join('');
+  var head='<div class="toolbar"><span class="cnt">対象月</span><select class="finput" id="bm" onchange="onBillMonth()" style="width:120px">'+mo+'</select>'
+    +'<span class="cnt">表示</span><select class="finput" id="bc" onchange="onBillCast()" style="max-width:260px">'+co+'</select>'
+    +'<span class="cnt">'+(r.slipCount||0)+'件 ・ 担当売上計'+fmtYen(r.monthTotal||0)+'</span></div>';
+  var body;
+  if(!(r.days||[]).length){
+    body='<div class="empty">'+(billCast?esc(billCast)+' の伝票がこの月にありません。':'この月の伝票データがありません。')
+      +'<br><small>取り込みは「📥 TRUST取込」から。</small></div>';
+  } else {
+    body=(r.days||[]).map(function(day){
+      var slips=(day.slips||[]).map(function(s){
+        return '<div class="bill-slip" onclick=\'billDetail(this,'+JSON.stringify(day.date)+','+JSON.stringify(s.uuid)+')\'>'
+          +'<div class="bs-top"><span class="bs-cust">'+esc(s.cust||'（無記名）')
+          +' <span class="bs-meta">卓'+esc(s.table||'-')+'・'+esc(s.guests||'-')+'名'+(s.inTime?'・'+esc(s.inTime):'')+'</span></span>'
+          +'<span class="bs-amt">'+fmtYen(s.tantoAmt)+'</span></div>'
+          // 主担当は「店全体」の時だけ出す＝個人で絞っている時は全行に同じ名前が並ぶだけで邪魔
+          +(!billCast?'<div class="bs-sub">主担当: '+esc(s.primary||'(未設定)')+(s.dohanCast?'　同伴: '+esc(s.dohanCast):'')+'</div>'
+                     :(s.dohanCast?'<div class="bs-sub">同伴: '+esc(s.dohanCast)+'</div>':''))
+          +'<div class="bill-detail" style="display:none"></div></div>';
+      }).join('');
+      return '<div class="bill-day"><div class="bd-head" onclick="toggleBillDay(this)">'
+        +'<span class="bd-date">'+fmtBillDate(day.date)+' <span class="bd-cnt">('+day.count+'件)</span>'
+        +(day.pending?' <span class="bd-pend" title="まだ営業中／締め前＝TRUST側で増える可能性があります">未確定</span>':'')+'</span>'
+        +'<span class="bd-total">'+fmtYen(day.total)+'</span></div>'
+        +'<div class="bill-slips" style="display:none">'+slips+'</div></div>';
+    }).join('');
+  }
+  setBody(paySubToggle('bills')+head+body);
+}
+function toggleBillDay(el){ var b=el.nextElementSibling; b.style.display=(b.style.display==='none'?'block':'none'); }
+function fmtBillDate(s){
+  var p=String(s).split('-'); if(p.length<3)return s;
+  var wd=['日','月','火','水','木','金','土'];
+  return (+p[1])+'/'+(+p[2])+'('+wd[new Date(+p[0],+p[1]-1,+p[2]).getDay()]+')';
+}
+/* 明細は開いた時に取りに行く（全伝票ぶん先読みすると重い）。2回目以降は再取得せず開閉するだけ。 */
+function billDetail(el,date,uuid){
+  var box=el.querySelector('.bill-detail'); if(!box)return;
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  box.style.display='block';
+  if(box.getAttribute('data-loaded')==='1') return;
+  box.innerHTML='<div class="bi-msg">明細を取得中…</div>';
+  api('adminGetBillDetail',{date:date,uuid:uuid}).then(function(d){
+    if(!d||d.ok===false){ box.innerHTML='<div class="bi-msg err">'+esc((d&&d.error)||'取得失敗')+'</div>'; return; }
+    box.innerHTML=renderBillItems(d); box.setAttribute('data-loaded','1');
+  }).catch(function(){ box.innerHTML='<div class="bi-msg err">通信エラー</div>'; });
+}
+function renderBillItems(d){
+  if(d.pending) return '<div class="bi-msg warn">明細（内訳）はまだ取り込まれていません。<br><small>「📥 TRUST取込」の「伝票を取得」で保存されます。</small></div>';
+  var items=d.items||[];
+  if(!items.length) return '<div class="bi-msg">明細なし</div>';
+  var h='<div class="bi-box">';
+  if(d.bottleCount>0) h+='<div class="bi-bottle">🍾 ボトル '+d.bottleCount+'本'+(d.bottles&&d.bottles.length?'：'+esc(d.bottles.join(' / ')):'')+'</div>';
+  h+=items.map(function(it){
+    return '<div class="bi-row"><span class="bi-nm">'+(it.isBottle?'🍾 ':'')
+      +'<span class="bi-cat">['+esc(it.category)+']</span> '+esc(it.product||it.detail||'')
+      +(it.qty>1?' ×'+it.qty:'')+'</span><span class="bi-amt">'+fmtYen(it.amount)+'</span></div>';
+  }).join('');
+  return h+'</div>';
+}
+
 /* --- 💳 立替集計（キャスト×月の領収書合計） --- */
 function renderTatekae(){
   if(!IS_GAS){ setBody(paySubToggle('tatekae')+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; }
@@ -2345,7 +2461,63 @@ function rsvMxMock(from,days){
   var closed={}; if(dates[5])closed[dates[5]]='お盆休み';
   return {ok:true,from:from,days:days,today:dates[0],dates:dates,casts:casts,totals:totals,pax:pax,closedDays:closed};
 }
+/* 🧾売上伝票のローカルモック。GASを叩かずに実際に押して確認するため（本番の伝票シートを模した最小データ）。
+   「未確定」バッジ・主担当(未設定)・明細未取込(pending)・複数キャスト＝実データに出る面倒な形を意図的に含める。 */
+function blMock(){
+  return {
+    '2026-07-15':[
+      {uuid:'u-a1',inTime:'20:10',table:'B1',guests:'3',cust:'田中様',primary:'あいり',tantoAmt:180000,dohanCast:'',dohanAmt:0,total:210000},
+      {uuid:'u-a2',inTime:'21:30',table:'C2',guests:'2',cust:'佐藤様',primary:'ゆな',tantoAmt:95000,dohanCast:'れい',dohanAmt:12000,total:120000}
+    ],
+    '2026-07-14':[
+      {uuid:'u-b1',inTime:'19:50',table:'B2',guests:'4',cust:'（無記名）',primary:'',tantoAmt:64000,dohanCast:'',dohanAmt:0,total:64000},
+      {uuid:'u-b2',inTime:'22:05',table:'A1',guests:'2',cust:'鈴木様',primary:'あいり',tantoAmt:143000,dohanCast:'',dohanAmt:0,total:160000},
+      {uuid:'u-b3',inTime:'23:10',table:'C1',guests:'1',cust:'高橋様',primary:'ゆな',tantoAmt:38000,dohanCast:'',dohanAmt:0,total:41000}
+    ],
+    '2026-07-16':[
+      {uuid:'u-c1',inTime:'20:00',table:'B1',guests:'2',cust:'伊藤様',primary:'れい',tantoAmt:72000,dohanCast:'',dohanAmt:0,total:80000}
+    ]
+  };
+}
+function blMockDetail(uuid){
+  if(uuid==='u-b1') return null; // 明細未取込＝pending の再現
+  var m={
+    'u-a1':{items:[{category:'セット',product:'セット料金',detail:'',qty:3,amount:45000,isBottle:false},
+                   {category:'キャスト注文',product:'ボトル/山崎12年',detail:'',qty:1,amount:60000,isBottle:true},
+                   {category:'お客様注文',product:'フルーツ盛り',detail:'',qty:1,amount:12000,isBottle:false}],
+            bottleCount:1,bottles:['ボトル/山崎12年']},
+    'u-a2':{items:[{category:'同伴',product:'同伴料',detail:'',qty:1,amount:12000,isBottle:false},
+                   {category:'セット',product:'セット料金',detail:'',qty:2,amount:30000,isBottle:false}],
+            bottleCount:0,bottles:[]}
+  };
+  return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
+}
 function MOCKAPI(action,body){
+  if(action==='adminGetBills'){
+    var src=blMock(), ym=String(body.month||'2026-07').slice(0,7), tgt=String(body.cast||''), today='2026-07-16';
+    var byCast={}, days=[], mset={};
+    Object.keys(src).sort().reverse().forEach(function(dt){
+      mset[dt.slice(0,7)]=1;
+      if(dt.slice(0,7)!==ym)return;
+      var slips=[];
+      src[dt].forEach(function(s){
+        var pk=s.primary||'(未設定)';
+        byCast[pk]=byCast[pk]||{name:pk,count:0,total:0}; byCast[pk].count++; byCast[pk].total+=s.tantoAmt;
+        if(tgt&&pk!==tgt)return;
+        slips.push(Object.assign({},s,{primary:pk}));
+      });
+      if(slips.length)days.push({date:dt,count:slips.length,total:slips.reduce(function(a,b){return a+b.tantoAmt;},0),pending:dt>=today,slips:slips});
+    });
+    var cs=Object.keys(byCast).map(function(k){return byCast[k];}).sort(function(a,b){return b.total-a.total;});
+    return {ok:true,month:ym,cast:tgt,months:Object.keys(mset).sort().reverse(),
+            monthTotal:days.reduce(function(a,d){return a+d.total;},0),
+            slipCount:days.reduce(function(a,d){return a+d.count;},0),casts:cs,days:days};
+  }
+  if(action==='adminGetBillDetail'){
+    var d=blMockDetail(body.uuid);
+    if(!d)return {ok:true,date:body.date,uuid:body.uuid,items:[],bottleCount:0,bottles:[],pending:true};
+    return {ok:true,date:body.date,uuid:body.uuid,items:d.items,bottleCount:d.bottleCount,bottles:d.bottles};
+  }
   if(action==='getRsvMatrix')return rsvMxMock(body.from,body.days);
   if(action==='getCastReservations')return rsvMock(body.cast);
   if(action==='getMenuBoard')return {ok:true,board:mnBoard()};

@@ -355,6 +355,20 @@ function clearClockDrift() {
 }
 
 function handleApiRequest_(body) {
+  // === 🧾 売上伝票（TRUST取込の伝票を管理者が全体/個人で見る） ===
+  if (body.action === 'adminGetBills') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return adminGetBills_(body.month, body.cast);
+  }
+  if (body.action === 'adminGetBillDetail') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    // 明細は本人用と同じ関数を isAdmin=true で呼ぶ＝所有ガードと在籍カットを素通し。
+    // 管理者判定は上のガードで済んでいるので、ここで true を渡すのは二重ではなく委譲。
+    return portalBillDetail_('', body.date, body.uuid, true, '');
+  }
+
   // === お知らせ配信＋既読 ===
   if (body.action === 'createNotice') {
     const adminName = getStaffName(body.userId);
@@ -6354,74 +6368,10 @@ function handlePortalApi_(e) {
 
   // （伝票バックフィルの保守用トークン導線 trustcreds/billingest 等は撤去済み。
   //   管理者向けの再投入は下の isAdmin && tab==='billbackfill' 系を使う）
-  // 状態確認(読み取り専用・TRUSTへはGET1回のみ=ログインPOSTしない=BAN延長しない)
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'truststatus') {
-    let loginCode = 0;
-    try { loginCode = UrlFetchApp.fetch('https://admin.trust-operation.com/', { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' } }).getResponseCode(); } catch (err) { loginCode = -1; }
-    const sh = billSheet_(); const last = sh.getLastRow(); let latest = '';
-    if (last >= 2) latest = sh.getRange(2, 1, last - 1, 1).getValues().map(x => x[0] instanceof Date ? Utilities.formatDate(x[0], TZ, 'yyyy-MM-dd') : String(x[0]).trim()).sort().reverse()[0];
-    return out({ ok: true, gasToTrustLoginCode: loginCode, gasBlocked: loginCode !== 200, billRows: Math.max(0, last - 1), latestBillDate: latest, today: bizDateStr_(), salesDataDates: JSON.parse(prop('SALES_DATA_DATES') || '{}') });
-  }
-  // 通知設定の現状ダンプ（読み取り専用・保存版があればそれ＝実際に送信中の設定）
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'notifdump') {
-    return out({ ok: true, customized: !!prop('NOTIF_SETTINGS'), settings: getNotifSettings_() });
-  }
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billverify') return out(portalGetMyBills_(e.parameter.cast || '', e.parameter.month || ''));
-  // 給与ロール許可リストの読み取り専用診断(本番給与は書かない)。名簿×売上でフィルタを走らせ除外/未照合を返す。
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'payrolldiag') {
-    const ssD = getOrOpenSS_();
-    const staffShD = ssD.getSheetByName(STAFF_TAB);
-    const salesShD = ssD.getSheetByName(URIAGE_TAB);
-    const ALLOWD = { 'キャスト': 1, '体験': 1, '派遣': 1, '黒服バイト': 1, '黒服社員': 1, '黒服': 1 };
-    const nkeyD = s => String(s || '').replace(/[\s　]/g, '');
-    const roleByKeyD = {};
-    if (staffShD) { const srD = staffShD.getDataRange().getValues();
-      for (let k = 1; k < srD.length; k++) { const rnD = String(srD[k][1]).trim(); if (rnD) roleByKeyD[nkeyD(rnD)] = String(srD[k][2]).trim(); } }
-    const ymD = String(e.parameter.month || '').replace(/-/g, '/').slice(0, 7);
-    const rowsD = salesShD ? salesShD.getDataRange().getValues() : [];
-    const iNameD = rowsD.length ? rowsD[0].map(String).indexOf('名前') : -1;
-    const excludedD = [], unmatchedD = []; let keptD = 0, totalD = 0;
-    for (let i = 1; i < rowsD.length; i++) {
-      if (ymD && mStr_(rowsD[i][0]) !== ymD) continue;
-      totalD++;
-      const nmD = String(rowsD[i][iNameD] || rowsD[i][1]);
-      const rlD = resolveSalesRole_(nmD, roleByKeyD, nkeyD, ALLOWD);
-      if (rlD === undefined) { unmatchedD.push(nmD); keptD++; }
-      else if (!ALLOWD[rlD]) { excludedD.push(nmD + '(' + rlD + ')'); }
-      else { keptD++; }
-    }
-    return out({ ok: true, month: ymD || '(all)', salesRows: totalD, kept: keptD, excludedCount: excludedD.length, excluded: excludedD, unmatchedCount: unmatchedD.length, unmatched: unmatchedD });
-  }
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billmonthbreakdown') {
-    const ym = String(e.parameter.month || '').replace(/\//g, '-').slice(0, 7);
-    const sh = billSheet_(); const last = sh.getLastRow(); const agg = {}; let total = 0, cnt = 0;
-    if (last >= 2) sh.getRange(2, 1, last - 1, 14).getValues().forEach(r => {
-      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
-      if (bd.slice(0, 7) !== ym) return;
-      const p = String(r[8]).trim() || '(空)'; const amt = Number(r[9]) || 0;
-      (agg[p] = agg[p] || { count: 0, total: 0 }); agg[p].count++; agg[p].total += amt; total += amt; cnt++;
-    });
-    return out({ ok: true, month: ym, slips: cnt, total: total, byCast: Object.keys(agg).map(k => ({ cast: k, count: agg[k].count, total: agg[k].total })).sort((a, b) => b.count - a.count) });
-  }
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'billqualityscan') {
-    const sh = billSheet_(); const last = sh.getLastRow(); let empty = 0, digit = 0; const digitSet = {}, emptyEx = [];
-    if (last >= 2) sh.getRange(2, 1, last - 1, 14).getValues().forEach(r => {
-      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
-      const p = String(r[8]).trim();
-      if (!p) { empty++; if (emptyEx.length < 8) emptyEx.push({ date: bd, tanto: String(r[13]) }); }
-      else if (/^\d/.test(p)) { digit++; digitSet[p] = (digitSet[p] || 0) + 1; }
-    });
-    return out({ ok: true, rows: Math.max(0, last - 1), emptyPrimary: empty, digitPrefixed: digit, digitNames: digitSet, emptyExamples: emptyEx });
-  }
-  if (e.parameter.token === 'ieyasu-bf-7k9x2m' && e.parameter.tab === 'dupnames') {
-    const sh = getOrOpenSS_().getSheetByName(STAFF_TAB); const byName = {};
-    if (sh && sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().forEach(r => {
-      const nm = normalizeName_(String(r[1]).trim()); if (!nm) return;
-      (byName[nm] = byName[nm] || []).push({ userId: String(r[0]).slice(-6), role: String(r[2]), reg: r[7] instanceof Date ? Utilities.formatDate(r[7], TZ, 'yyyy-MM-dd') : '' });
-    });
-    const dups = Object.keys(byName).filter(n => byName[n].length >= 2).map(n => ({ name: n, holders: byName[n] }));
-    return out({ ok: true, totalStaff: Object.keys(byName).length, reusedNames: dups });
-  }
+  // 診断用トークンルート(truststatus/notifdump/billverify/payrolldiag/billmonthbreakdown/
+  // billqualityscan/dupnames)は2026-07-16に撤去。固定トークンを知るだけで認証なしに
+  // 売上・給与・名簿が読めた＝バックフィル期の一時導線を残置していたもの。
+  // 伝票の閲覧は管理コンソール💰給与→🧾売上伝票(adminGetBills)へ正規化した。
 
   if (!userId) return out({ ok: false, error: 'userId required' });
   const name = getStaffName(userId);
@@ -12167,6 +12117,59 @@ function portalGetMyBills_(lookupName, month, sinceDate) {
   days.forEach(d => d.slips.sort((a, b) => String(a.inTime).localeCompare(String(b.inTime))));
   const monthTotal = days.reduce((s, d) => s + d.total, 0);
   return { ok: true, month: ym, cast: target, monthTotal: monthTotal, days: days };
+}
+
+// 管理者: 保存済みTRUST伝票を「店全体」または「キャスト個人」で見る（コンソール💰給与→🧾売上伝票）。
+// portalGetMyBills_(キャスト本人用)との違いは3つ。同じに見えるが意図的に違う＝安易に統合しないこと:
+//   (a) cast が空なら主担当で絞らない＝店全体。本人用は必ず本人で絞る。
+//   (b) 在籍カットオフ無し。管理者は前任者の代も含めて全期間見る（既存の isAdmin 素通しと同じ扱い）。
+//   (c) 当日も出す。本人用は「今日以降＝未確定」を隠すが、これは確定前の数字でキャストを一喜一憂させないため。
+//       管理者は締める前の当日を見たいので出す。ただし当日分は未確定と分かるよう画面側で印を付ける。
+// ⚠️キャスト候補(casts)は絞り込みの前に集める＝プルダウンに「その月に売上がある子」が全員出る。
+//   絞り込み後に集めると、一度誰かを選んだ瞬間に候補がその子だけになって他へ移れなくなる。
+function adminGetBills_(month, cast) {
+  const ym = String(month || Utilities.formatDate(new Date(), TZ, 'yyyy-MM')).replace(/\//g, '-').slice(0, 7);
+  const target = normalizeName_(cast || '');
+  const today = bizDateStr_();
+  const sh = billSheet_();
+  const last = sh.getLastRow();
+  const byDay = {}, byCast = {}, monthSet = {};
+  if (last >= 2) {
+    const vals = sh.getRange(2, 1, last - 1, BILL_HEAD_.length).getValues();
+    vals.forEach(r => {
+      const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
+      if (bd) monthSet[bd.slice(0, 7)] = 1;   // 月プルダウン用＝月フィルタより前に集める
+      if (bd.slice(0, 7) !== ym) return;
+      const prim = normalizeName_(String(r[8]).trim());
+      const amt = Number(r[9]) || 0;
+      // 主担当が空の伝票は実在する（TRUSTの担当セルから推定できなかった分）。(未設定)として全体には出す＝
+      // 黙って落とすと店全体の合計がTRUSTと合わなくなり、原因不明の欠損に見える。
+      const pk = prim || '(未設定)';
+      const bc = (byCast[pk] = byCast[pk] || { name: pk, count: 0, total: 0 });
+      bc.count += 1; bc.total += amt;
+      if (target && prim !== target) return;
+      const day = (byDay[bd] = byDay[bd] || { date: bd, total: 0, count: 0, pending: bd >= today, slips: [] });
+      day.total += amt;
+      day.count += 1;
+      day.slips.push({
+        uuid: String(r[1]),
+        inTime: (r[2] instanceof Date ? Utilities.formatDate(r[2], TZ, 'HH:mm') : String(r[2] || '')),
+        table: String(r[4]), guests: String(r[5]), cust: String(r[6]),
+        primary: prim || '(未設定)', tantoAmt: amt,
+        dohanCast: String(r[10]), dohanAmt: Number(r[11]) || 0, total: Number(r[12]) || 0
+      });
+    });
+  }
+  const days = Object.keys(byDay).sort().reverse().map(k => byDay[k]);
+  days.forEach(d => d.slips.sort((a, b) => String(a.inTime).localeCompare(String(b.inTime))));
+  const casts = Object.keys(byCast).map(k => byCast[k]).sort((a, b) => b.total - a.total);
+  return {
+    ok: true, month: ym, cast: target,
+    months: Object.keys(monthSet).sort().reverse(),
+    monthTotal: days.reduce((s, d) => s + d.total, 0),
+    slipCount: days.reduce((s, d) => s + d.count, 0),
+    casts: casts, days: days
+  };
 }
 
 // 使い回し源氏名の在籍カットオフ: スタッフマスタで同名(別userId)が2人以上居る源氏名だけ、
