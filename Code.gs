@@ -115,6 +115,32 @@ function surveyCustomerBirthdays() {
   Logger.log('==== 棚卸し終了 ====');
 }
 
+// 【手動・テスト】今月誕生日の担当客通知を「黒服グループ」へプレビュー送信（実キャストには送らない）。
+// 文面と宛先を安全に確認するための関数。末尾 _ なし＝GASエディタの実行メニューに出す。使い終わったら撤去する一時関数。
+function testCustomerBirthdayNoticeToKurofuku() {
+  var kf = prop('GROUP_KUROFUKU');
+  if (!kf) { Logger.log('❌ GROUP_KUROFUKU 未設定'); return '❌ GROUP_KUROFUKU 未設定'; }
+  var r = sendCustomerBirthdayNotices_(0, kf);
+  Logger.log('✅ 黒服グループへプレビュー送信: ' + JSON.stringify(r));
+  return '✅ 黒服グループへプレビュー送信: ' + JSON.stringify(r);
+}
+
+// 【手動・確認用／送信ゼロ】今月誕生日の担当客通知の文面を実行ログに出すだけ。LINEは一切送らない＝完全に安全。
+function previewCustomerBirthdayNotices() {
+  var notices = buildCustomerBirthdayNotices_(getOrOpenSS_(), 0);
+  Logger.log('==== 今月誕生日の担当客通知 プレビュー（LINE送信なし）====');
+  Logger.log('通知対象キャスト: ' + notices.length + '名');
+  notices.forEach(function (n) {
+    Logger.log('\n── ' + n.name + ' 宛（' + (n.lineId ? 'LINE登録あり' : '⚠️LINE未登録=本番では届きません') + '・' + n.count + '名）──\n' + n.message);
+  });
+  Logger.log('==== プレビュー終了（LINEは1通も送っていません）====');
+}
+
+// 【手動】今月誕生日の担当客の自動通知(毎月1日11時台に担当キャストへ)を ON にする。テスト承認後に実行。
+function enableCustomerBirthdayNotify() { setProp('CUSTBDAY_NOTIFY_ON', '1'); Logger.log('✅ 自動通知 ON（毎月1日11時台・担当キャストへ）'); return '✅ 自動通知 ON'; }
+// 【手動】今月誕生日の担当客の自動通知を OFF にする（いつでも停止可）。
+function disableCustomerBirthdayNotify() { setProp('CUSTBDAY_NOTIFY_ON', '0'); Logger.log('🛑 自動通知 OFF'); return '🛑 自動通知 OFF'; }
+
 /* 【テスト専用・手動実行】会費更新の確認通知の文面を、今日の予約から作って黒服グループへ1通だけ送る。
  * 本物(notifyMemberRenewalOnCheckIn_)は来店をトリガに飛ぶので、実際に客が来るまで文面を確認できない。
  * それを待たずに見るための関数。判定は本物と同じ getRenewalHitsForReservation_ を使う＝文面の答え合わせになる。
@@ -1978,6 +2004,49 @@ function customerBirthdaysByMonth_(ss, month, tantouFilter) {
 function gunshiGetBirthdays(month) {
   var m = Number(month) || Number(Utilities.formatDate(new Date(), TZ, 'M'));
   return { month: m, list: customerBirthdaysByMonth_(getOrOpenSS_(), m, null) };
+}
+
+// 今月誕生日のお客様を担当キャストごとにまとめ、[{name, lineId, count, message}] を返す（送信はしない）。
+// 担当なしの客・LINE未登録キャストは自然に落ちる（送りようがないため）。
+function buildCustomerBirthdayNotices_(ss, month) {
+  var m = Number(month) || Number(Utilities.formatDate(new Date(), TZ, 'M'));
+  var list = customerBirthdaysByMonth_(ss, m, null); // 店全体（担当付き）
+  var lineByName = {};
+  getAllStaff_(ss).forEach(function (s) { if (s && s.name) lineByName[String(s.name).replace(/\s/g, '')] = s.lineId || ''; });
+  var byCast = {};
+  list.forEach(function (c) {
+    var t = String(c.tantou || '').replace(/\s/g, '');
+    if (!t) return; // 担当なしは通知先が無い
+    (byCast[t] = byCast[t] || []).push(c);
+  });
+  return Object.keys(byCast).map(function (t) {
+    var custs = byCast[t];
+    var lines = custs.map(function (c) { return '・' + c.name + '様（🎂' + c.mmdd + '）'; }).join('\n');
+    var message = '🎂【今月お誕生日のお客様】\n' + m + '月にお誕生日を迎える、あなたの担当のお客様です。\nお祝いのひと言・ご来店のお声がけのきっかけにどうぞ😊\n\n' + lines;
+    return { name: t, lineId: lineByName[t] || '', count: custs.length, message: message };
+  });
+}
+
+// 今月誕生日の担当客を各キャストへLINE通知。dryGroupId を渡すと実キャストには送らず、そのグループへ全員ぶんのプレビューを1通で送る（テスト用）。
+function sendCustomerBirthdayNotices_(month, dryGroupId) {
+  var ss = getOrOpenSS_();
+  var m = Number(month) || Number(Utilities.formatDate(new Date(), TZ, 'M'));
+  var notices = buildCustomerBirthdayNotices_(ss, m);
+  if (dryGroupId) {
+    var preview = '🧪【テスト送信】今月(' + m + '月)誕生日の担当客通知プレビュー\n※実際のキャストには送っていません。\n\n' +
+      (notices.length ? notices.map(function (n) {
+        return '── ' + n.name + ' さん宛（' + (n.lineId ? 'LINE登録あり' : '⚠️LINE未登録=本番では届きません') + '・' + n.count + '名）──\n' + n.message;
+      }).join('\n\n────────\n\n') : '（今月、担当付きで誕生日のお客様はいません）');
+    push_(dryGroupId, preview.slice(0, 4900));
+    return { ok: true, mode: 'dry', month: m, casts: notices.length };
+  }
+  var sent = 0, skipped = 0, skippedNames = [];
+  notices.forEach(function (n) {
+    if (!n.lineId) { skipped++; skippedNames.push(n.name); return; }
+    push_(n.lineId, n.message);
+    sent++;
+  });
+  return { ok: true, mode: 'live', month: m, sent: sent, skipped: skipped, skippedNames: skippedNames };
 }
 
 // スタッフマスタの誕生日(個別条件の'誕生日'列)から 月→[{name,mmdd}] を作る（キャスト系のみ）
@@ -4568,6 +4637,19 @@ function scheduledJobs() {
 
   // 18:00: 月初1回、今月誕生日で誕生日バック未設定のキャストを軍師の要対応へ（内部で月ガード＝月1回）
   if (hhmm >= '18:00' && hhmm <= '18:09') once('BDAYREMIND', remindBirthdayBackIfNeeded_);
+
+  // 月初(1日)11時台に1回: 今月誕生日の担当客を各キャストへLINE通知。
+  // ⚠️既定OFF＝安全側。CUSTBDAY_NOTIFY_ON='1' をセットして初めて稼働（テスト承認後にONにする）。月ガードで月1回。
+  if (prop('CUSTBDAY_NOTIFY_ON') === '1' && hhmm >= '11:00' && hhmm <= '11:09') {
+    var _cbNow = new Date();
+    if (Number(Utilities.formatDate(_cbNow, TZ, 'd')) === 1) {
+      var _cbYm = Utilities.formatDate(_cbNow, TZ, 'yyyy-MM');
+      if (!prop('CUSTBDAY_SENT_' + _cbYm)) {
+        setProp('CUSTBDAY_SENT_' + _cbYm, '1');
+        try { sendCustomerBirthdayNotices_(0, null); } catch (e) { console.error('custbday notify', e); }
+      }
+    }
+  }
 
   notif_('kaiten_check', () => {
     push_(prop('GROUP_KUROFUKU'), ns_['kaiten_check'].message || ns_['kaiten_check'].defaultMsg);
