@@ -58,6 +58,63 @@ function setProp(k, v) {
   PropertiesService.getScriptProperties().setProperty(k, String(v));
 }
 
+/* 【調査専用・手動実行／読み取り専用】顧客マスタ お客様管理Y3 の「誕生日」列のデータ品質を1回棚卸しする。
+ * シートは一切書き換えない。結果は実行ログ(Logger.log)に出す。
+ * 目的＝「今月誕生日のお客様」機能を作る前に、入力率・書式のばらつき・今月該当者数を把握する（[[reference_customer_master_y3]]の地雷対策）。
+ * ⚠️末尾 _ を付けない＝GASエディタの実行メニューに出すため。使い終わったら撤去する一時関数。 */
+function surveyCustomerBirthdays() {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(MASTER_TAB);
+  if (!sh) { Logger.log('❌ シートが無い: ' + MASTER_TAB); return; }
+  const values = sh.getDataRange().getValues();
+  const cols = getCustomerMasterCols_(values);
+  if (!cols) { Logger.log('❌ 見出し行を検出できない（getCustomerMasterCols_ が null）'); return; }
+  if (cols.bday < 0) { Logger.log('❌ 誕生日列が見つからない（cols.bday=' + cols.bday + '）'); return; }
+
+  const thisMonth = Number(Utilities.formatDate(new Date(), TZ, 'M'));
+  const buckets = { empty: 0, dateType: 0, md: 0, ymd: 0, warekiOrFW: 0, unparseable: 0 };
+  const samples = {};
+  const pushSample = (k, v) => { (samples[k] = samples[k] || []); if (samples[k].length < 5) samples[k].push(v); };
+  const thisMonthList = [];
+  let total = 0, filled = 0;
+
+  for (let r = cols.headerRow + 1; r < values.length; r++) {
+    const rr = values[r];
+    const nm = String(rr[cols.name] == null ? '' : rr[cols.name]).replace(/\s/g, '');
+    if (!nm) continue;
+    total++;
+    const raw = rr[cols.bday];
+    const isDate = raw instanceof Date;
+    const s = isDate ? Utilities.formatDate(raw, TZ, 'yyyy/M/d') : String(raw == null ? '' : raw).trim();
+
+    if (!isDate && s === '') { buckets.empty++; continue; }
+    filled++;
+
+    if (isDate) { buckets.dateType++; pushSample('dateType', s); }
+    else if (/[令平昭]|[RrHhSs]\s*\d|[０-９Ａ-Ｚａ-ｚ．]/.test(s)) { buckets.warekiOrFW++; pushSample('warekiOrFW', s); }
+    else if (/^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(s)) { buckets.ymd++; }
+    else if (/^\d{1,2}[\/\-.]\d{1,2}$/.test(s)) { buckets.md++; }
+
+    const forParse = isDate ? Utilities.formatDate(raw, TZ, 'M/d') : s;
+    const mo = birthdayMonth_(forParse);
+    if (!mo && !isDate && !/[令平昭RrHhSs]/.test(s)) { buckets.unparseable++; pushSample('unparseable', s); }
+    if (mo === thisMonth) thisMonthList.push(nm + '（' + s + '）');
+  }
+
+  Logger.log('==== 顧客マスタ 誕生日 棚卸し（読み取り専用）====');
+  Logger.log('シート: ' + MASTER_TAB + ' / 見出し行: ' + (cols.headerRow + 1) + ' / 誕生日列index: ' + cols.bday);
+  Logger.log('総客数: ' + total + ' ／ 入力済み: ' + filled + ' ／ 空欄: ' + buckets.empty +
+             '（入力率 ' + (total ? Math.round(filled / total * 100) : 0) + '%）');
+  Logger.log('書式内訳 → Date型:' + buckets.dateType + ' / M/D:' + buckets.md + ' / Y/M/D:' + buckets.ymd +
+             ' / 和暦か全角混入:' + buckets.warekiOrFW + ' / パース不能:' + buckets.unparseable);
+  ['dateType', 'warekiOrFW', 'unparseable'].forEach(k => {
+    if (samples[k] && samples[k].length) Logger.log('  ▹ ' + k + ' 生値の例: ' + samples[k].join(' , '));
+  });
+  Logger.log('---- 今月(' + thisMonth + '月) 誕生日のお客様: ' + thisMonthList.length + '名 ----');
+  Logger.log(thisMonthList.length ? thisMonthList.join('\n') : '（該当なし）');
+  Logger.log('==== 棚卸し終了 ====');
+}
+
 /* 【テスト専用・手動実行】会費更新の確認通知の文面を、今日の予約から作って黒服グループへ1通だけ送る。
  * 本物(notifyMemberRenewalOnCheckIn_)は来店をトリガに飛ぶので、実際に客が来るまで文面を確認できない。
  * それを待たずに見るための関数。判定は本物と同じ getRenewalHitsForReservation_ を使う＝文面の答え合わせになる。
@@ -355,6 +412,16 @@ function clearClockDrift() {
 }
 
 function handleApiRequest_(body) {
+  // === 🎂 今月誕生日のお客様（管理者/黒服=全件・キャスト=自分の担当客のみ） ===
+  if (body.action === 'getCustomerBirthdays') {
+    const who = getStaffName(body.userId);
+    if (!who) return { ok: false, error: '権限がありません' };
+    const admin = isAdmin_(who);
+    const month = Number(body.month) || Number(Utilities.formatDate(new Date(), TZ, 'M'));
+    const list = customerBirthdaysByMonth_(getOrOpenSS_(), month, admin ? null : who);
+    return { ok: true, month: month, admin: admin, list: list };
+  }
+
   // === 🧾 売上伝票（TRUST取込の伝票を管理者が全体/個人で見る） ===
   if (body.action === 'adminGetBills') {
     const adminName = getStaffName(body.userId);
@@ -1867,6 +1934,43 @@ function birthdayMonth_(s) {
   if (!parts.length) return 0;
   var mo = (parts.length >= 3 && parts[0].length === 4) ? Number(parts[1]) : Number(parts[0]); // Y/M/D か M/D
   return (mo >= 1 && mo <= 12) ? mo : 0;
+}
+
+// 顧客マスタ お客様管理Y3 から「指定月に誕生日のお客様」を日付順で取り出す。
+// tantouFilter を渡すとその担当キャストの客だけ（ポータルのキャスト自己閲覧用）。null で全件（管理者/黒服）。
+// 書式は Phase0 棚卸しで M/D主体・Date型少数・和暦/全角/パース不能=0 を確認済み（reference_customer_master_y3）。
+function customerBirthdaysByMonth_(ss, month, tantouFilter) {
+  var m = Number(month);
+  var sh = ss.getSheetByName(MASTER_TAB);
+  if (!sh) return [];
+  var values = sh.getDataRange().getValues();
+  var cols = getCustomerMasterCols_(values);
+  if (!cols || cols.bday < 0) return [];
+  var filt = tantouFilter ? String(tantouFilter).replace(/\s/g, '') : '';
+  var out = [];
+  for (var r = cols.headerRow + 1; r < values.length; r++) {
+    var rr = values[r];
+    var nm = String(rr[cols.name] == null ? '' : rr[cols.name]).trim();
+    if (!nm.replace(/\s/g, '')) continue;
+    var tantou = cols.tantou >= 0 ? String(rr[cols.tantou] || '').replace(/\s/g, '') : '';
+    if (filt && tantou !== filt) continue;
+    var raw = rr[cols.bday];
+    var isDate = raw instanceof Date;
+    var bstr = isDate ? Utilities.formatDate(raw, TZ, 'M/d') : String(raw == null ? '' : raw).trim();
+    if (!isDate && bstr === '') continue;
+    if (birthdayMonth_(bstr) !== m) continue;
+    var parts = bstr.split(/[^\d]+/).filter(function (x) { return x !== ''; });
+    var day = (parts.length >= 3 && parts[0].length === 4) ? Number(parts[2]) : Number(parts[1] || 0);
+    out.push({
+      name: nm,
+      no: cols.no >= 0 ? String(rr[cols.no]).replace(/\s/g, '') : '',
+      tantou: tantou,
+      mmdd: m + '/' + (day || '?'),
+      day: day || 99
+    });
+  }
+  out.sort(function (a, b) { return a.day - b.day; });
+  return out;
 }
 
 // スタッフマスタの誕生日(個別条件の'誕生日'列)から 月→[{name,mmdd}] を作る（キャスト系のみ）

@@ -418,7 +418,7 @@ function pollAdminAuth(token){
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['ref','📖 説明']]},
-  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日']]},
+  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['custbday','🎂 誕生日']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['ops','⚙️ 運営']]}
@@ -437,10 +437,43 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
+
+/* 🎂 今月誕生日のお客様（お客様管理Y3の誕生日列より）。バックは getCustomerBirthdays（管理者=全件）。 */
+var custBdayMonth=0; // 0=未設定→現在月
+function renderCustBday(){
+  loading();
+  var mo=custBdayMonth||((new Date()).getMonth()+1); custBdayMonth=mo;
+  api('getCustomerBirthdays',{month:mo}).then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    drawCustBday(r||{});
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function drawCustBday(r){
+  var list=(r.list)||[];
+  var mo=r.month||custBdayMonth||((new Date()).getMonth()+1);
+  var opts=''; for(var i=1;i<=12;i++){ opts+='<option value="'+i+'"'+(i===mo?' selected':'')+'>'+i+'月</option>'; }
+  var bar='<div class="toolbar" style="flex-wrap:wrap;gap:10px;align-items:center">'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">🎂 誕生月 '
+    +'<select class="finput" id="cb-month" onchange="onCustBdayMonth()">'+opts+'</select></label>'
+    +'<span class="cnt">'+mo+'月生まれ：<b>'+list.length+'名</b></span></div>';
+  var rows=list.map(function(c){
+    var tantou=c.tantou?('担当 '+esc(c.tantou)):'<span style="color:var(--dim)">担当なし</span>';
+    var no=c.no?(' <span class="sub">#'+esc(c.no)+'</span>'):'';
+    return '<div class="lrow"><div class="main"><div class="nm">'+esc(c.name)+no
+      +'</div><div class="meta">🎂 '+esc(c.mmdd)+' ・ '+tantou+'</div></div></div>';
+  }).join('')||'<div class="empty" style="padding:14px">'+mo+'月生まれのお客様はいません</div>';
+  var listSec='<div class="sec"><div class="sec-t">🎂 '+mo+'月がお誕生日のお客様 <span class="sub">お客様管理Y3の誕生日列より・日付順</span></div>'+rows+'</div>';
+  var hint='<div class="hint">誕生日が未入力のお客様はここに出ません（入力率は約8割）。担当キャストへの自動お知らせは次フェーズで追加予定。</div>';
+  setBody(bar+listSec+hint);
+}
+function onCustBdayMonth(){
+  var v=Number((document.getElementById('cb-month')||{}).value||0);
+  if(v>=1&&v<=12){ custBdayMonth=v; renderCustBday(); }
+}
 
 /* ===== 👥 スタッフ ===== */
 function filtered(){ return ST.staff.filter(function(s){ if(roleFilter!=='all'&&s.role!==roleFilter)return false; if(q&&s.name.indexOf(q)<0)return false; return true; }); }
@@ -2531,6 +2564,17 @@ function blMockDetail(uuid){
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
 function MOCKAPI(action,body){
+  if(action==='getCustomerBirthdays'){
+    var cbm=Number(body.month)||7;
+    var jul=[
+      {name:'久田',no:'',tantou:'',mmdd:'7/7',day:7},
+      {name:'八木信介',no:'0361',tantou:'美玲',mmdd:'7/13',day:13},
+      {name:'石本裕大',no:'0210',tantou:'さくら',mmdd:'7/16',day:16},
+      {name:'穂田英樹',no:'',tantou:'美玲',mmdd:'7/26',day:26}
+    ];
+    var lst=(cbm===7)?jul.slice():[];
+    return {ok:true,month:cbm,admin:true,list:lst};
+  }
   if(action==='adminGetBills'){
     var src=blMock(), ym=String(body.month||'2026-07').slice(0,7), tgt=String(body.cast||''), today='2026-07-16';
     var byCast={}, days=[], mset={};
