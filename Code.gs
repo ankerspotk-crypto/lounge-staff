@@ -8295,7 +8295,9 @@ function getMemberFeeMapRaw_() {
   return map;
 }
 
-function searchCustomersForYoyaku_(query) {
+function searchCustomersForYoyaku_(query, opts) {
+  opts = opts || {};
+  const withTantou = !!opts.withTantou; // 顧客管理タブから担当名でも検索する時だけON（予約フォームは客特定なので混ぜない）
   const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
   if (!sheet) return [];
   const values = sheet.getDataRange().getValues();
@@ -8312,14 +8314,16 @@ function searchCustomersForYoyaku_(query) {
   const cA = idx('年会費'), cY = idx('よみがな');
   const q = query.replace(/\s/g,'');
   const qh = toHira_(q); // ふりがな検索用
+  const limit = withTantou ? 60 : 12; // 担当検索は「その子の客一覧」用途＝上限を広げる（客名の絞り込みは従来通り12）
   const results = [];
-  for (let r = h + 1; r < values.length && results.length < 12; r++) {
+  for (let r = h + 1; r < values.length && results.length < limit; r++) {
     const row = values[r];
     const card = val(row,cG).replace(/\s/g,'');
     const name = val(row,cH).replace(/\s/g,'');
     const no   = val(row,cE).replace(/\s/g,'');
     if (!card && !name) continue;
-    if (!card.includes(q) && !name.includes(q) && !no.includes(q) && !toHira_(val(row,cP).replace(/\s/g,'')).includes(qh) && !toHira_(val(row,cY).replace(/\s/g,'')).includes(qh)) continue;
+    const tantou = withTantou ? val(row,cN).replace(/\s/g,'') : '';
+    if (!card.includes(q) && !name.includes(q) && !no.includes(q) && !toHira_(val(row,cP).replace(/\s/g,'')).includes(qh) && !toHira_(val(row,cY).replace(/\s/g,'')).includes(qh) && !(withTantou && q && tantou.includes(q))) continue;
     const bdayRaw = row[cM];
     const bday = bdayRaw instanceof Date ? fmtDate(bdayRaw) : String(bdayRaw || '');
     const feeRaw = cA >= 0 ? row[cA] : null;
@@ -8575,8 +8579,8 @@ function getKioskCastNames() {
 }
 
 // 端末キオスク用：顧客検索
-function searchKioskCustomers(query) {
-  return searchCustomersForYoyaku_(String(query || '').trim());
+function searchKioskCustomers(query, opts) {
+  return searchCustomersForYoyaku_(String(query || '').trim(), opts);
 }
 
 // 軍師ログイン権限: スタッフマスタF列(index5) '○'=可 / '×'=不可 / 未設定=従来通り黒服社員・黒服バイトのみ可。

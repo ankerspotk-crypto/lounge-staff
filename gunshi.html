@@ -2519,7 +2519,7 @@ function renderMenu(){
     var nol=IS_GAS?0:CUSTOMERS.filter(isNoLine).length;
     var back=custFromTop?'<span class="menu-back" onclick="closeMenu()">← ホームに戻る</span>':'<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
     el.innerHTML=back
-      +'<input id="cust-q" class="cust-q" placeholder="お客様名・会員番号で検索" oninput="renderCustResults()">'
+      +'<input id="cust-q" class="cust-q" placeholder="お客様名・会員番号・担当名で検索" oninput="renderCustResults()">'
       +'<div class="cust-filters">'
         +'<span class="cfil'+(custFilter==='all'?' on':'')+'" onclick="setCustFilter(\'all\')">全員'+cnt(CUSTOMERS.length)+'</span>'
         +'<span class="cfil exp'+(custFilter==='expired'?' on':'')+'" onclick="setCustFilter(\'expired\')">🔴 更新切れ'+cnt(exp)+'</span>'
@@ -2595,14 +2595,14 @@ function renderCustResults(){
   var el=document.getElementById('cust-results'); if(!el)return;
   if(IS_GAS){
     el.innerHTML='<div class="empty-msg">検索中...</div>';
-    gsr('searchKioskCustomersV2', q, LOGIN).then(function(list){
+    gsr('searchKioskCustomersV2', q, LOGIN, {withTantou:true}).then(function(list){
       var a=(list||[]).map(adaptCustomer).filter(custFilterFn);
       var cur=document.getElementById('cust-results'); if(cur) cur.innerHTML=custResultsHtml(a);
     }).catch(function(){ var cur=document.getElementById('cust-results'); if(cur) cur.innerHTML='<div class="empty-msg">検索エラー</div>'; });
     return;
   }
   var list=CUSTOMERS.filter(function(c){
-    if(q && !(c.name.indexOf(q)>=0||(c.member&&c.member.toLowerCase().indexOf(q.toLowerCase())>=0))) return false;
+    if(q && !(c.name.indexOf(q)>=0||(c.member&&c.member.toLowerCase().indexOf(q.toLowerCase())>=0)||(c.tantou&&c.tantou.indexOf(q)>=0))) return false;
     return custFilterFn(c);
   });
   el.innerHTML=custResultsHtml(list);

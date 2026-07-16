@@ -84,8 +84,8 @@ function getKioskShiftBoard() {
 
 // 顧客検索（既存検索 + 年会費/更新 + 公式LINE登録状況を合成）
 // viewer＝閲覧者名。累計売上(totalSales)は「黒服・管理者」or「その客の担当キャスト本人」だけに返す（金額ガード）。
-function searchKioskCustomersV2(query, viewer) {
-  var base = searchKioskCustomers(query) || [];
+function searchKioskCustomersV2(query, viewer, opts) {
+  var base = searchKioskCustomers(query, opts) || [];
   var feeMap = (typeof getMemberFeeMap_ === 'function') ? getMemberFeeMap_() : {};
   var visitMap = null;
   try { visitMap = (typeof getMemberVisitMap_ === 'function') ? getMemberVisitMap_() : null; } catch (e) {}
