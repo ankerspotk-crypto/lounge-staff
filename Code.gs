@@ -13543,6 +13543,28 @@ function addCustomer(payload) {
   const name = String(payload.name || '').trim();
   if (!card && !name) return { ok: false, error: 'カード記載名または氏名を入力してください' };
 
+  // 重複ガード（ボス決定 2026-07-16: 同名は登録させない＝二重登録を防ぐ）。
+  // 氏名同士 or カード記載名同士が既存客と一致したら登録せず、既存客(会員番号・担当)を返す。
+  // 空白は吸収（「田中太郎」と「田中 太郎」は同一人物）。同名の別人もこの方針では登録できない
+  // （本当に別人が来たら運用で相談＝ボスが「同名は登録させない」を明示選択）。
+  const dupKey_ = s => String(s == null ? '' : s).replace(/\s/g, '');
+  const cardK = dupKey_(card), nameK = dupKey_(name);
+  for (let r = cols.headerRow + 1; r < values.length; r++) {
+    const rName = dupKey_(values[r][cols.name]);
+    const rCard = dupKey_(values[r][cols.card]);
+    if ((nameK && rName && rName === nameK) || (cardK && rCard && rCard === cardK)) {
+      return {
+        ok: false, duplicate: true, error: '同名のお客様が既に登録されています',
+        match: {
+          no: cols.no >= 0 ? String(values[r][cols.no] || '') : '',
+          name: cols.name >= 0 ? String(values[r][cols.name] || '') : '',
+          card: cols.card >= 0 ? String(values[r][cols.card] || '') : '',
+          tantou: cols.tantou >= 0 ? String(values[r][cols.tantou] || '') : ''
+        }
+      };
+    }
+  }
+
   const newRow = new Array(sh.getLastColumn()).fill('');
   const set = (c, v) => { if (c >= 0) newRow[c] = v; };
   set(cols.card, card);

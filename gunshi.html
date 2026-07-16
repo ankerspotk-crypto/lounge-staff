@@ -2568,9 +2568,23 @@ function saveNewCustomer(){
   if(!name && !card){ alert('氏名またはカード記載名を入力してください'); return; }
   var payload={ name:name, yomigana:g('yomigana'), card:card, tantou:g('tantou'), bottle:g('bottle'), pos:g('pos'), bday:g('bday'), company:g('company'), drink:g('drink'), tabaco:g('tabaco'), neck:g('neck'), ng:g('ng'), ngStaff:g('ngStaff'), note:g('note') };
   var btn=document.querySelector('#menu-body .savebtn'); if(btn){btn.disabled=true;btn.textContent='登録中...';}
-  if(!IS_GAS){ toast('（ローカル）登録: '+(name||card)); menuCustomer(); return; }
+  // 重複を分かりやすく伝えて既存客の検索へ戻す共通処理（同名は登録させない＝ボス決定 2026-07-16）
+  function showDup(m){
+    m=m||{}; var who=(m.name||m.card||name||card);
+    alert('「'+who+'」様は既に登録があります'+(m.no?'（'+m.no+(m.tantou?'・担当 '+m.tantou:'')+'）':'')
+      +'。\n\n二重登録を防ぐため、同名のお客様は新規登録できません。\n既存のお客様をご確認ください。');
+    custLastQ=who; if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} menuCustomer();
+  }
+  if(!IS_GAS){
+    // ローカル検証用：モックCUSTOMERSに同名がいれば本番同様にブロックUIを出す（card列は無いのでname照合）
+    var nk=function(s){return String(s||'').replace(/\s/g,'');};
+    var dup=CUSTOMERS.filter(function(c){return (name&&nk(c.name)===nk(name))||(card&&nk(c.name)===nk(card));})[0];
+    if(dup){ showDup({no:dup.member,name:dup.name,tantou:dup.tantou}); return; }
+    toast('（ローカル）登録: '+(name||card)); custLastQ=name||card; menuCustomer(); return;
+  }
   gsr('addCustomer',payload).then(function(res){
     if(res&&res.ok){ toast('✅ お客様を登録しました'); custLastQ=name||card; menuCustomer(); }
+    else if(res&&res.duplicate){ showDup(res.match); }
     else { alert('登録エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} }
   }).catch(function(e){ alert('登録エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} });
 }
