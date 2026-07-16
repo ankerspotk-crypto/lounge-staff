@@ -4475,7 +4475,7 @@ function scheduledJobs() {
     if (ns_['driver_notice_1600']?.enabled === false) return;
     const mode = prop('OKURI_MODE') || 'driver';
     if (mode === 'jisha') {
-      push_(prop('GROUP_DRIVER'), '本日は自社便のため、送りはありません。お休みでお願いします🙏');
+      push_(prop('GROUP_DRIVER'), '本日は送りお休みです。');
     } else {
       push_(prop('GROUP_DRIVER'), '本日もよろしくお願いします。\n送りが発生する場合は23:30に確定リストをお送りします🙏');
     }
