@@ -1481,9 +1481,17 @@ function drawKyuyo(r){
       var rateLbl=(c.ratePct||0)+'%'+(c.fixed?'<span style="color:#e0b060" title="固定率">固</span>':'');
       if(c.bday){ var bd=c.bday; rateLbl+=' <span style="color:#c9a0ff" title="🎂誕生日バック '+esc(bd.start)+'〜'+esc(bd.end)+'&#10;通常 '+fmtYen(bd.tantoNormal)+'×'+bd.normalRate+'%='+fmtYen(bd.normalBack)+'&#10;誕生日週 '+fmtYen(bd.tantoBday)+'×'+bd.rate+'%='+fmtYen(bd.bdayBack)+'">🎂'+bd.rate+'%</span>'; }
       var manualMark=(c.intro||c.nyuten)?' <span title="紹介料'+fmtYen(c.intro||0)+' / 入店祝金'+fmtYen(c.nyuten||0)+'" style="color:#7fd88f">•</span>':'';
+      // 担当小計＝TRUST由来＋コンソール調整。調整が入っている行は内訳を出す（黙って数字が変わっていると追えない）
+      function tantoCell(){
+        var adj=c.adjust||0;
+        if(!adj) return y(c.tanto);
+        var sign=adj>0?'+':'−', col=adj>0?'#7fd88f':'#e88';
+        return '<td style="text-align:right;white-space:nowrap">'+fmtYen(c.tanto)
+          +'<div style="font-size:10px;color:'+col+';white-space:nowrap" title="TRUST '+fmtYen(c.tantoTrust||0)+' ＋ コンソール調整 '+sign+fmtYen(Math.abs(adj))+'">'+sign+fmtYen(Math.abs(adj))+' 調整</div></td>';
+      }
       return '<tr><td class="nm">'+esc(c.name)+manualMark+'</td>'
         +'<td style="text-align:center">'+(c.kinmu||'—')+'</td>'
-        +y(c.jikan)+y(c.tanto)
+        +y(c.jikan)+tantoCell()
         +'<td style="text-align:center;color:var(--sub)">'+(c.bairitu||0).toFixed(2)+'</td>'
         +'<td style="text-align:center;color:var(--sub);font-size:11px">'+rateLbl+'</td>'
         +'<td style="text-align:right;color:#8fd0ff;font-weight:700">'+(c.newBack?fmtYen(c.newBack):'—')+'</td>'
@@ -1494,7 +1502,7 @@ function drawKyuyo(r){
         +y(c.net)
         +'<td style="text-align:right;color:#7fd88f">'+(c.tatekae?'+'+fmtYen(c.tatekae):'—')+'</td>'
         +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.finalPay)+'</td>'
-        +'<td style="text-align:center"><button class="btn sm" style="padding:2px 6px;font-size:11px" onclick=\'editKyuyoManual('+JSON.stringify(c.name)+','+(c.intro||0)+','+(c.nyuten||0)+')\'>✎</button></td></tr>';
+        +'<td style="text-align:center"><button class="btn sm" style="padding:2px 6px;font-size:11px" onclick=\'editKyuyoManual('+JSON.stringify(c.name)+','+(c.intro||0)+','+(c.nyuten||0)+','+(c.adjust||0)+')\'>✎</button></td></tr>';
     }).join('');
     var t=r.totals;
     var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td><td></td>'
@@ -1503,14 +1511,22 @@ function drawKyuyo(r){
       +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.minusTotal)+'</td>'
       +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td><td></td></tr>';
     body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'
-      +'<div class="hint" style="margin-top:8px">🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金（月単位）の編集。公開は「📣 公開設定」から。</div>';
+      +'<div class="hint" style="margin-top:8px">🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。公開は「📣 公開設定」から。</div>';
   }
   setBody(paySubToggle('kyuyo')+head+body);
 }
-function editKyuyoManual(name,intro,nyuten){
+function editKyuyoManual(name,intro,nyuten,adjust){
   var a=prompt('【'+name+'】'+(payMonth||'')+' キャスト紹介料（円）',intro||0); if(a===null)return;
   var b=prompt('【'+name+'】'+(payMonth||'')+' 入店祝い金（円）',nyuten||0); if(b===null)return;
-  var vals={intro:parseInt(a,10)||0, nyuten:parseInt(b,10)||0};
+  var c=prompt('【'+name+'】'+(payMonth||'')+' 売上調整（円）\n\n担当小計に合算されます。実売上と同じ扱いなのでバック率の倍率にも効き、率が上がると売上全体に新しい率がかかります。\nマイナスを入れると減算（バックは0で打ち止め）。',adjust||0); if(c===null)return;
+  var adj=parseInt(c,10)||0;
+  var vals={intro:parseInt(a,10)||0, nyuten:parseInt(b,10)||0, adjust:adj};
+  // 売上調整を変えた時だけ理由を聞く（サーバ側でも必須チェックあり）
+  if(adj!==(adjust||0)){
+    var rs=prompt('【'+name+'】売上調整の理由（必須・履歴に残ります）\n'+fmtYen(adjust||0)+' → '+fmtYen(adj),''); if(rs===null)return;
+    if(!String(rs).trim()){ toast('理由が必要です',true); return; }
+    vals.reason=String(rs).trim();
+  }
   if(!IS_GAS){ toast('（ローカルでは保存不可）'); return; }
   loading();
   gsr('adminSetKyuyoManual',USER_ID,payMonth,name,vals).then(function(r){ if(res(r,name+' の手入力を保存しました')) renderKyuyo(); }).catch(function(){ toast('保存に失敗しました',true); renderKyuyo(); });

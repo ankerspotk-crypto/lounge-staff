@@ -1424,9 +1424,22 @@ function adminGetTrustImport(userId) {
 // ── 新バック方式：月単位の手入力（キャスト紹介料・入店祝い金）ストア ──────────
 // ※ バック方式（新ルール/固定率）はキャスト単位の永続設定（スタッフマスタ）で持つ→ getCastBackRuleMap_
 var KYUYO_MANUAL_TAB  = '給与手入力';
-var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金'];
+var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整'];
 
-// 月手入力マップを取得 { 正規化名: {intro, nyuten} }
+// 給与手入力シートを取得（無ければ作成）。既存シートには不足ヘッダ列を後方互換で追加。
+// ⚠️追補が無いと ci('売上調整') が -1 になり、入力した調整額が黙って0扱いになる（金額に直結）。
+function ensureKyuyoManualSheet_(ss) {
+  var sh = ss.getSheetByName(KYUYO_MANUAL_TAB);
+  if (!sh) { sh = ss.insertSheet(KYUYO_MANUAL_TAB); sh.appendRow(KYUYO_MANUAL_HEAD); sh.setFrozenRows(1); return sh; }
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  KYUYO_MANUAL_HEAD.forEach(function (name) {
+    if (headers.indexOf(name) < 0) { lastCol += 1; sh.getRange(1, lastCol).setValue(name); headers.push(name); }
+  });
+  return sh;
+}
+
+// 月手入力マップを取得 { 正規化名: {intro, nyuten, adjust} }
 function getKyuyoManual_(ss, monthKey) {
   const map = {};
   const sh = ss.getSheetByName(KYUYO_MANUAL_TAB);
@@ -1434,13 +1447,14 @@ function getKyuyoManual_(ss, monthKey) {
   const rows = sh.getDataRange().getValues();
   const h = rows[0].map(String);
   const ci = function (n) { return h.indexOf(n); };
-  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金');
+  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整');
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== monthKey) continue;
     const nm = normalizeName_(String(rows[i][1]).trim());
     map[nm] = {
       intro:  iIntro >= 0 ? (Number(rows[i][iIntro]) || 0) : 0,
-      nyuten: iNyu   >= 0 ? (Number(rows[i][iNyu])   || 0) : 0
+      nyuten: iNyu   >= 0 ? (Number(rows[i][iNyu])   || 0) : 0,
+      adjust: iAdj   >= 0 ? (Number(rows[i][iAdj])   || 0) : 0
     };
   }
   return map;
@@ -2125,22 +2139,29 @@ function adminSendbackBirthdayWeek(userId, name, reason) {
 //   残り支給額 = 課税支給 − 源泉 − 日払 − マイナス計
 function newBackCalc_(g, m) {
   m = m || {};
-  const jikan   = Number(g('時間報酬'))   || 0;
-  const tanto   = Number(g('担当小計'))   || 0;
-  const gross   = Number(g('総支給額'))   || 0;
-  const tantoBk = Number(g('担当バック')) || 0;
-  const hibarai = Number(g('日払'))       || 0;
-  const minusT  = Number(g('マイナス計')) || 0;
+  const jikan    = Number(g('時間報酬'))   || 0;
+  const tantoTru = Number(g('担当小計'))   || 0;   // TRUST由来の担当小計（一次ソース）
+  const gross    = Number(g('総支給額'))   || 0;
+  const tantoBk  = Number(g('担当バック')) || 0;
+  const hibarai  = Number(g('日払'))       || 0;
+  const minusT   = Number(g('マイナス計')) || 0;
+  // 売上調整（コンソール手入力・給与手入力シートの「売上調整」列）。ユーザー確定ルール＝実売上と完全に同等に扱う
+  // ＝倍率にも貢献し、率が上がれば売上全体に新しい率がかかる。減算は担当小計を0で打ち止め（バックはマイナスにしない）。
+  const adjust = Number(m.adjust) || 0;
+  const tanto  = Math.max(0, tantoTru + adjust);
   const bairitu = jikan > 0 ? tanto / jikan : 0;
   // 通常率＝倍率ルール(10/15/20%) or 固定率。案A: 倍率判定は月トータル担当小計のまま（誕生日週も倍率に貢献）。
   const ratePct = (m.fixedRate != null) ? m.fixedRate : (bairitu < 2 ? 10 : (bairitu < 3 ? 15 : 20));
   // 誕生日バック週: 担当小計を比率で「通常ぶん」「誕生日週ぶん」に分割し、誕生日週だけ率を上書き（既定30%）。
-  // m.bday = {ratio, rate, start, end}。ratio>0 & 担当小計>0 のときだけ発動。合計は必ずtantoに一致（丸めは通常側で吸収）。
+  // m.bday = {ratio, rate, start, end}。合計は必ずtantoに一致（丸めは通常側で吸収）。
+  // ⚠️比率は伝票シート（TRUST実伝票）由来＝調整額は日付を持たないので比率を掛けない。掛けると実在しない伝票が
+  //   「誕生日週の売上」に化けて30%が付く。よって誕生日率を当てられるのはTRUST担当小計のうち残っている分だけ。
+  const bdayBase = Math.min(Math.max(0, tantoTru), tanto);
   let newBack, bdayInfo = null;
-  if (m.bday && m.bday.ratio > 0 && tanto > 0) {
+  if (m.bday && m.bday.ratio > 0 && bdayBase > 0) {
     const bRate       = Number(m.bday.rate) || 0;
-    const tantoBday   = Math.round(tanto * m.bday.ratio);
-    const tantoNormal = tanto - tantoBday;
+    const tantoBday   = Math.round(bdayBase * m.bday.ratio);
+    const tantoNormal = tanto - tantoBday;   // 調整額は必ずこちら側（通常率）に入る
     const normalBack  = Math.round(tantoNormal * ratePct / 100);
     const bdayBack    = Math.round(tantoBday * bRate / 100);
     newBack  = normalBack + bdayBack;
@@ -2155,9 +2176,10 @@ function newBackCalc_(g, m) {
   }
   const intro   = m.intro  || 0;
   const nyuten  = m.nyuten || 0;
-  // 新バックは担当バックの置換。担当小計>0（＝新バックを算出する）時のみTRUST担当バックを剥がす。
+  // 新バックは担当バックの置換。TRUST担当小計>0 の時のみTRUST担当バックを剥がす。
   // 担当小計=0で担当バックだけ残る例外行（手当扱い）は保全する。
-  const stripTantoBk = tanto > 0 ? tantoBk : 0;
+  // ⚠️判定はTRUST側の数字で行う（調整後のtantoで判定すると、減算で0に落ちた瞬間に剥がしが止まり課税支給が跳ね上がる）。
+  const stripTantoBk = tantoTru > 0 ? tantoBk : 0;
   const kazei   = gross - stripTantoBk + newBack + nyuten + intro;
   const gensen  = Math.floor(kazei * 0.1021);
   const nokori  = kazei - gensen - hibarai - minusT;
@@ -2166,33 +2188,77 @@ function newBackCalc_(g, m) {
     fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten,
     kazei: kazei, gensen: gensen, nokori: nokori,
     hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross,
+    tantoTrust: tantoTru, adjust: adjust,   // 調整の内訳（tanto = max(0, tantoTrust + adjust)）
     bday: bdayInfo   // 誕生日バック週の内訳（未設定はnull）: {ratio,rate,start,end,tantoNormal,tantoBday,normalRate,normalBack,bdayBack}
   };
 }
 
-// 管理者: 月単位の給与手入力（キャスト紹介料・入店祝い金）を保存
+// ── 給与手入力の変更履歴（監査用。給与ロジックには非連動） ──────────
+var KYUYO_ADJ_LOG_TAB  = '給与手入力ログ';
+var KYUYO_ADJ_LOG_HEAD = ['操作日時', '月', '名前', '項目', '変更前', '変更後', '理由', '操作者'];
+// 変更1件を記録（append・直近500行に自動トリム）。失敗しても本処理は止めない
+function logKyuyoManual_(ss, rec) {
+  try {
+    var sh = ss.getSheetByName(KYUYO_ADJ_LOG_TAB);
+    if (!sh) { sh = ss.insertSheet(KYUYO_ADJ_LOG_TAB); sh.appendRow(KYUYO_ADJ_LOG_HEAD); sh.setFrozenRows(1); }
+    sh.appendRow([bbNow_(), rec.month || '', rec.name || '', rec.item || '',
+                  (rec.before == null ? '' : rec.before), (rec.after == null ? '' : rec.after),
+                  rec.reason || '', rec.operator || '']);
+    var last = sh.getLastRow(), MAX = 500;
+    if (last > MAX + 1) sh.deleteRows(2, last - (MAX + 1));
+  } catch (e) {}
+}
+
+// 管理者: 月単位の給与手入力（キャスト紹介料・入店祝い金・売上調整）を保存
+// vals = {intro, nyuten, adjust, reason}。未指定(undefined/null/'')の項目は既存値を保つ＝一部だけ送っても他を0で潰さない。
 function adminSetKyuyoManual(userId, month, name, vals) {
-  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const operator = getStaffName(userId);
+  if (!isAdmin_(operator)) return { ok: false, error: '権限がありません' };
   const mk = monthKey_(month);
   if (!/^\d{4}\/\d{2}$/.test(mk)) return { ok: false, error: '対象月が不正です' };
   const nm = String(name || '').trim();
   if (!nm) return { ok: false, error: '名前がありません' };
   vals = vals || {};
   const ss = getOrOpenSS_();
-  let sh = ss.getSheetByName(KYUYO_MANUAL_TAB);
-  if (!sh) { sh = ss.insertSheet(KYUYO_MANUAL_TAB); sh.appendRow(KYUYO_MANUAL_HEAD); sh.setFrozenRows(1); }
-  const intro  = Number(vals.intro)  || 0;
-  const nyuten = Number(vals.nyuten) || 0;
+  const sh = ensureKyuyoManualSheet_(ss);
   const rows = sh.getDataRange().getValues();
+  const h = rows[0].map(function (x) { return String(x).trim(); });
+  const ci = function (n) { return h.indexOf(n); };
+  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整');
   const nmNorm = normalizeName_(nm);
   let found = -1;
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) === mk && normalizeName_(String(rows[i][1]).trim()) === nmNorm) { found = i; break; }
   }
-  const rowData = [mk, nm, intro, nyuten];
-  if (found >= 0) sh.getRange(found + 1, 1, 1, rowData.length).setValues([rowData]);
-  else sh.getRange(sh.getLastRow() + 1, 1, 1, rowData.length).setValues([rowData]);
-  return { ok: true, month: mk, name: nm };
+  const cur  = function (idx) { return (found >= 0 && idx >= 0) ? (Number(rows[found][idx]) || 0) : 0; };
+  const pick = function (v, idx) { return (v === undefined || v === null || v === '') ? cur(idx) : (Number(v) || 0); };
+  const intro  = pick(vals.intro,  iIntro);
+  const nyuten = pick(vals.nyuten, iNyu);
+  const adjust = pick(vals.adjust, iAdj);
+  if (!isFinite(adjust)) return { ok: false, error: '売上調整の金額が不正です' };
+  const reason = String(vals.reason || '').trim();
+  // 売上調整は担当小計に合算＝給与に直結するので、変更時は理由を必須にする（履歴が追えないと意味がない）
+  if (adjust !== cur(iAdj) && !reason) return { ok: false, error: '売上調整を変更するときは理由が必要です' };
+  let rowIdx;
+  if (found >= 0) rowIdx = found + 1;
+  else {
+    rowIdx = sh.getLastRow() + 1;
+    sh.getRange(rowIdx, 1).setValue(mk);
+    sh.getRange(rowIdx, 2).setValue(nm);
+  }
+  // ヘッダ名で引いた列にだけ書く（位置固定で書くと、列を足したシートで隣の値を潰す）
+  const writes = [
+    { idx: iIntro, item: 'キャスト紹介料', before: cur(iIntro), after: intro },
+    { idx: iNyu,   item: '入店祝い金',     before: cur(iNyu),   after: nyuten },
+    { idx: iAdj,   item: '売上調整',       before: cur(iAdj),   after: adjust }
+  ];
+  writes.forEach(function (w) { if (w.idx >= 0) sh.getRange(rowIdx, w.idx + 1).setValue(w.after); });
+  writes.forEach(function (w) {
+    if (w.idx >= 0 && w.after !== w.before) {
+      logKyuyoManual_(ss, { month: mk, name: nm, item: w.item, before: w.before, after: w.after, reason: reason, operator: operator });
+    }
+  });
+  return { ok: true, month: mk, name: nm, intro: intro, nyuten: nyuten, adjust: adjust };
 }
 
 // ── 管理コンソール: 給与明細（新バック方式で再計算＋立替代を合算） ──────────
@@ -2236,6 +2302,7 @@ function adminGetPayrollDetail(userId, month) {
     const finalPay = nb.nokori + tatekae;
     const rec = {
       name: name, kinmu: g('勤務日数'), jikan: nb.jikan, tanto: nb.tanto,
+      tantoTrust: nb.tantoTrust, adjust: nb.adjust,   // 担当小計の内訳（TRUST由来＋コンソール調整）
       bairitu: nb.bairitu, ratePct: nb.ratePct, fixed: nb.fixed, newBack: nb.newBack,
       bday: nb.bday, // 誕生日バック週の内訳（未設定null）
       intro: nb.intro, nyuten: nb.nyuten,
@@ -2286,8 +2353,10 @@ function portalTrustPay_(ss, name, filterMonth) {
       if (bwr.ratio > 0) mm.bday = { ratio: bwr.ratio, rate: bcfg.rate, start: bcfg.start, end: bcfg.end };
     }
     const nb = newBackCalc_(gN, mm);
+    // 担当小計は「調整後」を見せる（＝バックの母数と一致させる）。生のTRUST値を出すと
+    // 画面上で 担当売上×バック率 ≠ 新バック になり、本人が検算できない。調整の有無・内訳は出さない（コンソール側で確認する）。
     out[m] = {
-      '担当小計': g('担当小計'), '同伴小計': g('同伴小計'), '売上合計': tanto + dohan,
+      '担当小計': nb.tanto, '同伴小計': g('同伴小計'), '売上合計': nb.tanto + dohan,
       '給率(%)': g('給率'), '勤務日数': g('勤務日数'), '時間報酬': g('時間報酬'),
       '担当バック': nb.newBack, '予約バック': g('予約バック'), '同伴バック': g('同伴バック'),
       'ドリンクバック': g('ドリンクバック'), 'ボトルバック': g('ボトルバック'), '年会費バック': g('フードバック'),
