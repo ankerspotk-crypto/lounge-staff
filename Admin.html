@@ -97,6 +97,8 @@ table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
 .bd-cnt{color:var(--sub);font-weight:400;font-size:11px;}
 .bd-pend{font-size:10px;font-weight:800;color:#e0b060;border:1px solid #6a5320;background:#2a2108;border-radius:4px;padding:1px 5px;}
 .bd-total{font-size:14px;font-weight:800;color:var(--accent);white-space:nowrap;}
+.bill-castrow{cursor:pointer;}
+.bill-castrow:hover td{background:var(--accent-bg);}
 .bill-slip{padding:9px 13px;border-top:1px solid var(--line);cursor:pointer;}
 .bill-slip:hover{background:var(--panel);}
 .bs-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
@@ -244,7 +246,7 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
     <button class="tab" data-t="checklist" onclick="switchTab('checklist')">✅ チェック</button>
     <button class="tab" data-t="menu" onclick="switchTab('menu')">🍶 メニュー</button>
-    <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 給与</button>
+    <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 売上給与</button>
     <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
     <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
     <button class="tab" data-t="holiday" onclick="switchTab('holiday')">🏖 店休日</button>
@@ -1163,26 +1165,30 @@ var payMonth=null, payStat=null, paySub='tatekae';
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
 function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上伝票')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
+  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
 }
 function paySwitch(k){ paySub=k; renderPay(); }
 function renderPay(){
   if(paySub==='tatekae') return renderTatekae();
   if(paySub==='trust')   return renderTrust();
-  if(paySub==='bills')   return renderBillsAdmin();
+  if(paySub==='bills')   return renderBillsAdmin('all');
+  if(paySub==='mybills') return renderBillsAdmin('cast');
   if(paySub==='kyuyo')   return renderKyuyo();
   if(paySub==='bday')    return renderBday();
   renderPublish();
 }
-/* --- 🧾 売上伝票（TRUSTから取り込んだ伝票を「店全体」または「キャスト個人」で見る） ---
+/* --- 🧾 売上明細 / 👤 個人売上明細（TRUSTから取り込んだ伝票を見る） ---
    データは伝票シート＝取込済みのものを表示するだけ（TRUSTへ取りに行かない＝403でも見える）。
-   キャスト絞りは「表示」プルダウン1つ＝(店全体)を先頭に置く。全体/個人のチップを別に持つと
-   「どっちが今の状態か」が2箇所に散る。 */
-var billMonth=null, billCast='', billSeq=0;
+   画面は1つで billMode('all'|'cast')で振る舞いを変える＝日別アコーディオンの描画が完全に同じため。
+   個人側はキャスト未選択のとき一覧(売上順)を出し、それ自体を入口にする＝プルダウンを開かせるより
+   「誰がいくらか」が先に見える。 */
+var billMonth=null, billCast='', billSeq=0, billMode='all';
 /* ⚠️世代カウンタで「古い結果を捨てる」だけにする＝busyガード(読み込み中は無視)は付けないこと。
    両方を同居させると連打・高速切替で永久に読み込み中から抜けなくなる（既知の罠）。
    これが無いと、月を素早く切り替えた時に遅れて届いた前の月が最後に描画されて居座る。 */
-function renderBillsAdmin(){
+function renderBillsAdmin(mode){
+  if(mode&&mode!==billMode){ billMode=mode; billCast=''; }  // モードを跨いだら絞りは持ち越さない
+  if(billMode==='all') billCast='';                          // 店全体は常に絞らない
   var my=++billSeq;
   loading();
   api('adminGetBills',{month:billMonth||nowMonth(), cast:billCast}).then(function(r){
@@ -1195,18 +1201,38 @@ function renderBillsAdmin(){
 }
 function onBillMonth(){ billMonth=document.getElementById('bm').value; renderBillsAdmin(); }
 function onBillCast(){ billCast=document.getElementById('bc').value; renderBillsAdmin(); }
+function pickBillCast(n){ billCast=n; renderBillsAdmin(); }
 function drawBillsAdmin(r){
   billMonth=r.month; billCast=r.cast||'';
+  var isAll=(billMode==='all');
   var mo=(r.months||[]).map(function(m){return '<option value="'+esc(m)+'"'+(m===r.month?' selected':'')+'>'+esc(m)+'</option>';}).join('')||'<option>'+esc(r.month||'—')+'</option>';
-  // プルダウンに件数と金額を出す＝開いた瞬間に「誰がどれだけか」が分かる（選ばないと分からないのでは遅い）
-  var co='<option value=""'+(!billCast?' selected':'')+'>（店全体）</option>'
-    +(r.casts||[]).map(function(c){
-      return '<option value="'+esc(c.name)+'"'+(c.name===billCast?' selected':'')+'>'+esc(c.name)+'（'+c.count+'件・'+fmtYen(c.total)+'）</option>';
-    }).join('');
-  var head='<div class="toolbar"><span class="cnt">対象月</span><select class="finput" id="bm" onchange="onBillMonth()" style="width:120px">'+mo+'</select>'
-    +'<span class="cnt">表示</span><select class="finput" id="bc" onchange="onBillCast()" style="max-width:260px">'+co+'</select>'
-    +'<span class="cnt">'+(r.slipCount||0)+'件 ・ 担当売上計'+fmtYen(r.monthTotal||0)+'</span></div>';
+  var head='<div class="toolbar"><span class="cnt">対象月</span><select class="finput" id="bm" onchange="onBillMonth()" style="width:120px">'+mo+'</select>';
+  if(!isAll){
+    // 件数と金額をプルダウンにも出す＝選び直す時に一覧へ戻らなくて済む
+    head+='<span class="cnt">キャスト</span><select class="finput" id="bc" onchange="onBillCast()" style="max-width:260px">'
+      +'<option value=""'+(!billCast?' selected':'')+'>（一覧から選ぶ）</option>'
+      +(r.casts||[]).map(function(c){
+        return '<option value="'+esc(c.name)+'"'+(c.name===billCast?' selected':'')+'>'+esc(c.name)+'（'+c.count+'件・'+fmtYen(c.total)+'）</option>';
+      }).join('')+'</select>';
+  }
+  head+='<span class="cnt">'+(isAll?'店全体 ':'')+(r.slipCount||0)+'件 ・ 担当売上計'+fmtYen(r.monthTotal||0)+'</span></div>';
   var body;
+  if(!isAll && !billCast){
+    // 個人モードの入口＝キャスト一覧（売上順）。これ自体が「誰がいくら稼いだか」の表になる。
+    body=(r.casts||[]).length
+      ? '<div class="mtx-wrap"><table class="mtx" style="font-size:12px"><thead><tr>'
+        +'<th style="text-align:left">キャスト</th><th>伝票</th><th>担当売上</th></tr></thead><tbody>'
+        +(r.casts||[]).map(function(c){
+          return '<tr class="bill-castrow" onclick=\'pickBillCast('+JSON.stringify(c.name)+')\'>'
+            +'<td class="nm">'+esc(c.name)+'</td><td style="text-align:center;color:var(--sub)">'+c.count+'件</td>'
+            +'<td style="text-align:right;font-weight:700;color:var(--accent)">'+fmtYen(c.total)+'</td></tr>';
+        }).join('')
+        +'</tbody></table></div><div class="hint" style="margin-top:8px">キャストをタップすると、その子の伝票が日別で開きます。'
+        +'<b>(未設定)</b>＝TRUSTの担当セルから主担当を推定できなかった伝票。<br>'
+        +'⚠️ここに出るのは<b>主担当ぶんだけ</b>です。ヘルプで付いた伝票はその子の売上には出ません。</div>'
+      : '<div class="empty">この月の伝票データがありません。<br><small>取り込みは「📥 TRUST取込」から。</small></div>';
+    setBody(paySubToggle('mybills')+head+body); return;
+  }
   if(!(r.days||[]).length){
     body='<div class="empty">'+(billCast?esc(billCast)+' の伝票がこの月にありません。':'この月の伝票データがありません。')
       +'<br><small>取り込みは「📥 TRUST取込」から。</small></div>';
@@ -1217,9 +1243,9 @@ function drawBillsAdmin(r){
           +'<div class="bs-top"><span class="bs-cust">'+esc(s.cust||'（無記名）')
           +' <span class="bs-meta">卓'+esc(s.table||'-')+'・'+esc(s.guests||'-')+'名'+(s.inTime?'・'+esc(s.inTime):'')+'</span></span>'
           +'<span class="bs-amt">'+fmtYen(s.tantoAmt)+'</span></div>'
-          // 主担当は「店全体」の時だけ出す＝個人で絞っている時は全行に同じ名前が並ぶだけで邪魔
-          +(!billCast?'<div class="bs-sub">主担当: '+esc(s.primary||'(未設定)')+(s.dohanCast?'　同伴: '+esc(s.dohanCast):'')+'</div>'
-                     :(s.dohanCast?'<div class="bs-sub">同伴: '+esc(s.dohanCast)+'</div>':''))
+          // 主担当は「売上明細(店全体)」の時だけ出す＝個人で絞っている時は全行に同じ名前が並ぶだけで邪魔
+          +(isAll?'<div class="bs-sub">主担当: '+esc(s.primary||'(未設定)')+(s.dohanCast?'　同伴: '+esc(s.dohanCast):'')+'</div>'
+                 :(s.dohanCast?'<div class="bs-sub">同伴: '+esc(s.dohanCast)+'</div>':''))
           +'<div class="bill-detail" style="display:none"></div></div>';
       }).join('');
       return '<div class="bill-day"><div class="bd-head" onclick="toggleBillDay(this)">'
@@ -1229,7 +1255,7 @@ function drawBillsAdmin(r){
         +'<div class="bill-slips" style="display:none">'+slips+'</div></div>';
     }).join('');
   }
-  setBody(paySubToggle('bills')+head+body);
+  setBody(paySubToggle(isAll?'bills':'mybills')+head+body);
 }
 function toggleBillDay(el){ var b=el.nextElementSibling; b.style.display=(b.style.display==='none'?'block':'none'); }
 function fmtBillDate(s){
@@ -1634,7 +1660,7 @@ function drawKyuyo(r){
       +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.minusTotal)+'</td>'
       +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td><td class="kyu-act"></td></tr>';
     body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'
-      +'<div class="hint" style="margin-top:8px">🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。公開は「📣 公開設定」から。</div>';
+      +'<div class="hint" style="margin-top:8px"><b>📅 対象月は先月まで</b>（当月はTRUST報酬が締まっておらず、取込途中の数字が給与の顔で出てしまうため出しません）。当月の売上を見るなら「🧾 売上明細」「👤 個人売上明細」へ。<br>🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。公開は「📣 公開設定」から。</div>';
   }
   setBody(paySubToggle('kyuyo')+head+body);
 }

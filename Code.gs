@@ -2286,8 +2286,13 @@ function adminGetPayrollDetail(userId, month) {
       const m = mStr_(r[0]); if (m) monthsSet[m] = true;
     });
   }
-  const months = Object.keys(monthsSet).sort().reverse();
-  const mSel = monthKey_(month) && monthsSet[monthKey_(month)] ? monthKey_(month) : (months[0] || monthKey_(month) || '');
+  // 給与明細は先月まで（ボス確定・2026-07-16）。当月はTRUST報酬が締まっておらず、取込途中の数字が
+  // 「給与」の顔で見えてしまう＝額を誤読する。月キーは yyyy/MM のゼロ埋めなので文字列比較で足りる。
+  // ⚠️選択肢から外すだけでなく mSel でも弾く＝URL等で当月を渡されても当月は出さない。
+  const curMonth = Utilities.formatDate(new Date(), TZ, 'yyyy/MM');
+  const months = Object.keys(monthsSet).filter(function (m) { return m < curMonth; }).sort().reverse();
+  const req = monthKey_(month);
+  const mSel = (req && monthsSet[req] && req < curMonth) ? req : (months[0] || '');
   const rows = (sh && sh.getLastRow() >= 2) ? sh.getDataRange().getValues() : [];
   const hdrs = rows.length ? rows[0].map(String) : [];
   const ci = function (h) { return hdrs.indexOf(h); };
