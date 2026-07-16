@@ -4958,9 +4958,8 @@ function isWorkingToday_(name) {
 // シフト表(生セル)の本日の値を返す。了承で20:00に更新された値をそのまま拾う（portalShifts_は申請の元時間で上書きするため別途生読みが必要）
 function rawShiftCellToday_(name) {
   try {
-    const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
-    if (!sh) return '';
-    const data = sh.getDataRange().getValues();
+    const data = shiftSheetValuesMemo_();
+    if (!data) return '';
     const headers = data[0].map(v => (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim());
     const colIdx = headers.indexOf(bizShiftColKey_());
     if (colIdx < 0) return '';
@@ -6726,6 +6725,8 @@ function handlePortalApi_(e) {
   // 従来の「portal(全計算) + getCastSeats + tab=yoyaku + tab=vacancy」の4往復を1往復に集約する。
   // 成績・領収書タブを開いたときに tab=stats で残りを遅延ロードする（フロント loadStatsData）。
   if (tab === 'home') {
+    _portalHomeMemo = {}; // このhome計算中だけ重複シート読み(SHIFT表)をメモ化。finallyで必ず解除＝次リクエストへ漏らさない。
+    try {
     const lookupNameH = normalizeName_(isAdmin ? viewAs : name);
     const staffRoleH = getStaffRoleByName_(lookupNameH);
     const shiftsH = portalShifts_(lookupNameH);
@@ -6752,6 +6753,9 @@ function handlePortalApi_(e) {
       reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH,
       nextWeek: nextWeekDeclineInfo_(lookupNameH),
       notices: getNoticesFor_(lookupNameH, staffRoleH, userId) });
+    } finally {
+      _portalHomeMemo = null; // ★必ず解除（例外時も）＝グローバルを次リクエストに漏らさない
+    }
   }
 
   // === 成績ペイロード（成績タブを開いた時に遅延ロード） ===
@@ -7833,14 +7837,30 @@ function portalPay_(ss, name, filterMonth) {
   return result;
 }
 
+// ポータルhomeブランチ中だけ有効な1リクエスト内メモ（重複シート読みの回避）。
+// ⚠️homeブランチのtry/finallyでのみ set/null する。他経路では常にnull＝下のメモ化リーダーは素通し（従来と完全同一挙動）。
+var _portalHomeMemo = null;
+// SHIFT表(SHIFT_SHEET_ID/SHIFT_TAB)の全値を返す。homeブランチ中はメモ化して重複フル読みを1回にまとめる。
+// homeは本シートに書き込まないためメモは常に安全。値が取れなければ null。
+function shiftSheetValuesMemo_() {
+  if (_portalHomeMemo) {
+    if (_portalHomeMemo.shiftValues === undefined) {
+      const s = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+      _portalHomeMemo.shiftValues = s ? s.getDataRange().getValues() : null;
+    }
+    return _portalHomeMemo.shiftValues;
+  }
+  const s2 = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  return s2 ? s2.getDataRange().getValues() : null;
+}
+
 function portalShifts_(name) {
   try {
     const shifts = {};
 
-    // シフト表から読む
-    const sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
-    if (sh) {
-      const data = sh.getDataRange().getValues();
+    // シフト表から読む（homeブランチ中はメモ化＝重複フル読みを回避）
+    const data = shiftSheetValuesMemo_();
+    if (data) {
       const hdrs = data[0].map(v => {
         if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
         return String(v).trim();

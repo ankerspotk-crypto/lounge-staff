@@ -562,8 +562,45 @@ if (_devUid) {
   }
 }
 
+// ── ホームのクライアントキャッシュ（SWR: 前回内容を即描画→裏で最新取得して差し替え）──
+// キャッシュはキャスト本人のホームペイロードのみ。管理者のcastList応答は対象外。
+var HOME_CACHE_VER = 'v1';
+function homeCacheKey_() { return 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + (adminViewAs || ''); }
+function readHomeCache_() {
+  try {
+    var raw = localStorage.getItem(homeCacheKey_());
+    if (!raw) return null;
+    var o = JSON.parse(raw);
+    if (!o || !o.t || !o.d) return null;
+    if (Date.now() - o.t > 3 * 24 * 3600 * 1000) return null; // 3日超は初期描画に使わない（裏取得はする）
+    return o.d;
+  } catch (e) { return null; }
+}
+function writeHomeCache_(d) {
+  try { localStorage.setItem(homeCacheKey_(), JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
+}
+// キャスト本人のホームペイロードを画面に反映（初回キャッシュ描画と最新反映で共用）
+function applyHomePayload_(d) {
+  isAdmin = d.isAdmin || false;
+  if (d.staffRole) staffRole = d.staffRole;
+  onLeave = !!d.onLeave; // 休職中＝メニューを シフト提出／お知らせ／給与明細 に絞る
+  if (onLeave && currentTab !== 'home' && LEAVE_KEYS.indexOf(currentTab) < 0) currentTab = 'home';
+  if (isAdmin) showAdminTab();
+  if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
+  portalData = d;
+  // 黒服バイトの承認待ち(未確定)シフトをカレンダーに反映（リロードしても「申請中」が残る）
+  pendingShifts = {};
+  if (d.pendingShifts) Object.keys(d.pendingShifts).forEach(function(k){ pendingShifts[k] = d.pendingShifts[k]; });
+  if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
+  updateAdminBar(adminCastList);
+  renderTab(currentTab);
+}
 function loadPortal(month) {
-  setContent('<div class="loading">データ取得中...</div>');
+  // SWR: キャッシュがあれば即描画（体感を一瞬に）。無ければ従来のローディング表示。
+  var cached = readHomeCache_();
+  var renderedFromCache = false;
+  if (cached) { try { applyHomePayload_(cached); renderedFromCache = true; } catch (e) { renderedFromCache = false; } }
+  if (!renderedFromCache) setContent('<div class="loading">データ取得中...</div>');
   // ホーム軽量ペイロード（tab=home）: 売上/給与/領収書/月一覧を除外し、座席・今日の予約・空席を同梱。
   // 管理者でviewAs未指定のときはサーバ側で先にcastListを返すため tab=home は無視される（従来通り）。
   var url = GAS_URL + '?action=portal&tab=home&userId=' + encodeURIComponent(userId);
@@ -577,7 +614,7 @@ function loadPortal(month) {
           showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
         } else if (d.error === 'forbidden') {
           showErr('🚫 アクセスできません<br><small>' + (d.message || 'このアカウントではポータルをご利用いただけません。') + '</small>');
-        } else {
+        } else if (!renderedFromCache) {
           showErr('エラー: ' + d.error + retryBtn_('loadPortal'));
         }
         return;
@@ -590,24 +627,13 @@ function loadPortal(month) {
         initAdminUI(d.castList);
         return;
       }
-      isAdmin = d.isAdmin || false;
-      if (d.staffRole) staffRole = d.staffRole;
-      onLeave = !!d.onLeave; // 休職中＝メニューを シフト提出／お知らせ／給与明細 に絞る
-      // 休職中が使えないタブに居座ったままリロードした場合はホームへ戻す
-      if (onLeave && currentTab !== 'home' && LEAVE_KEYS.indexOf(currentTab) < 0) currentTab = 'home';
-      if (isAdmin) showAdminTab();
       // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
-      if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
-      portalData = d;
-      // 黒服バイトの承認待ち(未確定)シフトをカレンダーに反映（リロードしても「申請中」が残る）
-      pendingShifts = {};
-      if (d.pendingShifts) Object.keys(d.pendingShifts).forEach(function(k){ pendingShifts[k] = d.pendingShifts[k]; });
-      if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
-      updateAdminBar(adminCastList);
-      renderTab(currentTab);
+      writeHomeCache_(d);        // 次回の即描画用に保存
+      applyHomePayload_(d);      // 最新で反映（キャッシュ描画済みでも差し替え）
     })
     .catch(function(e) {
-      showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
+      // キャッシュから描画済みなら、通信失敗で画面を潰さない（内容を残す）
+      if (!renderedFromCache) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
     });
 }
 
