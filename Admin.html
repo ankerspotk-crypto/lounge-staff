@@ -19,6 +19,12 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"H
 .tabs{display:flex;gap:5px;padding:10px 14px 0;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap;}
 .tab{padding:9px 13px;border-radius:9px 9px 0 0;border:1px solid transparent;background:transparent;color:var(--sub);font-size:14px;font-weight:700;cursor:pointer;}
 .tab.on{background:var(--panel2);border-color:var(--line2);border-bottom-color:var(--panel2);color:var(--accent);}
+/* グループ行（14タブを5グループに束ねた第1階層）＝塗りpillで主役。サブタブ(.tab)は従来の下線タブのまま第2階層 */
+.groups{display:flex;gap:7px;padding:12px 14px 6px;background:var(--panel);flex-wrap:wrap;align-items:center;}
+.grp{padding:9px 17px;border-radius:11px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:14px;font-weight:800;cursor:pointer;transition:border-color .12s,background .12s;}
+.grp:hover{border-color:var(--accent);}
+.grp.on{background:var(--accent);border-color:var(--accent);color:#0b0b12;}
+.tabs{padding-top:2px;}
 .body{flex:1;padding:16px;overflow-y:auto;}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
 .finput{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 12px;color:var(--txt);font-size:14px;outline:none;}
@@ -238,22 +244,8 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
     <div class="sp"></div>
     <div class="who" id="who"></div>
   </div>
-  <div class="tabs" id="tabs" style="display:none">
-    <button class="tab on" data-t="staff" onclick="switchTab('staff')">👥 スタッフ</button>
-    <button class="tab" data-t="matrix" onclick="switchTab('matrix')">🔐 権限</button>
-    <button class="tab" data-t="shift" onclick="switchTab('shift')">🗓 シフト</button>
-    <button class="tab" data-t="rsv" onclick="switchTab('rsv')">📅 予約</button>
-    <button class="tab" data-t="notif" onclick="switchTab('notif')">🔔 通知</button>
-    <button class="tab" data-t="checklist" onclick="switchTab('checklist')">✅ チェック</button>
-    <button class="tab" data-t="menu" onclick="switchTab('menu')">🍶 メニュー</button>
-    <button class="tab" data-t="pay" onclick="switchTab('pay')">💰 売上給与</button>
-    <button class="tab" data-t="denpyo" onclick="switchTab('denpyo')">🧾 伝票・領収書</button>
-    <button class="tab" data-t="ops" onclick="switchTab('ops')">⚙️ 運営</button>
-    <button class="tab" data-t="holiday" onclick="switchTab('holiday')">🏖 店休日</button>
-    <button class="tab" data-t="notice" onclick="switchTab('notice')">📢 お知らせ</button>
-    <button class="tab" data-t="voice" onclick="switchTab('voice')">🗣 現場の声</button>
-    <button class="tab" data-t="ref" onclick="switchTab('ref')">📖 説明</button>
-  </div>
+  <div class="groups" id="groups" style="display:none"></div>
+  <div class="tabs" id="tabs" style="display:none"></div>
   <div class="body" id="body"><div class="empty">読み込み中…</div></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -422,9 +414,29 @@ function pollAdminAuth(token){
     }).catch(function(){});
   },2500);
 }
-function switchTab(t){ TAB=t; [].forEach.call(document.querySelectorAll('.tab'),function(el){el.classList.toggle('on',el.dataset.t===t);}); render(); }
+/* ===== ナビ: 14タブを5グループの2階層に束ねる（各画面のrender関数は無変更・入口の見せ方だけ） =====
+ * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
+var TAB_GROUPS=[
+  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['ref','📖 説明']]},
+  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日']]},
+  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
+  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
+  {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['ops','⚙️ 運営']]}
+];
+var GROUP='hr';
+function groupOf_(t){ for(var i=0;i<TAB_GROUPS.length;i++){ if(TAB_GROUPS[i].tabs.some(function(x){return x[0]===t;})) return TAB_GROUPS[i].g; } return TAB_GROUPS[0].g; }
+function curGroup_(){ return TAB_GROUPS.filter(function(G){return G.g===GROUP;})[0]||TAB_GROUPS[0]; }
+function renderNav(){
+  var gEl=document.getElementById('groups'), tEl=document.getElementById('tabs'); if(!gEl||!tEl) return;
+  gEl.style.display='flex'; tEl.style.display='flex';
+  gEl.innerHTML=TAB_GROUPS.map(function(G){ return '<button class="grp'+(G.g===GROUP?' on':'')+'" onclick="switchGroup(\''+G.g+'\')">'+G.label+'</button>'; }).join('');
+  tEl.innerHTML=curGroup_().tabs.map(function(x){ return '<button class="tab'+(x[0]===TAB?' on':'')+'" data-t="'+x[0]+'" onclick="switchTab(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('');
+}
+function switchGroup(g){ GROUP=g; TAB=curGroup_().tabs[0][0]; renderNav(); render(); }
+function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
-  document.getElementById('tabs').style.display='flex';
+  GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
+  renderNav();
   ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
