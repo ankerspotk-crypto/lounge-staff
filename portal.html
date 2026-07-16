@@ -653,6 +653,7 @@ var SECTIONS = {
   seatreq:  { t:'席リクエスト', i:'💺' },
   customers:{ t:'顧客管理',     i:'👥' },
   bday:     { t:'誕生日設定',   i:'🎂' },
+  custbday: { t:'今月誕生日の客', i:'🎂' },
   requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'シフト管理',   i:'🗂' },
   notif:    { t:'通知設定',     i:'🔔' },
@@ -694,7 +695,7 @@ function menuBtn(key) {
     + '<span style="font-size:14px;font-weight:700;color:#e8f0ff">' + s.t + '</span></button>';
 }
 function homeMenu() {
-  var castKeys = ['board','shift','yoyaku','stats','hair','seatreq','customers','bday'];
+  var castKeys = ['board','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
@@ -740,6 +741,7 @@ function switchTab(tab) {
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (tab === 'customers') { loadCustomers(); return; }
   if (tab === 'bday') { loadBirthday(); return; }
+  if (tab === 'custbday') { loadCustomerBirthdays(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -3267,6 +3269,36 @@ function loadBirthday() {
       bdayData = d; renderBirthday(d);
     })
     .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+/* 🎂 今月誕生日のお客様（キャスト＝自分の担当客のみ／バックの getCustomerBirthdays が非管理者を自動で担当スコープに絞る） */
+function loadCustomerBirthdays() {
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
+  var mo = (new Date()).getMonth() + 1;
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'getCustomerBirthdays', userId: userId, month: mo }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      renderCustomerBirthdays(d);
+    })
+    .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+function renderCustomerBirthdays(d) {
+  var list = d.list || [], m = d.month || ((new Date()).getMonth() + 1);
+  var head = '<div style="padding:14px 4px 10px;font-size:16px;font-weight:800;color:#e8f0ff">🎂 ' + m + '月がお誕生日のお客様 <span style="font-size:12px;font-weight:600;color:#8aabcc">（あなたの担当・日付順）</span></div>';
+  var body;
+  if (!list.length) {
+    body = '<div style="text-align:center;color:#6a8ab0;padding:40px 0;font-size:14px">' + m + '月生まれの担当のお客様はいません</div>';
+  } else {
+    body = '<div style="font-size:12px;color:#8aabcc;margin:0 4px 10px">' + list.length + '名</div>' + list.map(function(c){
+      var no = c.no ? ('<span style="color:#6a8ab0;font-size:12px;margin-left:6px">会員' + esc(c.no) + '</span>') : '';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:13px 14px;background:#111b2e;border:1px solid #1e3050;border-radius:12px;margin-bottom:9px">'
+        + '<span style="font-size:15px;font-weight:700;color:#e8f0ff">' + esc(c.name) + '様' + no + '</span>'
+        + '<span style="font-size:15px;font-weight:800;color:#f0b8dc">🎂 ' + esc(c.mmdd) + '</span></div>';
+    }).join('');
+  }
+  var tip = '<div style="color:#6a8ab0;font-size:12px;line-height:1.7;margin:12px 4px 0">お客様管理の誕生日データより。お祝いの一言、来店のきっかけにどうぞ。</div>';
+  setContent(head + body + tip);
 }
 
 function renderBirthday(d) {
