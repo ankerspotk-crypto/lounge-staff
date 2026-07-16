@@ -8315,29 +8315,44 @@ function searchCustomersForYoyaku_(query, opts) {
   const q = query.replace(/\s/g,'');
   const qh = toHira_(q); // ふりがな検索用
   const limit = withTantou ? 60 : 12; // 担当検索は「その子の客一覧」用途＝上限を広げる（客名の絞り込みは従来通り12）
-  const results = [];
-  for (let r = h + 1; r < values.length && results.length < limit; r++) {
+  const mkRec = (row) => {
+    const bdayRaw = row[cM];
+    const bday = bdayRaw instanceof Date ? fmtDate(bdayRaw) : String(bdayRaw || '');
+    const feeRaw = cA >= 0 ? row[cA] : null;
+    const annualFeeDate = feeRaw instanceof Date ? Utilities.formatDate(feeRaw, TZ, 'yyyy-MM-dd') : String(feeRaw || '');
+    return {
+      card: val(row,cG), name: val(row,cH), no: val(row,cE), tantou: val(row,cN),
+      bottle: val(row,cJ), bday, drink: val(row,cS), tabaco: val(row,cT), note: val(row,cP),
+      annualFeeDate
+      // NG行為・NGスタッフは含めない
+    };
+  };
+  const results = [];    // 客名/カード名/会員番号/参考情報/よみがな での一致
+  const tantouHits = []; // 担当欄が入力と「完全一致」した客（withTantou時のみ＝担当名検索モード）
+  for (let r = h + 1; r < values.length; r++) {
+    if (results.length >= 12 && (!withTantou || tantouHits.length >= limit)) break;
     const row = values[r];
     const card = val(row,cG).replace(/\s/g,'');
     const name = val(row,cH).replace(/\s/g,'');
     const no   = val(row,cE).replace(/\s/g,'');
     if (!card && !name) continue;
-    const tantou = withTantou ? val(row,cN).replace(/\s/g,'') : '';
-    if (!card.includes(q) && !name.includes(q) && !no.includes(q) && !toHira_(val(row,cP).replace(/\s/g,'')).includes(qh) && !toHira_(val(row,cY).replace(/\s/g,'')).includes(qh) && !(withTantou && q && tantou.includes(q))) continue;
-    const bdayRaw = row[cM];
-    const bday = bdayRaw instanceof Date ? fmtDate(bdayRaw) : String(bdayRaw || '');
-    const feeRaw = cA >= 0 ? row[cA] : null;
-    const annualFeeDate = feeRaw instanceof Date
-      ? Utilities.formatDate(feeRaw, TZ, 'yyyy-MM-dd')
-      : String(feeRaw || '');
-    results.push({
-      card: val(row,cG), name: val(row,cH), no: val(row,cE), tantou: val(row,cN),
-      bottle: val(row,cJ), bday, drink: val(row,cS), tabaco: val(row,cT), note: val(row,cP),
-      annualFeeDate
-      // NG行為・NGスタッフは含めない
-    });
+    // 担当名検索モード：入力が担当欄トークン（「、」区切り）と完全一致した客だけ集める。
+    // ⚠️部分一致や他列（客名・参考情報・よみがな）のヒットは混ぜない
+    //   （ボス報告2026-07-16：担当名を入れると他の担当の客も出た＝他列の部分一致が原因。
+    //    OR加算方式だと短いキャスト名が参考情報等に紛れて混入する）。
+    if (withTantou && q) {
+      const tks = val(row,cN).split('、').map(s => s.replace(/\s/g,''));
+      if (tks.indexOf(q) >= 0) { if (tantouHits.length < limit) tantouHits.push(mkRec(row)); continue; }
+    }
+    // 通常検索（客名/カード名/会員番号/参考情報/よみがな）。担当検索モードでも担当一致しなかった客はこちらで拾わない
+    if (results.length < 12) {
+      if (!card.includes(q) && !name.includes(q) && !no.includes(q) && !toHira_(val(row,cP).replace(/\s/g,'')).includes(qh) && !toHira_(val(row,cY).replace(/\s/g,'')).includes(qh)) continue;
+      results.push(mkRec(row));
+    }
   }
-  return results;
+  // 担当完全一致が1件でもあれば「担当名で検索した」とみなし、担当の客だけ返す。
+  // 0件なら通常の検索結果（＝入力は客名・会員番号・ふりがな等だった）。
+  return (withTantou && tantouHits.length) ? tantouHits : results;
 }
 
 // 月単位の予約サマリー（カレンダー表示用） monthKey = 'YYYY-MM'

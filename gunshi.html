@@ -2601,10 +2601,12 @@ function renderCustResults(){
     }).catch(function(){ var cur=document.getElementById('cust-results'); if(cur) cur.innerHTML='<div class="empty-msg">検索エラー</div>'; });
     return;
   }
-  var list=CUSTOMERS.filter(function(c){
-    if(q && !(c.name.indexOf(q)>=0||(c.member&&c.member.toLowerCase().indexOf(q.toLowerCase())>=0)||(c.tantou&&c.tantou.indexOf(q)>=0))) return false;
-    return custFilterFn(c);
-  });
+  // 本番(searchCustomersForYoyaku_)と同じ挙動：担当欄と完全一致した客が居れば「担当名検索」とみなし
+  // 担当の客だけ、居なければ客名・会員番号で検索（担当名の部分一致で他の客に混ざらないようにする）
+  var nk=function(s){return String(s||'').replace(/\s/g,'');};
+  var tHits=q?CUSTOMERS.filter(function(c){return nk(c.tantou).split('、').indexOf(nk(q))>=0;}):[];
+  var list=tHits.length ? tHits.filter(custFilterFn)
+    : CUSTOMERS.filter(function(c){ if(q && !(c.name.indexOf(q)>=0||(c.member&&c.member.toLowerCase().indexOf(q.toLowerCase())>=0))) return false; return custFilterFn(c); });
   el.innerHTML=custResultsHtml(list);
 }
 function custResultsHtml(list){
