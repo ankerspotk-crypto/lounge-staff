@@ -348,7 +348,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -4638,6 +4638,9 @@ function scheduledJobs() {
   // 18:00: 月初1回、今月誕生日で誕生日バック未設定のキャストを軍師の要対応へ（内部で月ガード＝月1回）
   if (hhmm >= '18:00' && hhmm <= '18:09') once('BDAYREMIND', remindBirthdayBackIfNeeded_);
 
+  // 17:00: 当日出勤の黒服へ「今日の申し送り」を個別DM（日ガード＝1日1回。中身が空 or 当日黒服なしなら自然にスキップ）
+  if (hhmm >= '17:00' && hhmm <= '17:09') once('KURO_HANDOVER', sendKurofukuHandoverDM_);
+
   // 月初(1日)11時台に1回: 今月誕生日の担当客を各キャストへLINE通知。
   // ⚠️既定OFF＝安全側。CUSTBDAY_NOTIFY_ON='1' をセットして初めて稼働（テスト承認後にONにする）。月ガードで月1回。
   if (prop('CUSTBDAY_NOTIFY_ON') === '1' && hhmm >= '11:00' && hhmm <= '11:09') {
@@ -5230,6 +5233,108 @@ function getTodayShiftDetail_() {
     else if (role === '派遣') haken.push({ name, origName, shift });
   }
   return { cast, kurofuku, haken };
+}
+
+// ============================================================
+// 📋 黒服 日次申し送り（引き継ぎボード）
+//   前日/当日の黒服が軍師から書き、翌日の黒服が朝イチで見る。未doneのTODOは翌営業日へ自動繰り越し。
+//   ⚠️お知らせ掲示板（管理者→全員の恒常告知）とは別物＝黒服同士の日次引き継ぎ。
+//   軍師から呼ぶ関数は GUNSHI_API_FNS に登録必須（gunshiGetHandover / gunshiSaveHandover）。
+// ============================================================
+var SHINOKURI_TAB = '申し送り';
+function getHandoverSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(SHINOKURI_TAB);
+  if (!sh) { sh = ss.insertSheet(SHINOKURI_TAB); sh.appendRow(['営業日', 'メモ', 'TODO', '更新者', '更新日時']); }
+  return sh;
+}
+function parseTodos_(s) { try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+// 営業日セルの正規化。Sheetsが '2026-07-17' をDate値に自動変換する罠を吸収（yyyy-MM-dd文字列に戻す）。
+function cellDateStr_(v) { return (v instanceof Date) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v).trim(); }
+function newTodoId_() { return 't' + new Date().getTime() + Math.floor(Math.random() * 1000); }
+function readHandoverRow_(sh, dateStr) {
+  const rows = sh.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (cellDateStr_(rows[i][0]) === dateStr) {
+      return { rowIndex: i + 1, date: dateStr, memo: String(rows[i][1] || ''), todos: parseTodos_(rows[i][2]), updatedBy: String(rows[i][3] || ''), updatedAt: String(rows[i][4] || '') };
+    }
+  }
+  return null;
+}
+function latestPriorHandover_(sh, dateStr) {
+  const rows = sh.getDataRange().getValues();
+  let best = null;
+  for (let i = 1; i < rows.length; i++) {
+    const d = cellDateStr_(rows[i][0]);
+    if (d && d < dateStr && (!best || d > best.date)) best = { date: d, memo: String(rows[i][1] || ''), todos: parseTodos_(rows[i][2]) };
+  }
+  return best;
+}
+// 本日の申し送りを保証（無ければ前営業日の memo＋未doneTODO を繰り越して新規作成）
+function ensureTodayHandover_() {
+  const sh = getHandoverSheet_();
+  const today = bizDateStr_();
+  const cur = readHandoverRow_(sh, today);
+  if (cur) return cur;
+  const prior = latestPriorHandover_(sh, today);
+  let carriedMemo = '', carriedTodos = [];
+  if (prior) {
+    carriedMemo = prior.memo || '';
+    carriedTodos = (prior.todos || []).filter(t => t && !t.done)
+      .map(t => ({ id: t.id || newTodoId_(), text: String(t.text || ''), done: false, carried: true }));
+  }
+  const stamp = nowStamp_();
+  sh.appendRow([today, carriedMemo, JSON.stringify(carriedTodos), '(繰越)', stamp]);
+  return { rowIndex: sh.getLastRow(), date: today, memo: carriedMemo, todos: carriedTodos, updatedBy: '(繰越)', updatedAt: stamp };
+}
+// 軍師：今日の申し送りを取得（GUNSHI_API_FNS）
+function gunshiGetHandover() {
+  const h = ensureTodayHandover_();
+  return { ok: true, date: h.date, memo: h.memo, todos: h.todos, updatedBy: h.updatedBy, updatedAt: h.updatedAt };
+}
+// 軍師：今日の申し送りを保存（GUNSHI_API_FNS）。payload={memo, todos:[{id,text,done,carried}], by}
+function gunshiSaveHandover(payload) {
+  payload = payload || {};
+  const sh = getHandoverSheet_();
+  const today = bizDateStr_();
+  ensureTodayHandover_(); // 行を保証
+  const row = readHandoverRow_(sh, today);
+  const memo = String(payload.memo == null ? (row ? row.memo : '') : payload.memo).slice(0, 4000);
+  const todos = Array.isArray(payload.todos) ? payload.todos.map(t => ({
+    id: String(t.id || newTodoId_()), text: String(t.text || '').slice(0, 500), done: !!t.done, carried: !!t.carried
+  })).filter(t => t.text) : (row ? row.todos : []);
+  const by = String(payload.by || '').slice(0, 40);
+  const stamp = nowStamp_();
+  sh.getRange(row.rowIndex, 2, 1, 4).setValues([[memo, JSON.stringify(todos), by, stamp]]);
+  return { ok: true, date: today, memo: memo, todos: todos, updatedBy: by, updatedAt: stamp };
+}
+function formatHandoverMessage_(h) {
+  const d = h.date ? h.date.replace(/^\d{4}-/, '').replace('-', '/') : '';
+  const lines = ['📋【今日の申し送り】' + (d ? '（' + d + '）' : ''), '', '【メモ】', (h.memo && h.memo.trim()) ? h.memo.trim() : '（なし）', '', '【今日やること】'];
+  if (h.todos && h.todos.length) h.todos.forEach(t => lines.push((t.done ? '☑ ' : '☐ ') + String(t.text || '')));
+  else lines.push('（なし）');
+  lines.push('', '▶ 追記・完了チェックは軍師「📋今日の申し送り」から');
+  return lines.join('\n');
+}
+// 当日出勤の黒服へ「今日の申し送り」を個別DM（scheduledJobsから日ガードで1回）。
+function sendKurofukuHandoverDM_() {
+  const h = ensureTodayHandover_();
+  const hasContent = (h.memo && h.memo.trim()) || (h.todos && h.todos.length);
+  if (!hasContent) return { ok: true, skipped: 'empty', sent: 0 };
+  const kuro = getTodayShiftDetail_().kurofuku || [];
+  if (!kuro.length) return { ok: true, skipped: 'no_kurofuku', sent: 0 };
+  const ss = getOrOpenSS_();
+  const byName = {};
+  const stf = ss.getSheetByName(STAFF_TAB);
+  if (stf) stf.getDataRange().getValues().slice(1).forEach(r => { const nm = normalizeName_(String(r[1]).trim()); if (nm) byName[nm] = String(r[0]).trim(); });
+  const msg = formatHandoverMessage_(h);
+  let sent = 0; const skippedNoLine = [];
+  kuro.forEach(k => {
+    const lid = byName[normalizeName_(String(k.origName || k.name))] || '';
+    if (!lid) { skippedNoLine.push(k.name); return; }
+    push_(lid, msg); sent++;
+  });
+  return { ok: true, sent: sent, skippedNoLine: skippedNoLine };
 }
 
 // ラインナップメッセージ生成（共通）

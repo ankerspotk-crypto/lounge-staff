@@ -833,6 +833,29 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .hv-card:active{transform:scale(.985);}
 .hv-card .ic{font-size:25px;width:33px;text-align:center;flex:none;}
 .hv-card .bd{flex:1;min-width:0;}
+/* 📋 日次申し送り（ホーム最上段・朝イチで必ず目に入るよう金系で強調） */
+.ho-card{background:linear-gradient(180deg,#1e1a0c,#161207);border:1px solid #6a5a2a;border-radius:16px;padding:15px 16px;margin-bottom:16px;}
+.ho-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:16px;font-weight:900;color:#f0d890;margin-bottom:10px;}
+.ho-edit{background:#2a2410;border:1px solid #6a5a2a;color:#f0d890;border-radius:9px;padding:6px 12px;font-size:13px;font-weight:800;cursor:pointer;flex:none;}
+.ho-memo{font-size:14px;line-height:1.7;color:var(--txt);background:rgba(0,0,0,.22);border-radius:10px;padding:11px 13px;margin-bottom:10px;}
+.ho-sec{font-size:13px;font-weight:800;color:#e6c060;margin:6px 2px 8px;}
+.ho-cnt{font-size:12px;color:var(--dim);margin-left:6px;font-weight:700;}
+.ho-t{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line2);border-radius:11px;background:var(--panel2);margin-bottom:7px;cursor:pointer;}
+.ho-t:active{transform:scale(.99);}
+.ho-t .ho-box{font-size:19px;flex:none;color:#e6c060;}
+.ho-t .ho-tx{flex:1;font-size:14px;font-weight:700;min-width:0;}
+.ho-t.done{opacity:.5;} .ho-t.done .ho-tx{text-decoration:line-through;}
+.ho-carry{font-size:10px;background:#3a2a1a;border:1px solid #6a5a2a;color:#e6c060;border-radius:8px;padding:1px 6px;flex:none;}
+.ho-empty{font-size:13px;color:var(--dim);line-height:1.7;padding:6px 2px;}
+.ho-loading{font-size:13px;color:var(--dim);padding:8px 2px;}
+.ho-ed{display:flex;flex-direction:column;} .ho-lbl{font-size:12px;font-weight:800;color:var(--sub);margin-bottom:5px;}
+.ho-ta{width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px;color:var(--txt);font-size:14px;font-family:inherit;resize:vertical;}
+.ho-erow{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.ho-eck{width:20px;height:20px;flex:none;}
+.ho-etx{flex:1;min-width:0;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;color:var(--txt);font-size:14px;}
+.ho-del{background:#2a1414;border:1px solid #5a2a2a;color:#ff9a9a;border-radius:8px;width:34px;height:36px;flex:none;font-size:17px;cursor:pointer;}
+.ho-add{margin-top:8px;background:var(--panel2);border:1px dashed var(--line2);color:var(--sub);border-radius:10px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;}
+.ho-save{margin-top:16px;background:var(--accent);color:#0b0b12;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:900;cursor:pointer;}
 .hv-card .t{font-size:16px;font-weight:800;line-height:1.25;}
 .hv-card .s{font-size:13px;color:var(--sub);margin-top:3px;}
 .hv-card .go{font-size:21px;color:var(--dim);flex:none;}
@@ -1209,7 +1232,7 @@ function setViewMode(m){
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
   // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
-  if(m==='home'&&BOOTED){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
+  if(m==='home'&&BOOTED){loadHandover();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
 }
 function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();if(p==='post')loadChecklistConfig();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
@@ -1318,7 +1341,77 @@ function renderHome(){
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
   var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderHomeChecklist(phase));
-  w.innerHTML=hvPhaseBar(phase)+mainHtml+hvToolsSection();
+  w.innerHTML=handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection();
+}
+
+/* ===== 📋 黒服 日次申し送り（引き継ぎボード）===== */
+var HANDOVER=null, _hoLoading=false;
+function loadHandover(){
+  if(!IS_GAS){ HANDOVER={memo:'（ローカル）申し送りは本番のみ',todos:[]}; if(viewMode==='home')renderHome(); return; }
+  if(_hoLoading)return; _hoLoading=true;
+  gsr('gunshiGetHandover').then(function(r){ _hoLoading=false; HANDOVER=r||{memo:'',todos:[]}; if(viewMode==='home')renderHome(); })
+    .catch(function(){ _hoLoading=false; });
+}
+function handoverCardHtml(){
+  if(!HANDOVER){ return '<div class="ho-card"><div class="ho-head">📋 今日の申し送り</div><div class="ho-loading">読み込み中…</div></div>'; }
+  var memo=(HANDOVER.memo||'').trim();
+  var todos=HANDOVER.todos||[];
+  var open=todos.filter(function(t){return !t.done;}).length;
+  var todoHtml=todos.map(function(t){
+    return '<div class="ho-t'+(t.done?' done':'')+'" onclick="toggleHandoverTodo(\''+esc(String(t.id))+'\')">'
+      +'<span class="ho-box">'+(t.done?'☑':'☐')+'</span><span class="ho-tx">'+esc(t.text)+'</span>'
+      +(t.carried?'<span class="ho-carry">昨日から</span>':'')+'</div>';
+  }).join('');
+  var body='';
+  if(memo) body+='<div class="ho-memo">'+esc(memo).replace(/\n/g,'<br>')+'</div>';
+  if(todos.length) body+='<div class="ho-sec">今日やること<span class="ho-cnt">残り '+open+'</span></div>'+todoHtml;
+  if(!memo && !todos.length) body='<div class="ho-empty">まだ申し送りはありません。<br>閉店時などに「✍️書く/編集」で残してください。</div>';
+  return '<div class="ho-card"><div class="ho-head"><span>📋 今日の申し送り</span>'
+    +'<button class="ho-edit" onclick="openHandoverEdit()">✍️ 書く/編集</button></div>'+body+'</div>';
+}
+function toggleHandoverTodo(id){
+  if(!HANDOVER||!HANDOVER.todos)return;
+  var hit=HANDOVER.todos.filter(function(t){return String(t.id)===String(id);})[0];
+  if(!hit)return;
+  hit.done=!hit.done;
+  if(viewMode==='home')renderHome();
+  saveHandoverNow_();
+}
+function saveHandoverNow_(){
+  if(!IS_GAS||!HANDOVER)return;
+  gsr('gunshiSaveHandover',{memo:HANDOVER.memo||'',todos:HANDOVER.todos||[],by:LOGIN||''})
+    .then(function(r){ if(r&&r.todos){HANDOVER=r; if(viewMode==='home')renderHome();} }).catch(function(){});
+}
+function hoEditRow_(t){
+  t=t||{}; var id=t.id||('t'+Date.now()+Math.floor(Math.random()*1000));
+  return '<div class="ho-erow" data-id="'+esc(String(id))+'">'
+    +'<input type="checkbox" class="ho-eck"'+(t.done?' checked':'')+'>'
+    +'<input type="text" class="ho-etx" value="'+esc(t.text||'')+'" placeholder="やること">'
+    +'<button class="ho-del" onclick="this.parentNode.remove()">×</button></div>';
+}
+function hoAddRow(){ var c=document.getElementById('ho-todos'); if(c)c.insertAdjacentHTML('beforeend',hoEditRow_({})); }
+function openHandoverEdit(){
+  var h=HANDOVER||{memo:'',todos:[]};
+  var rows=(h.todos||[]).map(hoEditRow_).join('');
+  var html='<div class="ho-ed">'
+    +'<label class="ho-lbl">メモ（今日の出来事・注意点・共有）</label>'
+    +'<textarea id="ho-memo" class="ho-ta" rows="5" placeholder="例）3番のボトル次回入れ替え。◯◯様、次回は静かな席希望。">'+esc(h.memo||'')+'</textarea>'
+    +'<label class="ho-lbl" style="margin-top:12px">今日やること（未完了は翌営業日へ自動で持ち越し）</label>'
+    +'<div id="ho-todos">'+rows+'</div>'
+    +'<button class="ho-add" onclick="hoAddRow()">＋ 項目を追加</button>'
+    +'<button class="ho-save" onclick="saveHandoverEdit()">保存</button></div>';
+  showSheet('📋 今日の申し送り',html,false);
+}
+function saveHandoverEdit(){
+  var memo=((document.getElementById('ho-memo')||{}).value||'');
+  var todos=[].slice.call(document.querySelectorAll('#ho-todos .ho-erow')).map(function(row){
+    var tx=((row.querySelector('.ho-etx')||{}).value||'').trim();
+    return {id:row.getAttribute('data-id'),text:tx,done:!!(row.querySelector('.ho-eck')||{}).checked,carried:false};
+  }).filter(function(t){return t.text;});
+  if(!IS_GAS){ HANDOVER={memo:memo,todos:todos}; closeSheet(); if(viewMode==='home')renderHome(); return; }
+  gsr('gunshiSaveHandover',{memo:memo,todos:todos,by:LOGIN||''}).then(function(r){
+    HANDOVER=r||{memo:memo,todos:todos}; closeSheet(); if(viewMode==='home')renderHome(); toast('申し送りを保存しました');
+  }).catch(function(){ toast('保存に失敗しました',true); });
 }
 /* 開店/閉店チェックの提出状況を取得（完了バッジ用・非ブロッキング） */
 function loadHomeStatus(){
@@ -2519,6 +2612,7 @@ var MENU_TILES=[
   {group:'管理', items:[
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
+    {ic:'📋', t:'申し送りを書く',     act:"openHandoverEdit()"},
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
