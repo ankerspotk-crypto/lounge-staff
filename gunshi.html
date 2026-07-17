@@ -1071,7 +1071,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-17c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-17d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2222,7 +2222,7 @@ function openSeat(idx){
     body='<div class="empty-msg" style="padding:24px 0">現在この席は空席です</div>';
     if(s.rsv) body+='<div class="kv"><span class="k">次の予約</span><span class="v" style="color:#ffcc55">'+esc(rsvArrT(s.rsv))+' '+esc(s.rsv.cust)+'様</span></div>';
     if(s.planList&&s.planList.length) body+='<div class="kv"><span class="k">予定キャスト</span><span class="v" style="color:#d8b8ff">📋 '+s.planList.map(esc).join('、')+'</span></div>';
-    body+='<div class="actions"><div class="act pri" onclick="openSeatSession('+idx+')">＋ 席設定する</div><div class="act" style="border-color:#6a4aa0;color:#d8b8ff" onclick="openPlanCast('+idx+')">📋 予定キャスト設定</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+    body+='<div class="actions"><div class="act pri" onclick="openSeatSession('+idx+',\'rsv\')">📋 予約客をこの席へ</div><div class="act pri" style="border-color:#2a6a44;background:#0d2618;color:#8ff0b0" onclick="openSeatSession('+idx+',\'new\')">✨ 飛び込み新規をこの席へ</div><div class="act" style="border-color:#6a4aa0;color:#d8b8ff" onclick="openPlanCast('+idx+')">📋 予定キャスト設定</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }else{
     var st=seatStatus(s);
     var stLabel=st==='over'?'<span style="color:#ee5a5a">🔴 時間超過</span>':st==='warn'?'<span style="color:#e6b23a">⏰ まもなく超過</span>':'<span style="color:#4dcc84">● 稼働中</span>';
@@ -2327,11 +2327,11 @@ function savePlanCast(){
 /* ============ 🪑 席設定（テーブル設定：予約から / 飛び込み新規） ============ */
 var seatSel=null;
 function codeToTbl(code){var m=String(code||'').match(/^(2F|5F)-([CB])(\d+)$/);return m?(m[1]+' '+(m[2]==='C'?'カウンター':'ボックス')+m[3]):null;}
-function openSeatSession(idx){
+function openSeatSession(idx, initMode){
   var s=SEATS[idx];
   var tbl=codeToTbl(s.code);
   seatSel={seatIdx:idx,seatCode:s.code,seatLabel:s.floor+' '+shortNm(s.name),tblName:tbl,
-    mode:null,rowIdx:0,customer:'',member:'',newCust:false,pax:2,tantou:[],pending:[],_busy:false};
+    mode:initMode||null,rowIdx:0,customer:'',member:'',newCust:false,pax:2,tantou:[],pending:[],_busy:false};
   showSheet('🪑 '+seatSel.seatLabel+' の席設定','<div class="empty-msg">読み込み中...</div>',false);
   if(IS_GAS){
     gsr('getTodayPendingReservations').then(function(list){ seatSel.pending=(list||[]); renderSeatSession(); }).catch(function(){ seatSel.pending=[]; renderSeatSession(); });
