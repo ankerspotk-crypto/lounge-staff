@@ -1071,7 +1071,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-17d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-17e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2215,7 +2215,7 @@ function openSeat(idx){
       +(s.tantou?'<div class="kv"><span class="k">担当</span><span class="v">👤 '+esc(s.tantou)+' <span style="color:#ffbf6a;font-size:11px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span></span></div>':'')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
-      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
     showSheet(title,body,false); return;
   }
   if(!s.casts||!s.casts.length){
@@ -2241,7 +2241,7 @@ function openSeat(idx){
       +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast" onclick="castAction('+idx+',\''+jsStr(c.n)+'\')" style="cursor:pointer"><span style="font-weight:700">'+esc(c.n)+'</span><span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span><span style="color:#5a6a8a;font-size:15px;margin-left:8px">›</span></span></div>';}).join('')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
-      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }
   showSheet(title,body,false);
 }
@@ -2270,6 +2270,65 @@ function seatGroupCheckout(rowIdx,cust){
   if(!confirm(cust+'様（この組）を退店にしますか？')) return;
   if(!IS_GAS){ toast('（ローカル）退店'); closeSheet(); return; }
   gsr('setKioskReservationStatus',rowIdx,'退店済み').then(function(){toast('🚪 '+cust+'様を退店にしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');});
+}
+/* ============ 👥 他の席と合わせる（相席・別伝票のまま同卓）============
+ * 席詳細 → 合わせる相手（🟢来店中の組 / ⏳未来店の予約）を選ぶ → 合流先の席を選ぶ → 相席。
+ * ・未来店の予約 = setupTableSession（checkInReservation_ が占有席でも upsert＝相席／バックエンド既存）
+ * ・来店中の組  = kioskChangeTable(..,allowMerge=true)（占有席への移動＝相席／allowMerge新設）
+ * 売上・伝票・来店回数は組ごとに別のまま（＝「分ける」運用。まとめる=1伝票化は非対応） */
+var coSeatSel=null;
+function coSeatCands(){
+  var out=[]; SEATS.forEach(function(s,i){ if(!coSeatSel||i===coSeatSel.aIdx)return; if(s.type==='W'||s.type==='K')return; if(s.mergedTo!=null)return;
+    var occ=(s.occupants&&s.occupants.length)||s.cust||(s.casts&&s.casts.length); if(occ)out.push({i:i,s:s}); }); return out;
+}
+function startCoSeat(idx){
+  var s=SEATS[idx];
+  coSeatSel={aIdx:idx,aCode:s.code,aLabel:s.floor+' '+shortNm(s.name),partner:null,pending:[]};
+  renderCoSeatPick();
+  if(IS_GAS){ gsr('getTodayPendingReservations').then(function(list){ if(coSeatSel){coSeatSel.pending=list||[];renderCoSeatPick();} }).catch(function(){ if(coSeatSel){coSeatSel.pending=[];renderCoSeatPick();} }); }
+  else { coSeatSel.pending=RSV.filter(function(r){return r.status==='確定';}).map(function(r){return {rowIdx:r.id,customer:r.cust,memberId:r.mem,pax:r.pax,tantouCast:r.tantou,time:r.time,table:r.table};}); renderCoSeatPick(); }
+}
+function coSeatCancel(idx){ coSeatSel=null; openSeat(idx); }
+function renderCoSeatPick(){
+  if(!coSeatSel)return; var cs=coSeatSel; var occ=coSeatCands();
+  var h='<div class="kv"><span class="k">ベース席</span><span class="v">🪑 '+esc(cs.aLabel)+'</span></div>'
+    +'<div style="font-size:11px;color:#8a9ac0;margin:6px 0 12px">別々の伝票のまま、同じ卓に相席させます。まず<b>合わせる相手</b>を選んでください。</div>';
+  h+='<div class="flabel">🟢 来店中の組と合わせる</div>';
+  h+= occ.length? occ.map(function(o){return '<div class="af-res" onclick="coSeatPickSeat('+o.i+')"><div class="af-res-top"><span class="cc-nm">'+esc(o.s.cust||'来店中')+'</span> <span class="rb">'+esc(o.s.floor+' '+shortNm(o.s.name))+'</span>'+(o.s.pax?' <span class="rb">'+o.s.pax+'名</span>':'')+'</div></div>';}).join('') : '<div class="empty-msg" style="padding:10px;font-size:12px">他に来店中の席はありません</div>';
+  h+='<div class="flabel" style="margin-top:14px">⏳ 未来店の予約と合わせる</div>';
+  h+= cs.pending.length? cs.pending.map(function(r){return '<div class="af-res" onclick="coSeatPickRsv('+r.rowIdx+')"><div class="af-res-top"><span class="cc-nm">'+esc(r.customer)+' 様</span> <span class="rb">'+esc(rsvArrT(r))+'</span> <span class="rb">'+(r.pax||1)+'名</span>'+(r.tantouCast?' <span class="rb t">担当 '+esc(r.tantouCast)+'</span>':'')+'</div></div>';}).join('') : '<div class="empty-msg" style="padding:10px;font-size:12px">未来店の予約はありません</div>';
+  h+='<div class="actions" style="margin-top:16px"><div class="act" onclick="coSeatCancel('+cs.aIdx+')">← 席の詳細へ戻る</div></div>';
+  showSheet('👥 '+cs.aLabel+' に合わせる',h,false);
+}
+function coSeatPickSeat(bIdx){ var b=SEATS[bIdx]; coSeatSel.partner={type:'seat',idx:bIdx,code:b.code,label:b.floor+' '+shortNm(b.name),cust:b.cust||'来店中'}; renderCoSeatDest(); }
+function coSeatPickRsv(rowIdx){ var r=coSeatSel.pending.filter(function(x){return x.rowIdx===rowIdx;})[0]; if(!r)return; coSeatSel.partner={type:'rsv',rowIdx:rowIdx,customer:r.customer,memberId:r.memberId,pax:r.pax,tantouCast:r.tantouCast,label:(r.customer||'')+'様'}; renderCoSeatDest(); }
+function renderCoSeatDest(){
+  var cs=coSeatSel,p=cs&&cs.partner; if(!p)return;
+  var h='<div class="kv"><span class="k">ベース席</span><span class="v">🪑 '+esc(cs.aLabel)+'</span></div>'
+    +'<div class="kv"><span class="k">合わせる相手</span><span class="v">'+(p.type==='rsv'?'⏳ ':'🟢 ')+esc(p.label)+'</span></div>'
+    +'<div class="flabel" style="margin-top:10px">どの席にまとめますか？（別伝票のまま同卓）</div>';
+  h+='<div class="act pri" onclick="coSeatExec(\''+jsStr(cs.aCode)+'\')">🪑 '+esc(cs.aLabel)+'（この席）にまとめる</div>';
+  if(p.type==='seat') h+='<div class="act" style="margin-top:8px" onclick="coSeatExec(\''+jsStr(p.code)+'\')">🪑 '+esc(p.label)+'（相手の席）にまとめる</div>';
+  h+='<div class="actions" style="margin-top:16px"><div class="act" onclick="renderCoSeatPick()">← 相手を選び直す</div></div>';
+  showSheet('👥 合流先を選ぶ',h,false);
+}
+function coSeatExec(destCode){
+  var cs=coSeatSel,p=cs&&cs.partner; if(!p)return;
+  var dest=SEATS.filter(function(s){return s.code===destCode;})[0];
+  var destLabel=dest?(dest.floor+' '+shortNm(dest.name)):destCode;
+  var destTbl=codeToTbl(destCode);
+  if(!confirm(p.label+' を '+destLabel+' に相席させます。\n売上・伝票は別々のままです。よろしいですか？')) return;
+  if(!IS_GAS){ toast('（ローカル）'+destLabel+' に相席にしました'); coSeatSel=null; closeSheet(); return; }
+  var tasks=[];
+  if(p.type==='rsv'){
+    tasks.push(gsr('setupTableSession',{rowIdx:p.rowIdx,customer:String(p.customer||'').replace(/\s*様\s*$/,''),memberId:p.memberId||'',pax:parseInt(p.pax)||1,tables:[destTbl].filter(Boolean),tantouCast:String(p.tantouCast||'').split('、').filter(Boolean),dohanCast:[],yoyakuCast:''}));
+  } else {
+    var loserIdx=(destCode===cs.aCode)?p.idx:cs.aIdx; var loser=SEATS[loserIdx];
+    (loser.occupants||[]).forEach(function(o){ if(o.rowIdx) tasks.push(gsr('kioskChangeTable',loser.code,destCode,o.rowIdx,true)); });
+    if(!tasks.length){ toast('相手の組を特定できませんでした（相席は予約行のある組のみ）'); return; }
+  }
+  coSeatSel=null; closeSheet(); toast('👥 相席にしています…');
+  Promise.all(tasks).then(function(rs){ var bad=(rs||[]).filter(function(r){return r&&r.ok===false;})[0]; if(bad){ toast('相席に失敗: '+(bad.error||'')); } else { toast('✅ '+destLabel+' に相席にしました'); } loadAll(); }).catch(function(){ toast('相席に失敗しました'); loadAll(); });
 }
 /* 席詳細でキャストをタップ → 延長 / 抜く を選択 */
 function castAction(idx,castName){
