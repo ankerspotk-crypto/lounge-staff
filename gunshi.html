@@ -265,8 +265,19 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 
 /* ---------- Reservation list ---------- */
 .rlist{display:flex;flex-direction:column;gap:4px;}
-.rcard{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 10px;cursor:pointer;}
+.rcard{position:relative;overflow:hidden;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 10px 5px 13px;cursor:pointer;}
+.rcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:transparent;}
+/* 来店前（確定・未来店）＝沈めた"予定"の面・寒色の左バー＝ひと目で「まだ来ていない」 */
+.rcard.waiting{background:#0d0d17;border-color:#20202f;}
+.rcard.waiting::before{background:#46506a;}
+.rcard.waiting .rtime{color:#8893ab;}
+.rcard.waiting .rname{color:#aeb7c6;}
+/* 来店中（来店済み）＝緑の面＋緑の左バー＋緑の時刻＝ひと目で「今ここに居る」 */
+.rcard.arrived{background:linear-gradient(90deg,rgba(77,204,132,.14),rgba(22,22,38,0) 46%),var(--panel2);border-color:#2a6a44;}
+.rcard.arrived::before{background:#4dcc84;}
+.rcard.arrived .rtime{color:#7fe0a3;}
 .rcard.done{opacity:.5;}
+.rcard.done::before{background:#3a3a4a;}
 .rcard.next{border-color:#245086;box-shadow:0 0 0 1px #1a3a66 inset;}
 .rtop{display:flex;align-items:center;gap:7px;}
 .rtime{font-size:14px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -1060,7 +1071,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-17b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-17c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2100,7 +2111,7 @@ function rcardHtml(r,isNext){
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
   var ms=membershipInfo(r.joined,r.feeDate);
   var mchip=ms.status==='expired'?'<span class="rmemchip exp">🔴更新切れ</span>':ms.status==='thismonth'?'<span class="rmemchip soon">🟡今月更新</span>':ms.status==='ok'?'<span class="rmemchip ok">🟢有効会員</span>':ms.status==='none'?'<span class="rmemchip none">未会員</span>':'';
-  return '<div class="rcard'+(done?' done':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
+  return '<div class="rcard'+(done?' done':'')+(r.status==='来店済み'?' arrived':'')+(r.status==='確定'?' waiting':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
     +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+mchip+statusBtns(r)+'</div>'
     +'<div class="rbadges">'+badges+'</div>'
     +((r.subCustomers&&r.subCustomers.length)?'<div class="rnote" style="color:#66cc88">👥 同席 +'+r.subCustomers.length+'名: '+r.subCustomers.map(function(s){return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':'');}).join('、')+'</div>':'')
