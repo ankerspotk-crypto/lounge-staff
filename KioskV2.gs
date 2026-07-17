@@ -190,7 +190,7 @@ function kioskCodeToTable_(code) {
   var m = String(code || '').match(/^(2F|5F)-([CB])(\d+)$/);
   return m ? (m[1] + ' ' + (m[2] === 'C' ? 'カウンター' : 'ボックス') + m[3]) : null;
 }
-function kioskChangeTable(fromCode, toCode, rowIdx) {
+function kioskChangeTable(fromCode, toCode, rowIdx, allowMerge) {
   try {
     if (!fromCode || !toCode || fromCode === toCode) return { ok: false, error: '移動元/先が不正です' };
     var fromLabel = kioskCodeToTable_(fromCode), toLabel = kioskCodeToTable_(toCode);
@@ -198,8 +198,9 @@ function kioskChangeTable(fromCode, toCode, rowIdx) {
     var sp = PropertiesService.getScriptProperties();
     var fromList = readRsrv_(fromCode);
     if (!fromList.length) return { ok: false, error: '移動元に来店中のお客様がいません' };
-    // 移動先が使用中なら不可（相席させたい時は予約のテーブル指定＋来店で同居する運用）
-    if (readRsrv_(toCode).length) return { ok: false, error: '移動先は使用中です' };
+    // 移動先が使用中: 通常移動は不可。ただし allowMerge=true（軍師「他の席と合わせる」動線）なら
+    // 相席として同居させる（下流の transferSeatState_ が upsertRsrvEntry_ で上書きせず追加する）。売上・伝票は組ごとに別のまま。
+    if (readRsrv_(toCode).length && !allowMerge) return { ok: false, error: '移動先は使用中です' };
     // 同居している場合は rowIdx で対象組を特定（未指定は先頭組）
     var rsrv = rowIdx ? (fromList.filter(function (e) { return String(e.rowIdx || '') === String(rowIdx); })[0] || fromList[0]) : fromList[0];
     // 来店済み予約のテーブル欄を更新（あれば）→ 同期でゾンビ削除されないように
