@@ -7460,28 +7460,62 @@ function adminSetMasterPin(userId, pin) {
   return { ok: true };
 }
 
-// ── 管理コンソール共通PIN（QRの代わりにPINで開く） ──────────────────
+// ── 管理コンソールPIN（QRの代わりにPINで開く） ──────────────────
 // PINが設定されているか（PIN値は返さない）。ゲート表示の振り分けに使う
 function adminConsolePinSet() {
   return { ok: true, pinSet: !!prop('ADMIN_CONSOLE_PIN') };
 }
-// PINログイン: 正しければ、以降のAPIが isAdmin_ を通るよう実在の管理者userIdを返す
-function adminPinLogin(pin) {
+// 管理コンソールにPINログインできる管理者の一覧 [{name,userId}]。
+// 表示順＝ハードコード管理者(管理者/ひろき/りく)→管理者フラグ(D列○)。退職者は除外、userIdの無い行は除外、名前で重複排除。
+function adminConsoleAdmins_() {
+  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return [];
+  const rows = sh.getDataRange().getValues();
+  const rcRetire = getStaffRetireCols_(sh, false)['退職'];
+  const isRetired = function (row) { return rcRetire >= 0 && String(row[rcRetire]).trim() === '退職'; };
+  const out = [], seen = {};
+  const push = function (name, uid) {
+    const k = String(name).trim(), u = String(uid).trim();
+    if (!k || !u || seen[k]) return;
+    seen[k] = 1; out.push({ name: k, userId: u });
+  };
+  for (let i = 1; i < rows.length; i++) {          // ①ハードコード管理者を優先（ロックアウト防止の保険なので退職では外さない）
+    const n = String(rows[i][1]).trim();
+    if (ADMIN_NAMES_.includes(n)) push(n, rows[i][0]);
+  }
+  for (let i = 1; i < rows.length; i++) {          // ②管理者フラグ(D列○)
+    if (isRetired(rows[i])) continue;
+    if (String(rows[i][3]).trim() === '○') push(String(rows[i][1]).trim(), rows[i][0]);
+  }
+  return out;
+}
+// フロント用：ログイン画面に出す管理者名の一覧（userId・PINは返さない）
+function adminConsoleAdminList() {
+  return adminConsoleAdmins_().map(function (a) { return a.name; });
+}
+// PINログイン: 名前を選んで本人のPINで認証。正しければ、以降のAPIが isAdmin_ を通るよう本人のuserIdを返す。
+//  ・照合PIN＝その人の個別PIN(KIOSK_PIN_<名前>／軍師と共通)。未設定ならコンソール共通PIN(ADMIN_CONSOLE_PIN)。
+//   個別PINを持つ人は共通PINでは入れない＝なりすまし不可の本人認証。
+//  ・name未指定（旧フロント/キャッシュ）は後方互換で共通PIN照合→代表管理者ログイン。
+function adminPinLogin(pin, name) {
+  const p = String(pin || '').trim();
+  const admins = adminConsoleAdmins_();
+  if (name) {                                       // ── 新方式：名前選択＋本人PIN ──
+    const nm = String(name).trim();
+    const hit = admins.filter(function (a) { return a.name === nm; })[0];
+    if (!hit) return { ok: false, error: '管理者アカウントが見つかりません' };
+    const individual = prop('KIOSK_PIN_' + nm.replace(/[\s　]/g, '_'));
+    const master = prop('ADMIN_CONSOLE_PIN');
+    const valid = individual || master;
+    if (!valid) return { ok: false, error: 'PINが未設定です（一度QRでログインし、運営タブでPINを設定してください）' };
+    if (p !== String(valid).trim()) return { ok: false, error: 'PINが違います' };
+    return { ok: true, userId: hit.userId, name: hit.name };
+  }
+  // ── 後方互換：名前未指定 → 従来の共通PIN照合＋代表管理者 ──
   const set = prop('ADMIN_CONSOLE_PIN');
   if (!set) return { ok: false, error: '管理コンソールPINが未設定です（一度QRでログインして設定してください）' };
-  if (String(pin || '').trim() !== String(set)) return { ok: false, error: 'PINが違います' };
-  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
-  const rows = sh ? sh.getDataRange().getValues() : [];
-  for (let i = 1; i < rows.length; i++) {          // ハードコード管理者(管理者/ひろき/りく)を優先
-    const n = String(rows[i][1]).trim(), uid = String(rows[i][0]).trim();
-    if (uid && ADMIN_NAMES_.includes(n)) return { ok: true, userId: uid, name: n };
-  }
-  const rcAdmin = getStaffRetireCols_(sh, false)['退職'];
-  for (let i = 1; i < rows.length; i++) {          // フォールバック: 管理者フラグ(D列○)
-    const uid = String(rows[i][0]).trim();
-    if (rcAdmin >= 0 && String(rows[i][rcAdmin]).trim() === '退職') continue; // 退職者は除外
-    if (uid && String(rows[i][3]).trim() === '○') return { ok: true, userId: uid, name: String(rows[i][1]).trim() };
-  }
+  if (p !== String(set).trim()) return { ok: false, error: 'PINが違います' };
+  if (admins.length) return { ok: true, userId: admins[0].userId, name: admins[0].name };
   return { ok: false, error: '管理者アカウントが見つかりません' };
 }
 // PINの設定/変更/クリア（既に管理者として入っている人のみ）
