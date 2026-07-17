@@ -305,6 +305,24 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .rb.d{color:#ffbf6a;border-color:#5a4010;background:#1c1300;}
 .rb.undef{color:#ff9a6a;border-color:#7a3a1a;background:#241000;}
 .rnote{font-size:10px;color:var(--sub);margin-top:3px;background:#0f0f1c;border-radius:7px;padding:3px 7px;border:1px solid var(--line);}
+/* 予約カードのボトル位置（黒服が来店前に準備できるよう銘柄＋位置を明示） */
+.rbottle{font-size:11px;font-weight:700;color:#8fd06a;background:#12240f;border:1px solid #356020;border-radius:7px;padding:3px 8px;margin-top:4px;display:inline-block;}
+.rbottle b{color:#c8f0a8;font-weight:800;}
+.rbottle .rb-nopos{color:#c69a6a;font-weight:600;}
+/* 🍶 本日の予約ボトル 一括リスト */
+.bp-list{display:flex;flex-direction:column;gap:8px;}
+.bp-item{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid #2f5020;border-left:4px solid #4dcc84;border-radius:10px;padding:9px 12px;cursor:pointer;}
+.bp-item .bp-pos{font-size:14px;font-weight:900;color:#c8f0a8;min-width:96px;white-space:nowrap;}
+.bp-item .bp-mid{flex:1;min-width:0;}
+.bp-item .bp-btl{font-size:14px;font-weight:800;color:#e8f0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bp-item .bp-cust{font-size:11px;color:var(--sub);font-weight:600;margin-top:1px;}
+.bp-item .bp-mem{color:#8aa8c8;}
+.bp-item .bp-right{text-align:right;font-size:12px;font-weight:800;color:var(--accent);white-space:nowrap;}
+.bp-item .bp-tbl{font-size:10px;color:var(--sub);font-weight:600;margin-top:2px;}
+.bp-st{font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;margin-left:5px;}
+.bp-st.arr{background:#0d2618;border:1px solid #2a6a44;color:#79e0a8;}
+.bp-st.wait{background:#12233f;border:1px solid #2a5590;color:#8fc0ff;}
+.bp-st.done{background:#181828;border:1px solid #3a3a4a;color:#8a95a8;}
 .rnextmemo{font-size:11px;color:#f0c66a;margin-top:4px;background:#2a2010;border-radius:7px;padding:5px 8px;border:1px solid #7a5a1a;font-weight:700;line-height:1.4;}
 .nmemo-box{background:#2a2010;border:1px solid #7a5a1a;border-radius:12px;padding:12px 14px;margin:4px 0 14px;}
 .nmemo-h{font-size:13px;color:#f0c66a;font-weight:800;margin-bottom:8px;}
@@ -1071,7 +1089,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-17e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-17f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2061,8 +2079,30 @@ function rotateCast(ci,key){var c=ROT[ci];var cur=c.tables.find(function(t){retu
 function renderRsv(){
   var list=RSV.slice().sort(function(a,b){return rsvArrT(a).localeCompare(rsvArrT(b));});
   var nextId=(list.filter(function(r){return r.status==='確定';})[0]||{}).id;
-  var head='<div class="rsv-toolbar"><span class="rcnt">'+list.length+'組 '+list.reduce(function(a,r){return a+r.pax;},0)+'名（'+list.filter(function(r){return r.status==='来店済み';}).length+'組来店済）</span><span style="flex:1"></span><button class="mini-btn" onclick="openSchedule()">🗓 予定表</button><button class="mini-btn add" onclick="openAdd()">＋ 予約を追加</button></div>';
+  var btlN=list.filter(function(r){return r.bottle;}).length;
+  var head='<div class="rsv-toolbar"><span class="rcnt">'+list.length+'組 '+list.reduce(function(a,r){return a+r.pax;},0)+'名（'+list.filter(function(r){return r.status==='来店済み';}).length+'組来店済）</span><span style="flex:1"></span>'+(btlN?'<button class="mini-btn" style="border-color:#356020;color:#8fd06a;background:#12240f" onclick="openBottlePrep()">🍶 ボトル '+btlN+'</button>':'')+'<button class="mini-btn" onclick="openSchedule()">🗓 予定表</button><button class="mini-btn add" onclick="openAdd()">＋ 予約を追加</button></div>';
   setHtml('rsvArea',head+(list.length?'<div class="rlist">'+list.map(function(r){return rcardHtml(r,r.id===nextId);}).join('')+'</div>':'<div class="empty-msg">この日の予約はありません</div>'));
+}
+/* 🍶 本日の予約ボトル：会員ボトルがある予約を"位置順"で一覧化＝開店前に棚を回って一括で出せる。行タップで予約詳細へ */
+function openBottlePrep(){
+  var list=(RSV||[]).filter(function(r){return r.bottle && r.status!=='キャンセル';})
+    .sort(function(a,b){var pa=a.bottlePos||'',pb=b.bottlePos||'';
+      if(!pa&&pb)return 1; if(pa&&!pb)return -1;  // 位置未登録は末尾へ（棚を回る導線を崩さない）
+      return pa.localeCompare(pb)||String(a.time||'').localeCompare(String(b.time||''));});
+  var body;
+  if(!list.length){ body='<div class="empty-msg" style="padding:28px 12px">本日の予約に会員ボトルはありません</div>'; }
+  else {
+    body='<div style="font-size:12px;color:#8a9ac0;margin-bottom:12px;line-height:1.5">開店前にこの<b>位置</b>からボトルを出して各卓へ。<b>位置順</b>に並べています（棚を一度で回れる）。</div>'
+      +'<div class="bp-list">'+list.map(function(r){
+        var st=r.status==='来店済み'?'<span class="bp-st arr">🟢来店中</span>':r.status==='退店済み'?'<span class="bp-st done">退店済</span>':'<span class="bp-st wait">来店前</span>';
+        return '<div class="bp-item" onclick="closeSheet();editRsv('+r.id+')">'
+          +'<div class="bp-pos">📍'+(r.bottlePos?esc(r.bottlePos):'<span style="color:#c69a6a">位置未登録</span>')+'</div>'
+          +'<div class="bp-mid"><div class="bp-btl">🍶 '+esc(r.bottle)+'</div><div class="bp-cust">'+esc(r.cust)+'様'+(r.mem?' <span class="bp-mem">'+esc(r.mem)+'</span>':'')+(r.tantou?'・'+esc(r.tantou):'')+'</div></div>'
+          +'<div class="bp-right">'+esc(rsvArrT(r))+' '+st+(r.table&&r.table!=='未定'?'<div class="bp-tbl">'+esc(r.table)+'</div>':'')+'</div>'
+          +'</div>';
+      }).join('')+'</div>';
+  }
+  showSheet('🍶 本日の予約ボトル（'+list.length+'本）',body,false);
 }
 function outMin(s){return tmin(s.out);}
 function setHaya(i){ var cur=SHIFT[i].hayaagari||''; var t=prompt(SHIFT[i].name+' の早上がり時刻（例 22:00 / 空欄で解除）', cur); if(t===null)return; t=String(t).trim(); SHIFT[i].hayaagari=t; renderShift(); renderAlerts(); if(IS_GAS)gsr('kioskSetHayaagari',SHIFT[i].name,t).catch(function(){}); }
@@ -2114,6 +2154,7 @@ function rcardHtml(r,isNext){
   return '<div class="rcard'+(done?' done':'')+(r.status==='来店済み'?' arrived':'')+(r.status==='確定'?' waiting':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
     +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+mchip+statusBtns(r)+'</div>'
     +'<div class="rbadges">'+badges+'</div>'
+    +(r.bottle?'<div class="rbottle">🍶 '+esc(r.bottle)+(r.bottlePos?' <b>📍'+esc(r.bottlePos)+'</b>':' <span class="rb-nopos">位置未登録</span>')+'</div>':'')
     +((r.subCustomers&&r.subCustomers.length)?'<div class="rnote" style="color:#66cc88">👥 同席 +'+r.subCustomers.length+'名: '+r.subCustomers.map(function(s){return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':'');}).join('、')+'</div>':'')
     +(r.nextMemo?'<div class="rnextmemo">📌 次回対応: '+esc(r.nextMemo)+'</div>':'')
     +(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
@@ -4113,7 +4154,7 @@ function adaptHall(data){
   Object.keys(comb).forEach(function(pc){var pi=byCode[pc]; if(pi==null)return; (comb[pc]||[]).forEach(function(oc){var oi=byCode[oc]; if(oi==null)return; (arr[pi].mergeWith=arr[pi].mergeWith||[]).push(oi); arr[oi].mergedTo=pi;});});
   return arr;
 }
-function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', subCustomers:r.subCustomers||[]};});}
+function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[]};});}
 // 同じお客様の予約が複数テーブルに跨る場合、その席同士を1組(結合表示)にまとめる。
 // 手動結合が既にある席は尊重してスキップ。キャンセル/退店済み・未定は対象外。
 function applyRsvGrouping(){
