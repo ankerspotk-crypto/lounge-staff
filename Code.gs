@@ -2013,10 +2013,13 @@ function buildCustomerBirthdayNotices_(ss, month) {
   var list = customerBirthdaysByMonth_(ss, m, null); // 店全体（担当付き）
   var lineByName = {};
   getAllStaff_(ss).forEach(function (s) { if (s && s.name) lineByName[String(s.name).replace(/\s/g, '')] = s.lineId || ''; });
+  var retiredK = retiredNameKeys_(); // 退職キャストには送らない
+  var normK = function (s) { return normalizeName_(String(s || '')).replace(/[\s　]/g, ''); };
   var byCast = {};
   list.forEach(function (c) {
     var t = String(c.tantou || '').replace(/\s/g, '');
     if (!t) return; // 担当なしは通知先が無い
+    if (retiredK[normK(t)]) return; // 退職キャストは通知対象から除外
     (byCast[t] = byCast[t] || []).push(c);
   });
   return Object.keys(byCast).map(function (t) {
@@ -2757,7 +2760,10 @@ function handleEvent(event) {
   //    未登録者の1:1は従来通り（下のhandleReservation）に落とす。顧客は個人LINEで予約するため公式アカ1:1には来ない。
   if (userId && !groupId) {
     var _ieName = getStaffName(userId);
-    if (_ieName) { handleIeyasuAI_(event, text, _ieName, userId); return; }
+    if (_ieName) {
+      if (isRetiredName_(_ieName)) return; // 退職者のDMには家康くんを応答させない（完全無反応）
+      handleIeyasuAI_(event, text, _ieName, userId); return;
+    }
   }
 
   // グループ別ルーティング
@@ -4522,10 +4528,13 @@ function pushAdmins_(message) {
     var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
     if (!sh) return 0;
     var rows = sh.getDataRange().getValues();
+    var retiredK = retiredNameKeys_(); // 退職した管理者には送らない
+    var normK = function (s) { return normalizeName_(String(s || '')).replace(/[\s　]/g, ''); };
     for (var i = 1; i < rows.length; i++) {
       var lineId = String(rows[i][0]).trim(), name = String(rows[i][1]).trim();
       if (!lineId || !name) continue;
       if (!isAdmin_(name)) continue;
+      if (retiredK[normK(name)]) continue; // 退職済み管理者は除外
       push_(lineId, message); sent++;
     }
   } catch (e) {}
@@ -5328,8 +5337,11 @@ function sendKurofukuHandoverDM_() {
   const stf = ss.getSheetByName(STAFF_TAB);
   if (stf) stf.getDataRange().getValues().slice(1).forEach(r => { const nm = normalizeName_(String(r[1]).trim()); if (nm) byName[nm] = String(r[0]).trim(); });
   const msg = formatHandoverMessage_(h);
+  const retiredK = retiredNameKeys_(); // 退職者には送らない
+  const normK = s => normalizeName_(String(s || '')).replace(/[\s　]/g, '');
   let sent = 0; const skippedNoLine = [];
   kuro.forEach(k => {
+    if (retiredK[normK(k.origName || k.name)]) return; // 退職した黒服は申し送りDM対象外
     const lid = byName[normalizeName_(String(k.origName || k.name))] || '';
     if (!lid) { skippedNoLine.push(k.name); return; }
     push_(lid, msg); sent++;
@@ -10044,7 +10056,10 @@ function notifyMemberRenewalOnCheckIn_(rowIdx){
   hits.forEach(function(h){
     String(h.tantou || '').split('、').forEach(function(n){ n = n.trim(); if (n) (byCast[n] = byCast[n] || []).push(h); });
   });
+  var retiredK = retiredNameKeys_(); // 退職キャストには送らない
+  var normK = function (s) { return normalizeName_(String(s || '')).replace(/[\s　]/g, ''); };
   Object.keys(byCast).forEach(function(n){
+    if (retiredK[normK(n)]) return; // 退職キャスト担当は黒服通知だけで拾う
     var c = resolveCastLine_(n);
     if (!c || !c.lineId) return; // LINE未登録の担当は黒服通知だけで拾う
     push_(c.lineId, '💳【会費更新のお願い】\n本日ご来店のお客様です。\n' + byCast[n].map(line).join('\n') + '\n\n会費の更新があるお客様です。確認お願いします。');
