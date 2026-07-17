@@ -4309,7 +4309,7 @@ function renameStaffEverywhere_(oldName, newName, dryRun) {
     if (v != null) { if (!dryRun) { p.setProperty('SHIFT_CONFIRMED_' + newN, v); p.deleteProperty('SHIFT_CONFIRMED_' + oldN); } rep['SHIFT_CONFIRMED'] = 1; } else rep['SHIFT_CONFIRMED'] = 0;
   } catch (e) {}
 
-  if (!dryRun) { try { CacheService.getScriptCache().remove('MEMFEEMAP_v1'); } catch (e) {} }
+  if (!dryRun) { try { CacheService.getScriptCache().remove('MEMFEEMAP_v3'); } catch (e) {} }
   return rep;
 }
 
@@ -8567,10 +8567,10 @@ function parseMasterDate_(raw) {
 function getMemberFeeMap_() {
   // 90秒キャッシュ（マスタ全件読込が重く予約管理/軍師が遅くなるため）。顧客追加・次回メモ更新時に破棄
   const _cache = CacheService.getScriptCache();
-  const _c = _cache.get('MEMFEEMAP_v2');
+  const _c = _cache.get('MEMFEEMAP_v3');
   if (_c) { try { return JSON.parse(_c); } catch (e) {} }
   const _map = getMemberFeeMapRaw_();
-  try { _cache.put('MEMFEEMAP_v2', JSON.stringify(_map), 90); } catch (e) {}
+  try { _cache.put('MEMFEEMAP_v3', JSON.stringify(_map), 90); } catch (e) {}
   return _map;
 }
 function getMemberFeeMapRaw_() {
@@ -8589,6 +8589,7 @@ function getMemberFeeMapRaw_() {
   const cReg = idx('登録日') >= 0 ? idx('登録日') : idx('入会'); // 入会日 = 登録日（無ければ入会）
   const cMemo = idx('次回対応'); // 次回対応メモ列（無ければ-1）
   const cTan = idx('担当');      // 担当（会費更新DMの宛先。予約に担当キャストが無い時のフォールバック）
+  const cBtl = idx('ボトル種類'), cPos = idx('ボトル位置'); // 予約からボトルの銘柄＋位置を黒服へ共有するため（キャッシュ済みマップに相乗り）
   const renewalCols = []; headers.forEach((hd, ci) => { if (/更新/.test(hd)) renewalCols.push(ci); }); // ◯年目更新 列
   const map = {};
   for (let r = h + 1; r < values.length; r++) {
@@ -8607,8 +8608,10 @@ function getMemberFeeMapRaw_() {
     const annualFeeDate = best ? best.str : memberSince;
     const nextMemo = cMemo >= 0 ? String(row[cMemo] || '').trim() : '';
     const tantou = cTan >= 0 ? String(row[cTan] || '').trim() : '';
-    // 収録条件は据え置き（tantouだけの行を新たに載せると既存の突合先の挙動が変わるため）。日付が無い＝更新判定もできない
-    if (annualFeeDate || memberSince || nextMemo) map[no] = { annualFeeDate, memberSince, nextMemo, tantou };
+    const bottle = cBtl >= 0 ? String(row[cBtl] || '').trim() : '';
+    const bottlePos = cPos >= 0 ? String(row[cPos] || '').trim() : '';
+    // 収録条件は据え置き（tantouだけの行を新たに載せると既存の突合先の挙動が変わるため）。日付が無い＝更新判定もできない。ボトルは収録された行にだけ相乗り（会員は登録日を持つので実害なし）
+    if (annualFeeDate || memberSince || nextMemo) map[no] = { annualFeeDate, memberSince, nextMemo, tantou, bottle, bottlePos };
   }
   return map;
 }
@@ -8880,7 +8883,7 @@ function getKioskReservations(dateKey) {
     Object.keys(feeMap).forEach(k => { const c = canon(k); if (c) byCanon[c] = feeMap[k]; });
     list.forEach(r => {
       const f = byCanon[canon(r.memberId)];
-      if (f) { r.memberSince = f.memberSince || ''; r.annualFeeDate = f.annualFeeDate || ''; r.nextMemo = f.nextMemo || ''; }
+      if (f) { r.memberSince = f.memberSince || ''; r.annualFeeDate = f.annualFeeDate || ''; r.nextMemo = f.nextMemo || ''; r.bottle = f.bottle || ''; r.bottlePos = f.bottlePos || ''; }
     });
   } catch (e) { /* 会費突合失敗時は無印で継続 */ }
   return list;
@@ -13926,7 +13929,7 @@ function addCustomer(payload) {
   if (payload.feeDate) set(cols.feeDate, new Date(payload.feeDate));
   if (cols.lineReg >= 0) set(cols.lineReg, payload.lineReg ? '済' : '');
   sh.appendRow(newRow);
-  try { CacheService.getScriptCache().remove('MEMFEEMAP_v1'); } catch (e) {} // 会費マップキャッシュ破棄
+  try { CacheService.getScriptCache().remove('MEMFEEMAP_v3'); } catch (e) {} // 会費マップキャッシュ破棄
   return { ok: true, rowIdx: sh.getLastRow() };
 }
 
@@ -14020,7 +14023,7 @@ function updateCustomer(rowIdx, payload) {
 // 軍師から顧客情報を修正（GUNSHI_API_FNSホワイトリスト経由＝軍師端末のみ。修正後は会費マップキャッシュを破棄）
 function kioskUpdateCustomer(rowIdx, payload) {
   const r = updateCustomer(rowIdx, payload || {});
-  if (r && r.ok) { try { CacheService.getScriptCache().remove('MEMFEEMAP_v1'); } catch (e) {} }
+  if (r && r.ok) { try { CacheService.getScriptCache().remove('MEMFEEMAP_v3'); } catch (e) {} }
   return r;
 }
 
