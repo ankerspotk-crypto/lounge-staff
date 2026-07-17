@@ -6244,11 +6244,13 @@ function nextWeekRange_() {
 function shiftSubmitRoster_() {
   const all = getAllStaff_(getOrOpenSS_());
   const exempt = kintaiExemptKeys_();
+  const retired = retiredNameKeys_(); // 退職者は催促・提出状況の母集団から外す（休職中は従来どおり催促＝外さない）
   const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
   return all.filter(function (s) {
     const r = String(s.role || '');
     if (r.indexOf('キャスト') < 0 && r.indexOf('体験') < 0 && r.indexOf('黒服') < 0) return false;
     if (exempt[norm(s.name)]) return false;
+    if (retired[norm(s.name)]) return false;
     return true;
   });
 }
@@ -7154,6 +7156,20 @@ function isRetiredName_(name) {
     if (normalizeName_(String(rows[i][1]).trim()) === key) return String(rows[i][rc]).trim() === '退職';
   }
   return false;
+}
+// 退職者の照合キー集合（空白除去の正規化名 → true）。退職列が無ければ空。isRetiredName_ の一括版（母集団フィルタ用）。
+function retiredNameKeys_() {
+  var keys = {};
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return keys;
+  var rc = getStaffRetireCols_(sh, false)['退職'];
+  if (rc == null || rc < 0) return keys;
+  var norm = function (s) { return normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, ''); };
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][rc]).trim() === '退職') keys[norm(rows[i][1])] = true;
+  }
+  return keys;
 }
 
 // 管理コンソール：退職/復帰の切替（動的「退職」「退職日」列）。物理削除しない＝履歴・別管理が残る。
