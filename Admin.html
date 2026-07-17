@@ -367,25 +367,43 @@ function boot(){
 function showAdminGate(){
   gsr('adminConsolePinSet').then(function(r){ if(r&&r.pinSet)showAdminPin(); else showAdminQr(); }).catch(function(){ showAdminQr(); });
 }
+// ①管理者名を選ぶ → ②本人のPINを入力（軍師と同じ本人認証）
+var _admLoginName='';
 function showAdminPin(){
   stopAAuth();
+  _admLoginName='';
   document.getElementById('tabs').style.display='none';
   document.getElementById('who').textContent='';
   document.getElementById('body').innerHTML='<div class="qrgate"><h2>⚙️ 管理コンソール</h2>'
-    +'<div class="qrsub">🔐 PINを入力してください</div>'
+    +'<div class="qrsub">👤 ログインする管理者を選んでください</div>'
+    +'<div id="admNames" style="margin:18px auto 0;max-width:440px"><div class="qrload">読み込み中…</div></div>'
+    +'<div class="qrhint" style="margin-top:16px"><span onclick="showAdminQr()" style="color:var(--accent);cursor:pointer;text-decoration:underline">QRでログイン</span></div></div>';
+  gsr('adminConsoleAdminList').then(function(names){
+    var el=document.getElementById('admNames'); if(!el)return;
+    if(!names||!names.length){ el.innerHTML='<div style="color:var(--sub);font-size:13px">管理者が見つかりません。QRでログインしてください。</div>'; return; }
+    el.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">'+names.map(function(n){
+      return '<button class="btn" style="padding:12px 20px;font-size:15px;font-weight:800" onclick="pickAdminName(\''+jstr(n)+'\')">'+esc(n)+'</button>';
+    }).join('')+'</div>';
+  }).catch(function(){ var el=document.getElementById('admNames'); if(el)el.innerHTML='<div style="color:#e08794;font-size:13px">読み込みエラー</div>'; });
+}
+function pickAdminName(name){
+  _admLoginName=name;
+  document.getElementById('body').innerHTML='<div class="qrgate"><h2>⚙️ 管理コンソール</h2>'
+    +'<div class="qrsub">🔐 '+esc(name)+' さんのPINを入力してください</div>'
     +'<div style="margin:18px auto 0;max-width:220px">'
     +'<input id="admPin" type="password" inputmode="numeric" maxlength="6" autocomplete="off" style="width:100%;box-sizing:border-box;text-align:center;font-size:28px;letter-spacing:10px;padding:12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel);color:var(--txt)" placeholder="••••">'
     +'<div id="admPinErr" style="color:#e08794;font-size:13px;min-height:18px;margin-top:8px"></div>'
     +'<button class="btn pri" style="width:100%;padding:13px;font-size:16px;margin-top:2px" onclick="submitAdminPin()">開く</button>'
     +'</div>'
-    +'<div class="qrhint" style="margin-top:14px"><span onclick="showAdminQr()" style="color:var(--accent);cursor:pointer;text-decoration:underline">QRでログイン</span></div></div>';
+    +'<div class="qrhint" style="margin-top:14px"><span onclick="showAdminPin()" style="color:var(--accent);cursor:pointer;text-decoration:underline">← 別の管理者を選ぶ</span></div></div>';
   var el=document.getElementById('admPin'); if(el){ el.focus(); el.addEventListener('keydown',function(e){ if(e.key==='Enter')submitAdminPin(); }); }
 }
 function submitAdminPin(){
   var el=document.getElementById('admPin'), err=document.getElementById('admPinErr');
   var p=(el&&el.value||'').trim();
+  if(!_admLoginName){ showAdminPin(); return; }
   if(!p){ if(err)err.textContent='PINを入力してください'; return; }
-  gsr('adminPinLogin',p).then(function(r){
+  gsr('adminPinLogin',p,_admLoginName).then(function(r){
     if(r&&r.ok&&r.userId){ USER_ID=r.userId; saveAdminSession(r.userId,r.name); load(); }
     else { if(err)err.textContent=(r&&r.error)||'PINが違います'; if(el){el.value='';el.focus();} }
   }).catch(function(){ if(err)err.textContent='通信エラー'; });
