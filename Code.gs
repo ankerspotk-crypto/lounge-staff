@@ -14105,10 +14105,23 @@ function getShiftMgmtData_() {
   const rows = [];
   const idx = {}; // 空白除去の正規化名 → row（「鈴木 海」と「鈴木海」を同一視して統合）
   const nkeyOf = s => normalizeName_(String(s).trim()).replace(/[\s　]/g, '');
+  // 退職者は現場（シフト管理）に出さない。名簿(SSOT)の退職列で判定し、空白除去の正規化名で突合（シート/名簿の表記ゆれ対策）。
+  const retiredKeys = {};
+  (function () {
+    const stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (!stf) return;
+    const rc = getStaffRetireCols_(stf, false)['退職'];
+    if (rc == null || rc < 0) return;
+    const sr = stf.getDataRange().getValues();
+    for (let k = 1; k < sr.length; k++) {
+      if (String(sr[k][rc]).trim() === '退職') retiredKeys[nkeyOf(sr[k][1])] = true; // 名簿の名前はB列
+    }
+  })();
   for (let i = 1; i < data.length; i++) {
     const name = String(data[i][0]).trim();
     const role = String(data[i][1]).trim();
     if (!name) continue;
+    if (retiredKeys[nkeyOf(name)]) continue; // 退職者は除外（例: まき）
     const cells = {};
     dateCols.forEach(j => {
       const v = data[i][j];
@@ -14128,6 +14141,7 @@ function getShiftMgmtData_() {
     const rr = reqSh.getDataRange().getValues();
     for (let i = 1; i < rr.length; i++) {
       const nm = String(rr[i][1]).trim(); if (!nm) continue;
+      if (retiredKeys[nkeyOf(nm)]) continue; // 退職者の申請は取り込まない（例: まき）
       const status = String(rr[i][4]).trim();
       if (status !== '承諾' && status !== 'pending') continue;
       const dc = rr[i][2];
