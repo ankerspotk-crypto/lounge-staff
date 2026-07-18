@@ -1255,6 +1255,30 @@ function showTaskDetail(id){
   showSheet('📋 タスク詳細',body,false);
 }
 function completeTaskFromDetail(id){ closeSheet(); completeTask(id); }
+/* 年会費更新：伝票で年会費を検知したチケットを顧客マスタへ反映（ワンタップ確認） */
+function showFeeRenewDetail(id){
+  var t=(TASKS||[]).find(function(x){return x.id===id;}); if(!t)return;
+  var body='<div class="tdetail">'
+    +'<div class="td-title">💳 '+esc(t.title)+'</div>'
+    +'<div class="td-memo">'+esc(t.sub||'')+'<br>顧客マスタの「最終会費更新日」に反映します。<br><small>※誤検知なら「却下」で消せます</small></div>'
+    +'<div class="td-actions"><button class="td-done" onclick="applyFeeRenewal(\''+jsStr(id)+'\')">✅ マスタに反映</button>'
+    +'<button class="td-close" onclick="feeRenewDismiss(\''+jsStr(id)+'\')">却下</button>'
+    +'<button class="td-close" onclick="closeSheet()">閉じる</button></div></div>';
+  showSheet('💳 年会費更新の反映',body,false);
+}
+function applyFeeRenewal(id){
+  if(!IS_GAS){ closeSheet(); toast('（ローカル）反映はスキップ'); return; }
+  gsr('applyFeeRenewalTicket',id).then(function(r){
+    if(r&&r.ok){ TASKS=(TASKS||[]).filter(function(t){return t.id!==id;}); closeSheet(); renderAlerts(); renderHome(); toast('✅ '+(r.cust||'お客様')+' の会費更新を反映しました'); }
+    else { toast((r&&r.error)||'反映に失敗しました',true); }
+  }).catch(function(){ toast('通信エラー',true); });
+}
+function feeRenewDismiss(id){
+  closeSheet();
+  TASKS=(TASKS||[]).filter(function(t){return t.id!==id;});
+  renderAlerts(); renderHome(); toast('却下しました');
+  if(IS_GAS) gsr('completeKioskTask',id).catch(function(){ loadAll(); });
+}
 function renderAlerts(){
   var list=buildTimeline();
   var q=TASKS||[];
@@ -1267,6 +1291,12 @@ function renderAlerts(){
         +'<div class="tk-time">📋 タスク'+(t.by?'・'+esc(t.by):'')+'</div>'
         +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">タップで全文・完了</span></span></div>'
         +'<div class="tk-done">詳細 ›</div></div>';
+    }
+    if(t.type==='feerenew'){
+      return '<div class="ticket k-task k-admin" onclick="showFeeRenewDetail(\''+jsStr(t.id)+'\')">'
+        +'<div class="tk-time">💳 会費更新</div>'
+        +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">タップで反映／却下</span></span></div>'
+        +'<div class="tk-done">確認 ›</div></div>';
     }
     return '<div class="ticket k-task" onclick="completeTask(\''+jsStr(t.id)+'\',event)">'
       +'<div class="tk-time">'+esc(t.type==='call'?'呼出':(t.sub||''))+'</div>'
@@ -1359,6 +1389,7 @@ function renderHomeMid(){
     h+='<div class="hv-sec urgent"><span class="st">🚨 今すぐ</span><span class="cnt">'+nowN+'件</span></div>';
     h+=q.map(function(t){
       if(t.type==='admin')return hvCard({ic:t.icon||'📋',title:t.title,sub:'タップで詳細・完了',act:'showTaskDetail(\''+jsStr(t.id)+'\')'},'call',false);
+      if(t.type==='feerenew')return hvCard({ic:t.icon||'💳',title:t.title,sub:'タップで反映／却下',act:'showFeeRenewDetail(\''+jsStr(t.id)+'\')'},'call',false);
       return hvCard({ic:t.icon||'🔔',title:t.title,sub:t.type==='call'?(t.sub||'席へ'):'タップで完了',act:'completeTask(\''+jsStr(t.id)+'\',event)'},'call',false);
     }).join('');
     h+=now.map(function(x){return hvCard(x,x.kind==='now-rot'?'rot':'crit',true);}).join('');
