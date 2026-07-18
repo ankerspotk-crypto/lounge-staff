@@ -348,7 +348,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -895,7 +895,9 @@ function handleApiRequest_(body) {
     if (!body.dateKey || !body.uuid) return { ok: false, error: 'dateKey/uuid required' };
     const items = parseTrustBillDetail_(String(body.html || ''));
     const bottles = items.filter(function (it) { return it.isBottle; });
-    return billWriteDetail_(String(body.dateKey), String(body.uuid), items, bottles);
+    const _wr = billWriteDetail_(String(body.dateKey), String(body.uuid), items, bottles);
+    try { detectFeeRenewalFromItems_(String(body.dateKey), String(body.uuid), items); } catch (e) {} // 年会費明細→軍師「要対応」に反映チケット
+    return _wr;
   }
   // 統合ワンクリック用：最新伝票取得日と当日基準日を返す（ブックマークレットが取得起点を自動算出するため）
   if (body.action === 'getTrustSyncState') {
@@ -5083,6 +5085,12 @@ function getKioskTasks() {
     let c; try { c = JSON.parse(props[k]); } catch (e) { return; }
     tasks.push({ id: 'admin:' + k, type: 'admin', icon: '📋', title: c.title || 'タスク', sub: '管理' + (c.by ? '・' + c.by : ''), memo: c.memo || '', by: c.by || '', at: c.ts ? Utilities.formatDate(new Date(c.ts), TZ, 'M/d HH:mm') : '', sort: '0_' + (c.ts || 0) });
   });
+  // 年会費更新の反映チケット（伝票で年会費を検知＝顧客マスタへ反映待ち。タップでapplyFeeRenewalTicket、×で却下）
+  Object.keys(props).forEach(function (k) {
+    if (k.indexOf('TASK_FEERENEW_') !== 0) return;
+    let c; try { c = JSON.parse(props[k]); } catch (e) { return; }
+    tasks.push({ id: 'feerenew:' + k, type: 'feerenew', icon: '💳', title: '年会費更新の反映：' + (c.cust || (c.memberNo ? '会員No.' + c.memberNo : 'お客様')), sub: '伝票 ' + (c.date || '') + (c.memberNo ? '／No.' + c.memberNo : '（会員番号なし＝手動）'), memberNo: c.memberNo || '', cust: c.cust || '', date: c.date || '', at: c.ts ? Utilities.formatDate(new Date(c.ts), TZ, 'M/d HH:mm') : '', sort: '0_' + (c.ts || 0) });
+  });
   tasks.sort(function (a, b) { return String(a.sort).localeCompare(String(b.sort)); });
   return { ok: true, tasks: tasks };
 }
@@ -5094,7 +5102,37 @@ function completeKioskTask(taskId) {
   if (id.indexOf('time:') === 0) { sp.setProperty('TASKDONE_' + bizDateStr_() + '_' + id.slice(5), '1'); return { ok: true }; }
   if (id.indexOf('call:') === 0) { sp.deleteProperty(id.slice(5)); return { ok: true }; }
   if (id.indexOf('admin:') === 0) { sp.deleteProperty(id.slice(6)); return { ok: true }; }
+  if (id.indexOf('feerenew:') === 0) { sp.deleteProperty(id.slice(9)); return { ok: true }; } // ×＝反映せず却下（誤検知など）
   return { ok: false, error: '不明なタスク' };
+}
+
+// 軍師「要対応」の年会費チケットを反映：会員番号で顧客マスタの「最終会費更新日」に伝票日付をDate書込→チケット削除。
+// GUNSHI_API_FNS登録必須。会員番号が伝票に無い/マスタに無い時はチケットを残して手動対応を促す。
+function applyFeeRenewalTicket(taskId) {
+  const sp = PropertiesService.getScriptProperties();
+  const id = String(taskId || '');
+  const key = (id.indexOf('feerenew:') === 0) ? id.slice(9) : id;
+  const raw = sp.getProperty(key);
+  if (!raw) return { ok: false, error: 'チケットが見つかりません（既に処理済みかも）' };
+  let c; try { c = JSON.parse(raw); } catch (e) { return { ok: false, error: 'チケットが壊れています' }; }
+  const canon = visitCanonNo_(c.memberNo || '');
+  if (!canon) return { ok: false, error: '伝票に会員番号がありません。' + (c.cust || 'お客様') + ' を手動で更新してください' };
+  const sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(MASTER_TAB);
+  if (!sh) return { ok: false, error: '顧客マスタが見つかりません' };
+  const values = sh.getDataRange().getValues();
+  const cols = getCustomerMasterCols_(values);
+  if (!cols) return { ok: false, error: '顧客マスタの列構成を認識できませんでした' };
+  let lc = cols.lastFeeDate;                               // 「最終会費更新日」列（無ければ新設）
+  if (lc == null || lc < 0) { lc = sh.getLastColumn(); sh.getRange(cols.headerRow + 1, lc + 1).setValue('最終会費更新日'); }
+  let rowIdx = -1;                                         // 会員番号（先頭ゼロ/全角無視）で行特定
+  for (let r = cols.headerRow + 1; r < values.length; r++) {
+    if (visitCanonNo_(values[r][cols.no]) === canon) { rowIdx = r + 1; break; }
+  }
+  if (rowIdx < 0) return { ok: false, error: '会員番号 ' + c.memberNo + ' がマスタに見つかりません。手動で更新してください' };
+  sh.getRange(rowIdx, lc + 1).setValue(c.date ? new Date(c.date) : new Date());
+  sp.deleteProperty(key);
+  try { CacheService.getScriptCache().remove('MEMFEEMAP_v3'); } catch (e) {} // 会費マップ再計算（最終会費更新日は/更新/で直近更新に自動反映）
+  return { ok: true, cust: c.cust || '', memberNo: c.memberNo || '', date: c.date || '' };
 }
 
 /* ===== 黒服タスクチケット（管理コンソール → 黒服LINE ＋ 軍師「要対応」） =====
@@ -12250,6 +12288,34 @@ function billWriteDetail_(dateKey, uuid, items, bottles) {
   else sh.getRange(sh.getLastRow() + 1, 1, 1, BILL_DETAIL_HEAD.length).setValues([row]);
   return { ok: true, uuid: uuid, items: (items || []).length, bottles: (bottles || []).length };
 }
+// 伝票明細に「年会費」があれば、その伝票の会員をひも付けて軍師「要対応」に反映チケットを1件だけ立てる（uuid固定キー＝冪等）。
+// 実際のマスタ書込は黒服が軍師でタップ→applyFeeRenewalTicket。ここでは検知して積むだけ＝更新記録の“付け忘れ”を構造的に消す。
+function detectFeeRenewalFromItems_(dateKey, uuid, items) {
+  if (!Array.isArray(items) || !items.length) return;
+  const hit = items.some(function (it) {
+    return /年会費/.test(String(it.product || '')) || /年会費/.test(String(it.category || ''));
+  });
+  if (!hit) return;
+  var memberNo = '', cust = '';
+  try { // 伝票シート（billWriteRows_が保存済み）から uuid で 会員番号/客名 を引く
+    const bs = billSheet_(); const last = bs.getLastRow();
+    if (last >= 2) {
+      const vals = bs.getRange(2, 1, last - 1, BILL_HEAD_.length).getValues();
+      const u = String(uuid).trim();
+      for (var i = 0; i < vals.length; i++) {
+        if (String(vals[i][1]).trim() === u) {            // col1=UUID
+          memberNo = visitNoFromRow_(vals[i][7], vals[i][6]); // col7=会員番号 col6=客名（末尾数字も救出）
+          cust = String(vals[i][6] || '').trim();
+          break;
+        }
+      }
+    }
+  } catch (e) {}
+  const sp = PropertiesService.getScriptProperties();
+  const key = 'TASK_FEERENEW_' + String(uuid);
+  if (sp.getProperty(key)) return;                        // 既に立ってる＝冪等
+  sp.setProperty(key, JSON.stringify({ uuid: String(uuid), date: String(dateKey), memberNo: memberNo, cust: cust, ts: Date.now() }));
+}
 // 保存済み明細を読む → { items, bottleCount, bottles } / 無ければ null
 function billReadDetail_(uuid) {
   var sh = billDetailSheet_();
@@ -13813,7 +13879,8 @@ function getCustomerMasterCols_(values) {
     bottle: idx('ボトル種類'), pos: idx('ボトル位置'), company: idx('会社名'), bday: idx('誕生日'),
     note: idx('参考情報'), neck: idx('ネック名'), drink: idx('飲み方'), tabaco: idx('タバコ'),
     ng: idx('NG行為'), ngStaff: idx('NGスタッフ'), regDate: idx('登録日'), oldTantou: idx('旧担当'),
-    memberSince: idx('登録日'), feeDate: idx('3年目更新'), renewal2: idx('2年目更新'), lineReg: idx('ライン登録'), yomigana: idx('よみがな')
+    memberSince: idx('登録日'), feeDate: idx('3年目更新'), renewal2: idx('2年目更新'), lineReg: idx('ライン登録'), yomigana: idx('よみがな'),
+    lastFeeDate: idx('最終会費更新日') // 年会費更新のワンタップ反映で書く一本の列。/更新/にマッチ＝会費マップの直近更新にも自動で乗る
   };
 }
 
@@ -14080,7 +14147,7 @@ function updateCustomer(rowIdx, payload) {
   setStr(cols.tantou, 'tantou'); setStr(cols.bottle, 'bottle'); setStr(cols.pos, 'pos');         setStr(cols.company, 'company');
   setDate(cols.bday, 'bday');    setStr(cols.note, 'note');    setStr(cols.neck, 'neck');         setStr(cols.drink, 'drink');
   setStr(cols.tabaco, 'tabaco'); setStr(cols.ng, 'ng');       setStr(cols.ngStaff, 'ngStaff');
-  setDate(cols.memberSince, 'memberSince'); setDate(cols.feeDate, 'feeDate');
+  setDate(cols.memberSince, 'memberSince'); setDate(cols.feeDate, 'feeDate'); setDate(cols.lastFeeDate, 'lastFeeDate');
   if (cols.lineReg >= 0 && has('lineReg')) sh.getRange(rowIdx, cols.lineReg + 1).setValue(payload.lineReg ? '済' : '');
   return { ok: true };
 }
