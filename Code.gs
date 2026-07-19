@@ -10089,6 +10089,7 @@ function getMemberRenewals() {
       no: no, name: name || ('会員' + no),
       tantou: cTan >= 0 ? String(row[cTan] || '').trim() : '',
       feeDate: best.str,        // 前回更新
+      feeYm: best.ym,           // 前回更新の年*12+月（＝その月に更新済みの判定用）
       exp: st.renewalStr,       // 次回期限 'YYYY/M'
       dueYm: best.ym + 12,      // 期限 = 直近更新 +1年（同月）
       status: st.status         // ok / thismonth / expired
