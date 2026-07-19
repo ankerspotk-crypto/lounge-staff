@@ -349,7 +349,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -10048,6 +10048,53 @@ function memberRenewalStatus_(feeDate){
   if (ms >= 13) return { status:'expired',   ms:ms, renewalStr:exp, label:'🔴 更新切れ（期限から' + (ms - 12) + 'ヶ月経過）' };
   if (ms >= 12) return { status:'thismonth', ms:ms, renewalStr:exp, label:'🟡 今月更新' };
   return { status:'ok', ms:ms, renewalStr:exp, label:'' };
+}
+
+// 月ごとの会費更新対象の会員一覧（コンソール💳会費更新タブ＋軍師）。読み取り専用。
+// 各会員の直近更新(=登録日と各「◯年目更新／最終会費更新日」列の最新)から、次回更新期限(＝+1年の同月)と状態を算出し、
+// dueYm(期限の年*12+月)で返す。フロントが todayYm 起点に「今月/来月/…」へ振り分け＋更新切れ(dueYm<todayYm)を別枠表示。
+function getMemberRenewals() {
+  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (!sheet) return { ok: false, error: '顧客マスタが見つかりません' };
+  const values = sheet.getDataRange().getValues();
+  let h = -1;
+  for (let i = 0; i < Math.min(values.length, 6); i++) {
+    if (values[i].some(c => String(c).replace(/\s/g, '').indexOf('カード記載名') !== -1)) { h = i; break; }
+  }
+  if (h < 0) return { ok: false, error: '顧客マスタの列構成を認識できませんでした' };
+  const headers = values[h].map(c => String(c).replace(/\s/g, ''));
+  const idx = kw => headers.findIndex(x => x.indexOf(kw) !== -1);
+  const cNo = idx('会員番号'); if (cNo < 0) return { ok: false, error: '会員番号列が見つかりません' };
+  const cName = idx('氏名'), cCard = idx('カード記載名'), cTan = idx('担当');
+  const cReg = idx('登録日') >= 0 ? idx('登録日') : idx('入会');
+  const renewalCols = []; headers.forEach((hd, ci) => { if (/更新/.test(hd)) renewalCols.push(ci); }); // 登録日＋各更新列で直近を出す
+  const now = new Date();
+  const todayYm = now.getFullYear() * 12 + (now.getMonth() + 1);
+  const members = [];
+  for (let r = h + 1; r < values.length; r++) {
+    const row = values[r];
+    const no = String(row[cNo] || '').trim();
+    if (!no) continue;
+    let best = null; // 直近更新（年月最新）
+    [cReg >= 0 ? row[cReg] : null].concat(renewalCols.map(ci => row[ci])).forEach(raw => {
+      const p = parseMasterDate_(raw);
+      if (!p || p.ym <= 0) return;
+      if (!best || p.ym > best.ym || (p.ym === best.ym && p.d > best.d)) best = p;
+    });
+    if (!best) continue; // 日付なし＝更新判定不能
+    const st = memberRenewalStatus_(best.str);
+    if (!st) continue;
+    const name = (cName >= 0 ? String(row[cName] || '').trim() : '') || (cCard >= 0 ? String(row[cCard] || '').trim() : '');
+    members.push({
+      no: no, name: name || ('会員' + no),
+      tantou: cTan >= 0 ? String(row[cTan] || '').trim() : '',
+      feeDate: best.str,        // 前回更新
+      exp: st.renewalStr,       // 次回期限 'YYYY/M'
+      dueYm: best.ym + 12,      // 期限 = 直近更新 +1年（同月）
+      status: st.status         // ok / thismonth / expired
+    });
+  }
+  return { ok: true, todayYm: todayYm, members: members };
 }
 
 // 来店した予約の会員（相席のサブ会員含む）を会費マップと突合し、更新が要る人だけ返す
