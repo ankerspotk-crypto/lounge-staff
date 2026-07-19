@@ -3311,7 +3311,7 @@ function submitSW(){
 /* --- 閉店チェック共通ヘルパ（4袋モデル・Kiosk2と同一契約） --- */
 var CASH_BAGS=[{k:'f5',label:'5Fレジ',color:'#8fb8ff'},{k:'f2',label:'2Fレジ',color:'#6fd6b0'},{k:'keihi',label:'経費袋',color:'#e0a060'},{k:'safe',label:'金庫',color:'#bb99ee'}];
 var CASH_TOLERANCE=1000; // 札だけ数えるため小銭ぶんのズレは±この額まで「合ってる」扱い
-var SLIP_CATS=['買出し・経費','代引き','酒屋 現金仕入れ','派遣 日払い','在籍 日払い','給与 一部払い','出前','ドライバー支払い','通信光熱費支払い','その他'];
+var SLIP_CATS=['買出し・経費','代引き','酒屋 現金仕入れ','派遣 日払い','在籍 日払い','給与 一部払い','出前','ドライバー支払い','通信光熱費支払い','立替 精算','その他'];
 function newBag(){ return {m10000:0,m5000:0,m1000:0}; }
 function newBags(){ var o={}; CASH_BAGS.forEach(function(b){ o[b.k]=newBag(); }); return o; }
 function bagYen(o){ o=o||{}; return (o.m10000||0)*10000+(o.m5000||0)*5000+(o.m1000||0)*1000; }
@@ -3336,13 +3336,13 @@ var cashState=null;
 function openCashCheck(){
   closeMenu(); showSheet('🌙 閉店の現金','<div class="empty-msg">読み込み中...</div>',false);
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）閉店チェックは本番のみ</div>'; return; }
-  Promise.all([gsr('getCashCheckInit'),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay').catch(function(){return null;}),gsr('getOpeningCheckInit').catch(function(){return null;})]).then(function(r){
-    initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]),r[4]);
+  Promise.all([gsr('getCashCheckInit'),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay').catch(function(){return null;}),gsr('getOpeningCheckInit').catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];})]).then(function(r){
+    initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]),r[4],r[5]||[]);
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
-function initCashCheck(init,approvers,staff,readSlips,openingInit){
+function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
-  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe};
+  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[]};
   renderCashCheck();
 }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
@@ -3415,7 +3415,7 @@ function renderCashCheck(){
   h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="submitCash()">閉店チェックを送信</div>';
   b.innerHTML=h; ccRenderSlips(); ccRefresh();
 }
-function slipCatSelect(i){ var s=cashState.slips[i]; return '<select onchange="cashState.slips['+i+'].category=this.value">'+SLIP_CATS.map(function(c){return '<option'+(s.category===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'; }
+function slipCatSelect(i){ var s=cashState.slips[i]; return '<select onchange="cashState.slips['+i+'].category=this.value;ccRenderSlips();ccRefresh()">'+SLIP_CATS.map(function(c){return '<option'+(s.category===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'; }
 function ccAddSlip(){ cashState.slips.push({source:'manual',category:'買出し・経費',payee:'',amount:0,include:true,photoBase64:'',mime:'',previewUrl:''}); ccRenderSlips(); ccRefresh(); }
 function ccRenderSlips(){
   var w=document.getElementById('cc-slips'); if(!w)return;
@@ -3430,8 +3430,15 @@ function ccRenderSlips(){
   }).join(''):'<div class="empty-msg" style="padding:6px 0;font-size:12px">画像から読み取った伝票はありません</div>';
   h+='<div class="flabel">手入力で追加（写真が無い支払い）</div>';
   h+=mans.map(function(i){ var s=cashState.slips[i];
+    var payeeField;
+    if(s.category==='立替 精算'){
+      var opts='<option value="">立て替えた人を選択</option>'+(cashState.keihiStaff||[]).map(function(n){return '<option'+(s.tatekaeName===n?' selected':'')+'>'+esc(n)+'</option>';}).join('');
+      payeeField='<select class="finput" style="margin-bottom:6px" onchange="var v=this.value;cashState.slips['+i+'].tatekaeName=v;cashState.slips['+i+'].payee=v">'+opts+'</select>';
+    }else{
+      payeeField='<input type="text" class="finput" placeholder="相手先（例: りく、酒屋）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value" style="margin-bottom:6px">';
+    }
     return '<div class="cc-slip"><div class="cc-slip-top">'+slipCatSelect(i)+'<button onclick="cashState.slips.splice('+i+',1);ccRenderSlips();ccRefresh()">✕</button></div>'
-      +'<input type="text" class="finput" placeholder="相手先（例: りく、酒屋）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value" style="margin-bottom:6px">'
+      +payeeField
       +'<input type="number" class="finput" placeholder="金額" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;ccRefresh()" style="margin-bottom:6px">'
       +'<label class="cc-photo">'+(s.previewUrl?'<img src="'+s.previewUrl+'">':'<span style="font-size:22px">📷</span>')+'<span>'+(s.photoBase64?'撮影済み（タップで変更）':'伝票を撮影／選択')+'</span><input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])ccPhoto('+i+',this.files[0])"></label></div>';
   }).join('');
@@ -3446,7 +3453,7 @@ function ccPhoto(idx,file){
 function submitCash(){
   var st=cashState; if(!st.reporterName){ alert('報告者を選択してください'); return; }
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
-  var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||''};});
+  var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
   var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto'};
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
