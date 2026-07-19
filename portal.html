@@ -3940,7 +3940,7 @@ var yoyakuRsvCalMonth = '';   // 予約追加カレンダー表示月 YYYY-MM
 var yoyakuRsvTime = '';       // 予約追加時間選択 HH:MM
 var yoyakuRsvCustManual = ''; // 再描画時に保持: お客様名
 var yoyakuRsvYoubou = '';    // 再描画時に保持: 要望・備考
-var yoyakuRsvPax = 0;        // 再描画時に保持: 人数（0=デフォルト3名）
+var yoyakuRsvPax = 0;        // 再描画時に保持: 人数（0=デフォルト1名）
 var yoyakuRsvTable = '';     // 再描画時に保持: 席
 var yoyakuRsvTantou = '';    // 再描画時に保持: 担当キャスト
 var yoyakuRsvYoyakuCast = ''; // 再描画時に保持: 予約キャスト
@@ -4439,7 +4439,7 @@ function renderYoyakuAdd() {
     + renderRsvTimeSel()
     + '<div class="yform-label">人数</div>'
     + (function(){
-        var curPax = yoyakuRsvPax || 3;
+        var curPax = yoyakuRsvPax || 1;
         var opts = [1,2,3,4,5].map(function(n){ return '<option'+(n===curPax?' selected':'')+'>'+n+'名</option>'; }).join('');
         opts += '<option'+(curPax>5?' selected':'')+'>6名+</option>';
         return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px">'+opts+'</select>';
@@ -4498,7 +4498,7 @@ function saveFormInputs() {
   var el;
   el = document.getElementById('yrsv-cust-manual'); if (el) yoyakuRsvCustManual = el.value;
   el = document.getElementById('yrsv-youbou');      if (el) yoyakuRsvYoubou = el.value;
-  el = document.getElementById('yrsv-pax');         if (el) yoyakuRsvPax = parseInt(el.value) || 3;
+  el = document.getElementById('yrsv-pax');         if (el) yoyakuRsvPax = parseInt(el.value) || 1;
   (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); yoyakuRsvTable = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } })();
   (function(){ var w = document.getElementById('yrsv-tantou-wrap'); if (w) { var s = w.querySelectorAll('.tantou-chip.sel'); yoyakuRsvTantou = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
   (function(){ var w = document.getElementById('yrsv-dohan-wrap'); if (w) { var s = w.querySelectorAll('.dohan-chip.sel'); yoyakuRsvDohan = Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、'); } })();
@@ -4779,7 +4779,7 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvTime = rsv.time || '20:00';
   yoyakuRsvCustManual = rsv.customer || '';
   yoyakuRsvYoubou = rsv.youbou || '';
-  yoyakuRsvPax = rsv.pax || 3;
+  yoyakuRsvPax = rsv.pax || 1;
   yoyakuRsvTable = rsv.table || '未定';
   yoyakuRsvTantou = rsv.tantouCast || '';
   yoyakuRsvYoyakuCast = rsv.yoyakuCast || '';

@@ -2581,8 +2581,8 @@ function quickRotate(toIdx,castName){
   else toast('🔄 '+castName+' を付けました');
 }
 
-var addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:3};
-function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:3,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false,subs:[],subMode:null,aggMode:'merge'};showSheet('➕ 予約を追加',addFormHtml(),false);}
+var addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1};
+function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false,subs:[],subMode:null,aggMode:'merge'};showSheet('➕ 予約を追加',addFormHtml(),false);}
 function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false,subs:(r.subCustomers||[]).filter(function(s){return s&&String(s.name||'').trim();}).map(function(s){return {name:s.name||'',memberId:s.memberId||'',pax:Number(s.pax)||1,tantouCast:s.tantouCast||'',splitSales:!!s.splitSales};}),subMode:null,aggMode:(r.aggMode==='split'?'split':'merge')};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
 function afToggle(kind,el,val,single){ if(single){var w=el.parentElement;w.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');});el.classList.add('sel');addSel[kind]=val;} else {el.classList.toggle('sel');var a=addSel[kind];var i=a.indexOf(val);if(i>=0)a.splice(i,1);else a.push(val);} }
 function addFormHtml(isEdit){
