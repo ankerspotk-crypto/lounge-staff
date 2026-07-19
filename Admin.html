@@ -1228,11 +1228,12 @@ var payMonth=null, payStat=null, paySub='tatekae';
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
 function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
+  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
 }
 function paySwitch(k){ paySub=k; renderPay(); }
 function renderPay(){
   if(paySub==='tatekae') return renderTatekae();
+  if(paySub==='keihi')   return renderKeihiTatekae();
   if(paySub==='trust')   return renderTrust();
   if(paySub==='bills')   return renderBillsAdmin('all');
   if(paySub==='mybills') return renderBillsAdmin('cast');
@@ -1369,6 +1370,29 @@ function drawTatekae(r){
   }).join('');
   var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td>'+r.months.map(function(m){return '<td style="text-align:right">'+fmtYen(r.monthTotals[m])+'</td>';}).join('')+'<td style="text-align:right">'+fmtYen(r.grandTotal)+'</td></tr>';
   setBody(paySubToggle('tatekae')+head+'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx">'+th+'<tbody>'+body+totalRow+'</tbody></table></div>'+'<div class="hint" style="margin-top:8px">立替代＝各キャストが提出したヘアサロン領収書の月合計。給与では最終支給に加算されます。</div>');
+}
+/* --- 💴 経費立替（一般経費の立替→店の現金で精算した記録。ヘアサロン立替とは別系統） --- */
+var KEIHI_MOCK={ok:true,count:2,settledTotal:83000,openTotal:0,rows:[
+  {name:'りく',date:'2026-07-19',himoku:'備品購入',amount:80000,status:'精算済み',method:'店現金',settledAt:'2026-07-19',operator:'ひろき',memo:'',imageUrl:''},
+  {name:'たろう',date:'2026-07-18',himoku:'タクシー代',amount:3000,status:'精算済み',method:'店現金',settledAt:'2026-07-18',operator:'りく',memo:'',imageUrl:''}
+]};
+function renderKeihiTatekae(){
+  if(!IS_GAS){ drawKeihiTatekae(KEIHI_MOCK); return; }   // ローカルはモックで描画（デプロイ前にボスへ見せる用）
+  loading();
+  gsr('adminGetKeihiTatekae',USER_ID).then(function(r){ if(!res(r))return; drawKeihiTatekae(r); }).catch(function(){setBody(paySubToggle('keihi')+'<div class="empty">読み込みエラー</div>');});
+}
+function drawKeihiTatekae(r){
+  var head='<div class="toolbar"><span class="cnt">経費立替　精算済 '+fmtYen(r.settledTotal||0)+(r.openTotal?' ・ 未精算 '+fmtYen(r.openTotal):'')+' ・ '+(r.count||0)+'件</span></div>';
+  if(!r.rows||!r.rows.length){ setBody(paySubToggle('keihi')+head+'<div class="empty">まだ記録がありません（軍師の閉店チェックで「立替 精算」を登録すると、ここに精算済みが並びます）</div>'); return; }
+  var th='<thead><tr><th style="text-align:left">日付</th><th style="text-align:left">立替えた人</th><th style="text-align:left">費目</th><th>金額</th><th>精算</th><th style="text-align:left">操作者</th></tr></thead>';
+  var body=r.rows.map(function(x){
+    var badge=x.status==='精算済み'?'<span style="color:#7be0a8">精算済</span>':'<span style="color:#e0a060">未精算</span>';
+    return '<tr><td class="nm">'+esc(x.settledAt||x.date||'')+'</td><td class="nm">'+esc(x.name||'')+'</td><td>'+esc(x.himoku||'—')+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+fmtYen(x.amount||0)+'</td>'
+      +'<td style="text-align:center">'+badge+(x.method?' <span style="color:var(--dim)">'+esc(x.method)+'</span>':'')+'</td>'
+      +'<td class="nm" style="color:var(--dim)">'+esc(x.operator||'')+'</td></tr>';
+  }).join('');
+  setBody(paySubToggle('keihi')+head+'<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx">'+th+'<tbody>'+body+'</tbody></table></div>'+'<div class="hint" style="margin-top:8px">一般経費の立替（買い出し・備品・タクシー代等）を店の現金で精算した記録。軍師の閉店チェックで「立替 精算」を選ぶと自動で1件立ちます。<b>ヘアサロン立替（給与に加算）とは別物</b>です。</div>');
 }
 /* --- 📥 TRUST取込（取得ブックマークレット＋処理ステータス＋取込履歴＋Excel） --- */
 var trustPreview=null;
