@@ -2815,6 +2815,7 @@ var MENU_TILES=[
   {group:'管理', items:[
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
+    {ic:'💳', t:'会費更新',           act:"openFeeRenew()"},
     {ic:'📋', t:'申し送りを書く',     act:"openHandoverEdit()"},
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
@@ -2829,6 +2830,59 @@ function openMenu(){ menuView='grid'; custFromTop=false; document.getElementById
 function openCustomer(){ menuView='customer'; custFilter='all'; custFromTop=true; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
 function closeMenu(){ document.getElementById('menuOverlay').classList.remove('show'); }
 function menuCustomer(){ menuView='customer'; custFilter='all'; custFromTop=false; renderMenu(); }
+/* 💳 会費更新（軍師）：今月〜先の月ごとに更新期限が来る会員を一覧・検索（閲覧専用）。バックは getMemberRenewals */
+var GFR_DATA=null, GFR_SEL=null, GFR_Q='';
+function openFeeRenew(){
+  menuView='feerenew'; GFR_SEL=null; GFR_Q=''; GFR_DATA=null;
+  document.getElementById('menuOverlay').classList.add('show'); renderMenu();
+  if(!IS_GAS){ var d=new Date(); GFR_DATA={ok:true,todayYm:d.getFullYear()*12+d.getMonth()+1,members:[]}; GFR_SEL=GFR_DATA.todayYm; renderMenu(); return; }
+  gsr('getMemberRenewals').then(function(r){
+    GFR_DATA=(r&&r.ok!==false)?r:{ok:true,todayYm:0,members:[]};
+    if(GFR_SEL===null)GFR_SEL=GFR_DATA.todayYm;
+    if(menuView==='feerenew')renderMenu();
+  }).catch(function(){ var el=document.getElementById('menu-body'); if(el)el.innerHTML='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span><div class="empty-msg" style="padding:24px">読み込みエラー</div>'; });
+}
+function gfrYmLabel_(ym){ var y=Math.floor((ym-1)/12), m=((ym-1)%12)+1; return y+'年'+m+'月'; }
+function gfrStChip_(s){
+  if(s==='expired')   return '<span style="background:#3a1518;color:#ff9aa0;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800">🔴更新切れ</span>';
+  if(s==='thismonth') return '<span style="background:#3a2f10;color:#e6c14a;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800">🟡今月更新</span>';
+  return '<span style="background:#12301f;color:#7fdca0;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800">🟢有効</span>';
+}
+function gfrShown_(){
+  var r=GFR_DATA||{}, today=r.todayYm||0, members=r.members||[];
+  var q=(GFR_Q||'').replace(/\s/g,''), shown;
+  if(q){ shown=members.filter(function(x){return (x.name&&x.name.replace(/\s/g,'').indexOf(q)>=0)||(x.no&&String(x.no).indexOf(q)>=0);}); }
+  else if(GFR_SEL==='overdue'){ shown=members.filter(function(x){return x.dueYm<today;}); }
+  else { shown=members.filter(function(x){return x.dueYm===GFR_SEL;}); }
+  shown.sort(function(a,b){ return (a.dueYm-b.dueYm)||String(a.name).localeCompare(String(b.name)); });
+  return shown;
+}
+function gfrRows_(){
+  var shown=gfrShown_();
+  var head=(GFR_Q?('検索「'+esc(GFR_Q)+'」'):(GFR_SEL==='overdue'?'🔴 更新切れ':gfrYmLabel_(GFR_SEL)+'に更新期限'))+'：'+shown.length+'名';
+  var rows=shown.map(function(c){
+    var no=c.no?(' <span style="color:#8aa8c8;font-size:12px">#'+esc(c.no)+'</span>'):'';
+    var tantou=c.tantou?('担当 '+esc(c.tantou)):'担当なし';
+    return '<div style="padding:10px 12px;border:1px solid #23324a;border-radius:10px;margin-bottom:6px;background:#0e1626">'
+      +'<div style="font-weight:800">'+esc(c.name)+no+' '+gfrStChip_(c.status)+'</div>'
+      +'<div style="font-size:12px;color:#8aa8c8;margin-top:2px">前回更新 '+esc(c.feeDate||'—')+' ・ 次回期限 '+esc(c.exp||'—')+' ・ '+esc(tantou)+'</div></div>';
+  }).join('')||'<div class="empty-msg" style="padding:20px">該当する会員はいません</div>';
+  return '<div style="font-size:12px;color:#9fb2c8;font-weight:700;margin:2px 2px 8px">'+head+'</div>'+rows;
+}
+function gfrHtml_(){
+  var r=GFR_DATA||{}, today=r.todayYm||0, members=r.members||[];
+  var overdue=members.filter(function(x){return x.dueYm<today;}).length;
+  var chips='<span class="cfil'+(GFR_SEL==='overdue'?' on':'')+'" onclick="gfrSel(\'overdue\')">🔴 更新切れ '+overdue+'</span>';
+  for(var i=0;i<12;i++){ var ym=today+i; var cnt=members.filter(function(x){return x.dueYm===ym;}).length;
+    var lbl=(i===0?'今月':i===1?'来月':(((ym-1)%12)+1)+'月');
+    chips+='<span class="cfil'+(GFR_SEL===ym?' on':'')+'" onclick="gfrSel('+ym+')">'+lbl+' '+cnt+'</span>'; }
+  return '<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>'
+    +'<input id="gfr-q" class="cust-q" placeholder="会員名・会員番号で検索" oninput="gfrSearch()">'
+    +'<div class="cust-filters" style="flex-wrap:wrap">'+chips+'</div>'
+    +'<div id="gfr-results" class="cust-results">'+gfrRows_()+'</div>';
+}
+function gfrSel(v){ GFR_SEL=v; GFR_Q=''; renderMenu(); }
+function gfrSearch(){ var el=document.getElementById('gfr-q'); GFR_Q=el?el.value:''; var res=document.getElementById('gfr-results'); if(res)res.innerHTML=gfrRows_(); }
 function renderMenu(){
   document.getElementById('menuTitle').textContent = menuView==='customer'?'👤 顧客管理':'☰ 各種メニュー';
   var el=document.getElementById('menu-body');
@@ -2849,6 +2903,13 @@ function renderMenu(){
     var inp=document.getElementById('cust-q'); if(inp) inp.value=custLastQ||'';
     renderCustResults();
     if(inp) inp.focus();
+    return;
+  }
+  if(menuView==='feerenew'){
+    document.getElementById('menuTitle').textContent='💳 会費更新';
+    if(!GFR_DATA){ el.innerHTML='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span><div class="empty-msg" style="padding:24px">読み込み中…</div>'; return; }
+    el.innerHTML=gfrHtml_();
+    var gi=document.getElementById('gfr-q'); if(gi){ gi.value=GFR_Q||''; if(GFR_Q)gi.focus(); }
     return;
   }
   el.innerHTML=MENU_TILES.map(function(g){
