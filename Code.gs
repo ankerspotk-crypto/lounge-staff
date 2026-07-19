@@ -181,6 +181,7 @@ function sendFeeRenewalTestToKurofuku() {
 const URIAGE_TAB       = '売上明細';
 const KYUYO_TAB        = '給与計算';
 const HAIR_RECEIPT_TAB = 'ヘアサロン領収書';
+const KEIHI_TATEKAE_TAB = '経費立替台帳'; // 一般経費の立替金台帳（ヘアサロン領収書とは別系統）
 const TRUST_TAB        = 'TRUST報酬';
 const CASH_CHECK_TAB     = '現金管理';
 const OPENING_CHECK_TAB  = '現金管理_開店';
@@ -348,7 +349,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -11933,7 +11934,7 @@ function submitCashCheck(payload) {
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
         url = 'https://drive.google.com/uc?id=' + file.getId();
       }
-      slipDetails.push({ category: s.category || 'その他', payee: s.payee || '', amount, imageUrl: url, source: s.source || 'manual' });
+      slipDetails.push({ category: s.category || 'その他', payee: s.payee || '', amount, imageUrl: url, source: s.source || 'manual', tatekaeName: s.tatekaeName || '', tatekaeHimoku: s.tatekaeHimoku || '' });
     });
 
     const actual = bagsTotalYen_(bags);
@@ -11957,6 +11958,9 @@ function submitCashCheck(payload) {
     ];
     if (rowIdx > 0) sh.getRange(rowIdx, 1, 1, rowData.length).setValues([rowData]);
     else sh.appendRow(rowData);
+
+    // 「立替 精算」スリップを経費立替台帳へ反映（born 精算済み・冪等）。本体の現金締めからは独立＝転んでも締めは無事。
+    try { applyKeihiSettlementsFromSlips_(dateKey, slipDetails, reporterName); } catch (e) { console.error('applyKeihiSettlementsFromSlips_ error:', e); }
 
     // LINE通知（現金の流れ）
     const within = openingInit.locked && Math.abs(diff) <= CASH_TOLERANCE_;
@@ -11986,6 +11990,100 @@ function submitCashCheck(payload) {
     console.error('submitCashCheck error:', e);
     return { ok: false, error: String(e) };
   }
+}
+
+/* ============ 経費立替台帳（一般経費の立替 → 現金精算フラグ） ============ */
+// スタッフが店のために自腹で立て替えた一般経費（買い出し/備品/タクシー等）を、
+// 店のレジ現金でその場精算した記録を残す台帳。ヘアサロン領収書(給与加算)とは完全に別系統。
+// MVP＝現金チェックの「立替 精算」スリップから born 精算済み行を生成するのみ。給与計算には一切干渉しない。
+const KEIHI_TATEKAE_HEADERS_ = [
+  '立替ID', '月', '名前', '日付', '費目', '金額', 'メモ', '写真URL', '登録者', '登録日時',
+  '精算ステータス', '精算方法', '精算日', '精算額', '精算操作者', '現金チェック紐付け', 'ソース'
+];
+// 台帳シートを取得（なければ作成。旧ヘッダーなら新ヘッダーへ正規化）— getCashCheckSheet_ と同型の自己修復
+function getKeihiTatekaeSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sh = ss.getSheetByName(KEIHI_TATEKAE_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(KEIHI_TATEKAE_TAB);
+    sh.appendRow(KEIHI_TATEKAE_HEADERS_);
+  } else if (String(sh.getRange(1, 1).getValue()) !== '立替ID' || String(sh.getRange(1, 11).getValue()) !== '精算ステータス') {
+    sh.getRange(1, 1, 1, KEIHI_TATEKAE_HEADERS_.length).setValues([KEIHI_TATEKAE_HEADERS_]);
+  }
+  return sh;
+}
+// 立替の払い手ロスター＝立替はキャスト/黒服/ドライバー/管理者の誰でも起こり得る。
+// 幽霊ロール(管理アカウント/テストスタッフ)と退職者だけ除外（getCastNamesForYoyaku_ より広く拾う）。
+function getKeihiStaffNames() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sh = ss.getSheetByName(STAFF_TAB);
+  if (!sh) return [];
+  const retireC = getStaffRetireCols_(sh, false)['退職'];
+  return sh.getDataRange().getValues().slice(1)
+    .filter(function (r) {
+      const name = String(r[1]).trim();
+      const role = String(r[2]).trim() || 'キャスト';
+      if (!name) return false;
+      if (isGhostRole_(role)) return false;
+      if (retireC >= 0 && String(r[retireC]).trim() === '退職') return false;
+      return true;
+    })
+    .map(function (r) { return String(r[1]).trim(); });
+}
+// 現金チェックの「立替 精算」スリップを台帳へ反映（born 精算済み行）。
+// 冪等：同じ現金チェック(dateKey)由来の既存行を消してから再生成＝黒服の再送で二重計上しない。
+// ⚠️本体の現金締めからは独立して呼ぶ（submitCashCheck 側で try/catch）＝ここが転んでも締めは無事。
+function applyKeihiSettlementsFromSlips_(dateKey, slipDetails, reporterName) {
+  const idxSource = KEIHI_TATEKAE_HEADERS_.indexOf('ソース');
+  const idxLink   = KEIHI_TATEKAE_HEADERS_.indexOf('現金チェック紐付け');
+  const sh = getKeihiTatekaeSheet_();
+  const values = sh.getDataRange().getValues();
+  // この現金チェック由来の既存行を下から削除（再送の二重計上を防止）
+  for (let i = values.length - 1; i >= 1; i--) {
+    if (String(values[i][idxSource]).trim() === 'cashcheck' && String(values[i][idxLink]).trim() === dateKey) {
+      sh.deleteRow(i + 1);
+    }
+  }
+  const settlements = (slipDetails || []).filter(function (s) {
+    return String(s.category || '').trim() === '立替 精算' && Number(s.amount) > 0 && String(s.tatekaeName || '').trim();
+  });
+  if (!settlements.length) return;
+  const monthKey = String(dateKey).slice(0, 7).replace(/-/g, '/'); // yyyy/MM
+  const stamp = now_();
+  const rows = settlements.map(function (s) {
+    const amt = Number(s.amount) || 0;
+    const id = 'T' + String(dateKey).replace(/-/g, '') + '_' + Math.random().toString(36).slice(2, 8);
+    return [
+      id, monthKey, String(s.tatekaeName).trim(), dateKey, String(s.tatekaeHimoku || s.payee || '').trim(), amt, '', String(s.imageUrl || ''), '(現金チェック)', stamp,
+      '精算済み', '店現金', dateKey, amt, reporterName, dateKey, 'cashcheck'
+    ];
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, KEIHI_TATEKAE_HEADERS_.length).setValues(rows);
+}
+// 管理コンソール：経費立替台帳を行リストで返す（未精算/精算済み・新しい順）
+function adminGetKeihiTatekae(userId) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const sh = getKeihiTatekaeSheet_();
+  const values = sh.getDataRange().getValues();
+  const H = KEIHI_TATEKAE_HEADERS_;
+  const iName = H.indexOf('名前'), iDate = H.indexOf('日付'), iHimoku = H.indexOf('費目'),
+        iAmt = H.indexOf('金額'), iStatus = H.indexOf('精算ステータス'), iMethod = H.indexOf('精算方法'),
+        iSettle = H.indexOf('精算日'), iOp = H.indexOf('精算操作者'), iMemo = H.indexOf('メモ'), iImg = H.indexOf('写真URL');
+  const fmtD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || ''); };
+  const rows = [];
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    if (!String(r[iName]).trim()) continue;
+    rows.push({
+      name: String(r[iName]).trim(), date: fmtD(r[iDate]), himoku: String(r[iHimoku] || ''),
+      amount: Number(r[iAmt]) || 0, status: String(r[iStatus] || '未精算'), method: String(r[iMethod] || ''),
+      settledAt: fmtD(r[iSettle]), operator: String(r[iOp] || ''), memo: String(r[iMemo] || ''), imageUrl: String(r[iImg] || '')
+    });
+  }
+  rows.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+  const settledTotal = rows.filter(function (x) { return x.status === '精算済み'; }).reduce(function (t, x) { return t + x.amount; }, 0);
+  const openTotal = rows.filter(function (x) { return x.status !== '精算済み'; }).reduce(function (t, x) { return t + x.amount; }, 0);
+  return { ok: true, rows: rows, settledTotal: settledTotal, openTotal: openTotal, count: rows.length };
 }
 
 // 管理者が閉店チェックを承認（黒服の退勤ゲートが解除される）
