@@ -1209,7 +1209,10 @@ function goToday(){curDate=TODAY;renderAll();}
 function nowBizMin(){var n=new Date();var h=n.getHours();if(h<6)h+=24;return h*60+n.getMinutes();}
 // 同伴予約は20:30来店として扱う（顧客名に「同伴」を含む予約が対象）
 function rsvArrT(r){return /同伴/.test((r.cust||r.customer||'')+' '+(r.time||''))?'20:30':(r.time||'');}
-function rsvLateMin(r){return nowBizMin()-tmin(rsvArrT(r));}
+// 遅延分は「表示中の営業日(curDate)の予約時刻」からの実経過で測る。nowBizMin()だけで
+// 測ると、深夜0〜6時に翌営業日を表示した際、未来の予約が「◯分超過」と誤検知される
+// （例: 00:09に翌7/20を表示すると20:30予約が219分超過と出た）。0〜5時の予約は営業日の翌暦日。
+function rsvLateMin(r){var hhmm=rsvArrT(r);var p=String(hhmm).split(':');var h=parseInt(p[0]);if(isNaN(h))return NaN;var mi=parseInt(p[1])||0;var d=parseKey(curDate);if(h<6)d.setDate(d.getDate()+1);d.setHours(h,mi,0,0);return Math.round((Date.now()-d.getTime())/60000);}
 function buildTimeline(){
   var t=[];
   // 今：来店予定を15分超過（確定・未来店）→ 担当に来店確認（赤点滅）
