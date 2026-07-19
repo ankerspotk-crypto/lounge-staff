@@ -494,7 +494,7 @@ function onCustBdayMonth(){
 }
 
 /* 💳 会費更新：今月〜先の月ごとに更新期限が来る会員を一覧・検索（閲覧専用）。バックは getMemberRenewals。 */
-var FR_DATA=null, FR_SEL=null, FR_Q='';
+var FR_DATA=null, FR_SEL=null, FR_Q='', FR_MODE='due'; // 'due'=会費の期限の人(未更新) / 'done'=すでに更新済み
 function renderFeeRenew(){
   loading();
   gsr('getMemberRenewals').then(function(r){
@@ -515,27 +515,37 @@ function drawFeeRenew(){
   for(var i=0;i<12;i++){ var ym=today+i; var cnt=members.filter(function(x){return x.dueYm===ym;}).length;
     var lbl=(i===0?'今月':i===1?'来月':(((ym-1)%12)+1)+'月');
     chips+='<span class="chip'+(FR_SEL===ym?' on':'')+'" onclick="frSel('+ym+')">'+lbl+' '+cnt+'</span>'; }
-  var q=(FR_Q||'').replace(/\s/g,''), shown;
+  var q=(FR_Q||'').replace(/\s/g,''), shown, isMonth=(FR_SEL!=='overdue');
   if(q){ shown=members.filter(function(x){return (x.name&&x.name.replace(/\s/g,'').indexOf(q)>=0)||(x.no&&String(x.no).indexOf(q)>=0);}); }
   else if(FR_SEL==='overdue'){ shown=overdue.slice(); }
-  else { shown=members.filter(function(x){return x.dueYm===FR_SEL;}); }
+  else if(FR_MODE==='done'){ shown=members.filter(function(x){return x.feeYm===FR_SEL;}); }        // その月に更新済み
+  else { shown=members.filter(function(x){return x.dueYm===FR_SEL;}); }                              // その月が期限＝未更新
   shown.sort(function(a,b){ return (a.dueYm-b.dueYm)||String(a.name).localeCompare(String(b.name)); });
+  var subchips='';
+  if(!q && isMonth){ // 月選択時：期限の人（未更新）／すでに更新済み で絞り込み
+    var dueN=members.filter(function(x){return x.dueYm===FR_SEL;}).length;
+    var doneN=members.filter(function(x){return x.feeYm===FR_SEL;}).length;
+    subchips='<div style="display:flex;gap:6px;margin:0 0 8px">'
+      +'<span class="chip'+(FR_MODE!=='done'?' on':'')+'" onclick="frMode(\'due\')">🟡 期限の人（未更新）'+dueN+'</span>'
+      +'<span class="chip'+(FR_MODE==='done'?' on':'')+'" onclick="frMode(\'done\')">🟢 すでに更新済み '+doneN+'</span></div>';
+  }
   var rows=shown.map(function(c){
     var no=c.no?(' <span class="sub">#'+esc(c.no)+'</span>'):'';
     var tantou=c.tantou?('担当 '+esc(c.tantou)):'<span style="color:var(--dim)">担当なし</span>';
     return '<div class="lrow"><div class="main"><div class="nm">'+esc(c.name)+no+' '+frStChip_(c.status)
       +'</div><div class="meta">前回更新 '+esc(c.feeDate||'—')+' ・ 次回期限 '+esc(c.exp||'—')+' ・ '+tantou+'</div></div></div>';
   }).join('')||'<div class="empty" style="padding:14px">該当する会員はいません</div>';
-  var head=q?('検索「'+esc(FR_Q)+'」'):(FR_SEL==='overdue'?'🔴 更新切れ':frYmLabel_(FR_SEL)+'に更新期限');
+  var head=q?('検索「'+esc(FR_Q)+'」'):(FR_SEL==='overdue'?'🔴 更新切れ':frYmLabel_(FR_SEL)+(FR_MODE==='done'?' に更新済み':'に更新期限'));
   var bar='<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
     +'<input class="finput grow" id="fr-q" placeholder="会員名・会員番号で検索" value="'+esc(FR_Q)+'" oninput="frSearch()">'
     +'<span class="cnt">'+head+'：<b>'+shown.length+'名</b></span></div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+chips+'</div>';
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+chips+'</div>'+subchips;
   var hint='<div class="hint">「更新期限」＝前回更新の1年後の同月。日付が未入力の会員はここに出ません。<b>閲覧専用</b>（更新の記録は伝票検知→軍師のワンタップ、または顧客編集で）。検索時は全月から探します。</div>';
   setBody(bar+'<div class="sec">'+rows+'</div>'+hint);
   var el=document.getElementById('fr-q'); if(el&&FR_Q){ el.focus(); try{el.setSelectionRange(el.value.length,el.value.length);}catch(_){} }
 }
-function frSel(v){ FR_SEL=v; FR_Q=''; drawFeeRenew(); }
+function frSel(v){ FR_SEL=v; FR_Q=''; FR_MODE='due'; drawFeeRenew(); } // 月を変えたら「期限の人」に戻す
+function frMode(m){ FR_MODE=m; drawFeeRenew(); }
 function frSearch(){ var el=document.getElementById('fr-q'); FR_Q=el?el.value:''; drawFeeRenew(); }
 
 /* ===== 👥 スタッフ ===== */
