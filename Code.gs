@@ -197,9 +197,8 @@ function isAdmin_(name) {
   if (!name) return false;
   if (ADMIN_NAMES_.includes(name)) return true;
   try {
-    const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
-    if (!sh) return false;
-    const rows = sh.getDataRange().getValues();
+    const rows = staffSheetValues_();
+    if (!rows) return false;
     const target = (typeof normalizeName_ === 'function') ? normalizeName_(name) : String(name).trim();
     for (let i = 1; i < rows.length; i++) {
       const nm = (typeof normalizeName_ === 'function') ? normalizeName_(String(rows[i][1]).trim()) : String(rows[i][1]).trim();
@@ -219,6 +218,21 @@ var _sharedSS_;
 function getOrOpenSS_() {
   if (!_sharedSS_) _sharedSS_ = SpreadsheetApp.openById(SHEET_ID);
   return _sharedSS_;
+}
+
+// ===== スタッフマスタの1リクエスト内メモ（ポータルhome経路の重複フル読み対策・2026-07-20） =====
+// 既定は null ＝ 全経路で従来どおり毎回フル読み（＝挙動は完全同一）。
+// handlePortalApi_ が tab==='home' のときだけ有効化し、home分岐の finally で必ず解除する。
+// 効果: home 1リクエストでの名簿フル読み 6回（getStaffName / isRetiredName_ / getStaffRoleByName_ ×2
+//       / isAdmin_ / isOnLeaveName_）→ 1回。
+// ⚠️名簿を書き換える処理からは絶対に有効化しないこと（書込後に古い値を返す）。homeは名簿に書き込まない。
+var _staffValuesMemo = null;
+function staffSheetValues_() {
+  if (_staffValuesMemo && _staffValuesMemo.v !== undefined) return _staffValuesMemo.v;
+  const shStaffMemo = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  const v = shStaffMemo ? shStaffMemo.getDataRange().getValues() : null;
+  if (_staffValuesMemo) _staffValuesMemo.v = v;
+  return v;
 }
 
 function doGet(e) {
@@ -4459,9 +4473,9 @@ function deleteStaff(userId) {
 
 function getStaffName(userId) {
   if (!userId) return '';
-  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
-  if (!sh) return '';
-  const row = sh.getDataRange().getValues().find(r => r[0] === userId);
+  const rows = staffSheetValues_();
+  if (!rows) return '';
+  const row = rows.find(r => r[0] === userId);
   return row ? String(row[1]) : '';
 }
 
@@ -4570,6 +4584,14 @@ function scheduledJobs() {
   checkAtendou();
   checkLateReservations();
   checkPendingStaffRegistrations_();
+
+  // 予約整合(RSRV/YRSRV)の同期をトリガー側で先回りする（2026-07-20）。
+  // 従来は getSekiJokyouData 経由で「ユーザーのリクエストが5分に1回この重い同期を肩代わり」していた
+  // ＝軍師/ポータルを開いた人だけ極端に遅い当たりくじを引く構造。ここで先に回して RSRV_SYNC_AT を
+  // 進めておけば、ユーザー側の autoSyncRsrvIfNeeded_ は常に「5分未満」で即returnして抜ける。
+  // ⚠️肩代わりの呼び出し(5957行)は残してある＝このトリガーが止まっても従来どおり自動フォールバックする。
+  // ⚠️同期がコケても後続の通知ジョブを巻き込まないよう try/catch で隔離する（実体は5分に1回だけ動く）。
+  try { autoSyncRsrvIfNeeded_(); } catch (e) { Logger.log('autoSyncRsrvIfNeeded_(trigger) 失敗: ' + e); }
   // 閉店チェック承認から10分経過→全端末を強制ログアウト
   (function () {
     const at = Number(prop('KIOSK_LOGOUT_AT') || 0);
@@ -6729,6 +6751,14 @@ function handlePortalApi_(e) {
   // 伝票の閲覧は管理コンソール💰給与→🧾売上伝票(adminGetBills)へ正規化した。
 
   if (!userId) return out({ ok: false, error: 'userId required' });
+
+  // ★ホーム経路だけ、スタッフマスタのフル読みを1リクエスト内でメモ化する（2026-07-20）。
+  //   下のゲート5関数（getStaffName/isRetiredName_/getStaffRoleByName_/isAdmin_/isOnLeaveName_）は
+  //   home分岐に入る前に走るため、home分岐内の _portalHomeMemo では救えない＝ここで前倒しして立てる。
+  //   解除は home分岐の finally（他tabでは null のまま＝従来どおり毎回フル読みで挙動不変）。
+  const tab = e.parameter.tab || '';
+  if (tab === 'home') _staffValuesMemo = {};
+
   const name = getStaffName(userId);
   if (!name) return out({ ok: false, error: 'unregistered' });
 
@@ -6747,7 +6777,7 @@ function handlePortalApi_(e) {
   const ss = getOrOpenSS_();
 
   const viewAs = e.parameter.viewAs || '';
-  const tab    = e.parameter.tab    || '';
+  // ※ tab は上（名簿メモの有効化）で宣言済み
 
   // 休職中は参照できる面を絞る（シフト提出／お知らせ／給与明細のみ）。退職と違いログイン自体は通す。
   // ※管理者の代理閲覧(viewAs)は name=管理者本人なので false ＝ 従来どおり全部見える。
@@ -6912,7 +6942,8 @@ function handlePortalApi_(e) {
       nextWeek: nextWeekDeclineInfo_(lookupNameH),
       notices: getNoticesFor_(lookupNameH, staffRoleH, userId) });
     } finally {
-      _portalHomeMemo = null; // ★必ず解除（例外時も）＝グローバルを次リクエストに漏らさない
+      _portalHomeMemo = null;  // ★必ず解除（例外時も）＝グローバルを次リクエストに漏らさない
+      _staffValuesMemo = null; // ★同上（スタッフマスタのメモ）
     }
   }
 
@@ -7015,9 +7046,8 @@ function getAllStaff_(ss) {
 
 // スタッフマスタ C列（属性）を名前で取得
 function getStaffRoleByName_(name) {
-  const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
-  if (!sh) return 'キャスト';
-  const rows = sh.getDataRange().getValues();
+  const rows = staffSheetValues_();
+  if (!rows) return 'キャスト';
   for (let i = 1; i < rows.length; i++) {
     if (normalizeName_(String(rows[i][1]).trim()) === name) return String(rows[i][2]).trim() || 'キャスト';
   }
@@ -7201,7 +7231,8 @@ function isRetiredName_(name) {
   if (!sh) return false;
   var rc = getStaffRetireCols_(sh, false)['退職'];
   if (rc < 0) return false;
-  var rows = sh.getDataRange().getValues();
+  var rows = staffSheetValues_();
+  if (!rows) return false;
   var key = normalizeName_(String(name || '').trim());
   for (var i = 1; i < rows.length; i++) {
     if (normalizeName_(String(rows[i][1]).trim()) === key) return String(rows[i][rc]).trim() === '退職';
@@ -7278,7 +7309,8 @@ function isOnLeaveName_(name) {
   if (!sh) return false;
   var lc = getStaffLeaveCols_(sh, false)['休職中'];
   if (lc < 0) return false;
-  var rows = sh.getDataRange().getValues();
+  var rows = staffSheetValues_();
+  if (!rows) return false;
   var key = normalizeName_(String(name || '').trim());
   for (var i = 1; i < rows.length; i++) {
     if (normalizeName_(String(rows[i][1]).trim()) === key) return String(rows[i][lc]).trim() === '休職中';
