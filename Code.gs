@@ -363,7 +363,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'gunshiPunch', 'gunshiPunchStatus'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -2851,6 +2851,23 @@ function castEffectiveArrival_(name, shift, dohanSet){
 // 「20:00」「20:00〜24:00」「21出勤」等 → 開始時刻の分。'フル'等の非時刻はnull（isShift2000_と同じ解釈）
 function hhmmStartMin_(s){var m=String(s||'').trim().match(/^(\d{1,2})[:：時]?(\d{2})?/);if(!m)return null;return parseInt(m[1],10)*60+(m[2]!=null?parseInt(m[2],10):0);}
 
+// シフト文字列 → {inMin, outMin, raw}。開始のみなら outMin=null。'フル'等の非時刻・'休み'・空は null。
+// ⚠️区切り文字がデータ内で2種類混在している：ポータルが書くのは全角チルダ「～」(U+FF5E)なのに、
+//   既存パーサ(KioskV2の shiftRows_ / buildLineupBody_)は波ダッシュ「〜」(U+301C)しか見ておらず、
+//   黒服の「18:00～26:00」は終了時刻がずっと取れていなかった。両方＋ハイフン各種をここで吸収する。
+//   時刻レンジを割る処理はこの1本に寄せること（各所で正規表現を書き直すと同じ穴がまた開く）。
+// ⚠️24超え表記はそのまま分で返す（26:00→1560）。「20:00～2:00」も翌日扱いに補正＝営業日の中で必ず inMin < outMin。
+function parseShiftRange_(s) {
+  var t = String(s == null ? '' : s).trim();
+  if (!t || t === '休み') return null;
+  var parts = t.split(/[-‐–—－~〜～]/);
+  var a = hhmmStartMin_(parts[0]);
+  if (a == null) return null;
+  var b = parts.length > 1 ? hhmmStartMin_(parts[1]) : null;
+  if (b != null && b < a) b += 24 * 60;
+  return { inMin: a, outMin: b, raw: t };
+}
+
 // 候補リスト＋判断材料（同伴・20:30までの予約・20:00時点の在店見込み）の本文を作る
 // 候補に「20:30までに自分の予約がある子」がいれば呼ぶ根拠が最も強いので候補行に印を付ける
 function buildReq20Body_(cands){
@@ -4447,17 +4464,184 @@ function checkMissingTaikin() {
   );
 }
 
-function recordKintai(name, type) {
+// ============================================================
+// ⏱ 勤怠（出退勤の記録／2026-08-01 勤怠手当制度の土台）
+//   記録の正＝「勤怠ログ」シート。既存A〜D列(日付/時刻/名前/種別)は非破壊で維持する。
+//   ⚠️A列「日付」は暦日todayStr()のまま＝checkMissingShukkin/checkMissingTaikinがこの列を
+//     暦日で読んでいるため（深夜1時の退勤は"翌日"の日付で入る）。
+//     集計・判定は必ず後から足した「営業日」列(bizDateStr_・朝6時境界)を使うこと。
+//     取り違えると同じ営業日の出勤と退勤が別々の日付に割れて勤務時間が壊れる。
+// ============================================================
+var KINTAI_HEAD_ = ['日付', '時刻', '名前', '種別', '営業日', '記録元', '記録日時'];
+
+// 勤怠ログを取得（無ければ作成）。既存シートには不足ヘッダを末尾へ追補＝後方互換（列は途中に挿さない）。
+function ensureKintaiSheet_(ss) {
+  var sh = ss.getSheetByName(KINTAI_TAB);
+  if (!sh) { sh = ss.insertSheet(KINTAI_TAB); sh.appendRow(KINTAI_HEAD_); sh.setFrozenRows(1); return sh; }
+  var lastCol = sh.getLastColumn();
+  var heads = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  KINTAI_HEAD_.forEach(function (h) {
+    if (heads.indexOf(h) < 0) { lastCol += 1; sh.getRange(1, lastCol).setValue(h); heads.push(h); }
+  });
+  return sh;
+}
+
+// ヘッダー名で列を引いて1行追記＝列順に依存しない（将来列が増えても書き込みが壊れない）
+function kintaiAppend_(sh, obj) {
+  var heads = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  sh.appendRow(heads.map(function (h) { return obj[h] !== undefined ? obj[h] : ''; }));
+}
+
+// 勤怠の名寄せキー（既存の未出勤リマインドと同じ流儀＝正規化＋内部スペース除去）。
+// 黒服はスタッフマスタ由来で「鈴木 海」等スペース入り、シフト表は詰めて書かれる＝生一致だと毎回すれ違う。
+function kintaiNameKey_(s) { return normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, ''); }
+
+// 出退勤を1行記録。src='iPad'(軍師の打刻) / 'LINE'(グループ発言) / '手修正'(コンソール)
+function recordKintai(name, type, src) {
   // 管理者・徳子（テスト）は出退勤を記録しない＝出勤/退勤報告に一切引っかからない
-  const _exKey = normalizeName_(String(name == null ? '' : name)).replace(/[\s　]/g, '');
+  const _exKey = kintaiNameKey_(name);
   if (kintaiExemptKeys_()[_exKey]) return;
   const ss = SpreadsheetApp.openById(SHEET_ID);
-  let sh = ss.getSheetByName(KINTAI_TAB);
-  if (!sh) {
-    sh = ss.insertSheet(KINTAI_TAB);
-    sh.appendRow(['日付', '時刻', '名前', '種別']);
+  const sh = ensureKintaiSheet_(ss);
+  kintaiAppend_(sh, {
+    '日付': todayStr(),        // ⚠️暦日のまま維持（既存の未出勤/未退勤リマインドがこの列を読む）
+    '時刻': now_(),
+    '名前': name,
+    '種別': type,
+    '営業日': bizDateStr_(),   // ← 集計・判定はこちら
+    '記録元': src || 'LINE',
+    '記録日時': nowStamp_()
+  });
+}
+
+// 現在時刻を営業日内の分に直す（0:00〜5:59は24時を足して前営業日の続きとして扱う＝bizDateStr_と同じ6時境界）
+function kintaiNowBizMin_() {
+  var n = new Date();
+  var h = n.getHours();
+  if (h < 6) h += 24;
+  return h * 60 + n.getMinutes();
+}
+
+// 指定営業日の打刻を名前ごとに集約 → { 正規化名: {name, in, out, inRow, outRow} }
+// 出勤は最初の1打、退勤は最後の1打を採る（勤怠の常道）。
+// ⚠️営業日列が空の古い行は暦日の「日付」列で代用する＝列追加より前に記録された行との後方互換。
+function kintaiPunchMap_(bizDate) {
+  var out = {};
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(KINTAI_TAB);
+  if (!sh || sh.getLastRow() < 2) return out;
+  var vals = sh.getDataRange().getValues();
+  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  var iDate = heads.indexOf('日付'), iTime = heads.indexOf('時刻');
+  var iName = heads.indexOf('名前'), iType = heads.indexOf('種別'), iBiz = heads.indexOf('営業日');
+  if (iName < 0 || iType < 0) return out;
+  var dstr = function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); };
+  for (var i = 1; i < vals.length; i++) {
+    var r = vals[i];
+    var biz = iBiz >= 0 ? dstr(r[iBiz]) : '';
+    if (!biz) biz = iDate >= 0 ? dstr(r[iDate]) : '';
+    if (biz !== bizDate) continue;
+    var nm = String(r[iName] || '').trim();
+    if (!nm) continue;
+    var key = kintaiNameKey_(nm);
+    if (!out[key]) out[key] = { name: nm, in: '', out: '', inRow: 0, outRow: 0 };
+    var tm = iTime >= 0 ? fmtStamp_(r[iTime]) : '';
+    var ty = String(r[iType] || '').trim();
+    if (ty === '出勤') { if (!out[key].in) { out[key].in = tm; out[key].inRow = i + 1; } }
+    else if (ty === '退勤') { out[key].out = tm; out[key].outRow = i + 1; }
   }
-  sh.appendRow([todayStr(), now_(), name, type]);
+  return out;
+}
+
+// 指定営業日・指定名の予定シフト → {raw, inMin, outMin, off} / 行が無ければ null
+// ⚠️現状はシフト表のみを見る。シフト表に行が無い黒服（シフト申請の承諾行だけで回っている人）は拾えない。
+//   判定を作るときにシフト申請とのマージ版へ差し替える＝呼び出し側はここ1本しか見ていないので安全に載せ替えられる。
+function kintaiPlanFor_(bizDate, name) {
+  var key = kintaiNameKey_(name);
+  var sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+  if (!sh) return null;
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return null;
+  var p = String(bizDate).split('-');
+  if (p.length < 3) return null;
+  var colKey = parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+  var heads = data[0].map(function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim(); });
+  var ci = heads.indexOf(colKey);
+  if (ci < 0) return null;
+  for (var i = 1; i < data.length; i++) {
+    if (kintaiNameKey_(data[i][0]) !== key) continue;
+    var cell = data[i][ci];
+    var raw = (cell instanceof Date && !isNaN(cell)) ? Utilities.formatDate(cell, TZ, 'HH:mm') : String(cell == null ? '' : cell).trim();
+    if (!raw || raw === '休み') return { raw: raw, inMin: null, outMin: null, off: true };
+    var rg = parseShiftRange_(raw);
+    return { raw: raw, inMin: rg ? rg.inMin : null, outMin: rg ? rg.outMin : null, off: false };
+  }
+  return null;
+}
+
+// 軍師iPadからの出退勤打刻。
+// ⚠️時刻は必ずサーバ側で採る（引数で受けない）＝端末の時計ズレを打刻値に持ち込まない。
+//   軍師のドリフト検知は12時間閾値＝数十分のズレは素通りするので、クライアント時刻は勤怠には使えない。
+function gunshiPunch(name, type) {
+  var nm = String(name || '').trim();
+  var ty = String(type || '').trim();
+  if (!nm) return { ok: false, error: '名前が空です' };
+  if (ty !== '出勤' && ty !== '退勤') return { ok: false, error: '種別が不正です' };
+
+  var key = kintaiNameKey_(nm);
+  if (kintaiExemptKeys_()[key]) return { ok: false, error: nm + ' さんは打刻の対象外です（管理者/テスト）' };
+
+  var biz = bizDateStr_();
+  var cur = kintaiPunchMap_(biz)[key] || { in: '', out: '' };
+
+  // 二重打刻ガード（訂正は管理コンソールから）
+  if (ty === '出勤' && cur.in) return { ok: false, already: true, punch: cur, error: '本日は既に出勤打刻済みです（' + cur.in + '）' };
+  if (ty === '退勤' && cur.out) return { ok: false, already: true, punch: cur, error: '本日は既に退勤打刻済みです（' + cur.out + '）' };
+  if (ty === '退勤' && !cur.in) return { ok: false, punch: cur, error: 'まだ出勤の打刻がありません。先に「出勤」を押してください' };
+
+  // 黒服の退勤は現金チェック合格が前提（LINE経路と同じゲート。片方だけ開けると抜け穴になる）
+  if (ty === '退勤') {
+    var role = getStaffRoleByName_(normalizeName_(nm));
+    if ((role === '黒服社員' || role === '黒服バイト') && !isCashCheckPassed_(biz)) {
+      return { ok: false, gated: true, punch: cur, error: '本日の現金チェックがまだ完了していません。\n「現金管理」からチェック申請を行い、AIチェックに合格してから退勤してください。' };
+    }
+  }
+
+  recordKintai(nm, ty, 'iPad');
+
+  var res = { ok: true, name: nm, type: ty, time: now_(), bizDate: biz };
+  // 予定との差は「参考表示」だけ＝台帳には焼かない。
+  // シフトは後から直るし第6条の減免もある＝判定は常にその時点の予定と実績から計算し直すのが正。
+  try {
+    var pl = kintaiPlanFor_(biz, nm);
+    if (pl && !pl.off) {
+      res.plan = pl.raw;
+      var nowM = kintaiNowBizMin_();
+      if (ty === '出勤' && pl.inMin != null) res.lateMin = Math.max(0, nowM - pl.inMin);
+      if (ty === '退勤' && pl.outMin != null) res.earlyMin = Math.max(0, pl.outMin - nowM);
+    }
+  } catch (e) {}
+  return res;
+}
+
+// 軍師の打刻カード用。自分の状態＋本日出勤予定の黒服それぞれの打刻状況（誰がまだ打っていないか一目で分かる）
+function gunshiPunchStatus(name) {
+  var biz = bizDateStr_();
+  var map = kintaiPunchMap_(biz);
+  var me = null;
+  if (name) {
+    var k = kintaiNameKey_(name);
+    var cur = map[k] || { in: '', out: '' };
+    var pl = null; try { pl = kintaiPlanFor_(biz, name); } catch (e) {}
+    me = { name: String(name), in: cur.in || '', out: cur.out || '', plan: (pl && !pl.off) ? pl.raw : '', exempt: !!kintaiExemptKeys_()[k] };
+  }
+  var list = [];
+  try {
+    ((getTodayShiftDetail_() || {}).kurofuku || []).forEach(function (s) {
+      var c = map[kintaiNameKey_(s.origName || s.name)] || { in: '', out: '' };
+      list.push({ name: s.name, shift: s.shift, in: c.in || '', out: c.out || '' });
+    });
+  } catch (e) {}
+  return { ok: true, bizDate: biz, me: me, list: list };
 }
 
 function deleteStaff(userId) {
@@ -8594,36 +8778,42 @@ function syncYrsrv_() {
 }
 
 // 予約システムと整合を取り、ゾンビRSRV_エントリを削除（同居対応: 席単位ではなく組(rowIdx)単位で照合）
+// ⚠️⚠️日付で絞ってはいけない（2026-07-20 修正）。以前は「本日(営業日)の来店済み予約」だけを正解集合にし、
+//   その席が正解集合に無ければ RSRV_ を丸ごと削除していた。そのため営業日と予約日がズレた席
+//   （例: 深夜0〜6時＝営業日はまだ前日、なのに翌日付の予約を来店させた）で客名だけが消え、
+//   キャスト(ACTIVE_)は別台帳で残るため席カードが「ご来店」になる不具合が出た。
+//   予約管理にテーブルがアサインされていても、その行は日付フィルタで読まれもしないのが原因。
+//   判定材料は「その予約行がいま来店済みで、かつこの席に割り当てられているか」だけにする＝日付非依存。
+//   退店済み・キャンセル・行削除・席の付け替えという本物のゾンビは従来どおり消える。
+//   日ごとの一掃は0:30の席リセット(RSRV_を全削除)が担っているので、ここで日付を見る必要はない。
 function syncRsrvWithReservations_() {
-  const today = bizDateStr_();
   const sh = getYoyakuRsrvSheet_();
   const rows = sh.getDataRange().getValues();
-  // 本日の来店済み予約から、席コード→期待エントリ(rowIdx集合)を再構築
-  const expected = {}; // code -> Set(rowIdxの文字列)
+  // 来店済み予約の rowIdx → 割り当て席コード集合（日付は問わない）
+  const checkedIn = {};
   for (let i = 1; i < rows.length; i++) {
-    const d = rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], TZ, 'yyyy-MM-dd') : String(rows[i][0]);
-    if (d !== today || String(rows[i][8]) !== '来店済み') continue;
-    const rowIdx = i + 1;
+    if (String(rows[i][8]) !== '来店済み') continue;
+    const codes = {};
     String(rows[i][5]).split('、').forEach(t => {
       const code = tableNameToSeatCode_(t.trim());
-      if (!code) return;
-      (expected[code] = expected[code] || {})[String(rowIdx)] = true;
+      if (code) codes[code] = true;
     });
+    checkedIn[String(i + 1)] = codes;
   }
+  const seatCodeSet = {};
+  ALL_SEATS.forEach(s => { seatCodeSet[s.code] = true; });
   const sp = PropertiesService.getScriptProperties();
   const props = sp.getProperties();
   let cleared = 0;
   Object.keys(props).forEach(k => {
     if (!k.startsWith('RSRV_')) return;
     const code = k.slice(5);
+    // ⚠️RSRV_SYNC_AT（同期の実行時刻＝5分スロットル）は席ではない。以前はここで毎回巻き添え削除され、
+    //   autoSyncRsrvIfNeeded_ のスロットルが永久に効かず全ポーリングでこの重い同期が走っていた。
+    if (!seatCodeSet[code]) return;
     const arr = parseRsrvVal_(props[k]);
-    const exp = expected[code];
-    if (!exp) {
-      // この席に来店済み予約が1件も無い → 全エントリがゾンビ（RSRV_SYNC_AT等の非配列値もここで従来通り削除される）
-      sp.deleteProperty(k); cleared += (arr.length || 1); return;
-    }
-    // rowIdxを持つエントリのうち期待集合に無いものを除去。rowIdx無し(旧値/手動着席)は温存。
-    const kept = arr.filter(e => !e.rowIdx || exp[String(e.rowIdx)]);
+    // rowIdx無し(旧値/手動着席)は照合材料が無いので温存。0:30の席リセットで掃除される。
+    const kept = arr.filter(e => !e.rowIdx || (checkedIn[String(e.rowIdx)] && checkedIn[String(e.rowIdx)][code]));
     if (kept.length !== arr.length) { writeRsrv_(code, kept); cleared += (arr.length - kept.length); }
   });
   return { ok: true, cleared };
