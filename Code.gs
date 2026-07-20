@@ -6806,7 +6806,7 @@ function handlePortalApi_(e) {
     return out({ ok: true, name, isAdmin, date,
       reservations: reservations,
       requests: getYoyakuRequests_(null),
-      casts: getCastNamesForYoyaku_(ss),
+      casts: getCastNamesForYoyaku_(ss, { withKurofuku: true }), // 担当/同伴/予約キャストに黒服も出す
       memberFeeMap: memberFeeMap });
   }
   if (tab === 'customers') {
@@ -8630,17 +8630,31 @@ function syncRsrvWithReservations_() {
 }
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
-function getCastNamesForYoyaku_(ss) {
+function getCastNamesForYoyaku_(ss, opts) {
   const sh = (ss || SpreadsheetApp.openById(SHEET_ID)).getSheetByName(STAFF_TAB);
   if (!sh) return [];
-  // 黒服/管理者に加えて「ドライバー」も除外（送り依頼の都合で登録しているだけで、
+  // 管理者・ドライバーは常に除外（ドライバーは送り依頼の都合で登録しているだけで、
   // キャスト・付け回し・予約担当・シフト等どこにも名前を出さない）
   // テストスタッフは軍師の担当/同伴/予約チップ＝付け回し候補に「出す」（盤面テスト用）。実データ集計側は別途isGhostRole_で不参加。管理アカウントは完全除外。
-  const KURO = ['黒服社員', '黒服バイト', '管理者', 'ドライバー', '管理アカウント'];
+  // opts.withKurofuku=true で黒服社員・黒服バイトも含める（担当・同伴・予約担当者・顧客の担当に黒服を立てる運用。2026-07-20 ボス指示）。
+  //   ・黒服はキャストの後ろにまとめて並べる＝チップの並びで見分けられる。
+  //   ⚠️名刺同期(syncMeishiRowsWithRoster)は既定(黒服除外)のまま呼ぶこと。含めると黒服の名刺行が2F/5F分作られる。
+  //   ⚠️給与・売上・誕生日の集計はこの関数ではなく castRosterNames_ 等が別途黒服を除外している＝ここを開けても跳ねない。
+  const KURO_ROLES = ['黒服社員', '黒服バイト'];
+  const withKuro = !!(opts && opts.withKurofuku);
+  const EXCLUDE = withKuro ? ['管理者', 'ドライバー', '管理アカウント']
+                           : KURO_ROLES.concat(['管理者', 'ドライバー', '管理アカウント']);
   const retireC = getStaffRetireCols_(sh, false)['退職']; // 退職者は候補から除外（コンソールで退職にした子は現場に出さない）
-  return sh.getDataRange().getValues().slice(1)
-    .filter(r => { const name = String(r[1]).trim(); const role = String(r[2]).trim() || 'キャスト'; return name && !KURO.includes(role) && !(retireC >= 0 && String(r[retireC]).trim() === '退職'); })
-    .map(r => String(r[1]).trim());
+  const casts = [], kuro = [];
+  sh.getDataRange().getValues().slice(1).forEach(r => {
+    const name = String(r[1]).trim();
+    if (!name) return;
+    const role = String(r[2]).trim() || 'キャスト';
+    if (EXCLUDE.indexOf(role) >= 0) return;
+    if (retireC >= 0 && String(r[retireC]).trim() === '退職') return;
+    (KURO_ROLES.indexOf(role) >= 0 ? kuro : casts).push(name);
+  });
+  return casts.concat(kuro);
 }
 
 // カタカナ→ひらがな（ふりがな検索でカナ表記ゆれを吸収）
@@ -9090,9 +9104,9 @@ function getKioskMonthSummary(monthKey) {
   return getYoyakuMonthSummary_(monthKey);
 }
 
-// 端末キオスク用：キャスト名一覧
+// 端末キオスク用：キャスト名一覧（軍師の担当/同伴/予約キャスト・席の担当・顧客登録の担当に使う＝黒服も含める）
 function getKioskCastNames() {
-  return getCastNamesForYoyaku_(getOrOpenSS_());
+  return getCastNamesForYoyaku_(getOrOpenSS_(), { withKurofuku: true });
 }
 
 // 端末キオスク用：顧客検索
@@ -10453,9 +10467,9 @@ function searchCustomersForTableSetup(query) {
   return searchCustomersForYoyaku_(String(query || '').trim());
 }
 
-// キャスト名一覧（予約管理と同じ一覧を流用）
+// キャスト名一覧（予約管理と同じ一覧を流用＝黒服も含める）
 function getCastNamesForTableSetup() {
-  return getCastNamesForYoyaku_(getOrOpenSS_());
+  return getCastNamesForYoyaku_(getOrOpenSS_(), { withKurofuku: true });
 }
 
 // 既存予約への来店反映、または新規来店登録＋来店済み化を1回で行う
@@ -13371,6 +13385,7 @@ function checkMeishiStock_(castName) {
 //  ⚠️削除は不可逆。名簿が1件も取れなかった時は全行が削除対象になってしまうので何もせず抜ける。
 //  ⚠️deleteRow は行番号がずれるので必ず下から消す。
 function syncMeishiRowsWithRoster() {
+  // ⚠️ここは既定（黒服除外）のまま呼ぶ。withKurofuku を付けると黒服の名刺行が2F/5F分できる。
   const casts = getCastNamesForYoyaku_(getOrOpenSS_()) || [];
   if (!casts.length) return { ok: false, error: '名簿から在籍キャストを取得できませんでした（安全のため何も変更していません）' };
   const inRoster = {};
@@ -14201,7 +14216,9 @@ function getCustomerList() {
   const sh = ss.getSheetByName(MASTER_TAB);
   if (!sh) return { customers: [], activeCasts: [] };
 
-  const activeCasts = getCastNamesForYoyaku_(ss);
+  // ⚠️黒服を含めること。この一覧は下の reassignInactiveTantou_ の「在籍している担当」判定にそのまま渡る＝
+  //   含めないと黒服担当の客が顧客管理を開くたび「店担当」へ書き換えられて消える（2026-07-20）。
+  const activeCasts = getCastNamesForYoyaku_(ss, { withKurofuku: true });
   // 在籍していない担当キャストを店担当へ自動整理。シートの再読み込みを避けるため values をそのまま再利用する
   const { values, cols } = reassignInactiveTantou_(sh, activeCasts);
   if (!cols) return { customers: [], activeCasts };
@@ -14586,4 +14603,139 @@ function resetKioskKey_() {
   Logger.log('2F: ' + base + '?page=kiosk&term=2f&key=' + key);
   Logger.log('5F: ' + base + '?page=kiosk&term=5f&key=' + key);
   return key;
+}
+
+// ============================================================
+// 🚨 LINE配信の緊急復旧（2026-07-20 プラン上限で14:00/16:00が不達）
+// ------------------------------------------------------------
+// 背景: ライトプランの月間上限に到達 → push が LINE 側で 429 拒否。
+//   push_ は 429 を console.error に書くだけで握り潰し、once() は
+//   fn() 実行後に無条件でフラグを立てる（4575行）＝システムは「送信済み」
+//   と記録済みで、枠が戻っても当日は二度と自動再送されない。
+//   よってここで手動の再送経路を用意する。
+// 使い方: 先頭の RUN() を GAS エディタから ▶ 実行するだけ。
+//   枠が無ければ何も送らずに理由を返す＝押しても無害。枠が戻ってから
+//   もう一度押せば送る。成功した分だけフラグを立てるので連打しても
+//   二重送信にならない（失敗した分だけ再試行される）。
+// ============================================================
+
+// 上限エラーを握り潰さない push。push_(4904行) の検証つき版。
+// 「送れたか」を呼び出し元が判定できないと、429 を成功と誤報告する。
+function pushChecked_(to, message) {
+  if (!to)      return { ok: false, code: 0, body: '宛先グループIDが未設定' };
+  if (!message) return { ok: false, code: 0, body: '本文が空' };
+  const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + prop('LINE_TOKEN') },
+    payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: message }] }),
+    muteHttpExceptions: true
+  });
+  const code = res.getResponseCode();
+  return { ok: code === 200, code: code, body: res.getContentText().slice(0, 300) };
+}
+
+// 当月の配信枠を LINE に直接問い合わせる（送る前の裏取り）。
+// quota: {type:'limited'|'none', value} / consumption: {totalUsage}
+function lineQuotaStatus_() {
+  const token = prop('LINE_TOKEN');
+  if (!token) return { ok: false, error: 'LINE_TOKEN未設定' };
+  const h = { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true };
+  const q = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/quota', h);
+  const c = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/quota/consumption', h);
+  if (q.getResponseCode() !== 200) {
+    return { ok: false, error: 'quota取得失敗 HTTP' + q.getResponseCode() + ' ' + q.getContentText().slice(0, 200) };
+  }
+  const quota = JSON.parse(q.getContentText());
+  const used  = c.getResponseCode() === 200 ? Number(JSON.parse(c.getContentText()).totalUsage || 0) : null;
+  const limited = quota.type === 'limited';
+  return {
+    ok: true,
+    type: quota.type,
+    limit: limited ? Number(quota.value || 0) : null,
+    used: used,
+    remain: (limited && used !== null) ? Number(quota.value || 0) - used : null
+  };
+}
+
+// 14:00ラインナップ / 16:00ドライバー連絡 を強制再送する。
+// 枠が残っていなければ1通も送らずに中断する（無駄打ちと誤報告の防止）。
+function forceResendToday_() {
+  const today = todayStr();
+  const out = { time: nowStamp_(), quota: null, results: [], note: '' };
+
+  // ① 送る前に枠を確認。ここで止めないと 429 を「送った」と誤報告する
+  const q = lineQuotaStatus_();
+  out.quota = q;
+  if (!q.ok) { out.note = '⛔ 配信枠を確認できませんでした: ' + q.error; Logger.log(JSON.stringify(out, null, 2)); return out; }
+  if (q.type === 'limited' && q.remain !== null && q.remain <= 0) {
+    out.note = '⛔ まだ上限です（上限' + q.limit + '通 / 使用' + q.used + '通 / 残り' + q.remain +
+               '）。プラン変更がまだ反映されていません。反映後にもう一度 ▶ を押してください。1通も送っていません。';
+    Logger.log(JSON.stringify(out, null, 2));
+    return out;
+  }
+
+  // ② 対象＝14:00〜16:00に不達だった定時配信2件
+  const jobs = [
+    {
+      id: 'lineup',
+      label: '14:00 本日出勤ラインナップ',
+      to: prop('GROUP_STAFF'),
+      build: function () {
+        const m = buildLineupMessage_();
+        if (!m) return null;
+        return '⏰（14:00配信ぶん・システム復旧により再送）\n\n' + m.text;
+      }
+    },
+    {
+      id: 'driver1600',
+      label: '16:00 ドライバー連絡',
+      to: prop('GROUP_DRIVER'),
+      build: function () {
+        return (prop('OKURI_MODE') || 'driver') === 'jisha'
+          ? '本日は送りお休みです。'
+          : '本日もよろしくお願いします。\n送りが発生する場合は23:30に確定リストをお送りします🙏';
+      }
+    }
+  ];
+
+  jobs.forEach(function (j) {
+    const doneKey = 'FRSND_' + today + '_' + j.id;
+    if (prop(doneKey)) { out.results.push({ job: j.label, status: 'skip', detail: '再送済み（' + prop(doneKey) + '）' }); return; }
+    let body = null;
+    try { body = j.build(); } catch (e) { out.results.push({ job: j.label, status: 'error', detail: '本文生成に失敗: ' + e }); return; }
+    if (!body) { out.results.push({ job: j.label, status: 'skip', detail: '本文が空（対象なし）' }); return; }
+    const r = pushChecked_(j.to, body);
+    if (r.ok) {
+      setProp(doneKey, nowStamp_());   // 200 のときだけ立てる＝失敗分は次回再試行される
+      out.results.push({ job: j.label, status: 'sent', detail: 'HTTP200 送信完了' });
+    } else {
+      out.results.push({ job: j.label, status: 'failed', detail: 'HTTP' + r.code + ' ' + r.body });
+    }
+  });
+
+  const sent = out.results.filter(function (r) { return r.status === 'sent'; }).length;
+  const bad  = out.results.filter(function (r) { return r.status === 'failed' || r.status === 'error'; }).length;
+  out.note = bad ? ('⚠️ ' + sent + '件送信 / ' + bad + '件失敗。detail のHTTPコードを確認してください。')
+                 : ('✅ ' + sent + '件送信しました。');
+  Logger.log(JSON.stringify(out, null, 2));
+  return out;
+}
+
+// 再送フラグを消す（同じ内容をもう一度送りたいときだけ使う）
+function forceResendClearFlags_() {
+  const today = todayStr();
+  ['lineup', 'driver1600'].forEach(function (id) {
+    PropertiesService.getScriptProperties().deleteProperty('FRSND_' + today + '_' + id);
+  });
+  Logger.log('再送フラグを消しました: ' + today);
+}
+
+// 今日システムが「送った」と記録している定時配信の一覧（不達の実態調査用・読み取り専用）
+function listTodayScheduledFlags_() {
+  const today = todayStr();
+  const all = PropertiesService.getScriptProperties().getProperties();
+  const hit = Object.keys(all).filter(function (k) { return k.indexOf('SCHED_' + today + '_') === 0; }).sort();
+  Logger.log('【' + today + ' にシステムが送信済みと記録している通知】' + hit.length + '件\n' + hit.join('\n'));
+  return hit;
 }
