@@ -507,6 +507,19 @@ function retryBtn_(fn) {
 }
 
 // ---- LIFF init ----
+// ホームを lite/rest の2本に分けて取る間、rest(席/今日の予約/空席)がまだ届いていないことを示す（2026-07-20）。
+// true の間 renderHome はフォールバックの個別取得を走らせず「読み込み中...」のまま待つ＝二重取得を防ぐ。
+// ⚠️⚠️宣言は必ず「loadPortal を"呼ぶ"行(537行の_devUid経路)より前」に置くこと。ここを外して実際に事故った：
+//   var の巻き上げで宣言だけ先に上がり、代入`= false`は書いた行に残る。_devUid経路は loadPortal を
+//   スクリプト実行の途中で同期的に呼ぶため、loadPortal が true にした直後に後ろの `= false` が走って
+//   黙って上書きし、rest待ちのガードが死んで yoyaku/vacancy/getCastSeats を二重取得していた。
+var homeRestPending = false;
+// loadPortal の世代番号。連打・タブ切替で loadPortal が重なったとき、古い呼び出しの応答を捨てる。
+// ⚠️実際に踏んだ事故: 3連打すると「古い方のlite(席/予約を含まない)」が新しい画面を上書きし、
+//   さらに rest未着扱いでフォールバックが誤発動して予約欄が『読み込み中...』のまま固着した。
+// ⚠️busyガード(実行中なら弾く)は入れないこと。stale捨てと同居させると連打で永久に読み込み中になる
+//   （既知の罠。最新世代の応答は必ず処理されるので、この形なら固まらない）。
+var _homeLoadSeq = 0;
 var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
 var _kt = new URLSearchParams(location.search).get('kt'); // 軍師QRログインのトークン
 
@@ -596,44 +609,72 @@ function applyHomePayload_(d) {
   renderTab(currentTab);
 }
 function loadPortal(month) {
+  var mySeq = ++_homeLoadSeq; // この呼び出しの世代。以降の応答は最新世代のときだけ反映する
   // SWR: キャッシュがあれば即描画（体感を一瞬に）。無ければ従来のローディング表示。
   var cached = readHomeCache_();
   var renderedFromCache = false;
   if (cached) { try { applyHomePayload_(cached); renderedFromCache = true; } catch (e) { renderedFromCache = false; } }
   if (!renderedFromCache) setContent('<div class="loading">データ取得中...</div>');
-  // ホーム軽量ペイロード（tab=home）: 売上/給与/領収書/月一覧を除外し、座席・今日の予約・空席を同梱。
-  // 管理者でviewAs未指定のときはサーバ側で先にcastListを返すため tab=home は無視される（従来通り）。
-  var url = GAS_URL + '?action=portal&tab=home&userId=' + encodeURIComponent(userId);
-  if (month) url += '&month=' + encodeURIComponent(month);
-  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
-  gasFetch(url)
+
+  // ホームを2本に分けて「並列で」取る（2026-07-20）。
+  //   homelite = シフト系だけ（読むシートが少ない＝先に返る）→ 届いた時点で「次の出勤」まで描く
+  //   homerest = 席/出勤/今日の予約/空席/お知らせ（重い）→ 後から差し込む
+  // ⚠️1本(tab=home)にまとめていた頃は「13枚のシートを読み終わるまで画面が真っ白」だった（実測8.9秒）。
+  //   GASはシート1枚あたり300〜600msかかるのが実測値で、これは削れない（→memo: GASの応答は何もしなくても1.9秒）。
+  //   サーバ側の tab=home は残してあるので、古いキャッシュを掴んだ端末は従来どおり1本で動く。
+  var base = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId);
+  if (month) base += '&month=' + encodeURIComponent(month);
+  if (adminViewAs) base += '&viewAs=' + encodeURIComponent(adminViewAs);
+
+  // 前回キャッシュを土台にマージする＝liteだけ先に届いても席や予約が画面から消えない（SWRの継続）
+  var merged = {};
+  if (cached) { try { merged = JSON.parse(JSON.stringify(cached)); } catch (e) { merged = {}; } }
+  var gotLite = false, gotRest = false;
+  // キャッシュが無い完全初回だけ、rest到着まで renderHome のフォールバック個別取得を止める
+  homeRestPending = !renderedFromCache;
+
+  function handleHome_(d, which) {
+    if (mySeq !== _homeLoadSeq) return; // 古い世代の応答＝新しい読み込みが走っているので捨てる
+    if (!d || !d.ok) {
+      if (d && d.error === 'unregistered') { showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>'); homeRestPending = false; return; }
+      if (d && d.error === 'forbidden')    { showErr('🚫 アクセスできません<br><small>' + (d.message || 'このアカウントではポータルをご利用いただけません。') + '</small>'); homeRestPending = false; return; }
+      if (!renderedFromCache && !gotLite && !gotRest) showErr('エラー: ' + ((d && d.error) || '不明') + retryBtn_('loadPortal'));
+      homeRestPending = false;
+      return;
+    }
+    // 管理者で castList が返ってきた場合 → 申請管理タブをデフォルト表示（従来どおり。ここで打ち切る）
+    if (d.isAdmin && d.castList && !adminViewAs) {
+      isAdmin = true;
+      adminCastList = d.castList;
+      adminCastRoles = d.castRoles || {};
+      homeRestPending = false;
+      initAdminUI(d.castList);
+      return;
+    }
+    for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
+    if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }
+    // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
+    if (gotLite && gotRest) writeHomeCache_(merged); // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
+    applyHomePayload_(merged);
+  }
+
+  gasFetch(base + '&tab=homelite')
     .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) {
-        if (d.error === 'unregistered') {
-          showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
-        } else if (d.error === 'forbidden') {
-          showErr('🚫 アクセスできません<br><small>' + (d.message || 'このアカウントではポータルをご利用いただけません。') + '</small>');
-        } else if (!renderedFromCache) {
-          showErr('エラー: ' + d.error + retryBtn_('loadPortal'));
-        }
-        return;
-      }
-      // 管理者で castList が返ってきた場合 → 申請管理タブをデフォルト表示
-      if (d.isAdmin && d.castList && !adminViewAs) {
-        isAdmin = true;
-        adminCastList = d.castList;
-        adminCastRoles = d.castRoles || {};
-        initAdminUI(d.castList);
-        return;
-      }
-      // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
-      writeHomeCache_(d);        // 次回の即描画用に保存
-      applyHomePayload_(d);      // 最新で反映（キャッシュ描画済みでも差し替え）
-    })
+    .then(function(d) { handleHome_(d, 'lite'); })
     .catch(function(e) {
-      // キャッシュから描画済みなら、通信失敗で画面を潰さない（内容を残す）
-      if (!renderedFromCache) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
+      if (mySeq !== _homeLoadSeq) return; // 古い世代の失敗で新しい画面を潰さない
+      // キャッシュから描画済み、または重い方が既に届いているなら画面を潰さない
+      if (!renderedFromCache && !gotRest) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
+    });
+
+  gasFetch(base + '&tab=homerest')
+    .then(function(r) { return r.json(); })
+    .then(function(d) { handleHome_(d, 'rest'); })
+    .catch(function(e) {
+      if (mySeq !== _homeLoadSeq) return; // ★古い世代がガード(homeRestPending)を解除すると新しい読み込みが誤発動する
+      // 重い方だけ落ちた場合は画面を潰さず、renderHome 側の従来フォールバック（個別取得）に委ねる
+      homeRestPending = false;
+      if (gotLite || renderedFromCache) renderTab(currentTab);
     });
 }
 
@@ -1053,14 +1094,14 @@ function renderHome(){
     homeMySeats = portalData.seats || [];
     homeWorking = homeOnShift() || portalData.working === true;
     renderMySeat(); applyWorkingGate();
-  } else {
+  } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ
     loadMySeat();
   }
 
   // --- 今日の予約: 同梱済みなら即描画、無ければ従来取得 ---
   if (portalData && portalData.reservations !== undefined) {
     renderHomeRsv(portalData.reservations || []);
-  } else {
+  } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ
     var now = new Date();
     var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
     gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
@@ -1071,7 +1112,7 @@ function renderHome(){
 
   // --- 空席状況: 同梱済みの初回分を即描画し、以降60秒ごとに自動更新 ---
   if (portalData && portalData.vacancy) renderHomeVacancy(portalData.vacancy);
-  else fetchVacancy();
+  else if (!homeRestPending) fetchVacancy();   // rest待ち中は個別取得せず、届くのを待つ
   if(window._vacTimer) clearInterval(window._vacTimer);
   window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } fetchVacancy(); }, 60000);
 }

@@ -3905,7 +3905,7 @@ function findStaffPartial_(input) {
 }
 
 function getAtenSheet_() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = getOrOpenSS_(); // 同一リクエスト内の openById 重複を避ける（openById は1回あたり数百msの実費）
   let sh = ss.getSheetByName(ATEN_TAB);
   if (!sh) {
     sh = ss.insertSheet(ATEN_TAB);
@@ -4964,7 +4964,7 @@ function gunshiBroadcastCast(message) {
 // キャストの「現在アテンド中の席」を軍師のホール/付け回しデータ(getActiveAtendou)から取得（待機席は除外）
 function castCurrentSeats_(name) {
   try {
-    return getActiveAtendou(todayStr())
+    return activeAtendouMemo_(todayStr())
       .filter(a => normalizeName_(a.name) === normalizeName_(name))
       .filter(a => { const s = ALL_SEATS.find(x => x.code === a.code); return !s || s.type !== 'W'; })
       .map(a => ({ code: a.code, label: a.label }));
@@ -4975,10 +4975,11 @@ function castCurrentSeats_(name) {
 function isWorkingToday_(name) {
   const nm = normalizeName_(name);
   try {
-    if (getActiveAtendou(todayStr()).some(a => normalizeName_(a.name) === nm)) return true;
+    if (activeAtendouMemo_(todayStr()).some(a => normalizeName_(a.name) === nm)) return true;
   } catch (e) {}
   try {
-    const sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(KINTAI_TAB);
+    // getOrOpenSS_ 経由に統一（openById を毎回叩くと1回あたり数百msの実費がかかる）
+    const sh = getOrOpenSS_().getSheetByName(KINTAI_TAB);
     if (sh) {
       const today = todayStr();
       const rows = sh.getDataRange().getValues().slice(1).filter(r =>
@@ -5965,7 +5966,7 @@ function getSekiJokyouData() {
     autoSyncRsrvIfNeeded_();
 
     const today   = todayStr();
-    const active  = getActiveAtendou(today);
+    const active  = activeAtendouMemo_(today);
 
     // PropertiesServiceを1回だけ呼ぶ（ATEN_MINSも含めて一括取得）
     const allProps = PropertiesService.getScriptProperties().getProperties();
@@ -6737,6 +6738,7 @@ function getPayrollReceiptStatus_(name) {
 // ============================================================
 
 function handlePortalApi_(e) {
+  const _reqT0 = Date.now(); // ホーム内訳計測(?_diag=1)の基準。計測を有効にしない限り一切使わない
   const userId = e.parameter.userId;
   const month  = e.parameter.month || '';
 
@@ -6912,35 +6914,65 @@ function handlePortalApi_(e) {
   // 売上/給与/領収書/月一覧などホーム非表示データを除外し、代わりに座席・今日の予約・空席を同梱して
   // 従来の「portal(全計算) + getCastSeats + tab=yoyaku + tab=vacancy」の4往復を1往復に集約する。
   // 成績・領収書タブを開いたときに tab=stats で残りを遅延ロードする（フロント loadStatsData）。
-  if (tab === 'home') {
+  // tab=home     … 従来どおり全部入り（後方互換。古いキャッシュを掴んだ端末/portal-next が壊れないよう温存する）
+  // tab=homelite … シフト系だけ。読むシートが少ない＝「先に画面を出す」ための1本目（2026-07-20）
+  // tab=homerest … 席/出勤/今日の予約/空席/お知らせ。重い方。liteと並列で走らせ、出た画面に後から差し込む
+  // ⚠️分割の理由: 実測でGASはシート1枚あたり300〜600ms、ホームは13枚読んで約6秒。1本にまとめている限り
+  //   「13枚読み終わるまで画面が真っ白」になる。7/9に4往復→1往復へ集約したのは1往復3秒時代の最適解で、
+  //   前提が変わった（→[[reference_gas_performance_floor]]）。
+  if (tab === 'home' || tab === 'homelite' || tab === 'homerest') {
+    const wantLite = (tab !== 'homerest'); // home / homelite が含む
+    const wantRest = (tab !== 'homelite'); // home / homerest が含む
     _portalHomeMemo = {}; // このhome計算中だけ重複シート読み(SHIFT表)をメモ化。finallyで必ず解除＝次リクエストへ漏らさない。
+    // 内訳計測（2026-07-20）: `&_diag=1` を付けた時だけ各ステップの所要msを測って応答に _diag として載せる。
+    // ⚠️既定(_dg=null)では _lap() が即returnし、応答にもキーを足さない＝通常の応答はバイト単位で従来と同一。
+    //   「どこで6秒溶けているか」を推測でなく実測で当てるための足場（[[reference_gas_performance_floor]]）。
+    const _dg = (e.parameter._diag === '1') ? {} : null;
+    let _dgT = _reqT0;
+    const _lap = k => { if (_dg) { const n = Date.now(); _dg[k] = n - _dgT; _dgT = n; } };
     try {
+    _lap('gate'); // ここまで＝ゲート処理(名簿・退職/休職/管理者判定)
     const lookupNameH = normalizeName_(isAdmin ? viewAs : name);
-    const staffRoleH = getStaffRoleByName_(lookupNameH);
-    const shiftsH = portalShifts_(lookupNameH);
-    const confirmedShiftsH = getConfirmedShiftDates_(lookupNameH, shiftsH, staffRoleH);
-    const pendingShiftsH = staffRoleH === '黒服バイト' ? getPendingShiftDates_(lookupNameH) : {};
-    // 本日の実効出勤（デフォルト経路と同一ロジック）
-    let todayArrivalH = null;
-    const todayKeyH = bizShiftColKey_();
-    const todayShiftValH = rawShiftCellToday_(lookupNameH) || shiftsH[todayKeyH];
-    if (todayShiftValH && todayShiftValH !== '休み' && todayShiftValH !== '欠勤') {
-      const effH = castEffectiveArrival_(lookupNameH, todayShiftValH);
-      todayArrivalH = { key: todayKeyH, time: effH.time, pending: effH.pending, dohan: effH.dohan };
+    const staffRoleH = getStaffRoleByName_(lookupNameH);                                          _lap('staffRole');
+    const payloadH = { ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH, onLeave };
+
+    // ---- 軽い側（シフト系）: 実測 約1.3秒。ここだけで「次の出勤」まで描ける ----
+    if (wantLite) {
+      const shiftsH = portalShifts_(lookupNameH);                                                 _lap('shifts');
+      const confirmedShiftsH = getConfirmedShiftDates_(lookupNameH, shiftsH, staffRoleH);         _lap('confirmedShifts');
+      const pendingShiftsH = staffRoleH === '黒服バイト' ? getPendingShiftDates_(lookupNameH) : {}; _lap('pendingShifts');
+      // 本日の実効出勤（デフォルト経路と同一ロジック）
+      let todayArrivalH = null;
+      const todayKeyH = bizShiftColKey_();
+      const todayShiftValH = rawShiftCellToday_(lookupNameH) || shiftsH[todayKeyH];               _lap('rawShiftCell');
+      if (todayShiftValH && todayShiftValH !== '休み' && todayShiftValH !== '欠勤') {
+        const effH = castEffectiveArrival_(lookupNameH, todayShiftValH);
+        todayArrivalH = { key: todayKeyH, time: effH.time, pending: effH.pending, dohan: effH.dohan };
+      }                                                                                           _lap('todayArrival');
+      const closedDaysH = {}; getHolidays_().forEach(h => { closedDaysH[h.date] = h.label || '店休日'; }); _lap('holidays');
+      payloadH.shifts = shiftsH;
+      payloadH.confirmedShifts = confirmedShiftsH;
+      payloadH.pendingShifts = pendingShiftsH;
+      payloadH.todayArrival = todayArrivalH;
+      payloadH.closedDays = closedDaysH;
+      payloadH.nextWeek = nextWeekDeclineInfo_(lookupNameH);                                      _lap('nextWeek');
     }
+
+    // ---- 重い側（席/出勤/今日の予約/空席/お知らせ）: 実測 約4.2秒 ----
     // 同梱: 座席(getCastSeats相当) / 今日の予約(tab=yoyaku相当) / 空席(tab=vacancy相当)
     // ⚠️休職中は「今日の予約」「空席」を取得も送信もしない（＝フロントで隠すだけにせず、そもそも渡さない）
-    const seatsH = castCurrentSeats_(lookupNameH);
-    const workingH = onLeave ? false : (isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin);
-    let reservationsH = []; if (!onLeave) { try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {} }
-    let vacancyH = null; if (!onLeave) { try { vacancyH = getPortalVacancy_(); } catch (e) {} }
-    const closedDaysH = {}; getHolidays_().forEach(h => { closedDaysH[h.date] = h.label || '店休日'; });
-    return out({ ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH, onLeave,
-      shifts: shiftsH, confirmedShifts: confirmedShiftsH, pendingShifts: pendingShiftsH,
-      todayArrival: todayArrivalH, seats: seatsH, working: workingH,
-      reservations: reservationsH, vacancy: vacancyH, closedDays: closedDaysH,
-      nextWeek: nextWeekDeclineInfo_(lookupNameH),
-      notices: getNoticesFor_(lookupNameH, staffRoleH, userId) });
+    if (wantRest) {
+      payloadH.seats = castCurrentSeats_(lookupNameH);                                            _lap('seats');
+      payloadH.working = onLeave ? false : (isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin); _lap('working');
+      let reservationsH = []; if (!onLeave) { try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {} } _lap('reservations');
+      let vacancyH = null; if (!onLeave) { try { vacancyH = getPortalVacancy_(); } catch (e) {} }  _lap('vacancy');
+      payloadH.reservations = reservationsH;
+      payloadH.vacancy = vacancyH;
+      payloadH.notices = getNoticesFor_(lookupNameH, staffRoleH, userId);                         _lap('notices');
+    }
+
+    if (_dg) { _dg.total = Date.now() - _reqT0; payloadH._diag = _dg; } // 計測時のみキーを足す
+    return out(payloadH);
     } finally {
       _portalHomeMemo = null;  // ★必ず解除（例外時も）＝グローバルを次リクエストに漏らさない
       _staffValuesMemo = null; // ★同上（スタッフマスタのメモ）
@@ -8092,6 +8124,19 @@ function shiftSheetValuesMemo_() {
   return s2 ? s2.getDataRange().getValues() : null;
 }
 
+// アテンドログ(getActiveAtendou)の1リクエスト内メモ（2026-07-20）。
+// ポータルhomeは同じ日のアテンドを3回取り直していた（castCurrentSeats_ / isWorkingToday_ / getSekiJokyouData）。
+// 実測ではこの3ステップで seats 600ms・working 1,083ms・vacancy 1,325ms を消費（→reference_gas_performance_floor）。
+// ⚠️homeブランチ中(_portalHomeMemo非null)だけ有効。他の全経路は素通し＝従来どおり毎回取得で挙動不変。
+// ⚠️日付ごとに分けて持つ（homeは全部todayだが、別日で呼ばれても混ざらないように）。
+// ⚠️同期(autoSyncRsrvIfNeeded_)が実際に走った直後は席の状態が変わりうる → あちらでこのメモを捨てている。
+function activeAtendouMemo_(date) {
+  if (!_portalHomeMemo) return getActiveAtendou(date);
+  const k = 'aten:' + String(date || '');
+  if (_portalHomeMemo[k] === undefined) _portalHomeMemo[k] = getActiveAtendou(date);
+  return _portalHomeMemo[k];
+}
+
 function portalShifts_(name) {
   try {
     const shifts = {};
@@ -8507,6 +8552,9 @@ function autoSyncRsrvIfNeeded_() {
   sp.setProperty('RSRV_SYNC_AT', String(Date.now()));
   syncRsrvWithReservations_();
   syncYrsrv_();
+  // ★同期が実際に走った＝席まわりの状態が変わりうる。ポータルhomeのアテンドメモは捨てて取り直させる。
+  //   （通常はscheduledJobsが先回りするのでここには来ない。来るのはトリガー停止時のフォールバック時だけ）
+  if (_portalHomeMemo) Object.keys(_portalHomeMemo).forEach(k => { if (k.indexOf('aten:') === 0) delete _portalHomeMemo[k]; });
 }
 
 // 確定予約をYRSRV_プロパティに書き込む（席カードに予告表示用）
