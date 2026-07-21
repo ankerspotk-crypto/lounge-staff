@@ -1021,7 +1021,7 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 <body>
 <script>
 /* ===== テスト環境リボン（ファイル名 -test.html で判定・本番では何も出力しない） ===== */
-if(/-test\.html/i.test(location.pathname)){document.write('<div style="background:#7a1020;color:#ffd7dd;font:700 12px/1.7 system-ui,-apple-system,sans-serif;text-align:center;padding:4px 8px;letter-spacing:.04em;">⚠️ 軍師 テスト環境 — 本番バックエンド接続（実データ）。確定操作は本番に反映されます</div>');}
+if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a1020;color:#ffd7dd;font:700 12px/1.7 system-ui,-apple-system,sans-serif;text-align:center;padding:4px 8px;letter-spacing:.04em;box-shadow:0 1px 6px rgba(0,0,0,.5);">⚠️ 軍師 テスト環境 — 本番バックエンド接続（実データ）。確定操作は本番に反映されます</div>');}
 </script>
 
 <div class="hdr">
