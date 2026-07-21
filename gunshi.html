@@ -1500,11 +1500,18 @@ function loadPunch(){
   });
 }
 function pnKey_(s){ return String(s==null?'':s).replace(/[\s　]/g,''); }
+function fmtStartDate_(s){ var m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?(parseInt(m[2],10)+'月'+parseInt(m[3],10)+'日'):(s||'8月1日'); }
 function punchCardHtml(){
   if(!PUNCH) return '<div class="pn-card"><div class="pn-mini">⏱ 打刻を読み込み中…</div></div>';
   if(PUNCH.error) return '<div class="pn-card"><div class="pn-mini">⏱ 打刻の状態を取得できませんでした<button class="pn-re" onclick="loadPunch()">再試行</button></div></div>';
   var me=PUNCH.me;
   if(!me||me.exempt) return '';   // 管理者・テストは打刻対象外＝カードごと出さない
+  // 制度開始前は予告カード＝打刻ボタンを出さない（サーバのbeforeStart判定＝端末時計に依存しない）
+  if(PUNCH.beforeStart){
+    var sd=fmtStartDate_(PUNCH.startDate);
+    return '<div class="pn-card"><div class="pn-head"><span class="pn-t">🗓 出退勤の打刻は '+sd+' から</span></div>'
+      +'<span class="pn-oth">'+sd+'より、このカードの出勤・退勤ボタンで打刻します。それまで操作は不要です。</span></div>';
+  }
   var others=(PUNCH.list||[]).filter(function(s){ return pnKey_(s.name)!==pnKey_(me.name); });
   var yet=others.filter(function(s){ return !s.in; }).length;
   var sub=others.length?('<span class="pn-oth">他の黒服 '+(others.length-yet)+'/'+others.length+' 出勤済み</span>'):'';
