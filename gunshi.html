@@ -3588,11 +3588,39 @@ function cashResultHtml(init){
   h+='<div class="flabel">現金の流れ</div>'+ccFlowHtml(v,true);
   if(init.safeUnchecked) h+='<div class="safe-auto-note" style="margin-top:10px">🔒 金庫は未確認（開店時の額を自動入力しました）</div>';
   var sd=init.slipDetails||[];
-  if(sd.length) h+='<div class="flabel">出ていったお金（伝票 '+sd.length+'枚）</div><div class="cc-flow">'+sd.map(function(x){return '<div class="cc-flow-row"><span style="color:#889">'+esc(x.category||'その他')+(x.payee?' / '+esc(x.payee):'')+(x.imageUrl&&x.imageUrl!=='#'?' <a href="'+esc(x.imageUrl)+'" target="_blank" style="color:#7ac6ff">📷</a>':'')+'</span><span style="color:#e0a060">−¥'+Number(x.amount||0).toLocaleString()+'</span></div>';}).join('')+'</div>';
+  if(sd.length) h+='<div class="flabel">出ていったお金（伝票 '+sd.length+'枚）</div><div class="cc-flow">'+sd.map(function(x){return '<div class="cc-flow-row"><span style="color:#889">'+esc(x.category||'その他')+(x.payee?' / '+esc(x.payee):'')+slipImgTag(x.imageUrl)+'</span><span style="color:#e0a060">−¥'+Number(x.amount||0).toLocaleString()+'</span></div>';}).join('')+'</div>';
   if(init.approved) h+='<div class="ck-banner ok">✅ 承認済み　承認者 '+esc(init.approver)+'（'+esc(init.approvedAt)+'）<br>🚪 退勤OKです</div>';
   else h+='<div class="ck-banner warn">⏳ 管理者の承認待ちです<br>承認は管理者が管理コンソールから行います（退勤OKになったらここに表示されます）</div>';
   h+='<div class="act dng" style="margin-top:10px" onclick="redoCash()">✏️ 内容を修正して再チェック</div>';
   return h;
+}
+// 現金伝票の📷タグ。制限付き保存(uc?id=)はGAS経由base64で開く。OCR由来(/file/d/)は従来の直リンクのまま。
+function slipImgTag(url){
+  var u=String(url||''); if(!u||u==='#') return '';
+  if(/[?&]id=/.test(u)) return ' <span class="dp-img" style="cursor:pointer;padding:1px 6px" data-purl="'+esc(u)+'" onclick="openSlipImg(this)">📷</span>';
+  return ' <a href="'+esc(u)+'" target="_blank" style="color:#7ac6ff">📷</a>';
+}
+function openSlipImg(el){
+  var u=el.getAttribute('data-purl'); if(!u) return;
+  el.style.opacity='.5';
+  gsr('kioskGetSlipImage',u).then(function(r){
+    el.style.opacity='';
+    if(!r||r.ok===false){ if(typeof toast==='function') toast((r&&r.error)||'画像を取得できませんでした'); return; }
+    showImgOverlay(r.dataUrl, r.name);
+  }).catch(function(){ el.style.opacity=''; if(typeof toast==='function') toast('画像の取得に失敗しました'); });
+}
+// 画像を全画面オーバーレイで表示（タップで閉じる）。
+function showImgOverlay(dataUrl, name){
+  var ov=document.getElementById('imgOverlay');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='imgOverlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.86);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out';
+    ov.onclick=function(){ ov.style.display='none'; ov.innerHTML=''; };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML='<img src="'+dataUrl+'" style="max-width:96vw;max-height:88vh;object-fit:contain;border-radius:8px;box-shadow:0 12px 44px rgba(0,0,0,.6)">'
+    +'<div style="color:#cdd;font-size:12px;margin-top:10px">'+(name?esc(name)+'　':'')+'（タップで閉じる）</div>';
+  ov.style.display='flex';
 }
 function redoCash(){ cashState.formMode=true; renderCashCheck(); }
 

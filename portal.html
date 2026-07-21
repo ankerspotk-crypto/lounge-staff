@@ -2476,9 +2476,7 @@ function renderHairTab(d) {
       h += '<div style="font-size:10px;color:#6a8ab0;margin-top:4px">登録: ' + esc(r.registeredAt) + '</div>';
       h += '</div>';
       h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">';
-      if (r.photoUrl) {
-        h += '<a href="' + esc(r.photoUrl) + '" target="_blank" style="font-size:11px;color:#7ab0f0;text-decoration:none;background:#0f2040;border:1px solid #3355aa;padding:4px 10px;border-radius:8px">写真を見る</a>';
-      }
+      // 写真の再閲覧リンクは撤去（Drive公開共有を廃止＝直リンクは403。キャストは提出/削除のみ。ボス確定2026-07-21）
       if (isAdmin || !d.isAdmin) {
         h += '<button onclick="deleteReceipt(' + r.rowIdx + ')" style="font-size:11px;color:#cc6666;background:#1a0f0f;border:1px solid #663333;padding:4px 10px;border-radius:8px;cursor:pointer">削除</button>';
       }
