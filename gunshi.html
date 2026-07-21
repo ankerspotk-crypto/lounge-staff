@@ -917,6 +917,23 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .hv-card:active{transform:scale(.985);}
 .hv-card .ic{font-size:25px;width:33px;text-align:center;flex:none;}
 .hv-card .bd{flex:1;min-width:0;}
+/* ⏱ 出退勤の打刻（ホーム最上段。未打刻のときだけ大きく出し、済んだら畳んで申し送りを埋めない） */
+.pn-card{border-radius:16px;padding:13px 16px;margin-bottom:14px;border:1px solid var(--line2);background:var(--panel2);}
+.pn-card.pn-in{background:linear-gradient(180deg,#0c1e12,#07160d);border-color:#2a6a3f;}
+.pn-card.pn-done{opacity:.6;}
+.pn-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+.pn-t{font-size:16px;font-weight:900;color:#8fe0a8;}
+.pn-plan{font-size:12px;color:var(--dim);font-weight:700;margin-left:8px;}
+.pn-btn{width:100%;border:0;border-radius:12px;padding:15px;font-size:17px;font-weight:900;cursor:pointer;}
+.pn-btn.go{background:#1f7a44;color:#fff;}
+.pn-btn.out{background:#2a1414;border:1px solid #6a2a2a;color:#ff9a9a;padding:11px;font-size:15px;}
+.pn-btn:active{transform:scale(.99);}
+.pn-btn[disabled]{opacity:.5;}
+.pn-mini{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--txt);margin-bottom:9px;}
+.pn-dot{color:#4ade80;font-size:11px;}
+.pn-card.pn-done .pn-mini{margin-bottom:0;font-size:13px;color:var(--dim);font-weight:700;}
+.pn-oth{display:block;font-size:12px;color:var(--dim);margin-top:9px;font-weight:700;}
+.pn-re{background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:8px;padding:4px 10px;font-size:12px;margin-left:8px;cursor:pointer;}
 /* 📋 日次申し送り（ホーム最上段・朝イチで必ず目に入るよう金系で強調） */
 .ho-card{background:linear-gradient(180deg,#1e1a0c,#161207);border:1px solid #6a5a2a;border-radius:16px;padding:15px 16px;margin-bottom:16px;}
 .ho-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:16px;font-weight:900;color:#f0d890;margin-bottom:10px;}
@@ -1355,7 +1372,7 @@ function setViewMode(m){
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
   // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
-  if(m==='home'&&BOOTED){loadHandover();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
+  if(m==='home'&&BOOTED){loadHandover();loadPunch();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
 }
 function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();if(p==='post')loadChecklistConfig();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
@@ -1465,7 +1482,56 @@ function renderHome(){
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
   var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderHomeChecklist(phase));
-  w.innerHTML=handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection();
+  w.innerHTML=punchCardHtml()+handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection();
+}
+
+/* ===== ⏱ 出退勤の打刻 =====
+   時刻はサーバが採る＝端末の時計ズレを持ち込まない（フロントから時刻を送ってはいけない）。
+   未打刻のときだけ大きく出し、済んだら1行に畳む＝申し送りを押しのけない。 */
+var PUNCH=null, _pnLoading=false, _pnBusy=false;
+function loadPunch(){
+  if(!IS_GAS){ PUNCH={bizDate:'(ローカル)',me:{name:LOGIN||'テスト',in:'',out:'',plan:'18:00～26:00'},list:[]}; if(viewMode==='home')renderHome(); return; }
+  if(_pnLoading)return; _pnLoading=true;
+  gsr('gunshiPunchStatus',LOGIN||'').then(function(r){
+    _pnLoading=false; PUNCH=r||{error:true}; if(viewMode==='home')renderHome();
+  }).catch(function(){
+    // ⚠️エラーでもフラグとPUNCHを必ず埋める＝「読み込み中…」で永久に固まらせない
+    _pnLoading=false; PUNCH={error:true}; if(viewMode==='home')renderHome();
+  });
+}
+function pnKey_(s){ return String(s==null?'':s).replace(/[\s　]/g,''); }
+function punchCardHtml(){
+  if(!PUNCH) return '<div class="pn-card"><div class="pn-mini">⏱ 打刻を読み込み中…</div></div>';
+  if(PUNCH.error) return '<div class="pn-card"><div class="pn-mini">⏱ 打刻の状態を取得できませんでした<button class="pn-re" onclick="loadPunch()">再試行</button></div></div>';
+  var me=PUNCH.me;
+  if(!me||me.exempt) return '';   // 管理者・テストは打刻対象外＝カードごと出さない
+  var others=(PUNCH.list||[]).filter(function(s){ return pnKey_(s.name)!==pnKey_(me.name); });
+  var yet=others.filter(function(s){ return !s.in; }).length;
+  var sub=others.length?('<span class="pn-oth">他の黒服 '+(others.length-yet)+'/'+others.length+' 出勤済み</span>'):'';
+  var plan=me.plan?'<span class="pn-plan">予定 '+esc(me.plan)+'</span>':'';
+  if(!me.in){
+    return '<div class="pn-card pn-in"><div class="pn-head"><span class="pn-t">⏱ 出勤の打刻</span>'+plan+'</div>'
+      +'<button class="pn-btn go"'+(_pnBusy?' disabled':'')+' onclick="doPunch(\'出勤\')">🟢 出勤</button>'+sub+'</div>';
+  }
+  if(!me.out){
+    return '<div class="pn-card"><div class="pn-mini"><span class="pn-dot">●</span>'+esc(me.in)+' 出勤中'+plan+'</div>'
+      +'<button class="pn-btn out"'+(_pnBusy?' disabled':'')+' onclick="doPunch(\'退勤\')">🔴 退勤</button>'+sub+'</div>';
+  }
+  return '<div class="pn-card pn-done"><div class="pn-mini">⏱ 本日 '+esc(me.in)+' 〜 '+esc(me.out)+' 打刻済み</div></div>';
+}
+function doPunch(type){
+  if(_pnBusy)return;
+  if(!IS_GAS){ alert('ローカルでは打刻できません'); return; }
+  if(type==='退勤'&&!confirm('退勤を打刻します。よろしいですか？'))return;
+  _pnBusy=true; if(viewMode==='home')renderHome();
+  gsr('gunshiPunch',LOGIN||'',type).then(function(r){
+    _pnBusy=false;
+    if(!r||!r.ok){ alert('⚠️ '+((r&&r.error)||'打刻できませんでした')); loadPunch(); return; }
+    var msg='✅ '+r.type+'を記録しました（'+r.time+'）';
+    if(r.lateMin>0) msg+='\n\n⚠️ 予定 '+r.plan+' に対して '+r.lateMin+'分の遅刻として記録されます。\nやむを得ない事情があった場合は責任者に申告してください。';
+    if(r.earlyMin>0) msg+='\n\n⚠️ 予定 '+r.plan+' より '+r.earlyMin+'分早い退勤です。';
+    alert(msg); loadPunch();
+  }).catch(function(){ _pnBusy=false; alert('⚠️ 通信に失敗しました。もう一度お試しください'); loadPunch(); });
 }
 
 /* ===== 📋 黒服 日次申し送り（引き継ぎボード）===== */
@@ -2864,6 +2930,7 @@ var MENU_TILES=[
     {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"}
   ]},
   {group:'管理', items:[
+    {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
     {ic:'💳', t:'会費更新',           act:"openFeeRenew()"},
@@ -4313,6 +4380,18 @@ function gsr(fn){
   return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a})})
     .then(function(r){return r.json();})
     .then(function(j){ if(j&&j.__ok===false) throw new Error(j.error||'server error'); return j?j.data:j; });
+}
+
+/* 📝 面談を開始：トークンを発行して応募者フロント(mendan.html)を開く。
+   ⚠️封じ込め：iPadを応募者に渡す前に軍師セッションを破棄する（戻られてもPINログインで止まる）。 */
+function startMendanFlow(){
+  if(!confirm('面談を開始します。\nこの iPad を応募者にお渡しする準備はよろしいですか？\n（安全のため、いったん軍師からログアウトします）')) return;
+  gsr('gunshiStartMendan', LOGIN).then(function(r){
+    if(!r || !r.ok){ alert((r&&r.error)||'開始できませんでした'); return; }
+    var base=location.origin+location.pathname.replace(/[^/]*$/,'');
+    try{ localStorage.removeItem(kSessKey()); }catch(_){}   // 封じ込め：軍師セッション破棄
+    location.href=base+'mendan.html?t='+r.token;
+  }).catch(function(){ alert('通信に失敗しました。もう一度お試しください。'); });
 }
 
 function adaptHall(data){
