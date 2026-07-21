@@ -3243,7 +3243,7 @@ function renderCustVisits(v){
     var sales=r.sales?('売上¥'+Number(r.sales).toLocaleString()):'';
     return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 2px;border-bottom:1px solid var(--line);font-size:13px">'
       +'<span style="width:74px;flex-shrink:0;font-weight:700">'+esc(fmtVisitDate(r.date))+'</span>'
-      +'<span style="flex:1;color:var(--sub)">'+esc(r.in||'')+(r.out?'〜'+esc(r.out):'')+(r.table?'　'+esc(r.table):'')+(r.tantou?'　担当 '+esc(r.tantou):'')+(fee?'　'+fee:'')+(sales?'　'+sales:'')+'</span>'
+      +'<span style="flex:1;color:var(--sub)">'+esc(r.in||'')+(r.out?'〜'+esc(r.out):'')+(r.table?'　'+esc(r.table):'')+(r.pax?'　'+r.pax+'名':'')+(r.tantou?'　担当 '+esc(r.tantou):'')+(fee?'　'+fee:'')+(sales?'　'+sales:'')+'</span>'
       +(r.dohan?'<span class="cbd" style="flex-shrink:0">🤝同伴'+(r.dohanCast?' '+esc(r.dohanCast):'')+'</span>':'')
       +(r.source==='TRUST'?'<span class="cbd" style="flex-shrink:0">TRUST</span>':'')
       +'</div>';

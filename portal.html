@@ -1249,6 +1249,16 @@ function homeToast(msg, ok){
 
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
 var statsSubTab = 'sales';
+var billsJumpDate = '';  // 顧客の来店記録タップ→その日の伝票へ飛ぶ時だけセット（renderBillsBodyで1回だけ消費）
+
+// 来店記録（顧客詳細）から、その来店日の伝票へ飛ぶ。担当キャスト/管理者のみ呼ばれる（呼び出し側でガード済み）
+function jumpToBillDayFromVisit(date) {
+  if (!date) return;
+  billsJumpDate = date;
+  currentMonth = String(date).slice(0, 7);
+  statsSubTab = 'bills';
+  switchTab('stats');
+}
 
 // 成績データ（売上/給与/月一覧/領収書合計/受領状況）を遅延ロードしてportalDataにマージ。
 // ホームは tab=home の軽量ペイロードで先に描画し、成績タブを開いた時だけこれを叩く（初回ロード高速化）。
@@ -1318,6 +1328,25 @@ function renderBills() {
 }
 
 function renderBillsBody(d) {
+  // 来店記録からジャンプしてきた時だけ、対象日の伝票カードを自動展開＋スクロール（1回消費）
+  var jumpDate = billsJumpDate; billsJumpDate = '';
+  function finishBills(html) {
+    setContent(html);
+    if (!jumpDate) return;
+    var tgt = document.getElementById('billday-' + jumpDate);
+    if (tgt) {
+      var slips = tgt.querySelector('.bill-slips'); if (slips) slips.style.display = 'block';
+      try { tgt.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) { tgt.scrollIntoView(); }
+      tgt.style.boxShadow = '0 0 0 2px #7ab0f0';
+      setTimeout(function () { tgt.style.boxShadow = ''; }, 2200);
+    } else {
+      var note = document.createElement('div');
+      note.style.cssText = 'background:#1a1400;border:1px solid #443300;color:#c9a066;border-radius:8px;padding:9px 12px;font-size:12px;margin-bottom:10px';
+      note.textContent = fmtBillDate(jumpDate) + ' の伝票は見つかりませんでした（あなたの担当分のみ表示されます）';
+      var host = document.getElementById('stats-body') || document.getElementById('content');
+      if (host) host.insertBefore(note, host.firstChild);
+    }
+  }
   var days = d.days || [];
   var h = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
     + '<div style="font-size:13px;color:#7ab0f0;font-weight:700">' + esc(d.cast||'') + ' さんの伝票</div>'
@@ -1327,10 +1356,10 @@ function renderBillsBody(d) {
     + '<span style="font-size:19px;font-weight:800;color:#7ab0f0">' + yen(d.monthTotal||0) + '</span></div>';
   if (days.length === 0) {
     h += '<div style="text-align:center;color:#6a8ab0;padding:44px 16px;font-size:13px;line-height:1.8">この月の伝票データはまだありません。<br><small>毎晩、自動で前日分が追加されます。</small></div>';
-    setContent(h); return;
+    finishBills(h); return;
   }
   days.forEach(function(day){
-    h += '<div style="border:1px solid #1e3050;border-radius:9px;margin-bottom:8px;overflow:hidden">'
+    h += '<div id="billday-' + day.date + '" style="border:1px solid #1e3050;border-radius:9px;margin-bottom:8px;overflow:hidden;transition:box-shadow .3s">'
       + '<div onclick="toggleBillDay(this)" style="padding:11px 13px;background:#141d30;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'
       + '<span style="font-size:13px;color:#cfe0f5;font-weight:700">' + fmtBillDate(day.date)
       + ' <span style="color:#7a9cc8;font-weight:400;font-size:11px">(' + day.count + '件)</span></span>'
@@ -1347,7 +1376,7 @@ function renderBillsBody(d) {
     });
     h += '</div></div>';
   });
-  setContent(h);
+  finishBills(h);
 }
 
 function toggleBillDay(el){ var b = el.nextElementSibling; b.style.display = (b.style.display === 'none' ? 'block' : 'none'); }
@@ -2393,19 +2422,23 @@ function renderPortalVisits(v) {
     + (s.totalSales ? '<div><div style="font-size:11px;color:#6a8ab0">累計売上</div><div style="font-size:18px;font-weight:800;color:#7fe0a0">¥' + Number(s.totalSales).toLocaleString() + '</div></div>' : '')
     + '</div>';
   var moneyNote = (s.money === false) ? '<div style="font-size:11px;color:#6a8ab0;margin-bottom:8px">🔒 金額は担当キャストのみ表示されます</div>' : '';
+  // 担当キャスト（＝金額が見える人）だけ、来店行タップでその日の伝票へ飛べる ＝「担当者しか見れない機能」
+  var canJump = (s.money !== false);
+  var jumpHint = canJump ? '<div style="font-size:11px;color:#5a7ba0;padding:2px 2px 8px">各来店をタップすると、その日の伝票を開けます</div>' : '';
   var rows = h.map(function(r) {
     var sales = r.sales ? '売上¥' + Number(r.sales).toLocaleString() : '';
     var fee = (r.seatFee ? '席料¥' + Number(r.seatFee).toLocaleString() : '') + (r.dohanFee ? (r.seatFee ? ' ' : '') + '同伴料¥' + Number(r.dohanFee).toLocaleString() : '');
-    return '<div style="display:flex;gap:10px;align-items:baseline;padding:7px 2px;border-bottom:1px solid #16233c;font-size:13px">'
+    return '<div ' + (canJump ? 'onclick="jumpToBillDayFromVisit(\'' + r.date + '\')" ' : '') + 'style="display:flex;gap:10px;align-items:baseline;padding:7px 2px;border-bottom:1px solid #16233c;font-size:13px' + (canJump ? ';cursor:pointer' : '') + '">'
       + '<span style="width:66px;flex-shrink:0;font-weight:700;color:#d0e4f8">' + esc(fmtVisitDate(r.date)) + '</span>'
-      + '<span style="flex:1;color:#8aabcc">' + esc(r.in || '') + (r.out ? '〜' + esc(r.out) : '') + (r.table ? '　' + esc(r.table) : '') + (r.tantou ? '　担当' + esc(r.tantou) : '') + (sales ? '　' + sales : (fee ? '　' + fee : '')) + '</span>'
+      + '<span style="flex:1;color:#8aabcc">' + esc(r.in || '') + (r.out ? '〜' + esc(r.out) : '') + (r.table ? '　' + esc(r.table) : '') + (r.pax ? '　' + r.pax + '名' : '') + (r.tantou ? '　担当' + esc(r.tantou) : '') + (sales ? '　' + sales : (fee ? '　' + fee : '')) + '</span>'
       + (r.dohan ? '<span class="ycm ycm-note" style="flex-shrink:0">🤝同伴' + (r.dohanCast ? esc(r.dohanCast) : '') + '</span>' : '')
       + (r.source === 'TRUST' ? '<span class="ycm ycm-note" style="flex-shrink:0">TRUST</span>' : '')
+      + (canJump ? '<span style="flex-shrink:0;color:#5a7ba0;font-size:12px">伝票 ›</span>' : '')
       + '</div>';
   }).join('');
   el.innerHTML = '<div style="background:#0d1626;border:1px solid #1a2740;border-radius:12px;padding:14px">'
     + '<div style="font-size:12px;color:#6a8ab0;margin-bottom:8px">🕗 来店情報</div>' + tiles + moneyNote
-    + '<div id="pcv-list" style="display:none;max-height:340px;overflow-y:auto">' + rows + '</div>'
+    + '<div id="pcv-list" style="display:none;max-height:340px;overflow-y:auto">' + jumpHint + rows + '</div>'
     + '<button onclick="var l=document.getElementById(\'pcv-list\');var on=l.style.display===\'none\';l.style.display=on?\'block\':\'none\';this.textContent=on?\'▲ 履歴を閉じる\':\'▼ 来店履歴を見る（直近' + h.length + '件）\'" style="width:100%;margin-top:6px;background:#111b2e;border:1px solid #1e3050;color:#8aabcc;border-radius:8px;padding:8px;font-size:13px;cursor:pointer">▼ 来店履歴を見る（直近' + h.length + '件）</button>'
     + '</div>';
 }
