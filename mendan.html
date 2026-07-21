@@ -329,16 +329,6 @@ body{
     <div class="pnote">お預かりした写真は、お店の管理者だけが確認します。第三者には共有しません。</div>
   </section>
 
-  <!-- 7. シミュ -->
-  <section class="step" data-name="お給料の目安" data-k="sim">
-    <div class="shead"><div class="k">STEP 7</div><h1 class="mincho">あなたなら、どのくらい</h1><p>ご入力の内容から、月のお給料の目安をお出しします。</p></div>
-    <div class="hero"><div class="cap">月のお手取り目安（標準）</div><div class="big" id="heroAmt">—</div><div class="sub" id="heroSub"></div></div>
-    <div class="cards" id="cards"></div>
-    <div id="compareWrap"></div>
-    <details class="brk" id="brk"><summary><span>お給料の内訳（標準の場合）</span><span class="cv">▾</span></summary><table class="bt" id="brkTbl"></table></details>
-    <div class="simnote" id="simnote"></div>
-  </section>
-
   <!-- 8. 完了 -->
   <section class="step" data-name="完了" data-k="done">
     <div class="done">
@@ -443,7 +433,6 @@ function go(i){
     document.getElementById('progBar').style.width = Math.round(i/total*100) + '%';
   }
   document.getElementById('nextBtn').textContent = (i===LAST_INPUT) ? 'この内容で送る' : '次へ';
-  if(steps[i].dataset.k==='sim') renderSim();
   window.scrollTo(0,0);
 }
 function back(){ if(cur>0) go(cur-1); }

@@ -4397,6 +4397,34 @@ function startMendanFlow(){
 
 /* ===== 📋 面談表（黒服が内容を見ながら面談→補足→判定） ===== */
 var MENDAN_LIST=[];
+/* ===== 給与シミュ（面談表の応募者データから・黒服が面談で本人に見せる。率表は本番newBackCalc_と同一） ===== */
+var SIM_GENSEN=0.1021, SIM_WEEKS=4.3;
+var SIM_CFG={ wage:3000, nyuten:50000, firstMonth:true, stdBairitu:1.5, lowMult:0.5, highMult:1.5 };
+function simRate_(b){ return b<2?10:(b<3?15:20); }
+function simOne_(tanto,jikan,ny){ tanto=Math.max(0,tanto); var b=jikan>0?tanto/jikan:0, rp=simRate_(b), nb=Math.round(tanto*rp/100), kz=jikan+nb+(ny||0), gs=Math.floor(kz*SIM_GENSEN); return {tanto:tanto,ratePct:rp,newBack:nb,kazei:kz,gensen:gs,take:kz-gs}; }
+function simHours_(range){ if(!range)return 6; var p=String(range).split('-'); if(p.length<2)return 6; var f=p[0].split(':'),t=p[1].split(':'); if(f.length<2||t.length<2)return 6; var h=(+t[0]+(+t[1])/60)-(+f[0]+(+f[1])/60); if(h<=0)h+=24; return Math.round(h*10)/10; }
+function buildSimHtml_(m){
+  var hasExp=(m.exp==='あり'||m.exp==='少し');
+  var prevSales=Number(m.prevSales)||0, prevWage=Number(m.prevWage)||0;
+  var hours=simHours_(m.timeRange);
+  var days=Number(m.days)|| (m.weekdays? String(m.weekdays).split('・').filter(Boolean).length : 3) || 3;
+  var dpm=days*SIM_WEEKS;
+  var jikan=Math.round(SIM_CFG.wage*hours*dpm);
+  var ny=SIM_CFG.firstMonth?SIM_CFG.nyuten:0;
+  var base=(hasExp&&prevSales>0)?prevSales:Math.round(jikan*SIM_CFG.stdBairitu);
+  var tiers=[['控えめ',SIM_CFG.lowMult],['標準',1],['頑張った時',SIM_CFG.highMult]].map(function(t){ var r=simOne_(Math.round(base*t[1]),jikan,ny); r.tag=t[0]; return r; });
+  var mid=tiers[1];
+  var compare=(hasExp&&prevWage>0)?{prev:Math.round(prevWage*hours*dpm),our:mid.take}:null;
+  var yen=function(n){return '¥'+Math.round(n).toLocaleString('ja-JP');};
+  var h='<div style="margin-top:16px;border:1px solid rgba(201,164,92,.3);border-radius:12px;padding:16px;background:linear-gradient(170deg,#1c1815,#0d0b0a)">'
+    +'<div style="font-size:11px;color:#a29a8e;text-align:center;letter-spacing:.1em">💰 お給料の目安（面談で本人に見せる）</div>'
+    +'<div style="font-family:\'Yu Mincho\',serif;font-size:34px;text-align:center;color:#e6d2a8;line-height:1.1;margin:4px 0">'+Math.round(mid.take).toLocaleString('ja-JP')+'<span style="font-size:14px;color:#a29a8e"> 円/月</span></div>'
+    +'<div style="font-size:10.5px;color:#6f685e;text-align:center;margin-bottom:12px">時給'+SIM_CFG.wage.toLocaleString()+'円 × 1日'+hours+'時間 × 月'+(Math.round(dpm*10)/10)+'日 ＋ バック'+mid.ratePct+'%（初月は祝金込み）</div>'
+    +'<div style="display:flex;gap:7px">'+tiers.map(function(t){ var on=(t.tag==='標準'); return '<div style="flex:1;text-align:center;border:1px solid '+(on?'#c9a45c':'rgba(255,255,255,.1)')+';border-radius:9px;padding:9px 3px;background:'+(on?'#1a1611':'transparent')+'"><div style="font-size:9.5px;color:#a29a8e">'+t.tag+'</div><div style="font-family:\'Yu Mincho\',serif;font-size:15px;color:#e6d2a8;margin-top:2px">'+Math.round(t.take).toLocaleString('ja-JP')+'</div><div style="font-size:9px;color:#6f685e;margin-top:2px">売上'+Math.round(t.tanto/10000)+'万/'+t.ratePct+'%</div></div>'; }).join('')+'</div>';
+  if(compare){ h+='<div style="text-align:center;font-size:12px;color:#c9a45c;margin-top:10px">前のお店 '+yen(compare.prev)+' → いえやす <b>'+yen(compare.our)+'</b>（月 +'+Math.round(compare.our-compare.prev).toLocaleString('ja-JP')+'円）</div>'; }
+  h+='<div style="font-size:9.5px;color:#6f685e;text-align:center;margin-top:8px">※担当売上の想定にもとづく試算。保証ではありません。</div></div>';
+  return h;
+}
 function mendanBack_(){ return '<span class="menu-back" onclick="closeMenu()">← 閉じる</span>'; }
 function openMendanManager(){
   document.getElementById('menuOverlay').classList.add('show');
@@ -4438,6 +4466,7 @@ function openMendanDetail(i){
     +row('他店予定',(m.other==='あり')?('⚠️あり '+(m.otherNote||'')):'なし')
     +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証',m.idPhoto)+'</div>'
     +'</div>'
+    +buildSimHtml_(m)
     +'<div style="margin-top:16px"><div style="font-size:13px;color:#a29a8e;margin-bottom:6px">補足事項（面談メモ）</div>'
     +'<textarea id="mjMemo" style="width:100%;min-height:80px;background:#0c0a08;border:1px solid rgba(201,164,92,.2);color:#ece7dd;border-radius:10px;padding:12px;font-size:15px;font-family:inherit">'+esc(m.memo||'')+'</textarea></div>'
     +'<div style="font-size:13px;color:#a29a8e;margin:16px 0 8px">判定（りく＋管理者にLINEで通知されます）</div>'
