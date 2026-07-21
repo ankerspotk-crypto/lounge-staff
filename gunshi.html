@@ -4442,11 +4442,43 @@ function openMendanDetail(i){
     +'<textarea id="mjMemo" style="width:100%;min-height:80px;background:#0c0a08;border:1px solid rgba(201,164,92,.2);color:#ece7dd;border-radius:10px;padding:12px;font-size:15px;font-family:inherit">'+esc(m.memo||'')+'</textarea></div>'
     +'<div style="font-size:13px;color:#a29a8e;margin:16px 0 8px">判定（りく＋管理者にLINEで通知されます）</div>'
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="submitMendanJudge(\''+m.id+'\',\'体験へ\')" style="flex:1;background:#c9a45c;color:#1a1207;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700">体験へ</button>'
+    +'<button onclick="showTaiken(\''+m.id+'\')" style="flex:1;background:#c9a45c;color:#1a1207;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700">体験へ</button>'
     +'<button onclick="submitMendanJudge(\''+m.id+'\',\'面談で終わり\')" style="flex:1;background:transparent;border:1px solid rgba(201,164,92,.4);color:#e6d2a8;border-radius:11px;padding:15px;font-size:14px">面談で終わり</button>'
     +'<button onclick="submitMendanJudge(\''+m.id+'\',\'不採用\')" style="flex:1;background:transparent;border:1px solid rgba(163,59,50,.5);color:#d1786d;border-radius:11px;padding:15px;font-size:14px">不採用</button>'
-    +'</div>';
+    +'</div>'
+    +'<div id="taikenForm" style="display:none;margin-top:14px;border:1px solid rgba(201,164,92,.3);border-radius:12px;padding:16px;background:#15120f"></div>';
   el.innerHTML=h;
+}
+/* 「体験へ」→ 源氏名＋体験日＋時間を入力してシフト登録／修正 */
+function showTaiken(id){
+  var el=document.getElementById('taikenForm'); if(!el)return;
+  var now=new Date(); var iso=now.getFullYear()+'-'+('0'+(now.getMonth()+1)).slice(-2)+'-'+('0'+now.getDate()).slice(-2);
+  var inp='background:#0c0a08;border:1px solid rgba(201,164,92,.3);color:#ece7dd;border-radius:10px;padding:12px;font-size:16px;font-family:inherit';
+  el.innerHTML=
+    '<div style="font-size:14px;font-weight:700;color:#e6d2a8;margin-bottom:12px">🌸 体験の登録（シフト表に反映）</div>'
+    +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">源氏名（お店での名前）</div>'
+    +'<input id="tkGenji" placeholder="例：ゆい" style="width:100%;'+inp+';margin-bottom:12px">'
+    +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">体験日</div>'
+    +'<input id="tkDate" type="date" value="'+iso+'" style="width:100%;'+inp+';margin-bottom:12px">'
+    +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">時間（シフト表の書き方で）</div>'
+    +'<input id="tkTime" value="20:00〜24:00" placeholder="例：20:00〜24:00" style="width:100%;'+inp+'">'
+    +'<div style="font-size:11px;color:#6f685e;margin-top:6px">※ 同じ源氏名が既にシフト表にあれば、その日の時間を上書き（修正）します。</div>'
+    +'<button onclick="submitTaiken(\''+id+'\')" style="width:100%;margin-top:16px;background:#c9a45c;color:#1a1207;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700">この内容で体験登録＆シフトに反映</button>';
+  el.style.display='block';
+  try{ el.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+}
+function submitTaiken(id){
+  var genji=((document.getElementById('tkGenji')||{}).value||'').trim();
+  var date=(document.getElementById('tkDate')||{}).value||'';
+  var time=((document.getElementById('tkTime')||{}).value||'').trim();
+  var memo=((document.getElementById('mjMemo')||{}).value||'');
+  if(!genji){ alert('源氏名を入力してください'); return; }
+  if(!date){ alert('体験日を選んでください'); return; }
+  if(!confirm('【体験へ】で確定します。\n源氏名「'+genji+'」で '+date+' '+time+' をシフト表に登録し、\nりく＋管理者にLINEで通知します。よろしいですか？')) return;
+  gsr('gunshiJudgeMendan', LOGIN, id, memo, '体験へ', genji, date, time).then(function(r){
+    if(r&&r.ok){ alert('体験を登録し、シフトに反映しました。'); openMendanManager(); }
+    else alert((r&&r.error)||'登録に失敗しました');
+  }).catch(function(){ alert('通信に失敗しました'); });
 }
 function submitMendanJudge(id,judge){
   var memo=(document.getElementById('mjMemo')||{}).value||'';
