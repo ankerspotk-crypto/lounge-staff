@@ -2339,7 +2339,7 @@ function renderCustomerList_() {
     return '<div class="cust-card" onclick="openPortalCustDetail(' + i + ')" style="cursor:pointer">'
       + '<div class="cust-card-top">'
       + '<span class="cust-card-name">' + esc(c.name || c.card || '') + '様</span>'
-      + (c.no ? '<span class="cust-card-no">会員 ' + esc(c.no) + '</span>' : '')
+      + (c.no ? '<span class="cust-card-no">会員 ' + esc(pad4No(c.no)) + '</span>' : '')
       + (c.tantou ? '<span class="cust-card-tantou">担当: ' + esc(c.tantou) + '</span>' : '')
       + '</div>'
       + (badges ? '<div class="cust-card-badges">' + badges + '</div>' : '')
@@ -2365,7 +2365,7 @@ function openPortalCustDetail(i) {
   var head = '<div style="padding:14px">'
     + '<button onclick="backToCustList()" style="background:#111b2e;border:1px solid #1e3050;color:#8aabcc;border-radius:8px;padding:7px 14px;font-size:13px;margin-bottom:14px;cursor:pointer">← 顧客一覧へ戻る</button>'
     + '<div style="font-size:20px;font-weight:800;color:#e8f0ff;margin-bottom:2px">' + esc(c.name || c.card || '') + ' 様</div>'
-    + '<div style="font-size:12px;color:#6a8ab0;margin-bottom:12px">' + (c.no ? '会員 ' + esc(c.no) : '') + (c.tantou ? '　担当 ' + esc(c.tantou) : '') + '</div>';
+    + '<div style="font-size:12px;color:#6a8ab0;margin-bottom:12px">' + (c.no ? '会員 ' + esc(pad4No(c.no)) : '') + (c.tantou ? '　担当 ' + esc(c.tantou) : '') + '</div>';
   var info = '';
   function row(k, v) { if (v) info += '<div style="display:flex;gap:10px;padding:8px 2px;border-bottom:1px solid #16233c;font-size:13px"><span style="width:90px;flex-shrink:0;color:#6a8ab0">' + k + '</span><span style="flex:1;color:#d0e4f8;white-space:pre-wrap">' + esc(v) + '</span></div>'; }
   row('ボトル', c.bottle); row('誕生日', c.bday); row('飲み方', c.drink); row('タバコ', c.tabaco);
@@ -3493,6 +3493,7 @@ function showErr(msg) {
   setContent('<div class="err">' + msg + '</div>');
 }
 
+function pad4No(n){ n=String(n==null?'':n); return /^\d+$/.test(n)&&n.length<4?('0000'+n).slice(-4):n; }
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
