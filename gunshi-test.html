@@ -167,6 +167,7 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .mflag.f-ng{background:#2a0e0e;color:#f08080;border:1px solid #7a2828;}
 .mflag.f-req{background:#20203a;color:#9aa8c8;border:1px solid var(--line2);cursor:pointer;}
 .mflag.f-req.un{background:#2a1600;color:#ffb060;border-color:#7a4a10;animation:apulse 1.6s ease-in-out infinite;}
+.mflag.f-next{background:#3a2a12;color:#ffc98a;border:1px solid #7a5a2a;}
 .mini-r1{display:flex;align-items:center;justify-content:space-between;gap:4px;line-height:1.15;min-width:0;}
 /* 席名は縮まない＝削っていいのはフラグだけ。極端に長い結合名（カウ1＋2＋3）だけ62%で省略する */
 .mini-r1 b{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;max-width:62%;}
@@ -1739,6 +1740,7 @@ function mapBox_(p,fl){
 var MAP_TAG={ng:'⚠',bday:'🎂',vip:'👑',bottle:'🍶'};
 function mapFlags_(s,idx){
   var f='';
+  if(s.nextRsv) f+='<span class="mflag f-next" title="次席予約 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様">🔜'+esc(rsvArrT(s.nextRsv))+'</span>';
   var rq=reqsForCust(s.cust);
   if(rq&&rq.length){
     var un=rq.filter(function(r){return !r.handled;}).length;
@@ -1999,7 +2001,7 @@ function seatHtml(s){
     return '<div class="seat nocast'+mt+self+ct+cprim+grp+'" '+oc+'><div class="cnr">⚠ 担当不在</div>'
       +'<div class="st"><span class="snm">'+esc(dispNm)+grpBadge+coBadge+'</span><span class="pax">'+paxDisp+'名</span></div>'
       +((tags||reqBadgeHtml(idx,s.cust))?'<div class="tags">'+tags+reqBadgeHtml(idx,s.cust)+'</div>':'')
-      +occupantsHtml(s)+seatInfoLine(s)
+      +occupantsHtml(s)+seatInfoLine(s)+nextRsvLine_(s)
       +(tantou?'<div style="margin-top:3px">'+chipHtml(tantou,-1,idx,{away:true,awayMin:s.awayMin})+'</div>':'')+'</div>';
   }
   // 接客中
@@ -2011,7 +2013,7 @@ function seatHtml(s){
   return '<div class="seat '+st+mt+self+ct+cprim+grp+'" '+oc+'>'+(cnr?'<div class="cnr">'+cnr+'</div>':'')
     +'<div class="st"><span class="snm">'+esc(dispNm)+grpBadge+coBadge+'</span><span class="pax">'+paxDisp+'名</span></div>'
     +((tags||rqb)?'<div class="tags">'+tags+rqb+'</div>':'')
-    +occupantsHtml(s)+seatCastCtx(s)+seatInfoLine(s)+'<div style="margin-top:2px">'+chips+'</div></div>';
+    +occupantsHtml(s)+seatCastCtx(s)+seatInfoLine(s)+nextRsvLine_(s)+'<div style="margin-top:2px">'+chips+'</div></div>';
 }
 // 席カードの客名表示（相席=複数組なら各組を縦積み、単一なら従来通り）
 function occupantsHtml(s){
@@ -2020,6 +2022,11 @@ function occupantsHtml(s){
   return '<div class="cust" style="line-height:1.45">'+occ.map(function(o){
     return '<div>'+esc(o.cust)+'様 <span style="font-size:10px;color:#8aa8c8">'+(o.pax||1)+'名'+(o.tantou?'・'+esc(o.tantou):'')+'</span></div>';
   }).join('')+'</div>';
+}
+// 来店中の席に「次席予約(=後半に入った別の確定予約)」があれば予告する1行。席一覧の接客中/担当不在で共用（マップはmapFlags_の🔜）。
+function nextRsvLine_(s){
+  if(!s||!s.nextRsv) return '';
+  return '<div class="rsv-meta" style="color:#ffc98a;margin-top:3px">🔜 次席予約 '+esc(rsvArrT(s.nextRsv))+'〜 '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'<span style="color:#8aa8c8;font-weight:600">・担当 '+esc(s.nextRsv.tantou)+'</span>':'')+'</div>';
 }
 /* ---- 席・キャストのタップ操作（付け回し / 移動） ---- */
 function onSeatClick(idx){
@@ -2281,6 +2288,20 @@ function statusBtns(r){
 function setStatus(id,s){
   var r=RSV.find(function(x){return x.id===id;}); if(!r)return;
   if(s==='確定'&&!canUndoCheckin(r)){ toast('来店から10分以上経過したため戻せません'); return; }
+  // 来店(チェックイン)時、割り当て席に既に別の組が着席中なら「相席」になる旨を確認＝無言マージ防止（2026-07-21）。
+  // 先客が後で退店する「次席予約(時間差)」なら、いまは来店にせず先客の退店後に来店させる運用へ誘導する。
+  // 席設定側(submitSeatSession)の相席ガードと対称。相席を意図するなら従来どおりOKで通せる。
+  if(s==='来店済み'){
+    var _occ=[];
+    rsvSeatCodes(r).forEach(function(code){
+      var seat=SEATS.find(function(x){return x.code===code;}); if(!seat)return;
+      (seat.occupants||[]).forEach(function(o){ if(o.rowIdx&&String(o.rowIdx)!==String(r.rowIdx||r.id)&&o.cust) _occ.push(o.cust); });
+    });
+    if(_occ.length){
+      var _nm=_occ.filter(function(v,i,a){return a.indexOf(v)===i;}).map(function(n){return n+'様';}).join('、');
+      if(!confirm('この予約席には既に '+_nm+' が着席中です。\n\nこのまま来店にすると、入れ替えではなく【相席】（同じ卓に2組）になります。\n\n先客が後で退店する「次席予約（時間差）」なら、いまは来店にせず、先客の退店後に来店させてください。\n\n相席として今すぐ来店にしますか？')) return;
+    }
+  }
   r.status=s;
   if(s==='来店済み') r.checkInAt=Date.now();          // 楽観的に来店時刻を記録（10分カウント開始）
   else if(s==='確定') r.checkInAt=null;               // 来店前に戻す＝時刻クリア
@@ -2359,6 +2380,7 @@ function openSeat(idx){
     body=seatCustRowHtml(s,idx)
       +'<div class="kv"><span class="k">状態</span><span class="v" style="color:#ffbf6a">⚠ 担当不在（接客者なし）</span></div>'
       +(s.tantou?'<div class="kv"><span class="k">担当</span><span class="v">👤 '+esc(s.tantou)+' <span style="color:#ffbf6a;font-size:11px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span></span></div>':'')
+      +(s.nextRsv?'<div class="kv"><span class="k">次席予約</span><span class="v" style="color:#ffc98a">🔜 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'・担当 '+esc(s.nextRsv.tantou):'')+'</span></div>':'')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
       +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#2a5a8a;color:#8fc0f0" onclick="openSeatSession('+idx+',\'rsv\')">👤 お客様を変更</div><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
@@ -2382,6 +2404,7 @@ function openSeat(idx){
       +'<div class="kv"><span class="k">担当</span><span class="v">'+tantouV+'</span></div>'
       +(s.dohan?'<div class="kv"><span class="k">同伴</span><span class="v">'+esc(s.dohan)+'</span></div>':'')
       +'<div class="kv"><span class="k">状態</span><span class="v">'+stLabel+'</span></div>'
+      +(s.nextRsv?'<div class="kv"><span class="k">次席予約</span><span class="v" style="color:#ffc98a">🔜 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'・担当 '+esc(s.nextRsv.tantou):'')+'</span></div>':'')
       +((s.tags||[]).length?'<div class="kv"><span class="k">タグ</span><span class="v">'+s.tags.map(function(t){return TAGLABEL[t];}).join(' / ')+'</span></div>':'')
       +'<div style="font-size:11px;color:#8a9ac0;margin:14px 0 4px;font-weight:700">担当キャストと残り時間 <span style="color:#6a7a9a;font-weight:600">（タップで延長・抜く）</span></div>'
       +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast" onclick="castAction('+idx+',\''+jsStr(c.n)+'\')" style="cursor:pointer"><span style="font-weight:700">'+esc(c.n)+'</span><span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span><span style="color:#5a6a8a;font-size:15px;margin-left:8px">›</span></span></div>';}).join('')
@@ -4564,6 +4587,9 @@ function adaptHall(data){
       if(s.occupied) o.cust=(s.rsrv&&s.rsrv.customer)?(s.rsrv.customer+' 様'):'ご来店';
       else if(s.rsrv&&s.rsrv.customer) o.cust=s.rsrv.customer+' 様';   // 来店済みだがキャスト未着＝担当不在で表示
       else if(s.yrsrv) o.rsv={time:s.yrsrv.time,cust:s.yrsrv.customer,tantou:s.yrsrv.tantouCast||''};
+      // 来店中(または担当不在で客が席に居る)状態で後半に別の確定予約があれば「次席予約」として予告する。
+      // 空席の予約は上の o.rsv（＝「予約客をこの席へ」導線）で従来通り。占有席は別フィールド o.nextRsv＝表示専用で相席化しない。
+      if((s.occupied||(s.rsrv&&s.rsrv.customer))&&s.yrsrv) o.nextRsv={time:s.yrsrv.time,cust:s.yrsrv.customer,tantou:s.yrsrv.tantouCast||''};
     }
     return o;
   });
