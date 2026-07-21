@@ -114,6 +114,8 @@ body{
 .done .dp{color:var(--muted);font-size:14px;margin:14px 0 0}
 .done .hand{margin:26px auto 0;max-width:340px;border:1px solid var(--line);border-radius:14px;padding:18px;
   background:rgba(201,164,92,.05);font-size:14px}
+.done .backstaff{margin:30px auto 0;display:inline-block;background:transparent;border:1px solid var(--line2);
+  color:var(--muted2);border-radius:10px;padding:10px 20px;font-size:12px;font-family:var(--gothic)}
 
 /* ===== シミュ（既存・そのまま） ===== */
 .hero{margin:10px 0 0;padding:24px 20px 22px;border-radius:16px;text-align:center;border:1px solid var(--line);
@@ -344,6 +346,7 @@ body{
       <div class="dt mincho">ありがとうございました</div>
       <div class="dp">ご入力を受け付けました。</div>
       <div class="hand">この iPad を、スタッフにお渡しください。<br>このあと担当より、面談の続きをご案内します。</div>
+      <button class="backstaff" onclick="backToGunshi()">スタッフの方はこちら →</button>
     </div>
   </section>
 
@@ -615,6 +618,12 @@ function submitMendan(){
       else { alert((r&&r.error)||'送信に失敗しました。スタッフにお声がけください。'); btn.disabled=false; btn.textContent='この内容で送る'; }
     })
     .catch(function(){ alert('通信に失敗しました。もう一度お試しください。'); btn.disabled=false; btn.textContent='この内容で送る'; });
+}
+
+/* スタッフが軍師に戻る（応募者は軍師PINを知らないので入れない＝封じ込め）。 */
+function backToGunshi(){
+  var base=location.origin+location.pathname.replace(/[^/]*$/,'');
+  location.href=base+'gunshi.html';
 }
 
 /* node からの検証用（純ロジックのみ） */

@@ -2931,6 +2931,7 @@ var MENU_TILES=[
   ]},
   {group:'管理', items:[
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
+    {ic:'📋', t:'面談カルテ',         act:"openMendanManager()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
     {ic:'💳', t:'会費更新',           act:"openFeeRenew()"},
@@ -4392,6 +4393,68 @@ function startMendanFlow(){
     try{ localStorage.removeItem(kSessKey()); }catch(_){}   // 封じ込め：軍師セッション破棄
     location.href=base+'mendan.html?t='+r.token;
   }).catch(function(){ alert('通信に失敗しました。もう一度お試しください。'); });
+}
+
+/* ===== 📋 面談カルテ（黒服が内容を見ながら面談→補足→判定） ===== */
+var MENDAN_LIST=[];
+function mendanBack_(){ return '<span class="menu-back" onclick="closeMenu()">← 閉じる</span>'; }
+function openMendanManager(){
+  document.getElementById('menuOverlay').classList.add('show');
+  var el=document.getElementById('menu-body');
+  el.innerHTML=mendanBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>';
+  gsr('gunshiGetMendanList', LOGIN).then(function(r){
+    MENDAN_LIST=(r&&r.ok&&r.list)?r.list:[];
+    renderMendanList();
+  }).catch(function(){ document.getElementById('menu-body').innerHTML=mendanBack_()+'<div class="empty-msg" style="padding:24px">読み込みエラー</div>'; });
+}
+function renderMendanList(){
+  var el=document.getElementById('menu-body');
+  var h=mendanBack_()+'<div class="menu-grp">📝 面談カルテ（面談待ち '+MENDAN_LIST.length+'）</div>';
+  if(!MENDAN_LIST.length){ h+='<div class="empty-msg" style="padding:24px;color:#888">面談待ちの応募者はいません。</div>'; el.innerHTML=h; return; }
+  h+='<div style="display:flex;flex-direction:column;gap:10px">'+MENDAN_LIST.map(function(m,i){
+    var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?'<span style="color:#ff9aa0;font-weight:800"> ⚠️20歳未満</span>':'';
+    var other=(m.other==='あり')?'<span style="color:#e6c14a"> ／⚠️他店予定</span>':'';
+    return '<div onclick="openMendanDetail('+i+')" style="border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;cursor:pointer;background:#15120f">'
+      +'<div style="font-size:16px;font-weight:700">'+esc(m.name||'（無名）')+' <span style="color:#a29a8e;font-size:13px;font-weight:400">満'+(m.age!==''?m.age+'歳':'—')+'</span>'+warn+'</div>'
+      +'<div style="color:#a29a8e;font-size:12.5px;margin-top:4px">'+esc(m.at||'')+' ／ 週'+(m.days||'—')+' '+esc(m.weekdays||'')+' ／ '+esc(m.exp||'')+other+'</div></div>';
+  }).join('')+'</div>';
+  el.innerHTML=h;
+}
+function openMendanDetail(i){
+  var m=MENDAN_LIST[i]; if(!m)return;
+  var el=document.getElementById('menu-body');
+  var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?'<span style="color:#ff9aa0;font-weight:800"> ⚠️20歳未満（深夜不可）</span>':'';
+  var row=function(k,v){ return v?('<div style="display:flex;gap:10px;padding:7px 0;border-top:1px solid rgba(255,255,255,.06)"><div style="width:96px;flex:none;color:#a29a8e;font-size:12.5px">'+k+'</div><div style="font-size:14px">'+esc(String(v))+'</div></div>'):''; };
+  var photo=function(k,url){ return url?('<a href="'+url+'" target="_blank" style="color:#c9a45c;text-decoration:underline;font-size:13px">'+k+'を開く</a>'):('<span style="color:#6f685e;font-size:13px">'+k+'なし</span>'); };
+  var expTxt=(m.exp||'')+((m.exp==='あり'||m.exp==='少し')?('（前店 '+(m.prevSales?Math.round(m.prevSales/10000)+'万':'—')+'・時給'+(m.prevWage||'—')+'）'):'');
+  var h=mendanBack_()
+    +'<div class="menu-grp">'+esc(m.name||'（無名）')+' <span style="color:#a29a8e">満'+(m.age!==''?m.age+'歳':'—')+'</span>'+warn+'</div>'
+    +'<div style="background:#15120f;border:1px solid rgba(201,164,92,.2);border-radius:12px;padding:6px 16px 12px">'
+    +row('フリガナ',m.kana)+row('電話',m.tel)+row('住所',m.addr)
+    +row('希望シフト','週'+(m.days||'—')+' '+(m.weekdays||'')+(m.prevWeek?('／前週提出:'+m.prevWeek):''))
+    +row('昼職',m.dayJob)+row('送り',(m.okuri||'')+(m.okuriArea?('（'+m.okuriArea+'）'):''))
+    +row('お酒',m.drink)+row('苦手な酒',m.weak)+row('同伴',m.dohan)+row('客付き',m.customers)
+    +row('経験',expTxt)+row('ホスト/風俗',(m.hostExp||'-')+' / '+(m.fuzokuExp||'-'))
+    +row('他店予定',(m.other==='あり')?('⚠️あり '+(m.otherNote||'')):'なし')
+    +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証',m.idPhoto)+'</div>'
+    +'</div>'
+    +'<div style="margin-top:16px"><div style="font-size:13px;color:#a29a8e;margin-bottom:6px">補足事項（面談メモ）</div>'
+    +'<textarea id="mjMemo" style="width:100%;min-height:80px;background:#0c0a08;border:1px solid rgba(201,164,92,.2);color:#ece7dd;border-radius:10px;padding:12px;font-size:15px;font-family:inherit">'+esc(m.memo||'')+'</textarea></div>'
+    +'<div style="font-size:13px;color:#a29a8e;margin:16px 0 8px">判定（りく＋管理者にLINEで通知されます）</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="submitMendanJudge(\''+m.id+'\',\'体験へ\')" style="flex:1;background:#c9a45c;color:#1a1207;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700">体験へ</button>'
+    +'<button onclick="submitMendanJudge(\''+m.id+'\',\'面談で終わり\')" style="flex:1;background:transparent;border:1px solid rgba(201,164,92,.4);color:#e6d2a8;border-radius:11px;padding:15px;font-size:14px">面談で終わり</button>'
+    +'<button onclick="submitMendanJudge(\''+m.id+'\',\'不採用\')" style="flex:1;background:transparent;border:1px solid rgba(163,59,50,.5);color:#d1786d;border-radius:11px;padding:15px;font-size:14px">不採用</button>'
+    +'</div>';
+  el.innerHTML=h;
+}
+function submitMendanJudge(id,judge){
+  var memo=(document.getElementById('mjMemo')||{}).value||'';
+  if(!confirm('【'+judge+'】で確定します。\nりく＋管理者にLINEで通知されます。よろしいですか？'))return;
+  gsr('gunshiJudgeMendan', LOGIN, id, memo, judge).then(function(r){
+    if(r&&r.ok){ alert('保存し、管理者に通知しました。'); openMendanManager(); }
+    else alert((r&&r.error)||'保存に失敗しました');
+  }).catch(function(){ alert('通信に失敗しました'); });
 }
 
 function adaptHall(data){
