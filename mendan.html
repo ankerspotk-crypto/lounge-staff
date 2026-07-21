@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>面談カルテ｜ラウンジ いえやす</title>
+<title>面談表｜ラウンジ いえやす</title>
 <style>
 /* ===== 世界観は求人サイト(ieyasu-web)と統一：濃紺墨＋金 ===== */
 :root{
@@ -188,7 +188,7 @@ body{
   <!-- 0. ようこそ -->
   <section class="step on" data-name="ようこそ" data-k="welcome">
     <div class="welcome">
-      <div class="big mincho">面談カルテ<br>ご入力のお願い</div>
+      <div class="big mincho">面談表<br>ご入力のお願い</div>
       <p class="lead2">かんたんな質問にお答えください。3〜5分ほどで終わります。<br>正直にお答えいただいて大丈夫です。合否には、入力の丁寧さではなく、あなたのことを知るために使います。</p>
       <ul>
         <li><span class="n">1</span><span>基本のこと・希望のシフト・お酒や接客のこと</span></li>
@@ -360,7 +360,7 @@ body{
 
 <script>
 /* ===================================================================
- *  面談カルテ フロント（応募者が iPad で入力）
+ *  面談表 フロント（応募者が iPad で入力）
  *  ※このページは KIOSK_KEY を持たない。顧客データには一切触らない。
  *  ※送信APIは Phase 後半（doPost action:'mendan' + トークン）。今は
  *    収集した内容を submitMendan() でまとめてロック画面へ（POSTはTODO）。
@@ -608,7 +608,7 @@ function submitMendan(){
   var payload = JSON.parse(JSON.stringify(STATE));
   if(!TOKEN){   // ローカル/デモ：サーバに送らず完了画面へ
     try { localStorage.setItem('mendan_last', JSON.stringify({at:new Date().toISOString(), data:payload})); } catch(e){}
-    console.log('[面談カルテ] (demo) submit =', payload);
+    console.log('[面談表] (demo) submit =', payload);
     go(steps.length-1); return;
   }
   var btn=document.getElementById('nextBtn'); btn.disabled=true; btn.textContent='送信中…';

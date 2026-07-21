@@ -2931,7 +2931,7 @@ var MENU_TILES=[
   ]},
   {group:'管理', items:[
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
-    {ic:'📋', t:'面談カルテ',         act:"openMendanManager()"},
+    {ic:'📋', t:'面談表',         act:"openMendanManager()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
     {ic:'💳', t:'会費更新',           act:"openFeeRenew()"},
@@ -4395,7 +4395,7 @@ function startMendanFlow(){
   }).catch(function(){ alert('通信に失敗しました。もう一度お試しください。'); });
 }
 
-/* ===== 📋 面談カルテ（黒服が内容を見ながら面談→補足→判定） ===== */
+/* ===== 📋 面談表（黒服が内容を見ながら面談→補足→判定） ===== */
 var MENDAN_LIST=[];
 function mendanBack_(){ return '<span class="menu-back" onclick="closeMenu()">← 閉じる</span>'; }
 function openMendanManager(){
@@ -4409,7 +4409,7 @@ function openMendanManager(){
 }
 function renderMendanList(){
   var el=document.getElementById('menu-body');
-  var h=mendanBack_()+'<div class="menu-grp">📝 面談カルテ（面談待ち '+MENDAN_LIST.length+'）</div>';
+  var h=mendanBack_()+'<div class="menu-grp">📝 面談表（面談待ち '+MENDAN_LIST.length+'）</div>';
   if(!MENDAN_LIST.length){ h+='<div class="empty-msg" style="padding:24px;color:#888">面談待ちの応募者はいません。</div>'; el.innerHTML=h; return; }
   h+='<div style="display:flex;flex-direction:column;gap:10px">'+MENDAN_LIST.map(function(m,i){
     var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?'<span style="color:#ff9aa0;font-weight:800"> ⚠️20歳未満</span>':'';
@@ -4457,7 +4457,8 @@ function showTaiken(id){
   el.innerHTML=
     '<div style="font-size:14px;font-weight:700;color:#e6d2a8;margin-bottom:12px">🌸 体験の登録（シフト表に反映）</div>'
     +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">源氏名（お店での名前）</div>'
-    +'<input id="tkGenji" placeholder="例：ゆい" style="width:100%;'+inp+';margin-bottom:12px">'
+    +'<input id="tkGenji" placeholder="例：ゆい" onblur="checkGenjiShift()" style="width:100%;'+inp+'">'
+    +'<div id="tkShiftHint" style="font-size:12px;margin:6px 0 12px;min-height:1px"></div>'
     +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">体験日</div>'
     +'<input id="tkDate" type="date" value="'+iso+'" style="width:100%;'+inp+';margin-bottom:12px">'
     +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">時間（シフト表の書き方で）</div>'
@@ -4479,6 +4480,27 @@ function submitTaiken(id){
     if(r&&r.ok){ alert('体験を登録し、シフトに反映しました。'); openMendanManager(); }
     else alert((r&&r.error)||'登録に失敗しました');
   }).catch(function(){ alert('通信に失敗しました'); });
+}
+/* 源氏名を入れたら、既にシフト表にあるか調べて流用（あれば日時を自動セット・変更可） */
+function checkGenjiShift(){
+  var genji=((document.getElementById('tkGenji')||{}).value||'').trim();
+  var el=document.getElementById('tkShiftHint'); if(!el)return;
+  if(!genji){ el.innerHTML=''; return; }
+  el.innerHTML='<span style="color:#6f685e">既存シフトを確認中…</span>';
+  gsr('gunshiGetGenjiShift', genji).then(function(r){
+    if(r&&r.found&&r.shifts&&r.shifts.length){
+      var last=r.shifts[r.shifts.length-1];
+      el.innerHTML='<span style="color:#7fdca0">✅ 既にシフトあり：'+r.shifts.map(function(s){return s.date+' '+s.time;}).join('、')+'</span>'
+        +'<br><span style="color:#c9a45c">→ 直近の '+last.date+' '+last.time+' を流用しました（下で変更もできます）</span>';
+      var tt=document.getElementById('tkTime'); if(tt)tt.value=last.time;
+      var mdy=String(last.date).split('/');
+      if(mdy.length===2){ var y=new Date().getFullYear(); var dd=document.getElementById('tkDate'); if(dd)dd.value=y+'-'+('0'+mdy[0]).slice(-2)+'-'+('0'+mdy[1]).slice(-2); }
+    } else if(r&&r.found){
+      el.innerHTML='<span style="color:#a29a8e">この源氏名は在籍していますが、シフト未登録です。日時を入力してください。</span>';
+    } else {
+      el.innerHTML='<span style="color:#6f685e">新しい源氏名です。日時を入力してください。</span>';
+    }
+  }).catch(function(){ el.innerHTML=''; });
 }
 function submitMendanJudge(id,judge){
   var memo=(document.getElementById('mjMemo')||{}).value||'';
