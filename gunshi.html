@@ -3145,23 +3145,22 @@ function rcptCalc(){
   var paper=document.getElementById('rcpt-paper'), bd=document.getElementById('rcpt-bd');
   if(!paper||!bd)return;
   if(RCPT_MODE==='R'){
-    var stampLand=(!RCPT_CASH)?'<div class="rl-note2">※カード利用<br>のため<br>印紙不要</div>'
-      :(inshi===0)?'<div class="rl-note2">※税抜5万円<br>未満のため<br>印紙不要</div>'
-      :'<div class="rl-stampbox">収入印紙<br>'+rcptYen_(inshi)+'<br>貼付</div>';
-    paper.className='rcpt-paper rcpt-land';
-    if(paper.parentNode)paper.parentNode.classList.add('land');
-    paper.innerHTML='<div class="rl-head"><div class="rl-title">領 収 証</div><div class="rl-meta">No. '+esc(rcptNo_(iso))+'<br>'+esc(rcptJp_(iso))+'</div></div>'
-      +'<div class="rl-body"><div class="rl-left">'
-        +'<div class="rl-to">'+(atena?esc(atena):'&nbsp;')+'</div>'
-        +'<div class="rl-amt">¥ '+(amount||0).toLocaleString("ja-JP")+' 也</div>'
-        +'<div class="rl-tada">但し　'+esc(tada)+'</div>'
-        +'<div class="rl-ack">上記正に領収いたしました</div>'
-      +'</div><div class="rl-right">'+stampLand+'</div></div>'
-      +'<div class="rl-foot"><div class="rl-tax">税抜 '+rcptYen_(taxExcl)+'<br>消費税(10%) '+rcptYen_(tax)+'</div>'
-        +'<div class="rl-issuer"><b>'+esc(RCPT_ISSUER.name)+'</b>'
-          +(RCPT_ISSUER.addr?('<br>'+esc(RCPT_ISSUER.addr)):'')+(RCPT_ISSUER.tel?('<br>TEL '+esc(RCPT_ISSUER.tel)):'')
-          +'<br>登録番号 '+esc(RCPT_ISSUER.invoiceNo)+'</div>'
-        +'<div class="rl-inkan">㊞</div></div>';
+    var stampHtml=(!RCPT_CASH)?'<div class="small">※クレジットカード利用のため収入印紙不要</div>'
+      :(inshi===0)?'<div class="small">※税抜5万円未満につき収入印紙不要（非課税）</div>'
+      :'<div class="stampbox">収入印紙<br>'+rcptYen_(inshi)+'<br>貼付</div>';
+    paper.className='rcpt-paper';
+    if(paper.parentNode)paper.parentNode.classList.remove('land');
+    paper.innerHTML='<div class="c title" style="letter-spacing:.3em">領 収 証</div>'
+      +'<div class="kv small"><span>No.'+esc(rcptNo_(iso))+'</span><span>'+esc(rcptJp_(iso))+'</span></div><hr>'
+      +'<div class="to">'+(atena?esc(atena):'&nbsp;')+'</div>'
+      +'<div class="c amt">￥ '+(amount||0).toLocaleString("ja-JP")+' 也</div><div class="c small">（税込）</div><hr>'
+      +'<div>但し '+esc(tada)+'</div><div>上記正に領収いたしました</div><hr>'
+      +'<div class="kv"><span>税抜金額</span><span>'+rcptYen_(taxExcl)+'</span></div>'
+      +'<div class="kv"><span>消費税（10%）</span><span>'+rcptYen_(tax)+'</span></div>'
+      +stampHtml
+      +'<div class="issuer"><b>'+esc(RCPT_ISSUER.name)+'</b>'
+        +(RCPT_ISSUER.addr?('<br>'+esc(RCPT_ISSUER.addr)):'')+(RCPT_ISSUER.tel?('<br>TEL '+esc(RCPT_ISSUER.tel)):'')
+        +'<br>登録番号 '+esc(RCPT_ISSUER.invoiceNo)+'</div>';
     var badge=(!RCPT_CASH)?'<span class="rcpt-badge zero">カード＝印紙不要</span>'
       :(inshi===0)?'<span class="rcpt-badge zero">税抜5万円未満＝非課税</span>'
       :'<span class="rcpt-badge stamp">印紙 '+rcptYen_(inshi)+'</span>';
@@ -3223,19 +3222,18 @@ function rcptBuildXmlLandscape_(o){
   return L.join('');
 }
 function rcptBuildXml_(o){
-  if(o.mode==='R') return rcptBuildXmlLandscape_(o);
   var NL='&#10;';
   function t(s,a){ return '<text'+(a||'')+'>'+esc(s)+NL+'</text>'; }
   var L=[];
   L.push('<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">');
   L.push('<text lang="ja"/>'); L.push('<text align="center"/>');
   if(o.mode==='R'){
-    L.push('<text width="2" height="2" em="true"/>'); L.push(t('領収書'));
+    L.push('<text width="3" height="3" em="true"/>'); L.push(t('領 収 証'));
     L.push('<text width="1" height="1" em="false"/>');
     L.push(t('No.'+rcptNo_(o.iso)+'　'+rcptJp_(o.iso)));
     L.push('<feed/>'); L.push('<text align="left"/>'); L.push(t((o.atena||'')+'　'));
     L.push('<feed/>'); L.push('<text align="center"/>');
-    L.push('<text width="2" height="2" em="true"/>'); L.push(t(rcptYen_(o.amount)+'-'));
+    L.push('<text width="3" height="3" em="true"/>'); L.push(t('￥'+(o.amount||0).toLocaleString('ja-JP')+' 也'));
     L.push('<text width="1" height="1" em="false"/>'); L.push(t('（税込）'));
     L.push('<feed/>'); L.push('<text align="left"/>');
     L.push(t('但し '+o.tada)); L.push(t('上記正に領収いたしました'));
