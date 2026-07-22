@@ -3449,12 +3449,7 @@ function renderMenu(){
         +'<span class="cfil'+(custF.bottle?' on':'')+'" onclick="custTgl(\'bottle\')">🍶 ボトルあり</span>'
         +'<span class="cfil nol'+(custF.noline?' on':'')+'" onclick="custTgl(\'noline\')">📵 LINE未登録</span>'
       +'</div>'
-      +'<div class="cust-browse cust-pos">'
-        +'<span class="cpos-lbl">ボトル位置</span>'
-        +'<span class="cfil'+(custF.pos==='2F'?' on':'')+'" onclick="custPos(\'2F\')">2F</span>'
-        +'<span class="cfil'+(custF.pos==='5F'?' on':'')+'" onclick="custPos(\'5F\')">5F</span>'
-        +'<span class="cfil'+(custF.pos==='倉庫'?' on':'')+'" onclick="custPos(\'倉庫\')">倉庫</span>'
-      +'</div>'
+      /* ボトル位置(2F/5F/倉庫)の絞り込みUIは一旦非表示（ボス指示 2026-07-22）。custPos/bottlePosArea_/custF.pos のロジックは温存＝この div を戻せば復活する */
       +'<div class="cust-browse">'
         +'<select id="cust-tsel" class="cust-tsel'+(custTantou?' on':'')+'" onchange="custPickTantou(this.value)">'+custTantouOpts_()+'</select>'
       +'</div>'
