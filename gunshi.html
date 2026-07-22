@@ -3046,7 +3046,7 @@ function rcptCss_(){ if(document.getElementById('rcpt-css'))return; var s=docume
   '.rcpt-badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;margin-left:6px}',
   '.rcpt-badge.zero{background:#123d16;color:#8fe39a}',
   '.rcpt-badge.stamp{background:#3d2a12;color:#ffcf87}',
-  '.rcpt-print{width:100%;margin-top:12px;background:var(--accent);color:#1a1000;border:0;border-radius:10px;padding:15px;font-size:16px;font-weight:800;cursor:pointer}'
+  '.rcpt-print{display:block;box-sizing:border-box;width:100%;margin-top:12px;background:var(--accent);color:#1a1000;border:0;border-radius:10px;padding:15px;font-size:16px;font-weight:800;text-align:center;text-decoration:none;cursor:pointer}'
   ].join(''); document.head.appendChild(s); }
 function rcptDenListHtml_(){
   if(RCPT_DENPYO===null) return '<div class="rcpt-den-loading">読み込み中…</div>';
@@ -3091,7 +3091,7 @@ function rcptRenderMenu_(el){
     +'<input id="rcpt-date" class="finput" type="date" onchange="rcptDateManual_()">';
   h+='<div class="rcpt-preview"><div class="rcpt-paper" id="rcpt-paper"></div></div>';
   h+='<div id="rcpt-bd" class="rcpt-bd"></div>';
-  h+='<button class="rcpt-print" onclick="rcptPrint()">🖨 印刷する（TM-M30 / Bluetooth）</button>';
+  h+='<a class="rcpt-print" id="rcpt-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return rcptPrint()">🖨 印刷する（TM-M30 / Bluetooth）</a>';
   h+='<div class="rcpt-note" id="rcpt-hint"></div>';
   el.innerHTML=h;
   var dEl=document.getElementById('rcpt-date'); if(dEl)dEl.value=(RCPT_DATEMODE==='custom'?(dEl.value||rcptToday_()):rcptDateFor_(RCPT_DATEMODE));
@@ -3154,6 +3154,7 @@ function rcptCalc(){
       +'<div class="row" style="border-bottom:0"><span style="color:var(--sub);font-size:11px">社内書類のため収入印紙・消費税区分なし</span><span></span></div>';
   }
   window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
+  var _pl=document.getElementById('rcpt-printlink'); if(_pl){ _pl.href='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml); }
 }
 function rcptBuildXml_(o){
   var NL='&#10;';
@@ -3199,10 +3200,9 @@ function rcptBuildXml_(o){
 function rcptPrint(){
   var xml=window.__rcptXml||''; if(!xml){ rcptCalc(); xml=window.__rcptXml||''; }
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
-  var hint=document.getElementById('rcpt-hint');
-  var isiOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
-  if(isiOS){ if(hint)hint.textContent='TM Print Assistant を起動しています…（印字後この画面へ戻ってください）'; window.location.href=url; }
-  else { if(hint)hint.textContent='※このiPad以外では起動しません。TM Print Assistant導入済みの端末で押すとBT印字します。'; }
+  var pl=document.getElementById('rcpt-printlink'); if(pl)pl.href=url;
+  var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（印字後この画面へ戻ってください）';
+  return true; // アンカーのhref(tmprintassistant://)へ遷移＝アプリ起動。iPadOSはUAをMacと偽装するためUA分岐は使わない
 }
 function openReceipt(){
   menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_DATEMODE='today';
