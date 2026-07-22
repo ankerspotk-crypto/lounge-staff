@@ -16165,7 +16165,7 @@ function listTodayScheduledFlags_() {
 var MENDAN_TAB  = '面談表';
 var MENDAN_HEAD = ['面談ID','面談日時','面談者','状態','氏名','フリガナ','生年月日','年齢','住所','電話',
   '週日数','曜日','希望時間','前週提出','昼職','送り','送り先','酒強さ','苦手な酒','同伴','客付き',
-  '経験','前店売上','前店時給','ホスト','風俗','他店予定','他店詳細','身分証','顔写真','シミュ',
+  '経験','前店売上','前店時給','持ち客数','見込み客数','見込み売上','ホスト','風俗','他店予定','他店詳細','身分証','顔写真','シミュ',
   '黒服所感','判定','源氏名','体験日','名簿登録','更新日時'];
 
 // シート取得（無ければ作成／既存に見出しが無い列は末尾に追補＝ci()の-1黙り0を防ぐ）
@@ -16297,6 +16297,8 @@ function mendanSummaryText_(id, data) {
   var ageWarn = (data.age != null && data.age !== '' && Number(data.age) < 20) ? ' ⚠️20歳未満' : '';
   var expDetail = (data.exp === 'あり' || data.exp === '少し')
     ? ('（前店 ' + (data.prevSales ? Math.round(data.prevSales / 10000) + '万' : '—') + '・時給' + (data.prevWage || '—') + '）') : '';
+  var custInfo = (data.exp === 'あり' || data.exp === '少し')
+    ? ('お客様: 持ち' + (data.holdCust || '—') + '人 / 見込み' + (data.expCust || '—') + '人 / 見込み売上' + (data.expSales ? Math.round(data.expSales / 10000) + '万' : '—')) : '';
   var other = (data.other === 'あり') ? ('⚠️他店の予定あり' + (data.otherNote ? '（' + data.otherNote + '）' : '')) : '他店の予定なし';
   var wd = (data.weekdays && data.weekdays.length) ? data.weekdays.join('') : '';
   return [
@@ -16308,9 +16310,10 @@ function mendanSummaryText_(id, data) {
     '昼職:' + (data.dayJob || '—') + ' / 送り:' + (data.needOkuri || '—') + (data.okuriArea && data.okuriArea.length ? '（' + data.okuriArea.join('・') + '）' : ''),
     'お酒:' + (data.drink || '—') + ' / 同伴:' + (data.dohan || '—') + ' / 客付き:' + (data.customers || '—'),
     '経験: ' + (data.exp || '—') + expDetail,
+    custInfo,
     other,
     '（写真は続けて送ります）この後、黒服が軍師で面談します。'
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function mendanSubmit_(token, rec, data) {
@@ -16335,6 +16338,7 @@ function mendanSubmit_(token, rec, data) {
     set('酒強さ', data.drink); set('苦手な酒', (data.weakDrinks || []).join('・'));
     set('同伴', data.dohan); set('客付き', data.customers);
     set('経験', data.exp); set('前店売上', data.prevSales); set('前店時給', data.prevWage);
+    set('持ち客数', data.holdCust); set('見込み客数', data.expCust); set('見込み売上', data.expSales);
     set('ホスト', data.hostExp); set('風俗', data.fuzokuExp);
     set('他店予定', data.other); set('他店詳細', data.otherNote);
     set('身分証', idPhoto ? ('https://drive.google.com/file/d/' + idPhoto + '/view') : '');
@@ -16383,6 +16387,7 @@ function mendanRowToObj_(row, c) {
     okuri: String(g('送り')), okuriArea: String(g('送り先')),
     drink: String(g('酒強さ')), weak: String(g('苦手な酒')), dohan: String(g('同伴')), customers: String(g('客付き')),
     exp: String(g('経験')), prevSales: g('前店売上'), prevWage: g('前店時給'),
+    holdCust: g('持ち客数'), expCust: g('見込み客数'), expSales: g('見込み売上'),
     hostExp: String(g('ホスト')), fuzokuExp: String(g('風俗')), other: String(g('他店予定')), otherNote: String(g('他店詳細')),
     idPhoto: String(g('身分証')), facePhoto: String(g('顔写真')),
     memo: String(g('黒服所感')), judge: String(g('判定'))
