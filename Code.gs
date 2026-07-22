@@ -363,7 +363,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'gunshiPunch', 'gunshiPunchStatus', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'getKioskCustomerRoster', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'gunshiPunch', 'gunshiPunchStatus', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -10488,6 +10488,58 @@ function getMemberRenewals() {
     });
   }
   return { ok: true, todayYm: todayYm, members: members };
+}
+
+// 軍師の顧客管理「会員切れ一覧／担当ごと一覧」用：全顧客の軽量ロースターを読み取り専用で返す。
+// ⚠️getCustomerList() と違い reassignInactiveTantou_ を呼ばない＝担当欄の書き換え(破壊的)は一切しない。
+// 会員日付(入会日/前回更新)は getMemberFeeMapRaw_ と同一ロジック（登録日＋各「◯更新」列の最新を parseMasterDate_）で
+// 算出し、フロントの membershipInfo による会員切れ判定が既存の顧客カードと食い違わないようにする。
+// 来店集計・金額は含めない（一覧では不要・詳細タップ時に kioskGetCustomerDetail/kioskGetCustomerVisits で取得）。
+// GUNSHI_API_FNS 登録必須。
+function getKioskCustomerRoster() {
+  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (!sheet) return { ok: false, error: '顧客マスタが見つかりません' };
+  const values = sheet.getDataRange().getValues();
+  let h = -1;
+  for (let i = 0; i < Math.min(values.length, 6); i++) {
+    if (values[i].some(c => String(c).replace(/\s/g, '').indexOf('カード記載名') !== -1)) { h = i; break; }
+  }
+  if (h < 0) return { ok: false, error: '顧客マスタの列構成を認識できませんでした' };
+  const headers = values[h].map(c => String(c).replace(/\s/g, ''));
+  const idx = kw => headers.findIndex(x => x.indexOf(kw) !== -1);
+  const cNo = idx('会員番号'), cName = idx('氏名'), cCard = idx('カード記載名'), cTan = idx('担当');
+  const cBtl = idx('ボトル種類'), cPos = idx('ボトル位置'), cBday = idx('誕生日');
+  const cNote = idx('参考情報'), cDrink = idx('飲み方'), cTab = idx('タバコ');
+  const cLine = idx('ライン登録') >= 0 ? idx('ライン登録') : idx('公式LINE'); // Y3には無い＝-1（フロントの isNoLine で代替判定）
+  const cReg = idx('登録日') >= 0 ? idx('登録日') : idx('入会');
+  const renewalCols = []; headers.forEach((hd, ci) => { if (/更新/.test(hd)) renewalCols.push(ci); }); // 登録日＋各更新列で直近を出す
+  const val = (row, c) => (c >= 0 && row[c] != null) ? String(row[c]) : '';
+  const customers = [];
+  for (let r = h + 1; r < values.length; r++) {
+    const row = values[r];
+    const card = val(row, cCard).trim(), name = val(row, cName).trim();
+    if (!card && !name) continue;
+    const join = cReg >= 0 ? parseMasterDate_(row[cReg]) : null;
+    const memberSince = join ? join.str : '';
+    let best = null; // 直近更新（登録日＋各更新列のうち年月最新）
+    [cReg >= 0 ? row[cReg] : null].concat(renewalCols.map(ci => row[ci])).forEach(raw => {
+      const p = parseMasterDate_(raw);
+      if (!p || p.ym <= 0) return;
+      if (!best || p.ym > best.ym || (p.ym === best.ym && p.d > best.d)) best = p;
+    });
+    const annualFeeDate = best ? best.str : memberSince;
+    const bdayRaw = cBday >= 0 ? row[cBday] : null;
+    const bday = bdayRaw instanceof Date ? Utilities.formatDate(bdayRaw, TZ, 'yyyy-MM-dd') : val(row, cBday).trim();
+    let lineRegistered = null; // 列があれば true/false、無ければ null（フロントで NO_LINE_MEMBERS 判定）
+    if (cLine >= 0) { lineRegistered = val(row, cLine).trim() ? true : false; }
+    customers.push({
+      name: name || card, card: card, no: val(row, cNo).trim(), tantou: val(row, cTan).trim(),
+      bottle: val(row, cBtl).trim(), bottlePos: val(row, cPos).trim(), bday: bday,
+      note: val(row, cNote).trim(), drink: val(row, cDrink).trim(), tabaco: val(row, cTab).trim(),
+      memberSince: memberSince, annualFeeDate: annualFeeDate, lineRegistered: lineRegistered
+    });
+  }
+  return { ok: true, customers: customers };
 }
 
 // 来店した予約の会員（相席のサブ会員含む）を会費マップと突合し、更新が要る人だけ返す
