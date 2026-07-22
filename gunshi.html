@@ -4914,7 +4914,9 @@ function openMendanDetail(i){
     +row('希望シフト','週'+(m.days||'—')+' '+(m.weekdays||'')+(m.prevWeek?('／前週提出:'+m.prevWeek):''))
     +row('昼職',m.dayJob)+row('送り',(m.okuri||'')+(m.okuriArea?('（'+m.okuriArea+'）'):''))
     +row('お酒',m.drink)+row('苦手な酒',m.weak)+row('同伴',m.dohan)+row('客付き',m.customers)
-    +row('経験',expTxt)+row('ホスト/風俗',(m.hostExp||'-')+' / '+(m.fuzokuExp||'-'))
+    +row('経験',expTxt)
+    +((m.exp==='あり'||m.exp==='少し')?row('お客様','持ち'+(m.holdCust||'—')+'人 ／ 見込み'+(m.expCust||'—')+'人 ／ 見込み売上'+(m.expSales?Math.round(m.expSales/10000)+'万':'—')):'')
+    +row('ホスト/風俗',(m.hostExp||'-')+' / '+(m.fuzokuExp||'-'))
     +row('他店予定',(m.other==='あり')?('⚠️あり '+(m.otherNote||'')):'なし')
     +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証',m.idPhoto)+'</div>'
     +'</div>'

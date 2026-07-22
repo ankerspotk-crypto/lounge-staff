@@ -208,7 +208,10 @@ body{
       <input class="tin" id="f_birth" type="date" onchange="onBirth()">
       <div class="age" id="ageOut"></div>
     </div>
-    <div class="q"><div class="ql">ご住所<span class="hint">お住まいの市区町村までで大丈夫です</span></div><input class="tin" id="f_addr" placeholder="名古屋市中区 …"></div>
+    <div class="q"><div class="ql">ご住所<span class="req">必須</span><span class="hint">番地・建物名・部屋番号まで（送りに使います）</span></div>
+      <input class="tin" id="f_addr" placeholder="名古屋市中区栄3-1-1 〇〇マンション101" oninput="clearErr('e_addr')">
+      <div class="err" id="e_addr">建物名・部屋番号まで正しくご入力ください（戸建て・寮の方はその旨をご記入）</div>
+    </div>
     <div class="q"><div class="ql">電話番号<span class="req">必須</span><span class="hint">採用のご連絡に使います</span></div>
       <input class="tin" id="f_tel" type="tel" inputmode="numeric" placeholder="09012345678" oninput="clearErr('e_tel')">
       <div class="err" id="e_tel">電話番号を正しくご入力ください（ハイフンなし・10〜11桁）</div>
@@ -291,6 +294,15 @@ body{
       </div>
       <div class="q subq"><div class="ql">前のお店の時給</div>
         <div class="row2"><input class="tin" id="f_prevWage" inputmode="numeric" placeholder="2500"><span class="sep">円 / 時</span></div>
+      </div>
+      <div class="q subq"><div class="ql">今ついているお客様<span class="hint">指名・常連の人数（だいたいで大丈夫です）</span></div>
+        <div class="row2"><input class="tin" id="f_holdCust" inputmode="numeric" placeholder="15"><span class="sep">人</span></div>
+      </div>
+      <div class="q subq"><div class="ql">うちで見込めるお客様<span class="hint">いえやすにお呼びできそうな人数</span></div>
+        <div class="row2"><input class="tin" id="f_expCust" inputmode="numeric" placeholder="10"><span class="sep">人</span></div>
+      </div>
+      <div class="q subq"><div class="ql">見込める売上<span class="hint">月あたりの目安</span></div>
+        <div class="row2"><input class="tin" id="f_expSales" inputmode="numeric" placeholder="50"><span class="sep">万円 / 月</span></div>
       </div>
       <div class="q subq"><div class="ql">ホストのご経験</div>
         <div class="opts" data-k="hostExp"><button data-v="無">ない</button><button data-v="有">ある</button></div>
@@ -410,7 +422,7 @@ var STATE = {
   daysPerWeek:0, weekdays:[], timeFrom:'20:00', timeTo:'01:00', prevWeek:'', dayJob:'',
   needOkuri:'', okuriArea:[], okuriNote:'',
   drink:'', weakDrinks:[], dohan:'', customers:'',
-  exp:'', prevSales:0, prevWage:0, hostExp:'', fuzokuExp:'', other:'', otherNote:'',
+  exp:'', prevSales:0, prevWage:0, holdCust:0, expCust:0, expSales:0, hostExp:'', fuzokuExp:'', other:'', otherNote:'',
   idPhoto:'', facePhoto:''
 };
 var yen = function(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); };
@@ -498,6 +510,13 @@ function validate(i){
     var tel = document.getElementById('f_tel').value.replace(/[^0-9]/g,'');
     if(!name){ alert('お名前をご入力ください'); document.getElementById('f_name').focus(); return false; }
     if(!birth){ alert('生年月日をご入力ください'); return false; }
+    var addr = document.getElementById('f_addr').value.trim();
+    if(!addr){
+      document.getElementById('e_addr').classList.add('on');
+      document.getElementById('f_addr').classList.add('bad');
+      document.getElementById('f_addr').focus();
+      return false;
+    }
     if(!/^0\d{9,10}$/.test(tel)){
       document.getElementById('e_tel').classList.add('on');
       document.getElementById('f_tel').classList.add('bad');
@@ -512,7 +531,7 @@ function collect(i){
   if(k==='basic'){ STATE.name=g('f_name').trim(); STATE.kana=g('f_kana').trim(); STATE.birth=g('f_birth'); STATE.age=calcAge(g('f_birth')); STATE.addr=g('f_addr').trim(); STATE.tel=g('f_tel').replace(/[^0-9]/g,''); }
   if(k==='shift'){ STATE.timeFrom=g('f_from'); STATE.timeTo=g('f_to'); }
   if(k==='okuri'){ STATE.okuriNote=(g('f_okuriNote')||'').trim(); }
-  if(k==='exp'){ STATE.prevSales=(parseFloat(g('f_prevSales'))||0)*10000; STATE.prevWage=parseFloat(g('f_prevWage'))||0; STATE.otherNote=(g('f_otherNote')||'').trim(); }
+  if(k==='exp'){ STATE.prevSales=(parseFloat(g('f_prevSales'))||0)*10000; STATE.prevWage=parseFloat(g('f_prevWage'))||0; STATE.holdCust=parseFloat(g('f_holdCust'))||0; STATE.expCust=parseFloat(g('f_expCust'))||0; STATE.expSales=(parseFloat(g('f_expSales'))||0)*10000; STATE.otherNote=(g('f_otherNote')||'').trim(); }
 }
 
 /* ---------- 写真（既存 canvas 縮小を流用：長辺1000px・JPEG0.75） ---------- */
