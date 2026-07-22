@@ -363,7 +363,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'gunshiPunch', 'gunshiPunchStatus'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'gunshiPunch', 'gunshiPunchStatus', 'getReceiptReservationsToday', 'logIssuedReceipt'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -9272,6 +9272,98 @@ function getKioskReservations(dateKey) {
     });
   } catch (e) { /* 会費突合失敗時は無印で継続 */ }
   return list;
+}
+
+// ============================================================
+// 軍師「🖨 領収書・受領書発行」バックエンド（2026-07-22）
+//   getReceiptReservationsToday … 本日の予約伝票＋会員に紐づく領収書名を返す（読み取り専用）
+//   logIssuedReceipt            … 発行控えを「発行領収書」シートへ追記し通し番号を返す（追記のみ・非破壊）
+//   いずれも GUNSHI_API_FNS 登録済み。金額は軍師で手入力するため取得しない。
+// ============================================================
+function getReceiptReservationsToday() {
+  try {
+    var list = getKioskReservations(bizDateStr_()) || [];
+    var nameMap = getReceiptNameMap_();
+    var canon = function (s) { return String(s || '').trim().replace(/\s/g, '').replace(/^0+(?=\d)/, ''); };
+    var rows = list.map(function (r) {
+      var m = nameMap[canon(r.memberId)] || {};
+      return {
+        time: r.time || '',
+        seat: r.table || '',
+        name: r.customer || '',
+        no: r.memberId || '',
+        company: m.company || '',
+        ryoshuName: m.ryoshuName || ''
+      };
+    });
+    return { ok: true, rows: rows };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+// 顧客マスタ 会員番号(canon) → { company:会社名, ryoshuName:領収書名(列があれば) } のマップ（60秒キャッシュ）。
+// 「領収書名」列は未新設でも動く（無ければ会社名のみ／フロントで氏名+様にフォールバック）。
+function getReceiptNameMap_() {
+  var cache = CacheService.getScriptCache();
+  var c = cache.get('RCPTNAMEMAP_v1');
+  if (c) { try { return JSON.parse(c); } catch (e) {} }
+  var map = {};
+  var sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (sheet) {
+    var values = sheet.getDataRange().getValues();
+    var h = -1;
+    for (var i = 0; i < Math.min(values.length, 6); i++) {
+      if (values[i].some(function (x) { return String(x).replace(/\s/g, '').indexOf('カード記載名') !== -1; })) { h = i; break; }
+    }
+    if (h >= 0) {
+      var headers = values[h].map(function (x) { return String(x).replace(/\s/g, ''); });
+      var idx = function (kw) { return headers.findIndex(function (x) { return x.indexOf(kw) !== -1; }); };
+      var cE = idx('会員番号'), cComp = idx('会社名'), cRyo = idx('領収書名');
+      var canon = function (s) { return String(s || '').trim().replace(/\s/g, '').replace(/^0+(?=\d)/, ''); };
+      if (cE >= 0) {
+        for (var r = h + 1; r < values.length; r++) {
+          var no = canon(values[r][cE]);
+          if (!no) continue;
+          var company = cComp >= 0 ? String(values[r][cComp] || '').trim() : '';
+          var ryo = cRyo >= 0 ? String(values[r][cRyo] || '').trim() : '';
+          if (company || ryo) map[no] = { company: company, ryoshuName: ryo };
+        }
+      }
+    }
+  }
+  try { cache.put('RCPTNAMEMAP_v1', JSON.stringify(map), 60); } catch (e) {}
+  return map;
+}
+// 発行控えを「発行領収書」シートへ追記し、その日の通し番号(yyyymmdd-連番)を返す。追記のみ＝非破壊。
+// payload = { docType, atena, memberNo, amount, taxExcl, tax, inshi, cash, tada, issueDate('yyyy-MM-dd'), by }
+function logIssuedReceipt(payload) {
+  try {
+    payload = payload || {};
+    var ss = getOrOpenSS_();
+    var TAB = '発行領収書';
+    var HDR = ['発行日時', '種別', '発行日', '通し番号', '宛名', '会員番号', '金額(税込)', '税抜', '消費税', '収入印紙', '支払方法', '但し書き', '発行者'];
+    var sh = ss.getSheetByName(TAB);
+    if (!sh) { sh = ss.insertSheet(TAB); sh.appendRow(HDR); sh.setFrozenRows(1); }
+    var iso = String(payload.issueDate || '').trim() || bizDateStr_();
+    var ymd = iso.replace(/-/g, '');
+    var seq = 1, lastRow = sh.getLastRow();
+    if (lastRow >= 2) {
+      sh.getRange(2, 4, lastRow - 1, 1).getValues().forEach(function (x) {
+        var v = String(x[0] || '');
+        if (v.indexOf(ymd + '-') === 0) { var n = parseInt(v.split('-')[1], 10); if (n >= seq) seq = n + 1; }
+      });
+    }
+    var serial = ymd + '-' + ('00' + seq).slice(-3);
+    sh.appendRow([
+      new Date(), String(payload.docType || '領収書'), iso, serial,
+      String(payload.atena || ''), String(payload.memberNo || ''),
+      Number(payload.amount) || 0, Number(payload.taxExcl) || 0, Number(payload.tax) || 0, Number(payload.inshi) || 0,
+      (payload.cash === false ? 'カード' : '現金'), String(payload.tada || ''), String(payload.by || '')
+    ]);
+    return { ok: true, serial: serial };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
 }
 
 // 端末キオスク用：ステータス変更（来店前=確定 / 来店済み / 退店済み）
