@@ -3261,27 +3261,27 @@ function rcptBuildXml_(o){
 }
 /* ===== 横向き領収書＝画像印字（プリンターが回転命令を無視するため、横長に組んだ画像を刷る） ===== */
 function rcptLandscapeCanvas_(o){
-  var W=680, H=416;                      // 横向き（読む向き）の論理サイズ。H=紙幅方向→回転後の印字幅(≤512)
+  var W=1000, H=340;                     // 横幅1.5倍・余白詰め。H=紙幅方向→回転後の印字幅(≤512)。URLは約60KB
   var c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d');
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
   g.fillStyle='#000'; g.strokeStyle='#000'; g.lineWidth=1.5; g.textBaseline='alphabetic';
   var yen=function(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); };
-  g.font='bold 40px "Hiragino Mincho ProN","YuMincho",serif'; g.fillText('領 収 証', 22, 56);
-  g.font='24px sans-serif'; g.fillText(String(o.atena||''), 210, 50);
-  g.beginPath(); g.moveTo(205,58); g.lineTo(520,58); g.stroke();
-  g.font='13px sans-serif'; g.textAlign='right'; g.fillText('No. '+rcptNo_(o.iso), 660, 26); g.fillText(rcptJp_(o.iso), 660, 44); g.textAlign='left';
-  g.font='bold 40px sans-serif'; g.fillText('￥ '+(Number(o.amount)||0).toLocaleString('ja-JP')+' -', 46, 122);
-  g.font='13px sans-serif'; g.fillText('税抜額   '+yen(o.taxExcl), 470, 104); g.fillText('消費税等 '+yen(o.tax), 470, 124);
-  g.font='16px sans-serif'; g.fillText('但  '+String(o.tada||''), 24, 168);
-  g.fillText(rcptJp_(o.iso)+'　上記正に領収いたしました', 24, 196);
-  g.strokeRect(560, 150, 110, 56); g.textAlign='center'; g.font='12px sans-serif';
-  if(RCPT_CASH && Number(o.inshi)>0){ g.fillText('収入印紙', 615, 174); g.fillText(yen(o.inshi), 615, 194); } else { g.fillText('印紙不要', 615, 184); }
+  g.font='bold 42px "Hiragino Mincho ProN","YuMincho",serif'; g.fillText('領 収 証', 30, 62);
+  g.font='26px sans-serif'; g.fillText(String(o.atena||''), 280, 56);
+  g.beginPath(); g.moveTo(275,64); g.lineTo(760,64); g.stroke();
+  g.font='14px sans-serif'; g.textAlign='right'; g.fillText('No. '+rcptNo_(o.iso), 988, 28); g.fillText(rcptJp_(o.iso), 988, 48); g.textAlign='left';
+  g.font='bold 44px sans-serif'; g.fillText('￥ '+(Number(o.amount)||0).toLocaleString('ja-JP')+' -', 56, 140);
+  g.font='14px sans-serif'; g.fillText('税抜額   '+yen(o.taxExcl), 770, 118); g.fillText('消費税等 '+yen(o.tax), 770, 142);
+  g.font='17px sans-serif'; g.fillText('但  '+String(o.tada||''), 30, 196);
+  g.fillText(rcptJp_(o.iso)+'　上記正に領収いたしました', 30, 228);
+  g.strokeRect(850, 102, 122, 58); g.textAlign='center'; g.font='13px sans-serif';
+  if(RCPT_CASH && Number(o.inshi)>0){ g.fillText('収入印紙', 911, 128); g.fillText(yen(o.inshi), 911, 148); } else { g.fillText('印紙不要', 911, 136); }
   g.textAlign='left';
-  g.strokeRect(20, 228, 340, 120);
-  g.font='bold 19px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 34, 260);
-  g.font='13px sans-serif'; g.fillText(String(RCPT_ISSUER.addr||''), 34, 288); g.fillText('登録番号 '+String(RCPT_ISSUER.invoiceNo||''), 34, 312);
-  g.strokeRect(600, 228, 66, 66); g.textAlign='center'; g.font='11px sans-serif'; g.fillText('印', 633, 266); g.textAlign='left';
+  g.strokeRect(30, 258, 580, 72);
+  g.font='bold 20px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 46, 288);
+  g.font='14px sans-serif'; g.fillText(String(RCPT_ISSUER.addr||''), 46, 310); g.fillText('登録番号 '+String(RCPT_ISSUER.invoiceNo||''), 46, 330);
+  g.strokeRect(880, 258, 68, 68); g.textAlign='center'; g.font='12px sans-serif'; g.fillText('印', 914, 298); g.textAlign='left';
   return c;
 }
 function rcptCanvasToEposXml_(c){
