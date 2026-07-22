@@ -773,6 +773,12 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .menu-btn.cust{background:#14213a;border-color:#2a4a7a;color:#8fb8f0;}
 .menu-btn.reload{background:#1a1220;border-color:#4a2c5a;color:#c69ae0;}
 .cust-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.cust-browse{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;}
+.cust-tsel{font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);cursor:pointer;-webkit-appearance:none;appearance:none;}
+.cust-tsel:focus{border-color:var(--accent-line);outline:none;}
+.cust-tsel.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.cust-browse-h{font-size:13px;font-weight:800;color:var(--sub);margin:2px 2px 10px;}
+.cust-browse-n{color:var(--accent);}
 .cfil{font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;}
 .cfil.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
 .cfil.exp.on{background:#2a0e0e;border-color:#7a2828;color:#ff9a9a;}
@@ -1020,6 +1026,10 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 </style>
 </head>
 <body>
+<script>
+/* ===== テスト環境リボン（ファイル名 -test.html で判定・本番では何も出力しない） ===== */
+if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a1020;color:#ffd7dd;font:700 12px/1.7 system-ui,-apple-system,sans-serif;text-align:center;padding:4px 8px;letter-spacing:.04em;box-shadow:0 1px 6px rgba(0,0,0,.5);">⚠️ 軍師 テスト環境 — 本番バックエンド接続（実データ）。確定操作は本番に反映されます</div>');}
+</script>
 
 <div class="hdr">
   <div class="brand">⚡IEYAS <span class="z">軍師</span></div>
@@ -1102,7 +1112,8 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 <script>
 /* ============ 環境判定（GAS本番 / ローカルモック） ============ */
 /* 自社ホスティング版: バックエンドは GAS の fetch API（action:'gunshi'）。google.script.run は使わない */
-var GAS_URL='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
+var GAS_URL='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
 var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
@@ -2975,11 +2986,43 @@ var MENU_TILES=[
     {ic:'🍽', t:'POS',               act:"alert('（プロト）POSへ')"}
   ]}
 ];
-var menuView='grid', custFilter='all', custFromTop=false;
+var menuView='grid', custFilter='all', custFromTop=false, custTantou='';
+var CUST_ROSTER=null, CUST_ROSTER_LOADING=false; // 顧客管理の会員切れ/担当別ブラウズ用（adaptCustomer済み・null=未取得）
 function openMenu(){ menuView='grid'; custFromTop=false; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
-function openCustomer(){ menuView='customer'; custFilter='all'; custFromTop=true; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
+function openCustomer(){ menuView='customer'; custFilter='all'; custTantou=''; custFromTop=true; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); loadCustRoster(); }
 function closeMenu(){ document.getElementById('menuOverlay').classList.remove('show'); }
-function menuCustomer(){ menuView='customer'; custFilter='all'; custFromTop=false; renderMenu(); }
+function menuCustomer(){ menuView='customer'; custFilter='all'; custTantou=''; custFromTop=false; renderMenu(); loadCustRoster(); }
+/* 顧客ロースター（会員切れ／担当ごと一覧の元データ）を1回だけ取得してキャッシュ。読み取り専用API。 */
+function loadCustRoster(cb){
+  if(CUST_ROSTER){ if(cb)cb(); return; }
+  if(!IS_GAS){ CUST_ROSTER=(CUSTOMERS||[]).slice(); if(cb)cb(); custRosterReady_(); return; }
+  if(CUST_ROSTER_LOADING) return;
+  CUST_ROSTER_LOADING=true;
+  gsr('getKioskCustomerRoster').then(function(res){
+    CUST_ROSTER_LOADING=false;
+    CUST_ROSTER=(res&&res.customers)?res.customers.map(adaptCustomer):[];
+    if(cb)cb(); custRosterReady_();
+  }).catch(function(){ CUST_ROSTER_LOADING=false; CUST_ROSTER=[]; if(cb)cb(); custRosterReady_(); });
+}
+/* ロースター取得完了時：検索中でなければ担当セレクトとブラウズ一覧を更新（フォーカスは奪わない） */
+function custRosterReady_(){
+  if(menuView!=='customer') return;
+  var inp=document.getElementById('cust-q'); if(inp && inp.value.trim()) return; // 検索中は邪魔しない
+  var sel=document.getElementById('cust-tsel'); if(sel){ var cur=sel.value; sel.innerHTML=custTantouOpts_(); sel.value=cur; }
+  if(custFilter==='expired'||custFilter==='noline'||custTantou) renderCustResults();
+}
+/* 客が紐づく担当の一覧（「、」区切りの複数担当に対応・客ゼロの担当は出さない） */
+function custTantouList_(){ var seen={},arr=[]; (CUST_ROSTER||[]).forEach(function(c){ String(c.tantou||'').split('、').forEach(function(t){ t=t.trim(); if(t&&!seen[t]){seen[t]=1;arr.push(t);} }); }); return arr.sort(); }
+function custTantouOpts_(){ return '<option value="">担当で選ぶ…</option>'+custTantouList_().map(function(t){ return '<option value="'+esc(t)+'"'+(custTantou===t?' selected':'')+'>'+esc(t)+'</option>'; }).join(''); }
+/* 会員切れ／LINE未登録ブラウズのトグル */
+function custBrowse(key){ custFilter=(custFilter===key)?'all':key; custTantou=''; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(function(){ if(menuView==='customer'&&!((document.getElementById('cust-q')||{}).value||'').trim()) renderCustResults(); }); }
+/* 担当ごと一覧 */
+function custPickTantou(name){ custTantou=name||''; custFilter='all'; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(function(){ if(menuView==='customer'&&!((document.getElementById('cust-q')||{}).value||'').trim()) renderCustResults(); }); }
+/* 検索窓に入力＝ブラウズ状態を解除して検索モードへ（チップ/セレクトの選択も外す・再描画せずフォーカス維持） */
+function custOnSearchInput(){ var q=((document.getElementById('cust-q')||{}).value||'').trim(); if(q&&(custFilter!=='all'||custTantou)){ custFilter='all'; custTantou=''; var chips=document.querySelectorAll('#menu-body .cust-browse .cfil'); if(chips)chips.forEach(function(c){c.classList.remove('on');}); var sel=document.getElementById('cust-tsel'); if(sel)sel.value=''; } renderCustResults(); }
+/* ブラウズ一覧の並び：会員切れ→今月更新→有効→未会員、同区分内は更新が古い順（＝より切れている順） */
+function custSortForBrowse_(list){ var order={expired:0,thismonth:1,ok:2,none:3}; var w=(list||[]).map(function(c){return{c:c,mi:membershipInfo(c.joined,c.feeDate)};}); w.sort(function(a,b){ var oa=order[a.mi.status]==null?9:order[a.mi.status], ob=order[b.mi.status]==null?9:order[b.mi.status]; if(oa!==ob)return oa-ob; return (b.mi.monthsSince||0)-(a.mi.monthsSince||0); }); return w.map(function(x){return x.c;}); }
+function custBrowseHeader_(n){ var label=custTantou?('担当 '+esc(custTantou)+' のお客様'):custFilter==='expired'?'🔴 会員切れのお客様':custFilter==='noline'?'📵 公式LINE未登録のお客様':''; if(!label)return ''; return '<div class="cust-browse-h">'+label+'　<span class="cust-browse-n">'+n+'名</span></div>'; }
 
 /* ===== 🖨 領収書・受領書発行（軍師メニュー内・TM-M30/Bluetooth印字） =====
    ・今日の伝票 → 会員に紐づく領収書宛名/金額を自動で引く（今夜ぶんの金額は席料+同伴の仮値。TRUST合計が取れればそれを優先）
@@ -3381,22 +3424,19 @@ function renderMenu(){
   document.getElementById('menuTitle').textContent = menuView==='customer'?'👤 顧客管理':'☰ 各種メニュー';
   var el=document.getElementById('menu-body');
   if(menuView==='customer'){
-    var cnt=function(n){return IS_GAS?'':(' '+n);}; // 実データ時は件数を出さない(検索結果依存のため)
-    var exp=IS_GAS?0:CUSTOMERS.filter(function(c){return renewStatus(c.feeDate)==='expired';}).length;
-    var nol=IS_GAS?0:CUSTOMERS.filter(isNoLine).length;
     var back=custFromTop?'<span class="menu-back" onclick="closeMenu()">← ホームに戻る</span>':'<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
     el.innerHTML=back
-      +'<input id="cust-q" class="cust-q" placeholder="お客様名・会員番号・担当名で検索" oninput="renderCustResults()">'
-      +'<div class="cust-filters">'
-        +'<span class="cfil'+(custFilter==='all'?' on':'')+'" onclick="setCustFilter(\'all\')">全員'+cnt(CUSTOMERS.length)+'</span>'
-        +'<span class="cfil exp'+(custFilter==='expired'?' on':'')+'" onclick="setCustFilter(\'expired\')">🔴 更新切れ'+cnt(exp)+'</span>'
-        +'<span class="cfil nol'+(custFilter==='noline'?' on':'')+'" onclick="setCustFilter(\'noline\')">📵 公式LINE未登録'+cnt(nol)+'</span>'
+      +'<input id="cust-q" class="cust-q" placeholder="お客様名・会員番号・担当名で検索" oninput="custOnSearchInput()">'
+      +'<div class="cust-browse">'
+        +'<span class="cfil exp'+(custFilter==='expired'?' on':'')+'" onclick="custBrowse(\'expired\')">🔴 会員切れ一覧</span>'
+        +'<span class="cfil nol'+(custFilter==='noline'?' on':'')+'" onclick="custBrowse(\'noline\')">📵 LINE未登録</span>'
+        +'<select id="cust-tsel" class="cust-tsel'+(custTantou?' on':'')+'" onchange="custPickTantou(this.value)">'+custTantouOpts_()+'</select>'
       +'</div>'
       +'<button onclick="openAddCustomer()" style="width:100%;margin:2px 0 12px;padding:12px;border-radius:10px;border:1px solid #2a6a44;background:#0f2a1a;color:#7fe0a3;font-weight:800;font-size:14px;cursor:pointer">➕ 新規のお客様を追加</button>'
       +'<div id="cust-results" class="cust-results"></div>';
     var inp=document.getElementById('cust-q'); if(inp) inp.value=custLastQ||'';
     renderCustResults();
-    if(inp) inp.focus();
+    if(inp && (custLastQ||'').trim()) inp.focus(); // 検索に戻ってきた時だけフォーカス（ブラウズ時はキーボードを出さない）
     return;
   }
   if(menuView==='feerenew'){
@@ -3413,7 +3453,7 @@ function renderMenu(){
     }).join('')+'</div>';
   }).join('');
 }
-function setCustFilter(f){ var q=((document.getElementById('cust-q')||{}).value||''); custFilter=f; renderMenu(); var inp=document.getElementById('cust-q'); if(inp){ inp.value=q; renderCustResults(); } }
+/* setCustFilter は廃止（会員切れ／担当ブラウズの custBrowse / custPickTantou に置換） */
 /* 新規のお客様を追加（会員番号は自動採番・登録日=本日） */
 function openAddCustomer(){
   var el=document.getElementById('menu-body'); if(!el)return;
@@ -3473,10 +3513,31 @@ function saveNewCustomer(){
   }).catch(function(e){ alert('登録エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} });
 }
 function custFilterFn(c){ if(custFilter==='expired'&&membershipInfo(c.joined,c.feeDate).status!=='expired')return false; if(custFilter==='noline'&&!isNoLine(c))return false; return true; }
+/* ブラウズ中（検索窓が空＋会員切れ/LINE未登録/担当選択のいずれか）か */
+function custIsBrowsing_(q){ return !q && (custFilter==='expired'||custFilter==='noline'||!!custTantou); }
+/* ロースターからブラウズ条件で抽出（判定はフロントの membershipInfo に一元化＝既存カードと一致） */
+function custBrowseList_(){
+  return (CUST_ROSTER||[]).filter(function(c){
+    if(custTantou){ if(String(c.tantou||'').split('、').map(function(s){return s.trim();}).indexOf(custTantou)<0) return false; }
+    if(custFilter==='expired' && membershipInfo(c.joined,c.feeDate).status!=='expired') return false;
+    if(custFilter==='noline' && !isNoLine(c)) return false;
+    return true;
+  });
+}
 function renderCustResults(){
   var q=((document.getElementById('cust-q')||{}).value||'').trim();
-  custLastQ=q;
   var el=document.getElementById('cust-results'); if(!el)return;
+  // ── ブラウズ（会員切れ一覧／担当ごと一覧） ──
+  if(custIsBrowsing_(q)){
+    custLastQ='';
+    if(IS_GAS && !CUST_ROSTER){ el.innerHTML='<div class="empty-msg">読み込み中...</div>'; loadCustRoster(function(){ if(menuView==='customer'&&custIsBrowsing_(((document.getElementById('cust-q')||{}).value||'').trim())) renderCustResults(); }); return; }
+    var blist=custSortForBrowse_(custBrowseList_());
+    el.innerHTML=custBrowseHeader_(blist.length)+(blist.length?custResultsHtml(blist):'<div class="empty-msg">該当のお客様はいません</div>');
+    return;
+  }
+  // ── 検索 ──
+  custLastQ=q;
+  if(!q){ el.innerHTML='<div class="empty-msg" style="padding:16px;font-size:13px;line-height:1.8">お客様名・会員番号・担当名で検索、<br>または上のボタンで<b>会員切れ</b>／<b>担当ごと</b>の一覧を表示できます。</div>'; return; }
   if(IS_GAS){
     el.innerHTML='<div class="empty-msg">検索中...</div>';
     gsr('searchKioskCustomersV2', q, LOGIN, {withTantou:true}).then(function(list){
