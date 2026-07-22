@@ -93,7 +93,9 @@ function searchKioskCustomersV2(query, viewer, opts) {
   var vNorm = normalizeName_(String(viewer || ''));
   return base.map(function (c) {
     var f = feeMap[c.no] || feeMap[c.member] || {};
-    var v = visitMap ? (visitStatsFor_(visitMap, c.no, c.card) || visitStatsFor_(visitMap, '', c.name)) : null;
+    // 会員番号(=TRUSTタグ番号)一致のみで来店集計。番号なし/不明は手動仕訳へ（名前では拾わない）。
+    var cno = c.no || c.member || '';
+    var v = visitMap ? visitStatsFor_(visitMap, cno, '') : null;
     // 担当キャスト本人か（「、」区切り複数対応）
     var isTantou = vNorm && String(c.tantou || '').split('、').some(function (t) { return normalizeName_(t.trim()) === vNorm; });
     var canMoney = full || isTantou;
