@@ -3057,6 +3057,10 @@ var RCPT_PAYEES=null;           // 受領書の受取人候補＝今日の出勤
 function rcptPayeeMock_(){ return ['田中 太郎','佐藤 美咲','鈴木 レイ','派遣 山本','派遣 高橋']; }
 function rcptPayeeOpts_(){ return (RCPT_PAYEES||[]).map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join(''); }
 function rcptPickPayee(v){ var a=document.getElementById('rcpt-atena'); if(!a)return; if(v==='__free'){ a.value=''; a.focus(); return; } if(v){ a.value=v; rcptCalc(); } }
+var RCPT_MOKUTEKI=['日払い報酬として','体験報酬として','送迎代として','紹介料として']; // 受領書の名目プリセット（＋その他自由入力）
+function rcptMokutekiOpts_(){ return RCPT_MOKUTEKI.map(function(m){ return '<option value="'+esc(m)+'">'+esc(m)+'</option>'; }).join('')+'<option value="__free">（その他・自由入力）</option>'; }
+function rcptPickMokuteki(v){ var a=document.getElementById('rcpt-tada'); if(!a)return; if(v==='__free'){ a.value=''; a.focus(); rcptCalc(); return; } a.value=v; rcptCalc(); }
+function rcptTadaInput_(){ var a=document.getElementById('rcpt-tada'), s=document.getElementById('rcpt-mokuteki'); if(s&&a){ s.value=(RCPT_MOKUTEKI.indexOf(a.value.trim())>=0)?a.value.trim():'__free'; } rcptCalc(); }
 function rcptInshi_(taxExcl,cash){ if(!cash)return 0; var a=taxExcl;
   if(a<50000)return 0; if(a<=1000000)return 200; if(a<=2000000)return 400; if(a<=3000000)return 600;
   if(a<=5000000)return 1000; if(a<=10000000)return 2000; if(a<=20000000)return 4000; if(a<=30000000)return 6000;
@@ -3166,8 +3170,9 @@ function rcptRenderMenu_(el){
       +'<div class="rcpt-seg"><button id="rcpt-cash" class="'+(RCPT_CASH?'on':'')+'" onclick="rcptSetCash(true)">現金</button>'
       +'<button id="rcpt-card" class="'+(!RCPT_CASH?'on':'')+'" onclick="rcptSetCash(false)">カード</button></div>';
   }
-  h+='<div class="flabel">'+(R?'但し書き':'名目')+'</div>'
-    +'<input id="rcpt-tada" class="finput" value="'+(R?'飲食代として':'日払い報酬として')+'" oninput="rcptCalc()">';
+  h+='<div class="flabel">'+(R?'但し書き':'名目')+'</div>';
+  if(!R){ h+='<select id="rcpt-mokuteki" class="finput" onchange="rcptPickMokuteki(this.value)" style="margin-bottom:6px">'+rcptMokutekiOpts_()+'</select>'; }
+  h+='<input id="rcpt-tada" class="finput" value="'+(R?'飲食代として':'日払い報酬として')+'"'+(R?'':' placeholder="名目（自由入力可）"')+' oninput="rcptTadaInput_()">';
   h+='<div class="flabel">発行日</div>'
     +'<div class="rcpt-seg" style="margin-bottom:6px">'
     +'<button id="rcpt-d-today" class="'+(RCPT_DATEMODE==='today'?'on':'')+'" onclick="rcptSetDate(\'today\')">今日</button>'
