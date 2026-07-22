@@ -58,6 +58,297 @@ function setProp(k, v) {
   PropertiesService.getScriptProperties().setProperty(k, String(v));
 }
 
+// ============================================================
+// 【消耗品の発注点セットアップ】2026-07-20 現場ヒアリング確定分の投入ツール
+//   previewStockPreset() … 読み取り専用。1セルも書かない。現状とプリセットの突合をログに出す
+//   applyStockPreset()   … 本実行。追加と「発注点/単位/数え方」の更新のみ
+//
+//   判定式は全品共通で「在庫数 ≦ 発注点 で発注」（現場が『2個になったら発注』と回答）。
+//   ⚠️両階合算の品はゼロ＝全てフロア独立（現場に2度確認。ライターもフレッシュも各階それぞれ）
+//     ＝名刺のようなフロア合算の専用ロジックは要らない。既存の行ごと判定でよい。
+//   ⚠️箱/袋/ケースで数える品は「開けかけを数に入れない（未開封のみ）」＝現場承諾済み。
+//   ⚠️手動実行専用なので末尾 _ を付けない（付けるとGASエディタの実行メニューに出ない）。
+//   ⚠️チャームは意図的にプリセットへ入れていない。カテゴリ「チャーム」には既存の個別品目が
+//     あるはずで、現場の「10セット作れない量になったら」がどの品を指すか未確定のため。
+//     previewが出す既存品目一覧を見てから決める。
+// ============================================================
+const STOCK_PRESET_CATS_ = ['消耗品', '割り物', 'チャーム', '果物']; // 突合の対象（ボトル/名刺は対象外）
+// n=品名 / cat=マスタに無い時に新規作成するカテゴリ / unit=単位の但し書き / r=発注点 / exp=賞味期限管理
+// m: 'num'=数値で判定 / 'lv3'=3段階ボタン（数値を出さない）/ 'ondemand'=都度発注（アラート対象外）
+const STOCK_PRESET_ = [
+  // ══ 飲み物まわり ══════════════════════════════
+  { n: '水',                     unit: '箱(24本)未開封',   r: 1,  m: 'num' },
+  { n: '炭酸水(瓶)',             unit: '箱(24本)未開封',   r: 1,  m: 'num' }, // 現場の「炭酸 1箱」＝瓶のこと
+  { n: '炭酸水(ペット・日曜用)', unit: '本',              r: 12, m: 'num' }, // 現行の発注点を維持
+  { n: '緑茶2L',                 unit: '本',              r: 2,  m: 'num' },
+  { n: 'ウーロン茶2L',           unit: '本',              r: 2,  m: 'num' },
+  { n: 'ジャスミン茶',           unit: '本',              r: 2,  m: 'num' },
+  { n: 'レモンティ',             unit: '本(バラ発注)',     r: 1,  m: 'num' },
+  { n: 'せんぶり茶',             unit: '箱',              r: 1,  m: 'num' }, // 現行の発注点を維持
+  { n: '丸氷',                   unit: '袋(12個)未開封',   r: 1,  m: 'num' },
+  { n: 'コーヒー(HOT)',          unit: 'パック(1杯)',      r: 5,  m: 'num', exp: true }, // 現場の「コーヒー 5パック」
+  { n: 'コーヒー(ICE)',          unit: '本',              r: 2,  m: 'num', exp: true }, // 現行の発注点を維持
+  { n: 'オレンジジュース',       unit: '本(未開封)',       r: 0,  m: 'num' },
+  { n: 'ネクター',               unit: '本(未開封)',       r: 0,  m: 'num' }, // 新設
+  { n: 'ウェルチ',               unit: '本(未開封)',       r: 0,  m: 'num' },
+  { n: 'コーヒーフレッシュ',     unit: '個',              r: 10, m: 'num', exp: true },
+  { n: 'ガムシロップ',           unit: '個',              r: 10, m: 'num' },
+  { n: 'スティックシュガー',     unit: '本',              r: 10, m: 'num' },
+  // ⚠️唯一の両階合算品。フロア「共通」1行で持てば合算が自然に表現できる＝名刺型の専用ロジックは要らない
+  { n: 'JAVATEA白',              unit: '本(2F+5F合計)',    r: 10, m: 'num', fl: ['共通'] },
+  // ══ 消耗品 ════════════════════════════════════
+  { n: '紙ナプキン',             unit: '小箱(12個)未開封', r: 1,  m: 'num' },
+  { n: 'コースター',             unit: '束',              r: 4,  m: 'num' },
+  { n: 'ペーパータオル',         unit: '袋',              r: 2,  m: 'num' }, // ＝現場が言う「手拭きのペーパー」（同一品と確認済み）
+  { n: 'キッチンペーパー',       unit: '個',              r: 2,  m: 'num' }, // 現行の発注点を維持
+  { n: 'ライター',               unit: '箱(100本)未開封',  r: 1,  m: 'num' },
+  { n: 'トイレットペーパー',     unit: 'ロール',          r: 5,  m: 'num' },
+  { n: 'マウスウォッシュ',       unit: '本',              r: 30, m: 'num' },
+  { n: 'ウェルカム伝票',         unit: '枚',              r: 30, m: 'num' }, // 伝票3種は同じ基準（現場確認済み）
+  { n: 'テーブル伝票',           unit: '枚',              r: 30, m: 'num' },
+  { n: 'チェックシート',         unit: '枚',              r: 30, m: 'num' },
+  { n: 'お土産袋',               unit: '袋',              r: 2,  m: 'num' },
+  { n: 'おしぼり',               unit: '袋',              r: 4,  m: 'num' },
+  { n: '可燃ごみ袋',             unit: '袋',              r: 1,  m: 'num' },
+  { n: '付箋(紙・プラ)',         unit: '個',              r: 1,  m: 'num' },
+  { n: '領収書(手書き)',         unit: '冊',              r: 1,  m: 'num' },
+  { n: '領収書(受領書用)',       unit: '冊',              r: 1,  m: 'num' },
+  { n: '収入印紙(200円)',        unit: '枚',              r: 5,  m: 'num' },
+  { n: 'つまようじ',             unit: '個(200本入)未開封', r: 1, m: 'num' },
+  { n: 'ばんそうこう',           unit: 'ケース(30枚)未開封', r: 1, m: 'num' },
+  { n: 'ロキソニン',             unit: '箱',              r: 1,  m: 'num' },
+  { n: 'ホッチキス針',           unit: '箱',              r: 1,  m: 'num' },
+  { n: 'POSロール紙',            unit: '個',              r: 2,  m: 'num' },
+  { n: 'カード端末ロール紙',     unit: '個',              r: 2,  m: 'num' },
+  { n: '金魚の醤油入れ',         unit: 'セット(10個)',     r: 20, m: 'num' }, // テキーラ金魚の容器
+  { n: '傘',                     unit: '本',              r: 10, m: 'num' }, // ⚠️旧「傘(2店舗合計)」から各階10本へ変更（現場確認済み）
+  // ボトルネック＝一色ごとに1袋（現場確認済み。銀色を新設）
+  { n: 'ボトルネック(黒)',       unit: '袋', r: 1, m: 'num' },
+  { n: 'ボトルネック(金)',       unit: '袋', r: 1, m: 'num' },
+  { n: 'ボトルネック(白)',       unit: '袋', r: 1, m: 'num' },
+  { n: 'ボトルネック(銀)',       unit: '袋', r: 1, m: 'num' },
+  // 洗剤＝4種それぞれで見る（現場確認済み）。「最後の1個を開けた＝未開封0」で発注
+  { n: 'ハイター',               unit: '個(未開封)', r: 0, m: 'num' },
+  { n: 'アルコール',             unit: '個(未開封)', r: 0, m: 'num' },
+  { n: 'キッチン洗剤',           unit: '個(未開封)', r: 0, m: 'num' },
+  { n: 'ハンドソープ',           unit: '個(未開封)', r: 0, m: 'num' },
+  // ══ 3段階ボタン（数える代わりに見た目で判断する品）══
+  { n: '眼鏡拭き',                           m: 'lv3' },
+  { n: '綿棒',                               m: 'lv3' },
+  { n: '割りばし',                           m: 'lv3' },
+  { n: 'ストロー',                           m: 'lv3' },
+  { n: 'ラップ',                             m: 'lv3' },
+  { n: 'しみ抜き',                           m: 'lv3' }, // 使っていないが残す（残量少で買い出し）
+  { n: 'チャーム(ラムネ・ミックスナッツ等)', m: 'lv3' }, // 「10セット作れない量になったら」＝数値化不能
+  { n: '輪ゴム',                             m: 'lv3' }, // 現場「少なくなって来たら買い出し」
+  { n: 'まな板シート',                       m: 'lv3' },
+  { n: 'ジップロック',                       m: 'lv3' },
+  // ══ 都度発注（出た分を頼む＝在庫数で追いかけない）══
+  //   ⚠️これをアラートに混ぜると鳴りっぱなしになり、全アラートが無視されるようになる
+  { n: '瓶コーラ',         unit: '本',    m: 'ondemand' },
+  { n: '瓶ジンジャエール', unit: '本',    m: 'ondemand' },
+  { n: 'ビール',           unit: '本',    m: 'ondemand' }, // 新設
+  { n: 'レッドブル',       unit: '本',    m: 'ondemand' }, // 新設
+  { n: 'レモン',           unit: 'パック', m: 'ondemand' }
+];
+const STOCK_PRESET_FLOORS_ = ['2F', '5F'];
+
+// 品名の照合キー。⚠️あいまい照合(matchStockName_)は使わない＝完全一致だけ（山崎→山崎12年の事故を避ける）
+function stkKey_(s) {
+  return String(s || '').replace(/[\s　]/g, '')
+    .replace(/[Ａ-Ｚａ-ｚ０-９（）]/g, function (c) {
+      if (c === '（') return '(';
+      if (c === '）') return ')';
+      return String.fromCharCode(c.charCodeAt(0) - 0xFEE0);
+    }).toUpperCase();
+}
+
+// 9列目=単位 / 10列目=数え方 の見出しを生やす。⚠️列は末尾追加のみ（途中に挿すと全12関数が壊れる）
+function ensureStockExtraCols_(sh, headRow) {
+  const h = headRow || [];
+  if (String(h[8] || '').trim() !== '単位')   sh.getRange(1, 9).setValue('単位');
+  if (String(h[9] || '').trim() !== '数え方') sh.getRange(1, 10).setValue('数え方');
+}
+
+function previewStockPreset() { return runStockPreset_(true); }
+function applyStockPreset()   { return runStockPreset_(false); }
+
+function runStockPreset_(dryRun) {
+  const sh = getStockMasterSheet_();
+  const rows = sh.getDataRange().getValues();
+  const L = [];
+  L.push(dryRun ? '🔍【下見】1セルも書きません' : '✍️【本実行】書き込みます');
+
+  // 既存行を読む（対象カテゴリのみ。⚠️名刺はキャスト名＝消耗品と同名がありうるので必ずカテゴリで絞る）
+  const cur = {};              // key(品名+フロア) -> {row, name, cat, qty, min, unit, cnt}
+  const byCat = {};            // カテゴリ -> [表示用の行]
+  for (let i = 1; i < rows.length; i++) {
+    const name = String(rows[i][0]).trim();
+    if (!name) continue;
+    const cat = String(rows[i][1] || '').trim();
+    if (STOCK_PRESET_CATS_.indexOf(cat) < 0) continue;
+    const floor = String(rows[i][2] || '').trim();
+    const rec = {
+      row: i + 1, name: name, cat: cat, floor: floor,
+      qty: rows[i][3], min: rows[i][4], unit: String(rows[i][8] || ''), cnt: String(rows[i][9] || '')
+    };
+    cur[stkKey_(name) + '|' + floor] = rec;
+    (byCat[cat] = byCat[cat] || []).push(rec);
+  }
+
+  // ① 現状の棚卸し
+  L.push('', '━━ ① いま登録されている品目（ボトル/名刺は除く）━━');
+  STOCK_PRESET_CATS_.forEach(function (cat) {
+    const list = byCat[cat] || [];
+    L.push('【' + cat + '】' + list.length + '行');
+    list.forEach(function (r) {
+      L.push('   ' + r.floor + ' ' + r.name + '　在庫=' + (r.qty === '' ? '(空欄)' : r.qty) +
+             '　発注点=' + (r.min === '' ? '(空欄)' : r.min));
+    });
+  });
+
+  // ② プリセットとの突合
+  const toAdd = [], toUpd = [], same = [];
+  STOCK_PRESET_.forEach(function (p) {
+    const reorder = (p.m === 'num') ? p.r : '';          // 3段階と都度発注は発注点を持たない＝空欄でアラートが鳴らない
+    const cntMode = (p.m === 'lv3') ? '3段階' : (p.m === 'ondemand') ? '都度' : '';
+    (p.fl || STOCK_PRESET_FLOORS_).forEach(function (fl) {
+      const hit = cur[stkKey_(p.n) + '|' + fl];
+      if (!hit) { toAdd.push({ p: p, floor: fl, reorder: reorder, cntMode: cntMode }); return; }
+      const diff = [];
+      if (String(hit.min) !== String(reorder)) diff.push('発注点 ' + (hit.min === '' ? '(空欄)' : hit.min) + '→' + (reorder === '' ? '(空欄)' : reorder));
+      if (hit.unit !== (p.unit || '')) diff.push('単位 ' + (hit.unit || '(空欄)') + '→' + (p.unit || '(空欄)'));
+      if (hit.cnt !== cntMode) diff.push('数え方 ' + (hit.cnt || '(空欄)') + '→' + (cntMode || '(数値)'));
+      if (diff.length) toUpd.push({ p: p, floor: fl, row: hit.row, reorder: reorder, cntMode: cntMode, diff: diff, cat: hit.cat });
+      else same.push(p.n + ' ' + fl);
+    });
+  });
+
+  // ③ プリセットに無い既存品（＝現場のシートに載っていない品。消さずに報告するだけ）
+  const extra = [];
+  const presetKeys = {};
+  STOCK_PRESET_.forEach(function (p) { presetKeys[stkKey_(p.n)] = true; });
+  Object.keys(cur).forEach(function (k) {
+    const r = cur[k];
+    if (!presetKeys[stkKey_(r.name)]) extra.push(r);
+  });
+
+  L.push('', '━━ ② これから追加する行（' + toAdd.length + '件）━━');
+  toAdd.forEach(function (a) {
+    L.push('   ➕ ' + a.floor + ' ' + a.p.n + '　[' + (a.p.cat || '消耗品') + ']　発注点=' + (a.reorder === '' ? '(なし)' : a.reorder) +
+           '　単位=' + (a.p.unit || '-') + (a.cntMode ? '　' + a.cntMode : '') + '　在庫数=空欄のまま');
+  });
+  L.push('', '━━ ③ 設定を更新する行（' + toUpd.length + '件）━━');
+  toUpd.forEach(function (u) { L.push('   ✏️ ' + u.floor + ' ' + u.p.n + '（' + u.row + '行目）' + u.diff.join(' / ')); });
+  L.push('', '━━ ④ 変更なし（' + same.length + '件）━━');
+  L.push('', '━━ ⑤ 現場のリストに無い既存品（' + extra.length + '件・触りません）━━');
+  extra.forEach(function (r) { L.push('   ❓ ' + r.cat + ' ' + r.floor + ' ' + r.name + '　在庫=' + (r.qty === '' ? '(空欄)' : r.qty)); });
+
+  if (dryRun) {
+    L.push('', '＝＝ 下見はここまで。1セルも書いていません ＝＝');
+    L.push('内容に問題がなければ applyStockPreset() を実行してください。');
+    Logger.log(L.join('\n'));
+    return { dryRun: true, add: toAdd.length, update: toUpd.length, same: same.length, extra: extra.length };
+  }
+
+  // ── ここから書き込み ──────────────────────────
+  ensureStockExtraCols_(sh, rows[0]);
+  // 追加は末尾へ一括（appendRowの繰り返しは遅く、途中で6分制限に当たる）
+  //  ⚠️在庫数(4列目)は空欄で作る＝「未入力」と「本当に0」を区別するため。
+  //    0で作ると投入した瞬間に全品目が発注アラートで暴発する（名刺で踏んだのと同じ型）。
+  if (toAdd.length) {
+    const stamp = Utilities.formatDate(new Date(), TZ, 'M/d HH:mm');
+    const block = toAdd.map(function (a) {
+      return [a.p.n, a.p.cat || '消耗品', a.floor, '', a.reorder, a.p.exp ? '○' : '', stamp, '', a.p.unit || '', a.cntMode];
+    });
+    sh.getRange(sh.getLastRow() + 1, 1, block.length, 10).setValues(block);
+  }
+  // 更新は行ごとに個別で書く。⚠️在庫数(4列目)と更新日時(7列目)には絶対に触らない
+  //   （在庫数＝現物の数／更新日時＝在庫が動いた時刻。設定変更で書き換えると現場が読み違える）
+  toUpd.forEach(function (u) {
+    sh.getRange(u.row, 5).setValue(u.reorder);
+    sh.getRange(u.row, 9).setValue(u.p.unit || '');
+    sh.getRange(u.row, 10).setValue(u.cntMode);
+  });
+  L.push('', '✅ 追加 ' + toAdd.length + '件 / 更新 ' + toUpd.length + '件 を書き込みました。');
+  L.push('⚠️在庫数の列は1つも触っていません（現物の数は現場が入れるまで空欄）。');
+  Logger.log(L.join('\n'));
+  return { dryRun: false, add: toAdd.length, update: toUpd.length, same: same.length, extra: extra.length };
+}
+
+// ============================================================
+// 【旧台帳の退役】新プリセットに (品名×フロア) が無い行を「在庫発注マスタ_旧」へ
+//   丸ごと退避してから削除する。previewRetireOldStock()=下見（1セルも書かない）。
+//   ⚠️これが要る理由＝既存62行はフロアが「共通」で、新台帳は2F/5F別。品名が同じでも
+//     別行として併存する（例:「水/共通」+「水/2F」+「水/5F」＝3行）。品名一致の一覧には
+//     出てこないので、放っておくと黙って重複台帳になる。
+//   ⚠️カテゴリが名刺/ボトルの行には絶対に触らない（STOCK_PRESET_CATS_で絞る）。
+//   ⚠️削除は必ず下の行から（上から消すと行番号がずれて別の行を巻き込む＝名刺同期で踏んだ罠）。
+// ============================================================
+const STOCK_RETIRE_TAB_ = '在庫発注マスタ_旧';
+function previewRetireOldStock() { return runRetireOldStock_(true); }
+function retireOldStock()        { return runRetireOldStock_(false); }
+
+function runRetireOldStock_(dryRun) {
+  const sh = getStockMasterSheet_();
+  const rows = sh.getDataRange().getValues();
+  const L = [dryRun ? '🔍【下見】1セルも書きません' : '✍️【本実行】退避してから削除します'];
+
+  const keep = {};
+  STOCK_PRESET_.forEach(function (p) {
+    (p.fl || STOCK_PRESET_FLOORS_).forEach(function (fl) { keep[stkKey_(p.n) + '|' + fl] = true; });
+  });
+
+  const targets = [];
+  for (let i = 1; i < rows.length; i++) {
+    const name = String(rows[i][0]).trim();
+    if (!name) continue;
+    if (STOCK_PRESET_CATS_.indexOf(String(rows[i][1] || '').trim()) < 0) continue; // 名刺/ボトルは対象外
+    const fl = String(rows[i][2] || '').trim();
+    if (keep[stkKey_(name) + '|' + fl]) continue;                                   // 新台帳で使う行は残す
+    targets.push({ row: i + 1, vals: rows[i].slice(0, 10) });
+  }
+
+  const withStock = targets.filter(function (t) { return Number(t.vals[3]) > 0; });
+  L.push('', '━━ 退役する行（' + targets.length + '件）━━');
+  targets.forEach(function (t) {
+    L.push('   🗄 ' + (t.vals[2] || '(フロア空欄)') + ' ' + t.vals[0] +
+           '　在庫=' + (t.vals[3] === '' ? '(空欄)' : t.vals[3]) +
+           '　旧発注点=' + (t.vals[4] === '' ? '(空欄)' : t.vals[4]));
+  });
+  if (withStock.length) {
+    L.push('', '⚠️このうち現物が残っている行（' + withStock.length + '件）＝退避タブに数量ごと記録します:');
+    withStock.forEach(function (t) { L.push('   ・' + t.vals[2] + ' ' + t.vals[0] + '　在庫=' + t.vals[3]); });
+  }
+
+  if (dryRun) {
+    L.push('', '＝＝ 下見はここまで。1セルも書いていません ＝＝');
+    L.push('よければ retireOldStock() を実行してください（「' + STOCK_RETIRE_TAB_ + '」タブへ退避してから削除します）。');
+    Logger.log(L.join('\n'));
+    return { dryRun: true, retire: targets.length, withStock: withStock.length };
+  }
+  if (!targets.length) { Logger.log(L.join('\n') + '\n退役対象がありません。'); return { dryRun: false, retire: 0 }; }
+
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let bk = ss.getSheetByName(STOCK_RETIRE_TAB_);
+  if (!bk) {
+    bk = ss.insertSheet(STOCK_RETIRE_TAB_);
+    bk.appendRow(['品名', 'カテゴリ', 'フロア', '在庫数', '最低在庫数', '賞味期限管理', '更新日時', '仕入れ区分', '単位', '数え方', '退避日時']);
+    bk.setFrozenRows(1);
+  }
+  const stamp = Utilities.formatDate(new Date(), TZ, 'yyyy/M/d HH:mm');
+  bk.getRange(bk.getLastRow() + 1, 1, targets.length, 11)
+    .setValues(targets.map(function (t) { return t.vals.concat([stamp]); }));
+
+  // ⚠️必ず下の行から消す
+  targets.slice().sort(function (a, b) { return b.row - a.row; })
+         .forEach(function (t) { sh.deleteRow(t.row); });
+
+  L.push('', '✅ ' + targets.length + '件を「' + STOCK_RETIRE_TAB_ + '」へ退避してから削除しました（記録は消えていません）。');
+  Logger.log(L.join('\n'));
+  return { dryRun: false, retire: targets.length, withStock: withStock.length };
+}
+
 /* 【調査専用・手動実行／読み取り専用】顧客マスタ お客様管理Y3 の「誕生日」列のデータ品質を1回棚卸しする。
  * シートは一切書き換えない。結果は実行ログ(Logger.log)に出す。
  * 目的＝「今月誕生日のお客様」機能を作る前に、入力率・書式のばらつき・今月該当者数を把握する（[[reference_customer_master_y3]]の地雷対策）。
@@ -341,6 +632,11 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(gunshiApi_(body)))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    // 面談表（応募者フロント mendan.html・使い捨てトークンで認証）
+    if (body.action === 'mendan') {
+      return ContentService.createTextOutput(JSON.stringify(mendanApi_(body)))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     // LIFF APIリクエスト（actionフィールドあり）
     if (body.action) {
       const result = handleApiRequest_(body);
@@ -363,7 +659,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'getKioskCustomerRoster', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'gunshiPunch', 'gunshiPunchStatus', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -729,6 +1025,43 @@ function handleApiRequest_(body) {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return { ok: true, requests: getShiftRequests_() };
+  }
+
+  // ⏱ 勤怠（黒服の勤怠手当制度・2026-08-01施行）
+  if (body.action === 'kintaiDay') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    const biz = String(body.bizDate || bizDateStr_());
+    return { ok: true, bizDate: biz, rows: kintaiDayView_(biz) };
+  }
+  if (body.action === 'kintaiMonth') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    const mm = String(body.month || '').slice(0, 7);
+    const cur = kintaiMonthSummary_(mm);
+    // 当月のポイントは「翌月」の単価を決める。画面が取り違えないよう明示して返す。
+    cur.appliesTo = (function (m) { var p = String(m).split('-'); var y = parseInt(p[0], 10), o = parseInt(p[1], 10) + 1; if (o > 12) { o = 1; y += 1; } return y + '-' + (o < 10 ? '0' : '') + o; })(mm);
+    return cur;
+  }
+  if (body.action === 'kintaiSetPoint') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kintaiSetPoint_(body.bizDate, body.name, body.point, body.reason, adminName);
+  }
+  if (body.action === 'kintaiRebuild') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kintaiSaveDay_(String(body.bizDate || kintaiPrevBizDate_()));
+  }
+  if (body.action === 'kintaiAllowance') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kintaiAllowanceMonth_(String(body.month || '').slice(0, 7));
+  }
+  if (body.action === 'kintaiFixPunch') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kintaiFixPunch_(body.bizDate, body.name, body.type, body.time, adminName);
   }
   if (body.action === 'getShiftMgmt') {
     const adminName = getStaffName(body.userId);
@@ -1548,7 +1881,9 @@ function adminGetTrustImport(userId) {
 // ── 新バック方式：月単位の手入力（キャスト紹介料・入店祝い金）ストア ──────────
 // ※ バック方式（新ルール/固定率）はキャスト単位の永続設定（スタッフマスタ）で持つ→ getCastBackRuleMap_
 var KYUYO_MANUAL_TAB  = '給与手入力';
-var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整'];
+// ⚠️「勤務時間」は勤怠手当の計算に使う実勤務時間(h)の手入力欄（2026-08の勤怠手当制度）。
+//   空なら自動（TRUSTの時間報酬÷基本時給→打刻集計）にフォールバックする＝入れた時だけ人の値が勝つ。
+var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整', '勤務時間'];
 
 // 給与手入力シートを取得（無ければ作成）。既存シートには不足ヘッダ列を後方互換で追加。
 // ⚠️追補が無いと ci('売上調整') が -1 になり、入力した調整額が黙って0扱いになる（金額に直結）。
@@ -4553,29 +4888,8 @@ function kintaiPunchMap_(bizDate) {
 }
 
 // 指定営業日・指定名の予定シフト → {raw, inMin, outMin, off} / 行が無ければ null
-// ⚠️現状はシフト表のみを見る。シフト表に行が無い黒服（シフト申請の承諾行だけで回っている人）は拾えない。
-//   判定を作るときにシフト申請とのマージ版へ差し替える＝呼び出し側はここ1本しか見ていないので安全に載せ替えられる。
 function kintaiPlanFor_(bizDate, name) {
-  var key = kintaiNameKey_(name);
-  var sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
-  if (!sh) return null;
-  var data = sh.getDataRange().getValues();
-  if (data.length < 2) return null;
-  var p = String(bizDate).split('-');
-  if (p.length < 3) return null;
-  var colKey = parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
-  var heads = data[0].map(function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim(); });
-  var ci = heads.indexOf(colKey);
-  if (ci < 0) return null;
-  for (var i = 1; i < data.length; i++) {
-    if (kintaiNameKey_(data[i][0]) !== key) continue;
-    var cell = data[i][ci];
-    var raw = (cell instanceof Date && !isNaN(cell)) ? Utilities.formatDate(cell, TZ, 'HH:mm') : String(cell == null ? '' : cell).trim();
-    if (!raw || raw === '休み') return { raw: raw, inMin: null, outMin: null, off: true };
-    var rg = parseShiftRange_(raw);
-    return { raw: raw, inMin: rg ? rg.inMin : null, outMin: rg ? rg.outMin : null, off: false };
-  }
-  return null;
+  return kintaiDayPlanMap_(bizDate)[kintaiNameKey_(name)] || null;
 }
 
 // 軍師iPadからの出退勤打刻。
@@ -4591,6 +4905,8 @@ function gunshiPunch(name, type) {
   if (kintaiExemptKeys_()[key]) return { ok: false, error: nm + ' さんは打刻の対象外です（管理者/テスト）' };
 
   var biz = bizDateStr_();
+  // 制度開始前は打刻を受け付けない（軍師には予告カードを出す）。判定はサーバ時刻＝端末に依存しない
+  if (biz < kintaiStartDate_()) return { ok: false, beforeStart: true, startDate: kintaiStartDate_(), error: '出退勤の打刻は ' + kintaiStartDate_() + ' から始まります。' };
   var cur = kintaiPunchMap_(biz)[key] || { in: '', out: '' };
 
   // 二重打刻ガード（訂正は管理コンソールから）
@@ -4626,6 +4942,7 @@ function gunshiPunch(name, type) {
 // 軍師の打刻カード用。自分の状態＋本日出勤予定の黒服それぞれの打刻状況（誰がまだ打っていないか一目で分かる）
 function gunshiPunchStatus(name) {
   var biz = bizDateStr_();
+  var startDate = kintaiStartDate_();
   var map = kintaiPunchMap_(biz);
   var me = null;
   if (name) {
@@ -4641,7 +4958,677 @@ function gunshiPunchStatus(name) {
       list.push({ name: s.name, shift: s.shift, in: c.in || '', out: c.out || '' });
     });
   } catch (e) {}
-  return { ok: true, bizDate: biz, me: me, list: list };
+  return { ok: true, bizDate: biz, beforeStart: biz < startDate, startDate: startDate, me: me, list: list };
+}
+
+// 勤怠手当制度の開始日（この日より前は打刻させず「◯月◯日から」の予告を出す）。
+// 既定 2026-08-01・ScriptProperty KINTAI_START_DATE で変更可（KINTAI_ prefix＝軍師設定リセットで消えない）。
+function kintaiStartDate_() { return prop('KINTAI_START_DATE') || '2026-08-01'; }
+
+// ============================================================
+// ⏱ 勤怠の判定（遅刻・早退・欠勤 → ポイント）
+//   正本＝同意書『労働条件変更および勤怠手当制度に関する同意書』第4条・第5条。
+//   ⚠️自動判定は「候補」まで。確定は必ず人（第6条＝急病・事故・交通機関の遅延等は店舗判断で減免できる）。
+//   ⚠️金額に直結する。純ロジック(kintaiJudgeOne_)はシートを触らない形に切ってあり、
+//     scratchpad/kintai_judge.js で境界値32件を検証済み。式を変えるときは必ずそちらも直すこと。
+// ============================================================
+
+// 'HH:mm' → 営業日内の分。0:00〜5:59は前営業日の続きとして+24h（bizDateStr_の6時境界と同じ）
+// ⚠️これを噛ませないと深夜2時の退勤が「16時間の早退」に化ける。
+function kintaiHmToBizMin_(hm) {
+  var m = String(hm == null ? '' : hm).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  var h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+  if (h < 6) h += 24;
+  return h * 60 + mi;
+}
+
+// 分 → 表示用 'H:mm'（26:10 のように24超えで見せる＝営業日の感覚に合わせる）
+function kintaiMinToHm_(min) {
+  if (min == null) return '';
+  var h = Math.floor(min / 60), m = min % 60;
+  return h + ':' + (m < 10 ? '0' : '') + m;
+}
+
+// ⚠️earlyGraceMin＝同意書に早退の分数定義が無いため、遅刻の15分に揃えた運用既定値。
+//   打刻の丸め誤差で1ptが付くのを防ぐためのもので、変えるならボスの判断。
+var KINTAI_OPTS_DEF_ = { lateGraceMin: 0, earlyGraceMin: 15, sameDayHours: 24 };
+
+var KINTAI_KIND_JP_ = {
+  ok: '定時', late: '遅刻', early: '早退', late_early: '遅刻+早退',
+  no_out: '退勤打刻なし', late_no_out: '遅刻/退勤打刻なし', early_no_out: '早退/退勤打刻なし',
+  late_early_no_out: '遅刻+早退/退勤打刻なし',
+  absent_nocontact: '連絡なし欠勤', absent_sameday: '当日欠勤', absent_advance: '事前欠勤',
+  off: '休み', extra: '予定外出勤', broken: '要確認'
+};
+
+/**
+ * 1人・1営業日の勤怠判定（純関数＝シートを触らない）
+ * @param {Object|null} plan  予定 {raw, inMin, outMin, off}。null=予定行なし
+ * @param {Object|null} punch 実績 {in:'19:02', out:'02:10'}
+ * @param {Object|null} abs   欠勤の申し出 {hoursBefore}（営業開始までの残り時間）
+ * @param {Object} [opts]
+ */
+function kintaiJudgeOne_(plan, punch, abs, opts) {
+  var d = KINTAI_OPTS_DEF_;
+  var lateGrace  = (opts && opts.lateGraceMin  != null) ? opts.lateGraceMin  : d.lateGraceMin;
+  var earlyGrace = (opts && opts.earlyGraceMin != null) ? opts.earlyGraceMin : d.earlyGraceMin;
+  var sameDayH   = (opts && opts.sameDayHours  != null) ? opts.sameDayHours  : d.sameDayHours;
+
+  var inHm  = punch && punch.in  ? String(punch.in).trim()  : '';
+  var outHm = punch && punch.out ? String(punch.out).trim() : '';
+
+  var sameDayAbsent = function (a) {
+    return { kind: 'absent_sameday', lateMin: 0, earlyMin: 0, autoPt: 2,
+             reason: '当日欠勤（営業開始' + Math.floor(a.hoursBefore) + '時間前の申し出）', needsHuman: false };
+  };
+  var isSameDayCall = function (a) { return a && a.hoursBefore != null && a.hoursBefore < sameDayH; };
+
+  // 出勤予定が無い日
+  if (!plan || plan.off || plan.inMin == null) {
+    if (inHm) return { kind: 'extra', lateMin: 0, earlyMin: 0, autoPt: 0, reason: '予定外の出勤', needsHuman: false };
+    // ⚠️⚠️ここで欠勤の申し出を見ないと制度が空振りする。
+    //   当日欠勤が承認されるとシフト表のセルが「休み」に書き換わり（submitShift/承認処理のwriteShiftCell_）、
+    //   予定そのものが消えて"ただの休みの日"に見える＝2ポイントが永久に付かない。
+    //   24時間を切ってからの申し出だけを当日欠勤として拾い、事前申請の休みは通常の休み扱い（同意書第5条）。
+    if (isSameDayCall(abs)) return sameDayAbsent(abs);
+    return { kind: 'off', lateMin: 0, earlyMin: 0, autoPt: 0, reason: '出勤予定なし', needsHuman: false };
+  }
+
+  // 予定があるのに出勤打刻が無い＝欠勤
+  if (!inHm) {
+    if (!abs) return { kind: 'absent_nocontact', lateMin: 0, earlyMin: 0, autoPt: 3, reason: '連絡のない欠勤', needsHuman: true };
+    if (isSameDayCall(abs)) return sameDayAbsent(abs);
+    return { kind: 'absent_advance', lateMin: 0, earlyMin: 0, autoPt: 0, reason: '事前連絡の欠勤', needsHuman: false };
+  }
+
+  var actIn = kintaiHmToBizMin_(inHm);
+  if (actIn == null) return { kind: 'broken', lateMin: 0, earlyMin: 0, autoPt: 0, reason: '出勤打刻を時刻として読めない: ' + inHm, needsHuman: true };
+  var lateMin = Math.max(0, actIn - plan.inMin);
+  if (lateMin <= lateGrace) lateMin = 0;
+
+  var earlyMin = 0, noOut = false;
+  if (!outHm) {
+    noOut = true;
+  } else if (plan.outMin != null) {
+    var actOut = kintaiHmToBizMin_(outHm);
+    if (actOut == null) return { kind: 'broken', lateMin: lateMin, earlyMin: 0, autoPt: 0, reason: '退勤打刻を時刻として読めない: ' + outHm, needsHuman: true };
+    earlyMin = Math.max(0, plan.outMin - actOut);
+    if (earlyMin < earlyGrace) earlyMin = 0;
+  }
+
+  // ポイント算定（同意書 第5条）
+  var pt = 0, parts = [];
+  if (lateMin > 0) {
+    if (lateMin < 15) { pt += 0.5; parts.push(lateMin + '分の遅刻(0.5)'); }
+    else              { pt += 1;   parts.push(lateMin + '分の遅刻(1)'); }
+  }
+  if (earlyMin > 0) { pt += 1; parts.push(earlyMin + '分の早退(1)'); }
+
+  var kind = 'ok';
+  if (lateMin > 0 && earlyMin > 0) kind = 'late_early';
+  else if (lateMin > 0) kind = 'late';
+  else if (earlyMin > 0) kind = 'early';
+  if (noOut) kind = (kind === 'ok') ? 'no_out' : kind + '_no_out';
+
+  var reason = parts.length ? parts.join(' + ') : '定時';
+  if (noOut) reason += (parts.length ? ' / ' : '') + '退勤打刻なし（早退は未判定）';
+
+  // ⚠️早退は「本人都合の」に限る＝店の指示で上がった場合は対象外。必ず人が確認する。
+  return { kind: kind, lateMin: lateMin, earlyMin: earlyMin, autoPt: pt, reason: reason, needsHuman: earlyMin > 0 || noOut };
+}
+
+// 月間ポイント → 翌月の勤怠手当の単価（円/時）。同意書 第4条
+function kintaiRateFromPoints_(pt) {
+  var p = Number(pt) || 0;
+  if (p < 2) return 100;
+  if (p < 3) return 50;
+  return 0;
+}
+
+// 勤怠手当の対象＝黒服のみ（キャストは制度外）
+function kintaiIsTargetRole_(role) {
+  var r = String(role || '').trim();
+  return r === '黒服社員' || r === '黒服バイト' || r === '黒服';
+}
+
+// 当日欠勤(24時間)判定の基準となる営業開始時刻。既定19:00・ScriptPropertyで変更可
+// （KEEP_PREFIX に 'KINTAI_' を登録済み＝軍師設定リセットで消えない）
+function kintaiOpenHhmm_() { return String(prop('KINTAI_OPEN_HHMM') || '19:00'); }
+
+function kintaiDateAt_(bizDate, hhmm) {
+  var p = String(bizDate).split('-'), t = String(hhmm).split(':');
+  return new Date(+p[0], (+p[1]) - 1, +p[2], parseInt(t[0], 10) || 0, parseInt(t[1], 10) || 0, 0);
+}
+
+function kintaiMdKey_(bizDate) {
+  var p = String(bizDate).split('-');
+  return p.length < 3 ? '' : parseInt(p[1], 10) + '/' + parseInt(p[2], 10);
+}
+
+// 前営業日（朝の判定バッチ用）。いまの営業日の1つ前を返す。
+function kintaiPrevBizDate_() {
+  var d = new Date();
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);   // まず"いまの営業日"へ
+  d.setDate(d.getDate() - 1);                         // その前日
+  return Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+}
+
+function kintaiPlanFromRaw_(name, role, raw) {
+  if (!raw || raw === '休み') return { name: name, role: role, raw: raw || '', inMin: null, outMin: null, off: true };
+  var rg = parseShiftRange_(raw);
+  return { name: name, role: role, raw: raw, inMin: rg ? rg.inMin : null, outMin: rg ? rg.outMin : null, off: false };
+}
+
+// その営業日に出勤予定だった黒服 → { 正規化名: {name, role, raw, inMin, outMin, off} }
+// ⚠️シフト表だけでは足りない。黒服はシフト表に行が無い人がいて、主データは「シフト申請」の承諾行
+//   （getShiftMgmtData_ と同じマージ規則）。getTodayShiftDetail_ はシフト表しか見ないので使わない。
+function kintaiDayPlanMap_(bizDate) {
+  var map = {};
+  var mdKey = kintaiMdKey_(bizDate);
+  if (!mdKey) return map;
+  // ① シフト表
+  try {
+    var sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+    if (sh) {
+      var data = sh.getDataRange().getValues();
+      if (data.length >= 2) {
+        var heads = data[0].map(function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim(); });
+        var ci = heads.indexOf(mdKey);
+        if (ci >= 0) {
+          for (var i = 1; i < data.length; i++) {
+            var nm = String(data[i][0]).trim();
+            var role = String(data[i][1]).trim();
+            if (!nm || !kintaiIsTargetRole_(role)) continue;
+            var cell = data[i][ci];
+            var raw = (cell instanceof Date && !isNaN(cell)) ? Utilities.formatDate(cell, TZ, 'HH:mm') : String(cell == null ? '' : cell).trim();
+            map[kintaiNameKey_(nm)] = kintaiPlanFromRaw_(nm, role, raw);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+  // ② シフト申請の承諾行（シフト表に行が無い黒服はここが主データ）
+  try {
+    var rs = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHIFT_REQUEST_TAB);
+    if (rs && rs.getLastRow() > 1) {
+      var rows = rs.getDataRange().getValues();
+      for (var j = 1; j < rows.length; j++) {
+        var role2 = String(rows[j][6] || '').trim();
+        if (!kintaiIsTargetRole_(role2)) continue;
+        var dc = rows[j][2];
+        var ds = (dc instanceof Date && !isNaN(dc)) ? Utilities.formatDate(dc, TZ, 'M/d') : String(dc || '').trim();
+        if (ds !== mdKey) continue;
+        if (String(rows[j][4] || '').trim() !== '承諾') continue;
+        var nm2 = String(rows[j][1] || '').trim();
+        if (!nm2) continue;
+        var k2 = kintaiNameKey_(nm2);
+        if (map[k2] && !map[k2].off) continue;   // シフト表に実シフトがあればそちらを優先
+        var t2 = String(rows[j][3] || '').trim();
+        map[k2] = kintaiPlanFromRaw_(nm2, role2, (t2 === '欠勤') ? '休み' : t2);
+      }
+    }
+  } catch (e) {}
+  return map;
+}
+
+// その営業日の「欠勤の申し出」→ { 正規化名: {hoursBefore, status, submittedAt} }
+// ⚠️⚠️ここが無いと制度が空振りする。欠勤申請が承認されるとシフト表のセルが「休み」に書き換わり
+//   （submitShift / 承認処理が writeShiftCell_ で書く）、予定そのものが消えて「休みの日」に見える。
+//   ＝当日欠勤の2ポイントが永久に付かない。申請シートの提出日時から復元するのが唯一の方法。
+function kintaiAbsenceMap_(bizDate) {
+  var map = {};
+  var mdKey = kintaiMdKey_(bizDate);
+  if (!mdKey) return map;
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(SHIFT_REQUEST_TAB);
+  if (!sh || sh.getLastRow() < 2) return map;
+  var openAt = kintaiDateAt_(bizDate, kintaiOpenHhmm_());
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (!kintaiIsTargetRole_(String(rows[i][6] || '').trim())) continue;
+    var dc = rows[i][2];
+    var ds = (dc instanceof Date && !isNaN(dc)) ? Utilities.formatDate(dc, TZ, 'M/d') : String(dc || '').trim();
+    if (ds !== mdKey) continue;
+    var want = String(rows[i][3] || '').trim();
+    if (want !== '欠勤' && want !== '休み') continue;
+    var st = String(rows[i][4] || '').trim();
+    if (st === 'クリア') continue;
+    var nm = String(rows[i][1] || '').trim();
+    if (!nm) continue;
+    var sub = rows[i][0];
+    var hours = (sub instanceof Date && !isNaN(sub)) ? (openAt.getTime() - sub.getTime()) / 3600000 : null;
+    var key = kintaiNameKey_(nm);
+    // 同じ日に複数の申し出があれば「最も早い申し出」を採る（本人に有利な側）
+    if (!map[key] || (hours != null && map[key].hoursBefore != null && hours > map[key].hoursBefore)) {
+      map[key] = { hoursBefore: hours, status: st, submittedAt: (sub instanceof Date && !isNaN(sub)) ? Utilities.formatDate(sub, TZ, 'yyyy-MM-dd HH:mm') : String(sub || '') };
+    }
+  }
+  return map;
+}
+
+// 1営業日の黒服全員の判定（台帳には書かない＝いつでも再計算できる純粋な読み取り）
+function kintaiJudgeDay_(bizDate) {
+  var biz = String(bizDate || bizDateStr_());
+  var plans = kintaiDayPlanMap_(biz);
+  var punches = kintaiPunchMap_(biz);
+  var abs = kintaiAbsenceMap_(biz);
+  var keys = {};
+  Object.keys(plans).forEach(function (k) { keys[k] = true; });
+  Object.keys(punches).forEach(function (k) {                 // 予定に無いが打刻がある人も拾う
+    if (keys[k]) return;
+    if (kintaiIsTargetRole_(getStaffRoleByName_(normalizeName_(punches[k].name)))) keys[k] = true;
+  });
+  var out = [];
+  Object.keys(keys).forEach(function (k) {
+    var pl = plans[k] || null, pu = punches[k] || null, ab = abs[k] || null;
+    var j = kintaiJudgeOne_(pl, pu, ab);
+    out.push({
+      bizDate: biz,
+      name: (pl && pl.name) || (pu && pu.name) || k,
+      role: (pl && pl.role) || '',
+      plan: pl ? pl.raw : '',
+      inTime: pu ? pu.in : '',
+      outTime: pu ? pu.out : '',
+      kind: j.kind, kindJp: KINTAI_KIND_JP_[j.kind] || j.kind,
+      lateMin: j.lateMin, earlyMin: j.earlyMin,
+      autoPt: j.autoPt, reason: j.reason, needsHuman: j.needsHuman,
+      absHours: (ab && ab.hoursBefore != null) ? Math.round(ab.hoursBefore * 10) / 10 : null,
+      absStatus: ab ? ab.status : ''
+    });
+  });
+  out.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'ja'); });
+  return out;
+}
+
+// ============================================================
+// ⏱ 勤怠ポイント台帳
+//   毎営業日の判定を1行ずつ積む。月次はこの台帳を1回読むだけで集計できる
+//   （日ごとにシートを読み直すとGASの1.9秒の床×日数で実用にならないため）。
+//   ⚠️確定ポイント・理由・確定者は人が入れた値＝自動更新で絶対に上書きしない。
+// ============================================================
+var KINTAI_PT_TAB_  = '勤怠ポイント';
+// ⚠️「自動判定の根拠」と「確定理由」は必ず別列。同じ列に混ぜると、後から
+//   「機械がそう言ったのか、人がそう決めたのか」が区別できなくなる（金額の根拠を説明できなくなる）。
+var KINTAI_PT_HEAD_ = ['営業日', '名前', '役割', '予定', '出勤', '退勤', '判定', '遅刻分', '早退分', '自動ポイント', '自動判定の根拠', '確定ポイント', '確定理由', '確定者', '確定日時'];
+
+function ensureKintaiPtSheet_(ss) {
+  var sh = ss.getSheetByName(KINTAI_PT_TAB_);
+  if (!sh) { sh = ss.insertSheet(KINTAI_PT_TAB_); sh.appendRow(KINTAI_PT_HEAD_); sh.setFrozenRows(1); return sh; }
+  var lastCol = sh.getLastColumn();
+  var heads = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  KINTAI_PT_HEAD_.forEach(function (h) {
+    if (heads.indexOf(h) < 0) { lastCol += 1; sh.getRange(1, lastCol).setValue(h); heads.push(h); }
+  });
+  return sh;
+}
+
+// 1営業日の判定を台帳へ反映（何度実行してもよい＝冪等）。人が入れた確定値は保持する。
+function kintaiSaveDay_(bizDate) {
+  var biz = String(bizDate || bizDateStr_());
+  var rows = kintaiJudgeDay_(biz);
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ensureKintaiPtSheet_(ss);
+  var vals = sh.getDataRange().getValues();
+  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  var ci = function (h) { return heads.indexOf(h); };
+  var iBiz = ci('営業日'), iName = ci('名前');
+  var idx = {};
+  for (var i = 1; i < vals.length; i++) {
+    var b = (vals[i][iBiz] instanceof Date) ? Utilities.formatDate(vals[i][iBiz], TZ, 'yyyy-MM-dd') : String(vals[i][iBiz] || '').trim();
+    if (b !== biz) continue;
+    idx[kintaiNameKey_(vals[i][iName])] = i + 1;
+  }
+  var added = 0, updated = 0;
+  var AUTO_COLS = ['予定', '出勤', '退勤', '判定', '遅刻分', '早退分', '自動ポイント', '自動判定の根拠'];
+  rows.forEach(function (r) {
+    var payload = {
+      '営業日': biz, '名前': r.name, '役割': r.role, '予定': r.plan,
+      '出勤': r.inTime, '退勤': r.outTime, '判定': r.kindJp,
+      '遅刻分': r.lateMin, '早退分': r.earlyMin, '自動ポイント': r.autoPt, '自動判定の根拠': r.reason
+    };
+    var rowNo = idx[kintaiNameKey_(r.name)];
+    if (!rowNo) { kintaiAppend_(sh, payload); added++; return; }
+    AUTO_COLS.forEach(function (h) {
+      var c = ci(h);
+      if (c >= 0) sh.getRange(rowNo, c + 1).setValue(payload[h]);
+    });
+    updated++;
+  });
+  return { ok: true, bizDate: biz, added: added, updated: updated, rows: rows.length };
+}
+
+// 日別の画面用＝いまの自動判定に、台帳の確定値（人の減免）を重ねて返す。
+// ⚠️自動判定は常に再計算する＝シフトを直したり打刻を訂正したら、その場で結果が変わる。
+//   台帳から読むのは人が入れた確定値だけ。
+function kintaiDayView_(bizDate) {
+  var biz = String(bizDate || bizDateStr_());
+  var rows = kintaiJudgeDay_(biz);
+  var fixed = {};
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(KINTAI_PT_TAB_);
+  if (sh && sh.getLastRow() > 1) {
+    var vals = sh.getDataRange().getValues();
+    var heads = vals[0].map(function (h) { return String(h).trim(); });
+    var iBiz = heads.indexOf('営業日'), iName = heads.indexOf('名前');
+    var iFix = heads.indexOf('確定ポイント'), iReason = heads.indexOf('確定理由'), iBy = heads.indexOf('確定者');
+    for (var i = 1; i < vals.length; i++) {
+      var b = (vals[i][iBiz] instanceof Date) ? Utilities.formatDate(vals[i][iBiz], TZ, 'yyyy-MM-dd') : String(vals[i][iBiz] || '').trim();
+      if (b !== biz) continue;
+      var f = iFix >= 0 ? vals[i][iFix] : '';
+      fixed[kintaiNameKey_(vals[i][iName])] = {
+        fixedPt: (f === '' || f == null) ? null : Number(f),
+        fixedReason: iReason >= 0 ? String(vals[i][iReason] || '') : '',
+        fixedBy: iBy >= 0 ? String(vals[i][iBy] || '') : ''
+      };
+    }
+  }
+  rows.forEach(function (r) {
+    var f = fixed[kintaiNameKey_(r.name)] || {};
+    r.fixedPt = (f.fixedPt == null) ? null : f.fixedPt;
+    r.fixedReason = f.fixedReason || '';
+    r.fixedBy = f.fixedBy || '';
+    r.finalPt = (r.fixedPt == null) ? r.autoPt : r.fixedPt;   // 確定値が入っていればそれが正
+  });
+  return rows;
+}
+
+// 打刻の訂正（コンソールから）。打刻忘れ・押し間違いの救済。
+// ⚠️元の時刻は捨てず「記録元」に痕跡を残す＝誰がいつ何を直したかを後から追える。
+// ⚠️取り消しは行を削除せず種別を「出勤(取消)」に変える＝監査できる形を保つ
+//   （集計側は '出勤'/'退勤' の完全一致でしか拾わないので、取消行は自然に無視される）。
+// ⚠️行が無ければ新規に追記する＝打刻を丸ごと忘れた日を後から埋められる。
+function kintaiFixPunch_(bizDate, name, type, hhmm, byName) {
+  var biz = String(bizDate || '').trim();
+  var nm = String(name || '').trim();
+  var ty = String(type || '').trim();
+  if (!biz || !nm) return { ok: false, error: '日付と名前は必須です' };
+  if (ty !== '出勤' && ty !== '退勤') return { ok: false, error: '種別が不正です' };
+  var t = String(hhmm == null ? '' : hhmm).trim();
+  var clear = (t === '');
+  // 26:10 のような24時超え表記も受ける（営業日の感覚に合わせる）
+  if (!clear && !/^\d{1,2}:\d{2}$/.test(t)) return { ok: false, error: '時刻は HH:mm 形式で入力してください（例 19:05 / 26:10）' };
+
+  var sh = ensureKintaiSheet_(SpreadsheetApp.openById(SHEET_ID));
+  var vals = sh.getDataRange().getValues();
+  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  var iTime = heads.indexOf('時刻'), iName = heads.indexOf('名前'), iType = heads.indexOf('種別');
+  var iBiz = heads.indexOf('営業日'), iDate = heads.indexOf('日付'), iSrc = heads.indexOf('記録元');
+  if (iName < 0 || iType < 0 || iTime < 0) return { ok: false, error: '勤怠ログの列が見つかりません' };
+  var dstr = function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); };
+  var key = kintaiNameKey_(nm);
+  var hit = 0, old = '';
+  for (var i = 1; i < vals.length; i++) {
+    var b = iBiz >= 0 ? dstr(vals[i][iBiz]) : '';
+    if (!b) b = iDate >= 0 ? dstr(vals[i][iDate]) : '';
+    if (b !== biz) continue;
+    if (kintaiNameKey_(vals[i][iName]) !== key) continue;
+    if (String(vals[i][iType] || '').trim() !== ty) continue;
+    hit = i + 1; old = fmtStamp_(vals[i][iTime]);
+    if (ty === '出勤') break;   // 出勤は最初の行／退勤は最後の行＝集計が採用しているのと同じ行を直す
+  }
+  var mark = '手修正:' + String(byName || '') + (old ? '(元' + old + ')' : '') + ' ' + nowStamp_();
+  if (clear) {
+    if (!hit) return { ok: false, error: '取り消す打刻がありません' };
+    sh.getRange(hit, iType + 1).setValue(ty + '(取消)');
+    if (iSrc >= 0) sh.getRange(hit, iSrc + 1).setValue(mark + ' 取消');
+    return { ok: true, cleared: true, bizDate: biz, name: nm, type: ty, prev: old };
+  }
+  if (hit) {
+    sh.getRange(hit, iTime + 1).setValue(t);
+    if (iSrc >= 0) sh.getRange(hit, iSrc + 1).setValue(mark);
+  } else {
+    kintaiAppend_(sh, {
+      '日付': biz, '時刻': t, '名前': nm, '種別': ty, '営業日': biz,
+      '記録元': '手修正:' + String(byName || '') + '(新規) ' + nowStamp_(), '記録日時': nowStamp_()
+    });
+  }
+  return { ok: true, bizDate: biz, name: nm, type: ty, time: t, prev: old, added: !hit };
+}
+
+// 確定ポイントを保存（同意書 第6条の減免）。
+// ⚠️理由必須＝売上調整と同じ流儀。「誰がなぜ何を変えたか」が残らない金額操作を作らない。
+function kintaiSetPoint_(bizDate, name, point, reason, byName) {
+  var biz = String(bizDate || '').trim();
+  var nm = String(name || '').trim();
+  if (!biz || !nm) return { ok: false, error: '日付と名前は必須です' };
+  var rs = String(reason || '').trim();
+  var clear = (point === '' || point == null);
+  if (!clear && !rs) return { ok: false, error: '変更の理由を入力してください（第6条の減免は根拠を残す必要があります）' };
+  var pt = clear ? '' : Number(point);
+  if (!clear && (isNaN(pt) || pt < 0)) return { ok: false, error: 'ポイントは0以上の数値で入力してください' };
+
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ensureKintaiPtSheet_(ss);
+  var find = function () {
+    var vals = sh.getDataRange().getValues();
+    var heads = vals[0].map(function (h) { return String(h).trim(); });
+    var iBiz = heads.indexOf('営業日'), iName = heads.indexOf('名前');
+    for (var i = 1; i < vals.length; i++) {
+      var b = (vals[i][iBiz] instanceof Date) ? Utilities.formatDate(vals[i][iBiz], TZ, 'yyyy-MM-dd') : String(vals[i][iBiz] || '').trim();
+      if (b === biz && kintaiNameKey_(vals[i][iName]) === kintaiNameKey_(nm)) return { row: i + 1, heads: heads };
+    }
+    return null;
+  };
+  var hit = find();
+  if (!hit) { kintaiSaveDay_(biz); hit = find(); }   // まだ台帳に積まれていない日なら先に判定を走らせる
+  if (!hit) return { ok: false, error: 'この日の対象者に ' + nm + ' が見つかりません' };
+
+  var set = function (h, v) { var c = hit.heads.indexOf(h); if (c >= 0) sh.getRange(hit.row, c + 1).setValue(v); };
+  set('確定ポイント', pt);
+  set('確定理由', clear ? '' : rs);
+  set('確定者', clear ? '' : String(byName || ''));
+  set('確定日時', clear ? '' : nowStamp_());
+  return { ok: true, bizDate: biz, name: nm, point: pt, cleared: clear };
+}
+
+// 月間ポイント集計 → {month, list:[{name, role, points, rate, detail[]}]}
+// 確定ポイントが入っていればそれが正、空なら自動ポイント。
+function kintaiMonthSummary_(month) {
+  var m = String(month || '').slice(0, 7);
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(KINTAI_PT_TAB_);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, month: m, list: [] };
+  var vals = sh.getDataRange().getValues();
+  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  var ci = function (h) { return heads.indexOf(h); };
+  var iBiz = ci('営業日'), iName = ci('名前'), iRole = ci('役割');
+  var iAuto = ci('自動ポイント'), iFix = ci('確定ポイント'), iKind = ci('判定');
+  var agg = {};
+  for (var i = 1; i < vals.length; i++) {
+    var b = (vals[i][iBiz] instanceof Date) ? Utilities.formatDate(vals[i][iBiz], TZ, 'yyyy-MM-dd') : String(vals[i][iBiz] || '').trim();
+    if (b.slice(0, 7) !== m) continue;
+    var nm = String(vals[i][iName] || '').trim();
+    if (!nm) continue;
+    var k = kintaiNameKey_(nm);
+    if (!agg[k]) agg[k] = { name: nm, role: String(vals[i][iRole] || ''), points: 0, detail: [] };
+    var fixRaw = iFix >= 0 ? vals[i][iFix] : '';
+    var pt = (fixRaw === '' || fixRaw == null) ? (Number(vals[i][iAuto]) || 0) : (Number(fixRaw) || 0);
+    agg[k].points += pt;
+    if (pt > 0) agg[k].detail.push({ date: b, kind: String(vals[i][iKind] || ''), pt: pt });
+  }
+  var list = Object.keys(agg).map(function (k) {
+    var a = agg[k];
+    a.points = Math.round(a.points * 10) / 10;   // 0.5刻みの丸め
+    a.rate = kintaiRateFromPoints_(a.points);
+    return a;
+  });
+  list.sort(function (x, y) { return (y.points - x.points) || String(x.name).localeCompare(String(y.name), 'ja'); });
+  return { ok: true, month: m, list: list };
+}
+
+function kintaiPrevMonth_(m) {
+  var p = String(m).split('-');
+  var y = parseInt(p[0], 10), mo = parseInt(p[1], 10) - 1;
+  if (mo < 1) { mo = 12; y -= 1; }
+  return y + '-' + (mo < 10 ? '0' : '') + mo;
+}
+
+// 指定月に適用される勤怠手当の単価（＝前月のポイントで決まる。同意書 第4条）
+// 制度開始月など前月の実績が無い場合は満額100円から始める。
+function kintaiRateForMonth_(month, name) {
+  var prev = kintaiPrevMonth_(String(month || '').slice(0, 7));
+  var sum = kintaiMonthSummary_(prev);
+  var key = kintaiNameKey_(name);
+  var hit = sum.list.filter(function (r) { return kintaiNameKey_(r.name) === key; })[0];
+  if (!hit) return { rate: 100, points: null, basedOn: prev, note: '前月の勤怠記録なし＝満額から開始' };
+  return { rate: hit.rate, points: hit.points, basedOn: prev, note: '' };
+}
+
+// ============================================================
+// 💰 勤怠手当の金額（同意書 第3条・第4条）
+//   手当額 ＝ 実勤務時間 × 単価（単価は前月のポイントで決まる）
+//   ⚠️同意書は「実勤務時間に対して支給」と定めているが、その"実勤務時間"を持っているシステムが無い
+//     （TRUSTから来るのは`時間報酬`という金額だけで時間数が無い）。
+//     そこで取得口をこの1本に閉じ込め、出所を3段のフォールバックにしてある。
+//     どこに倒しても呼び出し側は書き換え不要＝TRUSTの実物を確認してから寄せられる。
+// ============================================================
+
+// 「3,000」「3000円」「￥3000」「３０００」等に耐える数値パース（基本時給列は文字列保存のため）
+function kintaiNum_(v) {
+  if (v == null || v === '') return 0;
+  var s = String(v).replace(/[０-９]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
+                   .replace(/[，,¥￥円\s　]/g, '');
+  var n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// 月キーの正規化（'2026/8' や Date や '2026-8' を 'yyyy-MM' に揃える）
+function kintaiMonthKey_(v) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'yyyy-MM');
+  var s = String(v == null ? '' : v).trim().replace(/\//g, '-');
+  var m = s.match(/^(\d{4})-(\d{1,2})/);
+  return m ? (m[1] + '-' + (m[2].length < 2 ? '0' : '') + m[2]) : s.slice(0, 7);
+}
+
+// スタッフマスタの「基本時給」（⚠️計算非連動の参照メモとして文字列で入っている＝必ずパースする）
+function kintaiBaseWage_(name) {
+  try {
+    var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(STAFF_TAB);
+    if (!sh || sh.getLastRow() < 2) return 0;
+    var cols = getStaffTermCols_(sh, false);
+    var c = cols['基本時給'];
+    if (c == null || c < 0) return 0;
+    var vals = sh.getDataRange().getValues();
+    var key = kintaiNameKey_(name);
+    for (var i = 1; i < vals.length; i++) {
+      if (kintaiNameKey_(vals[i][1]) === key) return kintaiNum_(vals[i][c]);   // B列=名前（固定）
+    }
+  } catch (e) {}
+  return 0;
+}
+
+// TRUST報酬シートの「時間報酬」（月の金額合計）
+function kintaiTrustJikan_(month, name) {
+  try {
+    var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(TRUST_TAB);
+    if (!sh || sh.getLastRow() < 2) return 0;
+    var vals = sh.getDataRange().getValues();
+    var heads = vals[0].map(function (h) { return String(h).trim(); });
+    var iM = heads.indexOf('月'), iN = heads.indexOf('名前'), iJ = heads.indexOf('時間報酬');
+    if (iM < 0 || iN < 0 || iJ < 0) return 0;
+    var key = kintaiNameKey_(name), m = kintaiMonthKey_(month);
+    for (var i = 1; i < vals.length; i++) {
+      if (kintaiMonthKey_(vals[i][iM]) !== m) continue;
+      if (kintaiNameKey_(vals[i][iN]) !== key) continue;
+      return kintaiNum_(vals[i][iJ]);
+    }
+  } catch (e) {}
+  return 0;
+}
+
+// 給与手入力シートの「勤務時間」（人が入れた値。空ならnull＝自動に任せる）
+function kintaiManualHours_(month, name) {
+  try {
+    var sh = ensureKyuyoManualSheet_(SpreadsheetApp.openById(SHEET_ID));
+    if (!sh || sh.getLastRow() < 2) return null;
+    var vals = sh.getDataRange().getValues();
+    var heads = vals[0].map(function (h) { return String(h).trim(); });
+    var iM = heads.indexOf('月'), iN = heads.indexOf('名前'), iH = heads.indexOf('勤務時間');
+    if (iM < 0 || iN < 0 || iH < 0) return null;
+    var key = kintaiNameKey_(name), m = kintaiMonthKey_(month);
+    for (var i = 1; i < vals.length; i++) {
+      if (kintaiMonthKey_(vals[i][iM]) !== m) continue;
+      if (kintaiNameKey_(vals[i][iN]) !== key) continue;
+      var v = vals[i][iH];
+      return (v === '' || v == null) ? null : kintaiNum_(v);
+    }
+  } catch (e) {}
+  return null;
+}
+
+// 打刻から月内の実働時間を積む（出勤と退勤が揃っている日だけ。揃わない日は数えず件数だけ返す）
+function kintaiPunchHours_(month, name) {
+  var res = { hours: 0, days: 0, incomplete: 0 };
+  var sh = SpreadsheetApp.openById(SHEET_ID).getSheetByName(KINTAI_TAB);
+  if (!sh || sh.getLastRow() < 2) return res;
+  var vals = sh.getDataRange().getValues();
+  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  var iDate = heads.indexOf('日付'), iTime = heads.indexOf('時刻');
+  var iName = heads.indexOf('名前'), iType = heads.indexOf('種別'), iBiz = heads.indexOf('営業日');
+  if (iName < 0 || iType < 0) return res;
+  var key = kintaiNameKey_(name), m = String(month).slice(0, 7);
+  var dstr = function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); };
+  var byDay = {};
+  for (var i = 1; i < vals.length; i++) {
+    if (kintaiNameKey_(vals[i][iName]) !== key) continue;
+    var biz = iBiz >= 0 ? dstr(vals[i][iBiz]) : '';
+    if (!biz) biz = iDate >= 0 ? dstr(vals[i][iDate]) : '';   // 営業日列が無い古い行との後方互換
+    if (biz.slice(0, 7) !== m) continue;
+    if (!byDay[biz]) byDay[biz] = { in: '', out: '' };
+    var tm = iTime >= 0 ? fmtStamp_(vals[i][iTime]) : '';
+    var ty = String(vals[i][iType] || '').trim();
+    if (ty === '出勤') { if (!byDay[biz].in) byDay[biz].in = tm; }
+    else if (ty === '退勤') byDay[biz].out = tm;
+  }
+  Object.keys(byDay).forEach(function (d) {
+    var a = kintaiHmToBizMin_(byDay[d].in), b = kintaiHmToBizMin_(byDay[d].out);
+    if (a == null || b == null || b <= a) { res.incomplete++; return; }
+    res.hours += (b - a) / 60;
+    res.days++;
+  });
+  res.hours = Math.round(res.hours * 100) / 100;
+  return res;
+}
+
+// 実勤務時間(h)の唯一の入口。①手入力 → ②TRUSTから逆算 → ③打刻集計 の順で採る。
+function kintaiWorkHours_(month, name) {
+  var man = kintaiManualHours_(month, name);
+  if (man != null && man > 0) return { hours: man, from: 'manual', note: 'コンソールの手入力' };
+  var jikan = kintaiTrustJikan_(month, name);
+  var wage = kintaiBaseWage_(name);
+  if (jikan > 0 && wage > 0) {
+    return { hours: Math.round((jikan / wage) * 100) / 100, from: 'trust',
+             note: 'TRUSTの時間報酬 ' + Math.round(jikan).toLocaleString() + '円 ÷ 基本時給 ' + Math.round(wage).toLocaleString() + '円' };
+  }
+  var p = kintaiPunchHours_(month, name);
+  return { hours: p.hours, from: 'punch', incomplete: p.incomplete,
+           note: '打刻から集計（' + p.days + '日分' + (p.incomplete ? '／打刻が揃わない ' + p.incomplete + '日は除外' : '') + '）'
+                 + (wage <= 0 ? '　※基本時給が未登録のため逆算できません' : '') };
+}
+
+// 指定月・指定名の勤怠手当（同意書 第3条・第4条）
+function kintaiAllowance_(month, name) {
+  var m = String(month || '').slice(0, 7);
+  var r = kintaiRateForMonth_(m, name);
+  var h = kintaiWorkHours_(m, name);
+  return {
+    month: m, name: String(name),
+    rate: r.rate, points: r.points, basedOn: r.basedOn, rateNote: r.note,
+    hours: h.hours, hoursFrom: h.from, hoursNote: h.note, incomplete: h.incomplete || 0,
+    amount: Math.floor(r.rate * h.hours)      // 円未満は切り捨て
+  };
+}
+
+// 月の対象者全員の手当一覧（コンソールの試算画面用）
+// 母集団＝当月に勤怠記録がある人 ∪ 前月にポイントがある人
+function kintaiAllowanceMonth_(month) {
+  var m = String(month || '').slice(0, 7);
+  var prev = kintaiPrevMonth_(m);
+  var names = {};
+  [m, prev].forEach(function (mm) {
+    (kintaiMonthSummary_(mm).list || []).forEach(function (r) { names[kintaiNameKey_(r.name)] = r.name; });
+  });
+  var list = Object.keys(names).map(function (k) { return kintaiAllowance_(m, names[k]); });
+  list.sort(function (a, b) { return (b.amount - a.amount) || String(a.name).localeCompare(String(b.name), 'ja'); });
+  return { ok: true, month: m, basedOn: prev, list: list, total: list.reduce(function (a, x) { return a + x.amount; }, 0) };
 }
 
 function deleteStaff(userId) {
@@ -4858,6 +5845,11 @@ function scheduledJobs() {
 
   // 17:00: 当日出勤の黒服へ「今日の申し送り」を個別DM（日ガード＝1日1回。中身が空 or 当日黒服なしなら自然にスキップ）
   if (hhmm >= '17:00' && hhmm <= '17:09') once('KURO_HANDOVER', sendKurofukuHandoverDM_);
+
+  // 08:00: 前営業日の勤怠を判定して台帳へ積む（日ガード＝1日1回）。
+  // ⚠️朝8時なのは、深夜2〜4時の退勤打刻が出揃ってから判定するため（6時境界で営業日が変わった後）。
+  //   何度実行しても人が入れた確定ポイントは壊れない（kintaiSaveDay_は冪等）。
+  if (hhmm >= '08:00' && hhmm <= '08:09') once('KINTAI_SAVE', function () { return kintaiSaveDay_(kintaiPrevBizDate_()); });
 
   // 月初(1日)11時台に1回: 今月誕生日の担当客を各キャストへLINE通知。
   // ⚠️既定OFF＝安全側。CUSTBDAY_NOTIFY_ON='1' をセットして初めて稼働（テスト承認後にONにする）。月ガードで月1回。
@@ -7001,7 +7993,8 @@ function handlePortalApi_(e) {
     try {
       const vmap = getMemberVisitMap_();
       cust.forEach(function (c) {
-        const v = visitStatsFor_(vmap, c.no, c.card) || visitStatsFor_(vmap, '', c.name);
+        // 会員番号(=TRUSTタグ番号)一致のみで来店集計。番号なし/不明は手動仕訳へ（名前では拾わない）。
+        const v = visitStatsFor_(vmap, c.no, '');
         if (!v) return;
         c.visitCount = v.count; c.lastVisit = v.last; c.dohanCount = v.dohanCount;
         if (!c.restricted) c.totalSales = v.totalSales || 0;
@@ -8493,7 +9486,7 @@ function submitHairReceipt_(body) {
         callerName + '_' + date + '_' + Date.now() + '.jpg'
       );
       const file = folder.createFile(blob);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      // 公開共有はしない（制限付き＝オーナーのみ）。閲覧は adminGetReceiptImage 経由でGASが読む。
       photoUrl = 'https://drive.google.com/uc?id=' + file.getId();
     }
 
@@ -8521,11 +9514,150 @@ function deleteHairReceipt_(callerName, rowIdx, isAdmin) {
     if (!r) return { ok: false, error: '行が見つかりません' };
     if (!isAdmin && String(r[1]).trim() !== callerName)
       return { ok: false, error: '権限がありません' };
+    // 台帳から消す前にDriveの写真も削除（孤児ファイルが残り続けるのを防ぐ）。失敗しても台帳削除は続行。
+    try {
+      const fid = fileIdFromPhotoRef_(r[4]);   // 写真URL列(5列目=E)
+      if (fid) DriveApp.getFileById(fid).setTrashed(true);
+    } catch (fe) { console.error('deleteHairReceipt_ file trash error:', fe); }
     sh.deleteRow(rowIdx);
     return { ok: true };
   } catch(e) {
     return { ok: false, error: String(e) };
   }
+}
+
+// ── Drive写真の安全な受け渡し（公開共有を廃止し、GASがオーナー権限で読んでbase64で返す）──────
+// 背景: 領収書/現金伝票の写真は setSharing(ANYONE_WITH_LINK) を廃止して「制限付き」で保存する。
+//   閲覧はこの関数経由のみ。executeAs=USER_DEPLOYING なのでGASは自分の作ったファイルを常に読める。
+//   ⚠️ /exec は匿名到達可のため、呼び出し口ごとに認証（isAdmin_ / KIOSK_KEY）を必須にし、さらに
+//      fileId が所定フォルダ木の配下かを検証して、キーを知る者による任意ファイル読み出しを防ぐ。
+var PHOTO_ROOTS_ = {
+  receipt: /^ラウンジ家康_領収書_/,          // 月フォルダ ラウンジ家康_領収書_YYYY-MM 配下
+  slip:    /^ラウンジ家康_現金チェック伝票$/  // 現金チェック伝票（直下に日付フォルダ）配下
+};
+var PHOTO_MAX_BYTES_ = 8 * 1024 * 1024;      // base64転送の暴発を防ぐ上限（8MB）
+
+// URL(uc?id= / file/d/ID/ 形式) または生IDから fileId を取り出す
+function fileIdFromPhotoRef_(ref) {
+  const s = String(ref || '').trim();
+  if (!s) return '';
+  let m = s.match(/[?&]id=([A-Za-z0-9_-]+)/); if (m) return m[1];
+  m = s.match(/\/file\/d\/([A-Za-z0-9_-]+)/); if (m) return m[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : '';
+}
+
+// fileId が kind に対応するフォルダ木の配下にあるかを親を辿って検証（任意ファイル読み出しの遮断）
+function photoUnderAllowedRoot_(file, kind) {
+  const re = PHOTO_ROOTS_[kind];
+  if (!re) return false;
+  let parents = file.getParents(), level = 0;
+  while (parents.hasNext() && level < 4) {
+    const p = parents.next();
+    if (re.test(p.getName())) return true;
+    parents = p.getParents();
+    level++;
+  }
+  return false;
+}
+
+// 認証済みの呼び出し口からのみ使う内部ヘルパー。{ok,dataUrl,name} を返す
+function drivePhotoAsDataUrl_(ref, kind) {
+  const id = fileIdFromPhotoRef_(ref);
+  if (!id) return { ok: false, error: '画像がありません' };
+  let file;
+  try { file = DriveApp.getFileById(id); }
+  catch (e) { return { ok: false, error: '画像が見つかりません' }; }
+  if (!photoUnderAllowedRoot_(file, kind)) return { ok: false, error: '対象外の画像です' };
+  const blob = file.getBlob();
+  const bytes = blob.getBytes();
+  if (bytes.length > PHOTO_MAX_BYTES_) return { ok: false, error: '画像が大きすぎます' };
+  const mime = blob.getContentType() || 'image/jpeg';
+  return { ok: true, name: file.getName(), dataUrl: 'data:' + mime + ';base64,' + Utilities.base64Encode(bytes) };
+}
+
+// 管理コンソール(💇領収書)用: ヘアサロン領収書の写真をbase64で返す。管理者のみ。
+function adminGetReceiptImage(userId, photoRef) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  return drivePhotoAsDataUrl_(photoRef, 'receipt');
+}
+
+// 軍師(現金伝票)用: 手入力伝票の写真をbase64で返す。KIOSK_KEYで保護（GUNSHI_API_FNS登録必須）。
+function kioskGetSlipImage(photoRef) {
+  return drivePhotoAsDataUrl_(photoRef, 'slip');
+}
+
+// ── 【移行ツール】既存Drive写真の公開共有を「制限付き」に一括で締める（手動実行・要ボス承認）──────
+//   previewTightenPhotoSharing() … 読み取り専用。対象フォルダ木を走査し「総数/現在ANYONE公開の数」をログ。1枚も変更しない。まずこれ。
+//   applyTightenPhotoSharing()   … 本実行。公開ファイルだけ PRIVATE/NONE に締める。冪等＝もう一度実行すると
+//                                   「まだ公開の残り」だけを締める（済みは自動skip）。6分制限手前で自動中断→再実行で続く。
+//   ⚠️手動実行専用なので末尾 _ を付けない（付けるとGASエディタの実行メニューに出ない）。applyはボス承認後のみ。
+var PHOTO_TIGHTEN_ROOT_NAMES_  = ['ラウンジ家康_現金チェック伝票'];   // 完全一致で辿るルート
+var PHOTO_TIGHTEN_ROOT_PREFIX_ = 'ラウンジ家康_領収書_';              // 前方一致で辿る月フォルダ群
+
+function tightenPhotoTargetFolders_() {
+  const root = DriveApp.getRootFolder();
+  const folders = [];
+  PHOTO_TIGHTEN_ROOT_NAMES_.forEach(function (nm) {
+    const it = root.getFoldersByName(nm);
+    while (it.hasNext()) folders.push(it.next());
+  });
+  const all = root.getFolders();
+  while (all.hasNext()) {
+    const f = all.next();
+    if (f.getName().indexOf(PHOTO_TIGHTEN_ROOT_PREFIX_) === 0) folders.push(f);
+  }
+  return folders;
+}
+
+function isAnyonePublic_(file) {
+  const acc = file.getSharingAccess();
+  return acc === DriveApp.Access.ANYONE_WITH_LINK || acc === DriveApp.Access.ANYONE;
+}
+
+function previewTightenPhotoSharing() {
+  const folders = tightenPhotoTargetFolders_();
+  let total = 0, anyone = 0;
+  folders.forEach(function (root) {
+    let t = 0, a = 0;
+    const stack = [root];
+    while (stack.length) {
+      const folder = stack.pop();
+      const subs = folder.getFolders();
+      while (subs.hasNext()) stack.push(subs.next());
+      const files = folder.getFiles();
+      while (files.hasNext()) { t++; if (isAnyonePublic_(files.next())) a++; }
+    }
+    total += t; anyone += a;
+    Logger.log('  ' + root.getName() + ': 総数' + t + ' / 現在公開' + a);
+  });
+  Logger.log('【previewTightenPhotoSharing】対象フォルダ ' + folders.length + '個 ── 合計: 総数' + total + ' / 現在ANYONE公開 ' + anyone + '（applyで制限付きに変更予定）');
+  return { ok: true, folders: folders.length, total: total, anyonePublic: anyone };
+}
+
+function applyTightenPhotoSharing() {
+  const start = (new Date()).getTime();
+  const LIMIT_MS = 5 * 60 * 1000;               // 6分制限の手前で自動中断
+  const folders = tightenPhotoTargetFolders_();
+  let changed = 0, scanned = 0, timeUp = false;
+  const stack = folders.slice();
+  while (stack.length && !timeUp) {
+    const folder = stack.pop();
+    const subs = folder.getFolders();
+    while (subs.hasNext()) stack.push(subs.next());
+    const files = folder.getFiles();
+    while (files.hasNext()) {
+      if ((new Date()).getTime() - start > LIMIT_MS) { timeUp = true; break; }
+      const file = files.next(); scanned++;
+      try {
+        if (isAnyonePublic_(file)) { file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE); changed++; }
+      } catch (e) { console.error('applyTightenPhotoSharing error: ' + e); }
+    }
+  }
+  Logger.log('【applyTightenPhotoSharing】' + (timeUp ? '時間切れで中断' : 'done') +
+    '。今回スキャン ' + scanned + ' / 制限化 ' + changed +
+    (timeUp ? '。まだ公開が残っている可能性＝もう一度実行（残りを続けて締める・冪等）。'
+            : '。対象フォルダに公開ファイルは残っていません。'));
+  return { ok: true, scanned: scanned, changed: changed, finished: !timeUp };
 }
 
 // テストキャスト「徳子」をスタッフシートに追加（初回1回だけ実行）
@@ -8681,8 +9813,8 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL'];
-  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG'];
+  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
     if (KEEP_PREFIX.some(p => k.startsWith(p))) return;
@@ -8764,10 +9896,13 @@ function syncYrsrv_() {
       if (!seatMap[code] || time < seatMap[code].time) seatMap[code] = { customer, time, pax, tantouCast };
     });
   }
-  // あるべきYRSRV_を先に確定（RSRV_＝来店済みがある席は予告不要なので除外）
+  // あるべきYRSRV_を先に確定
+  // ⚠️来店中(RSRV_あり)の席も「次席予約(=後半に入った別の確定予約)」として予告する（2026-07-21）。
+  //   占有中の客は status='来店済み'なので seatMap(=確定のみ) には入らない＝自分自身を次席予約に出す事故は無い。
+  //   フロントは空席なら o.rsv、来店中なら o.nextRsv で拾う（adaptHall）。相席マージとは別物＝表示専用ヒント。
   const desired = {}; // 'YRSRV_<code>' -> json文字列
   Object.entries(seatMap).forEach(([code, data]) => {
-    if (parseRsrvVal_(allProps['RSRV_' + code]).length === 0) desired['YRSRV_' + code] = JSON.stringify(data);
+    desired['YRSRV_' + code] = JSON.stringify(data);
   });
   // 追加・変更のみ書き込む（同じ値は触らない＝安定している席は一瞬も消えない）
   Object.keys(desired).forEach(k => { if (allProps[k] !== desired[k]) sp.setProperty(k, desired[k]); });
@@ -9272,114 +10407,6 @@ function getKioskReservations(dateKey) {
     });
   } catch (e) { /* 会費突合失敗時は無印で継続 */ }
   return list;
-}
-
-// ============================================================
-// 軍師「🖨 領収書・受領書発行」バックエンド（2026-07-22）
-//   getReceiptReservationsToday … 本日の予約伝票＋会員に紐づく領収書名を返す（読み取り専用）
-//   logIssuedReceipt            … 発行控えを「発行領収書」シートへ追記し通し番号を返す（追記のみ・非破壊）
-//   いずれも GUNSHI_API_FNS 登録済み。金額は軍師で手入力するため取得しない。
-// ============================================================
-function getReceiptReservationsToday() {
-  try {
-    var list = getKioskReservations(bizDateStr_()) || [];
-    var nameMap = getReceiptNameMap_();
-    var canon = function (s) { return String(s || '').trim().replace(/\s/g, '').replace(/^0+(?=\d)/, ''); };
-    var rows = list.map(function (r) {
-      var m = nameMap[canon(r.memberId)] || {};
-      return {
-        time: r.time || '',
-        seat: r.table || '',
-        name: r.customer || '',
-        no: r.memberId || '',
-        company: m.company || '',
-        ryoshuName: m.ryoshuName || ''
-      };
-    });
-    return { ok: true, rows: rows };
-  } catch (e) {
-    return { ok: false, error: String((e && e.message) || e) };
-  }
-}
-// 顧客マスタ 会員番号(canon) → { company:会社名, ryoshuName:領収書名(列があれば) } のマップ（60秒キャッシュ）。
-// 「領収書名」列は未新設でも動く（無ければ会社名のみ／フロントで氏名+様にフォールバック）。
-function getReceiptNameMap_() {
-  var cache = CacheService.getScriptCache();
-  var c = cache.get('RCPTNAMEMAP_v1');
-  if (c) { try { return JSON.parse(c); } catch (e) {} }
-  var map = {};
-  var sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
-  if (sheet) {
-    var values = sheet.getDataRange().getValues();
-    var h = -1;
-    for (var i = 0; i < Math.min(values.length, 6); i++) {
-      if (values[i].some(function (x) { return String(x).replace(/\s/g, '').indexOf('カード記載名') !== -1; })) { h = i; break; }
-    }
-    if (h >= 0) {
-      var headers = values[h].map(function (x) { return String(x).replace(/\s/g, ''); });
-      var idx = function (kw) { return headers.findIndex(function (x) { return x.indexOf(kw) !== -1; }); };
-      var cE = idx('会員番号'), cComp = idx('会社名'), cRyo = idx('領収書名');
-      var canon = function (s) { return String(s || '').trim().replace(/\s/g, '').replace(/^0+(?=\d)/, ''); };
-      if (cE >= 0) {
-        for (var r = h + 1; r < values.length; r++) {
-          var no = canon(values[r][cE]);
-          if (!no) continue;
-          var company = cComp >= 0 ? String(values[r][cComp] || '').trim() : '';
-          var ryo = cRyo >= 0 ? String(values[r][cRyo] || '').trim() : '';
-          if (company || ryo) map[no] = { company: company, ryoshuName: ryo };
-        }
-      }
-    }
-  }
-  try { cache.put('RCPTNAMEMAP_v1', JSON.stringify(map), 60); } catch (e) {}
-  return map;
-}
-// 発行控えを「発行領収書」シートへ追記し、その日の通し番号(yyyymmdd-連番)を返す。追記のみ＝非破壊。
-// payload = { docType, atena, memberNo, amount, taxExcl, tax, inshi, cash, tada, issueDate('yyyy-MM-dd'), by }
-function logIssuedReceipt(payload) {
-  try {
-    payload = payload || {};
-    var ss = getOrOpenSS_();
-    var TAB = '発行領収書';
-    var HDR = ['発行日時', '種別', '発行日', '通し番号', '宛名', '会員番号', '金額(税込)', '税抜', '消費税', '収入印紙', '支払方法', '但し書き', '発行者'];
-    var sh = ss.getSheetByName(TAB);
-    if (!sh) { sh = ss.insertSheet(TAB); sh.appendRow(HDR); sh.setFrozenRows(1); }
-    var iso = String(payload.issueDate || '').trim() || bizDateStr_();
-    var ymd = iso.replace(/-/g, '');
-    var seq = 1, lastRow = sh.getLastRow();
-    if (lastRow >= 2) {
-      sh.getRange(2, 4, lastRow - 1, 1).getValues().forEach(function (x) {
-        var v = String(x[0] || '');
-        if (v.indexOf(ymd + '-') === 0) { var n = parseInt(v.split('-')[1], 10); if (n >= seq) seq = n + 1; }
-      });
-    }
-    var serial = ymd + '-' + ('00' + seq).slice(-3);
-    sh.appendRow([
-      new Date(), String(payload.docType || '領収書'), iso, serial,
-      String(payload.atena || ''), String(payload.memberNo || ''),
-      Number(payload.amount) || 0, Number(payload.taxExcl) || 0, Number(payload.tax) || 0, Number(payload.inshi) || 0,
-      (payload.cash === false ? 'カード' : '現金'), String(payload.tada || ''), String(payload.by || '')
-    ]);
-    return { ok: true, serial: serial };
-  } catch (e) {
-    return { ok: false, error: String((e && e.message) || e) };
-  }
-}
-
-// 軍師「受領書」用：今日の出勤スタッフ（キャスト＋黒服＋派遣）を受取人候補として返す（読み取り専用・GUNSHI_API_FNS登録必須）。
-// 派遣は名簿に居ないためシフト由来の getTodayShiftDetail_() から拾い、頭に「派遣 」を付ける。
-function getReceiptPayees() {
-  try {
-    var d = getTodayShiftDetail_() || {};
-    var out = [], seen = {};
-    var push = function (n) { n = String(n || '').trim(); if (n && !seen[n]) { seen[n] = 1; out.push(n); } };
-    (d.cast || []).forEach(function (s) { push(s && s.name); });
-    (d.kurofuku || []).forEach(function (s) { push(s && s.name); });
-    (d.haken || []).forEach(function (s) { if (s && s.name) push('派遣 ' + String(s.name).trim()); });
-    return { ok: true, rows: out };
-  } catch (e) {
-    return { ok: false, error: String((e && e.message) || e), rows: [] };
-  }
 }
 
 // 端末キオスク用：ステータス変更（来店前=確定 / 来店済み / 退店済み）
@@ -10212,15 +11239,19 @@ function getMemberVisitMapRaw_() {
     const dohanCast = String(rows[i][8] || '').trim();
     const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
     const sales = Number(rows[i][14]) || 0;
-    add(out.byNo, visitNoFromRow_(rows[i][4], rows[i][3]), d, dohan, dohanCast, sales);
-    add(out.byName, visitCanonName_(rows[i][3]), d, dohan, dohanCast, sales);
+    const rno = visitNoFromRow_(rows[i][4], rows[i][3]);
+    // ⚠️会員番号(=TRUSTタグ番号)一致のみで集計。名前では一切拾わない（同名別人の混線防止）。
+    //   番号なし/不明の行は誰にも自動帰属させない＝手動仕訳の対象（getUnassignedVisitsで列挙）。
+    add(out.byNo, rno, d, dohan, dohanCast, sales);
   }
   return out;
 }
-// 会員番号優先・なければ名前で来店集計を引く
+// 会員番号(=TRUSTタグ番号)一致のみで来店集計を引く。名前では一切引かない（同名別人の混線防止）。
+// 番号なしの会員は集計対象外（該当行は手動仕訳へ）。第2引数nameは後方互換で残すが未使用。
 function visitStatsFor_(map, no, name) {
   if (!map) return null;
-  return map.byNo[visitCanonNo_(no)] || map.byName[visitCanonName_(name)] || null;
+  const nq = visitCanonNo_(no);
+  return nq ? (map.byNo[nq] || null) : null;
 }
 
 // 金額（売上/席料/同伴料/累計売上）を全件見れる閲覧者か＝管理者 or 黒服社員/黒服バイト。
@@ -10239,7 +11270,7 @@ function kioskGetCustomerVisits(no, name, limit, viewer) {
   try {
     const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
     const nq = visitCanonNo_(no), mq = visitCanonName_(name);
-    if (!sh || (!nq && !mq)) return { ok: true, stats: null, history: [] };
+    if (!sh || !nq) return { ok: true, stats: null, history: [] }; // 会員番号なし=手動仕訳対象=履歴なし
     const rows = sh.getDataRange().getValues();
     const vNorm = normalizeName_(String(viewer || ''));
     const full = visitViewerFull_(viewer);
@@ -10247,8 +11278,8 @@ function kioskGetCustomerVisits(no, name, limit, viewer) {
     let count = 0, dohanCount = 0, last = '', totalSales = 0, isTantou = false;
     for (let i = 1; i < rows.length; i++) {
       const rno = visitNoFromRow_(rows[i][4], rows[i][3]);
-      const rnm = visitCanonName_(rows[i][3]);
-      if (!((nq && rno && rno === nq) || (mq && rnm && rnm === mq))) continue;
+      // ⚠️会員番号(=TRUSTタグ番号)一致のみで拾う。名前では一切拾わない（同名別人の誤紐付け防止）。
+      if (!(rno && rno === nq)) continue;
       const d = visitDateStr_(rows[i][0]);
       const dohanCast = String(rows[i][8] || '').trim();
       const dohan = !!dohanCast || /同伴/.test(String(rows[i][3] || ''));
@@ -10376,6 +11407,88 @@ function gunshiImportTrustVisits(items, commit) {
     sample: toAppend.slice(0, 5).map(function (r) { return r[0] + ' ' + r[3] + ' ¥' + r[14]; }) };
 }
 
+// ── 来店の手動仕訳（管理コンソール「🧾 来店の仕訳」）─────────────────────
+// 会員番号(=TRUSTタグ番号)が無い/マスタに無い来店記録＝「仕訳待ち」、
+// 同一番号に複数の(正規化)名前が付く＝「取り違え疑い」を返す。名前照合を廃した受け皿。管理者のみ。
+function getUnassignedVisits(userId) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
+  if (!sh) return { ok: true, pending: [], collisions: [] };
+  const rows = sh.getDataRange().getValues();
+  const nameByNo = memberNameByNo_();
+  const pending = [], suspByNo = {};
+  for (let i = 1; i < rows.length; i++) {
+    const d = visitDateStr_(rows[i][0]);
+    if (!d) continue;
+    const colNo = visitCanonNo_(rows[i][4]); // 会員番号"列"の値
+    if (colNo) continue;                     // 列に番号あり＝正として信頼＝仕訳対象外（名前違いは表記ゆれとして許容＝ボス確定ルール）
+    const rno = visitNoFromRow_(rows[i][4], rows[i][3]); // 列が空＝名前末尾から推定
+    const rec = {
+      rowIdx: i + 1, date: d, name: String(rows[i][3] || ''), no: rno,
+      table: String(rows[i][6] || ''), tantou: String(rows[i][7] || ''),
+      sales: Number(rows[i][14]) || 0, source: String(rows[i][11] || '')
+    };
+    if (!rno || !nameByNo[rno]) { pending.push(rec); continue; } // 番号なし / マスタに無い番号＝仕訳待ち
+    const owner = nameByNo[rno];
+    const rc = visitCanonName_(rec.name), oc = visitCanonName_(owner);
+    // "食い違う"のみ疑い＝どちらも他方の前方一致でない（八木vs佐藤型）。姓一致(山下 vs 山下卓＝フルネーム省略)は同一人物として対象外。
+    const consistent = (!rc) || (!oc) || (rc === oc) || (oc.indexOf(rc) === 0) || (rc.indexOf(oc) === 0);
+    if (!consistent) {
+      const slot = suspByNo[rno] || (suspByNo[rno] = { owner: owner, rows: [] });
+      slot.rows.push(rec);
+    }
+    // 名前が持ち主と一致＝番号を名前に手打ちしただけ＝正常（対象外）
+  }
+  const collisions = Object.keys(suspByNo).map(function (no) {
+    return { no: no, owner: suspByNo[no].owner, count: suspByNo[no].rows.length, rows: suspByNo[no].rows };
+  }).sort(function (a, b) { return b.count - a.count; });
+  pending.sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+  return { ok: true, pending: pending, collisions: collisions };
+}
+
+// お客様管理Y3 の有効会員番号セット {canonNo:true}（先頭ゼロ/全角吸収）
+function memberNameByNo_() {
+  const out = {};
+  const sh = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (!sh) return out;
+  const values = sh.getDataRange().getValues();
+  let h = -1;
+  for (let i = 0; i < Math.min(values.length, 6); i++) {
+    if (values[i].some(function (c) { return String(c).replace(/\s/g, '').indexOf('会員番号') !== -1; })) { h = i; break; }
+  }
+  if (h < 0) return out;
+  const headers = values[h].map(function (c) { return String(c).replace(/\s/g, ''); });
+  const cE = headers.findIndex(function (x) { return x.indexOf('会員番号') !== -1; });
+  if (cE < 0) return out;
+  const cH = headers.findIndex(function (x) { return x.indexOf('氏名') !== -1; });
+  const cG = headers.findIndex(function (x) { return x.indexOf('カード記載名') !== -1; });
+  const nameCol = cH >= 0 ? cH : (cG >= 0 ? cG : cE);
+  for (let r = h + 1; r < values.length; r++) {
+    const no = visitCanonNo_(values[r][cE]);
+    if (no) out[no] = String(values[r][nameCol] || '');
+  }
+  return out;
+}
+
+// 来店記録1行の会員番号(と任意で名前)を上書きして会員へ紐づけ直す。仕訳・取り違えの付け替え両用。管理者のみ。
+function assignVisitToMember(userId, rowIdx, memberNo, memberName) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  try {
+    const ri = Number(rowIdx) || 0;
+    if (ri < 2) return { ok: false, error: '行番号が不正です' };
+    const no = visitCanonNo_(memberNo);
+    if (!no) return { ok: false, error: '紐づけ先の会員番号がありません' };
+    const sh = getOrOpenSS_().getSheetByName(VISIT_TAB);
+    if (!sh) return { ok: false, error: '来店記録シートがありません' };
+    if (ri > sh.getLastRow()) return { ok: false, error: '対象の行が存在しません' };
+    sh.getRange(ri, 5).setValue(no);                                 // 会員番号列(5列目)
+    if (memberName) sh.getRange(ri, 4).setValue(String(memberName)); // お客様名列(4列目)
+    visitCacheClear_();
+    return { ok: true, rowIdx: ri, no: no };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+
+
 // ── 席の来店客(RSRV_)の読み書きヘルパー（複数組同居対応の後方互換レイヤ）──
 // 値は組(予約)エントリの配列 [{rowIdx,customer,memberId,pax,tantouCast}]。
 // 旧形式（単一オブジェクト）も透過的に配列化して読む＝データ移行不要。
@@ -10488,58 +11601,6 @@ function getMemberRenewals() {
     });
   }
   return { ok: true, todayYm: todayYm, members: members };
-}
-
-// 軍師の顧客管理「会員切れ一覧／担当ごと一覧」用：全顧客の軽量ロースターを読み取り専用で返す。
-// ⚠️getCustomerList() と違い reassignInactiveTantou_ を呼ばない＝担当欄の書き換え(破壊的)は一切しない。
-// 会員日付(入会日/前回更新)は getMemberFeeMapRaw_ と同一ロジック（登録日＋各「◯更新」列の最新を parseMasterDate_）で
-// 算出し、フロントの membershipInfo による会員切れ判定が既存の顧客カードと食い違わないようにする。
-// 来店集計・金額は含めない（一覧では不要・詳細タップ時に kioskGetCustomerDetail/kioskGetCustomerVisits で取得）。
-// GUNSHI_API_FNS 登録必須。
-function getKioskCustomerRoster() {
-  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
-  if (!sheet) return { ok: false, error: '顧客マスタが見つかりません' };
-  const values = sheet.getDataRange().getValues();
-  let h = -1;
-  for (let i = 0; i < Math.min(values.length, 6); i++) {
-    if (values[i].some(c => String(c).replace(/\s/g, '').indexOf('カード記載名') !== -1)) { h = i; break; }
-  }
-  if (h < 0) return { ok: false, error: '顧客マスタの列構成を認識できませんでした' };
-  const headers = values[h].map(c => String(c).replace(/\s/g, ''));
-  const idx = kw => headers.findIndex(x => x.indexOf(kw) !== -1);
-  const cNo = idx('会員番号'), cName = idx('氏名'), cCard = idx('カード記載名'), cTan = idx('担当');
-  const cBtl = idx('ボトル種類'), cPos = idx('ボトル位置'), cBday = idx('誕生日');
-  const cNote = idx('参考情報'), cDrink = idx('飲み方'), cTab = idx('タバコ');
-  const cLine = idx('ライン登録') >= 0 ? idx('ライン登録') : idx('公式LINE'); // Y3には無い＝-1（フロントの isNoLine で代替判定）
-  const cReg = idx('登録日') >= 0 ? idx('登録日') : idx('入会');
-  const renewalCols = []; headers.forEach((hd, ci) => { if (/更新/.test(hd)) renewalCols.push(ci); }); // 登録日＋各更新列で直近を出す
-  const val = (row, c) => (c >= 0 && row[c] != null) ? String(row[c]) : '';
-  const customers = [];
-  for (let r = h + 1; r < values.length; r++) {
-    const row = values[r];
-    const card = val(row, cCard).trim(), name = val(row, cName).trim();
-    if (!card && !name) continue;
-    const join = cReg >= 0 ? parseMasterDate_(row[cReg]) : null;
-    const memberSince = join ? join.str : '';
-    let best = null; // 直近更新（登録日＋各更新列のうち年月最新）
-    [cReg >= 0 ? row[cReg] : null].concat(renewalCols.map(ci => row[ci])).forEach(raw => {
-      const p = parseMasterDate_(raw);
-      if (!p || p.ym <= 0) return;
-      if (!best || p.ym > best.ym || (p.ym === best.ym && p.d > best.d)) best = p;
-    });
-    const annualFeeDate = best ? best.str : memberSince;
-    const bdayRaw = cBday >= 0 ? row[cBday] : null;
-    const bday = bdayRaw instanceof Date ? Utilities.formatDate(bdayRaw, TZ, 'yyyy-MM-dd') : val(row, cBday).trim();
-    let lineRegistered = null; // 列があれば true/false、無ければ null（フロントで NO_LINE_MEMBERS 判定）
-    if (cLine >= 0) { lineRegistered = val(row, cLine).trim() ? true : false; }
-    customers.push({
-      name: name || card, card: card, no: val(row, cNo).trim(), tantou: val(row, cTan).trim(),
-      bottle: val(row, cBtl).trim(), bottlePos: val(row, cPos).trim(), bday: bday,
-      note: val(row, cNote).trim(), drink: val(row, cDrink).trim(), tabaco: val(row, cTab).trim(),
-      memberSince: memberSince, annualFeeDate: annualFeeDate, lineRegistered: lineRegistered
-    });
-  }
-  return { ok: true, customers: customers };
 }
 
 // 来店した予約の会員（相席のサブ会員含む）を会費マップと突合し、更新が要る人だけ返す
@@ -12423,7 +13484,7 @@ function submitCashCheck(payload) {
           dateKey + '_' + (s.category || '') + '_' + (s.payee || '') + '_' + (i + 1) + '.jpg'
         );
         const file = folder.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        // 公開共有はしない（制限付き＝オーナーのみ）。閲覧は kioskGetSlipImage 経由でGASが読む。
         url = 'https://drive.google.com/uc?id=' + file.getId();
       }
       slipDetails.push({ category: s.category || 'その他', payee: s.payee || '', amount, imageUrl: url, source: s.source || 'manual', tatekaeName: s.tatekaeName || '', tatekaeHimoku: s.tatekaeHimoku || '' });
@@ -15089,3 +16150,478 @@ function listTodayScheduledFlags_() {
   Logger.log('【' + today + ' にシステムが送信済みと記録している通知】' + hit.length + '件\n' + hit.join('\n'));
   return hit;
 }
+
+// ============================================================
+// 📝 面談表（紙の面接シート → 応募者が iPad で入力）
+// ------------------------------------------------------------
+// 経路: 応募者フロント mendan.html（Pages・KIOSK_KEY を持たない）は
+//   doPost の action:'mendan' を、面談ごとの使い捨てトークンで叩く。
+//   トークンは黒服が軍師で「面談を開始」した時に gunshiStartMendan()
+//   （GUNSHI_API_FNS 経由＝キー認証済み）が発行する。
+// ⚠️ 写真は setSharing しない＝Drive「制限付き」（管理者だけが閲覧）。
+// ⚠️ MENDAN_SIM_CONFIG は resetGunshiSettings_ の KEEP に登録済み。
+//   MENDAN_TOK_* は使い捨て（exp で自然失効＋発行時に期限切れを掃除）。
+// ============================================================
+var MENDAN_TAB  = '面談表';
+var MENDAN_HEAD = ['面談ID','面談日時','面談者','状態','氏名','フリガナ','生年月日','年齢','住所','電話',
+  '週日数','曜日','希望時間','前週提出','昼職','送り','送り先','酒強さ','苦手な酒','同伴','客付き',
+  '経験','前店売上','前店時給','ホスト','風俗','他店予定','他店詳細','身分証','顔写真','シミュ',
+  '黒服所感','判定','源氏名','体験日','名簿登録','更新日時'];
+
+// シート取得（無ければ作成／既存に見出しが無い列は末尾に追補＝ci()の-1黙り0を防ぐ）
+function ensureMendanSheet_(ss) {
+  var sh = ss.getSheetByName(MENDAN_TAB);
+  if (!sh) {
+    var oldSh = ss.getSheetByName('面談カルテ');   // 旧名→新名「面談表」に移行（既存データを引き継ぐ）
+    if (oldSh) { oldSh.setName(MENDAN_TAB); sh = oldSh; }
+  }
+  if (!sh) { sh = ss.insertSheet(MENDAN_TAB); sh.appendRow(MENDAN_HEAD); sh.setFrozenRows(1); return sh; }
+  var head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(String);
+  var missing = MENDAN_HEAD.filter(function (h) { return head.indexOf(h) < 0; });
+  if (missing.length) sh.getRange(1, sh.getLastColumn() + 1, 1, missing.length).setValues([missing]);
+  return sh;
+}
+function mendanColMap_(sh) {
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  var m = {}; head.forEach(function (h, i) { m[h] = i; }); return m;
+}
+
+// 使い捨てトークンの発行と検証（ScriptProperty: MENDAN_TOK_<token> = {id,by,exp}）
+function mendanTokenRec_(token) {
+  token = String(token || ''); if (!token) return null;
+  var raw = prop('MENDAN_TOK_' + token); if (!raw) return null;
+  try { var o = JSON.parse(raw); if (!o || o.used) return null; if (Date.now() > Number(o.exp)) return null; return o; }
+  catch (e) { return null; }
+}
+function mendanSweepTokens_(ps) {
+  try {
+    var all = ps.getProperties(), now = Date.now();
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf('MENDAN_TOK_') !== 0) return;
+      try { var o = JSON.parse(all[k]); if (!o || now > Number(o.exp)) ps.deleteProperty(k); }
+      catch (e) { ps.deleteProperty(k); }
+    });
+  } catch (e) {}
+}
+
+// 軍師（黒服）が面談を開始 → 面談ID採番＋トークン発行＋シートに仮行。GUNSHI_API_FNS 登録必須。
+function gunshiStartMendan(caller) {
+  try {
+    caller = String(caller || '').trim();
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ensureMendanSheet_(ss);
+    var now = new Date();
+    var rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+    var id = 'M' + Utilities.formatDate(now, TZ, 'yyyyMMdd') + '-' + rnd;
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789', token = '';
+    for (var i = 0; i < 24; i++) token += chars[Math.floor(Math.random() * chars.length)];
+    // 有効期限＝翌朝5時（面談は営業時間内想定・十分な猶予をとる）
+    var exp = new Date(now); if (now.getHours() >= 5) exp.setDate(exp.getDate() + 1); exp.setHours(5, 0, 0, 0);
+    var ps = PropertiesService.getScriptProperties();
+    ps.setProperty('MENDAN_TOK_' + token, JSON.stringify({ id: id, by: caller, exp: exp.getTime() }));
+    mendanSweepTokens_(ps);
+    var c = mendanColMap_(sh);
+    var row = new Array(sh.getLastColumn()).fill('');
+    row[c['面談ID']] = id; row[c['面談日時']] = now; row[c['面談者']] = caller; row[c['状態']] = '入力中';
+    sh.appendRow(row);
+    return { ok: true, id: id, token: token };
+  } catch (e) { console.error('gunshiStartMendan', e); return { ok: false, error: String(e) }; }
+}
+
+// mendan.html（応募者）からのトークン経路
+function mendanApi_(body) {
+  var rec = mendanTokenRec_(body.t);
+  if (!rec) return { ok: false, error: 'この面談の受付は終了しています。スタッフにお声がけください。' };
+  if (body.fn === 'config') return { ok: true, config: getMendanSimConfig_() };
+  if (body.fn === 'submit') return mendanSubmit_(String(body.t), rec, body.data || {});
+  return { ok: false, error: 'unknown fn' };
+}
+
+function getMendanSimConfig_() {
+  var cfg = null;
+  try { cfg = JSON.parse(prop('MENDAN_SIM_CONFIG') || 'null'); } catch (e) {}
+  return cfg || { wage: 3000, nyuten: 50000, firstMonth: true, stdBairitu: 1.5, lowMult: 0.5, highMult: 1.5 };
+}
+
+// 写真を Drive に保存（⚠️setSharing しない＝制限付き＝管理者だけが閲覧）。ファイルIDを返す。
+function getOrCreateMendanFolder_(id) {
+  var root = DriveApp.getRootFolder();
+  var it = root.getFoldersByName('ラウンジ家康_面談');
+  var base = it.hasNext() ? it.next() : root.createFolder('ラウンジ家康_面談');
+  var mk = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  var mit = base.getFoldersByName(mk); var mf = mit.hasNext() ? mit.next() : base.createFolder(mk);
+  var iit = mf.getFoldersByName(id); return iit.hasNext() ? iit.next() : mf.createFolder(id);
+}
+function saveMendanPhoto_(id, name, kind, dataUrl) {
+  var b64 = String(dataUrl).replace(/^data:[^;]+;base64,/, '');
+  var blob = Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', (name || id) + '_' + kind + '.jpg');
+  var file = getOrCreateMendanFolder_(id).createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); // LINEに画像を貼るため公開（2026-07-21ボス確定）。Drive IDは推測困難＝実質URL保有者のみ
+  return file.getId();
+}
+// LINE image message 用の画像URL（公開＋thumbnailで確実にJPEGを返す。uc?idはHTML化して不安定）
+function mendanDriveImageUrl_(fileId) { return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1600'; }
+// LINE 画像1枚を push（push_のtext版に対する image版）
+function pushImage_(to, imageUrl) {
+  if (!to || !imageUrl) return;
+  try {
+    UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + prop('LINE_TOKEN') },
+      payload: JSON.stringify({ to: to, messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }] }),
+      muteHttpExceptions: true
+    });
+  } catch (e) { console.error('pushImage_', e); }
+}
+// りく＋管理者全員のlineId（pushAdmins_と同一母集団・退職除外）。画像を個別pushするため配列で返す
+function mendanAdminLineIds_() {
+  var ids = [];
+  try {
+    var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (!sh) return ids;
+    var rows = sh.getDataRange().getValues();
+    var retiredK = retiredNameKeys_();
+    var normK = function (s) { return normalizeName_(String(s || '')).replace(/[\s　]/g, ''); };
+    for (var i = 1; i < rows.length; i++) {
+      var lineId = String(rows[i][0]).trim(), name = String(rows[i][1]).trim();
+      if (!lineId || !name || !isAdmin_(name)) continue;
+      if (retiredK[normK(name)]) continue;
+      ids.push(lineId);
+    }
+  } catch (e) {}
+  return ids;
+}
+// 通知1（入力完了時）のサマリ本文
+function mendanSummaryText_(id, data) {
+  var age = (data.age != null && data.age !== '') ? ('満' + data.age + '歳') : '—';
+  var ageWarn = (data.age != null && data.age !== '' && Number(data.age) < 20) ? ' ⚠️20歳未満' : '';
+  var expDetail = (data.exp === 'あり' || data.exp === '少し')
+    ? ('（前店 ' + (data.prevSales ? Math.round(data.prevSales / 10000) + '万' : '—') + '・時給' + (data.prevWage || '—') + '）') : '';
+  var other = (data.other === 'あり') ? ('⚠️他店の予定あり' + (data.otherNote ? '（' + data.otherNote + '）' : '')) : '他店の予定なし';
+  var wd = (data.weekdays && data.weekdays.length) ? data.weekdays.join('') : '';
+  return [
+    '📝 面談表（入力完了）',
+    '氏名: ' + (data.name || '—') + (data.kana ? '（' + data.kana + '）' : ''),
+    '年齢: ' + age + ageWarn,
+    '電話: ' + (data.tel || '—'),
+    '希望: 週' + (data.daysPerWeek || '—') + ' ' + wd + ' ' + (data.timeFrom || '') + '-' + (data.timeTo || '') + ' / 前週提出:' + (data.prevWeek || '—'),
+    '昼職:' + (data.dayJob || '—') + ' / 送り:' + (data.needOkuri || '—') + (data.okuriArea && data.okuriArea.length ? '（' + data.okuriArea.join('・') + '）' : ''),
+    'お酒:' + (data.drink || '—') + ' / 同伴:' + (data.dohan || '—') + ' / 客付き:' + (data.customers || '—'),
+    '経験: ' + (data.exp || '—') + expDetail,
+    other,
+    '（写真は続けて送ります）この後、黒服が軍師で面談します。'
+  ].join('\n');
+}
+
+function mendanSubmit_(token, rec, data) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ensureMendanSheet_(ss);
+    var c = mendanColMap_(sh);
+    var vals = sh.getDataRange().getValues();
+    var r = -1;
+    for (var i = 1; i < vals.length; i++) { if (String(vals[i][c['面談ID']]).trim() === rec.id) { r = i + 1; break; } }
+    if (r < 0) return { ok: false, error: '面談レコードが見つかりません' };
+    var idPhoto = data.idPhoto ? saveMendanPhoto_(rec.id, data.name, 'id', data.idPhoto) : '';
+    var facePhoto = data.facePhoto ? saveMendanPhoto_(rec.id, data.name, 'face', data.facePhoto) : '';
+    var set = function (k, v) { if (c[k] != null) sh.getRange(r, c[k] + 1).setValue(v == null ? '' : v); };
+    set('氏名', String(data.name || '')); set('フリガナ', String(data.kana || ''));
+    set('生年月日', String(data.birth || '')); set('年齢', data.age);
+    set('住所', String(data.addr || '')); set('電話', "'" + String(data.tel || ''));   // 先頭0保持のためテキスト固定
+    set('週日数', data.daysPerWeek); set('曜日', (data.weekdays || []).join('・'));
+    set('希望時間', (data.timeFrom || '') + (data.timeTo ? ('-' + data.timeTo) : ''));
+    set('前週提出', data.prevWeek); set('昼職', data.dayJob);
+    set('送り', data.needOkuri); set('送り先', [(data.okuriArea || []).join('・'), data.okuriNote].filter(Boolean).join(' '));
+    set('酒強さ', data.drink); set('苦手な酒', (data.weakDrinks || []).join('・'));
+    set('同伴', data.dohan); set('客付き', data.customers);
+    set('経験', data.exp); set('前店売上', data.prevSales); set('前店時給', data.prevWage);
+    set('ホスト', data.hostExp); set('風俗', data.fuzokuExp);
+    set('他店予定', data.other); set('他店詳細', data.otherNote);
+    set('身分証', idPhoto ? ('https://drive.google.com/file/d/' + idPhoto + '/view') : '');
+    set('顔写真', facePhoto ? ('https://drive.google.com/file/d/' + facePhoto + '/view') : '');
+    set('状態', '提出済'); set('更新日時', new Date());
+    PropertiesService.getScriptProperties().deleteProperty('MENDAN_TOK_' + token);   // 提出でトークン失効
+    // 通知1：りく＋管理者全員にLINEで即通知（内容サマリ＋写真2枚）
+    try {
+      pushAdmins_(mendanSummaryText_(rec.id, data));
+      var faceUrl = facePhoto ? mendanDriveImageUrl_(facePhoto) : '';
+      var idUrl   = idPhoto   ? mendanDriveImageUrl_(idPhoto)   : '';
+      mendanAdminLineIds_().forEach(function (to) {
+        if (faceUrl) pushImage_(to, faceUrl);
+        if (idUrl)   pushImage_(to, idUrl);
+      });
+    } catch (e) { console.error('mendan notify1', e); }
+    return { ok: true, id: rec.id };
+  } catch (e) { console.error('mendanSubmit_', e); return { ok: false, error: String(e) }; }
+}
+
+// 軍師：面談表の一覧（提出済＝面談待ちのみ・新しい順）。GUNSHI_API_FNS 登録必須。
+function gunshiGetMendanList(caller) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ss.getSheetByName(MENDAN_TAB);
+    if (!sh || sh.getLastRow() < 2) return { ok: true, list: [] };
+    var vals = sh.getDataRange().getValues();
+    var c = mendanColMap_(sh);
+    var list = [];
+    for (var i = 1; i < vals.length; i++) {
+      if (String(vals[i][c['状態']] || '') !== '提出済') continue;   // 入力中/面談済は出さない
+      list.push(mendanRowToObj_(vals[i], c));
+    }
+    list.reverse();
+    return { ok: true, list: list };
+  } catch (e) { console.error('gunshiGetMendanList', e); return { ok: false, error: String(e) }; }
+}
+function mendanRowToObj_(row, c) {
+  var g = function (k) { return c[k] != null ? row[c[k]] : ''; };
+  var fmt = function (v) { return (v instanceof Date) ? Utilities.formatDate(v, TZ, 'M/d HH:mm') : String(v || ''); };
+  return {
+    id: String(g('面談ID')), at: fmt(g('面談日時')), by: String(g('面談者')), status: String(g('状態')),
+    name: String(g('氏名')), kana: String(g('フリガナ')), birth: String(g('生年月日')), age: g('年齢'),
+    addr: String(g('住所')), tel: String(g('電話')).replace(/^'/, ''),
+    days: g('週日数'), weekdays: String(g('曜日')), timeRange: String(g('希望時間')), prevWeek: String(g('前週提出')), dayJob: String(g('昼職')),
+    okuri: String(g('送り')), okuriArea: String(g('送り先')),
+    drink: String(g('酒強さ')), weak: String(g('苦手な酒')), dohan: String(g('同伴')), customers: String(g('客付き')),
+    exp: String(g('経験')), prevSales: g('前店売上'), prevWage: g('前店時給'),
+    hostExp: String(g('ホスト')), fuzokuExp: String(g('風俗')), other: String(g('他店予定')), otherNote: String(g('他店詳細')),
+    idPhoto: String(g('身分証')), facePhoto: String(g('顔写真')),
+    memo: String(g('黒服所感')), judge: String(g('判定'))
+  };
+}
+// 軍師：黒服が補足＋判定を保存 → りく＋管理者に結果を通知。GUNSHI_API_FNS 登録必須。
+// judge = '体験へ' | '面談で終わり' | '不採用'
+function gunshiJudgeMendan(caller, id, memo, judge, genji, taikenDate, taikenTime) {
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ensureMendanSheet_(ss);
+    var c = mendanColMap_(sh);
+    var vals = sh.getDataRange().getValues();
+    var r = -1, row = null;
+    for (var i = 1; i < vals.length; i++) { if (String(vals[i][c['面談ID']]).trim() === String(id).trim()) { r = i + 1; row = vals[i]; break; } }
+    if (r < 0) return { ok: false, error: '面談が見つかりません' };
+    sh.getRange(r, c['黒服所感'] + 1).setValue(String(memo || ''));
+    sh.getRange(r, c['判定'] + 1).setValue(String(judge || ''));
+    sh.getRange(r, c['状態'] + 1).setValue('面談済');
+    sh.getRange(r, c['更新日時'] + 1).setValue(new Date());
+    // 「体験へ」＝源氏名でシフト表＋名簿（スタッフマスタ）に体験登録／修正。
+    // ⚠️date は M/d 形式に直してから addShiftStaff_ へ（シフト表の見出しが M/d。YYYY-MM-DDのままだと別列を作ってズレる）。
+    var shiftMsg = '', rosterMsg = '';
+    if (judge === '体験へ' && genji && taikenDate) {
+      var gn = String(genji).trim();
+      var md = '';
+      try { md = Utilities.formatDate(new Date(taikenDate), TZ, 'M/d'); } catch (e) { md = String(taikenDate); }
+      var timeVal = String(taikenTime || '');
+      var sres = addShiftStaff_(gn, '体験', md, timeVal);       // シフト表（既存源氏名行なら時刻上書き＝修正）
+      var rres = addTaikenToRoster_(gn);                        // 名簿（スタッフマスタ）に属性=体験で登録
+      if (c['源氏名'] != null) sh.getRange(r, c['源氏名'] + 1).setValue(gn);
+      if (c['体験日'] != null) sh.getRange(r, c['体験日'] + 1).setValue(md + (timeVal ? (' ' + timeVal) : ''));
+      if (c['名簿登録'] != null) sh.getRange(r, c['名簿登録'] + 1).setValue((rres && rres.note === 'added') ? '登録' : ((rres && rres.note === 'existing') ? '既存' : ''));
+      shiftMsg = (sres && sres.ok)
+        ? ('\n🗓 シフト登録: ' + gn + '（体験）' + md + (timeVal ? (' ' + timeVal) : ''))
+        : ('\n⚠️シフト登録に失敗: ' + ((sres && sres.error) || '不明'));
+      rosterMsg = (rres && rres.note === 'added') ? ('\n👤 名簿に体験登録: ' + gn)
+                : (rres && rres.note === 'existing') ? ('\n👤 名簿: ' + gn + '（既に在籍）') : '';
+    }
+    // 通知2：りく＋管理者へ結果
+    try {
+      var nm = String(row[c['氏名']] || '—');
+      var txt = '📝 面談の結果\n氏名: ' + nm + '\n判定: 【' + (judge || '—') + '】'
+        + (genji ? ('\n源氏名: ' + String(genji).trim()) : '') + shiftMsg + rosterMsg
+        + '\n面談者: ' + (caller || '—') + (memo ? ('\n補足: ' + memo) : '');
+      pushAdmins_(txt);
+    } catch (e) { console.error('mendan notify2', e); }
+    return { ok: true, id: id, judge: judge, shift: shiftMsg };
+  } catch (e) { console.error('gunshiJudgeMendan', e); return { ok: false, error: String(e) }; }
+}
+// 面談「体験へ」→ スタッフマスタに源氏名で体験登録（既にあればスキップ）。
+// 列 A:lineId(空＝本人が後で #登録 で紐付け) B:名前=源氏名 C:属性='体験' D-G:空 H:登録日。
+// ★役割/管理等は管理コンソールが正だが、体験は判定で確定なので属性='体験'を入れる（registerStaffの空役割とは別方針）。
+function addTaikenToRoster_(genji) {
+  try {
+    genji = String(genji || '').trim();
+    if (!genji) return { ok: false, error: '源氏名が空です' };
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ss.getSheetByName(STAFF_TAB);
+    if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+    var rows = sh.getDataRange().getValues();
+    var key = normalizeName_(genji).replace(/[\s　]/g, '');
+    for (var i = 1; i < rows.length; i++) {
+      if (normalizeName_(String(rows[i][1] || '')).replace(/[\s　]/g, '') === key) return { ok: true, note: 'existing' };
+    }
+    sh.appendRow(['', genji, '体験', '', '', '', '', new Date()]);
+    return { ok: true, note: 'added' };
+  } catch (e) { console.error('addTaikenToRoster_', e); return { ok: false, error: String(e) }; }
+}
+// 体験登録の前に、その源氏名が既にシフト表に入っているか調べて返す（あれば軍師で流用）。GUNSHI_API_FNS 登録必須。
+function gunshiGetGenjiShift(genji) {
+  try {
+    genji = String(genji || '').trim();
+    if (!genji) return { ok: true, found: false, shifts: [] };
+    var sh = SpreadsheetApp.openById(SHIFT_SHEET_ID).getSheetByName(SHIFT_TAB);
+    if (!sh) return { ok: true, found: false, shifts: [] };
+    var data = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, found: false, shifts: [] };
+    var headers = data[0].map(function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim(); });
+    var key = normalizeName_(genji).replace(/[\s　]/g, '');
+    for (var i = 1; i < data.length; i++) {
+      if (normalizeName_(String(data[i][0] || '')).replace(/[\s　]/g, '') !== key) continue;
+      var shifts = [];
+      for (var j = 2; j < headers.length; j++) {   // 0=名前 1=役割 2以降=日付列
+        var val = String(data[i][j] || '').trim();
+        if (val && /\d/.test(val)) shifts.push({ date: headers[j], time: val });   // 時刻が入っている日＝出勤予定
+      }
+      return { ok: true, found: true, role: String(data[i][1] || ''), shifts: shifts };
+    }
+    return { ok: true, found: false, shifts: [] };
+  } catch (e) { console.error('gunshiGetGenjiShift', e); return { ok: false, error: String(e) }; }
+}
+
+
+// ============================================================
+// 🖨 受領書・領収書発行 ＋ 顧客ロースター（@703-@708の新規・2026-07-22 復旧時にcpull2土台へ移植）
+//   @708デプロイが本番専用機能を巻き戻した事故の復旧。土台=cpull2(朝の本番)＋この5関数のみ移植。
+// ============================================================
+function getReceiptReservationsToday() {
+  try {
+    var list = getKioskReservations(bizDateStr_()) || [];
+    var nameMap = getReceiptNameMap_();
+    var canon = function (s) { return String(s || '').trim().replace(/\s/g, '').replace(/^0+(?=\d)/, ''); };
+    var rows = list.map(function (r) {
+      var m = nameMap[canon(r.memberId)] || {};
+      return {
+        time: r.time || '',
+        seat: r.table || '',
+        name: r.customer || '',
+        no: r.memberId || '',
+        company: m.company || '',
+        ryoshuName: m.ryoshuName || ''
+      };
+    });
+    return { ok: true, rows: rows };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+function getReceiptNameMap_() {
+  var cache = CacheService.getScriptCache();
+  var c = cache.get('RCPTNAMEMAP_v1');
+  if (c) { try { return JSON.parse(c); } catch (e) {} }
+  var map = {};
+  var sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (sheet) {
+    var values = sheet.getDataRange().getValues();
+    var h = -1;
+    for (var i = 0; i < Math.min(values.length, 6); i++) {
+      if (values[i].some(function (x) { return String(x).replace(/\s/g, '').indexOf('カード記載名') !== -1; })) { h = i; break; }
+    }
+    if (h >= 0) {
+      var headers = values[h].map(function (x) { return String(x).replace(/\s/g, ''); });
+      var idx = function (kw) { return headers.findIndex(function (x) { return x.indexOf(kw) !== -1; }); };
+      var cE = idx('会員番号'), cComp = idx('会社名'), cRyo = idx('領収書名');
+      var canon = function (s) { return String(s || '').trim().replace(/\s/g, '').replace(/^0+(?=\d)/, ''); };
+      if (cE >= 0) {
+        for (var r = h + 1; r < values.length; r++) {
+          var no = canon(values[r][cE]);
+          if (!no) continue;
+          var company = cComp >= 0 ? String(values[r][cComp] || '').trim() : '';
+          var ryo = cRyo >= 0 ? String(values[r][cRyo] || '').trim() : '';
+          if (company || ryo) map[no] = { company: company, ryoshuName: ryo };
+        }
+      }
+    }
+  }
+  try { cache.put('RCPTNAMEMAP_v1', JSON.stringify(map), 60); } catch (e) {}
+  return map;
+}
+
+function logIssuedReceipt(payload) {
+  try {
+    payload = payload || {};
+    var ss = getOrOpenSS_();
+    var TAB = '発行領収書';
+    var HDR = ['発行日時', '種別', '発行日', '通し番号', '宛名', '会員番号', '金額(税込)', '税抜', '消費税', '収入印紙', '支払方法', '但し書き', '発行者'];
+    var sh = ss.getSheetByName(TAB);
+    if (!sh) { sh = ss.insertSheet(TAB); sh.appendRow(HDR); sh.setFrozenRows(1); }
+    var iso = String(payload.issueDate || '').trim() || bizDateStr_();
+    var ymd = iso.replace(/-/g, '');
+    var seq = 1, lastRow = sh.getLastRow();
+    if (lastRow >= 2) {
+      sh.getRange(2, 4, lastRow - 1, 1).getValues().forEach(function (x) {
+        var v = String(x[0] || '');
+        if (v.indexOf(ymd + '-') === 0) { var n = parseInt(v.split('-')[1], 10); if (n >= seq) seq = n + 1; }
+      });
+    }
+    var serial = ymd + '-' + ('00' + seq).slice(-3);
+    sh.appendRow([
+      new Date(), String(payload.docType || '領収書'), iso, serial,
+      String(payload.atena || ''), String(payload.memberNo || ''),
+      Number(payload.amount) || 0, Number(payload.taxExcl) || 0, Number(payload.tax) || 0, Number(payload.inshi) || 0,
+      (payload.cash === false ? 'カード' : '現金'), String(payload.tada || ''), String(payload.by || '')
+    ]);
+    return { ok: true, serial: serial };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+function getReceiptPayees() {
+  try {
+    var d = getTodayShiftDetail_() || {};
+    var out = [], seen = {};
+    var push = function (n) { n = String(n || '').trim(); if (n && !seen[n]) { seen[n] = 1; out.push(n); } };
+    (d.cast || []).forEach(function (s) { push(s && s.name); });
+    (d.kurofuku || []).forEach(function (s) { push(s && s.name); });
+    (d.haken || []).forEach(function (s) { if (s && s.name) push('派遣 ' + String(s.name).trim()); });
+    return { ok: true, rows: out };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e), rows: [] };
+  }
+}
+
+function getKioskCustomerRoster() {
+  const sheet = getOrOpenSS_().getSheetByName(MASTER_TAB);
+  if (!sheet) return { ok: false, error: '顧客マスタが見つかりません' };
+  const values = sheet.getDataRange().getValues();
+  let h = -1;
+  for (let i = 0; i < Math.min(values.length, 6); i++) {
+    if (values[i].some(c => String(c).replace(/\s/g, '').indexOf('カード記載名') !== -1)) { h = i; break; }
+  }
+  if (h < 0) return { ok: false, error: '顧客マスタの列構成を認識できませんでした' };
+  const headers = values[h].map(c => String(c).replace(/\s/g, ''));
+  const idx = kw => headers.findIndex(x => x.indexOf(kw) !== -1);
+  const cNo = idx('会員番号'), cName = idx('氏名'), cCard = idx('カード記載名'), cTan = idx('担当');
+  const cBtl = idx('ボトル種類'), cPos = idx('ボトル位置'), cBday = idx('誕生日');
+  const cNote = idx('参考情報'), cDrink = idx('飲み方'), cTab = idx('タバコ');
+  const cLine = idx('ライン登録') >= 0 ? idx('ライン登録') : idx('公式LINE'); // Y3には無い＝-1（フロントの isNoLine で代替判定）
+  const cReg = idx('登録日') >= 0 ? idx('登録日') : idx('入会');
+  const renewalCols = []; headers.forEach((hd, ci) => { if (/更新/.test(hd)) renewalCols.push(ci); }); // 登録日＋各更新列で直近を出す
+  const val = (row, c) => (c >= 0 && row[c] != null) ? String(row[c]) : '';
+  const customers = [];
+  for (let r = h + 1; r < values.length; r++) {
+    const row = values[r];
+    const card = val(row, cCard).trim(), name = val(row, cName).trim();
+    if (!card && !name) continue;
+    const join = cReg >= 0 ? parseMasterDate_(row[cReg]) : null;
+    const memberSince = join ? join.str : '';
+    let best = null; // 直近更新（登録日＋各更新列のうち年月最新）
+    [cReg >= 0 ? row[cReg] : null].concat(renewalCols.map(ci => row[ci])).forEach(raw => {
+      const p = parseMasterDate_(raw);
+      if (!p || p.ym <= 0) return;
+      if (!best || p.ym > best.ym || (p.ym === best.ym && p.d > best.d)) best = p;
+    });
+    const annualFeeDate = best ? best.str : memberSince;
+    const bdayRaw = cBday >= 0 ? row[cBday] : null;
+    const bday = bdayRaw instanceof Date ? Utilities.formatDate(bdayRaw, TZ, 'yyyy-MM-dd') : val(row, cBday).trim();
+    let lineRegistered = null; // 列があれば true/false、無ければ null（フロントで NO_LINE_MEMBERS 判定）
+    if (cLine >= 0) { lineRegistered = val(row, cLine).trim() ? true : false; }
+    customers.push({
+      name: name || card, card: card, no: val(row, cNo).trim(), tantou: val(row, cTan).trim(),
+      bottle: val(row, cBtl).trim(), bottlePos: val(row, cPos).trim(), bday: bday,
+      note: val(row, cNote).trim(), drink: val(row, cDrink).trim(), tabaco: val(row, cTab).trim(),
+      memberSince: memberSince, annualFeeDate: annualFeeDate, lineRegistered: lineRegistered
+    });
+  }
+  return { ok: true, customers: customers };
+}
+
