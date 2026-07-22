@@ -3145,22 +3145,11 @@ function rcptCalc(){
   var paper=document.getElementById('rcpt-paper'), bd=document.getElementById('rcpt-bd');
   if(!paper||!bd)return;
   if(RCPT_MODE==='R'){
-    var stampHtml=(!RCPT_CASH)?'<div class="small">※クレジットカード利用のため収入印紙不要</div>'
-      :(inshi===0)?'<div class="small">※税抜5万円未満につき収入印紙不要（非課税）</div>'
-      :'<div class="stampbox">収入印紙<br>'+rcptYen_(inshi)+'<br>貼付</div>';
-    paper.className='rcpt-paper';
-    if(paper.parentNode)paper.parentNode.classList.remove('land');
-    paper.innerHTML='<div class="c title" style="letter-spacing:.3em">領 収 証</div>'
-      +'<div class="kv small"><span>No.'+esc(rcptNo_(iso))+'</span><span>'+esc(rcptJp_(iso))+'</span></div><hr>'
-      +'<div class="to">'+(atena?esc(atena):'&nbsp;')+'</div>'
-      +'<div class="c amt">￥ '+(amount||0).toLocaleString("ja-JP")+' 也</div><div class="c small">（税込）</div><hr>'
-      +'<div>但し '+esc(tada)+'</div><div>上記正に領収いたしました</div><hr>'
-      +'<div class="kv"><span>税抜金額</span><span>'+rcptYen_(taxExcl)+'</span></div>'
-      +'<div class="kv"><span>消費税（10%）</span><span>'+rcptYen_(tax)+'</span></div>'
-      +stampHtml
-      +'<div class="issuer"><b>'+esc(RCPT_ISSUER.name)+'</b>'
-        +(RCPT_ISSUER.addr?('<br>'+esc(RCPT_ISSUER.addr)):'')+(RCPT_ISSUER.tel?('<br>TEL '+esc(RCPT_ISSUER.tel)):'')
-        +'<br>登録番号 '+esc(RCPT_ISSUER.invoiceNo)+'</div>';
+    paper.className='rcpt-paper rcpt-land';
+    if(paper.parentNode)paper.parentNode.classList.add('land');
+    try{ var _lc=rcptLandscapeCanvas_({atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
+      paper.innerHTML='<img alt="領収書プレビュー" src="'+_lc.toDataURL()+'" style="width:100%;display:block;background:#fff">';
+    }catch(e){ paper.innerHTML='<div class="small" style="color:#900">プレビュー生成エラー: '+esc(e.message)+'</div>'; }
     var badge=(!RCPT_CASH)?'<span class="rcpt-badge zero">カード＝印紙不要</span>'
       :(inshi===0)?'<span class="rcpt-badge zero">税抜5万円未満＝非課税</span>'
       :'<span class="rcpt-badge stamp">印紙 '+rcptYen_(inshi)+'</span>';
@@ -3183,6 +3172,7 @@ function rcptCalc(){
       +'<div class="big"><span>お渡し</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="row" style="border-bottom:0"><span style="color:var(--sub);font-size:11px">社内書類のため収入印紙・消費税区分なし</span><span></span></div>';
   }
+  window.__rcptData={mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso};
   window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
   var _pl=document.getElementById('rcpt-printlink'); if(_pl){ _pl.href='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml); }
 }
@@ -3264,12 +3254,55 @@ function rcptBuildXml_(o){
   L.push('<feed unit="40"/>'); L.push('<cut type="feed"/>'); L.push('</epos-print>');
   return L.join('');
 }
+/* ===== 横向き領収書＝画像印字（プリンターが回転命令を無視するため、横長に組んだ画像を刷る） ===== */
+function rcptLandscapeCanvas_(o){
+  var W=680, H=416;                      // 横向き（読む向き）の論理サイズ。H=紙幅方向→回転後の印字幅(≤512)
+  var c=document.createElement('canvas'); c.width=W; c.height=H;
+  var g=c.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  g.fillStyle='#000'; g.strokeStyle='#000'; g.lineWidth=1.5; g.textBaseline='alphabetic';
+  var yen=function(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); };
+  g.font='bold 40px "Hiragino Mincho ProN","YuMincho",serif'; g.fillText('領 収 証', 22, 56);
+  g.font='24px sans-serif'; g.fillText(String(o.atena||''), 210, 50);
+  g.beginPath(); g.moveTo(205,58); g.lineTo(520,58); g.stroke();
+  g.font='13px sans-serif'; g.textAlign='right'; g.fillText('No. '+rcptNo_(o.iso), 660, 26); g.fillText(rcptJp_(o.iso), 660, 44); g.textAlign='left';
+  g.font='bold 40px sans-serif'; g.fillText('￥ '+(Number(o.amount)||0).toLocaleString('ja-JP')+' -', 46, 122);
+  g.font='13px sans-serif'; g.fillText('税抜額   '+yen(o.taxExcl), 470, 104); g.fillText('消費税等 '+yen(o.tax), 470, 124);
+  g.font='16px sans-serif'; g.fillText('但  '+String(o.tada||''), 24, 168);
+  g.fillText(rcptJp_(o.iso)+'　上記正に領収いたしました', 24, 196);
+  g.strokeRect(560, 150, 110, 56); g.textAlign='center'; g.font='12px sans-serif';
+  if(RCPT_CASH && Number(o.inshi)>0){ g.fillText('収入印紙', 615, 174); g.fillText(yen(o.inshi), 615, 194); } else { g.fillText('印紙不要', 615, 184); }
+  g.textAlign='left';
+  g.strokeRect(20, 228, 340, 120);
+  g.font='bold 19px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 34, 260);
+  g.font='13px sans-serif'; g.fillText(String(RCPT_ISSUER.addr||''), 34, 288); g.fillText('登録番号 '+String(RCPT_ISSUER.invoiceNo||''), 34, 312);
+  g.strokeRect(600, 228, 66, 66); g.textAlign='center'; g.font='11px sans-serif'; g.fillText('印', 633, 266); g.textAlign='left';
+  return c;
+}
+function rcptCanvasToEposXml_(c){
+  var w=c.width, h=c.height, d=c.getContext('2d').getImageData(0,0,w,h).data;
+  var bpr=Math.ceil(w/8), R=new Uint8Array(bpr*h);
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>128 && (d[i]+d[i+1]+d[i+2])/3<128) R[y*bpr+(x>>3)] |= (0x80>>(x&7)); } }
+  var s=''; for(var k=0;k<R.length;k++) s+=String.fromCharCode(R[k]);
+  return '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'
+    +'<image width="'+w+'" height="'+h+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
+    +'<feed unit="24"/><cut type="feed"/></epos-print>';
+}
+function rcptLandscapePrintXml_(o){
+  var c=rcptLandscapeCanvas_(o);
+  var r=document.createElement('canvas'); r.width=c.height; r.height=c.width;   // 90度回転
+  var rg=r.getContext('2d'); rg.fillStyle='#fff'; rg.fillRect(0,0,r.width,r.height);
+  rg.translate(r.width,0); rg.rotate(Math.PI/2); rg.drawImage(c,0,0);
+  return rcptCanvasToEposXml_(r);
+}
 function rcptPrint(){
-  var xml=window.__rcptXml||''; if(!xml){ rcptCalc(); xml=window.__rcptXml||''; }
+  var xml;
+  if(RCPT_MODE==='R'){ try{ xml=rcptLandscapePrintXml_(window.__rcptData||{amount:0,iso:rcptToday_()}); }catch(e){ xml=window.__rcptXml||''; } }
+  else { xml=window.__rcptXml||''; if(!xml){ rcptCalc(); xml=window.__rcptXml||''; } }
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
   var pl=document.getElementById('rcpt-printlink'); if(pl)pl.href=url;
-  var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（印字後この画面へ戻ってください）';
-  return true; // アンカーのhref(tmprintassistant://)へ遷移＝アプリ起動。iPadOSはUAをMacと偽装するためUA分岐は使わない
+  var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（横向きは画像印字のため数秒かかることがあります）';
+  return true;
 }
 function openReceipt(){
   menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
