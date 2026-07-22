@@ -779,6 +779,7 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .cust-tsel.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
 .cust-browse-h{font-size:13px;font-weight:800;color:var(--sub);margin:2px 2px 10px;}
 .cust-browse-n{color:var(--accent);}
+.cpos-lbl{font-size:12px;color:var(--dim);font-weight:700;margin-right:2px;}
 .cfil{font-size:13px;font-weight:800;padding:8px 14px;border-radius:20px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;}
 .cfil.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
 .cfil.exp.on{background:#2a0e0e;border-color:#7a2828;color:#ff9a9a;}
@@ -2986,12 +2987,17 @@ var MENU_TILES=[
     {ic:'🍽', t:'POS',               act:"alert('（プロト）POSへ')"}
   ]}
 ];
-var menuView='grid', custFilter='all', custFromTop=false, custTantou='';
+var menuView='grid', custFromTop=false, custTantou='';
+var custF={expired:false,noline:false,bottle:false,pos:''}; // 顧客ブラウズの複数条件（AND・会員切れ/LINE未登録/ボトルあり/ボトル位置）
+function custResetFilters_(){ custF={expired:false,noline:false,bottle:false,pos:''}; custTantou=''; }
+function custAnyFilter_(){ return custF.expired||custF.noline||custF.bottle||!!custF.pos||!!custTantou; }
+function hasBottle_(c){ return !!(String(c.bottle||'').trim()||String(c.bottlePos||'').trim()); } // 銘柄 or 位置があればボトルあり
+function bottlePosArea_(c){ var p=String(c.bottlePos||''); if(/2\s*[FＦ]|２\s*[FＦ]/i.test(p))return '2F'; if(/5\s*[FＦ]|５\s*[FＦ]/i.test(p))return '5F'; if(p.trim())return '倉庫'; return ''; } // 位置文字列→2F/5F/倉庫（2F/5Fを含まない非空は倉庫扱い）
 var CUST_ROSTER=null, CUST_ROSTER_LOADING=false; // 顧客管理の会員切れ/担当別ブラウズ用（adaptCustomer済み・null=未取得）
 function openMenu(){ menuView='grid'; custFromTop=false; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
-function openCustomer(){ menuView='customer'; custFilter='all'; custTantou=''; custFromTop=true; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); loadCustRoster(); }
+function openCustomer(){ menuView='customer'; custResetFilters_(); custFromTop=true; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); loadCustRoster(); }
 function closeMenu(){ document.getElementById('menuOverlay').classList.remove('show'); }
-function menuCustomer(){ menuView='customer'; custFilter='all'; custTantou=''; custFromTop=false; renderMenu(); loadCustRoster(); }
+function menuCustomer(){ menuView='customer'; custResetFilters_(); custFromTop=false; renderMenu(); loadCustRoster(); }
 /* 顧客ロースター（会員切れ／担当ごと一覧の元データ）を1回だけ取得してキャッシュ。読み取り専用API。 */
 function loadCustRoster(cb){
   if(CUST_ROSTER){ if(cb)cb(); return; }
@@ -3009,20 +3015,31 @@ function custRosterReady_(){
   if(menuView!=='customer') return;
   var inp=document.getElementById('cust-q'); if(inp && inp.value.trim()) return; // 検索中は邪魔しない
   var sel=document.getElementById('cust-tsel'); if(sel){ var cur=sel.value; sel.innerHTML=custTantouOpts_(); sel.value=cur; }
-  if(custFilter==='expired'||custFilter==='noline'||custTantou) renderCustResults();
+  if(custAnyFilter_()) renderCustResults();
 }
 /* 客が紐づく担当の一覧（「、」区切りの複数担当に対応・客ゼロの担当は出さない） */
 function custTantouList_(){ var seen={},arr=[]; (CUST_ROSTER||[]).forEach(function(c){ String(c.tantou||'').split('、').forEach(function(t){ t=t.trim(); if(t&&!seen[t]){seen[t]=1;arr.push(t);} }); }); return arr.sort(); }
 function custTantouOpts_(){ return '<option value="">担当で選ぶ…</option>'+custTantouList_().map(function(t){ return '<option value="'+esc(t)+'"'+(custTantou===t?' selected':'')+'>'+esc(t)+'</option>'; }).join(''); }
 /* 会員切れ／LINE未登録ブラウズのトグル */
-function custBrowse(key){ custFilter=(custFilter===key)?'all':key; custTantou=''; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(function(){ if(menuView==='customer'&&!((document.getElementById('cust-q')||{}).value||'').trim()) renderCustResults(); }); }
+function custRenderIfBrowse_(){ if(menuView==='customer'&&!((document.getElementById('cust-q')||{}).value||'').trim()) renderCustResults(); }
+function custTgl(key){ custF[key]=!custF[key]; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(custRenderIfBrowse_); }
+function custPos(v){ custF.pos=(custF.pos===v)?'':v; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(custRenderIfBrowse_); }
 /* 担当ごと一覧 */
-function custPickTantou(name){ custTantou=name||''; custFilter='all'; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(function(){ if(menuView==='customer'&&!((document.getElementById('cust-q')||{}).value||'').trim()) renderCustResults(); }); }
+function custPickTantou(name){ custTantou=name||''; custLastQ=''; var inp=document.getElementById('cust-q'); if(inp)inp.value=''; renderMenu(); loadCustRoster(custRenderIfBrowse_); }
 /* 検索窓に入力＝ブラウズ状態を解除して検索モードへ（チップ/セレクトの選択も外す・再描画せずフォーカス維持） */
-function custOnSearchInput(){ var q=((document.getElementById('cust-q')||{}).value||'').trim(); if(q&&(custFilter!=='all'||custTantou)){ custFilter='all'; custTantou=''; var chips=document.querySelectorAll('#menu-body .cust-browse .cfil'); if(chips)chips.forEach(function(c){c.classList.remove('on');}); var sel=document.getElementById('cust-tsel'); if(sel)sel.value=''; } renderCustResults(); }
+function custOnSearchInput(){ var q=((document.getElementById('cust-q')||{}).value||'').trim(); if(q&&custAnyFilter_()){ custResetFilters_(); var chips=document.querySelectorAll('#menu-body .cust-browse .cfil'); if(chips)chips.forEach(function(c){c.classList.remove('on');}); var sel=document.getElementById('cust-tsel'); if(sel)sel.value=''; } renderCustResults(); }
 /* ブラウズ一覧の並び：会員切れ→今月更新→有効→未会員、同区分内は更新が古い順（＝より切れている順） */
 function custSortForBrowse_(list){ var order={expired:0,thismonth:1,ok:2,none:3}; var w=(list||[]).map(function(c){return{c:c,mi:membershipInfo(c.joined,c.feeDate)};}); w.sort(function(a,b){ var oa=order[a.mi.status]==null?9:order[a.mi.status], ob=order[b.mi.status]==null?9:order[b.mi.status]; if(oa!==ob)return oa-ob; return (b.mi.monthsSince||0)-(a.mi.monthsSince||0); }); return w.map(function(x){return x.c;}); }
-function custBrowseHeader_(n){ var label=custTantou?('担当 '+esc(custTantou)+' のお客様'):custFilter==='expired'?'🔴 会員切れのお客様':custFilter==='noline'?'📵 公式LINE未登録のお客様':''; if(!label)return ''; return '<div class="cust-browse-h">'+label+'　<span class="cust-browse-n">'+n+'名</span></div>'; }
+function custBrowseHeader_(n){
+  var parts=[];
+  if(custTantou) parts.push('担当 '+esc(custTantou));
+  if(custF.expired) parts.push('🔴 会員切れ');
+  if(custF.bottle) parts.push('🍶 ボトルあり');
+  if(custF.pos) parts.push('📍 '+esc(custF.pos));
+  if(custF.noline) parts.push('📵 LINE未登録');
+  if(!parts.length) return '';
+  return '<div class="cust-browse-h">'+parts.join(' ・ ')+'　<span class="cust-browse-n">'+n+'名</span></div>';
+}
 
 /* ===== 🖨 領収書・受領書発行（軍師メニュー内・TM-M30/Bluetooth印字） =====
    ・今日の伝票 → 会員に紐づく領収書宛名/金額を自動で引く（今夜ぶんの金額は席料+同伴の仮値。TRUST合計が取れればそれを優先）
@@ -3428,8 +3445,17 @@ function renderMenu(){
     el.innerHTML=back
       +'<input id="cust-q" class="cust-q" placeholder="お客様名・会員番号・担当名で検索" oninput="custOnSearchInput()">'
       +'<div class="cust-browse">'
-        +'<span class="cfil exp'+(custFilter==='expired'?' on':'')+'" onclick="custBrowse(\'expired\')">🔴 会員切れ一覧</span>'
-        +'<span class="cfil nol'+(custFilter==='noline'?' on':'')+'" onclick="custBrowse(\'noline\')">📵 LINE未登録</span>'
+        +'<span class="cfil exp'+(custF.expired?' on':'')+'" onclick="custTgl(\'expired\')">🔴 会員切れ</span>'
+        +'<span class="cfil'+(custF.bottle?' on':'')+'" onclick="custTgl(\'bottle\')">🍶 ボトルあり</span>'
+        +'<span class="cfil nol'+(custF.noline?' on':'')+'" onclick="custTgl(\'noline\')">📵 LINE未登録</span>'
+      +'</div>'
+      +'<div class="cust-browse cust-pos">'
+        +'<span class="cpos-lbl">ボトル位置</span>'
+        +'<span class="cfil'+(custF.pos==='2F'?' on':'')+'" onclick="custPos(\'2F\')">2F</span>'
+        +'<span class="cfil'+(custF.pos==='5F'?' on':'')+'" onclick="custPos(\'5F\')">5F</span>'
+        +'<span class="cfil'+(custF.pos==='倉庫'?' on':'')+'" onclick="custPos(\'倉庫\')">倉庫</span>'
+      +'</div>'
+      +'<div class="cust-browse">'
         +'<select id="cust-tsel" class="cust-tsel'+(custTantou?' on':'')+'" onchange="custPickTantou(this.value)">'+custTantouOpts_()+'</select>'
       +'</div>'
       +'<button onclick="openAddCustomer()" style="width:100%;margin:2px 0 12px;padding:12px;border-radius:10px;border:1px solid #2a6a44;background:#0f2a1a;color:#7fe0a3;font-weight:800;font-size:14px;cursor:pointer">➕ 新規のお客様を追加</button>'
@@ -3512,16 +3538,20 @@ function saveNewCustomer(){
     else { alert('登録エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} }
   }).catch(function(e){ alert('登録エラー: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='💾 この内容で登録';} });
 }
-function custFilterFn(c){ if(custFilter==='expired'&&membershipInfo(c.joined,c.feeDate).status!=='expired')return false; if(custFilter==='noline'&&!isNoLine(c))return false; return true; }
+function custFilterFn(c){
+  if(custF.expired && membershipInfo(c.joined,c.feeDate).status!=='expired') return false;
+  if(custF.noline && !isNoLine(c)) return false;
+  if(custF.bottle && !hasBottle_(c)) return false;
+  if(custF.pos && bottlePosArea_(c)!==custF.pos) return false;
+  return true;
+}
 /* ブラウズ中（検索窓が空＋会員切れ/LINE未登録/担当選択のいずれか）か */
-function custIsBrowsing_(q){ return !q && (custFilter==='expired'||custFilter==='noline'||!!custTantou); }
+function custIsBrowsing_(q){ return !q && custAnyFilter_(); }
 /* ロースターからブラウズ条件で抽出（判定はフロントの membershipInfo に一元化＝既存カードと一致） */
 function custBrowseList_(){
   return (CUST_ROSTER||[]).filter(function(c){
-    if(custTantou){ if(String(c.tantou||'').split('、').map(function(s){return s.trim();}).indexOf(custTantou)<0) return false; }
-    if(custFilter==='expired' && membershipInfo(c.joined,c.feeDate).status!=='expired') return false;
-    if(custFilter==='noline' && !isNoLine(c)) return false;
-    return true;
+    if(custTantou && String(c.tantou||'').split('、').map(function(s){return s.trim();}).indexOf(custTantou)<0) return false;
+    return custFilterFn(c);
   });
 }
 function renderCustResults(){
