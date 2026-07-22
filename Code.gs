@@ -14361,42 +14361,9 @@ function getInventorySheet_() {
   return sh;
 }
 
-// 在庫一覧取得
-function getInventoryList() {
-  const sh = getInventorySheet_();
-  const rows = sh.getDataRange().getValues().slice(1);
-  return rows.map((r, i) => ({
-    rowIdx: i + 2,
-    floor: String(r[0]),
-    name: String(r[1]),
-    qty: Number(r[2]) || 0
-  })).filter(r => r.name);
-}
-
-// 在庫数を増減（delta: +1 / -1）。0未満にはならない
-function updateInventoryQty(rowIdx, delta) {
-  const sh = getInventorySheet_();
-  const cur = Number(sh.getRange(rowIdx, 3).getValue()) || 0;
-  const next = Math.max(0, cur + Number(delta));
-  sh.getRange(rowIdx, 3).setValue(next);
-  sh.getRange(rowIdx, 4).setValue(Utilities.formatDate(new Date(), TZ, 'M/d HH:mm'));
-  return { ok: true, qty: next };
-}
-
-// 新規アイテム追加
-function addInventoryItem(floor, name, qty) {
-  name = String(name || '').trim();
-  if (!name) return { ok: false, error: '品名を入力してください' };
-  const sh = getInventorySheet_();
-  sh.appendRow([floor, name, Number(qty) || 0, Utilities.formatDate(new Date(), TZ, 'M/d HH:mm')]);
-  return { ok: true };
-}
-
-// アイテム削除
-function deleteInventoryItem(rowIdx) {
-  getInventorySheet_().deleteRow(rowIdx);
-  return { ok: true };
-}
+// 〔2026-07-23 撤去〕旧・汎用在庫UIの getInventoryList / updateInventoryQty / addInventoryItem /
+//   deleteInventoryItem は到達不能な死にコードのため撤去。在庫の正本＝在庫発注マスタ（getStockList /
+//   changeStockQty）。※ getInventorySheet_（上）はおみやげ在庫が使うため存続。→ データ関係辞書 5-2
 
 // ============================================================
 // 軍師システム「発注」（紙の発注チェックシート代替）
@@ -14426,31 +14393,8 @@ function getOrderLogSheet_() {
   return sh;
 }
 
-// 発注品目マスタ一覧（フロア区分: 共通/2F/5F、最低在庫数は参考表示のみ）
-function getOrderMasterList() {
-  const sh = getOrderMasterSheet_();
-  const rows = sh.getDataRange().getValues();
-  const list = [];
-  for (let i = 1; i < rows.length; i++) {
-    const name = String(rows[i][0]).trim();
-    if (!name) continue;
-    list.push({ rowIdx: i + 1, name, floor: String(rows[i][1] || '共通'), minStock: String(rows[i][2] || '') });
-  }
-  return list;
-}
-
-function addOrderMasterItem(name, floor, minStock) {
-  name = String(name || '').trim();
-  if (!name) return { ok: false, error: '品名を入力してください' };
-  const sh = getOrderMasterSheet_();
-  sh.appendRow([name, String(floor || '共通'), String(minStock || '')]);
-  return { ok: true };
-}
-
-function deleteOrderMasterItem(rowIdx) {
-  getOrderMasterSheet_().deleteRow(rowIdx);
-  return { ok: true };
-}
+// 〔2026-07-23 撤去〕旧・発注品目マスタUIの getOrderMasterList / addOrderMasterItem /
+//   deleteOrderMasterItem は到達不能な死にコードのため撤去。→ データ関係辞書 5-2
 
 // 当日の発注ドラフトに1件追加（黒服がシフト中に「発注が必要」とタップした時に呼ぶ）
 function addOrderDraftItem(payload) {
