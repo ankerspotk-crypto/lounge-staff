@@ -819,6 +819,12 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return getRsvMatrix_(body.from, body.days);
   }
+  // 管理コンソール「📅 予約」＝退店予定時刻（チェック予定）だけを一覧からインライン編集（予約フォームは持たない）
+  if (body.action === 'setReservationCheckTime') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return setReservationCheckTime_(body.rowIdx, body.checkTime);
+  }
   if (body.action === 'submitShift') return submitShift(body);
   if (body.action === 'declineNextWeek') return declineNextWeek(body);
   if (body.action === 'getShiftSubmitStatus') {
@@ -910,6 +916,16 @@ function handleApiRequest_(body) {
     PropertiesService.getScriptProperties().setProperty('NOTIF_SETTINGS', JSON.stringify(clean));
     return { ok: true };
   }
+  if (body.action === 'getResendableNotices') { // 自動通知の再送パネル：一覧＋配信枠
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return getResendableNotices();
+  }
+  if (body.action === 'resendNotices') { // 選択した自動通知を今の最新データで再送
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return resendNotices(body.ids);
+  }
   if (body.action === 'getCashThresholds') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
@@ -993,6 +1009,13 @@ function handleApiRequest_(body) {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return { ok: true, mode: prop('OKURI_MODE') || 'driver' };
+  }
+  if (body.action === 'getOkuriMeansStats') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    const st = getOkuriMeansStats(body.ym || '');
+    st.ok = true;
+    return st;
   }
   if (body.action === 'kioskForceLogout') {
     const adminName = getStaffName(body.userId);
@@ -4010,16 +4033,95 @@ function detectOkuri(text) {
   return null;
 }
 
-function saveOkuri(date, name, dest, bin) {
+function saveOkuri(date, name, dest, bin, means) {
   const ss = getOrOpenSS_();
   let sh = ss.getSheetByName(OKURI_TAB);
   if (!sh) {
     sh = ss.insertSheet(OKURI_TAB);
-    sh.appendRow(['日付', '名前', '行き先', '時刻', '状態', '便']);
+    sh.appendRow(['日付', '名前', '行き先', '時刻', '状態', '便', '手段']);
   }
+  const meansCol = ensureOkuriMeansCol_(sh); // 手段列（無ければ末尾に自動新設＝非破壊）
   const binNo = bin || 1;
+  const label = resolveOkuriMeans_(date, name, means); // 自社便 / ドライバー（集計用）
   deleteOkuriRow_(sh, date, name, binNo);
-  sh.appendRow([date, name, dest, now_(), '依頼', binNo]);
+  const row = [date, name, dest, now_(), '依頼', binNo];
+  while (row.length < meansCol) row.push('');
+  row[meansCol - 1] = label;
+  sh.appendRow(row);
+}
+
+// 送迎ログに「手段」列を保証（無ければ末尾に新設＝既存行は無傷・非破壊）。1-based列番号を返す。
+function ensureOkuriMeansCol_(sh) {
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const header = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  const idx = header.indexOf('手段');
+  if (idx >= 0) return idx + 1;
+  const col = sh.getLastColumn() + 1;
+  sh.getRange(1, col, 1, 1).setValue('手段');
+  return col;
+}
+
+// 手段ラベルの正規化 → '自社便' / 'ドライバー' / ''（不明）
+function okuriMeansLabel_(m) {
+  const s = String(m == null ? '' : m).trim();
+  if (!s) return '';
+  if (s === 'ドライバー' || s === 'driver') return 'ドライバー';
+  if (s === '自便' || s === '自社便' || s === '自社送り' || s === 'jisha' || s.indexOf('自') >= 0) return '自社便';
+  return '';
+}
+
+// 手段の解決：①明示指定 → ②当日キャスト別prop(KOKURIMODE) → ③当日の全体モード(OKURI_MODE) → ④既定ドライバー
+function resolveOkuriMeans_(date, name, means) {
+  let l = okuriMeansLabel_(means);
+  if (l) return l;
+  try {
+    const raw = prop('KOKURIMODE_' + date);
+    if (raw) { l = okuriMeansLabel_((JSON.parse(raw) || {})[name]); if (l) return l; }
+  } catch (e) {}
+  try { l = okuriMeansLabel_(prop('OKURI_MODE')); if (l) return l; } catch (e) {}
+  return 'ドライバー';
+}
+
+// 当日の既存送迎行の手段だけ後から更新（黒服がシフト盤で 自便⇄ドライバー を送り記録後に切替えた時）
+function updateOkuriMeans_(date, name, means) {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(OKURI_TAB);
+  if (!sh) return;
+  const meansCol = ensureOkuriMeansCol_(sh);
+  const label = okuriMeansLabel_(means) || 'ドライバー';
+  const vals = sh.getDataRange().getValues();
+  for (let i = vals.length - 1; i >= 1; i--) {
+    const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]);
+    if (d === date && String(vals[i][1]) === name) sh.getRange(i + 1, meansCol).setValue(label);
+  }
+}
+
+// 送迎の月別集計（自社便◯件 / ドライバー◯件）。ym='yyyy-MM'（未指定=今月）。管理コンソールの集計タブ用。
+function getOkuriMeansStats(ym) {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(OKURI_TAB);
+  const target = ym || Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  const out = { ym: target, jisha: 0, driver: 0, unknown: 0, total: 0, months: [] };
+  if (!sh) return out;
+  const vals = sh.getDataRange().getValues();
+  if (vals.length < 2) return out;
+  const meansIdx = vals[0].indexOf('手段'); // 旧データは -1（手段列なし）
+  const monthsSet = {};
+  for (let i = 1; i < vals.length; i++) {
+    const r = vals[i];
+    if (String(r[4]) !== '依頼') continue; // 有効な送り依頼のみ（キャンセルは行削除済み）
+    const d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]);
+    const m = String(d).slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(m)) monthsSet[m] = true;
+    if (m !== target) continue;
+    const label = meansIdx >= 0 ? okuriMeansLabel_(r[meansIdx]) : '';
+    if (label === '自社便') out.jisha++;
+    else if (label === 'ドライバー') out.driver++;
+    else out.unknown++;
+  }
+  out.total = out.jisha + out.driver + out.unknown;
+  out.months = Object.keys(monthsSet).sort().reverse();
+  return out;
 }
 
 function cancelOkuri(date, name, bin) {
@@ -5763,6 +5865,7 @@ function scheduledJobs() {
   checkReminders();
   checkAtendou();
   checkLateReservations();
+  checkLeaveReservations();
   checkPendingStaffRegistrations_();
 
   // 予約整合(RSRV/YRSRV)の同期をトリガー側で先回りする（2026-07-20）。
@@ -9794,7 +9897,7 @@ function getYoyakuRsrvSheet_() {
   let sh = ss.getSheetByName(YOYAKU_RSRV_TAB);
   if (!sh) {
     sh = ss.insertSheet(YOYAKU_RSRV_TAB);
-    sh.appendRow(['予約日','来店時刻','お客様名','会員番号','人数','テーブル','担当キャスト','要望','ステータス','予約担当者','登録日時','予約キャスト','同伴キャスト','席料','同伴料','サブ内訳','集計モード']);
+    sh.appendRow(['予約日','来店時刻','お客様名','会員番号','人数','テーブル','担当キャスト','要望','ステータス','予約担当者','登録日時','予約キャスト','同伴キャスト','席料','同伴料','サブ内訳','集計モード','退店予定時刻']);
   }
   return sh;
 }
@@ -9803,6 +9906,8 @@ function getYoyakuRsrvSheet_() {
 function ensureRsrvHeaders_(sh) {
   try {
     if (String(sh.getRange(1, 17).getValue()).trim() !== '集計モード') sh.getRange(1, 17).setValue('集計モード');
+    // 列18「退店予定時刻」＝チェック予定（お客様が帰る予定の時刻）。既存本番シートに後付けする非破壊列。
+    if (String(sh.getRange(1, 18).getValue()).trim() !== '退店予定時刻') sh.getRange(1, 18).setValue('退店予定時刻');
   } catch (e) {}
 }
 
@@ -10246,7 +10351,8 @@ function getYoyakuReservations_(dateKey) {
       dohanFee: (row[14] !== undefined && row[14] !== '') ? Number(row[14]) : null,
       checkInAt: Number(_props['KCHECKIN_' + rowIdx]) || null,
       subCustomers: (function() { try { return row[15] ? JSON.parse(row[15]) : []; } catch (e) { return []; } })(),
-      aggMode: String(row[16] || '').trim() === 'split' ? 'split' : 'merge'
+      aggMode: String(row[16] || '').trim() === 'split' ? 'split' : 'merge',
+      checkTime: String(row[17] || '').trim() // 退店予定時刻（チェック予定）
     });
   }
   return result;
@@ -10315,6 +10421,7 @@ function getCastReservations_(castName) {
       customer: String(row[2]), memberId: String(row[3]), pax: Number(row[4]) || 1,
       table: String(row[5]), status: String(row[8]),
       tantouCast: String(row[6] || ''), yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || ''),
+      checkTime: String(row[17] || '').trim(),
       roles, future: date >= today
     });
   }
@@ -10598,6 +10705,7 @@ function addReservation_(payload, regBy) {
   if (subCustomers.length) sh.getRange(sh.getLastRow(), 16).setValue(JSON.stringify(subCustomers));
   ensureRsrvHeaders_(sh);
   sh.getRange(sh.getLastRow(), 17).setValue(payload.aggMode === 'split' ? 'split' : 'merge');
+  sh.getRange(sh.getLastRow(), 18).setValue(String(payload.checkTime || '')); // 退店予定時刻（チェック予定）
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
   return { ok: true, dateKey, rowIdx: sh.getLastRow() };
  });
@@ -10619,6 +10727,8 @@ function updateReservation_(rowIdx, payload) {
   ]]);
   sh.getRange(rowIdx, 12).setValue(String(payload.yoyakuCast || ''));
   sh.getRange(rowIdx, 13).setValue(String(payload.dohanCast || ''));
+  ensureRsrvHeaders_(sh);
+  sh.getRange(rowIdx, 18).setValue(String(payload.checkTime || '')); // 退店予定時刻（チェック予定）。空でクリア可
   const subCustomers = Array.isArray(payload.subCustomers) ? payload.subCustomers : [];
   sh.getRange(rowIdx, 16).setValue(subCustomers.length ? JSON.stringify(subCustomers) : '');
   if (payload.aggMode === 'merge' || payload.aggMode === 'split') {
@@ -10763,6 +10873,58 @@ function testLateReservationNotice() {
   if (!KF) return { ok: false, error: 'GROUP_KUROFUKU未設定' };
   push_(KF, '🧪【テスト送信】\n🕘 来店確認\nサンプル様（20:00予約・3名）が来店予定を30分過ぎています。\n担当：まや\n来店可否を担当に確認してください。\n（IEYAS軍師の新機能「来店30分超過の確認通知」の動作テストです）');
   return { ok: true };
+}
+
+// 退店予定（チェック予定）を超過した「来店済み」予約を黒服LINEへ確認依頼（毎分 scheduledJobs から呼ぶ）。
+// checkLateReservations（来店超過）と対。対象＝checkTime が入っていて、まだ退店操作されていない席。
+// ⚠️深夜0〜5時の +24h 補正は来店超過と同じ（bizDateStr_ の連続時間軸で判定）。
+// 既通知ガードのキーに checkTime を含める＝延長で予定を後ろ倒し（再編集）したら新しい予定で再アラートできる。
+function checkLeaveReservations() {
+  const n = new Date();
+  let nh = n.getHours(); if (nh < 6) nh += 24;
+  const nowM = nh * 60 + n.getMinutes();
+  if (nowM < 19 * 60 || nowM > 24 * 60 + 90) return; // 稼働時間帯 19:00〜翌1:30 のみ
+  const KF = prop('GROUP_KUROFUKU');
+  if (!KF) return;
+  const list = getYoyakuReservations_(bizDateStr_()).filter(r => r.status === '来店済み' && r.checkTime);
+  if (!list.length) return;
+  const GRACE = 5; // 予定を5分超過したら通知（微調整可）
+  const sp = PropertiesService.getScriptProperties();
+  list.forEach(r => {
+    const ct = String(r.checkTime || '').trim();
+    if (!/^\d{1,2}:\d{2}$/.test(ct)) return; // 時刻が不正なら判定不可 → 通知しない（NaN分防止）
+    const p = ct.split(':');
+    let rh = parseInt(p[0], 10); if (rh < 6) rh += 24;
+    const over = nowM - (rh * 60 + (parseInt(p[1], 10) || 0));
+    if (over < GRACE) return;
+    const key = 'KLEAVE_' + r.rowIdx + '_' + ct.replace(':', '');
+    if (sp.getProperty(key)) return; // この予定時刻ではもう通知済み
+    const seat = (r.table && r.table !== '未定') ? '（' + r.table + '）' : '';
+    push_(KF, '🕛【チェック確認】' + r.customer + '様' + seat + ' がチェック予定（' + ct + '）を' + over + '分過ぎています。\nお会計・退店ならIEYAS軍師で「退店」をお願いします。延長ならそのままでOKです。');
+    sp.setProperty(key, String(Date.now()));
+  });
+}
+
+// テスト送信: サンプルのチェック確認を黒服LINEへ1件だけ送る（動作確認用）
+function testLeaveReservationNotice() {
+  const KF = prop('GROUP_KUROFUKU');
+  if (!KF) return { ok: false, error: 'GROUP_KUROFUKU未設定' };
+  push_(KF, '🧪【テスト送信】\n🕛 チェック確認\nサンプル様（5F ボックス1）がチェック予定（23:00）を10分過ぎています。\nお会計・退店ならIEYAS軍師で「退店」をお願いします。\n（IEYAS軍師の新機能「チェック予定超過の確認通知」の動作テストです）');
+  return { ok: true };
+}
+
+// 管理コンソールの一覧インライン編集用：退店予定時刻（列18）だけを書き換える軽量セッター。
+// コンソールは予約フォームを持たない＝既存予約1行の退店予定だけをここで直せるようにする。
+function setReservationCheckTime_(rowIdx, checkTime) {
+  const r = Number(rowIdx);
+  if (!r || r < 2) return { ok: false, error: 'rowIdx不正' };
+  const sh = getYoyakuRsrvSheet_();
+  if (r > sh.getLastRow()) return { ok: false, error: '該当行なし' };
+  const ct = String(checkTime || '').trim();
+  if (ct && !/^\d{1,2}:\d{2}$/.test(ct)) return { ok: false, error: '時刻形式が不正です（HH:MM）' };
+  ensureRsrvHeaders_(sh);
+  sh.getRange(r, 18).setValue(ct); // 空文字でクリア可
+  return { ok: true, rowIdx: r, checkTime: ct };
 }
 
 // ============================================================
@@ -16102,6 +16264,175 @@ function listTodayScheduledFlags_() {
   const hit = Object.keys(all).filter(function (k) { return k.indexOf('SCHED_' + today + '_') === 0; }).sort();
   Logger.log('【' + today + ' にシステムが送信済みと記録している通知】' + hit.length + '件\n' + hit.join('\n'));
   return hit;
+}
+
+// ============================================================
+// 🔁 自動通知の一括再送（コンソール 📢連絡 → 🔁 再送）
+// ------------------------------------------------------------
+// 目的: 定時の自動通知が未達だった／データが古かった時に、押した時点の
+//   「最新データ」で作り直して再送する。forceResendToday_（14:00/16:00の2件）
+//   の一般化版。対象＝グループ定時配信・黒服/キャスト個別DM・監視アラート。
+// 安全設計:
+//   ① 送信前に配信枠を1回だけ確認。remain<=0 なら1通も送らず中断（429誤報告の防止）。
+//   ② ⚠️kinsen_go（退勤号令）は定時版だと resetAllAtendou_ を呼ぶが、再送では文面のみ＝
+//      アテンド状態には絶対に触らない。
+//   ③ 個別DM/監視系は既存のジョブ関数をそのまま呼ぶ（内部ガード無し＝毎回最新で再送）。
+//      早退勤予告(early_taikin)＝10分前の予測通知・黒服タスク(18:00)＝送信済みで消費、は
+//      「再送」概念に合わないため対象外。
+//   ④ 冪等フラグは置かない＝手動パネルは「意図した再送」を許すのが正。二重送信の歯止めは
+//      フロントの確認ダイアログ（送信内容と件数を提示）で行う。
+// ============================================================
+
+// pushChecked_ を使う検証つきグループ送信。{sent:0|1, note, failed?, skipped?} を返す。
+function resendGroupText_(to, text) {
+  if (!to) return { sent: 0, note: '宛先グループ未設定', skipped: true };
+  if (!text || !String(text).trim()) return { sent: 0, note: '本文が空（対象なし）', skipped: true };
+  var r = pushChecked_(to, String(text));
+  return r.ok ? { sent: 1, note: '送信' } : { sent: 0, note: 'HTTP' + r.code + ' ' + r.body, failed: true };
+}
+// 複数の送信結果をまとめる（1通知が複数グループへ送る場合）
+function resendMerge_(parts) {
+  var sent = 0, notes = [], failed = false;
+  parts.forEach(function (p) { if (!p) return; sent += (p.sent || 0); if (p.note) notes.push(p.note); if (p.failed) failed = true; });
+  return { sent: sent, note: notes.join(' / '), failed: failed };
+}
+
+// 再送レジストリ。today=todayStr(), ns=getNotifSettings_() を渡す。
+//   cat: 'group'（グループ定時配信）/ 'dm'（個別DMループ）/ 'alert'（監視・条件発火）
+//   schedId: SCHED_<today>_<schedId> の有無で「本日すでに配信済みか」を判定（null=判定不可）
+//   run(): {sent, note, skipped?, failed?} を返す（sent=nullは送信数不明＝実行のみ）。ns/todayはクロージャ参照
+function resendRegistry_(today, ns) {
+  var KF = function () { return prop('GROUP_KUROFUKU'); };
+  var ST = function () { return prop('GROUP_STAFF'); };
+  var DR = function () { return prop('GROUP_DRIVER'); };
+  var get = function (k) { return (ns && ns[k]) || {}; };
+  return [
+    // ---- グループ定時配信 ----
+    { id: 'lineup', label: '本日出勤ラインナップ', cat: 'group', time: '14:00', schedId: 'N_lineup', dynamic: true,
+      run: function () { var m = buildLineupMessage_(); return resendGroupText_(ST(), m && m.text); } },
+    { id: 'kinsen_mae', label: '開店準備の号令', cat: 'group', time: '19:30', schedId: 'N_kinsen_mae', dynamic: true,
+      run: function () {
+        var parts = [resendGroupText_(KF(), notifTpl_(ns, 'kinsen_mae', 'nudge'))];
+        try { if (!getOpeningCheckInit().locked) parts.push(resendGroupText_(KF(), notifTpl_(ns, 'kinsen_mae', 'unsubmitted'))); } catch (e) {}
+        return resendMerge_(parts);
+      } },
+    { id: 'soganbansen', label: '開店前チェック漏れ＋スタッフ挨拶', cat: 'group', time: '19:45', schedId: 'N_soganbansen', dynamic: true,
+      run: function () {
+        var parts = [];
+        try { var miss = openingPrepMissing_(); if (miss.any) parts.push(resendGroupText_(KF(), formatOpeningPrepReminder_(miss))); else parts.push({ sent: 0, note: '開店前チェック漏れなし', skipped: true }); }
+        catch (e) { parts.push({ sent: 0, note: '漏れ判定失敗', skipped: true }); }
+        parts.push(resendGroupText_(ST(), get('soganbansen').staffMessage || MSG_STAFF_OHAYO));
+        return resendMerge_(parts);
+      } },
+    { id: 'dohan_check', label: '同伴チェック', cat: 'group', time: '22:00', schedId: 'N_dohan_check', dynamic: false,
+      run: function () { return resendGroupText_(ST(), get('dohan_check').message || MSG_DOHAN_CHECK); } },
+    { id: 'okuri_summary', label: '送迎サマリー（22:30）', cat: 'group', time: '22:30', schedId: 'N_okuri_summary', dynamic: true,
+      run: function () { jobOkuriSummary(); return { sent: null, note: '送迎リストを最新で再送（スタッフ/黒服/ドライバー）' }; } },
+    { id: 'okuri_confirm', label: '送迎確定（23:30）', cat: 'group', time: '23:30', schedId: 'N_okuri_confirm', dynamic: true,
+      run: function () { jobOkuriConfirm(); return { sent: null, note: '送迎確定を最新で再送' }; } },
+    { id: 'seki_check', label: '各席チェック', cat: 'group', time: '23:45', schedId: 'N_seki_check', dynamic: false,
+      run: function () { return resendGroupText_(KF(), get('seki_check').message || '各席チェックを出してください'); } },
+    { id: 'shoumei', label: '照明消灯', cat: 'group', time: '00:15', schedId: 'N_shoumei', dynamic: false,
+      run: function () { return resendGroupText_(KF(), get('shoumei').message || '【24:30までに消灯】\n・外看板／外照明\n・2階／5階ラウンジ入口照明'); } },
+    { id: 'kinsen_go', label: '退勤号令（文面のみ・アテンド保持）', cat: 'group', time: '00:30', schedId: 'N_kinsen_go', dynamic: false,
+      run: function () {
+        // ⚠️定時版は resetAllAtendou_ を呼ぶが、再送では絶対に呼ばない（状態を壊さない）
+        return resendMerge_([
+          resendGroupText_(KF(), get('kinsen_go').message || MSG_KINSEN_GO),
+          resendGroupText_(ST(), get('kinsen_go').staffMessage || MSG_TAIKIN)
+        ]);
+      } },
+    { id: 'ieyas_url', label: 'IEYAS軍師URL', cat: 'group', time: '18:00', schedId: 'N_ieyas_url', dynamic: false,
+      run: function () { return resendGroupText_(KF(), get('ieyas_url').message || get('ieyas_url').defaultMsg); } },
+    { id: 'kaiten_check', label: '開店チェック誘導', cat: 'group', time: '18:30', schedId: 'N_kaiten_check', dynamic: false,
+      run: function () { return resendGroupText_(KF(), get('kaiten_check').message || get('kaiten_check').defaultMsg); } },
+    { id: 'driver_notice_1600', label: '16時ドライバー連絡', cat: 'group', time: '16:00', schedId: 'DRIVER_MODE_NOTICE_' + today, dynamic: true,
+      run: function () {
+        var t = (prop('OKURI_MODE') || 'driver') === 'jisha' ? '本日は送りお休みです。' : '本日もよろしくお願いします。\n送りが発生する場合は23:30に確定リストをお送りします🙏';
+        return resendGroupText_(DR(), t);
+      } },
+    { id: 'oshibori', label: 'おしぼり発注', cat: 'group', time: '00:50', schedId: 'N_oshibori', dynamic: false,
+      run: function () { return resendGroupText_(KF(), get('oshibori').message || '今日の閉店後おしぼりを通路に出して発注数に紙を置いておくこと'); } },
+    { id: 'stocktake_reminder', label: '棚卸しリマインド', cat: 'group', time: '月19:00', schedId: 'STOCKTAKE_REMINDER', dynamic: false,
+      run: function () { return resendGroupText_(KF(), '📋【棚卸しの日】\n本日は週次棚卸しの日です。軍師システムの「在庫発注管理」→「棚卸し」から実数の登録をお願いします。'); } },
+
+    // ---- 黒服・キャスト個別DM ----
+    { id: 'notice_reminder', label: 'お知らせ未読リマインド', cat: 'dm', time: '19:00', schedId: 'N_notice_reminder', dynamic: true,
+      run: function () { var r = sendNoticeUnreadReminders_() || {}; return { sent: (r.sent || 0), note: '未読者' + (r.staff || 0) + '名へ' + (r.sent || 0) + '通' + (r.failed ? ('（失敗' + r.failed + '）') : ''), skipped: !(r.staff) }; } },
+    { id: 'kuro_handover', label: '黒服 申し送りDM', cat: 'dm', time: '17:00', schedId: 'KURO_HANDOVER', dynamic: true,
+      run: function () {
+        var r = sendKurofukuHandoverDM_() || {};
+        if (r.skipped) return { sent: 0, note: 'スキップ（' + (r.skipped === 'empty' ? '申し送りが空' : '当日黒服なし') + '）', skipped: true };
+        return { sent: (r.sent || 0), note: (r.sent || 0) + '名へ申し送りDM' + ((r.skippedNoLine && r.skippedNoLine.length) ? ('（LINE未登録' + r.skippedNoLine.length + '名スキップ）') : '') };
+      } },
+    { id: 'req20', label: '20時出勤依頼の候補', cat: 'dm', time: '12:00', schedId: 'REQ20_1200', dynamic: true,
+      run: function () { var c = []; try { c = getReq20Candidates_() || []; } catch (e) {} if (!c.length) return { sent: 0, note: '該当者なし（無送信）', skipped: true }; sendReq20Candidates(); return { sent: 1, note: '20時候補' + c.length + '名を黒服へ' }; } },
+    { id: 'shift_open', label: '来週シフト号令', cat: 'dm', time: '月13:00', schedId: 'N_shift_open', dynamic: true,
+      run: function () { var r = broadcastShiftSubmitOpen_() || {}; return { sent: (r.sent || 0), note: (r.sent || 0) + '/' + (r.total || 0) + '名へ号令（' + (r.label || '') + '）' }; } },
+    { id: 'shift_remind', label: '来週シフト催促（木）', cat: 'dm', time: '木19:00', schedId: 'N_shift_remind', dynamic: true,
+      run: function () { var r = remindShiftSubmitMissing_(1) || {}; return { sent: (r.dmSent || 0), note: '未提出' + (r.missing || 0) + '名へ催促' + (r.dmSent || 0) + '通＋黒服一覧' }; } },
+    { id: 'shift_remind2', label: '来週シフト催促（金・最終）', cat: 'dm', time: '金19:00', schedId: 'N_shift_remind2', dynamic: true,
+      run: function () { var r = remindShiftSubmitMissing_(2) || {}; return { sent: (r.dmSent || 0), note: '未提出' + (r.missing || 0) + '名へ催促' + (r.dmSent || 0) + '通＋黒服一覧' }; } },
+
+    // ---- 監視アラート（条件を満たす時だけ送信＝実質「今の状態で再判定」） ----
+    { id: 'missing_shukkin', label: '未出勤リマインド（再判定）', cat: 'alert', time: '21:00', schedId: 'ST2100', dynamic: true,
+      run: function () { checkMissingShukkin(); return { sent: null, note: '未出勤を今の勤怠で再判定して送信（漏れなしなら無送信）' }; } },
+    { id: 'missing_taikin', label: '未退勤リマインド（再判定）', cat: 'alert', time: '01:00', schedId: 'ST0100', dynamic: true,
+      run: function () { checkMissingTaikin(); return { sent: null, note: '未退勤を今の勤怠で再判定して送信（漏れなしなら無送信）' }; } },
+    { id: 'rain_alert', label: '雨アラート（再判定）', cat: 'alert', time: '20:00〜', schedId: null, dynamic: true,
+      run: function () { checkRainAlert_(); return { sent: null, note: '降雨を再判定（15〜30分内に降り出す予報時のみ・通知済みは重複しない）' }; } }
+  ];
+}
+
+// 再送パネル用の一覧＋現在の配信枠。管理者専用。
+function getResendableNotices() {
+  var today = todayStr();
+  var ns = getNotifSettings_();
+  var reg = resendRegistry_(today, ns);
+  var list = reg.map(function (e) {
+    return {
+      id: e.id, label: e.label, cat: e.cat, time: e.time, dynamic: !!e.dynamic,
+      firedToday: e.schedId ? !!prop('SCHED_' + today + '_' + e.schedId) : null
+    };
+  });
+  return { ok: true, today: today, quota: lineQuotaStatus_(), list: list };
+}
+
+// 選択した通知を「今の最新データ」で再送する。ids=再送する通知idの配列。管理者専用。
+function resendNotices(ids) {
+  ids = (ids || []).filter(function (x) { return !!x; });
+  var out = { ok: true, time: nowStamp_(), quotaBefore: null, quotaAfter: null, results: [], note: '' };
+  if (!ids.length) { out.ok = false; out.note = '再送する通知が選択されていません'; return out; }
+
+  // ① 送信前に枠を確認。ここで止めないと 429 を「送った」と誤報告する
+  var q = lineQuotaStatus_();
+  out.quotaBefore = q;
+  if (q.ok && q.type === 'limited' && q.remain !== null && q.remain <= 0) {
+    out.ok = false;
+    out.note = '⛔ 配信枠が上限です（上限' + q.limit + ' / 使用' + q.used + ' / 残り' + q.remain + '）。1通も送っていません。枠が戻ってから再度お試しください。';
+    return out;
+  }
+
+  var today = todayStr();
+  var ns = getNotifSettings_();
+  var reg = resendRegistry_(today, ns);
+  var byId = {}; reg.forEach(function (e) { byId[e.id] = e; });
+
+  ids.forEach(function (id) {
+    var e = byId[id];
+    if (!e) { out.results.push({ id: id, label: id, status: 'error', detail: '未知の通知id' }); return; }
+    var r;
+    try { r = e.run() || {}; } catch (err) { out.results.push({ id: id, label: e.label, cat: e.cat, status: 'error', detail: '実行失敗: ' + err }); return; }
+    var status = r.failed ? 'failed' : (r.skipped ? 'skip' : 'sent');
+    out.results.push({ id: id, label: e.label, cat: e.cat, status: status, sent: (r.sent == null ? null : r.sent), detail: r.note || '' });
+  });
+
+  out.quotaAfter = lineQuotaStatus_();
+  var okc = out.results.filter(function (r) { return r.status === 'sent'; }).length;
+  var bad = out.results.filter(function (r) { return r.status === 'failed' || r.status === 'error'; }).length;
+  var used = (out.quotaBefore && out.quotaAfter && out.quotaBefore.used != null && out.quotaAfter.used != null) ? (out.quotaAfter.used - out.quotaBefore.used) : null;
+  out.note = (bad ? ('⚠️ ' + bad + '件失敗・') : '✅ ') + okc + '件を再送しました。' + (used != null ? ('（この操作で約' + used + '通消費）') : '');
+  return out;
 }
 
 // ============================================================
