@@ -2176,31 +2176,18 @@ function loadWine() {
 function renderWine(d) {
   var champagne = d.champagne || [];
   var wine = d.wine || [];
-  var grand = d.grand || { qty: 0, value: 0 };
-  var sub = d.subtotal || { champagne: { qty: 0, value: 0 }, wine: { qty: 0, value: 0 } };
 
   var h = '<div style="padding:14px">';
-
-  // 総額サマリー
-  h += '<div style="background:#0f1d18;border:1px solid #24503c;border-radius:12px;padding:16px;margin-bottom:16px">';
-  h += '<div style="font-size:11px;color:#7fb89a;margin-bottom:6px;letter-spacing:.5px">在庫総額（参考・売価ベース）</div>';
-  h += '<div style="font-size:26px;font-weight:800;color:#7fe0a0">' + yen(grand.value) + '</div>';
-  h += '<div style="font-size:12px;color:#8aabcc;margin-top:4px">合計 ' + grand.qty + '本'
-    + '（シャンパン ' + sub.champagne.qty + '本・ワイン ' + sub.wine.qty + '本）</div>';
-  h += '</div>';
-
-  h += wineCard_('🍾 シャンパン', champagne, sub.champagne);
-  h += wineCard_('🍷 ワイン', wine, sub.wine);
-
+  h += wineCard_('🍾 シャンパン', champagne);
+  h += wineCard_('🍷 ワイン', wine);
   h += '<div style="font-size:10px;color:#6a8ab0;text-align:center;padding:8px 4px;line-height:1.6">'
-    + '金額は店舗メニューの売価に基づく<b>参考値</b>です（会計はTRUSTが正）。<br>'
+    + '単価は店舗メニューの価格です（会計はTRUSTが正）。<br>'
     + 'メニューに紐づいた銘柄のみ表示・在庫0本は非表示。</div>';
   h += '</div>';
   setContent(h);
 }
 
-function wineCard_(title, list, subtotal) {
-  var st = subtotal || { qty: 0, value: 0 };
+function wineCard_(title, list) {
   var c = '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px;margin-bottom:14px">';
   c += '<div style="font-size:13px;font-weight:700;color:#7ab0f0;margin-bottom:10px;letter-spacing:.5px">' + title + '</div>';
   if (!list || list.length === 0) {
@@ -2210,14 +2197,9 @@ function wineCard_(title, list, subtotal) {
       c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828">';
       c += '<span style="flex:1;font-size:13px;color:#b0c8e8">' + esc(it.name) + wineTag_(it.menuCat) + '</span>';
       c += '<span style="font-size:13px;color:#a0c0e0;width:52px;text-align:right;flex-shrink:0">' + (it.qty || 0) + '本</span>';
-      c += '<span style="font-size:13px;font-weight:600;color:#c0d4f0;width:96px;text-align:right;flex-shrink:0">' + yen(it.value) + '</span>';
+      c += '<span style="font-size:13px;font-weight:600;color:#c0d4f0;width:96px;text-align:right;flex-shrink:0">' + yen(it.price) + '</span>';
       c += '</div>';
     });
-    c += '<div style="display:flex;align-items:center;padding:10px 0 2px;margin-top:2px;border-top:2px solid #24406a">';
-    c += '<span style="flex:1;font-size:12px;font-weight:700;color:#8aabcc">小計</span>';
-    c += '<span style="font-size:13px;color:#a0c0e0;width:52px;text-align:right;flex-shrink:0">' + st.qty + '本</span>';
-    c += '<span style="font-size:14px;font-weight:800;color:#7fe0a0;width:96px;text-align:right;flex-shrink:0">' + yen(st.value) + '</span>';
-    c += '</div>';
   }
   c += '</div>';
   return c;
