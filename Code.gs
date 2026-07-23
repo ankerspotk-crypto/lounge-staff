@@ -8177,10 +8177,11 @@ function handlePortalApi_(e) {
   }
 
   // シャンパン・ワイン在庫（登録スタッフ全員が閲覧・店全体の在庫なのでキャスト個別ではない＝viewAs不要）
-  //   在庫数(在庫発注マスタ) × メニュー売価(店舗メニュー) を品名で結合し、2F+5F を合算する。
+  //   在庫発注マスタの本数を品名で 2F+5F 合算し、店舗メニューの単価を添えて銘柄ごとに返す。
+  //   ⚠️ボス確定(2026-07-23)＝総額・小計は出さない／金額はメニュー単価のみ（本数×単価の評価額は出さない）。
   //   ⚠️シャンパン/ワインの判定は在庫側カテゴリ('ボトル'固定)ではなく、メニュー分類でしかできない
   //     ＝メニュー未紐づけのボトルはこの一覧に出ない（紐づけは黒服作業で進行中）。
-  //   ⚠️メニュー価格は参照専用（会計はTRUSTが正・14977-14978行）＝フロントで「参考(売価)」と明記する。
+  //   ⚠️メニュー価格は参照専用（会計はTRUSTが正・14977-14978行）。
   //   ※hairと同じく isAdmin && !viewAs の早期return より前に置く（管理者が代理未選択でも届かせる）。
   if (tab === 'wine') {
     const links = gunshiGetMenuLinks().byStock; // 在庫品名 → { category(メニュー分類), price, status }
@@ -8199,16 +8200,11 @@ function handlePortalApi_(e) {
     });
     const items = Object.keys(agg).map(k => agg[k])
       .filter(it => it.qty > 0)                    // 在庫ありのみ（0本は隠す）
-      .map(it => ({ name: it.name, qty: it.qty, price: it.price, value: it.qty * it.price, menuCat: it.menuCat, group: it.group }))
-      .sort((a, b) => b.value - a.value);
+      .map(it => ({ name: it.name, qty: it.qty, price: it.price, menuCat: it.menuCat, group: it.group }))
+      .sort((a, b) => b.price - a.price);          // 単価の高い順
     const champagne = items.filter(i => i.group === 'champagne');
     const wine = items.filter(i => i.group === 'wine');
-    const sub = list => ({ qty: list.reduce((a, i) => a + i.qty, 0), value: list.reduce((a, i) => a + i.value, 0) });
-    const cSub = sub(champagne), wSub = sub(wine);
-    return out({ ok: true, name, isAdmin,
-      champagne: champagne, wine: wine,
-      subtotal: { champagne: cSub, wine: wSub },
-      grand: { qty: cSub.qty + wSub.qty, value: cSub.value + wSub.value } });
+    return out({ ok: true, name, isAdmin, champagne: champagne, wine: wine });
   }
 
   // 管理者で viewAs 未指定 → キャスト一覧だけ返す
