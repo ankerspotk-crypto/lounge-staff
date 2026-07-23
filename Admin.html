@@ -1033,6 +1033,7 @@ function syncNotifInputs(){
   Object.keys(notif).forEach(function(k){
     var s=notif[k];
     var ti=document.getElementById('nt-'+k); if(ti)s.time=ti.value.trim();
+    var tg=document.getElementById('ntg-'+k); if(tg)s.target=tg.value; // 宛先ドロップダウンの選択を退避
     var mi=document.getElementById('nm-'+k); if(mi)s.message=mi.value;
     var si=document.getElementById('nsm-'+k); if(si){ var dv=String(s.defaultStaffMsg||''); s.staffMessage=(si.value.trim()===dv.trim()?'':si.value); }
     if(s.partsDef&&s.partsDef.length){
@@ -1050,6 +1051,27 @@ function notifBlk_(id,label,ph,val){
   var hint=(ph&&ph.length)?'<div style="font-size:10px;color:#8a8f98;margin:1px 0 4px">差し込み: '+ph.map(function(p){return '<code>{'+p.t+'}</code>'+(p.d?'＝'+esc(p.d):'');}).join(' ／ ')+'</div>':'';
   return '<div style="margin-top:9px"><div style="font-size:11px;font-weight:800;color:var(--accent);margin-bottom:2px">'+esc(label)+'</div>'+hint+'<textarea class="ta" id="'+id+'" rows="3" placeholder="（空欄で既定文に戻す）">'+esc(val)+'</textarea></div>';
 }
+/* 通知管理センター: 宛先の選択肢（内部運用グループのみ。予約=お客様向けグループは誤爆防止で出さない） */
+var NOTIF_TARGETS=[['kurofuku','黒服'],['staff','スタッフ'],['driver','ドライバー'],['haken','派遣']];
+function labelForTarget_(t){ var m={kurofuku:'黒服',staff:'スタッフ',driver:'ドライバー',haken:'派遣',yoyaku:'予約'}; return m[t]||t||'—'; }
+function notifTargetChange(k,v){ if(notif[k]) notif[k].target=v; }
+/* 宛先セル: group型で配線済み(wired)なら選択ドロップダウン、それ以外は種別に応じた固定表示 */
+function notifTargetCell_(k,s){
+  if(s.targetKind==='group' && s.wired){
+    var opts=NOTIF_TARGETS.map(function(t){ return '<option value="'+t[0]+'"'+(s.target===t[0]?' selected':'')+'>'+esc(t[1])+'</option>'; }).join('');
+    return '<span style="color:var(--accent);font-weight:700">📮 宛先</span> <select id="ntg-'+k+'" onchange="notifTargetChange(\''+jstr(k)+'\',this.value)" style="background:#1a1f2b;color:#e8eaed;border:1px solid #3a4150;border-radius:6px;padding:2px 6px;font-size:12px;font-weight:700">'+opts+'</select>';
+  }
+  var fixed={
+    group:'📮 '+esc(labelForTarget_(s.target))+'（宛先切替は準備中）',
+    multi:'📮 複数グループへ同報（切替不可）',
+    roster:'📮 対象名簿へ個別DM（退職・配信×は除外）',
+    person:'📮 対象者本人へDM',
+    admins:'📮 管理者へDM（固定）',
+    kiosk:'🖥 軍師の要対応へ（LINE送信なし）',
+    system:'⚙️ 送信なし・内部処理'
+  };
+  return '<span style="color:#8a8f98">'+(fixed[s.targetKind]||('📮 '+esc(s.group||'')))+'</span>';
+}
 function notifRow_(k){
   var s=notif[k]; var auto=(s.type==='auto'); var on=(s.enabled!==false);
   var tprefix=auto?'':'<span style="color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums;margin-right:9px">'+esc(s.time||'--:--')+'</span>';
@@ -1058,24 +1080,30 @@ function notifRow_(k){
   if(s.msgEditable) ed+='<textarea class="ta" id="nm-'+k+'" rows="2" placeholder="（既定文）">'+esc(s.message||'')+'</textarea>';
   if(s.staffMsgEditable){ var sv=(s.staffMessage!=null&&s.staffMessage!=='')?s.staffMessage:String(s.defaultStaffMsg||''); ed+=notifBlk_('nsm-'+k,'スタッフ向け文面',null,sv); }
   if(s.partsDef&&s.partsDef.length){ s.partsDef.forEach(function(d){ var ov=(s.parts&&s.parts[d.part]!=null&&s.parts[d.part]!=='')?s.parts[d.part]:String(d.def||''); ed+=notifBlk_('np-'+k+'-'+d.part,d.label||d.part,d.ph,ov); }); }
-  return '<div class="lrow" style="align-items:flex-start"><div class="main"><div class="nm">'+tprefix+esc(s.label||k)+'</div><div class="meta">'+esc(s.group||'')+(s.desc?' ・'+esc(s.desc):'')+'</div>'+ed+'</div>'+timeInput+'<span class="sw'+(on?' on':'')+'" id="ne-'+k+'" onclick="toggleNotif(\''+jstr(k)+'\')">'+(on?'ON':'OFF')+'</span></div>';
+  var sw=s.lockOn?'<span class="sw on" style="opacity:.55;cursor:default" title="停止不可（常時ON）">🔒 ON</span>':'<span class="sw'+(on?' on':'')+'" id="ne-'+k+'" onclick="toggleNotif(\''+jstr(k)+'\')">'+(on?'ON':'OFF')+'</span>';
+  return '<div class="lrow" style="align-items:flex-start"><div class="main"><div class="nm">'+tprefix+esc(s.label||k)+'</div><div class="meta">'+notifTargetCell_(k,s)+(s.desc?' <span style="color:#8a8f98">・'+esc(s.desc)+'</span>':'')+'</div>'+ed+'</div>'+timeInput+sw+'</div>';
 }
 function drawNotif(){
   var keys=Object.keys(notif);
   var onCount=keys.filter(function(k){return notif[k].enabled!==false;}).length, offCount=keys.length-onCount;
   function pass(k){ var en=notif[k].enabled!==false; return notifFilter==='all'||(notifFilter==='on'&&en)||(notifFilter==='off'&&!en); }
-  var timed=keys.filter(function(k){return notif[k].type!=='auto'&&pass(k);}).sort(function(a,b){return notifBizMin_(notif[a].time)-notifBizMin_(notif[b].time);});
-  var autos=keys.filter(function(k){return notif[k].type==='auto'&&pass(k);}).sort(function(a,b){return String(notif[a].label||a).localeCompare(String(notif[b].label||b));});
+  function catOf(k){ return notif[k].category || (notif[k].type==='auto'?'watch':'scheduled'); }
   function chip(f,label){ return '<div class="chip'+(notifFilter===f?' on':'')+'" onclick="setNotifFilter(\''+f+'\')">'+label+'</div>'; }
   var filters='<div class="chips" style="margin-bottom:12px">'+chip('all','すべて '+keys.length)+chip('on','🟢 ON '+onCount)+chip('off','⚪️ OFF '+offCount)+'</div>';
   var gh=function(t){return '<div style="font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.3px;margin:16px 2px 9px">'+t+'</div>';};
+  var CATS=[['scheduled','⏰ 定時通知（営業日の時系列）'],['watch','🔔 自動・監視（時刻/条件で発火）'],['event','⚡ イベント通知（発生ごと）'],['manual','✋ 手動配信']];
   var html='';
-  if(timed.length) html+=gh('⏰ 定時通知（営業日の時系列）')+timed.map(notifRow_).join('');
-  if(autos.length) html+=gh('⚙️ 自動トリガー（条件で発火）')+autos.map(notifRow_).join('');
+  CATS.forEach(function(c){
+    var ks=keys.filter(function(k){return catOf(k)===c[0]&&pass(k);});
+    if(c[0]==='scheduled') ks.sort(function(a,b){return notifBizMin_(notif[a].time)-notifBizMin_(notif[b].time);});
+    else ks.sort(function(a,b){return String(notif[a].label||a).localeCompare(String(notif[b].label||b));});
+    if(ks.length) html+=gh(c[1])+ks.map(notifRow_).join('');
+  });
   if(!html) html='<div class="empty">該当する通知はありません</div>';
-  setBody('<div class="toolbar"><span class="cnt">定時・自動通知の設定（変更後は「保存」）</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="saveNotif()">💾 保存</button></div>'+filters+html);
+  var note='<div style="font-size:11px;color:#8a8f98;background:#161b26;border:1px solid #2a3140;border-radius:8px;padding:8px 10px;margin-bottom:12px">📮 <b>宛先</b>を切り替えられるのは配線済みの通知だけ（ドロップダウン表示）。名簿DM・本人DM・管理者DMは対象が決まっているので固定です。<br>⚠️ 宛先を大きいグループへ変える／OFFをONにすると<b>LINE通数</b>が増えます。残り枠は「🔁 再送」タブで確認できます。</div>';
+  setBody('<div class="toolbar"><span class="cnt">全通知の一括管理（ON/OFF・宛先・時刻・文面）。変更後は「保存」</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="saveNotif()">💾 保存</button></div>'+note+filters+html);
 }
-function toggleNotif(k){ notif[k].enabled=!(notif[k].enabled!==false); var el=document.getElementById('ne-'+k); if(el){el.classList.toggle('on',notif[k].enabled); el.textContent=notif[k].enabled?'ON':'OFF';} if(notifFilter!=='all')drawNotif(); }
+function toggleNotif(k){ if(notif[k]&&notif[k].lockOn)return; notif[k].enabled=!(notif[k].enabled!==false); var el=document.getElementById('ne-'+k); if(el){el.classList.toggle('on',notif[k].enabled); el.textContent=notif[k].enabled?'ON':'OFF';} if(notifFilter!=='all')drawNotif(); }
 function saveNotif(){
   syncNotifInputs();
   api('saveNotifSettings',{settings:notif}).then(function(r){ res(r,'通知設定を保存しました'); });
@@ -2797,6 +2825,28 @@ function blMockDetail(uuid){
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
 function MOCKAPI(action,body){
+  if(action==='getNotifSettings'){ // 通知管理センターのローカルプレビュー（全UI分岐を網羅）
+    return {ok:true,settings:{
+      seki_check:{label:'各席チェック',time:'23:45',enabled:true,group:'黒服',category:'scheduled',targetKind:'group',target:'kurofuku',wired:true,msgEditable:true,message:''},
+      dohan_check:{label:'同伴チェック',time:'22:00',enabled:true,group:'スタッフ',category:'scheduled',targetKind:'group',target:'staff',wired:true,msgEditable:true,message:''},
+      lineup:{label:'本日出勤ラインナップ',time:'14:00',enabled:true,group:'スタッフ',category:'scheduled',targetKind:'group',target:'staff',wired:false},
+      kinsen_go:{label:'現金チェック（終了）+退勤',time:'00:30',enabled:true,group:'黒服・スタッフ',category:'scheduled',targetKind:'multi',target:null},
+      shift_open:{label:'📅 来週シフト号令（月）',time:'13:00',enabled:true,group:'キャスト・黒服',category:'scheduled',targetKind:'roster',target:null,desc:'月曜13:00に対象者へ号令'},
+      rain_alert:{label:'☂️ 雨アラート',type:'auto',enabled:true,group:'黒服',category:'watch',targetKind:'group',target:'kurofuku',wired:false,desc:'雨が降る前に黒服へ'},
+      aten_alert:{label:'⏱ アテンド延長アラート',type:'auto',enabled:true,group:'黒服',category:'watch',targetKind:'group',target:'kurofuku',wired:true,desc:'接客が設定時間超過で黒服へ'},
+      trust_sales_monthly:{label:'💴 月次TRUST売上の取込依頼',type:'auto',enabled:true,group:'管理者',category:'watch',targetKind:'admins',target:null,desc:'毎月1日に管理者へDM'},
+      bdayremind:{label:'🎂 誕生日バック未設定リマインド',type:'auto',enabled:true,group:'軍師',category:'watch',targetKind:'kiosk',target:null,desc:'月初、軍師の要対応へ'},
+      kuro_handover:{label:'📝 黒服 申し送りDM（17時）',type:'auto',enabled:true,group:'黒服',category:'watch',targetKind:'roster',target:null,desc:'17時に当日黒服へ個別DM'},
+      trust_cash_notice:{label:'💴 TRUST日次現金の参照通知',type:'auto',enabled:false,group:'黒服',category:'watch',targetKind:'group',target:'kurofuku',wired:false,desc:'既定OFF'},
+      driver_forward:{label:'🚗 ドライバー発言転送',type:'auto',enabled:true,group:'黒服',category:'event',targetKind:'group',target:'kurofuku',wired:true,desc:'ドライバー発言を黒服へ転送'},
+      cast_call:{label:'🔔 キャスト呼び出し',type:'auto',enabled:true,group:'黒服',category:'event',targetKind:'group',target:'kurofuku',wired:true,lockOn:true,desc:'サービス根幹＝停止不可・宛先のみ切替可'},
+      member_renewal_dm:{label:'💳 会費更新の来店確認',type:'auto',enabled:true,group:'黒服・担当',category:'event',targetKind:'multi',target:null,desc:'来店時に黒服＋担当へDM（うるさければOFF可）'},
+      mendan_submit:{label:'📋 面談表 提出の通知',type:'auto',enabled:true,group:'管理者',category:'event',targetKind:'admins',target:null,desc:'提出で管理者へDM（記録保存はOFFでも実行）'},
+      seat_share_alert:{label:'👥 相席・席未設定の通知',type:'auto',enabled:true,group:'黒服',category:'event',targetKind:'group',target:'kurofuku',lockOn:true,desc:'運用信号＝停止不可'},
+      kintai_detection:{label:'👤 出退勤自動検知',type:'auto',enabled:true,group:'システム',category:'event',targetKind:'system',target:null,desc:'出勤/退勤発言から自動記録'}
+    }};
+  }
+  if(action==='saveNotifSettings'){ return {ok:true}; }
   if(action==='getOkuriMeansStats'){
     var okm={'2026-07':{jisha:14,driver:9,unknown:2},'2026-06':{jisha:11,driver:16,unknown:0},'2026-05':{jisha:8,driver:20,unknown:5}};
     var tgt=String(body.ym||'2026-07')||'2026-07'; var o=okm[tgt]||{jisha:0,driver:0,unknown:0};
