@@ -457,7 +457,9 @@ function getTodayShiftRows_(today) {
     var rows = [];
     var pushRow = function (s, isHaken) {
       if (!s || !s.name) return;
-      var parts = String(s.shift || '').split(/[-〜~]/);
+      // 波ダッシュ問題対策：シフト表は全角チルダ ～(U+FF5E) を書くのに旧クラスは U+301C しか見ず
+      // out が空になって表示に「〜」だけ残っていた。parseShiftRange_ と同じ全ダッシュ/チルダを網羅する。
+      var parts = String(s.shift || '').split(/[-‐–—－~〜～]/);
       rows.push({
         name: String(s.name).trim(),
         origName: String(s.origName || s.name).trim(),

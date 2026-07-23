@@ -2613,7 +2613,7 @@ function shiftRow(s){
   var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
   var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
   var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>'+castBadge(s.name);
-  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span>'+attBadge(s)+'<span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
+  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+(s.out?('〜'+fmtTime(s.out)):'')+'</span>'+attBadge(s)+'<span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
 }
 /* 当日の源氏名を修正（体験の子など）。空欄で元名に戻す。keyは元のシート名。 */
 function setGenji(i){
