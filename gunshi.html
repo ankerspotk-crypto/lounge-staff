@@ -1042,6 +1042,24 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .bsv-label{position:absolute;background:rgba(20,22,30,.94);border:1px solid rgba(255,210,87,.5);border-radius:10px;padding:7px 12px;font-weight:800;color:#ffe9a8;pointer-events:none;max-width:74vw;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,.5);transition:left .55s cubic-bezier(.22,.7,.2,1),top .55s cubic-bezier(.22,.7,.2,1);}
 .bsv-label .bsv-lb2{display:block;font-weight:700;color:#cdd6ee;font-size:12px;margin-top:2px;}
 .bsv-empty{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(20,22,30,.92);border:1px solid #33364a;border-radius:10px;padding:8px 14px;color:#cdd6ee;font-size:13px;font-weight:700;pointer-events:none;text-align:center;max-width:88vw;}
+/* --- エヴァ風 照準（ズームせず棚を囲って指し示す） --- */
+.bsv-reticle{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+.bsv-ret-dim{fill:#04060c;fill-opacity:.44;}
+.bsv-ret-box{fill:none;stroke:#ffb020;stroke-width:1.4;stroke-opacity:.5;}
+.bsv-ret-br{fill:none;stroke:#ffb020;stroke-width:3.5;stroke-linecap:square;filter:drop-shadow(0 0 4px rgba(255,176,32,.75));}
+.bsv-ret-cx{stroke:#ffb020;stroke-width:2;stroke-opacity:.85;}
+.bsv-ret-lead{stroke:#ffb020;stroke-width:1.5;stroke-dasharray:5 4;opacity:.85;}
+.bsv-ret-node{fill:#ffb020;}
+.bsv-ret-lock{transform-box:fill-box;transform-origin:center;animation:bsvLock .42s cubic-bezier(.2,.9,.25,1);}
+.bsv-ret-ping{fill:none;stroke:#ffb020;stroke-width:2;transform-box:fill-box;transform-origin:center;animation:bsvPing 1.7s ease-out infinite;}
+@keyframes bsvLock{0%{opacity:0;transform:scale(1.22);}60%{opacity:1;}100%{opacity:1;transform:scale(1);}}
+@keyframes bsvPing{0%{opacity:.85;transform:scale(1);}70%,100%{opacity:0;transform:scale(1.35);}}
+.bsv-label.bsv-hud{background:linear-gradient(180deg,rgba(14,11,4,.95),rgba(9,7,3,.92));border:1px solid #ffb020;border-radius:0;padding:8px 12px;color:#ffd98a;clip-path:polygon(0 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%);font-family:ui-monospace,Menlo,Consolas,monospace;box-shadow:0 0 18px rgba(255,176,32,.22);}
+.bsv-hud-hd{font-size:10px;letter-spacing:.14em;color:#ff8a3b;font-weight:800;}
+.bsv-hud-hd span{color:#7dff9b;margin-left:5px;}
+.bsv-hud-code{font-size:23px;font-weight:900;color:#ffce6a;line-height:1.15;margin:2px 0;letter-spacing:.04em;}
+.bsv-hud-nm{font-size:14px;font-weight:800;color:#ffe9c2;}
+.bsv-hud-bt{font-size:12px;color:#e7c98f;margin-top:1px;}
 .bp-pos-go{cursor:pointer;}
 .bp-see{margin-left:4px;font-size:12px;opacity:.9;}
 </style>
@@ -1816,6 +1834,7 @@ function ensureShelfOverlay_(){
   ov.innerHTML='<div class="bsv-hd"><div class="bsv-t">🍶 ボトル棚</div><div class="bsv-floors" id="bsvFloors"></div><div class="bsv-x" onclick="closeBottleShelf()">閉じる ✕</div></div>'
     +'<div class="bsv-stage" id="bsvStage">'
     +  '<div class="bsv-layer" id="bsvLayer"><img class="bsv-img" id="bsvImg" alt=""></div>'
+    +  '<svg class="bsv-reticle" id="bsvReticle" xmlns="http://www.w3.org/2000/svg"></svg>'
     +  '<div class="bsv-hi" id="bsvHi" style="display:none"></div>'
     +  '<div class="bsv-label" id="bsvLabel" style="display:none"></div>'
     +  '<div class="bsv-empty" id="bsvEmpty" style="display:none"></div>'
@@ -1846,60 +1865,81 @@ function bsvZoneRect_(z,sh,S,tx,ty,LW,LH){
   var zx=z.x/sh.canvas.w, zy=z.y/sh.canvas.h, zw=z.w/sh.canvas.w, zh=z.h/sh.canvas.h;
   return {x:tx+S*zx*LW, y:ty+S*zy*LH, w:S*zw*LW, h:S*zh*LH, zx:zx,zy:zy,zw:zw,zh:zh};
 }
+// ズームしない＝画像は全景のまま。該当ゾーンをエヴァ風の照準枠で囲って引き出し線で指し示す。
 function bsvFocusTarget_(){
   var sh=BOTTLE_SHELVES[bsvState.floor], b=bsvState._base; if(!sh||!b)return;
-  var hi=document.getElementById('bsvHi'), lbl=document.getElementById('bsvLabel'), note=document.getElementById('bsvEmpty'), layer=document.getElementById('bsvLayer');
+  var svg=document.getElementById('bsvReticle'), lbl=document.getElementById('bsvLabel'), note=document.getElementById('bsvEmpty');
   var r=bsvResolveZone_(bsvState.pos||{floor:bsvState.floor,raw:''});
   if(!r || !r.zone){
-    hi.style.display='none';
+    svg.innerHTML='';
     note.style.display='block';
     note.textContent=(bsvState.floor==='2F') ? '2F（フロア全体・棚の細かい位置なし）'
       : '棚位置: '+((bsvState.pos&&bsvState.pos.raw)||'未登録')+'（全体表示）';
     if(bsvState.label||bsvState.bottle){
-      lbl.style.display='block';
-      lbl.innerHTML=(bsvState.label?esc(bsvState.label):'')+(bsvState.bottle?'<span class="bsv-lb2">🍶 '+esc(bsvState.bottle)+'</span>':'');
-      lbl.style.left='12px'; lbl.style.top=(b.SH-58)+'px';
+      lbl.className='bsv-label bsv-hud'; lbl.style.display='block'; lbl.style.width='210px';
+      lbl.innerHTML=bsvHudHtml_(bsvState.floor==='2F'?'2F 全体':'—', bsvState.label, bsvState.bottle);
+      lbl.style.left='16px'; lbl.style.top=(b.SH-108)+'px';
     } else lbl.style.display='none';
     return;
   }
   note.style.display='none';
-  var z=r.zone, SW=b.SW, SH=b.SH, LW=b.LW, LH=b.LH;
-  var zx=z.x/sh.canvas.w, zy=z.y/sh.canvas.h, zw=z.w/sh.canvas.w, zh=z.h/sh.canvas.h;
-  // 棚エリアは縦長になりがち＝素直な"はめ込み"だと寄れない。横幅主体で寄せ、縦は少しはみ出し許容。
-  var WFILL=0.72, VMAX=1.55, MINZOOM=1.15, SMAX=4.5;
-  var S=Math.min((SW*WFILL)/(zw*LW), (VMAX*SH)/(zh*LH));  // 横=幅の72%／縦=最大1.55画面
-  S=Math.max(S, b.ov.S*MINZOOM);                          // 必ず全景より寄る（ズーム感を担保）
-  S=Math.min(S, SMAX);
-  var cx=(zx+zw/2)*LW, cy=(zy+zh/2)*LH;
-  var tx=SW/2 - S*cx, ty=SH/2 - S*cy;
-  // 1) ハイライトを全景座標へ置いて可視化（transition無し）→ 2) レイヤと同時にズーム先へ（同期アニメ）
-  var ovR=bsvZoneRect_(z,sh,b.ov.S,b.ov.tx,b.ov.ty,LW,LH);
-  hi.style.transition='none'; bsvSetRect_(hi,ovR); hi.style.display='block'; void hi.offsetWidth; hi.style.transition='';
-  layer.style.transform='translate('+tx+'px,'+ty+'px) scale('+S+')';
-  var zR=bsvZoneRect_(z,sh,S,tx,ty,LW,LH); bsvSetRect_(hi,zR);
-  var slot=(bsvState.pos&&bsvState.pos.slot)?(' '+bsvState.pos.slot+'番'):'';
-  var l1=(bsvState.label?esc(bsvState.label)+'　':'')+esc((z.label||r.key||'')+slot);
-  var l2=bsvState.bottle?('🍶 '+esc(bsvState.bottle)):'';
-  lbl.style.display='block'; lbl.innerHTML=l1+(l2?'<span class="bsv-lb2">'+l2+'</span>':'');
-  var ly=zR.y-48; if(ly<8) ly=zR.y+zR.h+8; ly=Math.max(8, Math.min(ly, SH-56));
-  var lx=Math.max(8, Math.min(zR.x, SW-210));
+  var SW=b.SW, SH=b.SH;
+  var R=bsvZoneRect_(r.zone,sh,b.ov.S,b.ov.tx,b.ov.ty,b.LW,b.LH); // 全景座標での枠
+  var lw=210, lh=96, gap=28;
+  var toRight=(R.x+R.w/2) < SW/2;                                // 空いてる側にラベルを出す
+  var lx=toRight ? Math.min(R.x+R.w+gap, SW-lw-8) : Math.max(R.x-gap-lw, 8);
+  var ly=Math.max(8, Math.min(R.y+R.h/2-lh/2, SH-lh-8));
+  var lead={lax:(toRight?lx:lx+lw), lay:ly+lh/2, bx:(toRight?R.x:R.x+R.w), by:R.y+R.h/2};
+  svg.setAttribute('viewBox','0 0 '+SW+' '+SH);
+  svg.innerHTML=bsvReticleSvg_(R, lead, SW, SH);
+  lbl.className='bsv-label bsv-hud'; lbl.style.display='block'; lbl.style.width=lw+'px';
+  lbl.innerHTML=bsvHudHtml_(bsvHudCode_(r), bsvState.label, bsvState.bottle);
   lbl.style.left=lx+'px'; lbl.style.top=ly+'px';
 }
+function bsvHudCode_(r){
+  var raw=bsvState.pos&&bsvState.pos.raw;
+  if(raw && /[A-Za-zＡ-Ｚａ-ｚ]/.test(raw)) return bsvToHalf_(raw).toUpperCase().replace(/\s+/g,'');
+  return (bsvState.floor==='5F'?'5F-':'')+((r.zone&&r.zone.label)||r.key||'');
+}
+function bsvHudHtml_(code, name, bottle){
+  return '<div class="bsv-hud-hd">▶ 対象 <span>TARGET LOCK</span></div>'
+    +'<div class="bsv-hud-code">'+esc(code)+'</div>'
+    +(name?'<div class="bsv-hud-nm">'+esc(name)+'</div>':'')
+    +(bottle?'<div class="bsv-hud-bt">🍶 '+esc(bottle)+'</div>':'');
+}
+function bsvReticleSvg_(R, L, SWp, SHp){
+  var x=R.x,y=R.y,w=R.w,h=R.h, cx=x+w/2, cy=y+h/2;
+  var bl=Math.max(14, Math.min(Math.min(w,h)*0.34, 44));       // コーナーブラケットの長さ
+  function br(px,py,dx,dy){ return '<path d="M'+(px+dx*bl)+' '+py+' H'+px+' V'+(py+dy*bl)+'"/>'; }
+  var brackets=br(x,y,1,1)+br(x+w,y,-1,1)+br(x,y+h,1,-1)+br(x+w,y+h,-1,-1);
+  var dim='<path class="bsv-ret-dim" fill-rule="evenodd" d="M0 0 H'+SWp+' V'+SHp+' H0 Z M'+x+' '+y+' H'+(x+w)+' V'+(y+h)+' H'+x+' Z"/>';
+  var ping='<rect class="bsv-ret-ping" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="2"/>';
+  var lock='<g class="bsv-ret-lock">'
+    +'<rect class="bsv-ret-box" x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="2"/>'
+    +'<g class="bsv-ret-br">'+brackets+'</g>'
+    +'<line class="bsv-ret-cx" x1="'+(cx-12)+'" y1="'+cy+'" x2="'+(cx+12)+'" y2="'+cy+'"/>'
+    +'<line class="bsv-ret-cx" x1="'+cx+'" y1="'+(cy-12)+'" x2="'+cx+'" y2="'+(cy+12)+'"/>'
+    +'</g>';
+  var leader='<line class="bsv-ret-lead" x1="'+L.lax+'" y1="'+L.lay+'" x2="'+L.bx+'" y2="'+L.by+'"/>'
+    +'<circle class="bsv-ret-node" cx="'+L.bx+'" cy="'+L.by+'" r="4.5"/>';
+  return dim+ping+lock+leader;
+}
 function bsvShowFloorNote_(sh){
-  var hi=document.getElementById('bsvHi'), lbl=document.getElementById('bsvLabel'), note=document.getElementById('bsvEmpty');
-  hi.style.display='none'; lbl.style.display='none';
+  document.getElementById('bsvReticle').innerHTML='';
+  document.getElementById('bsvLabel').style.display='none';
+  var note=document.getElementById('bsvEmpty');
   note.style.display='block'; note.textContent=sh.label+'（全体表示）';
 }
 // 幾何はcanvas寸法で決まる＝画像ロード待ち不要。全て同期＝rAF非依存（タブ非アクティブでも確実）＆連打で競合しない。
 // 手順: transition無しで全景を置く→強制リフローで基準を確定→transitionを戻して対象へ＝ズームがアニメする。
 function bsvLoadFloor_(floor, doFocus){
   var sh=BOTTLE_SHELVES[floor]; if(!sh)return;
-  var img=document.getElementById('bsvImg'), layer=document.getElementById('bsvLayer');
+  var img=document.getElementById('bsvImg');
   if(img.getAttribute('src')!==sh.img) img.src=sh.img;
-  document.getElementById('bsvHi').style.display='none';
+  document.getElementById('bsvReticle').innerHTML='';
   document.getElementById('bsvLabel').style.display='none';
   document.getElementById('bsvEmpty').style.display='none';
-  layer.style.transition='none'; bsvApplyOverview_(sh); void layer.offsetWidth; layer.style.transition='';
+  bsvApplyOverview_(sh);                                   // 画像は常に全景（ズームしない）
   if(doFocus) bsvFocusTarget_(); else bsvShowFloorNote_(sh);
 }
 function bsvSwitchFloor_(floor){
@@ -1911,8 +1951,7 @@ function bsvOnResize_(){
   var ov=document.getElementById('bottleShelfOverlay');
   if(!ov || ov.style.display==='none')return;
   var sh=BOTTLE_SHELVES[bsvState.floor]; if(!sh)return;
-  var layer=document.getElementById('bsvLayer');
-  layer.style.transition='none'; bsvApplyOverview_(sh); void layer.offsetWidth; layer.style.transition='';
+  bsvApplyOverview_(sh);
   if(bsvState.pos && bsvState.pos.floor===bsvState.floor) bsvFocusTarget_(); else bsvShowFloorNote_(sh);
 }
 // メインAPI：bottlePos文字列 → パース → 該当フロア写真 → ゾーンへズーム
