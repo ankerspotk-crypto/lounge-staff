@@ -4799,15 +4799,20 @@ function registerStaff(userId, name, groupId) {
     sh = ss.insertSheet(STAFF_TAB);
     sh.appendRow(['userId', '名前', '役割', '管理者', '金庫', '軍師', 'グループ', '登録日']);
   }
+  // ⚠️列ドリフト対策：位置固定でG/H列へ書くと 基本バック/入店日 を潰す（実際に潰していた＝グループIDが基本バックに混入）。
+  //   登録日は必ず見出しで解決して書く。groupIdはLINE routingがScriptProperties(GROUP_*)で判定＝スタッフ行では未使用のため記録しない。
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  const regCol = headers.indexOf('登録日'); // 0-based / 無ければ -1
   const vals = sh.getDataRange().getValues();
   for (let i = 1; i < vals.length; i++) {
     if (String(vals[i][0]).trim() === userId) {
-      sh.getRange(i + 1, 2).setValue(name);                                  // 名前のみ更新（役割C・管理D等は保持）
-      sh.getRange(i + 1, 7, 1, 2).setValues([[groupId || '', new Date()]]);  // グループ/登録日は G,H 列
+      sh.getRange(i + 1, 2).setValue(name);                                  // 名前のみ更新（役割C等は保持）
+      if (regCol >= 0 && !vals[i][regCol]) sh.getRange(i + 1, regCol + 1).setValue(new Date()); // 登録日が空の時だけ記録（再登録で上書きしない）
       return;
     }
   }
-  sh.appendRow([userId, name, '', '', '', '', groupId || '', new Date()]);   // 新規: 役割(C)は空＝管理コンソールで設定
+  sh.appendRow([userId, name]);                                              // 新規: A,Bのみ。役割(C)以降は空＝コンソールで設定
+  if (regCol >= 0) sh.getRange(sh.getLastRow(), regCol + 1).setValue(new Date());
 }
 
 // シフト表（SHIFT_SHEET_ID）に氏名の行が既にあるかどうか
