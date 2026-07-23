@@ -9001,16 +9001,20 @@ function adminBulkOnboardComplete(userId, excludeNames) {
   return bulkOnboardComplete_(excludeNames || []);
 }
 
-// 管理者フラグ（スタッフマスタ D列）。ハードコード管理者は保護（変更不可）。
+// 管理者フラグ。⚠️旧実装はD列(index3)固定へ書いていたが、現行スキーマではD=登録日＝トグルが登録日を上書き破壊する事故になる。
+//   列ドリフト保護：専用見出し「管理者」列がある時だけ書く。無い＝現状は安全に何もしない（管理者はADMIN_NAMES_で判定）。ハードコード管理者は保護（変更不可）。
 function adminSetAdminFlag(userId, targetName, enabled) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
   if (ADMIN_NAMES_.includes(targetName)) return { ok: false, error: 'この管理者はコード保護のため変更できません' };
   const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  const admCol = headers.indexOf('管理者'); // 専用列が無ければ書かない（登録日/基本時給を潰す位置固定書きを廃止）
+  if (admCol < 0) return { ok: false, error: '管理者トグルは無効です（列レイアウト保護）。管理者は固定名簿（管理者/ひろき/りく）で判定されます。個別付与が必要なら列整備をご相談ください。' };
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).trim() === targetName) {
-      sh.getRange(i + 1, 4).setValue(enabled ? '○' : '');
+      sh.getRange(i + 1, admCol + 1).setValue(enabled ? '○' : '');
       return { ok: true, name: targetName, admin: enabled };
     }
   }
@@ -9023,16 +9027,20 @@ function adminSetSafeAdmin(userId, targetName, enabled) {
   return setSafeAdminTag_(targetName, enabled);
 }
 
-// 軍師ログイン権限フラグ（スタッフマスタ F列 ○/×）。管理者は常に可なので変更不可。
+// 軍師ログイン権限フラグ。⚠️旧実装はF列(index5)固定へ書いていたが、現行スキーマではF=基本時給＝トグルが基本時給を上書き破壊する事故になる。
+//   列ドリフト保護：専用見出し「軍師」列がある時だけ書く。無い＝現状は安全に何もしない（軍師ログインは役割で判定）。管理者は常に可なので変更不可。
 function adminSetGunshi(userId, targetName, enabled) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
   if (isAdmin_(targetName)) return { ok: false, error: '管理者は常に軍師ログイン可のため変更できません' };
   const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+  const gunCol = headers.indexOf('軍師'); // 専用列が無ければ書かない（基本時給を潰す位置固定書きを廃止）
+  if (gunCol < 0) return { ok: false, error: '軍師トグルは無効です（列レイアウト保護）。軍師ログインは役割（黒服社員/バイト）と管理者で判定されます。個別付与が必要なら列整備をご相談ください。' };
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][1]).trim() === targetName) {
-      sh.getRange(i + 1, 6).setValue(enabled ? '○' : '×'); // 明示 ○/× で保存
+      sh.getRange(i + 1, gunCol + 1).setValue(enabled ? '○' : '×'); // 明示 ○/× で保存
       return { ok: true, name: targetName, gunshi: enabled };
     }
   }
