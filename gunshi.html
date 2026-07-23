@@ -1243,10 +1243,14 @@ function rsvArrT(r){return /同伴/.test((r.cust||r.customer||'')+' '+(r.time||'
 // 測ると、深夜0〜6時に翌営業日を表示した際、未来の予約が「◯分超過」と誤検知される
 // （例: 00:09に翌7/20を表示すると20:30予約が219分超過と出た）。0〜5時の予約は営業日の翌暦日。
 function rsvLateMin(r){var hhmm=rsvArrT(r);var p=String(hhmm).split(':');var h=parseInt(p[0]);if(isNaN(h))return NaN;var mi=parseInt(p[1])||0;var d=parseKey(curDate);if(h<6)d.setDate(d.getDate()+1);d.setHours(h,mi,0,0);return Math.round((Date.now()-d.getTime())/60000);}
+// 退店予定（チェック予定）超過の分。rsvLateMinと同じくcurDate基準＝深夜0〜5時に翌営業日を表示しても誤発火しない。
+function rsvLeaveLateMin(r){var hhmm=String((r&&r.checkTime)||'');if(!/^\d{1,2}:\d{2}$/.test(hhmm))return NaN;var p=hhmm.split(':');var h=parseInt(p[0]);var mi=parseInt(p[1])||0;var d=parseKey(curDate);if(h<6)d.setDate(d.getDate()+1);d.setHours(h,mi,0,0);return Math.round((Date.now()-d.getTime())/60000);}
 function buildTimeline(){
   var t=[];
   // 今：来店予定を15分超過（確定・未来店）→ 担当に来店確認（赤点滅）
   RSV.forEach(function(r){ if(r.status!=='確定')return; var late=rsvLateMin(r); if(late>=15) t.push({g:0,kind:'now-crit',blink:true,ic:'🕘',time:'今',min:-1000-late,title:r.cust+'様 来店'+late+'分超過',sub:(r.tantou?'担当 '+r.tantou+' に来店確認':'担当に来店確認')+'（'+rsvArrT(r)+'予約）',act:'editRsv('+r.id+')'}); });
+  // 今：チェック予定を超過（来店済み・退店操作なし）→ 退店 or 延長の確認
+  RSV.forEach(function(r){ if(r.status!=='来店済み'||!r.checkTime)return; var ov=rsvLeaveLateMin(r); if(!isNaN(ov)&&ov>=5) t.push({g:1,kind:'now-leave',ic:'🕛',time:'今',min:-500-ov,title:r.cust+'様 チェック予定'+ov+'分超過',sub:'退店操作なし（'+esc(r.checkTime)+'予定）→ 退店 or 延長確認',act:'editRsv('+r.id+')'}); });
   // 今：超過
   SEATS.forEach(function(s,idx){
     var st=seatStatus(s);
@@ -1754,6 +1758,7 @@ function mapBox_(p,fl){
 var MAP_TAG={ng:'⚠',bday:'🎂',vip:'👑',bottle:'🍶'};
 function mapFlags_(s,idx){
   var f='';
+  if(s.leavePlan) f+='<span class="mflag f-next" title="空く予定 '+esc(s.leavePlan)+' 頃">🕛'+esc(s.leavePlan)+'</span>';
   if(s.nextRsv) f+='<span class="mflag f-next" title="次席予約 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様">🔜'+esc(rsvArrT(s.nextRsv))+'</span>';
   var rq=reqsForCust(s.cust);
   if(rq&&rq.length){
@@ -2039,8 +2044,24 @@ function occupantsHtml(s){
 }
 // 来店中の席に「次席予約(=後半に入った別の確定予約)」があれば予告する1行。席一覧の接客中/担当不在で共用（マップはmapFlags_の🔜）。
 function nextRsvLine_(s){
-  if(!s||!s.nextRsv) return '';
-  return '<div class="rsv-meta" style="color:#ffc98a;margin-top:3px">🔜 次席予約 '+esc(rsvArrT(s.nextRsv))+'〜 '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'<span style="color:#8aa8c8;font-weight:600">・担当 '+esc(s.nextRsv.tantou)+'</span>':'')+'</div>';
+  if(!s) return '';
+  var h='';
+  if(s.leavePlan) h+='<div class="rsv-meta" style="color:#ffc98a;margin-top:3px">🕛 空く予定 '+esc(s.leavePlan)+' 頃</div>';
+  if(s.nextRsv) h+='<div class="rsv-meta" style="color:#ffc98a;margin-top:3px">🔜 次席予約 '+esc(rsvArrT(s.nextRsv))+'〜 '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'<span style="color:#8aa8c8;font-weight:600">・担当 '+esc(s.nextRsv.tantou)+'</span>':'')+'</div>';
+  return h;
+}
+// 占有席に「空く予定」= その席に居る来店済み予約の退店予定時刻を付与（相席は最も遅い方＝最後に空く時刻）。
+// 席状態3台帳には手を入れず、既に読み込んだ RSV（退店予定つき）と席をテーブル名で突き合わせる低リスク方式。
+function annotateLeavePlan(){
+  if(!SEATS||!RSV) return;
+  var byCode={}; SEATS.forEach(function(s){ if(s)s.leavePlan=''; byCode[s.code]=s; });
+  RSV.forEach(function(r){
+    if(r.status!=='来店済み'||!r.checkTime||!r.table||r.table==='未定') return;
+    String(r.table).split('、').forEach(function(t){
+      var s=byCode[tblToCode(t.trim())]; if(!s) return;
+      if(!s.leavePlan || r.checkTime>s.leavePlan) s.leavePlan=r.checkTime;
+    });
+  });
 }
 /* ---- 席・キャストのタップ操作（付け回し / 移動） ---- */
 function onSeatClick(idx){
@@ -2280,6 +2301,7 @@ function rcardHtml(r,isNext){
   return '<div class="rcard'+(done?' done':'')+(r.status==='来店済み'?' arrived':'')+(r.status==='確定'?' waiting':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
     +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+mchip+statusBtns(r)+'</div>'
     +'<div class="rbadges">'+badges+'</div>'
+    +(r.checkTime?'<div class="rnote" style="color:#ffc98a">🕛 チェック予定 '+esc(r.checkTime)+'</div>':'')
     +(r.bottle?'<div class="rbottle">🍶 '+esc(r.bottle)+(r.bottlePos?' <b>📍'+esc(r.bottlePos)+'</b>':' <span class="rb-nopos">位置未登録</span>')+'</div>':'')
     +((r.subCustomers&&r.subCustomers.length)?'<div class="rnote" style="color:#66cc88">👥 同席 +'+r.subCustomers.length+'名: '+r.subCustomers.map(function(s){return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':'');}).join('、')+'</div>':'')
     +(r.nextMemo?'<div class="rnextmemo">📌 次回対応: '+esc(r.nextMemo)+'</div>':'')
@@ -2394,6 +2416,7 @@ function openSeat(idx){
     body=seatCustRowHtml(s,idx)
       +'<div class="kv"><span class="k">状態</span><span class="v" style="color:#ffbf6a">⚠ 担当不在（接客者なし）</span></div>'
       +(s.tantou?'<div class="kv"><span class="k">担当</span><span class="v">👤 '+esc(s.tantou)+' <span style="color:#ffbf6a;font-size:11px">⤴ 抜けて'+(s.awayMin!=null?s.awayMin:0)+'分</span></span></div>':'')
+      +(s.leavePlan?'<div class="kv"><span class="k">空く予定</span><span class="v" style="color:#ffc98a">🕛 '+esc(s.leavePlan)+' 頃</span></div>':'')
       +(s.nextRsv?'<div class="kv"><span class="k">次席予約</span><span class="v" style="color:#ffc98a">🔜 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'・担当 '+esc(s.nextRsv.tantou):'')+'</span></div>':'')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
@@ -2418,6 +2441,7 @@ function openSeat(idx){
       +'<div class="kv"><span class="k">担当</span><span class="v">'+tantouV+'</span></div>'
       +(s.dohan?'<div class="kv"><span class="k">同伴</span><span class="v">'+esc(s.dohan)+'</span></div>':'')
       +'<div class="kv"><span class="k">状態</span><span class="v">'+stLabel+'</span></div>'
+      +(s.leavePlan?'<div class="kv"><span class="k">空く予定</span><span class="v" style="color:#ffc98a">🕛 '+esc(s.leavePlan)+' 頃</span></div>':'')
       +(s.nextRsv?'<div class="kv"><span class="k">次席予約</span><span class="v" style="color:#ffc98a">🔜 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'・担当 '+esc(s.nextRsv.tantou):'')+'</span></div>':'')
       +((s.tags||[]).length?'<div class="kv"><span class="k">タグ</span><span class="v">'+s.tags.map(function(t){return TAGLABEL[t];}).join(' / ')+'</span></div>':'')
       +'<div style="font-size:11px;color:#8a9ac0;margin:14px 0 4px;font-weight:700">担当キャストと残り時間 <span style="color:#6a7a9a;font-weight:600">（タップで延長・抜く）</span></div>'
@@ -2738,8 +2762,8 @@ function quickRotate(toIdx,castName){
 }
 
 var addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1};
-function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false,subs:[],subMode:null,aggMode:'merge'};showSheet('➕ 予約を追加',addFormHtml(),false);}
-function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false,subs:(r.subCustomers||[]).filter(function(s){return s&&String(s.name||'').trim();}).map(function(s){return {name:s.name||'',memberId:s.memberId||'',pax:Number(s.pax)||1,tantouCast:s.tantouCast||'',splitSales:!!s.splitSales};}),subMode:null,aggMode:(r.aggMode==='split'?'split':'merge')};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
+function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false,subs:[],subMode:null,aggMode:'merge',checkTime:''};showSheet('➕ 予約を追加',addFormHtml(),false);}
+function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false,subs:(r.subCustomers||[]).filter(function(s){return s&&String(s.name||'').trim();}).map(function(s){return {name:s.name||'',memberId:s.memberId||'',pax:Number(s.pax)||1,tantouCast:s.tantouCast||'',splitSales:!!s.splitSales};}),subMode:null,aggMode:(r.aggMode==='split'?'split':'merge'),checkTime:(r.checkTime||'')};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
 function afToggle(kind,el,val,single){ if(single){var w=el.parentElement;w.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');});el.classList.add('sel');addSel[kind]=val;} else {el.classList.toggle('sel');var a=addSel[kind];var i=a.indexOf(val);if(i>=0)a.splice(i,1);else a.push(val);} }
 function addFormHtml(isEdit){
   var times=['同伴','20:00','20:30','21:00','21:30','22:00','22:30','23:00'];
@@ -2747,6 +2771,7 @@ function addFormHtml(isEdit){
   return afCustSection()
     +afSubSection()
     +'<div class="flabel">時間</div><div class="chips">'+times.map(function(t){return '<div class="chip'+(st===t?' sel':'')+'" onclick="afToggle(\'time\',this,\''+t+'\',1)">'+t+'</div>';}).join('')+'</div>'
+    +'<div class="flabel">チェック予定（退店予定・任意）</div><input type="time" id="af-checktime" class="finput" value="'+esc(addSel.checkTime||'')+'" style="max-width:170px">'
     +'<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(sp===String(n)?' sel':'')+'" onclick="afToggle(\'pax\',this,\''+n+'\',1)">'+n+'名</div>';}).join('')+'</div>'
     +'<div class="flabel">席（複数選択可）</div><div style="font-size:10px;color:#5a6a90;margin-bottom:4px">2F</div><div class="chips">'+TABLES_2F.map(function(t){return '<div class="chip'+(tb.indexOf('2F '+t)>=0?' sel':'')+'" onclick="afToggle(\'tables\',this,\'2F '+t+'\')">'+t+'</div>';}).join('')+'</div>'
     +'<div style="font-size:10px;color:#5a6a90;margin:8px 0 4px">5F</div><div class="chips">'+TABLES_5F.map(function(t){return '<div class="chip'+(tb.indexOf('5F '+t)>=0?' sel':'')+'" onclick="afToggle(\'tables\',this,\'5F '+t+'\')">'+t+'</div>';}).join('')+'</div>'
@@ -2774,7 +2799,7 @@ function afCustSection(){
   // 初期: どちらか選ぶ
   return '<div class="flabel">お客様</div><div class="af-choose"><button class="af-choose-btn" onclick="afCustMode(\'search\')"><span class="ic">🔍</span><span class="tx"><span class="t">既存のお客様</span><span class="s">検索して呼び出す</span></span></button><button class="af-choose-btn new" onclick="afCustMode(\'new\')"><span class="ic">✨</span><span class="tx"><span class="t">新規のお客様</span><span class="s">お名前を入力して登録</span></span></button></div>';
 }
-function afSyncInputs(){ var n=document.getElementById('af-note'); if(n)addSel.note=n.value; var nm=document.getElementById('af-name'); if(nm)addSel.name=nm.value; }
+function afSyncInputs(){ var n=document.getElementById('af-note'); if(n)addSel.note=n.value; var nm=document.getElementById('af-name'); if(nm)addSel.name=nm.value; var ct=document.getElementById('af-checktime'); if(ct)addSel.checkTime=ct.value; }
 function refreshAddForm(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML=addFormHtml(!!addSel.rowIdx); }
 function afCustMode(m){ afSyncInputs(); addSel.custMode=m; refreshAddForm(); if(m==='search'){ setTimeout(function(){var i=document.getElementById('af-cust-q'); if(i)i.focus();},30); } }
 function afCustReset(){ afSyncInputs(); addSel.name=''; addSel.member=''; addSel.newCust=false; addSel.custMode=null; refreshAddForm(); }
@@ -2868,7 +2893,7 @@ function submitRsv(){
   var name=(addSel.name||'').replace(/\s*様\s*$/,'').trim();
   if(!name){ alert(addSel.custMode==='search'?'お客様を検索して選択してください':'既存のお客様を検索するか、新規のお名前を入力してください'); return; }
   var note=addSel.note||'';
-  var payload={date:curDate,time:addSel.time,customer:name,memberId:addSel.member||'',pax:parseInt(addSel.pax)||1,table:addSel.tables.length?addSel.tables.join('、'):'未定',tantouCast:addSel.tantou.join('、'),dohanCast:addSel.dohan.join('、'),yoyakuCast:(addSel.yoyaku||[]).join('、'),youbou:note,status:'確定',subCustomers:(addSel.subs||[]).filter(function(s){return s&&String(s.name||'').trim();}),aggMode:((addSel.subs||[]).length?(addSel.aggMode||'merge'):'merge')};
+  var payload={date:curDate,time:addSel.time,customer:name,memberId:addSel.member||'',pax:parseInt(addSel.pax)||1,table:addSel.tables.length?addSel.tables.join('、'):'未定',tantouCast:addSel.tantou.join('、'),dohanCast:addSel.dohan.join('、'),yoyakuCast:(addSel.yoyaku||[]).join('、'),youbou:note,status:'確定',subCustomers:(addSel.subs||[]).filter(function(s){return s&&String(s.name||'').trim();}),aggMode:((addSel.subs||[]).length?(addSel.aggMode||'merge'):'merge'),checkTime:addSel.checkTime||''};
   if(!IS_GAS){ toast('（ローカル）予約を保存'); closeSheet(); return; }
   if(addSel._busy) return; addSel._busy=true;            // 二重送信ロック（連打で人数分入るのを防止）
   var btn=document.querySelector('#sheetBody .savebtn'); if(btn){ btn.textContent='保存中…'; btn.style.opacity='.55'; btn.style.pointerEvents='none'; }
@@ -5038,7 +5063,7 @@ function adaptHall(data){
   Object.keys(comb).forEach(function(pc){var pi=byCode[pc]; if(pi==null)return; (comb[pc]||[]).forEach(function(oc){var oi=byCode[oc]; if(oi==null)return; (arr[pi].mergeWith=arr[pi].mergeWith||[]).push(oi); arr[oi].mergedTo=pi;});});
   return arr;
 }
-function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[]};});}
+function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, checkTime:r.checkTime||'', cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[]};});}
 // 同じお客様の予約が複数テーブルに跨る場合、その席同士を1組(結合表示)にまとめる。
 // 手動結合が既にある席は尊重してスキップ。キャンセル/退店済み・未定は対象外。
 function applyRsvGrouping(){
@@ -5072,6 +5097,7 @@ function loadAll(){
   ]).then(function(r){
     SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[]; CASTKUBUN=(r[8]&&typeof r[8]==='object')?r[8]:CASTKUBUN;
     applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
+    annotateLeavePlan(); // 占有席に「空く予定」(=在席組の退店予定時刻)を付与
     BOOTED=true; renderAll();
     if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });

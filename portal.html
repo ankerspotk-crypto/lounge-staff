@@ -1171,6 +1171,7 @@ function renderHomeRsv(list){
       +   '<div style="font-size:14px;color:#e8f0ff">' + esc(r.customer) + '様 <span style="color:#8aabcc;font-size:12px">' + r.pax + '名</span>'
       +     (mineFlag ? ' <span style="font-size:10px;font-weight:700;color:#0a1f2e;background:#7ab0f0;padding:1px 6px;border-radius:10px">自分</span>' : '') + '</div>'
       +   '<div style="font-size:12px;color:#8aabcc;margin-top:2px">' + (r.table ? esc(r.table) + ' ・ ' : '') + tantou + '</div>'
+      +   (r.checkTime ? '<div style="font-size:12px;color:#d8b26a;margin-top:2px">🕛 チェック予定 ' + esc(r.checkTime) + '</div>' : '')
       +   (r.youbou ? '<div style="font-size:12px;color:#d8b26a;margin-top:4px;line-height:1.45;background:#1a2438;border:1px solid #33406a;border-radius:8px;padding:6px 9px">📝 ' + esc(r.youbou) + '</div>' : '')
       + '</div>'
       + '<div style="font-size:11px;color:' + stColor + ';white-space:nowrap;align-self:center">' + stTxt + '</div>'
@@ -4011,6 +4012,7 @@ var staffName = '';         // GASから取得したスタッフ名（予約入�
 var yoyakuRsvDate = '';       // 予約追加カレンダー選択日 YYYY-MM-DD
 var yoyakuRsvCalMonth = '';   // 予約追加カレンダー表示月 YYYY-MM
 var yoyakuRsvTime = '';       // 予約追加時間選択 HH:MM
+var yoyakuCheckTime = '';     // 退店予定（チェック予定）HH:MM・任意
 var yoyakuRsvCustManual = ''; // 再描画時に保持: お客様名
 var yoyakuRsvYoubou = '';    // 再描画時に保持: 要望・備考
 var yoyakuRsvPax = 0;        // 再描画時に保持: 人数（0=デフォルト1名）
@@ -4059,7 +4061,7 @@ function loadYoyaku() {
       yoyakuCastList = d.casts || [];
       yoyakuMemberFeeMap = d.memberFeeMap || {};
       yoyakuCustMode = '';
-      yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
+      yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = ''; yoyakuCheckTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
       yoyakuRsvSubs = []; yoyakuSubSearchOpen = false; yoyakuRsvAggMode = 'merge';
       yoyakuEditRsv = null;
@@ -4510,6 +4512,8 @@ function renderYoyakuAdd() {
     + renderRsvCal()
     + '<div class="yform-label">時間</div>'
     + renderRsvTimeSel()
+    + '<div class="yform-label">チェック予定<span style="font-size:10px;color:#6a8ab0;margin-left:6px">（退店予定・任意）</span></div>'
+    + '<input type="time" class="yform-input" id="yrsv-checktime" value="'+esc(yoyakuCheckTime||'')+'" style="margin-bottom:12px;max-width:180px" onchange="yoyakuCheckTime=this.value">'
     + '<div class="yform-label">人数</div>'
     + (function(){
         var curPax = yoyakuRsvPax || 1;
@@ -4850,6 +4854,7 @@ function yoyakuOpenEdit(rowIdx) {
   yoyakuRsvDate = rsv.date;
   yoyakuRsvCalMonth = rsv.date.slice(0, 7);
   yoyakuRsvTime = rsv.time || '20:00';
+  yoyakuCheckTime = rsv.checkTime || '';
   yoyakuRsvCustManual = rsv.customer || '';
   yoyakuRsvYoubou = rsv.youbou || '';
   yoyakuRsvPax = rsv.pax || 1;
@@ -4924,6 +4929,7 @@ function yoyakuCancelEdit() {
   yoyakuRsvDate = '';
   yoyakuRsvCalMonth = '';
   yoyakuRsvTime = '';
+  yoyakuCheckTime = '';
   yoyakuRsvCustManual = '';
   yoyakuRsvYoubou = '';
   yoyakuRsvPax = 0;
@@ -5059,6 +5065,7 @@ function yoyakuSubmitRsv() {
     userId: userId,
     date: yoyakuRsvDate,
     time: yoyakuRsvTime,
+    checkTime: (document.getElementById('yrsv-checktime') ? document.getElementById('yrsv-checktime').value : (yoyakuCheckTime || '')),
     customer: custName,
     memberId: yoyakuSelectedCust ? (yoyakuSelectedCust.no || '') : (yoyakuEditRsv ? (yoyakuEditRsv.memberId || '') : ''),
     pax: rsvPax,
@@ -5089,7 +5096,7 @@ function yoyakuSubmitRsv() {
       }
       yoyakuSelectedCust = null;
       yoyakuCustMode = '';
-      yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = '';
+      yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = ''; yoyakuCheckTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
       yoyakuRsvMode = '本予約';
       yoyakuRsvSubs = []; yoyakuSubSearchOpen = false; yoyakuRsvAggMode = 'merge';
