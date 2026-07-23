@@ -902,6 +902,7 @@ function handleApiRequest_(body) {
       }
       const o = {};
       if (s.enabled != null) o.enabled = s.enabled;
+      if (s.target != null) o.target = s.target; // 通知管理センター: 宛先グループの付け替え（group型のみ意味を持つ）
       if (s.time != null && s.time !== '') o.time = s.time;
       if (s.days != null) o.days = s.days;
       if (s.message) o.message = s.message;
@@ -1370,10 +1371,42 @@ function getNotifSettings_() {
     shift_open:         { label: '📅 来週シフト号令（月）',   time: '13:00', enabled: true, group: 'キャスト・黒服', days: [1], msgEditable: false, defaultMsg: null, desc: '毎週月曜13:00に対象者（キャスト/体験/黒服）へ来週分シフトの提出を号令（締切=木曜）。店休日でも配信' },
     shift_remind:       { label: '⏰ 来週シフト催促（木）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [4], msgEditable: false, defaultMsg: null, desc: '毎週木曜19:00に来週分が未提出＆来週なし未報告の人へ個別DM＋黒服グループへ提出状況一覧' },
     shift_remind2:      { label: '⏰ 来週シフト催促（金）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [5], msgEditable: false, defaultMsg: null, desc: '毎週金曜19:00にまだ未提出の人へ再度個別DM＋黒服グループへ一覧（無反応防止の追撃）' },
+    // ── Phase2: 監視・催促（時刻はハードコード＝ここではON/OFF管理・group型は宛先も切替可） ──
+    trust_sales_monthly:{ label: '💴 月次TRUST売上の取込依頼', type: 'auto', enabled: true, group: '管理者', desc: '毎月1日11時台に管理者へDM（先月分の取込催促）' },
+    trust_relay_nightly:{ label: '🌙 夜間TRUST取得の依頼',     type: 'auto', enabled: true, group: '管理者', desc: '毎営業後1時台に管理者へDM（当日分の取込催促）' },
+    kurofuku_tasks_1800:{ label: '📋 黒服タスクまとめ送信（18時）', type: 'auto', enabled: true, group: '黒服', desc: '18時に当日追加の黒服タスクをまとめて送信' },
+    bdayremind:         { label: '🎂 誕生日バック未設定リマインド', type: 'auto', enabled: true, group: '軍師', desc: '月初、誕生日バック未設定のキャストを軍師の要対応へ（LINE送信なし）' },
+    kuro_handover:      { label: '📝 黒服 申し送りDM（17時）',  type: 'auto', enabled: true, group: '黒服', desc: '17時に当日出勤の黒服へ申し送りを個別DM（中身が空ならスキップ）' },
+    req20_candidates:   { label: '🕗 20時出勤候補の送信（12時）', type: 'auto', enabled: true, group: '黒服', desc: '12時に本日20:00シフト・同伴なしの候補を黒服へ' },
+    check_proposal:     { label: '🗒 送りチェック割当の提案（23:40）', type: 'auto', enabled: true, group: '黒服', desc: '23:40頃にチェック割当の提案を黒服へ' },
+    aten_alert:         { label: '⏱ アテンド延長アラート',     type: 'auto', enabled: true, group: '黒服', desc: '接客が設定時間を超えたら黒服へ（20:00〜00:30・毎分監視）' },
+    late_reservation:   { label: '🕘 来店30分超過の確認',      type: 'auto', enabled: true, group: '黒服', desc: '予約時刻を過ぎても未来店なら黒服へ確認を促す（毎分監視）' },
+    // ── Phase3: イベント通知（発生ごと）。lockOn=停止不可(常時ON)で可視化のみ・宛先だけ切替可なものもある ──
+    cast_call:          { label: '🔔 キャスト呼び出し',        type: 'auto', enabled: true, group: '黒服',       desc: 'ヘルプ/炭酸/おしぼり等の呼び出しを黒服へ。サービス根幹のため停止不可＝宛先のみ切替可' },
+    member_renewal_dm:  { label: '💳 会費更新の来店確認',      type: 'auto', enabled: true, group: '黒服・担当', desc: '会員来店時に会費更新があれば黒服＋担当キャストへDM（頻繁でうるさければOFF可）' },
+    mendan_submit:      { label: '📋 面談表 提出の通知',       type: 'auto', enabled: true, group: '管理者',     desc: '応募者が面談表を提出したら管理者へDM（サマリ＋写真）。※記録保存はOFFでも必ず実行' },
+    seat_share_alert:   { label: '👥 相席・席未設定の通知',    type: 'auto', enabled: true, group: '黒服',       desc: '相席検知や席未設定を黒服へ（運用信号＝停止不可）' },
+    shift_confirmed_dm: { label: '📅 シフト確定の通知',        type: 'auto', enabled: true, group: '黒服',       desc: '管理者がシフトを確定したら黒服各人へ個別DM（運用信号＝停止不可）' },
+    shift_consult:      { label: '💬 当日相談（家康くん）',    type: 'auto', enabled: true, group: '黒服・本人', desc: '当日の休み/時間相談を黒服へ報告・承認/却下を本人へ（運用信号＝停止不可）' },
+    payroll_receipt:    { label: '🧾 給与受領の報告',          type: 'auto', enabled: true, group: '黒服',       desc: '本人の給与受領報告を黒服へ（運用信号＝停止不可）' },
+    notice_post_dm:     { label: '📢 お知らせ投稿のDM',        type: 'auto', enabled: true, group: '名簿',       desc: 'お知らせ掲示板に投稿すると対象者へ個別DM（運用信号＝停止不可）' },
+    staff_reg_done:     { label: '🎉 スタッフ登録完了の通知',  type: 'auto', enabled: true, group: '本人',       desc: 'スタッフ登録が完了したら本人へDM（運用信号＝停止不可）' },
+    kiosk_ops_report:   { label: '🏪 軍師操作の各種報告',      type: 'auto', enabled: true, group: '黒服',       desc: '開店/閉店/金庫/発注/棚卸し等の軍師操作を黒服へ報告（複数・運用信号＝停止不可）' },
   };
   // 動的通知に編集可能ブロック定義（partsDef）を付与。既定文の唯一の正はここ。
   const PARTS = notifPartsDefs_();
   Object.keys(PARTS).forEach(k => { if (defaults[k]) defaults[k].partsDef = PARTS[k]; });
+  // 通知管理センター: 各通知に 分類(category)・宛先種別(targetKind)・既定宛先(target) を付与。
+  // これは一覧表示と宛先リゾルバ notifTarget_ 用のメタ。送信挙動は各送信箇所へ配線するまで一切変わらない（純増）。
+  const META = notifMetaDefs_();
+  Object.keys(defaults).forEach(k => {
+    const m = META[k] || {};
+    defaults[k].category   = m.category   || (defaults[k].type === 'auto' ? 'watch' : 'scheduled');
+    defaults[k].targetKind = m.targetKind || 'group';
+    defaults[k].wired      = !!m.wired;  // 実配信が notifTarget_ に配線済み＝UIで宛先ドロップダウンを出してよい
+    defaults[k].lockOn     = !!m.lockOn; // 停止不可（常時ON）。運用ワークフロー信号＝UIはトグルを錠前表示
+    if (defaults[k].target == null) defaults[k].target = (m.target != null ? m.target : null);
+  });
   const saved = prop('NOTIF_SETTINGS');
   if (!saved) return defaults;
   try {
@@ -1391,10 +1424,74 @@ function getNotifSettings_() {
         if (!parsed[k].days) parsed[k].days = defaults[k].days;
         parsed[k].type = defaults[k].type;
         parsed[k].desc = defaults[k].desc;
+        parsed[k].group      = defaults[k].group;      // 表示ラベル＝常にシステム定義値（従来: 未再注入で初回保存後に宛先表示が空になるバグを解消）
+        parsed[k].category   = defaults[k].category;   // 常にシステム定義値
+        parsed[k].targetKind = defaults[k].targetKind; // 常にシステム定義値
+        parsed[k].wired      = defaults[k].wired;       // 常にシステム定義値
+        parsed[k].lockOn     = defaults[k].lockOn;       // 常にシステム定義値
+        if (parsed[k].lockOn) parsed[k].enabled = true;  // 停止不可＝保存値に関わらず常にON（誤保存の保険）
+        if (parsed[k].target == null) parsed[k].target = defaults[k].target; // 宛先は保存値を優先・無ければ既定
       }
     });
     return parsed;
   } catch(e) { return defaults; }
+}
+
+// 通知管理センターの「分類・宛先メタ」の唯一の正（宛先リゾルバ notifTarget_ と一覧UIが参照）。
+// category   : 一覧の並び。scheduled=定時 / watch=監視 / event=イベント起因 / manual=手動
+// targetKind : group=宛先グループ切替可 / multi=複数グループへ同報（切替不可・固定表示）/ roster=名簿抽出DM（固定）/ person=特定個人DM（固定）/ admins=管理者DM（固定）/ system=送信なし内部処理
+// target     : targetKind==='group' の既定グループキー（kurofuku/staff/driver/haken/yoyaku）
+// ⚠️ target を notifTarget_ で各送信箇所へ配線する時は、実際の push_(prop('GROUP_*')) と必ず照合すること
+//    （表示ラベル group と実配信がズレている通知が実在＝例: missing_* は表示「黒服」だが実配信はスタッフの疑い。配線時に確定）。
+function notifMetaDefs_() {
+  return {
+    ieyas_url:          { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
+    kaiten_check:       { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
+    lineup:             { category:'scheduled', targetKind:'group',  target:'staff' },   // 送信は sendDailyLineup 内＝未配線
+    kinsen_mae:         { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
+    soganbansen:        { category:'scheduled', targetKind:'multi',  target:null },      // 黒服(漏れ)＋スタッフ(挨拶)の同報
+    dohan_check:        { category:'scheduled', targetKind:'group',  target:'staff', wired:true },
+    okuri_summary:      { category:'scheduled', targetKind:'multi',  target:null },      // スタッフ＋黒服＋ドライバー
+    okuri_confirm:      { category:'scheduled', targetKind:'multi',  target:null },      // 黒服＋ドライバー
+    seki_check:         { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
+    shoumei:            { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
+    kinsen_go:          { category:'scheduled', targetKind:'multi',  target:null },      // 黒服＋スタッフ（+退勤リセット副作用あり＝地雷1）
+    oshibori:           { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
+    notice_reminder:    { category:'scheduled', targetKind:'roster', target:null },      // 未読者名簿へ個別DM
+    shift_open:         { category:'scheduled', targetKind:'roster', target:null },
+    shift_remind:       { category:'scheduled', targetKind:'roster', target:null },
+    shift_remind2:      { category:'scheduled', targetKind:'roster', target:null },
+    rain_alert:         { category:'watch',     targetKind:'group',  target:'kurofuku' },
+    driver_forward:     { category:'event',     targetKind:'group',  target:'kurofuku', wired:true },
+    kintai_detection:   { category:'event',     targetKind:'system', target:null },      // 出退勤の自動記録＝LINE送信なし
+    missing_shukkin:    { category:'watch',     targetKind:'group',  target:'staff' },   // ⚠️配線時に実配信を照合
+    missing_taikin:     { category:'watch',     targetKind:'group',  target:'staff' },   // ⚠️配線時に実配信を照合
+    early_taikin:       { category:'watch',     targetKind:'group',  target:'kurofuku' },
+    driver_notice_1600: { category:'watch',     targetKind:'group',  target:'driver' },
+    stocktake_reminder: { category:'watch',     targetKind:'group',  target:'kurofuku' },
+    trust_cash_notice:  { category:'watch',     targetKind:'group',  target:'kurofuku' },
+    // ── Phase2 ──
+    trust_sales_monthly:{ category:'watch',     targetKind:'admins', target:null },
+    trust_relay_nightly:{ category:'watch',     targetKind:'admins', target:null },
+    kurofuku_tasks_1800:{ category:'watch',     targetKind:'group',  target:'kurofuku' },     // 送信は関数内＝宛先は読取専用
+    bdayremind:         { category:'watch',     targetKind:'kiosk',  target:null },
+    kuro_handover:      { category:'watch',     targetKind:'roster', target:null },
+    req20_candidates:   { category:'watch',     targetKind:'group',  target:'kurofuku' },     // 送信は関数内＝宛先は読取専用
+    check_proposal:     { category:'watch',     targetKind:'group',  target:'kurofuku' },     // 送信は関数内＝宛先は読取専用
+    aten_alert:         { category:'watch',     targetKind:'group',  target:'kurofuku', wired:true },
+    late_reservation:   { category:'watch',     targetKind:'group',  target:'kurofuku', wired:true },
+    // ── Phase3（event）。lockOn=停止不可(常時ON・可視化のみ)。cast_callは宛先だけ切替可 ──
+    cast_call:          { category:'event',     targetKind:'group',  target:'kurofuku', wired:true, lockOn:true },
+    member_renewal_dm:  { category:'event',     targetKind:'multi',  target:null },
+    mendan_submit:      { category:'event',     targetKind:'admins', target:null },
+    seat_share_alert:   { category:'event',     targetKind:'group',  target:'kurofuku', lockOn:true },
+    shift_confirmed_dm: { category:'event',     targetKind:'person', target:null, lockOn:true },
+    shift_consult:      { category:'event',     targetKind:'multi',  target:null, lockOn:true },
+    payroll_receipt:    { category:'event',     targetKind:'group',  target:'kurofuku', lockOn:true },
+    notice_post_dm:     { category:'event',     targetKind:'roster', target:null, lockOn:true },
+    staff_reg_done:     { category:'event',     targetKind:'person', target:null, lockOn:true },
+    kiosk_ops_report:   { category:'event',     targetKind:'group',  target:'kurofuku', lockOn:true },
+  };
 }
 
 // 動的通知（本文を実データで生成する系）の「編集可能な固定文ブロック」定義。
@@ -3789,8 +3886,9 @@ function handleDriver(event, text, userId) {
     setProp('DRIVER_CONFIRMED_' + today, '1');
   }
   // ドライバーからのメッセージはすべて黒服グループに転送
-  if (getNotifSettings_()['driver_forward']?.enabled !== false) {
-    push_(prop('GROUP_KUROFUKU'), '🚗【ドライバー】' + text);
+  var ndf_ = getNotifSettings_();
+  if (ndf_['driver_forward']?.enabled !== false) {
+    push_(notifTarget_('driver_forward', ndf_, 'GROUP_KUROFUKU'), '🚗【ドライバー】' + text);
   }
 }
 
@@ -4548,7 +4646,8 @@ function checkAtendou() {
   const active = getActiveAtendou(today);
   if (active.length === 0) return;
   const defMins = Number(prop('ATEN_MINS') || 30);
-  const KF = prop('GROUP_KUROFUKU');
+  const KF = notifTarget_('aten_alert', null, 'GROUP_KUROFUKU'); // 通知管理センター: 宛先切替可
+
   if (!KF) return;
   const sh = getAtenSheet_();
   active.forEach(r => {
@@ -5863,8 +5962,8 @@ function scheduledJobs() {
 
   // 毎分実行（日曜も継続）
   checkReminders();
-  checkAtendou();
-  checkLateReservations();
+  if (notifEnabled_('aten_alert', ns_)) checkAtendou();
+  if (notifEnabled_('late_reservation', ns_)) checkLateReservations();
   checkLeaveReservations();
   checkPendingStaffRegistrations_();
 
@@ -5903,7 +6002,7 @@ function scheduledJobs() {
 
   // おしぼり発注: デフォルト木(4)・日(7)、days設定で制御
   notif_('oshibori', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['oshibori'].message || '今日の閉店後おしぼりを通路に出して発注数に紙を置いておくこと');
+    push_(notifTarget_('oshibori', ns_, 'GROUP_KUROFUKU'), ns_['oshibori'].message || '今日の閉店後おしぼりを通路に出して発注数に紙を置いておくこと');
   });
 
   // 週次棚卸しリマインド: 毎週月曜19:00（消耗品＋賞味期限管理品が対象）
@@ -5915,7 +6014,7 @@ function scheduledJobs() {
 
   // 月初1回(毎月1日 11:00台): 先月のTRUST売上を取り込むよう管理者へDM（給与を締める前に）。店休判定より前＝1日が日曜でも送る
   if (Number(Utilities.formatDate(new Date(), TZ, 'd')) === 1 && hhmm >= '11:00' && hhmm <= '11:09') {
-    once('TRUST_SALES_MONTHLY', () => {
+    if (notifEnabled_('trust_sales_monthly', ns_)) once('TRUST_SALES_MONTHLY', () => {
       var lm = mkShift_(Utilities.formatDate(new Date(), TZ, 'yyyy/MM'), -1);
       pushAdmins_('📅【月次TRUST売上の取込】\n先月（' + lm + '）の売上が確定しました。給与を締める前に取り込んでください。\n① TRUSTにログイン →② コンソール「📥TRUST取込」で対象月を ' + lm.replace('/', '-') + ' にして「売上を取得」をクリック。');
     });
@@ -5940,23 +6039,23 @@ function scheduledJobs() {
 
   // 毎営業後 01:00台: 当日営業ぶんの伝票・現金を取り込むよう管理者へDM（GAS夜間自動取得が403で停止中の手動代替）
   if (hhmm >= '01:00' && hhmm <= '01:09') {
-    once('TRUST_RELAY_NIGHTLY', () => {
+    if (notifEnabled_('trust_relay_nightly', ns_)) once('TRUST_RELAY_NIGHTLY', () => {
       pushAdmins_('🌙【TRUST取得のお願い】\n今日の営業ぶんを取り込んでください（各キャストの伝票・現金チェック用）。\n① TRUSTにログイン →② コンソール「📥TRUST取込」で\n　・「伝票を取得」\n　・「日払い・経費を取得」\nを順にクリック。\n※取れていない日はコンソールのカバレッジ表示（❌）で分かります。');
     });
   }
 
   notif_('ieyas_url', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['ieyas_url'].message || ns_['ieyas_url'].defaultMsg);
+    push_(notifTarget_('ieyas_url', ns_, 'GROUP_KUROFUKU'), ns_['ieyas_url'].message || ns_['ieyas_url'].defaultMsg);
   });
 
   // 18:00: 当日中に管理コンソールから追加された黒服タスクをまとめて送信（18時以降の追加分は即送信済み）
-  if (hhmm >= '18:00' && hhmm <= '18:09') once('KUROFUKU_TASKS_1800', sendPendingKurofukuTasks);
+  if (hhmm >= '18:00' && hhmm <= '18:09' && notifEnabled_('kurofuku_tasks_1800', ns_)) once('KUROFUKU_TASKS_1800', sendPendingKurofukuTasks);
 
   // 18:00: 月初1回、今月誕生日で誕生日バック未設定のキャストを軍師の要対応へ（内部で月ガード＝月1回）
-  if (hhmm >= '18:00' && hhmm <= '18:09') once('BDAYREMIND', remindBirthdayBackIfNeeded_);
+  if (hhmm >= '18:00' && hhmm <= '18:09' && notifEnabled_('bdayremind', ns_)) once('BDAYREMIND', remindBirthdayBackIfNeeded_);
 
   // 17:00: 当日出勤の黒服へ「今日の申し送り」を個別DM（日ガード＝1日1回。中身が空 or 当日黒服なしなら自然にスキップ）
-  if (hhmm >= '17:00' && hhmm <= '17:09') once('KURO_HANDOVER', sendKurofukuHandoverDM_);
+  if (hhmm >= '17:00' && hhmm <= '17:09' && notifEnabled_('kuro_handover', ns_)) once('KURO_HANDOVER', sendKurofukuHandoverDM_);
 
   // 08:00: 前営業日の勤怠を判定して台帳へ積む（日ガード＝1日1回）。
   // ⚠️朝8時なのは、深夜2〜4時の退勤打刻が出揃ってから判定するため（6時境界で営業日が変わった後）。
@@ -5977,20 +6076,20 @@ function scheduledJobs() {
   }
 
   notif_('kaiten_check', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['kaiten_check'].message || ns_['kaiten_check'].defaultMsg);
+    push_(notifTarget_('kaiten_check', ns_, 'GROUP_KUROFUKU'), ns_['kaiten_check'].message || ns_['kaiten_check'].defaultMsg);
   });
 
   notif_('lineup', sendDailyLineup);
 
   // 12:00 20時出勤の候補を黒服へ（14:00のシフト連絡までに前倒し依頼→シフト変更を反映できるよう）
-  if (hhmm >= '12:00' && hhmm <= '12:09') once('REQ20_1200', sendReq20Candidates);
+  if (hhmm >= '12:00' && hhmm <= '12:09' && notifEnabled_('req20_candidates', ns_)) once('REQ20_1200', sendReq20Candidates);
 
   // 19:30 開店準備＝軍師の開店前チェックを各フロア完了せよ、の号令（旧11項目の羅列は廃止し軍師へ一本化）
   notif_('kinsen_mae', () => {
-    push_(prop('GROUP_KUROFUKU'), notifTpl_(ns_, 'kinsen_mae', 'nudge'));
+    push_(notifTarget_('kinsen_mae', ns_, 'GROUP_KUROFUKU'), notifTpl_(ns_, 'kinsen_mae', 'nudge'));
     // レジ現金の開店チェックが未提出なら別途リマインド
     if (!getOpeningCheckInit().locked) {
-      push_(prop('GROUP_KUROFUKU'), notifTpl_(ns_, 'kinsen_mae', 'unsubmitted'));
+      push_(notifTarget_('kinsen_mae', ns_, 'GROUP_KUROFUKU'), notifTpl_(ns_, 'kinsen_mae', 'unsubmitted'));
     }
     recordChecklistSent('KUROFUKU', '1930');
   });
@@ -6004,7 +6103,7 @@ function scheduledJobs() {
   });
 
   notif_('dohan_check', () => {
-    push_(prop('GROUP_STAFF'), ns_['dohan_check'].message || MSG_DOHAN_CHECK);
+    push_(notifTarget_('dohan_check', ns_, 'GROUP_STAFF'), ns_['dohan_check'].message || MSG_DOHAN_CHECK);
   });
 
   // 16:00 ドライバーへ本日の連絡（ドライバーモード=よろしく / 自社便=送りなし お休み）
@@ -6022,15 +6121,15 @@ function scheduledJobs() {
 
   notif_('okuri_confirm', jobOkuriConfirm);
 
-  if (hhmm >= '23:40' && hhmm <= '23:49') once('CHECK_PROPOSAL', proposeCheckSchedule_);
+  if (hhmm >= '23:40' && hhmm <= '23:49' && notifEnabled_('check_proposal', ns_)) once('CHECK_PROPOSAL', proposeCheckSchedule_);
 
   notif_('seki_check', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['seki_check'].message || '各席チェックを出してください');
+    push_(notifTarget_('seki_check', ns_, 'GROUP_KUROFUKU'), ns_['seki_check'].message || '各席チェックを出してください');
     recordChecklistSent('KUROFUKU', '2345');
   });
 
   notif_('shoumei', () => {
-    push_(prop('GROUP_KUROFUKU'), ns_['shoumei'].message || '【24:30までに消灯】\n・外看板／外照明\n・2階／5階ラウンジ入口照明');
+    push_(notifTarget_('shoumei', ns_, 'GROUP_KUROFUKU'), ns_['shoumei'].message || '【24:30までに消灯】\n・外看板／外照明\n・2階／5階ラウンジ入口照明');
   });
 
   notif_('kinsen_go', () => {
@@ -6203,6 +6302,36 @@ function push_(groupId, message) {
   }
 }
 
+// ── 通知管理センター: 宛先リゾルバ & ON/OFFゲート ─────────────────────────
+// 宛先グループキー → ScriptProperty名。ここに無いキーは「切替不可」扱い。
+const NOTIF_GROUP_PROP_ = { kurofuku: 'GROUP_KUROFUKU', staff: 'GROUP_STAFF', driver: 'GROUP_DRIVER', haken: 'GROUP_HAKEN', yoyaku: 'GROUP_YOYAKU' };
+
+// 通知の実配信グループIDを返す（宛先切替の実体）。
+// group型で target が設定されていればそのグループへ。無ければ fallback（=各送信箇所の現行ハードコード宛先）を返す＝非破壊。
+// 使い方: push_(prop('GROUP_KUROFUKU'), msg)  →  push_(notifTarget_('seki_check', ns_, 'GROUP_KUROFUKU'), msg)
+//   fallback は 'GROUP_*'（プロパティ名）でも生groupIdでも可。ns_ を渡せば毎回 getNotifSettings_ を読み直さない。
+function notifTarget_(key, ns_, fallback) {
+  try {
+    const s = (ns_ || getNotifSettings_())[key];
+    if (s && s.targetKind === 'group' && s.target && NOTIF_GROUP_PROP_[s.target]) {
+      const gid = prop(NOTIF_GROUP_PROP_[s.target]);
+      if (gid) return gid;
+    }
+  } catch (e) { console.error('notifTarget_', key, e); }
+  if (fallback) return (String(fallback).indexOf('GROUP_') === 0) ? prop(fallback) : fallback;
+  return prop('GROUP_KUROFUKU');
+}
+
+// 通知が有効か。未登録キー・読み取り失敗は true フォールバック＝非破壊（止めるのは明示的に enabled:false の時だけ）。
+// ns_ を渡せば毎回 getNotifSettings_ を読み直さない（毎分ジョブ用）。
+function notifEnabled_(key, ns_) {
+  try {
+    const s = (ns_ || getNotifSettings_())[key];
+    if (s && s.enabled === false) return false;
+  } catch (e) { console.error('notifEnabled_', key, e); }
+  return true;
+}
+
 // ── 軍師: 全キャストへ個別LINEお知らせ配信 ──────────
 // 対象＝スタッフマスタで属性に「キャスト」or「体験」を含む者。LINE未登録(lineId無し)はスキップ。
 function gunshiBroadcastCastFilter_(all) {
@@ -6337,7 +6466,7 @@ function castCall_(body) {
   if (!m) return { ok: false, error: 'unknown kind' };
   // 本日シフトに入っているスタッフのみ利用可（打刻済み・管理者も可）
   if (!isOnShiftToday_(name) && !isWorkingToday_(name) && !isAdmin_(name)) return { ok: false, error: 'not_working', message: '本日シフトの方のみ利用できます' };
-  const KF = prop('GROUP_KUROFUKU');
+  const KF = notifTarget_('cast_call', null, 'GROUP_KUROFUKU'); // 通知管理センター: 宛先切替可（呼び出しはサービス根幹＝常時ON）
   if (!KF) return { ok: false, error: 'GROUP_KUROFUKU未設定' };
 
   // テーブル特定: フロント選択を軍師の付け回し(ライブ)と照合する。
@@ -10878,7 +11007,7 @@ function checkLateReservations() {
   let nh = n.getHours(); if (nh < 6) nh += 24;
   const nowM = nh * 60 + n.getMinutes();
   if (nowM < 19 * 60 || nowM > 24 * 60 + 90) return; // 稼働時間帯 19:00〜翌1:30 のみ
-  const KF = prop('GROUP_KUROFUKU');
+  const KF = notifTarget_('late_reservation', null, 'GROUP_KUROFUKU'); // 通知管理センター: 宛先切替可
   if (!KF) return;
   const list = getYoyakuReservations_(bizDateStr_()).filter(r => r.status === '確定');
   if (!list.length) return;
@@ -11832,6 +11961,7 @@ function getRenewalHitsForReservation_(rowIdx){
 }
 
 function notifyMemberRenewalOnCheckIn_(rowIdx){
+  if (!notifEnabled_('member_renewal_dm')) return; // 通知管理センター: ON/OFF（黒服＋担当DMの両方）
   var hits = getRenewalHitsForReservation_(rowIdx);
   if (!hits.length) return;
   var sp = PropertiesService.getScriptProperties();
@@ -16660,8 +16790,8 @@ function mendanSubmit_(token, rec, data) {
     set('顔写真', facePhoto ? ('https://drive.google.com/file/d/' + facePhoto + '/view') : '');
     set('状態', '提出済'); set('更新日時', new Date());
     PropertiesService.getScriptProperties().deleteProperty('MENDAN_TOK_' + token);   // 提出でトークン失効
-    // 通知1：りく＋管理者全員にLINEで即通知（内容サマリ＋写真2枚）
-    try {
+    // 通知1：りく＋管理者全員にLINEで即通知（内容サマリ＋写真2枚）。※記録保存は上で完了済＝通知だけをON/OFF
+    if (notifEnabled_('mendan_submit')) try {
       pushAdmins_(mendanSummaryText_(rec.id, data));
       var faceUrl = facePhoto ? mendanDriveImageUrl_(facePhoto) : '';
       var idUrl   = idPhoto   ? mendanDriveImageUrl_(idPhoto)   : '';
