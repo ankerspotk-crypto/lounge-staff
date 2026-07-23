@@ -44,6 +44,14 @@ const SUPPLY_STOP_        = 'メニュー落ち';
 // メニュー連動（メニューに無い＝仕入れない）を効かせるカテゴリ。ボス確定＝ボトルのみ
 // ⚠️割り物/チャーム/果物/消耗品/名刺を足してはいけない。メニューに一生載らないが仕入れは止められない＝店が回らない
 const MENU_LINK_CATS_     = ['ボトル'];
+// ── 発注の入荷予定日（標準リードタイム）と未着アラート ─────────────────
+//   ボス確定＝「品目ごとの標準リードタイム」。黒服は発注時に何も入れず、承認時に予定日が自動で付く。
+//   既定はカテゴリ別。品目ごとの上書きは在庫発注マスタ9列目「標準リードタイム」（任意・空欄=カテゴリ既定）。
+const LEAD_TIME_DEFAULT_  = 7;                 // カテゴリ未定義時の既定（日）
+const LEAD_TIME_BY_CAT_   = { 'ボトル': 7, '割り物': 3, 'チャーム': 5, '果物': 2, '消耗品': 3, '名刺': 7 };
+// 発注ログ8列目ステータスの終端。黒服が明示的に付ける＝「もう来ない」を可視化して未着リストから外す。
+const ORDER_ST_SHORTAGE_  = '欠品・入荷未定';   // 一時的な欠品／入荷未定（品目は生きている＝入荷したら未納品に戻せる）
+const ORDER_ST_DISCON_    = '終売';             // メーカー終売＝恒久。連動して在庫を メニュー落ち にする（現物は残す）
 const SOUVENIR_NAME             = 'おみやげ';
 const SOUVENIR_PER_PERSON       = 2;
 const SOUVENIR_ALERT_THRESHOLD  = 50;
@@ -668,7 +676,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getOrderAlerts', 'setOrderStatusManual'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -1702,10 +1710,13 @@ function handleReceiptImage_(event) {
       const dt = ai && ai.doc_type;
       if (dt === '納品書' && Array.isArray(ai.items)) {
         const r = recordDelivery_(bizDate, ai, file.getUrl());
+        // 納品を記録したら発注予定と品番で突合＝この伝票で埋まった発注を即クローズ（失敗しても記録は生かす）
+        let recLine = '';
+        try { const rc = reconcile010mDelivery_(); if (rc && rc.updated) recLine = '\n🔗 発注予定を更新: ' + rc.updated + '件'; } catch (e) { }
         extraLine = '\n📦 納品書: ' + (ai.supplier || '仕入先不明') + (ai.date ? '（' + ai.date + '）' : '')
           + '\n' + r.lines
           + (r.count > r.shown ? '\n…他' + (r.count - r.shown) + '品目' : '')
-          + '\n計 ' + r.count + '品目 / ¥' + yenComma_(ai.total || r.total) + '\n→「納品記録」シートに記録しました（在庫加算は別途確認）。';
+          + '\n計 ' + r.count + '品目 / ¥' + yenComma_(ai.total || r.total) + '\n→「納品記録」シートに記録しました（在庫加算は別途確認）。' + recLine;
       } else if (dt === '領収書' && (ai.issuer || ai.amount)) {
         recordReceipt_(bizDate, ai, file.getUrl());
         extraLine = '\n🧾 領収書: ' + (ai.issuer || '発行元不明') + ' / ¥' + yenComma_(ai.amount) + (ai.note ? ' / ' + ai.note : '') + (ai.date ? ' / ' + ai.date : '') + '\n→「領収書記録」シートに記録しました。';
@@ -1753,9 +1764,12 @@ function recordReceipt_(bizDate, ai, fileUrl) {
 // 納品記録シートに明細を1行ずつ追記。返り値: {count, shown, total, lines(リプライ用サマリ)}
 function recordDelivery_(bizDate, ai, fileUrl) {
   const ss = getOrOpenSS_();
-  const HDR = ['営業日', '仕入先', '伝票日付', '伝票No', '商品名', '容量', '本数', 'ケース', 'バラ', '入数', '単価', '金額', '在庫反映', '画像リンク'];
+  // ⚠️列は末尾追加のみ（在庫反映=13/画像=14が全関数でハードコード）。品番は15列目に足す＝非破壊で突合キーを持つ。
+  const HDR = ['営業日', '仕入先', '伝票日付', '伝票No', '商品名', '容量', '本数', 'ケース', 'バラ', '入数', '単価', '金額', '在庫反映', '画像リンク', '品番'];
   let sh = ss.getSheetByName('納品記録');
   if (!sh) { sh = ss.insertSheet('納品記録'); sh.appendRow(HDR); }
+  // 既存シート(14列)には品番見出しが無い＝15列目に生やす（値は空欄のまま＝既存行は移行不要）
+  if (String(sh.getRange(1, 15).getValue() || '').trim() !== '品番') { sh.getRange(1, 15).setValue('品番'); sh.getRange('O:O').setNumberFormat('@'); }
   const items = Array.isArray(ai.items) ? ai.items : [];
   const now = new Date();
   let total = 0; const lines = [];
@@ -1763,7 +1777,7 @@ function recordDelivery_(bizDate, ai, fileUrl) {
     const pack = Number(it.pack) || 0, cases = Number(it.cases) || 0, pieces = Number(it.pieces) || 0;
     const honCount = (cases * pack) + pieces || pieces || cases; // 実本数（入数×ケース＋バラ。入数不明ならバラ数）
     const amt = Number(it.amount) || 0; total += amt;
-    sh.appendRow([bizDate, String(ai.supplier || ''), String(ai.date || ''), String(ai.slip_no || ''), String(it.name || ''), String(it.volume || ''), honCount, cases, pieces, pack, Number(it.unit_price) || '', amt, '', fileUrl || '']);
+    sh.appendRow([bizDate, String(ai.supplier || ''), String(ai.date || ''), String(ai.slip_no || ''), String(it.name || ''), String(it.volume || ''), honCount, cases, pieces, pack, Number(it.unit_price) || '', amt, '', fileUrl || '', String(it.code || '')]);
     if (lines.length < 5) lines.push('・' + String(it.name || '') + ' ×' + honCount + '　¥' + yenComma_(amt));
   });
   return { count: items.length, shown: lines.length, total: total, lines: lines.join('\n') };
@@ -3135,8 +3149,8 @@ function extractReceiptWithGemini_(blob) {
     '■領収書（店が支払った領収書。発行元の店名/会社名がある）:\n' +
     '{"doc_type":"領収書","issuer":"発行元（誰から。店名/会社名）","amount":金額整数,"note":"但し書き","date":"日付"}\n\n' +
     '■納品書（仕入先からの納品書。商品明細の表がある）:\n' +
-    '{"doc_type":"納品書","supplier":"仕入先の会社名","date":"出荷/納品日","slip_no":"伝票No","total":総合計金額整数,"items":[{"name":"商品名（先頭の商品コード番号は除く）","volume":"容量 例:700ML","pack":入数（整数。無ければnull）,"cases":ケース数（整数。無ければ0）,"pieces":バラ数（整数。無ければ0）,"unit_price":単価整数,"amount":金額整数}]}\n' +
-    '（納品書の数量はケース列とバラ列に分かれる。ケース×入数＋バラ が実本数。cases/pieces/pack を正確に読む。明細行はすべて漏れなく含める。）\n\n' +
+    '{"doc_type":"納品書","supplier":"仕入先の会社名","date":"出荷/納品日","slip_no":"伝票No","total":総合計金額整数,"items":[{"code":"商品名の先頭にある商品コード番号（数字のみ。例 001808 や 118365。先頭ゼロも省かず桁そのまま。同じ番号が2回並ぶ時は片方。無ければ空文字）","name":"商品名（先頭の商品コード番号は除く）","volume":"容量 例:700ML","pack":入数（整数。無ければnull）,"cases":ケース数（整数。無ければ0）,"pieces":バラ数（整数。無ければ0）,"unit_price":単価整数,"amount":金額整数}]}\n' +
+    '（納品書の数量はケース列とバラ列に分かれる。ケース×入数＋バラ が実本数。cases/pieces/pack を正確に読む。明細行はすべて漏れなく含める。code は発注との突合キーなので先頭ゼロを含め正確に。）\n\n' +
     '■品薄伝票（仕入先が在庫の「品薄」「欠品」「品切れ」「入荷未定」「次回入荷」等を知らせる連絡票。商品名の表があり納品書と紛らわしいが、実際に納品された商品ではない）:\n' +
     '{"doc_type":"品薄伝票"}\n' +
     '（★重要: 見出し・余白・備考に「品薄」「欠品」「品切れ」「在庫切れ」「入荷未定」「入荷予定」「次回入荷」等の記載があり、実際の納品ではなく在庫状況の連絡であれば、商品明細の表があっても必ず "納品書" ではなく "品薄伝票" にすること。）\n\n' +
@@ -14710,10 +14724,49 @@ function getOrderLogSheet_() {
   let sh = ss.getSheetByName(ORDER_LOG_TAB);
   if (!sh) {
     sh = ss.insertSheet(ORDER_LOG_TAB);
-    sh.appendRow(['日付', 'フロア', '品名', '発注数', 'メモ', '申請者', '申請日時', 'ステータス', '承認者', '承認日時', '納品確認者', '納品確認日時']);
+    sh.appendRow(['日付', 'フロア', '品名', '発注数', 'メモ', '申請者', '申請日時', 'ステータス', '承認者', '承認日時', '納品確認者', '納品確認日時', '入荷予定日', '状態メモ']);
     sh.setFrozenRows(1);
   }
   return sh;
+}
+
+// 本番の発注ログは12列で作られている＝13列目「入荷予定日」/14列目「状態メモ」の見出しだけ後から生やす。
+// ⚠️途中挿入は禁止（8=ステータス等が全関数でハードコード）＝末尾追加のみ。既存行は空欄のまま＝
+//   未着判定は空欄なら「起票日＋既定リードタイム」でフォールバック＝データ移行は不要。
+function ensureOrderLogCols_(sh, headRow) {
+  const h = headRow || [];
+  if (String(h[12] || '').trim() !== '入荷予定日') sh.getRange(1, 13).setValue('入荷予定日');
+  if (String(h[13] || '').trim() !== '状態メモ')   sh.getRange(1, 14).setValue('状態メモ');
+}
+
+// ── 発注の入荷予定日ヘルパー（純粋な日付計算＝副作用なし） ──
+function orderYmdToDate_(ymd) {
+  const m = String(ymd || '').match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+function orderDayDiff_(fromYmd, toYmd) {   // toYmd − fromYmd（日数）
+  const a = orderYmdToDate_(fromYmd), b = orderYmdToDate_(toYmd);
+  return (a && b) ? Math.round((b.getTime() - a.getTime()) / 86400000) : 0;
+}
+function orderFmtDateCell_(cell) {
+  if (cell == null || cell === '') return '';
+  return (cell instanceof Date) ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd') : String(cell).trim();
+}
+function orderEtaFallback_(orderedYmd) {   // 旧行救済＝起票日＋既定リードタイム
+  const d = orderYmdToDate_(orderedYmd);
+  return d ? Utilities.formatDate(new Date(d.getTime() + LEAD_TIME_DEFAULT_ * 86400000), TZ, 'yyyy-MM-dd') : '';
+}
+// 品名→標準リードタイム（日）のマップを在庫から1回だけ作る。9列目に数値があればそれ、無ければカテゴリ既定。
+function orderLeadMap_() {
+  const map = {};
+  try {
+    getStockList().forEach(function (i) {
+      const k = stkKey_(i.name);
+      const d = Number(i.leadDays) > 0 ? Number(i.leadDays) : (LEAD_TIME_BY_CAT_[i.category] || LEAD_TIME_DEFAULT_);
+      if (map[k] == null || Number(i.leadDays) > 0) map[k] = d;   // 品目上書きを優先
+    });
+  } catch (e) { }
+  return map;
 }
 
 // 〔2026-07-23 撤去〕旧・発注品目マスタUIの getOrderMasterList / addOrderMasterItem /
@@ -14786,17 +14839,23 @@ function removeOrderDraftItem(rowIdx) {
 function getUndeliveredOrders() {
   const sh = getOrderLogSheet_();
   const rows = sh.getDataRange().getValues();
+  ensureOrderLogCols_(sh, rows[0]);
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   const list = [];
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][7]).trim() !== '承認済み・未納品') continue;
     const cell = rows[i][0];
     const dateStr = (cell instanceof Date) ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd') : String(cell);
+    const eta = orderFmtDateCell_(rows[i][12]) || orderEtaFallback_(dateStr);   // 空欄＝旧行は起票日＋既定で救済
+    const od = eta ? orderDayDiff_(eta, today) : 0;                             // today − eta（＞0＝超過）
     list.push({
       rowIdx: i + 1, date: dateStr, floor: String(rows[i][1]), name: String(rows[i][2]),
-      qty: String(rows[i][3]), memo: String(rows[i][4]), applicant: String(rows[i][5]), approver: String(rows[i][8])
+      qty: String(rows[i][3]), memo: String(rows[i][4]), applicant: String(rows[i][5]), approver: String(rows[i][8]),
+      eta: eta, overdueDays: od > 0 ? od : 0
     });
   }
-  list.sort((a, b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+  // 超過が大きい順→同じなら古い順。放置が長いものほど上に出す。
+  list.sort((a, b) => (b.overdueDays - a.overdueDays) || (a.date < b.date ? -1 : (a.date > b.date ? 1 : 0)));
   return list;
 }
 
@@ -14813,19 +14872,310 @@ function confirmOrderDelivered(payload) {
   return { ok: true };
 }
 
+// 発注アラート（軍師ホーム／管理用）。書き込みなし＝画面を開くたびに安全に呼べる。cron/LINE pushは持たない（通数を焼かない）。
+//  overdue  … 承認済み・未納品 で入荷予定日を過ぎたもの（＝発注したのに届いていない。放置されると来店日まで気づけない盲点そのもの）
+//  shortage … 黒服が明示した 欠品・入荷未定／終売（＝もう来ないと分かっている＝別枠で見せる）
+function getOrderAlerts() {
+  const sh = getOrderLogSheet_();
+  const rows = sh.getDataRange().getValues();
+  ensureOrderLogCols_(sh, rows[0]);
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  const overdue = [], shortage = [];
+  for (let i = 1; i < rows.length; i++) {
+    const st = String(rows[i][7]).trim();
+    const cell = rows[i][0];
+    const dateStr = (cell instanceof Date) ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd') : String(cell);
+    const base = {
+      rowIdx: i + 1, date: dateStr, floor: String(rows[i][1]), name: String(rows[i][2]),
+      qty: String(rows[i][3]), memo: String(rows[i][4]), applicant: String(rows[i][5]), approver: String(rows[i][8]),
+      statusMemo: String(rows[i][13] || '')
+    };
+    if (st === '承認済み・未納品') {
+      const eta = orderFmtDateCell_(rows[i][12]) || orderEtaFallback_(dateStr);
+      const od = eta ? orderDayDiff_(eta, today) : 0;
+      if (od > 0) { base.eta = eta; base.overdueDays = od; overdue.push(base); }
+    } else if (st === ORDER_ST_SHORTAGE_ || st === ORDER_ST_DISCON_) {
+      base.status = st;
+      shortage.push(base);
+    }
+  }
+  overdue.sort((a, b) => b.overdueDays - a.overdueDays);
+  let vendor = { overdue: [], shortage: [] };
+  try { vendor = getVendorOrderAlerts_(); } catch (e) { }   // 発注予定シートが無くてもカードは壊さない
+  return {
+    overdue: overdue, shortage: shortage,
+    vendorOverdue: vendor.overdue, vendorShortage: vendor.shortage,
+    overdueCount: overdue.length, shortageCount: shortage.length,
+    vendorOverdueCount: vendor.overdue.length, vendorShortageCount: vendor.shortage.length
+  };
+}
+
+// 発注予定台帳（010m/マルト水谷）から未着・欠品を返す。
+//  ⚠️未着はステータスに依らずライブ判定（納品希望日を過ぎて未充足）＝突合トリガーの遅延に強い。
+function getVendorOrderAlerts_() {
+  const sh = getOrderPlanSheet_();
+  const rows = sh.getDataRange().getValues();
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  const overdue = [], shortage = [];
+  for (let i = 1; i < rows.length; i++) {
+    const st = String(rows[i][7]).trim();
+    const want = String(rows[i][1]).trim();
+    const qty = Number(rows[i][5]) || 0;
+    const got = Number(rows[i][8]) || 0;
+    const base = {
+      rowIdx: i + 1, orderedDate: String(rows[i][0]).trim(), eta: want,
+      code: String(rows[i][2]).trim(), name: String(rows[i][3]).trim(),
+      qty: qty, unit: String(rows[i][6]).trim(), delivered: got, supplier: 'マルト水谷'
+    };
+    if (st === ORDER_PLAN_ST_SHORT_) { shortage.push(base); continue; }
+    if (st === ORDER_PLAN_ST_DONE_) continue;
+    if (got < qty && want && today > want) {          // 納品希望日を過ぎて未充足＝未着
+      base.overdueDays = orderDayDiff_(want, today);
+      base.partial = got > 0;
+      overdue.push(base);
+    }
+  }
+  overdue.sort((a, b) => b.overdueDays - a.overdueDays);
+  return { overdue: overdue, shortage: shortage };
+}
+
+// 黒服が発注の状態を手で変える：欠品・入荷未定／終売／未納品に戻す。
+//  ⚠️申請中・納品済みは対象外（未納品・欠品・終売の3状態の間だけ行き来できる）。
+//  終売のときは連動して在庫を メニュー落ち にする（現物は残す＝カテゴリは変えない。setSupplyStatusByName_ の流儀）。
+function setOrderStatusManual(payload) {
+  const name = getStaffName(payload.userId);
+  if (!name) return { ok: false, error: '登録されていません。グループLINEで #登録 名前 を送ってください。' };
+  const rowIdx = Number(payload.rowIdx);
+  const to = String(payload.status || '').trim();
+  if (['承認済み・未納品', ORDER_ST_SHORTAGE_, ORDER_ST_DISCON_].indexOf(to) < 0) return { ok: false, error: '不正なステータス: ' + to };
+  const sh = getOrderLogSheet_();
+  if (!rowIdx || rowIdx < 2 || rowIdx > sh.getLastRow()) return { ok: false, error: '対象の行が見つかりません' };
+  ensureOrderLogCols_(sh, sh.getRange(1, 1, 1, 14).getValues()[0]);
+  const cur = String(sh.getRange(rowIdx, 8).getValue()).trim();
+  if (['承認済み・未納品', ORDER_ST_SHORTAGE_, ORDER_ST_DISCON_].indexOf(cur) < 0) return { ok: false, error: 'この発注（' + cur + '）は状態を変えられません' };
+  const itemName = String(sh.getRange(rowIdx, 3).getValue()).trim();
+  sh.getRange(rowIdx, 8).setValue(to);
+  const label = (to === '承認済み・未納品') ? '未納品に戻す' : to;
+  const memo = label + '（' + name + '・' + bizDateStr_() + '）' + (payload.memo ? ' ' + String(payload.memo).trim() : '');
+  sh.getRange(rowIdx, 14).setValue(memo);
+  let supplyStopped = 0;
+  if (to === ORDER_ST_DISCON_ && itemName) {
+    try { supplyStopped = setSupplyStatusByName_(itemName, SUPPLY_STOP_) || 0; } catch (e) { }
+  }
+  return { ok: true, name: itemName, status: to, supplyStopped: supplyStopped };
+}
+
+// ============================================================
+// 010m（マルト水谷）WEB注文確認メールの自動取り込み → 発注予定台帳
+//   受信口座＝Apps Script実行口座（ankerspot.k@gmail.com・2026-07-23確認済）＝GmailApp直読み可。
+//   紙の納品書(納品記録)と「品番」で突合して未着/欠品を出すのが目的。突合・OCR品番拾いは次段。
+//   ⚠️まだ本番トリガー未設定・未デプロイ。parse010mOrderEmail_ は node で実データ検証済。
+// ============================================================
+const ORDER_PLAN_TAB   = '発注予定';
+const MARUTO_FROM_     = 'web_juchu@010m.co.jp';
+const MARUTO_LABEL_    = '010m取込済';                 // 取込済みスレッドに付けて二重取込を防ぐ
+const ORDER_PLAN_ST_OPEN_ = '発注済み';               // 受注確認～未突合
+const ORDER_PLAN_ST_DONE_ = '納品済み';
+const ORDER_PLAN_ST_PART_ = '一部納品';
+const ORDER_PLAN_ST_MISS_ = '未着';                   // 納品希望日を過ぎても品番が納品記録に無い
+const ORDER_PLAN_ST_SHORT_ = '欠品';                  // 「◯月◯日 欠品分」等で欠品と判明
+
+function getOrderPlanSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(ORDER_PLAN_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(ORDER_PLAN_TAB);
+    sh.appendRow(['受注日', '納品希望日', '品番', '品名', '容量', '発注数', '単位', 'ステータス', '納品数', '納品日', 'メールID', '状態メモ']);
+    sh.setFrozenRows(1);
+    sh.getRange('C:C').setNumberFormat('@');   // 品番は文字列固定＝先頭ゼロ(001808)を守る
+  }
+  return sh;
+}
+
+// 010m注文確認メールのプレーン本文を構造化する（純関数＝node検証済み）。
+//  baseYmd={y,m,d}=受注日。納品希望月<受注月なら翌年（12月受注→1月納品）。省略時は当年。
+function parse010mOrderEmail_(body, baseYmd) {
+  const lines = String(body || '').split(/\r?\n/);
+  const orders = [], flat = [];
+  let cur = null;
+  const reHead = /(\d{1,2})月(\d{1,2})日納品希望分/;
+  // 行頭「[品番]…容量ML×数量(単位)」。全角はNFKCで半角化してから判定（１８→18・ＭＬ→ML・（）→()）
+  const reItem = /^\[(\d+)\]\s*(.+?)\s*(\d+)\s*ML\s*[×✕xX]\s*(\d+)\s*[（(]\s*(バラ|ケース)\s*[）)]/;
+  for (let i = 0; i < lines.length; i++) {
+    const s = lines[i].normalize('NFKC').replace(/　/g, ' ').trim();
+    if (!s) continue;
+    const mh = s.match(reHead);
+    if (mh && /納品希望分\s*$/.test(s)) {         // 見出し"だけ"の行のみ採用（本文中の言及を拾わない）
+      const mm = Number(mh[1]), dd = Number(mh[2]);
+      let y = baseYmd ? baseYmd.y : (new Date()).getFullYear();
+      if (baseYmd && mm < baseYmd.m) y += 1;
+      const dstr = y + '-' + ('0' + mm).slice(-2) + '-' + ('0' + dd).slice(-2);
+      cur = { deliveryDate: dstr, mm: mm, dd: dd, items: [] };
+      orders.push(cur);
+      continue;
+    }
+    const mi = s.match(reItem);
+    if (mi) {
+      if (!cur) { cur = { deliveryDate: '', mm: 0, dd: 0, items: [] }; orders.push(cur); }
+      const name = mi[2].replace(/\s+/g, ' ').replace(/^[＊*■\s]+/, '').trim();  // 装飾記号を落とす
+      const it = { code: mi[1], name: name, volume: mi[3] + 'ML', qty: Number(mi[4]), unit: mi[5] };
+      cur.items.push(it);
+      flat.push({ deliveryDate: cur.deliveryDate, code: it.code, name: it.name, volume: it.volume, qty: it.qty, unit: it.unit });
+    }
+  }
+  return { orders: orders, flat: flat };
+}
+
+// 既存の発注予定行のキー（品番|納品希望日|受注日）集合＝二重取込の抑止に使う
+function orderPlanKeySet_(sh) {
+  const rows = sh.getDataRange().getValues();
+  const set = new Set();
+  for (let i = 1; i < rows.length; i++) {
+    set.add(String(rows[i][2]).trim() + '|' + String(rows[i][1]).trim() + '|' + String(rows[i][0]).trim());
+  }
+  return set;
+}
+
+// 未取込の010mメールを取り込んで発注予定台帳へ追記。取込済みスレッドはラベルで除外＝冪等。
+//  トリガー（毎朝など）から回す想定。手動実行でもよい（返り値に件数）。
+function ingest010mOrders_() {
+  const label = GmailApp.getUserLabelByName(MARUTO_LABEL_) || GmailApp.createLabel(MARUTO_LABEL_);
+  const query = 'from:' + MARUTO_FROM_ + ' subject:ご注文受付け -label:' + MARUTO_LABEL_ + ' newer_than:60d';
+  const threads = GmailApp.search(query, 0, 30);
+  if (!threads.length) return { ok: true, threads: 0, parsed: 0, added: 0 };
+  const sh = getOrderPlanSheet_();
+  const seen = orderPlanKeySet_(sh);
+  let parsed = 0, added = 0;
+  for (let t = 0; t < threads.length; t++) {
+    const msgs = threads[t].getMessages();
+    for (let m = 0; m < msgs.length; m++) {
+      const msg = msgs[m];
+      if (String(msg.getFrom()).indexOf(MARUTO_FROM_) < 0) continue;
+      const recv = msg.getDate();
+      const recvStr = Utilities.formatDate(recv, TZ, 'yyyy-MM-dd');
+      const msgId = msg.getId();
+      const r = parse010mOrderEmail_(msg.getPlainBody(), { y: recv.getFullYear(), m: recv.getMonth() + 1, d: recv.getDate() });
+      for (let k = 0; k < r.flat.length; k++) {
+        const it = r.flat[k];
+        parsed++;
+        const key = it.code + '|' + it.deliveryDate + '|' + recvStr;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        sh.appendRow([recvStr, it.deliveryDate, it.code, it.name, it.volume, it.qty, it.unit, ORDER_PLAN_ST_OPEN_, '', '', msgId, '']);
+        added++;
+      }
+    }
+    threads[t].addLabel(label);   // 取り込んだスレッドは以後クエリから外れる
+  }
+  return { ok: true, threads: threads.length, parsed: parsed, added: added };
+}
+
+// 発注予定 × 納品記録 を「品番」で突合してステータスを更新する。
+//  ・納品プールは品番付きの納品記録行だけ（品番の無い旧行は自然に除外）＝この仕組み以降の納品だけを見る。
+//  ・同じ品番の再発注に備えFIFO（受注日の古い順）で消化。単位はバラ/ケースを取り違えないよう列を分けて数える。
+//  ・納品希望日を過ぎても品番が来なければ「未着」。全数来たら「納品済み」・一部なら「一部納品」。
+//  ・「欠品」への確定は別関数（黒服操作／品薄伝票）で行う＝ここは自動で欠品にはしない（誤確定を避ける）。
+function reconcile010mDelivery_() {
+  const planSh = getOrderPlanSheet_();
+  const planRows = planSh.getDataRange().getValues();
+  if (planRows.length < 2) return { ok: true, updated: 0 };
+  const delSh = getOrOpenSS_().getSheetByName('納品記録');
+  const pool = {};   // 品番→{cases,pieces,lastDate}
+  if (delSh) {
+    const dr = delSh.getDataRange().getValues();
+    for (let i = 1; i < dr.length; i++) {
+      const code = String(dr[i][14] || '').trim();      // 15列目=品番
+      if (!code) continue;
+      if (!pool[code]) pool[code] = { cases: 0, pieces: 0, lastDate: '' };
+      pool[code].cases += Number(dr[i][7]) || 0;         // ケース列
+      pool[code].pieces += Number(dr[i][8]) || 0;        // バラ列
+      const dd = dr[i][0] instanceof Date ? Utilities.formatDate(dr[i][0], TZ, 'yyyy-MM-dd') : String(dr[i][0]);
+      if (dd > pool[code].lastDate) pool[code].lastDate = dd;
+    }
+  }
+  const upd = reconcilePlanCore_(planRows, pool, Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'));
+  upd.forEach(function (u) {
+    planSh.getRange(u.row, 8).setValue(u.status);
+    planSh.getRange(u.row, 9).setValue(u.delivered);
+    if (u.deliveredDate) planSh.getRange(u.row, 10).setValue(u.deliveredDate);
+  });
+  return { ok: true, updated: upd.length };
+}
+
+// 突合の判定だけを純関数に切り出す＝nodeで検証できる。planRows=シート全行, pool=品番→在庫, today='yyyy-MM-dd'
+//  返り値: 更新が必要な行だけ [{row(1-based), status, delivered, deliveredDate}]
+function reconcilePlanCore_(planRows, pool, today) {
+  const p = {};   // poolを破壊しない作業コピー
+  Object.keys(pool).forEach(function (c) { p[c] = { cases: pool[c].cases, pieces: pool[c].pieces, lastDate: pool[c].lastDate }; });
+  const openIdx = [];
+  for (let i = 1; i < planRows.length; i++) {
+    const st = String(planRows[i][7]).trim();
+    if (st === ORDER_PLAN_ST_DONE_ || st === ORDER_PLAN_ST_SHORT_) continue;   // 確定済みは触らない
+    openIdx.push(i);
+  }
+  openIdx.sort(function (a, b) { return String(planRows[a][0]).localeCompare(String(planRows[b][0])); });   // 受注日FIFO
+  const out = [];
+  openIdx.forEach(function (i) {
+    const code = String(planRows[i][2]).trim();
+    const unit = String(planRows[i][6]).trim();
+    const qty = Number(planRows[i][5]) || 0;
+    const wantDate = String(planRows[i][1]).trim();       // 納品希望日
+    let take = 0, lastDate = '';
+    if (p[code]) {
+      const isCase = (unit === 'ケース');
+      const avail = isCase ? p[code].cases : p[code].pieces;
+      take = Math.min(avail, qty);
+      if (isCase) p[code].cases -= take; else p[code].pieces -= take;
+      lastDate = p[code].lastDate;
+    }
+    let status;
+    if (qty > 0 && take >= qty) status = ORDER_PLAN_ST_DONE_;
+    else if (take > 0) status = ORDER_PLAN_ST_PART_;
+    else status = (today > wantDate) ? ORDER_PLAN_ST_MISS_ : ORDER_PLAN_ST_OPEN_;
+    const curSt = String(planRows[i][7]).trim();
+    const curNum = Number(planRows[i][8]) || 0;
+    if (curSt !== status || curNum !== take) {
+      out.push({ row: i + 1, status: status, delivered: take, deliveredDate: (status === ORDER_PLAN_ST_DONE_ || status === ORDER_PLAN_ST_PART_) ? (lastDate || today) : '' });
+    }
+  });
+  return out;
+}
+
+// トリガー用: 取り込み→突合をまとめて回す（毎朝＋納品記録の後に呼ぶ）
+function run010mSync_() {
+  const ing = ingest010mOrders_();
+  const rec = reconcile010mDelivery_();
+  return { ok: true, ingest: ing, reconcile: rec };
+}
+
+// 毎朝の自動同期トリガーを1本だけ張る（多重登録ガード）。デプロイ後にエディタから1回実行する。
+function install010mSyncTrigger_() {
+  const exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'run010mSync_'; });
+  if (exists) return { ok: true, already: true };
+  ScriptApp.newTrigger('run010mSync_').timeBased().everyDays(1).atHour(9).create();
+  return { ok: true, installed: true };
+}
+
 // その日の発注ドラフト（申請中）を全て「承認済み・未納品」に確定する（閉店チェック承認と同時に呼ばれる）
 function approveOrderDraftsForDate_(dateKey, approverName) {
   const sh = getOrderLogSheet_();
   const rows = sh.getDataRange().getValues();
+  ensureOrderLogCols_(sh, rows[0]);
   const approvedAt = now_();
+  const nowMs = new Date().getTime();
+  const leadMap = orderLeadMap_();            // 品名→リードタイム（在庫を1回だけ読む）
   let count = 0;
   for (let i = 1; i < rows.length; i++) {
     const cell = rows[i][0];
     const dateStr = (cell instanceof Date) ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd') : String(cell);
     if (dateStr !== dateKey) continue;
     if (String(rows[i][7]).trim() !== '申請中') continue;
+    const lead = leadMap[stkKey_(String(rows[i][2]))] || LEAD_TIME_DEFAULT_;
+    const eta = Utilities.formatDate(new Date(nowMs + lead * 86400000), TZ, 'yyyy-MM-dd');
     sh.getRange(i + 1, 8).setValue('承認済み・未納品');
     sh.getRange(i + 1, 9, 1, 2).setValues([[approverName, approvedAt]]);
+    sh.getRange(i + 1, 13).setNumberFormat('@');
+    sh.getRange(i + 1, 13).setValue(eta);      // 承認日＋品目リードタイム＝入荷予定日
     count++;
   }
   return count;
@@ -14919,7 +15269,9 @@ function getStockList() {
       qty: Number(rows[i][3]) || 0, minStock: String(rows[i][4] || ''),
       expiryManaged: String(rows[i][5]).trim() === '○',
       // 空欄＝通常。SUPPLY_STOP_ なら発注しない（カテゴリは「ボトル」のまま＝在庫画面からは消えない）
-      supplyStatus: String(rows[i][7] || '').trim()
+      supplyStatus: String(rows[i][7] || '').trim(),
+      // 9列目「標準リードタイム」（任意）。数値があれば入荷予定日の計算でカテゴリ既定を上書きする。空欄=0=既定
+      leadDays: Number(rows[i][8]) || 0
     });
   }
   return list;
@@ -15581,6 +15933,7 @@ function kioskGetPendingDeliveries() {
     const m = matchStockName_(name, list);
     groups[key].items.push({
       deliveryRowIdx: i + 1, name: name, volume: String(r[5] || ''), qty: Number(r[6]) || 0,
+      code: String(r[14] || ''),   // 15列目=品番（発注予定との突合キー）
       matchRowIdx: m.item ? m.item.rowIdx : 0, matchName: m.item ? m.item.name : '',
       matchFloor: m.item ? m.item.floor : '', matchQty: m.item ? m.item.qty : 0, score: m.score
     });

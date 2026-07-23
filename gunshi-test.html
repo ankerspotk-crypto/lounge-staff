@@ -550,6 +550,14 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .stk-undel-row{display:flex;align-items:center;gap:8px;background:#221a08;border:1px solid #4a3a12;border-radius:9px;padding:6px 9px;font-size:12px;white-space:nowrap;flex-shrink:0;}
 .stk-deliver{background:#0d2618;border:1px solid #2a6a44;color:#79e0a8;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .stk-floor{color:#8fb8f0;font-size:11px;font-weight:700;}
+/* 未着バーの拡張：入荷予定日／超過バッジ＋欠品・終売ボタン */
+.stk-undel-row.late{background:#2a1208;border-color:#8a3a1a;}
+.stk-undel-nm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.stk-undel-acts{display:flex;gap:6px;flex-shrink:0;}
+.stk-eta{font-size:11px;color:#c9b48a;font-weight:700;}
+.stk-eta.late{color:#ff8a5a;font-weight:900;}
+.stk-shortage{background:#241c08;border:1px solid #6a5a22;color:#f0d890;padding:6px 9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+.stk-discon{background:#1c1030;border:1px solid #5a3a7a;color:#d8a6ff;padding:6px 9px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .stk-card{background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:11px 12px;display:flex;flex-direction:column;}
 .stk-card.zero{border-color:#5a2430;background:#1a1013;}
 .stk-card-top{display:flex;align-items:flex-start;gap:6px;}
@@ -947,6 +955,25 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 /* 📋 日次申し送り（ホーム最上段・朝イチで必ず目に入るよう金系で強調） */
 .ho-card{background:linear-gradient(180deg,#1e1a0c,#161207);border:1px solid #6a5a2a;border-radius:16px;padding:15px 16px;margin-bottom:16px;}
 .ho-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:16px;font-weight:900;color:#f0d890;margin-bottom:10px;}
+/* ⚠️ 発注したのに届いていない（未着アラート）＝朝イチで必ず目に入るよう赤系で強調。0件なら描画しない */
+.oa-card{background:linear-gradient(180deg,#2a1010,#1c0a0a);border:1px solid #7a2a2a;border-radius:16px;padding:14px 16px;margin-bottom:16px;}
+.oa-head{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:900;color:#ff9a9a;margin-bottom:10px;}
+.oa-cnt{background:#7a1f1f;color:#ffd7d7;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:900;}
+.oa-row{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.25);border:1px solid #5a2222;border-radius:11px;padding:10px 12px;margin-bottom:8px;cursor:pointer;}
+.oa-row:active{opacity:.8;}
+.oa-bd{flex:1;min-width:0;}
+.oa-nm{font-size:14px;font-weight:800;color:#ffe0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.oa-fl{color:#8fb8f0;font-size:11px;font-weight:700;}
+.oa-sub{font-size:12px;color:#e8b0b0;margin-top:2px;}
+.oa-late{color:#ff7a7a;font-weight:900;}
+.oa-vtag{color:#ffcf8a;font-size:10px;font-weight:800;background:#3a2a10;border:1px solid #6a5020;border-radius:6px;padding:1px 6px;margin-left:4px;}
+.oa-part{color:#ffd27a;font-weight:800;}
+.oa-go{flex:none;color:#ff9a9a;font-weight:900;font-size:13px;}
+.oa-none{font-size:13px;color:#e8b0b0;padding:4px 2px;}
+.oa-shortage{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.oa-chip{font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;white-space:nowrap;}
+.oa-chip.dis{background:#2a1030;border:1px solid #6a3a7a;color:#d8a6ff;}
+.oa-chip.sho{background:#2a2010;border:1px solid #6a5a2a;color:#f0d890;}
 .ho-edit{background:#2a2410;border:1px solid #6a5a2a;color:#f0d890;border-radius:9px;padding:6px 12px;font-size:13px;font-weight:800;cursor:pointer;flex:none;}
 .ho-memo{font-size:14px;line-height:1.7;color:var(--txt);background:rgba(0,0,0,.22);border-radius:10px;padding:11px 13px;margin-bottom:10px;}
 .ho-sec{font-size:13px;font-weight:800;color:#e6c060;margin:6px 2px 8px;}
@@ -1429,7 +1456,7 @@ function setViewMode(m){
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
   // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
-  if(m==='home'&&BOOTED){loadHandover();loadPunch();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
+  if(m==='home'&&BOOTED){loadHandover();loadOrderAlerts();loadPunch();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
 }
 function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();if(p==='post')loadChecklistConfig();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
@@ -1539,8 +1566,56 @@ function renderHome(){
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
   var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderHomeChecklist(phase));
-  w.innerHTML=punchCardHtml()+handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection();
+  w.innerHTML=punchCardHtml()+orderAlertCardHtml()+handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection();
 }
+
+/* ===== ⚠️ 発注したのに届いていない（未着アラート）＝ホーム最上段（申し送りの上）に強調表示 =====
+   ボスの盲点＝「発注済み未着に来店日まで気づけない」を、黒服が毎シフト開く軍師ホームで先に気づかせる。
+   ⚠️書き込みなし＝getOrderAlertsは読むだけ。0件なら何も描画しない（クラッタにしない）。
+   ⚠️LINE pushは持たない＝定時グループ配信で通数を焼かない（通数の犯人はそこ）。目に入る化はホームで担保。 */
+var ORDER_ALERTS=null,_oaLoading=false;
+function loadOrderAlerts(){
+  if(!IS_GAS){ ORDER_ALERTS={overdue:[
+      {rowIdx:9,name:'獺祭 純米大吟醸45',floor:'5F',qty:'2',eta:'2026-07-18',overdueDays:5,approver:'りく'}],
+    shortage:[{rowIdx:7,name:'白州12年',floor:'共通',status:'終売',statusMemo:'終売（りく・7/20）'}],
+    vendorOverdue:[
+      {rowIdx:2,code:'125291',name:'ペリエ ジュエ ベルエポック 18',qty:5,unit:'バラ',eta:'2026-07-23',overdueDays:1,supplier:'マルト水谷',partial:false},
+      {rowIdx:8,code:'002255',name:'ペリエ ジュエ グラン ブリュット',qty:5,unit:'バラ',eta:'2026-07-23',overdueDays:1,supplier:'マルト水谷',partial:false},
+      {rowIdx:9,code:'054729',name:'ペリエ ジュエ ブラン ド ブラン',qty:5,unit:'バラ',eta:'2026-07-23',overdueDays:1,supplier:'マルト水谷',partial:false}],
+    vendorShortage:[{rowIdx:5,code:'118365',name:'ヴーヴ クリコ ラ グランダム 18',status:'欠品'}],
+    overdueCount:1,shortageCount:1,vendorOverdueCount:3,vendorShortageCount:1}; if(viewMode==='home')renderHome(); return; }
+  if(_oaLoading)return; _oaLoading=true;
+  gsr('getOrderAlerts').then(function(r){ _oaLoading=false; ORDER_ALERTS=r||{overdue:[],shortage:[]}; if(viewMode==='home')renderHome(); })
+    .catch(function(){ _oaLoading=false; });   // 未デプロイ等で落ちてもホームは壊さない（カード非表示のまま）
+}
+function orderAlertCardHtml(){
+  var a=ORDER_ALERTS; if(!a)return '';
+  var od=a.overdue||[], sh=a.shortage||[], vod=a.vendorOverdue||[], vsh=a.vendorShortage||[];
+  var totalOverdue=od.length+vod.length;
+  if(!totalOverdue&&!sh.length&&!vsh.length)return '';   // 何も無ければ出さない
+  // 業者発注（010m/マルト水谷）の未着＝納品希望日の実日付でETA。品名はrowIdxで在庫発注管理へ
+  var vrows=vod.map(function(it){
+    var part=it.partial?'　<span class="oa-part">一部'+esc(it.delivered)+'/'+esc(it.qty)+'</span>':'';
+    return '<div class="oa-row" onclick="openOrderAlert('+it.rowIdx+')"><div class="oa-bd">'
+      +'<div class="oa-nm">'+esc(it.name)+' ×'+esc(it.qty)+esc(it.unit||'')+' <span class="oa-vtag">🏭'+esc(it.supplier||'業者')+'</span></div>'
+      +'<div class="oa-sub">納品希望 '+esc(it.eta||'—')+'　<b class="oa-late">'+it.overdueDays+'日超過</b>'+part+'</div>'
+      +'</div><div class="oa-go">確認 ›</div></div>';
+  }).join('');
+  // 手タップ発注ログ基点（①②）の未着＝フロア＋承認者
+  var rows=od.map(function(it){
+    return '<div class="oa-row" onclick="openOrderAlert('+it.rowIdx+')"><div class="oa-bd">'
+      +'<div class="oa-nm">'+esc(it.name)+(it.qty?' ×'+esc(it.qty):'')+' <span class="oa-fl">['+esc(it.floor)+']</span></div>'
+      +'<div class="oa-sub">予定 '+esc(it.eta||'—')+'　<b class="oa-late">'+it.overdueDays+'日超過</b>'+(it.approver?'　承認 '+esc(it.approver):'')+'</div>'
+      +'</div><div class="oa-go">確認 ›</div></div>';
+  }).join('');
+  var allsh=sh.concat(vsh);
+  var shHtml=allsh.length?('<div class="oa-shortage">'+allsh.map(function(it){
+    return '<span class="oa-chip '+(it.status==='終売'?'dis':'sho')+'">'+(it.status==='終売'?'🚫終売':'📭欠品')+'：'+esc(it.name)+'</span>';
+  }).join('')+'</div>'):'';
+  return '<div class="oa-card"><div class="oa-head">⚠️ 発注したのに届いていません <span class="oa-cnt">'+totalOverdue+'件</span></div>'
+    +(totalOverdue?(vrows+rows):'<div class="oa-none">未着はありません（下は把握済みの欠品・終売）</div>')+shHtml+'</div>';
+}
+function openOrderAlert(rowIdx){ openStockManager(); }   // 在庫発注管理へ＝そこで納品✓／欠品／終売を操作
 
 /* ===== ⏱ 出退勤の打刻 =====
    時刻はサーバが採る＝端末の時計ズレを持ち込まない（フロントから時刻を送ってはいけない）。
@@ -4568,9 +4643,34 @@ function svSet(floor){
 }
 function undelHtml(items){
   if(!items.length) return '<span class="empty-msg" style="padding:0;font-size:12px">なし</span>';
+  // 品名はonclickに埋めない（クォート入りで壊れる）＝rowIdxだけ渡し、ハンドラがstockState.undeliveredから引く
   return items.map(function(it){
-    return '<div class="stk-undel-row"><span><span class="stk-floor">['+esc(it.floor)+']</span> '+esc(it.name)+(it.qty?' ×'+esc(it.qty):'')+'</span><button class="stk-deliver" onclick="stkDelivered('+it.rowIdx+')">納品✓</button></div>';
+    var od=Number(it.overdueDays)||0;
+    var eta=it.eta?('<span class="stk-eta'+(od>0?' late':'')+'">'+(od>0?'⚠️予定 '+esc(it.eta)+'／'+od+'日超過':'予定 '+esc(it.eta))+'</span>'):'';
+    return '<div class="stk-undel-row'+(od>0?' late':'')+'"><span class="stk-undel-nm"><span class="stk-floor">['+esc(it.floor)+']</span> '+esc(it.name)+(it.qty?' ×'+esc(it.qty):'')+eta+'</span>'
+      +'<span class="stk-undel-acts"><button class="stk-deliver" onclick="stkDelivered('+it.rowIdx+')">納品✓</button>'
+      +'<button class="stk-shortage" onclick="stkMarkOrder('+it.rowIdx+',\'shortage\')">📭欠品</button>'
+      +'<button class="stk-discon" onclick="stkMarkOrder('+it.rowIdx+',\'discon\')">🚫終売</button></span></div>';
   }).join('');
+}
+/* 黒服が発注を「欠品・入荷未定」または「終売」として記録する。終売は在庫がメニュー落ちになる（現物は残る）。
+   未着リストからは即座に消す（楽観更新）＝再度アラートに出さない。品名はstockState.undeliveredから引く。 */
+function stkMarkOrder(rowIdx,kind){
+  var it=(stockState.undelivered||[]).filter(function(x){return x.rowIdx===rowIdx;})[0];
+  var nm=it?it.name:'この発注';
+  var discon=(kind==='discon');
+  var status=discon?'終売':'欠品・入荷未定';
+  var extra=discon
+    ?'\n\n🚫 終売にすると、この品は今後「メニュー落ち（仕入れない）」になります。現物の在庫は残ります。'
+    :'\n\n📭 入荷未定として記録します。入荷したら「納品✓」で戻せます。';
+  if(!confirm('「'+nm+'」を「'+status+'」として記録しますか？'+extra))return;
+  stockState.undelivered=stockState.undelivered.filter(function(x){return x.rowIdx!==rowIdx;});
+  var el=document.getElementById('stk-undel'); if(el)el.innerHTML=undelHtml(stockState.undelivered);
+  var bar=document.querySelector('.stk-undel-bar .lbl'); if(bar)bar.textContent='📋 未納品の発注 '+stockState.undelivered.length+'件';
+  gsr('setOrderStatusManual',{userId:KIOSK_USER_ID,rowIdx:rowIdx,status:status}).then(function(r){
+    if(r&&r.ok){ toast('記録しました：'+status+(r.supplyStopped?'（在庫'+r.supplyStopped+'件をメニュー落ちに）':'')); }
+    else{ alert('エラー: '+((r&&r.error)||'不明')); openStockManager(); }
+  }).catch(function(){ alert('記録に失敗'); openStockManager(); });
 }
 function stkCat(c){stockState.category=c;renderStock();}
 function stkFloor(f){stockState.floor=f;renderStock();}
