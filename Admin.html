@@ -438,8 +438,8 @@ var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
-  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
-  {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['ops','⚙️ 運営']]}
+  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
+  {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
 ];
 var GROUP='hr';
 function groupOf_(t){ for(var i=0;i<TAB_GROUPS.length;i++){ if(TAB_GROUPS[i].tabs.some(function(x){return x[0]===t;})) return TAB_GROUPS[i].g; } return TAB_GROUPS[0].g; }
@@ -455,7 +455,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,checklist:renderChecklist,menu:renderMenu,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -547,6 +547,43 @@ function drawFeeRenew(){
 function frSel(v){ FR_SEL=v; FR_Q=''; FR_MODE='due'; drawFeeRenew(); } // 月を変えたら「期限の人」に戻す
 function frMode(m){ FR_MODE=m; drawFeeRenew(); }
 function frSearch(){ var el=document.getElementById('fr-q'); FR_Q=el?el.value:''; drawFeeRenew(); }
+
+/* 🚗 送迎集計：月ごとの手段内訳（自社便◯件／ドライバー◯件）。バックは getOkuriMeansStats（管理者=全件・閲覧専用）。
+   記録＝軍師シフト盤の 🚙ドライバー⇄🚶自便 トグル → 送迎ログの「手段」列に残る。ここはそれを月別で数えるだけ。 */
+var OK_YM='', OK_DATA=null;
+function renderOkuri(){
+  loading();
+  api('getOkuriMeansStats',{ym:OK_YM||''}).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込みエラー')+'</div>'); return; }
+    OK_DATA=r; OK_YM=r.ym||OK_YM; drawOkuri();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function okYmLabel_(ym){ var p=String(ym||'').split('-'); return (p.length===2)?(p[0]+'年'+Number(p[1])+'月'):String(ym||''); }
+function okRow_(icon,label,n,col){
+  return '<div class="lrow"><div class="main"><div class="nm">'+icon+' '+esc(label)+'</div></div>'
+    +'<div style="font-weight:900;font-size:24px;color:'+(col||'var(--txt)')+'">'+n+'<span style="font-size:13px;font-weight:700;color:var(--dim)"> 件</span></div></div>';
+}
+function drawOkuri(){
+  var r=OK_DATA||{}, cur=r.ym||OK_YM;
+  var months=(r.months||[]).slice();
+  if(cur && months.indexOf(cur)<0) months.push(cur); // データ0でも選択中の月は出す
+  months.sort().reverse();
+  var chips=months.slice(0,12).map(function(m){
+    return '<span class="chip'+(m===cur?' on':'')+'" onclick="okSel(\''+m+'\')">'+okYmLabel_(m)+'</span>';
+  }).join('')||'<span class="sub">記録がまだありません</span>';
+  var jisha=Number(r.jisha||0), driver=Number(r.driver||0), unknown=Number(r.unknown||0), total=Number(r.total||0);
+  var known=jisha+driver;
+  var rows=okRow_('🏠','自社便',jisha,'#7fdca0')+okRow_('🚗','ドライバー',driver,'#e6c14a')
+    +(unknown>0?okRow_('❔','不明（手段未記録）',unknown,'var(--dim)'):'');
+  var share = known>0 ? '<div class="hint">自社便 '+Math.round(jisha/known*100)+'％ ・ ドライバー '+Math.round(driver/known*100)+'％'+(unknown>0?'（不明 '+unknown+'件は除く）':'')+'</div>' : '';
+  var bar='<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
+    +'<span class="cnt">🚗 '+okYmLabel_(cur)+' の送り：<b>'+total+'件</b></span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+chips+'</div>';
+  var sec='<div class="sec"><div class="sec-t">🚗 送りの手段内訳 <span class="sub">自社便＝自前の車で送り／ドライバー＝外部手配</span></div>'+rows+share+'</div>';
+  var hint='<div class="hint">件数＝送迎ログに残った「送り依頼」の数（キャンセルは含みません）。手段は軍師シフト盤の 🚙ドライバー ⇄ 🚶自便 トグルで記録します。この集計を入れる前の記録は手段が残っていないため「不明」に入ります。<b>閲覧専用</b>。</div>';
+  setBody(bar+sec+hint);
+}
+function okSel(ym){ OK_YM=ym; renderOkuri(); }
 
 /* ===== 👥 スタッフ ===== */
 function filtered(){ return ST.staff.filter(function(s){ if(roleFilter!=='all'&&s.role!==roleFilter)return false; if(q&&s.name.indexOf(q)<0)return false; return true; }); }
@@ -1042,6 +1079,95 @@ function toggleNotif(k){ notif[k].enabled=!(notif[k].enabled!==false); var el=do
 function saveNotif(){
   syncNotifInputs();
   api('saveNotifSettings',{settings:notif}).then(function(r){ res(r,'通知設定を保存しました'); });
+}
+
+/* ===== 🔁 自動通知の再送（押した時点の最新データで作り直して再送）===== */
+var resendState=null, resendSel={}, resendPhase='list', resendResult=null; // phase: 'list'|'confirm'|'result'
+var RESEND_CATS=[['group','⏰ グループ定時配信'],['dm','📨 黒服・キャスト個別DM'],['alert','⚙️ 監視アラート（今の状態で再判定）']];
+function renderResend(){
+  loading(); resendSel={}; resendPhase='list'; resendResult=null;
+  api('getResendableNotices').then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    resendState=r||{}; drawResend();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function resendQuotaLine_(){
+  var q=(resendState&&resendState.quota)||{};
+  if(!q.ok) return '<span style="color:#e0564a">配信枠を確認できません</span>';
+  if(q.type!=='limited') return '配信枠：無制限プラン';
+  var danger=(q.remain!=null&&q.remain<=0);
+  return '配信枠：残り <b style="color:'+(danger?'#e0564a':'var(--accent)')+'">'+(q.remain!=null?q.remain.toLocaleString():'?')+'</b> 通'+(q.limit?('（上限'+q.limit.toLocaleString()+'）'):'')+(danger?' <b style="color:#e0564a">⛔上限到達＝送信不可</b>':'');
+}
+function resendBadge_(n){
+  if(n.cat==='alert') return '<span class="badge kiosk">🔁 再判定</span>';
+  if(n.firedToday===true) return '<span class="badge" style="background:#15321f;color:#4ad07a">✅ 本日配信済</span>';
+  if(n.firedToday===false) return '<span class="badge" style="background:#2a2350;color:#b7a6ff">⚪ 未配信</span>';
+  return '';
+}
+function resendChk_(on){ return '<span style="width:22px;height:22px;flex:none;border-radius:6px;border:2px solid '+(on?'var(--accent)':'#444a55')+';background:'+(on?'var(--accent)':'transparent')+';color:#0b0f1a;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px">'+(on?'✓':'')+'</span>'; }
+function resendRow_(n){
+  var on=!!resendSel[n.id];
+  var dyn=n.dynamic?'<span class="badge" style="background:#12303a;color:#5fc9e6">🔄 最新データ</span>':'';
+  return '<div class="lrow" onclick="resendToggle(\''+jstr(n.id)+'\')" style="cursor:pointer;align-items:center">'
+    +resendChk_(on)
+    +'<div class="main" style="margin-left:10px"><div class="nm">'+esc(n.label)+'</div>'
+    +'<div class="meta">'+esc(n.time||'')+' ・ '+resendBadge_(n)+' '+dyn+'</div></div></div>';
+}
+function drawResend(){
+  var list=(resendState&&resendState.list)||[];
+  if(resendPhase==='result'){ drawResendResult(); return; }
+  var selIds=Object.keys(resendSel).filter(function(k){return resendSel[k];});
+  var body='';
+  RESEND_CATS.forEach(function(c){
+    var rows=list.filter(function(n){return n.cat===c[0];});
+    if(!rows.length) return;
+    body+='<div style="font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.3px;margin:16px 2px 8px">'+c[1]+'</div>'+rows.map(resendRow_).join('');
+  });
+  if(!body) body='<div class="empty">再送できる通知がありません</div>';
+  var note='<div style="font-size:12px;color:#9aa0aa;line-height:1.6;margin:4px 2px 12px">押した<b>その時点の最新データ</b>で作り直して再送します（定時配信が未達だった／内容が古かった時の復旧用）。<br>⚠️退勤号令は<b>文面のみ</b>再送＝アテンドはリセットしません。監視系は今の状態で再判定＝該当がなければ送りません。</div>';
+  var tools='<div class="toolbar"><span class="cnt">'+resendQuotaLine_()+'</span><span class="sp" style="flex:1"></span>'
+    +'<button class="btn" onclick="resendPick(\'group\')">定時配信を選択</button>'
+    +'<button class="btn" onclick="resendPick(\'all\')">全選択</button>'
+    +'<button class="btn" onclick="resendPick(\'none\')">解除</button></div>';
+  var confirm='';
+  if(resendPhase==='confirm'){
+    var labels=list.filter(function(n){return resendSel[n.id];}).map(function(n){return '・'+esc(n.label);}).join('<br>');
+    confirm='<div style="border:1px solid var(--accent-line,#7a3f10);background:var(--accent-bg,#241a10);border-radius:10px;padding:14px;margin:12px 0">'
+      +'<div style="font-weight:800;margin-bottom:8px">🔁 以下 '+selIds.length+' 件を最新データで再送します。よろしいですか？</div>'
+      +'<div style="font-size:12px;line-height:1.7;margin-bottom:12px">'+labels+'</div>'
+      +'<button class="btn pri" onclick="resendGo()">送信する</button> <button class="btn" onclick="resendPhase=\'list\';drawResend();">キャンセル</button></div>';
+  }
+  var actionBtn=(resendPhase==='confirm')?'':'<div style="margin-top:16px"><button class="btn pri" style="width:100%;padding:12px;font-size:15px" onclick="resendAsk()">🔁 選択した '+selIds.length+' 件を最新データで再送</button></div>';
+  setBody(tools+note+body+confirm+actionBtn);
+}
+function resendToggle(id){ resendSel[id]=!resendSel[id]; if(resendPhase==='confirm')resendPhase='list'; drawResend(); }
+function resendPick(mode){
+  var list=(resendState&&resendState.list)||[];
+  if(mode==='none') resendSel={};
+  else list.forEach(function(n){ if(mode==='all'||n.cat===mode) resendSel[n.id]=true; });
+  if(resendPhase==='confirm')resendPhase='list'; drawResend();
+}
+function resendAsk(){
+  var selIds=Object.keys(resendSel).filter(function(k){return resendSel[k];});
+  if(!selIds.length){ toast('再送する通知を選んでください',true); return; }
+  resendPhase='confirm'; drawResend();
+}
+function resendGo(){
+  var ids=Object.keys(resendSel).filter(function(k){return resendSel[k];});
+  setBody('<div class="empty">再送中…</div>');
+  api('resendNotices',{ids:ids}).then(function(r){ resendResult=r||{}; resendPhase='result'; drawResend(); })
+    .catch(function(){ toast('再送に失敗しました',true); resendPhase='list'; drawResend(); });
+}
+function drawResendResult(){
+  var r=resendResult||{};
+  var icon={sent:'✅',skip:'⚪',failed:'⛔',error:'⛔'};
+  var rows=(r.results||[]).map(function(x){
+    var st=icon[x.status]||'・';
+    var col=(x.status==='failed'||x.status==='error')?'#e0564a':(x.status==='skip'?'#9aa0aa':'#4ad07a');
+    return '<div class="lrow" style="align-items:flex-start"><div class="main"><div class="nm">'+st+' '+esc(x.label)+'</div><div class="meta" style="color:'+col+'">'+esc(x.detail||'')+'</div></div></div>';
+  }).join('');
+  var head='<div style="font-weight:800;font-size:15px;margin:6px 2px 12px;color:'+(r.ok===false?'#e0564a':'inherit')+'">'+esc(r.note||'完了')+'</div>';
+  setBody('<div class="toolbar"><span class="cnt">再送結果</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="renderResend()">↻ 一覧に戻る</button></div>'+head+(rows||'<div class="empty">結果なし</div>'));
 }
 
 /* ===== ✅ チェックリスト（開店前・閉店後のやること編集） ===== */
@@ -2260,12 +2386,22 @@ function rsvRoleBadges(roles){
   var col={'予約':'background:#0e2440;color:#7ab0f0','担当':'background:#2a1030;color:#bb99ff','同伴':'background:#2a1800;color:#ffaa44','同席':'background:#0d2418;color:#66cc88'};
   return (roles||[]).map(function(x){ return '<span class="badge" style="'+(col[x]||'')+'">'+esc(x)+'</span>'; }).join(' ');
 }
+// 一覧インライン編集：退店予定時刻（チェック予定）だけをその行から直す。予約フォームは持たない＝この1点編集で足す。
+function rsvSaveCheckTime(rowIdx,v,el){
+  if(!rowIdx)return;
+  var stat=el&&el.parentElement?el.parentElement.querySelector('.rsv-ct-stat'):null;
+  if(stat){stat.textContent='保存中…';stat.style.color='var(--dim)';}
+  api('setReservationCheckTime',{rowIdx:rowIdx,checkTime:v||''})
+    .then(function(d){ if(d&&d.ok===false){ if(stat){stat.textContent='✕ '+(d.error||'失敗');stat.style.color='#e07a7a';} return; } if(stat){stat.textContent='✓ 保存';stat.style.color='#7be0a8';} })
+    .catch(function(){ if(stat){stat.textContent='✕ 通信エラー';stat.style.color='#e07a7a';} });
+}
 function rsvRowHtml(x,past){
   var st=x.status&&x.status!=='確定'?'<span class="badge" style="background:#2a2210;color:#ddaa44">'+esc(x.status)+'</span>':'';
   return '<div class="lrow"'+(past?' style="opacity:.55"':'')+'>'
     +'<div class="main"><div class="nm">'+esc(x.date)+'（'+hdWeekday(x.date)+'）'+esc(x.time||'')+'　'+esc(x.customer)+'様</div>'
     +'<div class="meta">'+esc(x.table||'席未定')+'　'+(x.pax||1)+'名'
-    +(x.tantouCast?'　担当: '+esc(x.tantouCast):'')+(x.dohanCast?'　同伴: '+esc(x.dohanCast):'')+'</div></div>'
+    +(x.tantouCast?'　担当: '+esc(x.tantouCast):'')+(x.dohanCast?'　同伴: '+esc(x.dohanCast):'')+'</div>'
+    +'<div class="meta" style="margin-top:5px;display:flex;align-items:center;gap:6px">🕛 チェック予定 <input type="time" value="'+esc(x.checkTime||'')+'" onchange="rsvSaveCheckTime('+(x.rowIdx||0)+',this.value,this)"'+(x.rowIdx?'':' disabled')+' style="background:#0d1526;color:#cfe0f5;border:1px solid #33406a;border-radius:6px;padding:2px 6px;font-size:12px"><span class="rsv-ct-stat" style="font-size:11px;color:var(--dim)"></span></div></div>'
     +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'+rsvRoleBadges(x.roles)+st+'</div></div>';
 }
 function drawRsv(){
@@ -2601,7 +2737,7 @@ function rsvMock(cast){
   var D=function(o){var n=new Date();n.setDate(n.getDate()+o);return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');};
   var all={
     'まや':[
-      {date:D(14),time:'20:00',customer:'田中',pax:2,table:'2F ボックス1',status:'確定',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',roles:['予約'],future:true},
+      {date:D(14),time:'20:00',customer:'田中',pax:2,table:'2F ボックス1',status:'確定',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',roles:['予約'],future:true,rowIdx:2,checkTime:'23:00'},
       {date:D(3), time:'同伴', customer:'佐藤',pax:2,table:'5F ボックス1',status:'確定',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'まや',roles:['予約','同伴'],future:true},
       {date:D(0), time:'21:00',customer:'鈴木',pax:1,table:'5F カウンター2',status:'確定',tantouCast:'まや',yoyakuCast:'',dohanCast:'',roles:['担当'],future:true},
       {date:D(-2),time:'20:30',customer:'高橋',pax:4,table:'2F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'まや',roles:['同伴'],future:false},
@@ -2661,6 +2797,11 @@ function blMockDetail(uuid){
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
 function MOCKAPI(action,body){
+  if(action==='getOkuriMeansStats'){
+    var okm={'2026-07':{jisha:14,driver:9,unknown:2},'2026-06':{jisha:11,driver:16,unknown:0},'2026-05':{jisha:8,driver:20,unknown:5}};
+    var tgt=String(body.ym||'2026-07')||'2026-07'; var o=okm[tgt]||{jisha:0,driver:0,unknown:0};
+    return {ok:true,ym:tgt,jisha:o.jisha,driver:o.driver,unknown:o.unknown,total:o.jisha+o.driver+o.unknown,months:Object.keys(okm).sort().reverse()};
+  }
   if(action==='getCustomerBirthdays'){
     var cbm=Number(body.month)||7;
     var jul=[
@@ -2699,6 +2840,7 @@ function MOCKAPI(action,body){
   }
   if(action==='getRsvMatrix')return rsvMxMock(body.from,body.days);
   if(action==='getCastReservations')return rsvMock(body.cast);
+  if(action==='setReservationCheckTime')return {ok:true,rowIdx:body.rowIdx,checkTime:body.checkTime||''};
   if(action==='getMenuBoard')return {ok:true,board:mnBoard()};
   if(action==='previewMenuBulk'){
     var pp=mnParse(body.text), ex={}, S3=mnMock();
@@ -2760,6 +2902,19 @@ function MOCKAPI(action,body){
   if(action==='getShiftSubmitStatus')return {ok:true,weekLabel:'7/14〜7/20',weekKey8:'20260714',total:5,submitted:['まや','たかし'],declined:['ゆうた'],missing:[{name:'鈴木海',registered:true},{name:'あや',registered:false}]};
   if(action==='runShiftOpenNow')return {ok:true,sent:4,total:5,label:'7/14〜7/20'};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
+  if(action==='getResendableNotices')return {ok:true,today:'2026-07-23',quota:{ok:true,type:'limited',limit:30000,used:8200,remain:21800},list:[
+    {id:'lineup',label:'本日出勤ラインナップ',cat:'group',time:'14:00',dynamic:true,firedToday:true},
+    {id:'kinsen_mae',label:'開店準備の号令',cat:'group',time:'19:30',dynamic:true,firedToday:false},
+    {id:'driver_notice_1600',label:'16時ドライバー連絡',cat:'group',time:'16:00',dynamic:true,firedToday:true},
+    {id:'kinsen_go',label:'退勤号令（文面のみ・アテンド保持）',cat:'group',time:'00:30',dynamic:false,firedToday:false},
+    {id:'seki_check',label:'各席チェック',cat:'group',time:'23:45',dynamic:false,firedToday:false},
+    {id:'kuro_handover',label:'黒服 申し送りDM',cat:'dm',time:'17:00',dynamic:true,firedToday:false},
+    {id:'req20',label:'20時出勤依頼の候補',cat:'dm',time:'12:00',dynamic:true,firedToday:true},
+    {id:'shift_remind',label:'来週シフト催促（木）',cat:'dm',time:'木19:00',dynamic:true,firedToday:false},
+    {id:'missing_shukkin',label:'未出勤リマインド（再判定）',cat:'alert',time:'21:00',dynamic:true,firedToday:false},
+    {id:'rain_alert',label:'雨アラート（再判定）',cat:'alert',time:'20:00〜',dynamic:true,firedToday:null}
+  ]};
+  if(action==='resendNotices'){var ids=body.ids||[];var LB={lineup:'本日出勤ラインナップ',kinsen_mae:'開店準備の号令',driver_notice_1600:'16時ドライバー連絡',kinsen_go:'退勤号令（文面のみ・アテンド保持）',seki_check:'各席チェック',kuro_handover:'黒服 申し送りDM',req20:'20時出勤依頼の候補',shift_remind:'来週シフト催促（木）',missing_shukkin:'未出勤リマインド（再判定）',rain_alert:'雨アラート（再判定）'};return {ok:true,note:'✅ '+ids.length+'件を再送しました。（この操作で約'+ids.length+'通消費）',quotaBefore:{used:8200},quotaAfter:{used:8200+ids.length},results:ids.map(function(id){return {id:id,label:(LB[id]||id),cat:'group',status:'sent',sent:1,detail:(id==='rain_alert'||id==='missing_shukkin')?'今の状態で再判定（該当なければ無送信）':'送信'};})};}
   if(action==='getPublishStatus')return {ok:true,month:body.month,payPublished:false,rankPublished:true,salesDate:''};
   if(action==='getOkuriMode')return {ok:true,mode:'driver'};
   if(action==='getCashThresholds')return {ok:true,thresholds:{till:{f5:{m10000:{min:7,max:30},m5000:{min:5,max:30},m1000:{min:10,max:50}},f2:{m10000:{min:5,max:30},m5000:{min:5,max:30},m1000:{min:10,max:50}}},safe:{f5:{m10000:{min:10},m5000:{min:10},m1000:{min:10}},f2:{m10000:{min:10},m5000:{min:10},m1000:{min:10}}}}};
