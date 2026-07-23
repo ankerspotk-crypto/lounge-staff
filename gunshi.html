@@ -1765,10 +1765,8 @@ var BOTTLE_SHELVES=(function(){
   // shelf(表示名, ゾーン{key:{x,y,w,h,label}}, 実写真URL, canvas{w,h}) ／ 実写真URLを入れれば仮画像を差し替え・canvasは写真の基準px
   function shelf(label, zones, img, canvas){ canvas=canvas||{w:CW,h:CH}; return {label:label, canvas:canvas, img:img||bsvPlaceholder_(label,zones,canvas.w,canvas.h), zones:zones}; }
   return {
-    '2F': shelf('2F 棚', {   // ← 実写真待ち（仮）。写真到着後にimg+zonesを差し替え
-      'A':{x:40,  y:70, w:290, h:560, label:'A棚'},
-      'B':{x:355, y:70, w:290, h:560, label:'B棚'},
-      'C':{x:670, y:70, w:290, h:560, label:'C棚'}
+    '2F': shelf('2F 棚', {   // 2Fは細かい位置指定なし＝フロア全体（実写真待ち・仮）
+      'ALL':{x:60, y:70, w:880, h:560, label:'2F 全体'}
     }, null /* ← 実写真URL 例:'gunshi-assets/shelf-2f.jpg' */),
     // 5F＝実写真(1618x1012)。ゾーンpxはボス送付の配置写真から採寸（要微調整）。メイン背面棚 A〜G ＋ 横のメタルラック H〜K
     '5F': shelf('5F 棚', {
@@ -1788,10 +1786,19 @@ var BOTTLE_SHELVES=(function(){
 function bsvToHalf_(s){ return String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}); }
 function parseBottlePos_(pos){
   var raw=String(pos||'').trim();
-  var floor=bottlePosArea_({bottlePos:raw});               // '2F'|'5F'|'倉庫'|''
-  var body=bsvToHalf_(raw).replace(/[25]\s*F/i,'');        // フロア表記(2F/5F)を外す＝floorのFをゾーン文字と誤検出しない
-  var m=body.match(/([A-Za-z])\s*棚?\s*(\d+)?/);           // A〜K等のゾーン1文字（+任意のスロット番号）
-  return {raw:raw, floor:floor, section:m?m[1].toUpperCase():null, slot:(m&&m[2])?m[2]:''};
+  var h=bsvToHalf_(raw);
+  var body=h.replace(/[25]\s*F/ig,'');                     // フロア表記(2F/5F)を外してからゾーン文字を拾う
+  var m=body.match(/([A-Za-z])\s*棚?\s*(\d+)?/);           // アルファベット1文字＝5Fのゾーン（+任意スロット番号）
+  var section=m?m[1].toUpperCase():null, slot=(m&&m[2])?m[2]:'';
+  // フロア判定：2F明記＝2F(全体・細かい位置なし) ＞ 5F明記 ＞ アルファベットだけ＝5F ＞ 冷蔵庫＝倉庫
+  var floor;
+  if(/2\s*F/i.test(h)){ floor='2F'; section=null; }        // 2Fは細かい位置を持たない＝全体（文字があっても無視）
+  else if(/5\s*F/i.test(h)) floor='5F';
+  else if(section) floor='5F';                             // アルファベットは全部5F
+  else if(/冷蔵|冷/.test(raw)) floor='倉庫';
+  else if(raw) floor='倉庫';
+  else floor='';
+  return {raw:raw, floor:floor, section:section, slot:slot};
 }
 function bsvResolveZone_(p){
   var sh=BOTTLE_SHELVES[p&&p.floor]; if(!sh) return null;
@@ -1844,9 +1851,16 @@ function bsvFocusTarget_(){
   var hi=document.getElementById('bsvHi'), lbl=document.getElementById('bsvLabel'), note=document.getElementById('bsvEmpty'), layer=document.getElementById('bsvLayer');
   var r=bsvResolveZone_(bsvState.pos||{floor:bsvState.floor,raw:''});
   if(!r || !r.zone){
+    hi.style.display='none';
     note.style.display='block';
-    note.textContent='棚位置: '+((bsvState.pos&&bsvState.pos.raw)||'未登録')+'（エリア未特定・全体表示）';
-    hi.style.display='none'; lbl.style.display='none'; return;
+    note.textContent=(bsvState.floor==='2F') ? '2F（フロア全体・棚の細かい位置なし）'
+      : '棚位置: '+((bsvState.pos&&bsvState.pos.raw)||'未登録')+'（全体表示）';
+    if(bsvState.label||bsvState.bottle){
+      lbl.style.display='block';
+      lbl.innerHTML=(bsvState.label?esc(bsvState.label):'')+(bsvState.bottle?'<span class="bsv-lb2">🍶 '+esc(bsvState.bottle)+'</span>':'');
+      lbl.style.left='12px'; lbl.style.top=(b.SH-58)+'px';
+    } else lbl.style.display='none';
+    return;
   }
   note.style.display='none';
   var z=r.zone, SW=b.SW, SH=b.SH, LW=b.LW, LH=b.LH;
