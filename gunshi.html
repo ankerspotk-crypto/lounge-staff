@@ -310,6 +310,8 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .rbottle{font-size:11px;font-weight:700;color:#8fd06a;background:#12240f;border:1px solid #356020;border-radius:7px;padding:3px 8px;margin-top:4px;display:inline-block;}
 .rbottle b{color:#c8f0a8;font-weight:800;}
 .rbottle .rb-nopos{color:#c69a6a;font-weight:600;}
+.rbottle.rbottle-go{cursor:pointer;border-color:#6a9a38;}
+.rbottle-go .rb-go{margin-left:6px;color:#ffd257;font-weight:800;}
 /* 🍶 本日の予約ボトル 一括リスト */
 .bp-list{display:flex;flex-direction:column;gap:8px;}
 .bp-item{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid #2f5020;border-left:4px solid #4dcc84;border-radius:10px;padding:9px 12px;cursor:pointer;}
@@ -2553,7 +2555,9 @@ function rcardHtml(r,isNext){
     +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+mchip+statusBtns(r)+'</div>'
     +'<div class="rbadges">'+badges+'</div>'
     +(r.checkTime?'<div class="rnote" style="color:#ffc98a">🕛 チェック予定 '+esc(r.checkTime)+'</div>':'')
-    +(r.bottle?'<div class="rbottle">🍶 '+esc(r.bottle)+(r.bottlePos?' <b>📍'+esc(r.bottlePos)+'</b>':' <span class="rb-nopos">位置未登録</span>')+'</div>':'')
+    +(r.bottle?(bsvShowable_(r.bottlePos)
+      ? '<div class="rbottle rbottle-go" onclick="event.stopPropagation();openBottleShelf(\''+jsStr(r.bottlePos)+'\',\''+jsStr((r.cust||'')+' 様')+'\',\''+jsStr(r.bottle||'')+'\')">🍶 '+esc(r.bottle)+' <b>📍'+esc(r.bottlePos)+'</b><span class="rb-go">🔍棚</span></div>'
+      : '<div class="rbottle">🍶 '+esc(r.bottle)+(r.bottlePos?' <b>📍'+esc(r.bottlePos)+'</b>':' <span class="rb-nopos">位置未登録</span>')+'</div>'):'')
     +((r.subCustomers&&r.subCustomers.length)?'<div class="rnote" style="color:#66cc88">👥 同席 +'+r.subCustomers.length+'名: '+r.subCustomers.map(function(s){return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':'');}).join('、')+'</div>':'')
     +(r.nextMemo?'<div class="rnextmemo">📌 次回対応: '+esc(r.nextMemo)+'</div>':'')
     +(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
