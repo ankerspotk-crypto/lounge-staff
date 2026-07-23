@@ -721,6 +721,7 @@ var SECTIONS = {
   customers:{ t:'顧客管理',     i:'👥' },
   bday:     { t:'誕生日設定',   i:'🎂' },
   custbday: { t:'今月誕生日の客', i:'🎂' },
+  wine:     { t:'シャンパン・ワイン在庫', i:'🍾' },
   requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'シフト管理',   i:'🗂' },
   notif:    { t:'通知設定',     i:'🔔' },
@@ -762,7 +763,7 @@ function menuBtn(key) {
     + '<span style="font-size:14px;font-weight:700;color:#e8f0ff">' + s.t + '</span></button>';
 }
 function homeMenu() {
-  var castKeys = ['board','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday'];
+  var castKeys = ['board','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   var html = '<div style="font-size:12px;color:#8aabcc;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
@@ -806,6 +807,7 @@ function switchTab(tab) {
   if (tab === 'shiftmgmt') { loadShiftMgmt(); return; }
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
+  if (tab === 'wine') { loadWine(); return; }
   if (tab === 'customers') { loadCustomers(); return; }
   if (tab === 'bday') { loadBirthday(); return; }
   if (tab === 'custbday') { loadCustomerBirthdays(); return; }
@@ -2150,6 +2152,78 @@ function renderRanking(d) {
   setContent(h);
   setupBookmarklet_();
   setupCashBookmarklet_();
+}
+
+// ---- シャンパン・ワイン在庫 ----
+// 在庫数(在庫発注マスタ) × メニュー売価(店舗メニュー) を品名で2F+5F合算した一覧。
+// バックエンド handlePortalApi_ の tab==='wine' がデータを組む。金額は参照専用の売価ベース。
+function loadWine() {
+  setContent('<div style="text-align:center;color:#6a8ab0;padding:60px 0;font-size:14px">読み込み中...</div>');
+  fetch(GAS_URL + '?action=portal&tab=wine&userId=' + encodeURIComponent(userId))
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      renderWine(d);
+    })
+    .catch(function() { setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function renderWine(d) {
+  var champagne = d.champagne || [];
+  var wine = d.wine || [];
+  var grand = d.grand || { qty: 0, value: 0 };
+  var sub = d.subtotal || { champagne: { qty: 0, value: 0 }, wine: { qty: 0, value: 0 } };
+
+  var h = '<div style="padding:14px">';
+
+  // 総額サマリー
+  h += '<div style="background:#0f1d18;border:1px solid #24503c;border-radius:12px;padding:16px;margin-bottom:16px">';
+  h += '<div style="font-size:11px;color:#7fb89a;margin-bottom:6px;letter-spacing:.5px">在庫総額（参考・売価ベース）</div>';
+  h += '<div style="font-size:26px;font-weight:800;color:#7fe0a0">' + yen(grand.value) + '</div>';
+  h += '<div style="font-size:12px;color:#8aabcc;margin-top:4px">合計 ' + grand.qty + '本'
+    + '（シャンパン ' + sub.champagne.qty + '本・ワイン ' + sub.wine.qty + '本）</div>';
+  h += '</div>';
+
+  h += wineCard_('🍾 シャンパン', champagne, sub.champagne);
+  h += wineCard_('🍷 ワイン', wine, sub.wine);
+
+  h += '<div style="font-size:10px;color:#6a8ab0;text-align:center;padding:8px 4px;line-height:1.6">'
+    + '金額は店舗メニューの売価に基づく<b>参考値</b>です（会計はTRUSTが正）。<br>'
+    + 'メニューに紐づいた銘柄のみ表示・在庫0本は非表示。</div>';
+  h += '</div>';
+  setContent(h);
+}
+
+function wineCard_(title, list, subtotal) {
+  var st = subtotal || { qty: 0, value: 0 };
+  var c = '<div style="background:#111b2e;border:1px solid #162848;border-radius:12px;padding:14px;margin-bottom:14px">';
+  c += '<div style="font-size:13px;font-weight:700;color:#7ab0f0;margin-bottom:10px;letter-spacing:.5px">' + title + '</div>';
+  if (!list || list.length === 0) {
+    c += '<div style="text-align:center;color:#7a9cc8;font-size:13px;padding:16px 0">データなし</div>';
+  } else {
+    list.forEach(function(it) {
+      c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #181828">';
+      c += '<span style="flex:1;font-size:13px;color:#b0c8e8">' + esc(it.name) + wineTag_(it.menuCat) + '</span>';
+      c += '<span style="font-size:13px;color:#a0c0e0;width:52px;text-align:right;flex-shrink:0">' + (it.qty || 0) + '本</span>';
+      c += '<span style="font-size:13px;font-weight:600;color:#c0d4f0;width:96px;text-align:right;flex-shrink:0">' + yen(it.value) + '</span>';
+      c += '</div>';
+    });
+    c += '<div style="display:flex;align-items:center;padding:10px 0 2px;margin-top:2px;border-top:2px solid #24406a">';
+    c += '<span style="flex:1;font-size:12px;font-weight:700;color:#8aabcc">小計</span>';
+    c += '<span style="font-size:13px;color:#a0c0e0;width:52px;text-align:right;flex-shrink:0">' + st.qty + '本</span>';
+    c += '<span style="font-size:14px;font-weight:800;color:#7fe0a0;width:96px;text-align:right;flex-shrink:0">' + yen(st.value) + '</span>';
+    c += '</div>';
+  }
+  c += '</div>';
+  return c;
+}
+
+// WINE赤/WINE白 の赤・白を小さなタグで示す（シャンパンには付けない）
+function wineTag_(menuCat) {
+  var m = String(menuCat || '');
+  if (m.indexOf('赤') >= 0) return ' <span style="font-size:10px;color:#e08a8a">赤</span>';
+  if (m.indexOf('白') >= 0) return ' <span style="font-size:10px;color:#e0d08a">白</span>';
+  return '';
 }
 
 function setupBookmarklet_() {
