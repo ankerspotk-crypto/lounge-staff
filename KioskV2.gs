@@ -305,10 +305,11 @@ function kioskGetOkuriMode_() {
 function kioskSetOkuri(cast, on, dest, mode) {
   return withPropLock_(function () {
     var today = todayStr();
-    if (on) saveOkuri(today, cast, dest || '', 1);
+    var means = mode || 'ドライバー';
+    if (on) saveOkuri(today, cast, dest || '', 1, means); // 手段も送迎ログに残す（集計用）
     else cancelOkuri(today, cast, 1);
     var mm = kioskGetOkuriMode_();
-    if (on) mm[cast] = mode || 'ドライバー'; else delete mm[cast];
+    if (on) mm[cast] = means; else delete mm[cast];
     setProp('KOKURIMODE_' + today, JSON.stringify(mm));
     return { ok: true };
   });
@@ -318,6 +319,7 @@ function kioskSetOkuriMode(cast, mode) {
     var mm = kioskGetOkuriMode_();
     mm[cast] = mode;
     setProp('KOKURIMODE_' + todayStr(), JSON.stringify(mm));
+    updateOkuriMeans_(todayStr(), cast, mode); // 既に送り記録があれば手段もシートに追随（集計用）
     return { ok: true };
   });
 }
