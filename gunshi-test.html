@@ -3751,6 +3751,15 @@ function startCustEdit(){
     else if(f.key==='memberSince') v=(custDetailCur&&custDetailCur.joined)||v;
     if(f.type==='area') input='<textarea id="ce-'+f.key+'" class="finput" rows="3" style="resize:none;width:100%;box-sizing:border-box">'+esc(v)+'</textarea>';
     else if(f.type==='date') input='<input id="ce-'+f.key+'" class="finput" type="date" style="width:100%;box-sizing:border-box" value="'+esc(toDateInput(v))+'">';
+    else if(f.key==='tantou'){
+      // 担当は在籍キャストのプルダウン（新規フォームと同じ CASTS 由来）
+      var opts='<option value="">（未設定）</option>', found=false;
+      (CASTS||[]).forEach(function(c){ var sel=(c===v); if(sel)found=true;
+        opts+='<option value="'+esc(c)+'"'+(sel?' selected':'')+'>'+esc(c)+'</option>'; });
+      // 在籍リストに無い現在値（退職担当など）は消さず先頭に残して selected ＝非破壊
+      if(v && !found) opts='<option value="'+esc(v)+'" selected>'+esc(v)+'</option>'+opts;
+      input='<select id="ce-'+f.key+'" class="finput" style="width:100%;box-sizing:border-box">'+opts+'</select>';
+    }
     else input='<input id="ce-'+f.key+'" class="finput" style="width:100%;box-sizing:border-box" value="'+esc(v)+'">';
     return '<div style="margin:9px 0"><div style="color:var(--dim);font-size:12px;margin-bottom:3px">'+esc(f.label)+'</div>'+input+'</div>';
   }).join('');
