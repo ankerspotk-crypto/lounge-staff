@@ -17267,7 +17267,11 @@ function addTaikenToRoster_(genji) {
     for (var i = 1; i < rows.length; i++) {
       if (normalizeName_(String(rows[i][1] || '')).replace(/[\s　]/g, '') === key) return { ok: true, note: 'existing' };
     }
-    sh.appendRow(['', genji, '体験', '', '', '', '', new Date()]);
+    // 列ドリフト対策：位置固定でH列へ new Date() を書くと入店日を潰す。登録日は見出しで解決して書く。G(基本バック)/H(入店日)は触らない。
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+    var regCol = headers.indexOf('登録日'); // 0-based / 無ければ -1
+    sh.appendRow(['', genji, '体験']);                                        // A空(userId無し) / B源氏名 / C役割=体験
+    if (regCol >= 0) sh.getRange(sh.getLastRow(), regCol + 1).setValue(new Date());
     return { ok: true, note: 'added' };
   } catch (e) { console.error('addTaikenToRoster_', e); return { ok: false, error: String(e) }; }
 }
