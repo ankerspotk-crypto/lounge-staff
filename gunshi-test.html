@@ -1024,6 +1024,26 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .fbox.on{border-color:var(--green);color:var(--green);background:rgba(102,204,136,.12);}
 .fbox.on .ck{background:var(--green);border-color:var(--green);color:#06210f;}
 .fbox.cur{box-shadow:0 0 0 2px var(--accent-line);}
+/* ===== 🍶 ボトル棚ビジュアライズ（棚画像→ボトル位置へズーム） ===== */
+#bottleShelfOverlay{position:fixed;inset:0;z-index:9998;display:none;flex-direction:column;background:#07070c;height:100vh;height:100dvh;overscroll-behavior:none;}
+.bsv-hd{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:#0d0e15;border-bottom:1px solid #23263a;flex-shrink:0;}
+.bsv-hd .bsv-t{font-weight:900;font-size:15px;color:#ffe9a8;flex-shrink:0;}
+.bsv-floors{display:flex;gap:6px;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.bsv-fl{padding:6px 12px;border-radius:999px;background:#181a26;border:1px solid #2a2d42;color:#aeb6d0;font-size:13px;font-weight:800;white-space:nowrap;cursor:pointer;}
+.bsv-fl.on{background:#ffd257;border-color:#ffd257;color:#241c00;}
+.bsv-x{padding:6px 12px;border-radius:999px;background:#20222e;border:1px solid #33364a;color:#dfe4f2;font-size:13px;font-weight:800;cursor:pointer;flex-shrink:0;}
+.bsv-stage{flex:1;position:relative;overflow:hidden;background:#0a0a10;touch-action:none;}
+.bsv-layer{position:absolute;left:0;top:0;transform-origin:0 0;transition:transform .55s cubic-bezier(.22,.7,.2,1);will-change:transform;}
+.bsv-img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none;pointer-events:none;}
+.bsv-hi{position:absolute;border:3px solid #ffd257;border-radius:10px;box-shadow:0 0 0 9999px rgba(0,0,0,.52);pointer-events:none;
+  transition:left .55s cubic-bezier(.22,.7,.2,1),top .55s cubic-bezier(.22,.7,.2,1),width .55s cubic-bezier(.22,.7,.2,1),height .55s cubic-bezier(.22,.7,.2,1);
+  animation:bsvPulse 1.15s ease-in-out infinite;}
+@keyframes bsvPulse{0%,100%{border-color:#ffd257;}50%{border-color:#fff4cc;}}
+.bsv-label{position:absolute;background:rgba(20,22,30,.94);border:1px solid rgba(255,210,87,.5);border-radius:10px;padding:7px 12px;font-weight:800;color:#ffe9a8;pointer-events:none;max-width:74vw;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,.5);transition:left .55s cubic-bezier(.22,.7,.2,1),top .55s cubic-bezier(.22,.7,.2,1);}
+.bsv-label .bsv-lb2{display:block;font-weight:700;color:#cdd6ee;font-size:12px;margin-top:2px;}
+.bsv-empty{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(20,22,30,.92);border:1px solid #33364a;border-radius:10px;padding:8px 14px;color:#cdd6ee;font-size:13px;font-weight:700;pointer-events:none;text-align:center;max-width:88vw;}
+.bp-pos-go{cursor:pointer;}
+.bp-see{margin-left:4px;font-size:12px;opacity:.9;}
 </style>
 </head>
 <body>
@@ -1721,6 +1741,179 @@ var SEAT_POS={
   '5F-C5':{x:0,y:256,w:250,h:56}, '5F-C6':{x:258,y:256,w:110,h:56},
   '5F-B2':{x:0,y:320,w:180,h:150},'5F-B1':{x:188,y:320,w:180,h:150}
 };
+/* ============================================================================
+ * 🍶 ボトルキープ 棚ビジュアライズ（棚画像→該当ボトル位置へズーム/フォーカス）
+ *  既存の「ボトル位置」テキスト（例 "2F-B棚3" "冷蔵庫"）を "棚エリア" に対応づけて棚写真の該当
+ *  エリアへズームする。会員ごとのピン配置は持たない（＝要件：エリア単位・SEAT_POS と同思想）。
+ *  座標系は SEAT_POS と同じ「固定pxキャンバス→割合」。canvas={w,h}＝写真の基準px。
+ *  ⚠️実写真差し替えは shelf(…,実写真URL) の第3引数を入れる＋各 zones の px を微調整するだけ（下記1箇所集約）。
+ *  実写真が来るまでは bsvPlaceholder_() の inline SVG を使う（バイナリ資産ゼロで全機構を検証）。 */
+function bsvPlaceholder_(floorLabel, zones, cw, ch){
+  var pal=['#39507e','#4a3d78','#2f6b54','#6b5a34','#6b3a4e'], i=0, inner='';
+  Object.keys(zones).forEach(function(k){ var z=zones[k], c=pal[i++%pal.length];
+    inner+='<rect x="'+z.x+'" y="'+z.y+'" width="'+z.w+'" height="'+z.h+'" rx="16" fill="'+c+'" stroke="#93a4cc" stroke-width="3"/>'
+      +'<text x="'+(z.x+z.w/2)+'" y="'+(z.y+z.h/2)+'" fill="#eef3ff" font-family="sans-serif" font-size="42" font-weight="700" text-anchor="middle" dominant-baseline="central">'+(z.label||k)+'</text>';
+  });
+  var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+cw+'" height="'+ch+'" viewBox="0 0 '+cw+' '+ch+'">'
+    +'<rect width="'+cw+'" height="'+ch+'" fill="#0f1119"/>'
+    +'<text x="26" y="46" fill="#7f8bb0" font-family="sans-serif" font-size="26" font-weight="700">'+floorLabel+'（棚イメージ・仮）</text>'
+    +inner+'</svg>';
+  return 'data:image/svg+xml,'+encodeURIComponent(svg);
+}
+var BOTTLE_SHELVES=(function(){
+  var CW=1000, CH=700;
+  // shelf(表示名, ゾーン{key:{x,y,w,h,label}}, 実写真URL, canvas{w,h}) ／ 実写真URLを入れれば仮画像を差し替え・canvasは写真の基準px
+  function shelf(label, zones, img, canvas){ canvas=canvas||{w:CW,h:CH}; return {label:label, canvas:canvas, img:img||bsvPlaceholder_(label,zones,canvas.w,canvas.h), zones:zones}; }
+  return {
+    '2F': shelf('2F 棚', {   // ← 実写真待ち（仮）。写真到着後にimg+zonesを差し替え
+      'A':{x:40,  y:70, w:290, h:560, label:'A棚'},
+      'B':{x:355, y:70, w:290, h:560, label:'B棚'},
+      'C':{x:670, y:70, w:290, h:560, label:'C棚'}
+    }, null /* ← 実写真URL 例:'gunshi-assets/shelf-2f.jpg' */),
+    // 5F＝実写真(1618x1012)。ゾーンpxはボス送付の配置写真から採寸（要微調整）。メイン背面棚 A〜G ＋ 横のメタルラック H〜K
+    '5F': shelf('5F 棚', {
+      'A':{x:695, y:120,w:200,h:120,label:'A'}, 'B':{x:695, y:248,w:200,h:100,label:'B'}, 'C':{x:695, y:352,w:200,h:100,label:'C'},
+      'D':{x:475, y:120,w:200,h:120,label:'D'}, 'E':{x:475, y:248,w:200,h:100,label:'E'},
+      'F':{x:255, y:120,w:200,h:120,label:'F'}, 'G':{x:35,  y:120,w:195,h:120,label:'G'},
+      'J':{x:975, y:690,w:210,h:80, label:'J'}, 'K':{x:975, y:812,w:210,h:95, label:'K'},
+      'H':{x:1248,y:690,w:112,h:80, label:'H'}, 'I':{x:1248,y:812,w:112,h:95, label:'I'}
+    }, 'gunshi-assets/shelf-5f.jpg', {w:1618,h:1012}),
+    '倉庫': shelf('倉庫 / 冷蔵庫', {
+      '冷蔵庫':{x:60,  y:70, w:420, h:560, label:'冷蔵庫'},
+      '棚':    {x:520, y:70, w:420, h:560, label:'常温棚'}
+    }, null /* ← 実写真URL 例:'gunshi-assets/shelf-store.jpg' */)
+  };
+})();
+// "2F-B棚3" → {floor:'2F', section:'B', slot:'3'}（全角も許容・floor判定は既存 bottlePosArea_ を流用）
+function bsvToHalf_(s){ return String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}); }
+function parseBottlePos_(pos){
+  var raw=String(pos||'').trim();
+  var floor=bottlePosArea_({bottlePos:raw});               // '2F'|'5F'|'倉庫'|''
+  var body=bsvToHalf_(raw).replace(/[25]\s*F/i,'');        // フロア表記(2F/5F)を外す＝floorのFをゾーン文字と誤検出しない
+  var m=body.match(/([A-Za-z])\s*棚?\s*(\d+)?/);           // A〜K等のゾーン1文字（+任意のスロット番号）
+  return {raw:raw, floor:floor, section:m?m[1].toUpperCase():null, slot:(m&&m[2])?m[2]:''};
+}
+function bsvResolveZone_(p){
+  var sh=BOTTLE_SHELVES[p&&p.floor]; if(!sh) return null;
+  var z=null, key=null;
+  if(p.floor==='倉庫'){ key=/冷蔵|冷/.test(p.raw||'')?'冷蔵庫':'棚'; z=sh.zones[key]||sh.zones['冷蔵庫']||sh.zones['棚']; if(z&&!sh.zones[key])key=sh.zones['冷蔵庫']?'冷蔵庫':'棚'; }
+  else if(p.section && sh.zones[p.section]){ key=p.section; z=sh.zones[p.section]; }
+  return {shelf:sh, zone:z||null, key:z?key:null};
+}
+/* ---- ビューア（専用トップレベルオーバーレイ・imgOverlay と同じ z-index:9998・body直append） ---- */
+var bsvState={floor:null, pos:null, label:'', bottle:'', _base:null};
+function bsvStage_(){ return document.getElementById('bsvStage'); }
+function ensureShelfOverlay_(){
+  var ov=document.getElementById('bottleShelfOverlay'); if(ov) return ov;
+  ov=document.createElement('div'); ov.id='bottleShelfOverlay';
+  ov.innerHTML='<div class="bsv-hd"><div class="bsv-t">🍶 ボトル棚</div><div class="bsv-floors" id="bsvFloors"></div><div class="bsv-x" onclick="closeBottleShelf()">閉じる ✕</div></div>'
+    +'<div class="bsv-stage" id="bsvStage">'
+    +  '<div class="bsv-layer" id="bsvLayer"><img class="bsv-img" id="bsvImg" alt=""></div>'
+    +  '<div class="bsv-hi" id="bsvHi" style="display:none"></div>'
+    +  '<div class="bsv-label" id="bsvLabel" style="display:none"></div>'
+    +  '<div class="bsv-empty" id="bsvEmpty" style="display:none"></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+  window.addEventListener('resize', bsvOnResize_);
+  window.addEventListener('orientationchange', bsvOnResize_);
+  return ov;
+}
+function bsvRenderFloors_(active){
+  var el=document.getElementById('bsvFloors'); if(!el)return;
+  el.innerHTML=Object.keys(BOTTLE_SHELVES).map(function(fl){
+    return '<div class="bsv-fl'+(fl===active?' on':'')+'" onclick="bsvSwitchFloor_(\''+jsStr(fl)+'\')">'+esc(BOTTLE_SHELVES[fl].label)+'</div>';
+  }).join('');
+}
+// 全景（写真全体が収まる）をレイヤに適用し、その変換を _base.ov に保存
+function bsvApplyOverview_(sh){
+  var st=bsvStage_(); if(!st)return;
+  var SW=st.clientWidth||1, SH=st.clientHeight||1, cw=sh.canvas.w, ch=sh.canvas.h;
+  var layer=document.getElementById('bsvLayer'), LW=SW, LH=SW*ch/cw;
+  layer.style.width=LW+'px'; layer.style.height=LH+'px';
+  var So=Math.min(1, SH/LH), tx=(SW-LW*So)/2, ty=(SH-LH*So)/2;
+  layer.style.transform='translate('+tx+'px,'+ty+'px) scale('+So+')';
+  bsvState._base={SW:SW,SH:SH,LW:LW,LH:LH,ov:{S:So,tx:tx,ty:ty}};
+}
+function bsvSetRect_(el,r){ el.style.left=r.x+'px'; el.style.top=r.y+'px'; el.style.width=r.w+'px'; el.style.height=r.h+'px'; }
+function bsvZoneRect_(z,sh,S,tx,ty,LW,LH){
+  var zx=z.x/sh.canvas.w, zy=z.y/sh.canvas.h, zw=z.w/sh.canvas.w, zh=z.h/sh.canvas.h;
+  return {x:tx+S*zx*LW, y:ty+S*zy*LH, w:S*zw*LW, h:S*zh*LH, zx:zx,zy:zy,zw:zw,zh:zh};
+}
+function bsvFocusTarget_(){
+  var sh=BOTTLE_SHELVES[bsvState.floor], b=bsvState._base; if(!sh||!b)return;
+  var hi=document.getElementById('bsvHi'), lbl=document.getElementById('bsvLabel'), note=document.getElementById('bsvEmpty'), layer=document.getElementById('bsvLayer');
+  var r=bsvResolveZone_(bsvState.pos||{floor:bsvState.floor,raw:''});
+  if(!r || !r.zone){
+    note.style.display='block';
+    note.textContent='棚位置: '+((bsvState.pos&&bsvState.pos.raw)||'未登録')+'（エリア未特定・全体表示）';
+    hi.style.display='none'; lbl.style.display='none'; return;
+  }
+  note.style.display='none';
+  var z=r.zone, SW=b.SW, SH=b.SH, LW=b.LW, LH=b.LH;
+  var zx=z.x/sh.canvas.w, zy=z.y/sh.canvas.h, zw=z.w/sh.canvas.w, zh=z.h/sh.canvas.h;
+  // 棚エリアは縦長になりがち＝素直な"はめ込み"だと寄れない。横幅主体で寄せ、縦は少しはみ出し許容。
+  var WFILL=0.72, VMAX=1.55, MINZOOM=1.15, SMAX=4.5;
+  var S=Math.min((SW*WFILL)/(zw*LW), (VMAX*SH)/(zh*LH));  // 横=幅の72%／縦=最大1.55画面
+  S=Math.max(S, b.ov.S*MINZOOM);                          // 必ず全景より寄る（ズーム感を担保）
+  S=Math.min(S, SMAX);
+  var cx=(zx+zw/2)*LW, cy=(zy+zh/2)*LH;
+  var tx=SW/2 - S*cx, ty=SH/2 - S*cy;
+  // 1) ハイライトを全景座標へ置いて可視化（transition無し）→ 2) レイヤと同時にズーム先へ（同期アニメ）
+  var ovR=bsvZoneRect_(z,sh,b.ov.S,b.ov.tx,b.ov.ty,LW,LH);
+  hi.style.transition='none'; bsvSetRect_(hi,ovR); hi.style.display='block'; void hi.offsetWidth; hi.style.transition='';
+  layer.style.transform='translate('+tx+'px,'+ty+'px) scale('+S+')';
+  var zR=bsvZoneRect_(z,sh,S,tx,ty,LW,LH); bsvSetRect_(hi,zR);
+  var slot=(bsvState.pos&&bsvState.pos.slot)?(' '+bsvState.pos.slot+'番'):'';
+  var l1=(bsvState.label?esc(bsvState.label)+'　':'')+esc((z.label||r.key||'')+slot);
+  var l2=bsvState.bottle?('🍶 '+esc(bsvState.bottle)):'';
+  lbl.style.display='block'; lbl.innerHTML=l1+(l2?'<span class="bsv-lb2">'+l2+'</span>':'');
+  var ly=zR.y-48; if(ly<8) ly=zR.y+zR.h+8; ly=Math.max(8, Math.min(ly, SH-56));
+  var lx=Math.max(8, Math.min(zR.x, SW-210));
+  lbl.style.left=lx+'px'; lbl.style.top=ly+'px';
+}
+function bsvShowFloorNote_(sh){
+  var hi=document.getElementById('bsvHi'), lbl=document.getElementById('bsvLabel'), note=document.getElementById('bsvEmpty');
+  hi.style.display='none'; lbl.style.display='none';
+  note.style.display='block'; note.textContent=sh.label+'（全体表示）';
+}
+// 幾何はcanvas寸法で決まる＝画像ロード待ち不要。全て同期＝rAF非依存（タブ非アクティブでも確実）＆連打で競合しない。
+// 手順: transition無しで全景を置く→強制リフローで基準を確定→transitionを戻して対象へ＝ズームがアニメする。
+function bsvLoadFloor_(floor, doFocus){
+  var sh=BOTTLE_SHELVES[floor]; if(!sh)return;
+  var img=document.getElementById('bsvImg'), layer=document.getElementById('bsvLayer');
+  if(img.getAttribute('src')!==sh.img) img.src=sh.img;
+  document.getElementById('bsvHi').style.display='none';
+  document.getElementById('bsvLabel').style.display='none';
+  document.getElementById('bsvEmpty').style.display='none';
+  layer.style.transition='none'; bsvApplyOverview_(sh); void layer.offsetWidth; layer.style.transition='';
+  if(doFocus) bsvFocusTarget_(); else bsvShowFloorNote_(sh);
+}
+function bsvSwitchFloor_(floor){
+  if(!BOTTLE_SHELVES[floor])return;
+  bsvState.floor=floor; bsvRenderFloors_(floor);
+  bsvLoadFloor_(floor, !!(bsvState.pos && bsvState.pos.floor===floor));
+}
+function bsvOnResize_(){
+  var ov=document.getElementById('bottleShelfOverlay');
+  if(!ov || ov.style.display==='none')return;
+  var sh=BOTTLE_SHELVES[bsvState.floor]; if(!sh)return;
+  var layer=document.getElementById('bsvLayer');
+  layer.style.transition='none'; bsvApplyOverview_(sh); void layer.offsetWidth; layer.style.transition='';
+  if(bsvState.pos && bsvState.pos.floor===bsvState.floor) bsvFocusTarget_(); else bsvShowFloorNote_(sh);
+}
+// メインAPI：bottlePos文字列 → パース → 該当フロア写真 → ゾーンへズーム
+function openBottleShelf(bottlePos, memberLabel, bottleName, forceFloor){
+  var ov=ensureShelfOverlay_();
+  var p=parseBottlePos_(bottlePos), hasPos=!!String(bottlePos||'').trim();
+  var floor=forceFloor||p.floor;
+  if(!floor || !BOTTLE_SHELVES[floor]) floor=Object.keys(BOTTLE_SHELVES)[0];
+  bsvState={floor:floor, pos:p, label:memberLabel||'', bottle:bottleName||'', _base:null};
+  ov.style.display='flex';
+  bsvRenderFloors_(floor);
+  bsvLoadFloor_(floor, hasPos);
+}
+function openBottleShelfMap(floor){ if(typeof closeMenu==='function')closeMenu(); openBottleShelf('','','',floor||Object.keys(BOTTLE_SHELVES)[0]); }
+function closeBottleShelf(){ var ov=document.getElementById('bottleShelfOverlay'); if(ov) ov.style.display='none'; }
 /* ---- 描画キャンバス＝各フロアで席が実際に占めている範囲（bbox）だけを映す ----
  * デフォルメ後は2F・5Fとも席が0,0〜368,470を埋める＝bboxはキャンバスと一致し、中央寄せは実質ゼロになる。
  * 仕組みは残す＝席を動かした時に切り抜きが勝手に追従する（手で維持する表を持たないため）。
@@ -2243,7 +2436,9 @@ function openBottlePrep(){
       +'<div class="bp-list">'+list.map(function(r){
         var st=r.status==='来店済み'?'<span class="bp-st arr">🟢来店中</span>':r.status==='退店済み'?'<span class="bp-st done">退店済</span>':'<span class="bp-st wait">来店前</span>';
         return '<div class="bp-item" onclick="closeSheet();editRsv('+r.id+')">'
-          +'<div class="bp-pos">📍'+(r.bottlePos?esc(r.bottlePos):'<span style="color:#c69a6a">位置未登録</span>')+'</div>'
+          +(r.bottlePos
+            ? '<div class="bp-pos bp-pos-go" onclick="event.stopPropagation();openBottleShelf(\''+jsStr(r.bottlePos)+'\',\''+jsStr((r.cust||'')+' 様')+'\',\''+jsStr(r.bottle||'')+'\')">📍'+esc(r.bottlePos)+'<span class="bp-see">🔍</span></div>'
+            : '<div class="bp-pos">📍<span style="color:#c69a6a">位置未登録</span></div>')
           +'<div class="bp-mid"><div class="bp-btl">🍶 '+esc(r.bottle)+'</div><div class="bp-cust">'+esc(r.cust)+'様'+(r.mem?' <span class="bp-mem">'+esc(r.mem)+'</span>':'')+(r.tantou?'・'+esc(r.tantou):'')+'</div></div>'
           +'<div class="bp-right">'+esc(rsvArrT(r))+' '+st+(r.table&&r.table!=='未定'?'<div class="bp-tbl">'+esc(r.table)+'</div>':'')+'</div>'
           +'</div>';
@@ -3000,6 +3195,7 @@ var MENU_TILES=[
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
     {ic:'📋', t:'面談表',         act:"openMendanManager()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
+    {ic:'🍶', t:'ボトル棚マップ',     act:"openBottleShelfMap()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
     {ic:'💳', t:'会費更新',           act:"openFeeRenew()"},
     {ic:'📋', t:'申し送りを書く',     act:"openHandoverEdit()"},
@@ -3748,7 +3944,11 @@ function renderCustDetailFields(fields){
   });
   // 軍師のみ：行が特定できていれば編集ボタン
   var editBtn=custDetailRowIdx?'<button class="menu-btn cust" style="width:100%;margin:4px 0 12px" onclick="startCustEdit()">✏️ 顧客情報を編集</button>':'';
-  el.innerHTML=editBtn+((rows||memos)?(rows+memos):'<div class="empty-msg" style="padding:14px 0;font-size:12px">追加情報はありません</div>');
+  // 🍶 ボトル位置があれば「棚で見る」（棚画像で置き場所へズーム）
+  var _pos=custValByLabel('ボトル位置'), _btl=custValByLabel('ボトル種類');
+  var _nm=custValByLabel('氏名')||custValByLabel('カード記載名')||(custDetailCur&&custDetailCur.name)||'';
+  var shelfBtn=(_pos&&String(_pos).trim())?('<button class="menu-btn cust" style="width:100%;margin:0 0 12px" onclick="openBottleShelf(\''+jsStr(_pos)+'\',\''+jsStr(_nm?(_nm+' 様'):'')+'\',\''+jsStr(_btl||'')+'\')">🍶 棚で見る（'+esc(_pos)+'）</button>'):'';
+  el.innerHTML=editBtn+shelfBtn+((rows||memos)?(rows+memos):'<div class="empty-msg" style="padding:14px 0;font-size:12px">追加情報はありません</div>');
 }
 // 編集可能な項目（ラベル＝マスタ見出し / key＝updateCustomerのペイロード）
 var CUST_EDIT_FIELDS=[
