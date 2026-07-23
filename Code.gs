@@ -15148,6 +15148,17 @@ function run010mSync_() {
   return { ok: true, ingest: ing, reconcile: rec };
 }
 
+// ── エディタから手で実行する公開入口 ─────────────────────────────
+//   ⚠️末尾_の内部関数はGASのRunメニューに出ない。ボスがエディタで実行するのはこの2つ。
+//   setupOrderSync … 初回の権限承認(Gmail/トリガー)＋毎朝トリガー設置。最初に1回。
+//   runOrderSyncNow … 今すぐ取込→突合（過去60日の発注メールをバックフィル）。
+function setupOrderSync() {
+  const t = install010mSyncTrigger_();
+  const s = run010mSync_();   // 承認直後に初回同期も回す
+  return { ok: true, trigger: t, firstSync: s };
+}
+function runOrderSyncNow() { return run010mSync_(); }
+
 // 毎朝の自動同期トリガーを1本だけ張る（多重登録ガード）。デプロイ後にエディタから1回実行する。
 function install010mSyncTrigger_() {
   const exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'run010mSync_'; });
