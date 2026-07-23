@@ -64,10 +64,19 @@ function getKioskShiftBoard() {
   var okuriSet = {};
   (getOkuriList(today) || []).forEach(function (o) { okuriSet[o.name] = true; });
 
+  // 出退勤の打刻状況＝「勤怠ログ」（LINEの「出勤」「退勤」報告＋軍師iPadの打刻が入る唯一の台帳）を読む。
+  // ⚠️シフト表は暦日だが打刻は営業日キー（bizDateStr_・朝6時境界）で集約されている＝0〜6時の
+  //    ズレを吸収するため必ず bizDateStr_() で引く。todayStr() で引くと深夜の退勤が別日に割れる。
+  var punch = {};
+  try { punch = kintaiPunchMap_(bizDateStr_()) || {}; } catch (e) {}
+
   // 源氏名リネームは getTodayShiftDetail_ で適用済み（r.name=当日の表示名, r.origName=シフト表の元名）
   var rows = getTodayShiftRows_(today);
   return rows.map(function (r) {
     var nm = r.name, orig = r.origName || r.name;
+    // 打刻は当日の源氏名・シフト表の元名のどちらで報告されても拾えるよう両キーで引く（正規化＋内部スペース除去）
+    var pk = null;
+    try { pk = punch[kintaiNameKey_(nm)] || punch[kintaiNameKey_(orig)] || null; } catch (e) {}
     return {
       name: nm,
       origName: orig,
@@ -77,7 +86,9 @@ function getKioskShiftBoard() {
       hayaagari: haya[nm] || haya[orig] || '',
       okuri: !!(okuriSet[nm] || okuriSet[orig]),
       okuriMode: okuriMode[nm] || okuriMode[orig] || 'ドライバー',
-      shusen: shusen[nm] || shusen[orig] || ''
+      shusen: shusen[nm] || shusen[orig] || '',
+      punchIn: pk ? (pk.in || '') : '',    // 出勤打刻の時刻（HH:mm・未打刻は空）
+      punchOut: pk ? (pk.out || '') : ''   // 退勤打刻の時刻（HH:mm・未打刻は空）
     };
   });
 }

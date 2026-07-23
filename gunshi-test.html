@@ -686,6 +686,11 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .sb.mode.jib{background:#1e1a0a;color:#e6c060;border:1px solid #5a4a1a;}
 .sb.shusen{background:#0e1a22;color:#8fd0e0;border:1px solid #2a4a5a;cursor:pointer;}
 .sb.shusen.off{background:#161626;color:#5a6a80;border:1px solid var(--line2);}
+/* 出退勤の打刻ステータス（出退勤LINEマスター＝勤怠ログ由来・表示のみ） */
+.sr-att{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums;flex-shrink:0;}
+.sr-att.in{background:#0f2a18;color:#7fe0a0;border:1px solid #2a6a44;}
+.sr-att.out{background:#161626;color:#8a9ab0;border:1px solid var(--line2);}
+.sr-att.none{background:#1c1608;color:#cfa85a;border:1px solid #4a3a1a;}
 .sr-nm{cursor:pointer;}
 .sr-nm .pen{color:#6a5a8a;font-size:11px;margin-left:3px;}
 .sr-nm .rnm{color:#c9a0ff;font-size:11px;margin-left:3px;font-weight:800;}
@@ -2587,8 +2592,18 @@ function renderShift(){
   var haya=SHIFT.filter(function(s){return s.hayaagari;}), okuri=SHIFT.filter(function(s){return s.okuri;});
   var drv=okuri.filter(function(s){return s.okuriMode==='ドライバー';}).length, jib=okuri.length-drv;
   var list=SHIFT.slice().sort(function(a,b){return outMin(a)-outMin(b);});
-  var sum='<div class="rcnt">出勤 <b style="color:#66cc88">'+SHIFT.length+'名</b>　🚪早上がり <b style="color:#e6b0d6">'+haya.length+'名</b>　🚗送り <b style="color:#8fe0c0">'+okuri.length+'名</b>（🚙'+drv+'・🚶'+jib+'）</div>';
+  var pIn=SHIFT.filter(function(s){return s.punchIn&&!s.punchOut;}).length;
+  var pOut=SHIFT.filter(function(s){return s.punchOut;}).length;
+  var pNone=SHIFT.length-pIn-pOut;
+  var att='　⏱ 打刻 <b style="color:#7fe0a0">出勤中'+pIn+'</b>・<b style="color:#8a9ab0">退勤'+pOut+'</b>'+(pNone?('・<span style="color:#cfa85a">未'+pNone+'</span>'):'');
+  var sum='<div class="rcnt">シフト <b style="color:#66cc88">'+SHIFT.length+'名</b>　🚪早上がり <b style="color:#e6b0d6">'+haya.length+'名</b>　🚗送り <b style="color:#8fe0c0">'+okuri.length+'名</b>（🚙'+drv+'・🚶'+jib+'）'+att+'</div>';
   setHtml('rsvArea',sum+'<div class="shift-list">'+list.map(shiftRow).join('')+'</div>');
+}
+/* 出退勤の打刻ステータス（勤怠ログ＝LINE「出勤」「退勤」＋iPad打刻）。表示のみ・タップ不可 */
+function attBadge(s){
+  if(s.punchOut) return '<span class="sr-att out" title="退勤打刻 '+esc(s.punchOut)+'">🔴 退勤 '+esc(s.punchOut)+'</span>';
+  if(s.punchIn)  return '<span class="sr-att in" title="出勤打刻 '+esc(s.punchIn)+'">🟢 出勤 '+esc(s.punchIn)+'</span>';
+  return '<span class="sr-att none" title="まだ出退勤の打刻・報告がありません">⚪ 未</span>';
 }
 function shiftRow(s){
   var i=SHIFT.indexOf(s);
@@ -2598,7 +2613,7 @@ function shiftRow(s){
   var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
   var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
   var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>'+castBadge(s.name);
-  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span><span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
+  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+'〜'+fmtTime(s.out)+'</span>'+attBadge(s)+'<span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
 }
 /* 当日の源氏名を修正（体験の子など）。空欄で元名に戻す。keyは元のシート名。 */
 function setGenji(i){
@@ -5437,7 +5452,7 @@ function applyRsvGrouping(){
   });
 }
 function adaptRot(list){return (list||[]).map(function(c){return {cast:c.cast, interval:c.interval||15, tables:(c.tables||[]).map(function(t){return {key:t.label, code:t.code, cust:(t.cust||'')+(t.cust?'様':''), cur:!!t.current, min:0, wait:t.awayMin||0};})};});}
-function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||''};});}
+function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||'', punchIn:s.punchIn||'', punchOut:s.punchOut||''};});}
 function adaptReq(list){return (list||[]).map(function(r){var store=/店全体|全体/.test(r.target||'');return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCust:store?'':custKey(r.target), comment:r.comment||'', handled:!!r.handled};});}
 
 function loadAll(){
