@@ -2723,6 +2723,58 @@ function showSheet(title,html,wide){
 }
 function closeSheet(){document.getElementById('scrim').classList.remove('show');document.getElementById('sheet').classList.remove('show');}
 
+/* ============ 🏆 表彰・匿名ピア投票（黒服・PIN確認済みの LOGIN で投票）============
+   backend: gunshiAwardData(LOGIN) / gunshiAwardVote(LOGIN,catKey,pick,comment)（GUNSHI_API_FNS 登録要） */
+var awGun=null;
+function awEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function openAwardVote(){
+  closeMenu();
+  if(!LOGIN){ showSheet('🏆 表彰投票','<div class="empty-msg">先にログインしてください</div>',false); return; }
+  showSheet('🏆 表彰投票','<div class="empty-msg">読み込み中...</div>','full');
+  gsr('gunshiAwardData', LOGIN).then(function(d){
+    document.getElementById('sheetBody').innerHTML = renderAwardVoteHtml(d);
+  }).catch(function(){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">取得に失敗しました</div>'; });
+}
+function renderAwardVoteHtml(d){
+  awGun=d;
+  if(!d || d.ok===false) return '<div class="empty-msg">'+awEsc(d&&d.error||'表彰データがありません')+'</div>';
+  var cats=d.categories||[], cands=d.candidates||[], mine=d.myVotes||{}, yen=d.rewardYen||500;
+  var done=cats.filter(function(c){return mine[c.key]&&mine[c.key].pick;}).length;
+  var card='background:#17140d;border:1px solid rgba(214,183,120,.18);border-radius:12px;padding:13px 14px;margin-bottom:11px';
+  var sel='width:100%;padding:11px;border-radius:9px;border:1px solid rgba(214,183,120,.3);background:#241d10;color:#f2ead9;font-size:15px;font-weight:600;box-sizing:border-box';
+  var cmt='width:100%;margin-top:8px;padding:9px 11px;border-radius:9px;border:1px solid rgba(214,183,120,.16);background:#100d08;color:#f2ead9;font-size:13px;box-sizing:border-box';
+  var opt=function(sv){ return '<option value="">未選択</option>'+cands.map(function(c){return '<option value="'+awEsc(c.id)+'"'+(c.id===sv?' selected':'')+'>'+awEsc(c.name)+'（'+awEsc(c.role)+'）</option>';}).join(''); };
+  var h='<div style="padding:4px 2px 70px">';
+  if(d.lastResult && d.lastResult.categories && d.lastResult.categories.length){
+    h+='<div style="'+card+';border-color:rgba(214,183,120,.34)"><b style="color:#f4d98a">🎉 '+awEsc(d.lastResult.monthLabel)+'の受賞者</b><div style="margin-top:6px;font-size:14px;color:#e8dcc0;line-height:1.7">'+d.lastResult.categories.map(function(r){return awEsc((r.icon||'🏆')+' '+r.title+'：'+r.winner+' さん');}).join('<br>')+'</div>';
+    if(d.myAwards && d.myAwards.length) h+='<div style="margin-top:8px;color:#f4d98a;font-weight:700">🏆 あなたは「'+d.myAwards.map(function(a){return awEsc(a.title);}).join('・')+'」を受賞！おめでとうございます</div>';
+    h+='</div>';
+  }
+  if(!d.voteOpen){ h+='<div style="'+card+'">今は投票期間ではありません。</div></div>'; return h; }
+  h+='<div style="'+card+';border-color:rgba(214,183,120,.42);background:linear-gradient(135deg,#2a2012,#15100a)"><b style="color:#f4d98a;font-size:15px">🎁 全部門に投票して ¥'+yen+' ゲット</b><div style="margin-top:4px;font-size:13px;color:#c7ae74">投票済み '+done+' / '+cats.length+' 部門　・　締切 '+awEsc(d.deadline||'今月末')+'</div></div>';
+  h+='<div style="font-size:12.5px;color:#c7ae74;margin:0 2px 12px;line-height:1.6">🤫 完全匿名。あなたが誰に入れたかは本人にも他の人にも分かりません。一言を添えると匿名のまま本人に届きます。</div>';
+  h+=cats.map(function(c){ var v=mine[c.key]||{};
+    return '<div style="'+card+'"><div style="font-size:15px;font-weight:700;color:#f2ead9">'+awEsc((c.icon||'🏆')+' '+c.title)+'</div><div style="font-size:12px;color:#94886a;margin:2px 0 10px">'+awEsc(c.desc||'')+'</div>'
+      +'<select style="'+sel+'" onchange="awGunPick(\''+c.key+'\',this.value)">'+opt(v.pick||'')+'</select>'
+      +'<input style="'+cmt+'" id="awg-'+c.key+'" placeholder="一言そえる（任意・匿名で本人に届く）" value="'+awEsc(v.comment||'')+'" onblur="awGunComment(\''+c.key+'\')"></div>';
+  }).join('');
+  h+='</div>';
+  return h;
+}
+function awGunPick(catKey, pick){
+  if(!awGun) return;
+  awGun.myVotes=awGun.myVotes||{}; var prev=awGun.myVotes[catKey]||{};
+  awGun.myVotes[catKey]={pick:pick, comment:prev.comment||''};
+  document.getElementById('sheetBody').innerHTML=renderAwardVoteHtml(awGun); // 進捗を即更新
+  gsr('gunshiAwardVote', LOGIN, catKey, pick, prev.comment||'').catch(function(){});
+}
+function awGunComment(catKey){
+  if(!awGun) return;
+  var el=document.getElementById('awg-'+catKey); if(!el) return;
+  awGun.myVotes=awGun.myVotes||{}; var v=awGun.myVotes[catKey]||{}; v.comment=el.value; awGun.myVotes[catKey]=v;
+  gsr('gunshiAwardVote', LOGIN, catKey, v.pick||'', el.value).catch(function(){});
+}
+
 // 🎂 今月誕生日のお客様（店全体・黒服用）。バックは gunshiGetBirthdays（GUNSHI_API_FNS・担当フィルタなし＝全件）。
 function openBirthdays(){
   closeMenu(); showSheet('🎂 今月誕生日のお客様','<div class="empty-msg">読み込み中...</div>',false);
@@ -3342,6 +3394,7 @@ var MENU_TILES=[
     {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"}
   ]},
   {group:'管理', items:[
+    {ic:'🏆', t:'表彰投票',           act:"openAwardVote()"},
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
     {ic:'📋', t:'面談表',         act:"openMendanManager()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},

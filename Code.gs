@@ -676,7 +676,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getOrderAlerts', 'setOrderStatusManual'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -1346,6 +1346,12 @@ function handleApiRequest_(body) {
       return n ? { ok: true, syncedRows: n } : { ok: false, error: '在庫に無い品名です: ' + body.stockName };
     }
   }
+  // 🏆 表彰・匿名ピア投票（キャストの投票＋コンソール管理）
+  if (body.action === 'awardVote') return awardVote_(body);
+  if (body.action === 'awardAdminData')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return awardAdminData_(body.month); }
+  if (body.action === 'closeAwardMonth')     { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return closeAwardMonth_(body.month); }
+  if (body.action === 'awardSaveCategories') { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return awardSaveCategories_(body.cats); }
+  if (body.action === 'awardSetConfig')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return awardSetConfig_(body.key, body.value); }
   return { ok: false, error: 'unknown action' };
 }
 
@@ -2026,7 +2032,7 @@ function adminGetTrustImport(userId) {
 var KYUYO_MANUAL_TAB  = '給与手入力';
 // ⚠️「勤務時間」は勤怠手当の計算に使う実勤務時間(h)の手入力欄（2026-08の勤怠手当制度）。
 //   空なら自動（TRUSTの時間報酬÷基本時給→打刻集計）にフォールバックする＝入れた時だけ人の値が勝つ。
-var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整', '勤務時間'];
+var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整', '勤務時間', '投票賞'];
 
 // 給与手入力シートを取得（無ければ作成）。既存シートには不足ヘッダ列を後方互換で追加。
 // ⚠️追補が無いと ci('売上調整') が -1 になり、入力した調整額が黙って0扱いになる（金額に直結）。
@@ -2049,14 +2055,15 @@ function getKyuyoManual_(ss, monthKey) {
   const rows = sh.getDataRange().getValues();
   const h = rows[0].map(String);
   const ci = function (n) { return h.indexOf(n); };
-  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整');
+  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整'), iVote = ci('投票賞');
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== monthKey) continue;
     const nm = normalizeName_(String(rows[i][1]).trim());
     map[nm] = {
       intro:  iIntro >= 0 ? (Number(rows[i][iIntro]) || 0) : 0,
       nyuten: iNyu   >= 0 ? (Number(rows[i][iNyu])   || 0) : 0,
-      adjust: iAdj   >= 0 ? (Number(rows[i][iAdj])   || 0) : 0
+      adjust: iAdj   >= 0 ? (Number(rows[i][iAdj])   || 0) : 0,
+      vote:   iVote  >= 0 ? (Number(rows[i][iVote])  || 0) : 0  // 🏆月間投票賞（¥1:¥1直加算）
     };
   }
   return map;
@@ -2868,16 +2875,17 @@ function newBackCalc_(g, m) {
   }
   const intro   = m.intro  || 0;
   const nyuten  = m.nyuten || 0;
+  const vote    = m.vote   || 0;   // 🏆月間投票賞：入店祝い金と同じく¥1:¥1で課税支給に直加算
   // 新バックは担当バックの置換。TRUST担当小計>0 の時のみTRUST担当バックを剥がす。
   // 担当小計=0で担当バックだけ残る例外行（手当扱い）は保全する。
   // ⚠️判定はTRUST側の数字で行う（調整後のtantoで判定すると、減算で0に落ちた瞬間に剥がしが止まり課税支給が跳ね上がる）。
   const stripTantoBk = tantoTru > 0 ? tantoBk : 0;
-  const kazei   = gross - stripTantoBk + newBack + nyuten + intro;
+  const kazei   = gross - stripTantoBk + newBack + nyuten + intro + vote;
   const gensen  = Math.floor(kazei * 0.1021);
   const nokori  = kazei - gensen - hibarai - minusT;
   return {
     bairitu: Math.round(bairitu * 100) / 100, ratePct: ratePct, newBack: newBack,
-    fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten,
+    fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten, vote: vote,
     kazei: kazei, gensen: gensen, nokori: nokori,
     hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross,
     tantoTrust: tantoTru, adjust: adjust,   // 調整の内訳（tanto = max(0, tantoTrust + adjust)）
@@ -8227,6 +8235,11 @@ function handlePortalApi_(e) {
   // 申請管理（管理者のみ・viewAs不要）
   if (isAdmin && tab === 'requests') {
     return out({ ok: true, name, isAdmin, requests: getShiftRequests_() });
+  }
+
+  // 🏆 表彰・匿名ピア投票（登録済みスタッフ全員）
+  if (tab === 'awards') {
+    return out(awardsPayload_(name, viewAs, isAdmin));
   }
 
   // 予約管理（登録済みスタッフ全員）

@@ -435,7 +435,7 @@ function pollAdminAuth(token){
 /* ===== ナビ: 14タブを5グループの2階層に束ねる（各画面のrender関数は無変更・入口の見せ方だけ） =====
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
-  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['ref','📖 説明']]},
+  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['awards','🏆 表彰'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
@@ -455,7 +455,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -1245,6 +1245,71 @@ function saveChecklist(){
   var op=chk.opening.filter(function(x){return String(x.label||'').trim();});
   var cl=chk.closing.filter(function(x){return String(x.label||'').trim();});
   api('saveChecklistConfig',{config:{opening:op,closing:cl}}).then(function(r){ res(r,'チェックリストを保存しました'); });
+}
+
+/* 🏆 表彰（匿名ピア投票の管理：集計/締め・発表/監査/部門編集/設定） */
+var awAdm=null, awAdmMonth='', awCatsEdit=null;
+function renderAwards(){
+  loading();
+  api('awardAdminData', awAdmMonth?{month:awAdmMonth}:{}).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'取得できませんでした')+'</div>'); return; }
+    awAdm=r; awAdmMonth=r.month;
+    awCatsEdit=(r.categories||[]).map(function(c){ return {key:c.key,icon:c.icon,title:c.title,desc:c.desc,enabled:c.enabled!==false,order:c.order}; });
+    drawAwards();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function awShiftMonth(d){ var p=String(awAdmMonth).split('-'); var y=+p[0],m=+p[1]+d; if(m<1){m=12;y--;} if(m>12){m=1;y++;} awAdmMonth=y+'-'+(m<10?'0':'')+m; renderAwards(); }
+function awTallyPreview(){ var by={}; (awAdm.votes||[]).forEach(function(v){ if(!v.pick)return; by[v.catKey]=by[v.catKey]||{}; by[v.catKey][v.pick]=(by[v.catKey][v.pick]||0)+1; }); return by; }
+function drawAwards(){
+  var cfg=awAdm.config||{}, results=awAdm.results||[], votes=awAdm.votes||[], catList=awCatsEdit||[];
+  var closed=results.length>0, by=awTallyPreview();
+  var tally=catList.map(function(c){
+    var t=by[c.key]||{}; var arr=Object.keys(t).map(function(n){return {n:n,v:t[n]};}).sort(function(a,b){return b.v-a.v;});
+    var rr=closed?(results.filter(function(x){return x.title===c.title;})[0]||null):null;
+    var top=arr.slice(0,3).map(function(x,i){ return '<span style="margin-right:12px;'+(i===0?'color:#f4d98a;font-weight:700':'color:var(--dim)')+'">'+esc(x.n)+' '+x.v+'票</span>'; }).join('')||'<span style="color:var(--dim)">票なし</span>';
+    return '<div class="lrow" style="align-items:center"><div class="main"><b>'+esc(c.icon+' '+c.title)+'</b>'+(rr&&rr.winner?' <span class="chip on">🏆 '+esc(rr.winner)+'</span>':'')+'<div style="margin-top:3px;font-size:13px">'+top+'</div></div></div>';
+  }).join('')||'<div class="empty" style="padding:10px">部門なし</div>';
+  var audit=votes.length? votes.map(function(v){ var ct=(catList.filter(function(c){return c.key===v.catKey;})[0]||{}).title||v.catKey; return '<tr><td style="padding:4px 8px">'+esc(v.voter)+'</td><td style="padding:4px 8px">'+esc(ct)+'</td><td style="padding:4px 8px">'+esc(v.pick||'—')+'</td><td style="padding:4px 8px;color:var(--dim)">'+esc(v.comment||'')+'</td></tr>'; }).join('') : '<tr><td colspan="4" style="padding:8px;color:var(--dim)">投票なし</td></tr>';
+  var catRows=catList.map(function(c,i){ return awCatRow(c,i,catList.length); }).join('')||'<div class="empty" style="padding:10px">部門なし</div>';
+  setBody(
+    '<div class="toolbar"><button class="btn" onclick="awShiftMonth(-1)">◀</button><span class="cnt" style="min-width:90px;text-align:center">'+esc(awAdmMonth)+'</span><button class="btn" onclick="awShiftMonth(1)">▶</button><span class="sp" style="flex:1"></span><button class="btn pri" onclick="awClose()">🏆 締めて発表</button></div>'
+    +'<div class="hint">投票参加で¥500。締めると各部門の受賞者を確定し、全員へ掲示板＋LINEで発表します。'+(closed?' <b style="color:#f4d98a">※この月は締め済み（再締めで上書き）</b>':'')+'</div>'
+    +'<div class="sec"><div class="sec-t">📊 '+(closed?'受賞者':'現在の集計（締め前プレビュー）')+'</div>'+tally+'</div>'
+    +'<div class="sec"><div class="sec-t">⚙️ 設定</div>'
+      +'<div class="lrow" style="align-items:center;gap:10px"><div class="main">投票参加賞（¥）</div><input class="finput" style="width:120px" id="aw-yen" type="number" value="'+esc(cfg.reward_yen)+'"></div>'
+      +'<div class="lrow" style="align-items:center;gap:10px"><div class="main">受賞の最低票数</div><input class="finput" style="width:120px" id="aw-min" type="number" value="'+esc(cfg.min_votes)+'"></div>'
+      +'<div class="lrow" style="align-items:center;gap:10px"><div class="main">投票の受付</div><select class="finput" style="width:160px" id="aw-force"><option value="">自動（当月開く）</option><option value="open"'+(cfg.vote_force==='open'?' selected':'')+'>強制オープン</option><option value="closed"'+(cfg.vote_force==='closed'?' selected':'')+'>強制クローズ</option></select></div>'
+      +'<button class="btn pri" style="margin-top:8px" onclick="awSaveConfig()">💾 設定を保存</button></div>'
+    +'<div class="sec"><div class="sec-t">🏷 部門（賞）の編集 <span style="font-weight:400;color:var(--dim);font-size:12px">キャストも黒服も全部門の候補</span></div>'
+      +catRows+'<div style="margin-top:8px"><button class="btn" onclick="awCatAdd()">＋ 部門を追加</button><button class="btn pri" style="margin-left:8px" onclick="awSaveCats()">💾 部門を保存</button></div></div>'
+    +'<div class="sec"><div class="sec-t">🔍 監査（誰が誰に入れたか）<span style="font-weight:400;color:var(--dim);font-size:12px">本人同士は匿名・ここだけ見える</span></div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);text-align:left"><th style="padding:4px 8px">投票者</th><th style="padding:4px 8px">部門</th><th style="padding:4px 8px">入れた相手</th><th style="padding:4px 8px">コメント</th></tr></thead><tbody>'+audit+'</tbody></table></div></div>'
+  );
+}
+function awCatRow(c,i,n){
+  var b='padding:6px 10px;min-width:0;font-size:13px';
+  return '<div class="lrow" style="align-items:center;gap:6px">'
+    +'<input class="finput" style="width:46px;text-align:center;flex:none" value="'+esc(c.icon)+'" oninput="awCatsEdit['+i+'].icon=this.value">'
+    +'<div class="main"><input class="finput" style="width:100%;margin-bottom:4px" value="'+esc(c.title)+'" placeholder="賞の名前" oninput="awCatsEdit['+i+'].title=this.value">'
+      +'<input class="finput" style="width:100%;font-size:12px" value="'+esc(c.desc||'')+'" placeholder="説明" oninput="awCatsEdit['+i+'].desc=this.value"></div>'
+    +'<span class="chip'+(c.enabled?' on':'')+'" style="cursor:pointer;flex:none;white-space:nowrap" onclick="awCatToggle('+i+')">'+(c.enabled?'有効':'停止')+'</span>'
+    +'<div style="display:flex;gap:4px;flex:none"><button class="btn" style="'+b+'" '+(i===0?'disabled':'')+' onclick="awCatMove('+i+',-1)">↑</button><button class="btn" style="'+b+'" '+(i===n-1?'disabled':'')+' onclick="awCatMove('+i+',1)">↓</button><button class="btn" style="'+b+';color:#ff9a9a;border-color:#5a2226" onclick="awCatDel('+i+')">✕</button></div></div>';
+}
+function awCatToggle(i){ awCatsEdit[i].enabled=!awCatsEdit[i].enabled; drawAwards(); }
+function awCatMove(i,d){ var j=i+d; if(j<0||j>=awCatsEdit.length)return; var t=awCatsEdit[i];awCatsEdit[i]=awCatsEdit[j];awCatsEdit[j]=t; drawAwards(); }
+function awCatDel(i){ if(!confirm('この部門を削除しますか？'))return; awCatsEdit.splice(i,1); drawAwards(); }
+function awCatAdd(){ awCatsEdit.push({key:'cat'+Date.now(),icon:'🏆',title:'',desc:'',enabled:true,order:awCatsEdit.length+1}); drawAwards(); }
+function awSaveCats(){
+  var cats=awCatsEdit.filter(function(c){return String(c.title||'').trim();}).map(function(c,i){c.order=i+1;return c;});
+  api('awardSaveCategories',{cats:cats}).then(function(r){ if(res(r,'部門を保存しました')) renderAwards(); });
+}
+function awSaveConfig(){
+  var yen=document.getElementById('aw-yen').value, min=document.getElementById('aw-min').value, force=document.getElementById('aw-force').value;
+  Promise.all([api('awardSetConfig',{key:'reward_yen',value:Number(yen)||0}),api('awardSetConfig',{key:'min_votes',value:Number(min)||0}),api('awardSetConfig',{key:'vote_force',value:force})]).then(function(){ toast('設定を保存しました'); renderAwards(); });
+}
+function awClose(){
+  if(!confirm(awAdmMonth+' を締めて受賞者を確定し、全員に発表します（掲示板＋LINE）。よろしいですか？'))return;
+  api('closeAwardMonth',{month:awAdmMonth}).then(function(r){ if(res(r,'締めました（受賞'+(r.winners||0)+'部門・¥500対象'+(r.rewarded||0)+'名）')) renderAwards(); });
 }
 
 /* ===== 🍶 メニュー（店舗メニューの登録／メニュー落ち→在庫の仕入れ区分へ伝播） =====
@@ -2825,6 +2890,30 @@ function blMockDetail(uuid){
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
 function MOCKAPI(action,body){
+  if(action==='awardAdminData'){
+    return {ok:true, month:(body.month||'2026-07'),
+      categories:[
+        {key:'mvp',icon:'🏆',title:'総合MVP',desc:'今月いちばん輝いていた人',enabled:true,order:1},
+        {key:'kikubari',icon:'💐',title:'気配り賞',desc:'さりげない気遣いが誰よりも上手い',enabled:true,order:2},
+        {key:'moriage',icon:'🔥',title:'盛り上げ賞',desc:'場を明るく、楽しくしてくれる',enabled:true,order:3},
+        {key:'ennoshita',icon:'🛡',title:'縁の下賞',desc:'見えないところで店を支えてくれた',enabled:true,order:4}
+      ],
+      votes:[
+        {voter:'美咲',catKey:'mvp',pick:'ゆあ',comment:'いつも全体を見て動いてて尊敬する。',at:'7/24 21:00'},
+        {voter:'ゆあ',catKey:'mvp',pick:'美咲',comment:'',at:'7/24 20:30'},
+        {voter:'れん',catKey:'mvp',pick:'ゆあ',comment:'背中で引っ張ってくれる',at:'7/23 23:10'},
+        {voter:'美咲',catKey:'ennoshita',pick:'りく',comment:'黒服のりくさん、いつも助かってます',at:'7/24 21:01'},
+        {voter:'りく',catKey:'kikubari',pick:'美咲',comment:'',at:'7/22 19:00'}
+      ],
+      results:(body.month==='2026-06')?[
+        {icon:'🏆',title:'総合MVP',winner:'ゆあ',role:'キャスト',votes:9},
+        {icon:'🛡',title:'縁の下賞',winner:'りく',role:'黒服',votes:8}
+      ]:[],
+      config:{reward_yen:500,min_votes:3,vote_force:''}};
+  }
+  if(action==='closeAwardMonth'){ return {ok:true,month:body.month,winners:4,rewarded:3}; }
+  if(action==='awardSaveCategories'){ return {ok:true,count:(body.cats||[]).length}; }
+  if(action==='awardSetConfig'){ return {ok:true}; }
   if(action==='getNotifSettings'){ // 通知管理センターのローカルプレビュー（全UI分岐を網羅）
     return {ok:true,settings:{
       seki_check:{label:'各席チェック',time:'23:45',enabled:true,group:'黒服',category:'scheduled',targetKind:'group',target:'kurofuku',wired:true,msgEditable:true,message:''},
