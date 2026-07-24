@@ -1299,8 +1299,10 @@ function drawSkill(){
         +'<div style="display:flex;gap:4px;flex:none"><button class="btn" style="padding:5px 9px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">編集</button>'
         +'<button class="btn" style="padding:5px 9px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">削除</button></div></div>';
     }).join('') : '<div class="empty" style="padding:8px;color:var(--dim)">まだ問題がありません</div>';
+    var seedBtn = ((skAdm.defaults||[]).indexOf(g.grade)>=0)
+      ? '<button class="btn" style="margin-left:8px" onclick="skSeedDefaults(\''+esc(g.grade)+'\')">📥 定番問題を投入</button>' : '';
     return '<div class="sec"><div class="sec-t">'+esc(g.grade)+'　<span style="font-weight:400;color:var(--dim);font-size:12px">'+arr.length+'問（合格ライン '+g.pass+'%・出題'+(g.count>0?g.count+'問':'全問')+'）</span></div>'
-      +list+'<div style="margin-top:8px"><button class="btn" onclick="skNewQ(\''+esc(g.grade)+'\')">＋ この級に問題を追加</button></div></div>';
+      +list+'<div style="margin-top:8px"><button class="btn" onclick="skNewQ(\''+esc(g.grade)+'\')">＋ この級に問題を追加</button>'+seedBtn+'</div></div>';
   }).join('');
   setBody(
     '<div class="hint">合格した級が時給の<b>維持・アップ</b>の資格になります。判定はここに出ますが、<b>実際の時給の改定は人が確定</b>します（自動では変えません）。受験は軍師の「📝 スキルテスト」から。</div>'
@@ -1366,6 +1368,14 @@ function skSaveQ(){
 }
 function skDelQ(id){ if(!confirm('この問題を削除しますか？')) return;
   api('skillDeleteQuestion',{id:id}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'削除に失敗'); return; } renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
+}
+function skSeedDefaults(grade){
+  if(!confirm(grade+'の定番問題を投入します。\n（この級の「サンプル」は消え、まだ無い定番だけが追加されます）')) return;
+  api('skillSeedDefaults',{grade:grade}).then(function(r){
+    if(!r||r.ok===false){ alert((r&&r.error)||'投入に失敗'); return; }
+    alert('定番問題を投入しました（追加'+(r.added||0)+'問／サンプル削除'+(r.removedSamples||0)+'問）。');
+    renderSkillTest();
+  }).catch(function(){ alert('通信エラー'); });
 }
 
 /* 🏆 表彰（匿名ピア投票の管理：集計/締め・発表/監査/部門編集/設定） */
@@ -3029,6 +3039,7 @@ function MOCKAPI(action,body){
         {id:'Q3',grade:'中級',cat:'サンプル',q:'お会計で金額を伝える前に、まず確認すべきことは？',choices:['伝票の内容と合計が正しいか','次回予約の希望','おしぼりの補充','照明の明るさ'],answer:1,points:1,active:true},
         {id:'Q4',grade:'上級',cat:'サンプル',q:'お客様同士のトラブル、黒服の最優先は？',choices:['双方を落ち着かせ安全を確保','その場を離れる','どちらかの味方をする','会計を急がせる'],answer:1,points:1,active:true}
       ],
+      defaults:['初級'],
       results:[
         {name:'りく',role:'黒服社員',status:{name:'りく',heldGrades:['初級','中級'],topGrade:'中級',eligibility:'アップ',canMaintain:true,canRaise:true,attempts:3,recent:[{date:'2026-07-24 21:30',grade:'中級',pct:90,result:'合格'}]}},
         {name:'たけし',role:'黒服バイト',status:{name:'たけし',heldGrades:['初級'],topGrade:'初級',eligibility:'維持',canMaintain:true,canRaise:false,attempts:2,recent:[{date:'2026-07-23 20:10',grade:'中級',pct:60,result:'不合格'}]}},
@@ -3036,6 +3047,7 @@ function MOCKAPI(action,body){
       ]};
   }
   if(action==='skillSaveQuestion'||action==='skillDeleteQuestion'||action==='skillSaveGrade') return {ok:true};
+  if(action==='skillSeedDefaults') return {ok:true,grade:body.grade,added:13,removedSamples:2};
   if(action==='awardAdminData'){
     return {ok:true, month:(body.month||'2026-07'),
       categories:[

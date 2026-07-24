@@ -1357,6 +1357,7 @@ function handleApiRequest_(body) {
   if (body.action === 'skillSaveQuestion')   { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminSaveQuestion_(body.q); }
   if (body.action === 'skillDeleteQuestion') { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminDeleteQuestion_(body.id); }
   if (body.action === 'skillSaveGrade')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminSaveGrade_(body.g); }
+  if (body.action === 'skillSeedDefaults')   { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillSeedDefaults_(body.grade); }
   // 📝 スキルテスト受験（ポータル：黒服＋管理者が受験。本人はuserIdの名前で解決＝なりすまし不可）
   if (body.action === 'skillStart')  { const _sn = getStaffName(body.userId); if (!_sn) return { ok: false, error: 'unregistered' }; return gunshiSkillStart(_sn, body.grade); }
   if (body.action === 'skillSubmit') { const _sn = getStaffName(body.userId); if (!_sn) return { ok: false, error: 'unregistered' }; return gunshiSkillSubmit(_sn, body.grade, body.answers); }
