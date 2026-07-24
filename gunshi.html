@@ -2122,8 +2122,10 @@ function mapFlags_(s,idx){
  * ⚠️段を足す/文字を上げる時は必ず実測で追う。枠(カウンター約56px・ボックス80〜102px)を超えると黙って切れる。 */
 function mapSeatCell_(s,tall,wide){
   var st=seatStatus(s), idx=seatIdx(s), nm=shortNm(s.name);
-  // 未対応キャストリクエスト＝卓ごと橙で光らせる（席名右の小フラグだけでは埋もれる）。占有卓のみ・reqsForCustは客名キー照合。
-  var reqUn=(st!=='empty')?reqsForCust(s.cust).filter(function(r){return !r.handled;}).length:0;
+  // 未対応キャストリクエスト＝卓ごと橙で光らせる（席名右の小フラグだけでは埋もれる）。
+  // 来店中(s.cust)だけでなく来店前の予約席(s.rsv.cust)も対象＝予約に付いたリクエストを来店前から出す。reqsForCustは客名キー照合。
+  var reqCust=s.cust||(s.rsv&&s.rsv.cust)||'';
+  var reqUn=reqCust?reqsForCust(reqCust).filter(function(r){return !r.handled;}).length:0;
   var rqc=reqUn?' hasreq':'';
   var reqCorner=reqUn?'<span class="req-corner" title="未対応リクエスト'+reqUn+'件" onclick="openReqForSeat('+idx+',event)">📣 リクエスト</span>':'';
   var oc='onclick="onSeatClick('+idx+')"', size=tall?' box':' mini';
@@ -4177,14 +4179,18 @@ function saveCustEdit(){
 }
 
 /* ============ キャストリクエスト ============ */
+// ⚠️本番は adaptReq がシートの生ラベルから作る形（targetCusts＝客名キー配列 / targetLabel＝時刻・卓つき表示）。モックも同じ形にして描画経路を実データと一致させる。
 var REQUESTS=[
-  {id:1, time:'20:10', cast:'のあ',  type:'NG',  targetCust:'加藤', comment:'先日クレームあり・接客不可', handled:false},
-  {id:2, time:'20:25', cast:'みれい',type:'希望', targetCust:'鈴木', comment:'指名継続希望・ボトル入れたい', handled:false},
-  {id:3, time:'19:50', cast:'かい',  type:'NG',  targetCust:'渡辺', comment:'', handled:true},
-  {id:4, time:'21:00', cast:'ゆき',  type:'希望', targetStore:true, comment:'新規のお客様につけてほしい', handled:false}
+  {id:1, time:'20:10', cast:'のあ',  type:'NG',  targetCusts:['加藤'], targetLabel:'20:10 加藤様（5F ボックス1）', comment:'先日クレームあり・接客不可', handled:false},
+  {id:2, time:'20:25', cast:'みれい',type:'希望', targetCusts:['鈴木'], targetLabel:'20:25 鈴木様（2F ボックス1）', comment:'指名継続希望・ボトル入れたい', handled:false},
+  {id:3, time:'19:50', cast:'かい',  type:'NG',  targetCusts:['渡辺'], targetLabel:'19:50 渡辺様（5F カウンター3）', comment:'', handled:true},
+  {id:4, time:'21:00', cast:'ゆき',  type:'希望', targetStore:true, comment:'新規のお客様につけてほしい', handled:false},
+  // 来店前（予約のみ）の卓を来店前から光らせるデモ＝中村(5Fカウ4予約)・山本(2Fカウ4予約)
+  {id:5, time:'20:35', cast:'ゆうか',type:'キャスト希望', targetCusts:['中村'], targetLabel:'20:30 中村様（5F カウンター4）', comment:'前回担当・指名継続希望', handled:false},
+  {id:6, time:'20:40', cast:'まや',  type:'希望', targetCusts:['山本'], targetLabel:'21:00 山本様（2F カウンター4）', comment:'同伴で来店予定', handled:false}
 ];
 function custKey(c){return String(c||'').replace(/\s*様\s*$/,'').trim();}
-function reqsForCust(cust){var k=custKey(cust);if(!k)return [];return REQUESTS.filter(function(r){return !r.targetStore&&r.targetCust===k;});}
+function reqsForCust(cust){var k=custKey(cust);if(!k)return [];return REQUESTS.filter(function(r){return !r.targetStore&&(r.targetCusts||(r.targetCust?[r.targetCust]:[])).indexOf(k)>=0;});}
 function reqTypeIcon(t){return t==='NG'?'🚫':t==='希望'?'🙋':'📣';}
 function reqBadgeHtml(idx,cust){var rq=reqsForCust(cust);if(!rq.length)return '';var un=rq.filter(function(r){return !r.handled;}).length;return '<span class="req-badge'+(un?' un':'')+'" onclick="openReqForSeat('+idx+',event)">📣 リクエスト'+(un?' '+un:'済')+'</span>';}
 function reqListHtml(list){
@@ -4192,7 +4198,7 @@ function reqListHtml(list){
   var un=list.filter(function(r){return !r.handled;}).length;
   return '<div style="font-size:12px;color:var(--sub);margin-bottom:10px;font-weight:700">未対応 '+un+' / 合計 '+list.length+'件</div>'
     +list.map(function(r){
-      var tgt=r.targetStore?'店全体へ':(esc(r.targetCust)+'様');
+      var tgt=r.targetStore?'店全体へ':esc(r.targetLabel||(r.targetCust?r.targetCust+'様':''));
       return '<div class="req-card'+(r.handled?' done':'')+'"><div class="rq-top"><span class="rq-time">'+esc(r.time)+'</span><span class="rq-cast">'+esc(r.cast)+'さん</span><span class="rq-type '+(r.type==='NG'?'ng':'want')+'">'+reqTypeIcon(r.type)+' '+esc(r.type)+'</span><label class="rq-done"><input type="checkbox" '+(r.handled?'checked':'')+' onchange="toggleReq('+r.id+',this.checked)">対応済</label></div><div class="rq-target">対象：'+tgt+'</div>'+(r.comment?'<div class="rq-comment">📝 '+esc(r.comment)+'</div>':'')+'</div>';
     }).join('');
 }
@@ -5469,7 +5475,18 @@ function applyRsvGrouping(){
 }
 function adaptRot(list){return (list||[]).map(function(c){return {cast:c.cast, interval:c.interval||15, tables:(c.tables||[]).map(function(t){return {key:t.label, code:t.code, cust:(t.cust||'')+(t.cust?'様':''), cur:!!t.current, min:0, wait:t.awayMin||0};})};});}
 function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||'', punchIn:s.punchIn||'', punchOut:s.punchOut||''};});}
-function adaptReq(list){return (list||[]).map(function(r){var store=/店全体|全体/.test(r.target||'');return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCust:store?'':custKey(r.target), comment:r.comment||'', handled:!!r.handled};});}
+// 保存ラベルは「HH:mm 客名様（卓）」を ' / ' で連結（複数予約対象）。ここから客名キーだけを抜く。
+// ⚠️旧実装は custKey(r.target) 一発＝末尾が「）」だと様を外せず丸ごとキー化し、席の客名と一致しなかった（実データで卓に出ない主因）。
+function reqCustKeys_(target){
+  return String(target||'').split('/').map(function(p){
+    return custKey(p.replace(/^\s*\d{1,2}:\d{2}\s*/,'').replace(/[（(][^）)]*[）)]\s*$/,''));
+  }).filter(Boolean);
+}
+function adaptReq(list){return (list||[]).map(function(r){
+  var store=/店全体|全体/.test(r.target||'');
+  var cs=store?[]:reqCustKeys_(r.target);
+  return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCusts:cs, targetCust:cs[0]||'', targetLabel:store?'':String(r.target||''), comment:r.comment||'', handled:!!r.handled};
+});}
 
 function loadAll(){
   if(!IS_GAS) return;
