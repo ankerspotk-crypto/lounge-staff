@@ -1352,6 +1352,11 @@ function handleApiRequest_(body) {
   if (body.action === 'closeAwardMonth')     { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return closeAwardMonth_(body.month); }
   if (body.action === 'awardSaveCategories') { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return awardSaveCategories_(body.cats); }
   if (body.action === 'awardSetConfig')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return awardSetConfig_(body.key, body.value); }
+  // ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦）
+  if (body.action === 'kassenPlay') return kassenPlay_(body);
+  if (body.action === 'kassenPing') return kassenPing_(body);
+  if (body.action === 'kassenAdminData')     { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return kassenAdminData_(body.month); }
+  if (body.action === 'kassenSetConfig')     { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return kassenSetConfig_(body.key, body.value); }
   return { ok: false, error: 'unknown action' };
 }
 
@@ -5987,6 +5992,13 @@ function scheduledJobs() {
     setProp(key, '1');
   }
 
+  // 通知設定を先に読み込む。おしぼりは日曜も実行するため、かつ毎分ジョブの notifEnabled_ ガードが
+  // これを参照するため、必ず「最初の ns_ 参照より前」に置くこと。
+  // ⚠️2026-07-24 修理: これが下（定時通知ブロックの直前）に置かれていたため const の TDZ に当たり、
+  //   毎分 ReferenceError で scheduledJobs が 5992行目以降ごと落ちていた（＝定時LINE通知が全滅）。
+  //   ns_ を使うガードを毎分ブロックに足す時は、この宣言より後ろであることを必ず確認する。
+  const ns_ = getNotifSettings_();
+
   // 毎分実行（日曜も継続）
   checkReminders();
   if (notifEnabled_('aten_alert', ns_)) checkAtendou();
@@ -6013,8 +6025,7 @@ function scheduledJobs() {
   // 毎日05:00: 古いプロパティ削除（日曜も継続）
   if (hhmm === '05:00') once('CLEANUP', cleanOldProperties);
 
-  // 通知設定を先に読み込む（おしぼりは日曜も実行するため）
-  const ns_ = getNotifSettings_();
+  // （通知設定 ns_ は関数冒頭で読み込み済み＝毎分ジョブのガードより前。ここでは再宣言しない）
 
   // 設定された時刻と一致したら1回だけ実行するヘルパー
   function notif_(key, fn) {
@@ -7483,24 +7494,10 @@ function getSekiJokyouData() {
 }
 
 // シフト表の特定セルに値を書き込む共通ヘルパー
-function writeShiftCell_(name, date, writeVal) {
-  const shiftSh = getShiftSS_().getSheetByName(SHIFT_TAB);
-  if (!shiftSh) return { ok: false, error: 'シフト表が見つかりません' };
-  const data = shiftSh.getDataRange().getValues();
-  const headers = data[0].map(v =>
-    v instanceof Date ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim()
-  );
-  let nameRowIdx = -1;
-  const nkey = normalizeName_(String(name).trim());
-  for (let i = 1; i < data.length; i++) {
-    if (normalizeName_(String(data[i][0]).trim()) === nkey) { nameRowIdx = i; break; }
-  }
-  if (nameRowIdx < 0) return { ok: false, error: name + ' のシフト行が見つかりません' };
-  const colIdx = headers.indexOf(date);
-  if (colIdx < 0) return { ok: false, error: date + ' の列が見つかりません' };
-  shiftSh.getRange(nameRowIdx + 1, colIdx + 1).setValue(writeVal);
-  return { ok: true };
-}
+// ⚠️2026-07-24: ここにあった writeShiftCell_ の旧定義を削除して1本化した。
+//   同名関数が2つあり JS の後勝ちで下（ensureShiftDateColumn_ の直後）の定義だけが動いていた＝ここは完全なデッドコード。
+//   しかも旧版は normalizeName_ で名寄せしていたのに、勝っていた新版が完全一致に退化していた（デグレ）。
+//   実体は shiftNameKey_ / rosterEntryByName_ と一緒に下側へ集約済み。ここには足さないこと。
 
 // 黒服バイトは全シフト管理者承認制(pending→コンソールで承認)。黒服社員・キャスト等は自動承認。当日の欠勤申請のみ承認待ち(pending)。
 function submitShift(payload) {
@@ -8240,6 +8237,11 @@ function handlePortalApi_(e) {
   // 🏆 表彰・匿名ピア投票（登録済みスタッフ全員）
   if (tab === 'awards') {
     return out(awardsPayload_(name, viewAs, isAdmin));
+  }
+
+  // ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦）
+  if (tab === 'kassen') {
+    return out(kassenPayload_(name, viewAs, isAdmin));
   }
 
   // 予約管理（登録済みスタッフ全員）
@@ -16624,6 +16626,39 @@ function ensureShiftDateColumn_(sh, date) {
   sh.getRange(1, newCol).setValue(dt); // Date値で入れる（既存列と同じ型。読取時にM/d化される）
   return newCol - 1;
 }
+// シフト関連の名前照合キー＝空白除去した正規化名。
+// ⚠️normalizeName_ は内部スペースを消さない（「鈴木 海」≠「鈴木海」）。シフト表↔名簿↔シフト申請の突合は必ずこれを通すこと。
+//    getShiftMgmtData_ / shiftSubmitRoster_ が使っているキーと同じ規則＝画面に出た人はここでも必ず引ける。
+function shiftNameKey_(s) {
+  return normalizeName_(String(s == null ? '' : s).trim()).replace(/[\s　]/g, '');
+}
+
+// 名簿（スタッフマスタ＝SSOT）から1人引く。空白除去の正規化名で突合。無ければ null。
+// returns { name（名簿の表記）, role, retired }
+function rosterEntryByName_(name) {
+  const key = shiftNameKey_(name);
+  if (!key) return null;
+  const stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!stf) return null;
+  let rc = -1;
+  try { const c = getStaffRetireCols_(stf, false)['退職']; if (c != null && c >= 0) rc = c; } catch (e) {}
+  const rows = stf.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (shiftNameKey_(rows[i][1]) !== key) continue; // 名簿の名前はB列
+    return {
+      name: String(rows[i][1]).trim(),
+      role: String(rows[i][2]).trim() || 'キャスト',
+      retired: (rc >= 0) ? (String(rows[i][rc]).trim() === '退職') : false
+    };
+  }
+  return null;
+}
+
+// シフト表の1セルに書く。名前は空白除去の正規化キーで照合し、行が無ければ名簿を根拠に自動生成する。
+// ⚠️2026-07-24修理: 旧版はA列の完全一致だけで探し、行が無いと 'スタッフが見つかりません' で詰んでいた。
+//   画面(getShiftMgmtData_)はシフト申請からも行を合成して出すので「一覧には居るのに時間変更できない」ねじれが発生していた（例: きさき）。
+//   さらにシフト表に行が無い人は getTodayShiftDetail_（黒服LINEの「シフト確認」／本日の出勤／付け回し）にも一生出てこない。
+//   → 名簿に在籍していれば行を作って両方まとめて解消する。タイポで幽霊行が生えないよう、行の新設は必ず名簿を経由させること。
 function writeShiftCell_(name, date, value) {
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
@@ -16638,13 +16673,24 @@ function writeShiftCell_(name, date, value) {
     colIdx = ensureShiftDateColumn_(sh, date); // 列が無ければ自動生成してから書く
     if (colIdx < 0) return { ok: false, error: '日付列を作成できません: ' + date };
   }
+  const key = shiftNameKey_(name);
+  if (!key) return { ok: false, error: '名前が空です' };
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === name) {
+    if (shiftNameKey_(data[i][0]) === key) {
       sh.getRange(i + 1, colIdx + 1).setValue(value || '');
       return { ok: true };
     }
   }
-  return { ok: false, error: 'スタッフが見つかりません: ' + name };
+  // シフト表に行が無い＝名簿にだけ居る人。名簿の表記と役割で行を新設してから書く。
+  const m = rosterEntryByName_(name);
+  if (!m) return { ok: false, error: 'スタッフが見つかりません: ' + name + '（名簿にも未登録です。先に名簿へ登録してください）' };
+  if (m.retired) return { ok: false, error: name + ' は退職者です（シフト表に行は作りません）' };
+  const newRow = new Array(Math.max(headers.length, colIdx + 1)).fill(''); // 日付列を新設した直後は headers より広くなる
+  newRow[0] = m.name; // 表記は名簿(SSOT)に寄せる
+  newRow[1] = m.role;
+  newRow[colIdx] = value || '';
+  sh.appendRow(newRow);
+  return { ok: true, created: true, name: m.name, role: m.role };
 }
 
 function addShiftStaff_(staffName, role, date, timeVal) {
@@ -16656,8 +16702,11 @@ function addShiftStaff_(staffName, role, date, timeVal) {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
     return String(v).trim();
   });
+  // ⚠️照合は writeShiftCell_ と同じ空白除去キーで統一すること。
+  //   完全一致のままだと「きさき」と「きさき 」を別人と見て行を新設し、writeShiftCell_（正規化照合）は元の行に書くため空の幽霊行が残る。
+  const key = shiftNameKey_(staffName);
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === staffName) {
+    if (shiftNameKey_(data[i][0]) === key) {
       if (date && timeVal) return writeShiftCell_(staffName, date, timeVal);
       return { ok: true, note: 'existing' };
     }
