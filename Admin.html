@@ -435,7 +435,7 @@ function pollAdminAuth(token){
 /* ===== ナビ: 14タブを5グループの2階層に束ねる（各画面のrender関数は無変更・入口の見せ方だけ） =====
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
-  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['awards','🏆 表彰'],['ref','📖 説明']]},
+  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
@@ -455,7 +455,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -1245,6 +1245,127 @@ function saveChecklist(){
   var op=chk.opening.filter(function(x){return String(x.label||'').trim();});
   var cl=chk.closing.filter(function(x){return String(x.label||'').trim();});
   api('saveChecklistConfig',{config:{opening:op,closing:cl}}).then(function(r){ res(r,'チェックリストを保存しました'); });
+}
+
+/* 📝 スキルテスト（黒服の知識関門・時給の維持/アップ資格）
+   結果一覧（誰が何級合格＝時給資格）／級設定／作問。受験は軍師側。
+   ⚠️合否はフラグ。基本時給は自動で書き換えない（改定は人が判断）。 */
+var skAdm=null, skGEdit=null, skQEdit=null;
+function renderSkillTest(){
+  loading();
+  api('skillAdminData',{}).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'取得できませんでした')+'</div>'); return; }
+    skAdm=r;
+    skGEdit=(r.grades||[]).map(function(g){ return {grade:g.grade,order:g.order,pass:g.pass,count:g.count,unlock:g.unlock,desc:g.desc,active:g.active!==false}; });
+    drawSkill();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function skEligChip_(st){
+  st=st||{};
+  if(st.canRaise)    return '<span class="chip on" style="background:#2b2410;border-color:#c9a45c;color:#f4d98a">昇給可</span>';
+  if(st.canMaintain) return '<span class="chip on">維持可</span>';
+  return '<span class="chip" style="color:#ff9a9a;border-color:#5a2226">資格なし</span>';
+}
+function skUnlockOpts_(v){
+  return '<option value=""'+(!v?' selected':'')+'>資格なし</option>'
+    +'<option value="維持"'+(v==='維持'?' selected':'')+'>維持（時給を維持できる）</option>'
+    +'<option value="アップ"'+(v==='アップ'?' selected':'')+'>アップ（昇給できる）</option>';
+}
+function drawSkill(){
+  var grades=skAdm.grades||[], questions=skAdm.questions||[], results=skAdm.results||[];
+  // ── 結果一覧（時給資格ボード）
+  var resRows=results.length? results.map(function(x){
+    var st=x.status||{}, r0=(st.recent&&st.recent[0])?st.recent[0]:null;
+    var last=r0?(esc(r0.grade)+' <b style="color:'+(r0.result==='合格'?'#7fd18b':'#ff9a9a')+'">'+esc(r0.result)+'</b> '+r0.pct+'%　<span style="color:var(--dim)">'+esc(String(r0.date).slice(5,16))+'</span>'):'<span style="color:var(--dim)">未受験</span>';
+    var held=(st.heldGrades&&st.heldGrades.length)?st.heldGrades.map(esc).join('・'):'<span style="color:var(--dim)">—</span>';
+    return '<tr>'
+      +'<td style="padding:6px 8px"><b>'+esc(x.name)+'</b></td>'
+      +'<td style="padding:6px 8px;color:var(--dim)">'+esc(x.role)+'</td>'
+      +'<td style="padding:6px 8px">'+held+'</td>'
+      +'<td style="padding:6px 8px">'+skEligChip_(st)+'</td>'
+      +'<td style="padding:6px 8px;font-size:12px">'+last+'</td></tr>';
+  }).join('') : '<tr><td colspan="5" style="padding:8px;color:var(--dim)">黒服のスタッフがいません</td></tr>';
+  // ── 級設定
+  var gRows=(skGEdit||[]).map(function(g,i){ return skGradeRow_(g,i); }).join('')||'<div class="empty" style="padding:10px">級がありません</div>';
+  // ── 問題管理（級ごと）
+  var qByGrade={}; questions.forEach(function(q){ (qByGrade[q.grade]=qByGrade[q.grade]||[]).push(q); });
+  var qSecs=grades.map(function(g){
+    var arr=qByGrade[g.grade]||[];
+    var list=arr.length? arr.map(function(q){
+      var correct=q.choices[(q.answer||1)-1]||'';
+      return '<div class="lrow" style="align-items:flex-start;gap:8px">'
+        +'<div class="main"><div>'+(q.active===false?'<span class="chip" style="color:#ff9a9a;border-color:#5a2226">停止</span> ':'')+(q.cat?'<span class="chip">'+esc(q.cat)+'</span> ':'')+esc(q.q)+'</div>'
+        +'<div style="font-size:12px;color:var(--dim);margin-top:2px">正解：'+esc(correct)+'　（'+ (q.points||1) +'点）</div></div>'
+        +'<div style="display:flex;gap:4px;flex:none"><button class="btn" style="padding:5px 9px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">編集</button>'
+        +'<button class="btn" style="padding:5px 9px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">削除</button></div></div>';
+    }).join('') : '<div class="empty" style="padding:8px;color:var(--dim)">まだ問題がありません</div>';
+    return '<div class="sec"><div class="sec-t">'+esc(g.grade)+'　<span style="font-weight:400;color:var(--dim);font-size:12px">'+arr.length+'問（合格ライン '+g.pass+'%・出題'+(g.count>0?g.count+'問':'全問')+'）</span></div>'
+      +list+'<div style="margin-top:8px"><button class="btn" onclick="skNewQ(\''+esc(g.grade)+'\')">＋ この級に問題を追加</button></div></div>';
+  }).join('');
+  setBody(
+    '<div class="hint">合格した級が時給の<b>維持・アップ</b>の資格になります。判定はここに出ますが、<b>実際の時給の改定は人が確定</b>します（自動では変えません）。受験は軍師の「📝 スキルテスト」から。</div>'
+    +'<div class="sec"><div class="sec-t">🎖 時給資格ボード（黒服ごと）</div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);text-align:left"><th style="padding:4px 8px">名前</th><th style="padding:4px 8px">役割</th><th style="padding:4px 8px">合格した級</th><th style="padding:4px 8px">時給資格</th><th style="padding:4px 8px">直近の受験</th></tr></thead><tbody>'+resRows+'</tbody></table></div></div>'
+    +'<div class="sec"><div class="sec-t">🪜 級の設定 <span style="font-weight:400;color:var(--dim);font-size:12px">解放資格で「維持／アップ」を切り分け</span></div>'
+      +gRows+'<div style="margin-top:8px"><button class="btn" onclick="skAddGrade()">＋ 級を追加</button><button class="btn pri" style="margin-left:8px" onclick="skSaveGrades()">💾 級を保存</button></div></div>'
+    +(skQEdit?skQFormHtml_():'')
+    +'<div class="sec-t" style="margin-top:18px">🗂 問題の管理</div>'
+    +qSecs
+  );
+}
+function skGradeRow_(g,i){
+  return '<div class="lrow" style="align-items:center;gap:6px;flex-wrap:wrap">'
+    +'<input class="finput" style="width:44px;text-align:center;flex:none" type="number" title="順位" value="'+esc(g.order)+'" oninput="skGEdit['+i+'].order=+this.value">'
+    +'<div style="min-width:70px;font-weight:700">'+esc(g.grade)+'</div>'
+    +'<span style="font-size:12px;color:var(--dim)">合格</span><input class="finput" style="width:58px;flex:none" type="number" value="'+esc(g.pass)+'" oninput="skGEdit['+i+'].pass=+this.value"><span style="font-size:12px;color:var(--dim)">%</span>'
+    +'<span style="font-size:12px;color:var(--dim)">出題</span><input class="finput" style="width:52px;flex:none" type="number" title="0=全問" value="'+esc(g.count)+'" oninput="skGEdit['+i+'].count=+this.value">'
+    +'<select class="finput" style="width:190px;flex:none" onchange="skGEdit['+i+'].unlock=this.value">'+skUnlockOpts_(g.unlock)+'</select>'
+    +'<input class="finput" style="flex:1;min-width:140px" placeholder="説明" value="'+esc(g.desc||'')+'" oninput="skGEdit['+i+'].desc=this.value">'
+    +'<span class="chip'+(g.active?' on':'')+'" style="cursor:pointer;flex:none" onclick="skGToggle('+i+')">'+(g.active?'有効':'停止')+'</span></div>';
+}
+function skGToggle(i){ skGEdit[i].active=!skGEdit[i].active; drawSkill(); }
+function skAddGrade(){
+  var name=prompt('新しい級の名前（例：特級）'); if(!name) return; name=name.trim(); if(!name) return;
+  api('skillSaveGrade',{g:{grade:name,order:(skGEdit.length+1),pass:80,count:10,unlock:'アップ',desc:'',active:true}})
+    .then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'追加に失敗'); return; } renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
+}
+function skSaveGrades(){
+  var list=(skGEdit||[]).slice();
+  (function next(i){ if(i>=list.length){ alert('級を保存しました'); renderSkillTest(); return; }
+    api('skillSaveGrade',{g:list[i]}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'級の保存に失敗'); return; } next(i+1); }).catch(function(){ alert('通信エラー'); });
+  })(0);
+}
+function skNewQ(grade){ skQEdit={id:null,grade:grade||((skAdm.grades[0]||{}).grade)||'',cat:'',q:'',choices:['','','',''],answer:1,points:1,active:true}; drawSkill(); location.hash='#skq'; }
+function skEditQ(id){ var q=(skAdm.questions||[]).filter(function(x){return x.id===id;})[0]; if(!q) return; skQEdit={id:q.id,grade:q.grade,cat:q.cat,q:q.q,choices:(q.choices||['','','','']).slice(),answer:q.answer||1,points:q.points||1,active:q.active!==false}; drawSkill(); location.hash='#skq'; }
+function skCancelQ(){ skQEdit=null; drawSkill(); }
+function skQFormHtml_(){
+  var q=skQEdit, gopts=(skAdm.grades||[]).map(function(g){ return '<option value="'+esc(g.grade)+'"'+(g.grade===q.grade?' selected':'')+'>'+esc(g.grade)+'</option>'; }).join('');
+  var ch=q.choices||['','','',''];
+  var chRows=[0,1,2,3].map(function(k){
+    return '<div class="lrow" style="align-items:center;gap:8px"><label style="flex:none;display:flex;align-items:center;gap:5px;color:var(--dim);font-size:13px"><input type="radio" name="skans" '+(q.answer===k+1?'checked':'')+' onclick="skQEdit.answer='+(k+1)+'">正解</label>'
+      +'<input class="finput" style="flex:1" placeholder="選択肢'+(k+1)+'" value="'+esc(ch[k]||'')+'" oninput="skQEdit.choices['+k+']=this.value"></div>';
+  }).join('');
+  return '<a id="skq"></a><div class="sec" style="border:1px solid #c9a45c">'
+    +'<div class="sec-t">'+(q.id?'✏️ 問題を編集':'➕ 問題を追加')+'</div>'
+    +'<div class="lrow" style="align-items:center;gap:10px"><div style="flex:none;color:var(--dim);font-size:13px">級</div><select class="finput" style="width:130px" onchange="skQEdit.grade=this.value">'+gopts+'</select>'
+      +'<div style="flex:none;color:var(--dim);font-size:13px">カテゴリ</div><input class="finput" style="width:150px" placeholder="任意" value="'+esc(q.cat||'')+'" oninput="skQEdit.cat=this.value">'
+      +'<div style="flex:none;color:var(--dim);font-size:13px">配点</div><input class="finput" style="width:64px" type="number" value="'+esc(q.points)+'" oninput="skQEdit.points=+this.value"></div>'
+    +'<textarea class="finput" style="width:100%;height:60px;margin-top:8px" placeholder="問題文" oninput="skQEdit.q=this.value">'+esc(q.q||'')+'</textarea>'
+    +'<div style="margin-top:8px">'+chRows+'</div>'
+    +'<div class="lrow" style="align-items:center;margin-top:8px"><span class="chip'+(q.active?' on':'')+'" style="cursor:pointer" onclick="skQEdit.active=!skQEdit.active;drawSkill()">'+(q.active?'有効':'停止')+'</span>'
+      +'<span class="sp" style="flex:1"></span><button class="btn" onclick="skCancelQ()">キャンセル</button><button class="btn pri" style="margin-left:8px" onclick="skSaveQ()">💾 保存</button></div></div>';
+}
+function skSaveQ(){
+  var q=skQEdit; if(!q) return;
+  if(!q.q||!q.q.trim()){ alert('問題文を入力してください'); return; }
+  if(!q.grade){ alert('級を選んでください'); return; }
+  var filled=(q.choices||[]).filter(function(c){return c&&c.trim();}).length;
+  if(filled<2){ alert('選択肢は2つ以上入力してください'); return; }
+  if(!q.choices[(q.answer||1)-1]||!q.choices[(q.answer||1)-1].trim()){ alert('正解に指定した選択肢が空です'); return; }
+  api('skillSaveQuestion',{q:q}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'保存に失敗'); return; } skQEdit=null; renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
+}
+function skDelQ(id){ if(!confirm('この問題を削除しますか？')) return;
+  api('skillDeleteQuestion',{id:id}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'削除に失敗'); return; } renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
 }
 
 /* 🏆 表彰（匿名ピア投票の管理：集計/締め・発表/監査/部門編集/設定） */
@@ -2895,6 +3016,26 @@ function blMockDetail(uuid){
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
 function MOCKAPI(action,body){
+  if(action==='skillAdminData'){
+    return {ok:true,
+      grades:[
+        {grade:'初級',order:1,pass:80,count:10,unlock:'維持',desc:'接客の基本・店のルール・身だしなみ',active:true},
+        {grade:'中級',order:2,pass:80,count:10,unlock:'アップ',desc:'システム操作・料金/会計・会員対応',active:true},
+        {grade:'上級',order:3,pass:80,count:10,unlock:'アップ',desc:'トラブル対応・数字/マネジメント',active:true}
+      ],
+      questions:[
+        {id:'Q1',grade:'初級',cat:'サンプル',q:'お客様をお迎えするとき、最初にすべき対応は？',choices:['笑顔で挨拶し人数を伺う','無言で席へ通す','まず料金の説明をする','席が空くまで待たせる'],answer:1,points:1,active:true},
+        {id:'Q2',grade:'初級',cat:'サンプル',q:'黒服としてふさわしくない身だしなみは？',choices:['清潔なスーツと磨いた靴','香水を強くつける','髪を整える','爪を短く保つ'],answer:2,points:1,active:true},
+        {id:'Q3',grade:'中級',cat:'サンプル',q:'お会計で金額を伝える前に、まず確認すべきことは？',choices:['伝票の内容と合計が正しいか','次回予約の希望','おしぼりの補充','照明の明るさ'],answer:1,points:1,active:true},
+        {id:'Q4',grade:'上級',cat:'サンプル',q:'お客様同士のトラブル、黒服の最優先は？',choices:['双方を落ち着かせ安全を確保','その場を離れる','どちらかの味方をする','会計を急がせる'],answer:1,points:1,active:true}
+      ],
+      results:[
+        {name:'りく',role:'黒服社員',status:{name:'りく',heldGrades:['初級','中級'],topGrade:'中級',eligibility:'アップ',canMaintain:true,canRaise:true,attempts:3,recent:[{date:'2026-07-24 21:30',grade:'中級',pct:90,result:'合格'}]}},
+        {name:'たけし',role:'黒服バイト',status:{name:'たけし',heldGrades:['初級'],topGrade:'初級',eligibility:'維持',canMaintain:true,canRaise:false,attempts:2,recent:[{date:'2026-07-23 20:10',grade:'中級',pct:60,result:'不合格'}]}},
+        {name:'ゆうと',role:'黒服バイト',status:{name:'ゆうと',heldGrades:[],topGrade:'',eligibility:'none',canMaintain:false,canRaise:false,attempts:0,recent:[]}}
+      ]};
+  }
+  if(action==='skillSaveQuestion'||action==='skillDeleteQuestion'||action==='skillSaveGrade') return {ok:true};
   if(action==='awardAdminData'){
     return {ok:true, month:(body.month||'2026-07'),
       categories:[

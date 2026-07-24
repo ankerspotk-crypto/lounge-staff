@@ -263,6 +263,16 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .seat.ok .cnr{background:#123a26;color:#7be0a8;}
 .seat.warn .cnr{background:#3a2c00;color:#ffcf6a;}
 .seat.over .cnr{background:#4a1212;color:#ff9a9a;}
+/* 未対応キャストリクエスト有り＝テーブルごと橙で強調（📣と同系色）。席名の右の小フラグだけでは埋もれるため卓を光らせる。
+ * ⚠️.seat.over は席自身のbox-shadowで赤点滅／move・combineは::after＝どれとも衝突しないよう::beforeの内側リングで出す。
+ *   超過(赤)とリクエスト(橙)は同時に発火し得る＝赤い外周点滅の内側で橙リングが脈打つ＝両方読める。 */
+.hall-map .seat.hasreq::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:1;
+  border:3px solid #ffb44d;box-shadow:inset 0 0 11px rgba(255,170,70,.55);animation:seatreq .95s ease-in-out infinite;}
+@keyframes seatreq{0%,100%{opacity:.4;}50%{opacity:1;}}
+/* 卓が光っている理由を一言で＝右下に「📣リクエスト」の帯（タップで当該客のリクエスト一覧）。 */
+.hall-map .seat.hasreq>.req-corner{position:absolute;right:0;bottom:0;z-index:2;font-size:9px;font-weight:800;line-height:1;
+  padding:2px 5px;border-top-left-radius:7px;background:#7a4400;color:#ffdca6;border:1px solid #ffb44d;border-right:0;border-bottom:0;
+  cursor:pointer;animation:seatreq .95s ease-in-out infinite;}
 
 /* ---------- Reservation list ---------- */
 .rlist{display:flex;flex-direction:column;gap:4px;}
@@ -1364,34 +1374,6 @@ function showTaskDetail(id){
   showSheet('📋 タスク詳細',body,false);
 }
 function completeTaskFromDetail(id){ closeSheet(); completeTask(id); }
-/* 🙋 LINEで届いた要望（captureHallRequest_が黒服/スタッフLINEから拾ったもの）。
- * 押すと原文全文＋「対応中／完了／これは要望じゃない」。完了にするまで消えない＝流れて消えない。 */
-function reqOverdue(t){ if(!t||!t.due)return 0; var m=tmin(t.due); if(isNaN(m))return 0; return nowBizMin()-m; }
-function showReqDetail(id){
-  var t=(TASKS||[]).find(function(x){return x.id===id;}); if(!t)return;
-  var ov=reqOverdue(t);
-  var meta=[t.by?'依頼者：'+t.by:'', t.seat?'席：'+t.seat:'', t.due?('希望：'+t.due+(ov>0?'（'+ov+'分超過）':'')):'', t.src?'元：'+t.src:'', t.at?'受信：'+t.at:''].filter(function(x){return x;});
-  var body='<div class="tdetail">'
-    +'<div class="td-title">🙋 '+esc(t.title)+'</div>'
-    +'<div class="td-memo"><b>LINE原文</b><br>'+esc(t.memo||'').replace(/\n/g,'<br>')+'</div>'
-    +(meta.length?'<div class="td-meta">'+esc(meta.join('　'))+'</div>':'')
-    // ボタンは4つ並ぶことがあるので、この詳細だけ折り返し可にする（.td-actions は他の詳細でも使う共有クラス）
-    +'<div class="td-actions" style="flex-wrap:wrap">'
-      +'<button class="td-done" style="white-space:nowrap;min-width:120px" onclick="hallReqAct(\''+jsStr(id)+'\',\'done\')">✅ 完了</button>'
-      +(t.ack==='対応中'?'':'<button class="td-close" style="white-space:nowrap" onclick="hallReqAct(\''+jsStr(id)+'\',\'ack\')">🏃 対応中</button>')
-      +'<button class="td-close" style="white-space:nowrap" onclick="hallReqAct(\''+jsStr(id)+'\',\'ng\')">🚫 要望じゃない</button>'
-      +'<button class="td-close" style="white-space:nowrap" onclick="closeSheet()">閉じる</button>'
-    +'</div></div>';
-  showSheet('🙋 LINEで届いた要望',body,false);
-}
-function hallReqAct(id,act){
-  closeSheet();
-  if(act==='ack'){ (TASKS||[]).forEach(function(t){ if(t.id===id){ t.ack='対応中'; t.icon='🏃'; } }); }
-  else { TASKS=(TASKS||[]).filter(function(t){return t.id!==id;}); }  // 楽観的に除去
-  renderAlerts(); renderHome();
-  if(typeof toast==='function')toast(act==='done'?'✅ 完了にしました':(act==='ng'?'🚫 要望ではないものとして消しました':'🏃 対応中にしました'));
-  if(IS_GAS) gsr('hallReqUpdate',id,act,(typeof LOGIN!=='undefined'?LOGIN:'')||'').catch(function(){ loadAll(); });
-}
 /* 年会費更新：伝票で年会費を検知したチケットを顧客マスタへ反映（ワンタップ確認） */
 function showFeeRenewDetail(id){
   var t=(TASKS||[]).find(function(x){return x.id===id;}); if(!t)return;
@@ -1428,13 +1410,6 @@ function renderAlerts(){
         +'<div class="tk-time">📋 タスク'+(t.by?'・'+esc(t.by):'')+'</div>'
         +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">タップで全文・完了</span></span></div>'
         +'<div class="tk-done">詳細 ›</div></div>';
-    }
-    if(t.type==='req'){
-      var ov=reqOverdue(t);
-      return '<div class="ticket k-task k-admin'+(ov>0?' tk-blink':'')+'" onclick="showReqDetail(\''+jsStr(t.id)+'\')">'
-        +'<div class="tk-time">'+(t.ack==='対応中'?'🏃 対応中':'🙋 要望')+(t.due?'・'+esc(t.due):'')+'</div>'
-        +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">'+esc(t.sub||'')+(ov>0?'　⚠️'+ov+'分超過':'')+'</span></span></div>'
-        +'<div class="tk-done">確認 ›</div></div>';
     }
     if(t.type==='feerenew'){
       return '<div class="ticket k-task k-admin" onclick="showFeeRenewDetail(\''+jsStr(t.id)+'\')">'
@@ -2147,6 +2122,12 @@ function mapFlags_(s,idx){
  * ⚠️段を足す/文字を上げる時は必ず実測で追う。枠(カウンター約56px・ボックス80〜102px)を超えると黙って切れる。 */
 function mapSeatCell_(s,tall,wide){
   var st=seatStatus(s), idx=seatIdx(s), nm=shortNm(s.name);
+  // 未対応キャストリクエスト＝卓ごと橙で光らせる（席名右の小フラグだけでは埋もれる）。
+  // 来店中(s.cust)だけでなく来店前の予約席(s.rsv.cust)も対象＝予約に付いたリクエストを来店前から出す。reqsForCustは客名キー照合。
+  var reqCust=s.cust||(s.rsv&&s.rsv.cust)||'';
+  var reqUn=reqCust?reqsForCust(reqCust).filter(function(r){return !r.handled;}).length:0;
+  var rqc=reqUn?' hasreq':'';
+  var reqCorner=reqUn?'<span class="req-corner" title="未対応リクエスト'+reqUn+'件" onclick="openReqForSeat('+idx+',event)">📣 リクエスト</span>':'';
   var oc='onclick="onSeatClick('+idx+')"', size=tall?' box':' mini';
   if(s.mergedTo!=null){
     return '<div class="seat mergedcell'+size+'" '+oc+'><div class="mini-r1"><b>'+esc(nm)+'</b></div>'
@@ -2209,9 +2190,9 @@ function mapSeatCell_(s,tall,wide){
       } else if(cs.length>1) r2+='<span class="mini-p">+'+(cs.length-1)+'</span>';
     }
   }
-  return '<div class="seat'+size+' '+cls+mt+self+ct+cprim+grp+'" '+oc+'>'
+  return '<div class="seat'+size+' '+cls+mt+self+ct+cprim+grp+rqc+'" '+oc+'>'
     +'<div class="mini-r1">'+r1+'</div><div class="mini-r2">'+r2+'</div>'
-    +(r3?'<div class="mini-r3">'+r3+'</div>':'')+'</div>';
+    +(r3?'<div class="mini-r3">'+r3+'</div>':'')+reqCorner+'</div>';
 }
 /* 3段目に入り切らなかったキャストを「+N」で明示する。
  * ⚠️切れた事実を黙って捨てない＝黒服が「ついているはずのキャストが居ない」と誤読する。
@@ -3432,6 +3413,7 @@ var MENU_TILES=[
     {ic:'🏆', t:'表彰投票',           act:"openAwardVote()"},
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
     {ic:'📋', t:'面談表',         act:"openMendanManager()"},
+    {ic:'📝', t:'スキルテスト',       act:"openSkillTest()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🍶', t:'ボトル棚マップ',     act:"openBottleShelfMap()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
@@ -4251,14 +4233,18 @@ function saveCustEdit(){
 }
 
 /* ============ キャストリクエスト ============ */
+// ⚠️本番は adaptReq がシートの生ラベルから作る形（targetCusts＝客名キー配列 / targetLabel＝時刻・卓つき表示）。モックも同じ形にして描画経路を実データと一致させる。
 var REQUESTS=[
-  {id:1, time:'20:10', cast:'のあ',  type:'NG',  targetCust:'加藤', comment:'先日クレームあり・接客不可', handled:false},
-  {id:2, time:'20:25', cast:'みれい',type:'希望', targetCust:'鈴木', comment:'指名継続希望・ボトル入れたい', handled:false},
-  {id:3, time:'19:50', cast:'かい',  type:'NG',  targetCust:'渡辺', comment:'', handled:true},
-  {id:4, time:'21:00', cast:'ゆき',  type:'希望', targetStore:true, comment:'新規のお客様につけてほしい', handled:false}
+  {id:1, time:'20:10', cast:'のあ',  type:'NG',  targetCusts:['加藤'], targetLabel:'20:10 加藤様（5F ボックス1）', comment:'先日クレームあり・接客不可', handled:false},
+  {id:2, time:'20:25', cast:'みれい',type:'希望', targetCusts:['鈴木'], targetLabel:'20:25 鈴木様（2F ボックス1）', comment:'指名継続希望・ボトル入れたい', handled:false},
+  {id:3, time:'19:50', cast:'かい',  type:'NG',  targetCusts:['渡辺'], targetLabel:'19:50 渡辺様（5F カウンター3）', comment:'', handled:true},
+  {id:4, time:'21:00', cast:'ゆき',  type:'希望', targetStore:true, comment:'新規のお客様につけてほしい', handled:false},
+  // 来店前（予約のみ）の卓を来店前から光らせるデモ＝中村(5Fカウ4予約)・山本(2Fカウ4予約)
+  {id:5, time:'20:35', cast:'ゆうか',type:'キャスト希望', targetCusts:['中村'], targetLabel:'20:30 中村様（5F カウンター4）', comment:'前回担当・指名継続希望', handled:false},
+  {id:6, time:'20:40', cast:'まや',  type:'希望', targetCusts:['山本'], targetLabel:'21:00 山本様（2F カウンター4）', comment:'同伴で来店予定', handled:false}
 ];
 function custKey(c){return String(c||'').replace(/\s*様\s*$/,'').trim();}
-function reqsForCust(cust){var k=custKey(cust);if(!k)return [];return REQUESTS.filter(function(r){return !r.targetStore&&r.targetCust===k;});}
+function reqsForCust(cust){var k=custKey(cust);if(!k)return [];return REQUESTS.filter(function(r){return !r.targetStore&&(r.targetCusts||(r.targetCust?[r.targetCust]:[])).indexOf(k)>=0;});}
 function reqTypeIcon(t){return t==='NG'?'🚫':t==='希望'?'🙋':'📣';}
 function reqBadgeHtml(idx,cust){var rq=reqsForCust(cust);if(!rq.length)return '';var un=rq.filter(function(r){return !r.handled;}).length;return '<span class="req-badge'+(un?' un':'')+'" onclick="openReqForSeat('+idx+',event)">📣 リクエスト'+(un?' '+un:'済')+'</span>';}
 function reqListHtml(list){
@@ -4266,7 +4252,7 @@ function reqListHtml(list){
   var un=list.filter(function(r){return !r.handled;}).length;
   return '<div style="font-size:12px;color:var(--sub);margin-bottom:10px;font-weight:700">未対応 '+un+' / 合計 '+list.length+'件</div>'
     +list.map(function(r){
-      var tgt=r.targetStore?'店全体へ':(esc(r.targetCust)+'様');
+      var tgt=r.targetStore?'店全体へ':esc(r.targetLabel||(r.targetCust?r.targetCust+'様':''));
       return '<div class="req-card'+(r.handled?' done':'')+'"><div class="rq-top"><span class="rq-time">'+esc(r.time)+'</span><span class="rq-cast">'+esc(r.cast)+'さん</span><span class="rq-type '+(r.type==='NG'?'ng':'want')+'">'+reqTypeIcon(r.type)+' '+esc(r.type)+'</span><label class="rq-done"><input type="checkbox" '+(r.handled?'checked':'')+' onchange="toggleReq('+r.id+',this.checked)">対応済</label></div><div class="rq-target">対象：'+tgt+'</div>'+(r.comment?'<div class="rq-comment">📝 '+esc(r.comment)+'</div>':'')+'</div>';
     }).join('');
 }
@@ -5337,6 +5323,113 @@ function gsr(fn){
     .then(function(j){ if(j&&j.__ok===false) throw new Error(j.error||'server error'); return j?j.data:j; });
 }
 
+/* ===== 📝 スキルテスト（黒服の知識関門・時給の維持/アップ資格ゲート） =====
+   受験＝ここ（軍師）。作問・級設定・結果閲覧はコンソール。
+   ⚠️正解はサーバーにしか無い＝出題は選択肢のみ、採点は gunshiSkillSubmit(サーバー側)で行う。 */
+var SKILL_STATE={grades:[],status:null,cur:null,busy:false};
+function skillBack_(onclick){ return '<span class="menu-back" onclick="'+(onclick||'closeMenu()')+'">← '+(onclick?'一覧へ':'閉じる')+'</span>'; }
+function skillUnlockBadge_(u){
+  if(u==='アップ') return '<span style="background:#2b2410;border:1px solid #c9a45c;color:#e6d2a8;border-radius:6px;padding:2px 8px;font-size:10.5px;margin-left:6px">昇給資格</span>';
+  if(u==='維持')   return '<span style="background:#16130f;border:1px solid #6f685e;color:#a29a8e;border-radius:6px;padding:2px 8px;font-size:10.5px;margin-left:6px">維持資格</span>';
+  return '';
+}
+function openSkillTest(){
+  document.getElementById('menuOverlay').classList.add('show');
+  var el=document.getElementById('menu-body');
+  el.innerHTML=skillBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>';
+  SKILL_STATE.cur=null; SKILL_STATE.busy=false;
+  gsr('gunshiSkillInit', LOGIN).then(function(r){
+    if(!r||!r.ok){ el.innerHTML=skillBack_()+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">読み込みエラー</div>'; return; }
+    SKILL_STATE.grades=r.grades||[]; SKILL_STATE.status=r.status||null;
+    renderSkillMenu_();
+  }).catch(function(){ el.innerHTML=skillBack_()+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">通信に失敗しました</div>'; });
+}
+function renderSkillMenu_(){
+  var el=document.getElementById('menu-body'), st=SKILL_STATE.status||{};
+  var elig=st.canRaise?'<b style="color:#e6d2a8">昇給（アップ）可</b>':(st.canMaintain?'<b style="color:#c9a45c">維持可</b>':'<span style="color:#ff9aa0">まだ資格なし</span>');
+  var top=st.topGrade?('到達級 <b>'+esc(st.topGrade)+'</b>'):'まだ合格した級はありません';
+  var h=skillBack_()+'<div class="menu-grp">📝 スキルテスト</div>';
+  h+='<div style="border:1px solid rgba(201,164,92,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:linear-gradient(170deg,#1c1815,#0d0b0a)">'
+    +'<div style="font-size:11px;color:#a29a8e">'+esc(st.name||LOGIN)+' さんの現在</div>'
+    +'<div style="font-size:15px;color:#e6d2a8;margin-top:4px">'+top+' ／ 時給：'+elig+'</div>'
+    +'<div style="font-size:10.5px;color:#6f685e;margin-top:6px">合格した級が時給の維持・アップの資格になります（実際の金額改定は店長が判断）。</div></div>';
+  if(!SKILL_STATE.grades.length){ h+='<div class="empty-msg" style="padding:24px;color:#888">受験できる級がありません。</div>'; el.innerHTML=h; return; }
+  h+='<div style="display:flex;flex-direction:column;gap:10px">'+SKILL_STATE.grades.map(function(g){
+    var held=g.held?'<span style="color:#7fd18b;font-weight:800;margin-left:6px"> ✅合格済</span>':'';
+    var qn=(g.count>0?Math.min(g.count,g.available):g.available);
+    var btn=g.available>0
+      ? '<button onclick="skillStart_(\''+encodeURIComponent(g.grade)+'\')" style="border:1px solid #c9a45c;background:#1a1611;color:#e6d2a8;border-radius:9px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap">挑戦する</button>'
+      : '<span style="color:#6f685e;font-size:11px;white-space:nowrap">問題準備中</span>';
+    return '<div style="border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;background:#15120f">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      +'<div><span style="font-size:16px;color:#e6d2a8;font-weight:700">'+esc(g.grade)+'</span>'+skillUnlockBadge_(g.unlock)+held+'</div>'+btn+'</div>'
+      +'<div style="font-size:11px;color:#a29a8e;margin-top:6px">'+esc(g.desc||'')+'</div>'
+      +'<div style="font-size:10.5px;color:#6f685e;margin-top:4px">出題 '+qn+'問 ／ 合格ライン '+g.pass+'%</div></div>';
+  }).join('')+'</div>';
+  el.innerHTML=h;
+}
+function skillStart_(gEnc){
+  var grade=decodeURIComponent(gEnc);
+  if(SKILL_STATE.busy) return; SKILL_STATE.busy=true;
+  var el=document.getElementById('menu-body');
+  el.innerHTML=skillBack_('openSkillTest()')+'<div class="empty-msg" style="padding:24px">問題を準備中…</div>';
+  gsr('gunshiSkillStart', LOGIN, grade).then(function(r){
+    SKILL_STATE.busy=false;
+    if(!r||!r.ok){ el.innerHTML=skillBack_('openSkillTest()')+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">'+esc((r&&r.error)||'開始できませんでした')+'</div>'; return; }
+    SKILL_STATE.cur={grade:grade,pass:r.pass,unlock:r.unlock,questions:r.questions||[],answers:{}};
+    renderSkillQuiz_();
+  }).catch(function(){ SKILL_STATE.busy=false; el.innerHTML=skillBack_('openSkillTest()')+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">通信に失敗しました</div>'; });
+}
+function skillPick_(qid,idx){ if(SKILL_STATE.cur){ SKILL_STATE.cur.answers[qid]=idx; renderSkillProgress_(); } }
+function renderSkillProgress_(){
+  var c=SKILL_STATE.cur; if(!c) return;
+  var done=Object.keys(c.answers).length, tot=c.questions.length;
+  var b=document.getElementById('skillProg'); if(b) b.textContent=done+' / '+tot+' 問 回答済';
+  var sb=document.getElementById('skillSubmitBtn'); if(sb){ var ok=done>=tot; sb.disabled=!ok; sb.style.opacity=ok?'1':'.45'; }
+}
+function renderSkillQuiz_(){
+  var c=SKILL_STATE.cur, el=document.getElementById('menu-body');
+  var h=skillBack_('openSkillTest()')+'<div class="menu-grp">📝 '+esc(c.grade)+'（合格ライン '+c.pass+'%）</div>';
+  h+='<div id="skillProg" style="text-align:center;font-size:11px;color:#a29a8e;margin-bottom:10px">0 / '+c.questions.length+' 問 回答済</div>';
+  h+=c.questions.map(function(q,i){
+    var opts=q.choices.map(function(ch,ci){ if(ch==='') return ''; var n=ci+1;
+      return '<label style="display:block;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:11px 13px;margin-top:7px;cursor:pointer;color:#ddd;font-size:13px">'
+        +'<input type="radio" name="skq_'+q.id+'" style="margin-right:9px" onclick="skillPick_(\''+q.id+'\','+n+')">'+esc(ch)+'</label>';
+    }).join('');
+    return '<div style="border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#15120f">'
+      +'<div style="font-size:14px;color:#e6d2a8;font-weight:600">Q'+(i+1)+'. '+esc(q.q)+'</div>'+opts+'</div>';
+  }).join('');
+  h+='<button id="skillSubmitBtn" disabled style="opacity:.45;width:100%;border:1px solid #c9a45c;background:#c9a45c;color:#1a1207;border-radius:11px;padding:14px;font-size:15px;font-weight:800;cursor:pointer" onclick="skillSubmit_()">採点する</button>';
+  el.innerHTML=h;
+}
+function skillSubmit_(){
+  var c=SKILL_STATE.cur; if(!c) return;
+  if(Object.keys(c.answers).length<c.questions.length){ alert('すべての問題に回答してください。'); return; }
+  if(SKILL_STATE.busy) return; SKILL_STATE.busy=true;
+  var sb=document.getElementById('skillSubmitBtn'); if(sb){ sb.disabled=true; sb.textContent='採点中…'; }
+  gsr('gunshiSkillSubmit', LOGIN, c.grade, c.answers).then(function(r){
+    SKILL_STATE.busy=false;
+    if(!r||!r.ok){ alert((r&&r.error)||'採点に失敗しました'); if(sb){sb.disabled=false;sb.textContent='採点する';} return; }
+    SKILL_STATE.status=r.status||SKILL_STATE.status;
+    renderSkillResult_(r);
+  }).catch(function(){ SKILL_STATE.busy=false; alert('通信に失敗しました'); if(sb){sb.disabled=false;sb.textContent='採点する';} });
+}
+function renderSkillResult_(r){
+  var el=document.getElementById('menu-body'), ok=r.passed;
+  var head=ok?'🎉 合格':'✋ 不合格', color=ok?'#7fd18b':'#ff9aa0';
+  var h=skillBack_('openSkillTest()')+'<div class="menu-grp">📝 '+esc(r.grade)+' の結果</div>';
+  h+='<div style="border:1px solid '+color+';border-radius:14px;padding:22px 16px;text-align:center;background:linear-gradient(170deg,#1c1815,#0d0b0a)">'
+    +'<div style="font-size:26px;color:'+color+';font-weight:800">'+head+'</div>'
+    +'<div style="font-family:\'Yu Mincho\',serif;font-size:40px;color:#e6d2a8;margin:6px 0">'+r.pct+'<span style="font-size:16px;color:#a29a8e">%</span></div>'
+    +'<div style="font-size:12px;color:#a29a8e">'+r.score+' / '+r.max+' 点（合格ライン '+r.pass+'%）</div>';
+  if(ok&&r.unlock){ h+='<div style="margin-top:12px;font-size:13px;color:#e6d2a8">この級で <b>時給'+(r.unlock==='アップ'?'アップ':'維持')+'</b> の資格を満たしました。</div>'; }
+  if(!ok){ h+='<div style="margin-top:12px;font-size:12px;color:#a29a8e">もう一度挑戦できます。落ち着いていきましょう。</div>'; }
+  h+='</div><div style="display:flex;gap:10px;margin-top:16px">'
+    +'<button onclick="skillStart_(\''+encodeURIComponent(r.grade)+'\')" style="flex:1;border:1px solid rgba(255,255,255,.2);background:#15120f;color:#ddd;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">もう一度</button>'
+    +'<button onclick="openSkillTest()" style="flex:1;border:1px solid #c9a45c;background:#1a1611;color:#e6d2a8;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">級一覧へ</button></div>';
+  el.innerHTML=h;
+}
+
 /* 📝 面談を開始：トークンを発行して応募者フロント(mendan.html)を開く。
    ⚠️封じ込め：iPadを応募者に渡す前に軍師セッションを破棄する（戻られてもPINログインで止まる）。 */
 function startMendanFlow(){
@@ -5541,7 +5634,18 @@ function applyRsvGrouping(){
 }
 function adaptRot(list){return (list||[]).map(function(c){return {cast:c.cast, interval:c.interval||15, tables:(c.tables||[]).map(function(t){return {key:t.label, code:t.code, cust:(t.cust||'')+(t.cust?'様':''), cur:!!t.current, min:0, wait:t.awayMin||0};})};});}
 function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||'', punchIn:s.punchIn||'', punchOut:s.punchOut||''};});}
-function adaptReq(list){return (list||[]).map(function(r){var store=/店全体|全体/.test(r.target||'');return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCust:store?'':custKey(r.target), comment:r.comment||'', handled:!!r.handled};});}
+// 保存ラベルは「HH:mm 客名様（卓）」を ' / ' で連結（複数予約対象）。ここから客名キーだけを抜く。
+// ⚠️旧実装は custKey(r.target) 一発＝末尾が「）」だと様を外せず丸ごとキー化し、席の客名と一致しなかった（実データで卓に出ない主因）。
+function reqCustKeys_(target){
+  return String(target||'').split('/').map(function(p){
+    return custKey(p.replace(/^\s*\d{1,2}:\d{2}\s*/,'').replace(/[（(][^）)]*[）)]\s*$/,''));
+  }).filter(Boolean);
+}
+function adaptReq(list){return (list||[]).map(function(r){
+  var store=/店全体|全体/.test(r.target||'');
+  var cs=store?[]:reqCustKeys_(r.target);
+  return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCusts:cs, targetCust:cs[0]||'', targetLabel:store?'':String(r.target||''), comment:r.comment||'', handled:!!r.handled};
+});}
 
 function loadAll(){
   if(!IS_GAS) return;
