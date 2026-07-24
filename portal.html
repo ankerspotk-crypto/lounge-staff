@@ -536,6 +536,70 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 .aw-win .aw-w-name{ margin-top:6px; font-size:22px; font-weight:800; color:#f4ecdc; }
 .aw-win .aw-w-name b{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
 .aw-mine{ background:linear-gradient(135deg,#2a2012,#15100a); border:1px solid rgba(214,183,120,.42); border-radius:16px; padding:20px 18px; margin-bottom:14px; text-align:center; box-shadow:0 12px 30px rgba(0,0,0,.42); }
+
+
+/* ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦） */
+.ks-arena{ position:relative; overflow:hidden; background:linear-gradient(160deg,#221a0f,#14100a 60%,#0f0c07); border:1px solid rgba(214,183,120,.34); border-radius:18px; padding:16px 15px 14px; margin-bottom:13px; box-shadow:0 12px 30px rgba(0,0,0,.44); }
+.ks-arena::before{ content:''; position:absolute; top:-55%; left:50%; transform:translateX(-50%); width:230px; height:230px; border-radius:50%; background:radial-gradient(circle, rgba(232,202,122,.13), rgba(232,202,122,0) 70%); pointer-events:none; }
+.ks-turn{ position:relative; text-align:center; font-size:11.5px; letter-spacing:.16em; color:#c7ae74; margin-bottom:13px; }
+.ks-fight{ position:relative; display:flex; align-items:flex-start; gap:8px; }
+.ks-side{ flex:1; min-width:0; }
+.ks-side .ks-flag{ font-size:10.5px; font-weight:700; letter-spacing:.1em; color:#8d7c56; }
+.ks-side .ks-nm{ font-size:15.5px; font-weight:800; color:#f2ead9; margin:2px 0 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ks-side.me .ks-nm{ color:#f4d98a; }
+.ks-hp{ height:9px; border-radius:5px; background:#0d0a06; border:1px solid rgba(214,183,120,.2); overflow:hidden; }
+.ks-hp i{ display:block; height:100%; background:linear-gradient(90deg,#b8933f,#f0d38d); transition:width .5s cubic-bezier(.2,.8,.3,1); }
+.ks-side.hurt .ks-hp i{ background:linear-gradient(90deg,#8d3040,#d1697a); }
+.ks-stat{ display:flex; justify-content:space-between; font-size:11px; color:#94886a; margin-top:5px; }
+.ks-stat b{ color:#e6cf95; font-weight:700; }
+.ks-vs{ align-self:center; font-size:13px; font-weight:800; color:#8d7c56; letter-spacing:.06em; padding-top:16px; }
+.ks-panel{ background:linear-gradient(180deg,#17140d,#120f09); border:1px solid rgba(214,183,120,.16); border-radius:14px; padding:15px 14px; margin-bottom:12px; box-shadow:0 6px 16px rgba(0,0,0,.28); }
+.ks-lbl{ font-size:11.5px; color:#b09f74; letter-spacing:.06em; margin-bottom:9px; }
+.ks-hands{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.ks-hand{ display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 4px 11px; border-radius:13px; border:1px solid rgba(214,183,120,.22); background:#181309; color:#cbb98a; cursor:pointer; font-family:inherit; transition:transform .12s, border-color .18s, background .18s; }
+.ks-hand .ks-h-ico{ font-size:27px; line-height:1; }
+.ks-hand .ks-h-nm{ font-size:13.5px; font-weight:800; }
+.ks-hand:active{ transform:scale(.96); }
+.ks-hand.sel{ background:linear-gradient(160deg,#3a2c15,#221a0d); border-color:#d6b778; color:#f6e2ab; box-shadow:0 0 0 1px rgba(214,183,120,.32), 0 6px 18px rgba(185,152,90,.24); }
+.ks-bets{ display:flex; gap:7px; }
+.ks-bet{ flex:1; padding:12px 0; border-radius:11px; border:1px solid rgba(214,183,120,.22); background:#181309; color:#cbb98a; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit; transition:transform .12s, border-color .18s, background .18s; }
+.ks-bet:active{ transform:scale(.94); }
+.ks-bet.sel{ background:linear-gradient(160deg,#3a2c15,#221a0d); border-color:#d6b778; color:#f6e2ab; }
+.ks-bet:disabled{ opacity:.28; cursor:default; }
+.ks-go{ width:100%; margin-top:14px; padding:16px 0; border-radius:13px; border:1px solid rgba(214,183,120,.5); background:linear-gradient(135deg,#3d2d14,#241a0c); color:#f6e2ab; font-size:17px; font-weight:800; letter-spacing:.1em; cursor:pointer; font-family:inherit; box-shadow:0 8px 22px rgba(0,0,0,.36); }
+.ks-go:disabled{ opacity:.36; cursor:default; box-shadow:none; }
+.ks-go:active:not(:disabled){ filter:brightness(1.12); }
+.ks-wait{ text-align:center; padding:22px 8px; }
+.ks-wait .ks-w-ico{ font-size:32px; line-height:1; }
+.ks-wait .ks-w-t{ margin-top:9px; font-size:14.5px; font-weight:700; color:#f2ead9; }
+.ks-wait .ks-w-s{ margin-top:5px; font-size:12px; color:#94886a; line-height:1.7; }
+.ks-dot{ display:inline-block; width:5px; height:5px; margin:0 2px; border-radius:50%; background:#c9a459; animation:ksBlink 1.3s infinite; }
+.ks-dot:nth-child(2){ animation-delay:.22s } .ks-dot:nth-child(3){ animation-delay:.44s }
+@keyframes ksBlink{ 0%,60%,100%{opacity:.22} 30%{opacity:1} }
+.ks-res{ position:relative; overflow:hidden; text-align:center; padding:26px 16px; border-radius:16px; margin-bottom:12px; border:1px solid rgba(214,183,120,.34); background:linear-gradient(135deg,#2a2012,#15100a); box-shadow:0 12px 30px rgba(0,0,0,.42); }
+.ks-res.win{ border-color:rgba(214,183,120,.62); box-shadow:0 12px 32px rgba(185,152,90,.26); }
+.ks-res .ks-r-ico{ font-size:44px; line-height:1; }
+.ks-res .ks-r-t{ margin-top:8px; font-size:25px; font-weight:800; color:#f4ecdc; letter-spacing:.06em; }
+.ks-res.win .ks-r-t{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+.ks-res .ks-r-s{ margin-top:7px; font-size:12.5px; color:#c7ae74; }
+.ks-log{ display:flex; align-items:center; gap:9px; padding:9px 4px; border-bottom:1px solid #221b11; font-size:13px; }
+.ks-log:last-child{ border-bottom:none; }
+.ks-log .ks-l-t{ font-size:10.5px; color:#8d7c56; width:34px; flex-shrink:0; letter-spacing:.04em; }
+.ks-log .ks-l-h{ color:#cbb98a; white-space:nowrap; }
+.ks-log .ks-l-r{ margin-left:auto; font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:8px; white-space:nowrap; }
+.ks-log .ks-l-r.win{ color:#f4d98a; background:#2a2012; border:1px solid rgba(214,183,120,.34); }
+.ks-log .ks-l-r.lose{ color:#cc8a96; background:#241318; border:1px solid rgba(204,138,150,.26); }
+.ks-log .ks-l-r.draw{ color:#94886a; background:#191510; border:1px solid rgba(214,183,120,.14); }
+.ks-rule{ font-size:11.5px; color:#8d7c56; line-height:1.85; letter-spacing:.02em; }
+.ks-rule b{ color:#c9a459; font-weight:700; }
+.ks-rank{ display:flex; align-items:center; gap:11px; padding:11px 4px; border-bottom:1px solid #221b11; }
+.ks-rank:last-child{ border-bottom:none; }
+.ks-rank .ks-no{ width:26px; flex-shrink:0; text-align:center; font-size:13px; font-weight:800; color:#8d7c56; }
+.ks-rank.top .ks-no{ font-size:17px; }
+.ks-rank .ks-r-nm{ flex:1; min-width:0; font-size:14.5px; color:#f2ead9; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ks-rank.me .ks-r-nm{ color:#f4d98a; font-weight:800; }
+.ks-rank .ks-r-w{ font-size:12.5px; color:#94886a; white-space:nowrap; }
+.ks-rank .ks-r-w b{ color:#e6cf95; font-size:15px; font-weight:800; }
 </style>
 </head>
 <body>
@@ -913,6 +977,7 @@ function adminChange(name) {
 var SECTIONS = {
   board:    { t:'お知らせ',     i:'📢' },
   awards:   { t:'表彰・投票',   i:'🏆' },
+  kassen:   { t:'合戦',         i:'⚔️' },
   shift:    { t:'シフト提出',   i:'📅' },
   yoyaku:   { t:'予約管理',     i:'🗓' },
   stats:    { t:'売上・給与',   i:'💰' },
@@ -957,13 +1022,18 @@ function menuBtn(key) {
     var un = noticeUnread().length;
     if (un) badge = '<span style="position:absolute;top:10px;right:10px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;background:#c0405a;color:#fff;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">' + un + '</span>';
   }
+  // 合戦ボタンは「あなたの手番です」を金バッジで表示（未読の赤バッジとは意味が違うので色を分ける）
+  if (key === 'kassen' && ksPending > 0) {
+    badge = '<span style="position:absolute;top:10px;right:10px;height:20px;padding:0 8px;box-sizing:border-box;background:linear-gradient(135deg,#c9a459,#8d6f2e);color:#1a1409;border-radius:10px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;letter-spacing:.04em">手番</span>';
+  }
   return '<button onclick="switchTab(\'' + key + '\')" style="position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:linear-gradient(180deg,#191510,#120f09);border:1px solid rgba(214,183,120,.16);border-radius:14px;text-align:left;cursor:pointer;width:100%;box-shadow:0 6px 16px rgba(0,0,0,.28)">'
     + badge
     + '<span style="font-size:23px;line-height:1;filter:saturate(.85)">' + s.i + '</span>'
     + '<span style="font-size:14px;font-weight:700;color:#f2ead9">' + s.t + '</span></button>';
 }
 function homeMenu() {
-  var castKeys = ['board','awards','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','wine'];
+  ksPingOnce();   // ⚔️合戦の「手番」バッジ用。ホーム描画をブロックしない（結果が来たら描き直す）
+  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   var html = '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
@@ -1000,6 +1070,7 @@ function switchTab(tab) {
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'board') { loadBoard(); return; }
   if (tab === 'awards') { loadAwards(); return; }
+  if (tab === 'kassen') { loadKassen(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
@@ -1348,6 +1419,247 @@ function awHomeBanner(){
     +     '<div style="font-size:12px;color:#c7ae74;margin-top:2px">匿名で選んで <b style="color:#f4d98a">¥500</b> ゲット（お給料に反映）</div></div>'
     +   '<span style="font-size:20px;color:#c9a459">›</span>'
     + '</div></div>';
+}
+
+// ================= ⚔️ いえやす合戦 =================
+// 出勤キャスト同士の非同期ターン制対戦。相手を待たない「同時選択」方式＝接客の合間に2タップで打てる。
+// ⚠️ LINE通知は入れない（通数が即死する）。気づかせるのはホームのバッジだけ。
+var ksData = null, ksSelHand = '', ksSelBet = 0, ksBusy = false, ksPoll = null, ksReqToken = 0, ksPending = -1;
+var KS_HAND_ICO = { '槍': '🗡', '盾': '🛡', '計略': '🎴' };
+
+function ksFetch(){
+  return gasFetch(GAS_URL + '?action=portal&tab=kassen&userId=' + encodeURIComponent(userId)
+      + (adminViewAs ? '&viewAs=' + encodeURIComponent(adminViewAs) : ''))
+    .then(function(r){ return r.json(); });
+}
+function loadKassen(){
+  contentTargetId = 'content';
+  setContent('<div class="loading">陣容を確認中...</div>');
+  var token = ++ksReqToken;   // 古い応答は捨てる。※busyフラグで新規要求を止めない＝永久ローディングにしない
+  ksFetch().then(function(d){
+    if (token !== ksReqToken) return;
+    ksData = d; ksSelHand = ''; ksSelBet = 0;
+    renderKassen();
+  }).catch(function(){
+    if (token !== ksReqToken) return;
+    setContent('<div class="err" style="text-align:center;color:#cc7766;padding:50px 0">合戦の取得に失敗しました' + retryBtn_('loadKassen') + '</div>');
+  });
+}
+function ksStopPoll(){ if (ksPoll){ clearInterval(ksPoll); ksPoll = null; } }
+// 相手の手が入ったかの確認。※この画面を開いていて、かつ自分が打ち終えて相手待ちの時だけ動かす
+function ksSyncPoll(){
+  ksStopPoll();
+  var m = ksData && ksData.match;
+  if (!m || m.state !== '進行中' || !m.iPlayed) return;
+  ksPoll = setInterval(function(){
+    if (currentTab !== 'kassen'){ ksStopPoll(); return; }
+    ksFetch().then(function(d){
+      if (currentTab !== 'kassen' || !d || !d.ok || !d.match) return;
+      var om = ksData && ksData.match;
+      // ターンが進んだ／決着した時だけ描き直す（毎回描くと選択中のUIがチラつく）
+      if (!om || d.match.turn !== om.turn || d.match.state !== om.state){ ksData = d; renderKassen(); }
+    }).catch(function(){});
+  }, 10000);
+}
+
+function ksSelectHand(h){ ksSelHand = h; renderKassen(); }
+function ksSelectBet(n){ ksSelBet = n; renderKassen(); }
+
+function ksPlay(){
+  if (ksBusy) return;                       // 連打の二重送信を止める（サーバ側でも already_played で弾く）
+  var m = ksData && ksData.match;
+  if (!m || !ksSelHand) return;
+  ksBusy = true;
+  var btn = document.getElementById('ks-go');
+  if (btn){ btn.disabled = true; btn.textContent = '出陣中...'; }
+  var done = function(){ ksBusy = false; };  // ⚠️ 成否にかかわらず必ず解除する
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({
+      action:'kassenPlay', userId:userId, viewAs:(adminViewAs||''),
+      matchId:m.id, hand:ksSelHand, bet:ksSelBet }) })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      done();
+      if (!res || !res.ok){
+        var msg = { already_played:'この陣はもう出陣済みです', finished:'この合戦は決着しています',
+                    not_your_match:'あなたの合戦ではありません', disabled:'いまは合戦をお休みしています',
+                    busy:'混み合っています。もう一度お試しください' }[res && res.error] || '出陣に失敗しました';
+        alert(msg);
+        loadKassen();
+        return;
+      }
+      ksData.match = res.match; ksSelHand = ''; ksSelBet = 0;
+      renderKassen();
+    })
+    .catch(function(){ done(); alert('通信に失敗しました。もう一度お試しください'); renderKassen(); });
+}
+
+function ksHpBar(hp, max, hurt){
+  var pct = Math.max(0, Math.min(100, Math.round((hp / (max || 1)) * 100)));
+  return '<div class="ks-hp"' + (hurt ? ' style="--x:1"' : '') + '><i style="width:' + pct + '%"></i></div>';
+}
+function ksSideHtml(name, hp, troops, maxHp, isMe, flag){
+  var hurt = (hp / (maxHp || 1)) <= 0.34;
+  return '<div class="ks-side' + (isMe ? ' me' : '') + (hurt ? ' hurt' : '') + '">'
+    + '<div class="ks-flag">' + flag + '</div>'
+    + '<div class="ks-nm">' + esc(name) + '</div>'
+    + ksHpBar(hp, maxHp)
+    + '<div class="ks-stat"><span>城 <b>' + hp + '</b></span><span>兵力 <b>' + troops + '</b></span></div>'
+    + '</div>';
+}
+function ksArenaHtml(m, rules){
+  // 東軍/西軍はサーバが決めた実際の陣営を出す（自分を常に東にすると表示が嘘になる）
+  var myFlag = (m.mySide === '西') ? '西軍' : '東軍';
+  var opFlag = (m.mySide === '西') ? '東軍' : '西軍';
+  return '<div class="ks-arena">'
+    + '<div class="ks-turn">' + (m.state === '決着' ? '決着' : ('第 ' + m.turn + ' 陣 ／ 全 ' + rules.turns + ' 陣')) + '</div>'
+    + '<div class="ks-fight">'
+    +   ksSideHtml(ksData.me, m.myHp, m.myTroops, rules.hp, true, myFlag)
+    +   '<div class="ks-vs">VS</div>'
+    +   ksSideHtml(m.opponent, m.opHp, m.opTroops, rules.hp, false, opFlag)
+    + '</div></div>';
+}
+function ksChooseHtml(m, rules){
+  var remain = m.myTroops;
+  var h = '<div class="ks-panel"><div class="ks-lbl">一、手を選ぶ</div><div class="ks-hands">';
+  ['槍','盾','計略'].forEach(function(x){
+    h += '<button class="ks-hand' + (ksSelHand === x ? ' sel' : '') + '" onclick="ksSelectHand(\'' + x + '\')">'
+      +  '<span class="ks-h-ico">' + KS_HAND_ICO[x] + '</span><span class="ks-h-nm">' + x + '</span></button>';
+  });
+  h += '</div></div>';
+
+  h += '<div class="ks-panel"><div class="ks-lbl">二、兵力を賭ける　<span style="color:#8d7c56">残り ' + remain + '</span></div>';
+  if (remain <= 0){
+    h += '<div style="font-size:13px;color:#94886a;line-height:1.7">兵力を使い切りました。手だけを選んで出陣できます（この陣のダメージは 0 です）。</div>';
+  } else {
+    h += '<div class="ks-bets">';
+    for (var n = 1; n <= rules.maxBet; n++){
+      var over = n > remain;
+      h += '<button class="ks-bet' + (ksSelBet === n ? ' sel' : '') + '"' + (over ? ' disabled' : '')
+        +  ' onclick="ksSelectBet(' + n + ')">' + n + '</button>';
+    }
+    h += '</div>';
+  }
+  var ready = !!ksSelHand && (remain <= 0 || ksSelBet > 0);
+  h += '<button class="ks-go" id="ks-go"' + (ready ? '' : ' disabled') + ' onclick="ksPlay()">出 陣</button>';
+  h += '</div>';
+  return h;
+}
+function ksWaitHtml(m){
+  return '<div class="ks-panel"><div class="ks-wait">'
+    + '<div class="ks-w-ico">' + (KS_HAND_ICO[m.myHandThisTurn] || '⚔️') + '</div>'
+    + '<div class="ks-w-t">' + esc(m.opponent) + ' さんの手を待っています</div>'
+    + '<div class="ks-w-s">あなたの手：<b style="color:#e6cf95">' + esc(m.myHandThisTurn) + '</b>'
+    +   (m.myBetThisTurn > 0 ? '　兵力 <b style="color:#e6cf95">' + m.myBetThisTurn + '</b>' : '')
+    +   '<br>相手が打つと、この陣の勝敗が決まります'
+    + '<div style="margin-top:9px"><span class="ks-dot"></span><span class="ks-dot"></span><span class="ks-dot"></span></div>'
+    + '</div></div></div>';
+}
+function ksResultHtml(m){
+  var draw = !m.winner, win = m.iWon;
+  var ico = draw ? '🤝' : (win ? '🏯' : '🌾');
+  var ttl = draw ? '痛み分け' : (win ? '勝鬨' : '無念');
+  var sub = draw ? '互角の勝負でした' : (win ? esc(m.opponent) + ' さんに勝ちました' : esc(m.opponent) + ' さんに敗れました');
+  return '<div class="ks-res' + (win ? ' win' : '') + '">'
+    + '<div class="ks-r-ico">' + ico + '</div><div class="ks-r-t">' + ttl + '</div>'
+    + '<div class="ks-r-s">' + sub + '　（城 ' + m.myHp + ' － ' + m.opHp + '）</div></div>';
+}
+function ksLogHtml(log){
+  if (!log || !log.length) return '';
+  var h = '<div class="ks-panel"><div class="ks-lbl">戦の記録</div>';
+  log.forEach(function(l){
+    var lbl = { win:'勝', lose:'負', draw:'分' }[l.result];
+    h += '<div class="ks-log"><span class="ks-l-t">' + l.turn + '陣</span>'
+      +  '<span class="ks-l-h">' + (KS_HAND_ICO[l.myHand]||'') + ' ' + esc(l.myHand) + ' ' + l.myBet
+      +    ' <span style="color:#6f6650">対</span> ' + (KS_HAND_ICO[l.opHand]||'') + ' ' + esc(l.opHand) + ' ' + l.opBet + '</span>'
+      +  '<span class="ks-l-r ' + l.result + '">' + lbl + (l.damage ? ' ' + l.damage : '') + '</span></div>';
+  });
+  return h + '</div>';
+}
+function ksRankHtml(rank){
+  if (!rank || !rank.rows || !rank.rows.length) return '';
+  var meK = String(ksData.me || '');
+  var h = '<div class="ks-panel"><div class="ks-lbl">今月の番付　<span style="color:#8d7c56">勝ち星の数（負けても減りません）</span></div>';
+  rank.rows.slice(0, 10).forEach(function(r, i){
+    var medal = ['🥇','🥈','🥉'][i] || String(i + 1);
+    h += '<div class="ks-rank' + (i < 3 ? ' top' : '') + (r.name === meK ? ' me' : '') + '">'
+      +  '<span class="ks-no">' + medal + '</span>'
+      +  '<span class="ks-r-nm">' + esc(r.name) + '</span>'
+      +  '<span class="ks-r-w"><b>' + r.win + '</b> 勝 <span style="color:#6f6650">/ ' + r.played + '戦</span></span></div>';
+  });
+  return h + '</div>';
+}
+function ksHistHtml(hist){
+  if (!hist || !hist.length) return '';
+  var h = '<div class="ks-panel"><div class="ks-lbl">これまでの戦</div>';
+  hist.forEach(function(x){
+    var lbl = { win:'勝', lose:'負', draw:'分' }[x.result];
+    h += '<div class="ks-log"><span class="ks-l-t">' + esc(String(x.date).slice(5).replace('-','/')) + '</span>'
+      +  '<span class="ks-l-h">' + esc(x.opponent) + ' <span style="color:#6f6650">戦</span></span>'
+      +  '<span class="ks-l-r ' + x.result + '">' + lbl + '</span></div>';
+  });
+  return h + '</div>';
+}
+var KS_RULE_HTML = '<div class="ks-panel"><div class="ks-lbl">合戦の心得</div><div class="ks-rule">'
+  + '<b>🗡 槍</b> は <b>🎴 計略</b> を破り、<b>🎴 計略</b> は <b>🛡 盾</b> を崩し、<b>🛡 盾</b> は <b>🗡 槍</b> を防ぐ。<br>'
+  + '勝った側は、賭けた<b>兵力</b>の分だけ相手の<b>城</b>を削る。同じ手なら痛み分け。<br>'
+  + '兵力は全五陣で使い切り。<b>どこに厚く賭けるか</b>が将の腕。<br>'
+  + '相手を待つ必要はない。<b>先に打っておける</b>ので、接客の合間で構わない。'
+  + '</div></div>';
+
+function renderKassen(){
+  if (!ksData){ loadKassen(); return; }
+  if (ksData.ok === false){
+    setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">合戦に参加できませんでした</div>');
+    return;
+  }
+  if (!ksData.enabled){
+    setContent('<div class="aw-head"><span class="aw-emoji">⚔️</span><span class="aw-title">合戦</span></div>'
+      + '<div style="text-align:center;color:#94886a;padding:44px 0;font-size:14px;line-height:1.7">いまは合戦をお休みしています。</div>');
+    return;
+  }
+  var m = ksData.match, rules = ksData.rules || { turns:5, maxBet:5, hp:15, troops:15 };
+  var h = '<div class="aw-head"><span class="aw-emoji">⚔️</span><span class="aw-title">本日の合戦</span></div>';
+
+  if (!m){
+    h += '<div class="aw-sub">' + esc(ksData.bizDate || '') + '</div>'
+      +  '<div style="text-align:center;color:#94886a;padding:38px 8px;font-size:14px;line-height:1.8">'
+      +  (ksData.noMatchReason === 'few_entrants'
+          ? '今日は出勤が少なく、合戦は組まれていません。<br>出勤者が2人以上そろうと自動で組まれます。'
+          : '今日のあなたの対戦は組まれていません。<br>次の出勤日をお待ちください。')
+      +  '</div>';
+    h += KS_RULE_HTML + ksRankHtml(ksData.ranking) + ksHistHtml(ksData.history);
+    setContent(h); ksStopPoll(); ksPending = 0;
+    return;
+  }
+
+  h += ksArenaHtml(m, rules);
+  if (m.state === '決着')      h += ksResultHtml(m);
+  else if (!m.iPlayed)         h += ksChooseHtml(m, rules);
+  else                         h += ksWaitHtml(m);
+  h += ksLogHtml(m.log);
+  h += KS_RULE_HTML;
+  h += ksRankHtml(ksData.ranking);
+  h += ksHistHtml(ksData.history);
+  setContent(h);
+
+  ksPending = (m.state === '進行中' && !m.iPlayed) ? 1 : 0;  // ホームのバッジと同期
+  ksSyncPoll();
+}
+
+// ホームの⚔️ボタンに「手番が来ています」バッジを出すための軽い問い合わせ。
+// ⚠️ ホーム本体のペイロードには相乗りさせない（ホームの初回描画をこれ以上遅くしないため）
+function ksPingOnce(){
+  if (ksPending >= 0) return;              // 1回のポータル起動につき1回だけ
+  if (isAdmin && !adminViewAs) { ksPending = 0; return; }
+  ksPending = 0;                            // 先に確定させて多重発火を防ぐ
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'kassenPing', userId:userId, viewAs:(adminViewAs||'') }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var n = (d && d.pending) || 0;
+      if (!n || n === ksPending) return;
+      ksPending = n;
+      if (currentTab === 'home') renderHome();
+    }).catch(function(){});
 }
 
 function renderHome(){
