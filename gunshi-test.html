@@ -1364,6 +1364,34 @@ function showTaskDetail(id){
   showSheet('📋 タスク詳細',body,false);
 }
 function completeTaskFromDetail(id){ closeSheet(); completeTask(id); }
+/* 🙋 LINEで届いた要望（captureHallRequest_が黒服/スタッフLINEから拾ったもの）。
+ * 押すと原文全文＋「対応中／完了／これは要望じゃない」。完了にするまで消えない＝流れて消えない。 */
+function reqOverdue(t){ if(!t||!t.due)return 0; var m=tmin(t.due); if(isNaN(m))return 0; return nowBizMin()-m; }
+function showReqDetail(id){
+  var t=(TASKS||[]).find(function(x){return x.id===id;}); if(!t)return;
+  var ov=reqOverdue(t);
+  var meta=[t.by?'依頼者：'+t.by:'', t.seat?'席：'+t.seat:'', t.due?('希望：'+t.due+(ov>0?'（'+ov+'分超過）':'')):'', t.src?'元：'+t.src:'', t.at?'受信：'+t.at:''].filter(function(x){return x;});
+  var body='<div class="tdetail">'
+    +'<div class="td-title">🙋 '+esc(t.title)+'</div>'
+    +'<div class="td-memo"><b>LINE原文</b><br>'+esc(t.memo||'').replace(/\n/g,'<br>')+'</div>'
+    +(meta.length?'<div class="td-meta">'+esc(meta.join('　'))+'</div>':'')
+    // ボタンは4つ並ぶことがあるので、この詳細だけ折り返し可にする（.td-actions は他の詳細でも使う共有クラス）
+    +'<div class="td-actions" style="flex-wrap:wrap">'
+      +'<button class="td-done" style="white-space:nowrap;min-width:120px" onclick="hallReqAct(\''+jsStr(id)+'\',\'done\')">✅ 完了</button>'
+      +(t.ack==='対応中'?'':'<button class="td-close" style="white-space:nowrap" onclick="hallReqAct(\''+jsStr(id)+'\',\'ack\')">🏃 対応中</button>')
+      +'<button class="td-close" style="white-space:nowrap" onclick="hallReqAct(\''+jsStr(id)+'\',\'ng\')">🚫 要望じゃない</button>'
+      +'<button class="td-close" style="white-space:nowrap" onclick="closeSheet()">閉じる</button>'
+    +'</div></div>';
+  showSheet('🙋 LINEで届いた要望',body,false);
+}
+function hallReqAct(id,act){
+  closeSheet();
+  if(act==='ack'){ (TASKS||[]).forEach(function(t){ if(t.id===id){ t.ack='対応中'; t.icon='🏃'; } }); }
+  else { TASKS=(TASKS||[]).filter(function(t){return t.id!==id;}); }  // 楽観的に除去
+  renderAlerts(); renderHome();
+  if(typeof toast==='function')toast(act==='done'?'✅ 完了にしました':(act==='ng'?'🚫 要望ではないものとして消しました':'🏃 対応中にしました'));
+  if(IS_GAS) gsr('hallReqUpdate',id,act,(typeof LOGIN!=='undefined'?LOGIN:'')||'').catch(function(){ loadAll(); });
+}
 /* 年会費更新：伝票で年会費を検知したチケットを顧客マスタへ反映（ワンタップ確認） */
 function showFeeRenewDetail(id){
   var t=(TASKS||[]).find(function(x){return x.id===id;}); if(!t)return;
@@ -1400,6 +1428,13 @@ function renderAlerts(){
         +'<div class="tk-time">📋 タスク'+(t.by?'・'+esc(t.by):'')+'</div>'
         +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">タップで全文・完了</span></span></div>'
         +'<div class="tk-done">詳細 ›</div></div>';
+    }
+    if(t.type==='req'){
+      var ov=reqOverdue(t);
+      return '<div class="ticket k-task k-admin'+(ov>0?' tk-blink':'')+'" onclick="showReqDetail(\''+jsStr(t.id)+'\')">'
+        +'<div class="tk-time">'+(t.ack==='対応中'?'🏃 対応中':'🙋 要望')+(t.due?'・'+esc(t.due):'')+'</div>'
+        +'<div class="tk-body"><span class="tk-ic">'+esc(t.icon)+'</span><span class="tk-tx"><span class="tk-title">'+esc(t.title)+'</span><span class="tk-sub">'+esc(t.sub||'')+(ov>0?'　⚠️'+ov+'分超過':'')+'</span></span></div>'
+        +'<div class="tk-done">確認 ›</div></div>';
     }
     if(t.type==='feerenew'){
       return '<div class="ticket k-task k-admin" onclick="showFeeRenewDetail(\''+jsStr(t.id)+'\')">'

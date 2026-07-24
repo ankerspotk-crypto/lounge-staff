@@ -1254,7 +1254,7 @@ function renderAwards(){
   api('awardAdminData', awAdmMonth?{month:awAdmMonth}:{}).then(function(r){
     if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'取得できませんでした')+'</div>'); return; }
     awAdm=r; awAdmMonth=r.month;
-    awCatsEdit=(r.categories||[]).map(function(c){ return {key:c.key,icon:c.icon,title:c.title,desc:c.desc,enabled:c.enabled!==false,order:c.order}; });
+    awCatsEdit=(r.categories||[]).map(function(c){ return {key:c.key,icon:c.icon,title:c.title,desc:c.desc,enabled:c.enabled!==false,order:c.order,scope:c.scope||'all'}; });
     drawAwards();
   }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
 }
@@ -1292,13 +1292,18 @@ function awCatRow(c,i,n){
     +'<input class="finput" style="width:46px;text-align:center;flex:none" value="'+esc(c.icon)+'" oninput="awCatsEdit['+i+'].icon=this.value">'
     +'<div class="main"><input class="finput" style="width:100%;margin-bottom:4px" value="'+esc(c.title)+'" placeholder="賞の名前" oninput="awCatsEdit['+i+'].title=this.value">'
       +'<input class="finput" style="width:100%;font-size:12px" value="'+esc(c.desc||'')+'" placeholder="説明" oninput="awCatsEdit['+i+'].desc=this.value"></div>'
+    +'<select class="finput" style="width:106px;flex:none" title="候補を誰に絞るか（投票は全員できる）" onchange="awCatsEdit['+i+'].scope=this.value">'
+      +'<option value="all"'+((!c.scope||c.scope==='all')?' selected':'')+'>候補:全員</option>'
+      +'<option value="cast"'+(c.scope==='cast'?' selected':'')+'>候補:キャスト</option>'
+      +'<option value="kurofuku"'+(c.scope==='kurofuku'?' selected':'')+'>候補:黒服</option>'
+    +'</select>'
     +'<span class="chip'+(c.enabled?' on':'')+'" style="cursor:pointer;flex:none;white-space:nowrap" onclick="awCatToggle('+i+')">'+(c.enabled?'有効':'停止')+'</span>'
     +'<div style="display:flex;gap:4px;flex:none"><button class="btn" style="'+b+'" '+(i===0?'disabled':'')+' onclick="awCatMove('+i+',-1)">↑</button><button class="btn" style="'+b+'" '+(i===n-1?'disabled':'')+' onclick="awCatMove('+i+',1)">↓</button><button class="btn" style="'+b+';color:#ff9a9a;border-color:#5a2226" onclick="awCatDel('+i+')">✕</button></div></div>';
 }
 function awCatToggle(i){ awCatsEdit[i].enabled=!awCatsEdit[i].enabled; drawAwards(); }
 function awCatMove(i,d){ var j=i+d; if(j<0||j>=awCatsEdit.length)return; var t=awCatsEdit[i];awCatsEdit[i]=awCatsEdit[j];awCatsEdit[j]=t; drawAwards(); }
 function awCatDel(i){ if(!confirm('この部門を削除しますか？'))return; awCatsEdit.splice(i,1); drawAwards(); }
-function awCatAdd(){ awCatsEdit.push({key:'cat'+Date.now(),icon:'🏆',title:'',desc:'',enabled:true,order:awCatsEdit.length+1}); drawAwards(); }
+function awCatAdd(){ awCatsEdit.push({key:'cat'+Date.now(),icon:'🏆',title:'',desc:'',enabled:true,order:awCatsEdit.length+1,scope:'all'}); drawAwards(); }
 function awSaveCats(){
   var cats=awCatsEdit.filter(function(c){return String(c.title||'').trim();}).map(function(c,i){c.order=i+1;return c;});
   api('awardSaveCategories',{cats:cats}).then(function(r){ if(res(r,'部門を保存しました')) renderAwards(); });
@@ -2893,10 +2898,11 @@ function MOCKAPI(action,body){
   if(action==='awardAdminData'){
     return {ok:true, month:(body.month||'2026-07'),
       categories:[
-        {key:'mvp',icon:'🏆',title:'総合MVP',desc:'今月いちばん輝いていた人',enabled:true,order:1},
-        {key:'kikubari',icon:'💐',title:'気配り賞',desc:'さりげない気遣いが誰よりも上手い',enabled:true,order:2},
-        {key:'moriage',icon:'🔥',title:'盛り上げ賞',desc:'場を明るく、楽しくしてくれる',enabled:true,order:3},
-        {key:'ennoshita',icon:'🛡',title:'縁の下賞',desc:'見えないところで店を支えてくれた',enabled:true,order:4}
+        {key:'mvp',icon:'🏆',title:'総合MVP',desc:'今月いちばん輝いていた人',enabled:true,order:1,scope:'all'},
+        {key:'kikubari',icon:'💐',title:'気配り賞',desc:'さりげない気遣いが誰よりも上手い',enabled:true,order:2,scope:'all'},
+        {key:'moriage',icon:'🔥',title:'盛り上げ賞',desc:'場を明るく、楽しくしてくれる',enabled:true,order:3,scope:'all'},
+        {key:'ennoshita',icon:'🛡',title:'縁の下賞',desc:'見えないところで店を支えてくれた',enabled:true,order:4,scope:'all'},
+        {key:'bestkuro',icon:'🎩',title:'ベスト黒服賞',desc:'今月いちばん頼れた黒服に',enabled:true,order:5,scope:'kurofuku'}
       ],
       votes:[
         {voter:'美咲',catKey:'mvp',pick:'ゆあ',comment:'いつも全体を見て動いてて尊敬する。',at:'7/24 21:00'},

@@ -17,7 +17,8 @@
 var AWARDS_VOTE_TAB    = '表彰_投票';
 var AWARDS_VOTE_HEAD   = ['月キー', '投票者', '投票者ID', '部門キー', '対象', 'コメント', '更新日時'];
 var AWARDS_CAT_TAB     = '表彰_部門';
-var AWARDS_CAT_HEAD    = ['部門キー', 'アイコン', 'タイトル', '説明', '有効', '並び順'];
+// 「対象」＝その部門の“候補”を誰に絞るか（投票は誰でもできる）。全員 / キャスト / 黒服
+var AWARDS_CAT_HEAD    = ['部門キー', 'アイコン', 'タイトル', '説明', '有効', '並び順', '対象'];
 var AWARDS_RESULT_TAB  = '表彰_結果';
 var AWARDS_RESULT_HEAD = ['月キー', '部門キー', 'アイコン', 'タイトル', '受賞者', '役割', '票数', '確定日時'];
 var AWARDS_REWARD_TAB  = '表彰_報酬台帳';
@@ -27,15 +28,31 @@ var AWARDS_CONFIG_HEAD = ['キー', '値'];
 
 // 初期部門（コンソールで増減できるようにする。無ければ自動シード）
 var AWARDS_CAT_SEED = [
-  ['mvp',       '🏆', '総合MVP',   '今月いちばん輝いていた人',           true, 1],
-  ['kikubari',  '💐', '気配り賞',   'さりげない気遣いが誰よりも上手い',   true, 2],
-  ['moriage',   '🔥', '盛り上げ賞', '場を明るく、楽しくしてくれる',       true, 3],
-  ['tasukeai',  '🤝', '助け合い賞', '困った時にそっと助けてくれた',       true, 4],
-  ['akogare',   '✨', '憧れ賞',     'こうなりたい、と思わせてくれる',     true, 5],
-  ['ennoshita', '🛡', '縁の下賞',   '見えないところで店を支えてくれた',   true, 6],
-  ['seichou',   '🌱', '成長賞',     '今月ぐっと伸びた',                   true, 7],
-  ['smile',     '😊', 'スマイル賞', '笑顔がいちばん素敵',                 true, 8]
+  ['mvp',       '🏆', '総合MVP',     '今月いちばん輝いていた人',           true, 1, '全員'],
+  ['kikubari',  '💐', '気配り賞',     'さりげない気遣いが誰よりも上手い',   true, 2, '全員'],
+  ['moriage',   '🔥', '盛り上げ賞',   '場を明るく、楽しくしてくれる',       true, 3, '全員'],
+  ['tasukeai',  '🤝', '助け合い賞',   '困った時にそっと助けてくれた',       true, 4, '全員'],
+  ['akogare',   '✨', '憧れ賞',       'こうなりたい、と思わせてくれる',     true, 5, '全員'],
+  ['ennoshita', '🛡', '縁の下賞',     '見えないところで店を支えてくれた',   true, 6, '全員'],
+  ['seichou',   '🌱', '成長賞',       '今月ぐっと伸びた',                   true, 7, '全員'],
+  ['smile',     '😊', 'スマイル賞',   '笑顔がいちばん素敵',                 true, 8, '全員'],
+  // 黒服部門：候補は黒服だけ／投票はキャストも黒服も全員できる
+  ['bestkuro',  '🎩', 'ベスト黒服賞', '今月いちばん頼れた黒服に',           true, 9, '黒服']
 ];
+
+// 「対象」→ 内部スコープ（'all' | 'cast' | 'kurofuku'）
+function awScope_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (s === '黒服' || s === 'kurofuku') return 'kurofuku';
+  if (s === 'キャスト' || s === 'cast') return 'cast';
+  return 'all';
+}
+// スコープに合う候補か（role は awCandidates_ が返す 'キャスト' / '黒服'）
+function awRoleMatches_(scope, role) {
+  if (scope === 'kurofuku') return role === '黒服';
+  if (scope === 'cast')     return role === 'キャスト';
+  return true;
+}
 
 // ---- シート（無ければ作る・非破壊）----
 function awSheet_(tab, head) {
@@ -76,17 +93,47 @@ function awDeadline_(mk) {
 }
 
 // ---- 部門（無ければシード）----
+// 既存シートに不足ヘッダ列を後方互換で追補（'対象' の後付け対応）
+function awEnsureCatCols_(sh) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  AWARDS_CAT_HEAD.forEach(function (n) {
+    if (headers.indexOf(n) < 0) { lastCol += 1; sh.getRange(1, lastCol).setValue(n); headers.push(n); }
+  });
+  return headers;
+}
 function awCategories_() {
   var sh = awSheet_(AWARDS_CAT_TAB, AWARDS_CAT_HEAD);
+  var head = awEnsureCatCols_(sh);
   var vals = sh.getDataRange().getValues();
   if (vals.length <= 1) { AWARDS_CAT_SEED.forEach(function (r) { sh.appendRow(r); }); vals = sh.getDataRange().getValues(); }
+
+  var ci = function (n) { return head.indexOf(n); };
+  var iKey = ci('部門キー'), iIcon = ci('アイコン'), iTitle = ci('タイトル'),
+      iDesc = ci('説明'), iOn = ci('有効'), iOrd = ci('並び順'), iScope = ci('対象');
+
+  // 黒服部門が1つも無ければ足す（運用開始後のシートへの後方互換）
+  var hasKuro = false;
+  for (var k = 1; k < vals.length; k++) { if (vals[k][iKey] && awScope_(vals[k][iScope]) === 'kurofuku') { hasKuro = true; break; } }
+  if (!hasKuro) {
+    var seedKuro = AWARDS_CAT_SEED[AWARDS_CAT_SEED.length - 1];
+    var row = []; row[iKey] = seedKuro[0]; row[iIcon] = seedKuro[1]; row[iTitle] = seedKuro[2];
+    row[iDesc] = seedKuro[3]; row[iOn] = seedKuro[4]; row[iOrd] = seedKuro[5]; row[iScope] = seedKuro[6];
+    for (var c = 0; c < head.length; c++) if (row[c] === undefined) row[c] = '';
+    sh.appendRow(row);
+    vals = sh.getDataRange().getValues();
+  }
+
   var out = [];
   for (var i = 1; i < vals.length; i++) {
-    var r = vals[i]; if (!r[0]) continue;
-    var raw = r[4];
+    var r = vals[i]; if (!r[iKey]) continue;
+    var raw = r[iOn];
     var disabled = (raw === false || raw === 'FALSE' || raw === '無効' || raw === 0 || raw === '×');
     if (disabled) continue;
-    out.push({ key: String(r[0]), icon: String(r[1] || '🏆'), title: String(r[2] || ''), desc: String(r[3] || ''), order: Number(r[5] || 99) });
+    out.push({
+      key: String(r[iKey]), icon: String(r[iIcon] || '🏆'), title: String(r[iTitle] || ''),
+      desc: String(r[iDesc] || ''), order: Number(r[iOrd] || 99), scope: awScope_(r[iScope])
+    });
   }
   out.sort(function (a, b) { return a.order - b.order; });
   return out;
@@ -150,7 +197,7 @@ function awardsPayloadByName_(effName) {
     voteOpen: awVoteOpen_(mk),
     deadline: awDeadline_(mk),
     rewardYen: Number(awCfg_('reward_yen', 500)) || 500,
-    categories: cats.map(function (c) { return { key: c.key, icon: c.icon, title: c.title, desc: c.desc }; }),
+    categories: cats.map(function (c) { return { key: c.key, icon: c.icon, title: c.title, desc: c.desc, scope: c.scope }; }),
     candidates: awCandidates_().filter(function (c) { return normalizeName_(c.id) !== normalizeName_(effName); }),
     myVotes: awMyVotes_(mk, effName)
   };
@@ -209,6 +256,18 @@ function awardVoteByName_(voter, catKey, pick, comment, voterId) {
   var mk = awMonthKey_();
   if (!awVoteOpen_(mk)) return { ok: false, error: 'closed' };
 
+  // 部門の「対象」に合う相手か（黒服部門にキャストを入れる等をサーバ側で拒否）
+  var cats = awCategories_();
+  var cat = null;
+  for (var ci2 = 0; ci2 < cats.length; ci2++) { if (cats[ci2].key === catKey) { cat = cats[ci2]; break; } }
+  if (!cat) return { ok: false, error: 'no_category' };
+  if (pick) {
+    var cands = awCandidates_(), pk = normalizeName_(pick), prole = '';
+    for (var j = 0; j < cands.length; j++) { if (normalizeName_(cands[j].id) === pk) { prole = cands[j].role; break; } }
+    if (!prole) return { ok: false, error: 'no_candidate' };
+    if (!awRoleMatches_(cat.scope, prole)) return { ok: false, error: 'scope_mismatch' };
+  }
+
   var sh = awSheet_(AWARDS_VOTE_TAB, AWARDS_VOTE_HEAD);
   var vals = sh.getDataRange().getValues();
   var vk = normalizeName_(voter), rowIdx = -1;
@@ -219,8 +278,7 @@ function awardVoteByName_(voter, catKey, pick, comment, voterId) {
   if (rowIdx > 0) { sh.getRange(rowIdx, 1, 1, row.length).setValues([row]); }
   else { sh.appendRow(row); }
 
-  var cats = awCategories_();
-  var mine = awMyVotes_(mk, voter);
+  var mine = awMyVotes_(mk, voter);   // cats は上の対象チェックで取得済み（再読み込みしない）
   var done = cats.filter(function (c) { return mine[c.key] && mine[c.key].pick; }).length;
   return { ok: true, done: done, total: cats.length };
 }
@@ -386,13 +444,23 @@ function gunshiAwardVote(voterName, catKey, pick, comment) {
 // ============================================================
 function awardSaveCategories_(cats) {
   var sh = awSheet_(AWARDS_CAT_TAB, AWARDS_CAT_HEAD);
+  var head = awEnsureCatCols_(sh);              // 列順はシート実体に合わせる
+  var ci = function (n) { return head.indexOf(n); };
   var last = sh.getLastRow();
-  if (last > 1) sh.getRange(2, 1, last - 1, AWARDS_CAT_HEAD.length).clearContent();
+  if (last > 1) sh.getRange(2, 1, last - 1, head.length).clearContent();
+  var scopeLabel = function (s) { return s === 'kurofuku' ? '黒服' : (s === 'cast' ? 'キャスト' : '全員'); };
   var rows = (cats || []).map(function (c, i) {
-    return [String(c.key || ('cat' + (i + 1))), String(c.icon || '🏆'), String(c.title || ''),
-            String(c.desc || ''), (c.enabled === false ? false : true), Number(c.order || (i + 1))];
+    var row = new Array(head.length).fill('');
+    row[ci('部門キー')] = String(c.key || ('cat' + (i + 1)));
+    row[ci('アイコン')] = String(c.icon || '🏆');
+    row[ci('タイトル')] = String(c.title || '');
+    row[ci('説明')]     = String(c.desc || '');
+    row[ci('有効')]     = (c.enabled === false ? false : true);
+    row[ci('並び順')]   = Number(c.order || (i + 1));
+    row[ci('対象')]     = scopeLabel(awScope_(c.scope));
+    return row;
   });
-  if (rows.length) sh.getRange(2, 1, rows.length, AWARDS_CAT_HEAD.length).setValues(rows);
+  if (rows.length) sh.getRange(2, 1, rows.length, head.length).setValues(rows);
   return { ok: true, count: rows.length };
 }
 function awardSetConfig_(key, value) {

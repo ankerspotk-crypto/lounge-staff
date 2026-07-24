@@ -512,6 +512,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 .aw-cat .aw-c-top{ display:flex; align-items:center; gap:9px; margin-bottom:4px; }
 .aw-cat .aw-c-ico{ font-size:21px; }
 .aw-cat .aw-c-name{ font-size:15.5px; font-weight:800; color:#f2ead9; }
+.aw-scope{ margin-left:auto; font-size:10.5px; font-weight:700; color:#c9a459; background:#241d10; border:1px solid rgba(214,183,120,.3); border-radius:8px; padding:2px 8px; white-space:nowrap; }
 .aw-cat .aw-c-desc{ font-size:12px; color:#94886a; margin:0 0 12px; line-height:1.55; }
 .aw-pick{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 14px; border-radius:11px; border:1px solid rgba(214,183,120,.3); background:#241d10; color:#f2ead9; font-size:15px; font-weight:700; cursor:pointer; }
 .aw-pick:active{ filter:brightness(1.08); }
@@ -1266,7 +1267,9 @@ function renderAwardsVote(){
     var v = myV[c.key] || {};
     var picked = v.pick ? candName(v.pick) : '';
     return '<div class="aw-cat">'
-      + '<div class="aw-c-top"><span class="aw-c-ico">' + (c.icon||'🏆') + '</span><span class="aw-c-name">' + esc(c.title) + '</span></div>'
+      + '<div class="aw-c-top"><span class="aw-c-ico">' + (c.icon||'🏆') + '</span><span class="aw-c-name">' + esc(c.title) + '</span>'
+      +   (awScopeLabel_(c.scope) ? '<span class="aw-scope">' + esc(awScopeLabel_(c.scope)) + '</span>' : '')
+      + '</div>'
       + '<div class="aw-c-desc">' + esc(c.desc || '') + '</div>'
       + '<button class="aw-pick' + (picked?'':' empty') + '" onclick="openCandPicker(\'' + c.key + '\')">'
       +   '<span>' + (picked ? '✓ ' + esc(picked) + ' さん' : '選ぶ') + '</span>'
@@ -1304,8 +1307,13 @@ function openCandPicker(catKey){
   renderCandList('');
   document.getElementById('aw-overlay').classList.add('show');
 }
+// 部門の「対象」で候補を絞る（黒服部門＝候補は黒服だけ。投票は全員できる）
+function awCatOf_(key){ var a=(awData&&awData.categories)||[]; for(var i=0;i<a.length;i++){ if(a[i].key===key) return a[i]; } return null; }
+function awScopeOk_(scope, role){ if(scope==='kurofuku') return role==='黒服'; if(scope==='cast') return role==='キャスト'; return true; }
+function awScopeLabel_(scope){ return scope==='kurofuku' ? '黒服から選ぶ' : (scope==='cast' ? 'キャストから選ぶ' : ''); }
 function renderCandList(q){
-  var list = (awData.candidates || []).filter(function(c){ return c.id !== awData.meId; });
+  var cat = awCatOf_(awPickCat) || {};
+  var list = (awData.candidates || []).filter(function(c){ return c.id !== awData.meId && awScopeOk_(cat.scope, c.role); });
   q = (q||'').trim();
   if (q) list = list.filter(function(c){ return String(c.name).indexOf(q) >= 0; });
   var cur = (awData.myVotes && awData.myVotes[awPickCat] && awData.myVotes[awPickCat].pick) || '';
