@@ -3413,7 +3413,6 @@ var MENU_TILES=[
     {ic:'🏆', t:'表彰投票',           act:"openAwardVote()"},
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
     {ic:'📋', t:'面談表',         act:"openMendanManager()"},
-    {ic:'📝', t:'スキルテスト',       act:"openSkillTest()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🍶', t:'ボトル棚マップ',     act:"openBottleShelfMap()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
@@ -5321,113 +5320,6 @@ function gsr(fn){
   return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a})})
     .then(function(r){return r.json();})
     .then(function(j){ if(j&&j.__ok===false) throw new Error(j.error||'server error'); return j?j.data:j; });
-}
-
-/* ===== 📝 スキルテスト（黒服の知識関門・時給の維持/アップ資格ゲート） =====
-   受験＝ここ（軍師）。作問・級設定・結果閲覧はコンソール。
-   ⚠️正解はサーバーにしか無い＝出題は選択肢のみ、採点は gunshiSkillSubmit(サーバー側)で行う。 */
-var SKILL_STATE={grades:[],status:null,cur:null,busy:false};
-function skillBack_(onclick){ return '<span class="menu-back" onclick="'+(onclick||'closeMenu()')+'">← '+(onclick?'一覧へ':'閉じる')+'</span>'; }
-function skillUnlockBadge_(u){
-  if(u==='アップ') return '<span style="background:#2b2410;border:1px solid #c9a45c;color:#e6d2a8;border-radius:6px;padding:2px 8px;font-size:10.5px;margin-left:6px">昇給資格</span>';
-  if(u==='維持')   return '<span style="background:#16130f;border:1px solid #6f685e;color:#a29a8e;border-radius:6px;padding:2px 8px;font-size:10.5px;margin-left:6px">維持資格</span>';
-  return '';
-}
-function openSkillTest(){
-  document.getElementById('menuOverlay').classList.add('show');
-  var el=document.getElementById('menu-body');
-  el.innerHTML=skillBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>';
-  SKILL_STATE.cur=null; SKILL_STATE.busy=false;
-  gsr('gunshiSkillInit', LOGIN).then(function(r){
-    if(!r||!r.ok){ el.innerHTML=skillBack_()+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">読み込みエラー</div>'; return; }
-    SKILL_STATE.grades=r.grades||[]; SKILL_STATE.status=r.status||null;
-    renderSkillMenu_();
-  }).catch(function(){ el.innerHTML=skillBack_()+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">通信に失敗しました</div>'; });
-}
-function renderSkillMenu_(){
-  var el=document.getElementById('menu-body'), st=SKILL_STATE.status||{};
-  var elig=st.canRaise?'<b style="color:#e6d2a8">昇給（アップ）可</b>':(st.canMaintain?'<b style="color:#c9a45c">維持可</b>':'<span style="color:#ff9aa0">まだ資格なし</span>');
-  var top=st.topGrade?('到達級 <b>'+esc(st.topGrade)+'</b>'):'まだ合格した級はありません';
-  var h=skillBack_()+'<div class="menu-grp">📝 スキルテスト</div>';
-  h+='<div style="border:1px solid rgba(201,164,92,.3);border-radius:12px;padding:14px 16px;margin-bottom:14px;background:linear-gradient(170deg,#1c1815,#0d0b0a)">'
-    +'<div style="font-size:11px;color:#a29a8e">'+esc(st.name||LOGIN)+' さんの現在</div>'
-    +'<div style="font-size:15px;color:#e6d2a8;margin-top:4px">'+top+' ／ 時給：'+elig+'</div>'
-    +'<div style="font-size:10.5px;color:#6f685e;margin-top:6px">合格した級が時給の維持・アップの資格になります（実際の金額改定は店長が判断）。</div></div>';
-  if(!SKILL_STATE.grades.length){ h+='<div class="empty-msg" style="padding:24px;color:#888">受験できる級がありません。</div>'; el.innerHTML=h; return; }
-  h+='<div style="display:flex;flex-direction:column;gap:10px">'+SKILL_STATE.grades.map(function(g){
-    var held=g.held?'<span style="color:#7fd18b;font-weight:800;margin-left:6px"> ✅合格済</span>':'';
-    var qn=(g.count>0?Math.min(g.count,g.available):g.available);
-    var btn=g.available>0
-      ? '<button onclick="skillStart_(\''+encodeURIComponent(g.grade)+'\')" style="border:1px solid #c9a45c;background:#1a1611;color:#e6d2a8;border-radius:9px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap">挑戦する</button>'
-      : '<span style="color:#6f685e;font-size:11px;white-space:nowrap">問題準備中</span>';
-    return '<div style="border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;background:#15120f">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
-      +'<div><span style="font-size:16px;color:#e6d2a8;font-weight:700">'+esc(g.grade)+'</span>'+skillUnlockBadge_(g.unlock)+held+'</div>'+btn+'</div>'
-      +'<div style="font-size:11px;color:#a29a8e;margin-top:6px">'+esc(g.desc||'')+'</div>'
-      +'<div style="font-size:10.5px;color:#6f685e;margin-top:4px">出題 '+qn+'問 ／ 合格ライン '+g.pass+'%</div></div>';
-  }).join('')+'</div>';
-  el.innerHTML=h;
-}
-function skillStart_(gEnc){
-  var grade=decodeURIComponent(gEnc);
-  if(SKILL_STATE.busy) return; SKILL_STATE.busy=true;
-  var el=document.getElementById('menu-body');
-  el.innerHTML=skillBack_('openSkillTest()')+'<div class="empty-msg" style="padding:24px">問題を準備中…</div>';
-  gsr('gunshiSkillStart', LOGIN, grade).then(function(r){
-    SKILL_STATE.busy=false;
-    if(!r||!r.ok){ el.innerHTML=skillBack_('openSkillTest()')+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">'+esc((r&&r.error)||'開始できませんでした')+'</div>'; return; }
-    SKILL_STATE.cur={grade:grade,pass:r.pass,unlock:r.unlock,questions:r.questions||[],answers:{}};
-    renderSkillQuiz_();
-  }).catch(function(){ SKILL_STATE.busy=false; el.innerHTML=skillBack_('openSkillTest()')+'<div class="empty-msg" style="padding:24px;color:#ff9aa0">通信に失敗しました</div>'; });
-}
-function skillPick_(qid,idx){ if(SKILL_STATE.cur){ SKILL_STATE.cur.answers[qid]=idx; renderSkillProgress_(); } }
-function renderSkillProgress_(){
-  var c=SKILL_STATE.cur; if(!c) return;
-  var done=Object.keys(c.answers).length, tot=c.questions.length;
-  var b=document.getElementById('skillProg'); if(b) b.textContent=done+' / '+tot+' 問 回答済';
-  var sb=document.getElementById('skillSubmitBtn'); if(sb){ var ok=done>=tot; sb.disabled=!ok; sb.style.opacity=ok?'1':'.45'; }
-}
-function renderSkillQuiz_(){
-  var c=SKILL_STATE.cur, el=document.getElementById('menu-body');
-  var h=skillBack_('openSkillTest()')+'<div class="menu-grp">📝 '+esc(c.grade)+'（合格ライン '+c.pass+'%）</div>';
-  h+='<div id="skillProg" style="text-align:center;font-size:11px;color:#a29a8e;margin-bottom:10px">0 / '+c.questions.length+' 問 回答済</div>';
-  h+=c.questions.map(function(q,i){
-    var opts=q.choices.map(function(ch,ci){ if(ch==='') return ''; var n=ci+1;
-      return '<label style="display:block;border:1px solid rgba(255,255,255,.12);border-radius:9px;padding:11px 13px;margin-top:7px;cursor:pointer;color:#ddd;font-size:13px">'
-        +'<input type="radio" name="skq_'+q.id+'" style="margin-right:9px" onclick="skillPick_(\''+q.id+'\','+n+')">'+esc(ch)+'</label>';
-    }).join('');
-    return '<div style="border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#15120f">'
-      +'<div style="font-size:14px;color:#e6d2a8;font-weight:600">Q'+(i+1)+'. '+esc(q.q)+'</div>'+opts+'</div>';
-  }).join('');
-  h+='<button id="skillSubmitBtn" disabled style="opacity:.45;width:100%;border:1px solid #c9a45c;background:#c9a45c;color:#1a1207;border-radius:11px;padding:14px;font-size:15px;font-weight:800;cursor:pointer" onclick="skillSubmit_()">採点する</button>';
-  el.innerHTML=h;
-}
-function skillSubmit_(){
-  var c=SKILL_STATE.cur; if(!c) return;
-  if(Object.keys(c.answers).length<c.questions.length){ alert('すべての問題に回答してください。'); return; }
-  if(SKILL_STATE.busy) return; SKILL_STATE.busy=true;
-  var sb=document.getElementById('skillSubmitBtn'); if(sb){ sb.disabled=true; sb.textContent='採点中…'; }
-  gsr('gunshiSkillSubmit', LOGIN, c.grade, c.answers).then(function(r){
-    SKILL_STATE.busy=false;
-    if(!r||!r.ok){ alert((r&&r.error)||'採点に失敗しました'); if(sb){sb.disabled=false;sb.textContent='採点する';} return; }
-    SKILL_STATE.status=r.status||SKILL_STATE.status;
-    renderSkillResult_(r);
-  }).catch(function(){ SKILL_STATE.busy=false; alert('通信に失敗しました'); if(sb){sb.disabled=false;sb.textContent='採点する';} });
-}
-function renderSkillResult_(r){
-  var el=document.getElementById('menu-body'), ok=r.passed;
-  var head=ok?'🎉 合格':'✋ 不合格', color=ok?'#7fd18b':'#ff9aa0';
-  var h=skillBack_('openSkillTest()')+'<div class="menu-grp">📝 '+esc(r.grade)+' の結果</div>';
-  h+='<div style="border:1px solid '+color+';border-radius:14px;padding:22px 16px;text-align:center;background:linear-gradient(170deg,#1c1815,#0d0b0a)">'
-    +'<div style="font-size:26px;color:'+color+';font-weight:800">'+head+'</div>'
-    +'<div style="font-family:\'Yu Mincho\',serif;font-size:40px;color:#e6d2a8;margin:6px 0">'+r.pct+'<span style="font-size:16px;color:#a29a8e">%</span></div>'
-    +'<div style="font-size:12px;color:#a29a8e">'+r.score+' / '+r.max+' 点（合格ライン '+r.pass+'%）</div>';
-  if(ok&&r.unlock){ h+='<div style="margin-top:12px;font-size:13px;color:#e6d2a8">この級で <b>時給'+(r.unlock==='アップ'?'アップ':'維持')+'</b> の資格を満たしました。</div>'; }
-  if(!ok){ h+='<div style="margin-top:12px;font-size:12px;color:#a29a8e">もう一度挑戦できます。落ち着いていきましょう。</div>'; }
-  h+='</div><div style="display:flex;gap:10px;margin-top:16px">'
-    +'<button onclick="skillStart_(\''+encodeURIComponent(r.grade)+'\')" style="flex:1;border:1px solid rgba(255,255,255,.2);background:#15120f;color:#ddd;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">もう一度</button>'
-    +'<button onclick="openSkillTest()" style="flex:1;border:1px solid #c9a45c;background:#1a1611;color:#e6d2a8;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">級一覧へ</button></div>';
-  el.innerHTML=h;
 }
 
 /* 📝 面談を開始：トークンを発行して応募者フロント(mendan.html)を開く。

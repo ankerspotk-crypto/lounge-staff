@@ -992,6 +992,7 @@ var SECTIONS = {
   bday:     { t:'誕生日設定',   i:'🎂' },
   custbday: { t:'今月誕生日の客', i:'🎂' },
   wine:     { t:'シャンパン・ワイン在庫', i:'🍾' },
+  skill:    { t:'スキルテスト',   i:'📝' },
   requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'シフト管理',   i:'🗂' },
   notif:    { t:'通知設定',     i:'🔔' },
@@ -1041,6 +1042,8 @@ function homeMenu() {
   var castKeys = ['board','awards','kassen','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
+  // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
+  if (!onLeave && (isAdmin || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === '黒服')) castKeys.push('skill');
   var html = '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
   if (isAdmin) {
@@ -1088,6 +1091,7 @@ function switchTab(tab) {
   if (tab === 'customers') { loadCustomers(); return; }
   if (tab === 'bday') { loadBirthday(); return; }
   if (tab === 'custbday') { loadCustomerBirthdays(); return; }
+  if (tab === 'skill') { loadSkill(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -2810,6 +2814,123 @@ function renderRanking(d) {
   setContent(h);
   setupBookmarklet_();
   setupCashBookmarklet_();
+}
+
+// ---- 📝 スキルテスト受験（黒服＋管理者属性。作問・結果はコンソール） ----
+// GET ?action=portal&tab=skill で級一覧＋本人状況。POST skillStart/skillSubmit で出題・採点。
+// ⚠️正解はサーバ側だけ＝端末には送らない（skillDraw_ が選択肢のみ返す）。
+var PSKILL = { grades: [], status: null, cur: null, busy: false };
+function loadSkill() {
+  setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">読み込み中...</div>');
+  PSKILL.cur = null; PSKILL.busy = false;
+  fetch(GAS_URL + '?action=portal&tab=skill&userId=' + encodeURIComponent(userId))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d || !d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc((d && d.error) || 'エラー') + '</div>'); return; }
+      PSKILL.grades = d.grades || []; PSKILL.status = d.status || null;
+      pskillMenu();
+    })
+    .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+function pskillUnlockBadge_(u){
+  if (u === 'アップ') return '<span style="background:#2b2410;border:1px solid #c9a459;color:#e6cf95;border-radius:6px;padding:2px 8px;font-size:10.5px;margin-left:6px">昇給資格</span>';
+  if (u === '維持')   return '<span style="background:#16130d;border:1px solid #5a4a2a;color:#b09f74;border-radius:6px;padding:2px 8px;font-size:10.5px;margin-left:6px">維持資格</span>';
+  return '';
+}
+function pskillMenu(){
+  var st = PSKILL.status || {};
+  var elig = st.canRaise ? '<b style="color:#e6cf95">昇給（アップ）可</b>' : (st.canMaintain ? '<b style="color:#c9a459">維持可</b>' : '<span style="color:#e0908f">まだ資格なし</span>');
+  var top = st.topGrade ? ('到達級 <b>' + esc(st.topGrade) + '</b>') : 'まだ合格した級はありません';
+  var h = '<div style="padding:14px">';
+  h += '<div style="background:linear-gradient(170deg,#1c1710,#100d08);border:1px solid rgba(214,183,120,.24);border-radius:14px;padding:16px;margin-bottom:14px">'
+    + '<div style="font-size:11px;color:#94886a">' + esc(st.name || userName || '') + ' さんの現在</div>'
+    + '<div style="font-size:15px;color:#f2ead9;margin-top:4px">' + top + ' ／ 時給：' + elig + '</div>'
+    + '<div style="font-size:10.5px;color:#7d7358;margin-top:6px;line-height:1.6">合格した級が時給の維持・アップの資格になります（実際の金額改定は店長が判断）。</div></div>';
+  if (!PSKILL.grades.length) { h += '<div style="text-align:center;color:#94886a;padding:30px 0">受験できる級がありません。</div></div>'; setContent(h); return; }
+  h += PSKILL.grades.map(function(g){
+    var held = g.held ? '<span style="color:#7fd18b;font-weight:800;margin-left:6px">✅合格済</span>' : '';
+    var qn = (g.count > 0 ? Math.min(g.count, g.available) : g.available);
+    var btn = g.available > 0
+      ? '<button onclick="pskillStart(\'' + encodeURIComponent(g.grade) + '\')" style="border:1px solid #c9a459;background:#1a1611;color:#e6cf95;border-radius:9px;padding:9px 16px;font-size:13px;cursor:pointer;white-space:nowrap">挑戦する</button>'
+      : '<span style="color:#7d7358;font-size:11px;white-space:nowrap">問題準備中</span>';
+    return '<div style="border:1px solid #211a0f;border-radius:12px;padding:14px 16px;background:#16130d;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      + '<div><span style="font-size:16px;color:#f2ead9;font-weight:700">' + esc(g.grade) + '</span>' + pskillUnlockBadge_(g.unlock) + held + '</div>' + btn + '</div>'
+      + '<div style="font-size:11px;color:#b09f74;margin-top:6px">' + esc(g.desc || '') + '</div>'
+      + '<div style="font-size:10.5px;color:#7d7358;margin-top:4px">出題 ' + qn + '問 ／ 合格ライン ' + g.pass + '%</div></div>';
+  }).join('');
+  h += '</div>';
+  setContent(h);
+}
+function pskillBackBtn_(){ return '<button onclick="loadSkill()" style="background:none;border:1px solid #33291a;color:#cbb98a;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer">← 級一覧へ</button>'; }
+function pskillStart(gEnc){
+  var grade = decodeURIComponent(gEnc);
+  if (PSKILL.busy) return; PSKILL.busy = true;
+  setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">問題を準備中...</div>');
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'skillStart', userId: userId, grade: grade }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      PSKILL.busy = false;
+      if (!d || !d.ok) { setContent('<div style="padding:14px"><div style="color:#f66;padding:8px 0 16px">' + esc((d && d.error) || '開始できませんでした') + '</div>' + pskillBackBtn_() + '</div>'); return; }
+      PSKILL.cur = { grade: grade, pass: d.pass, unlock: d.unlock, questions: d.questions || [], answers: {} };
+      pskillQuiz();
+    })
+    .catch(function(){ PSKILL.busy = false; setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+function pskillPick(qid, n){ if (PSKILL.cur) { PSKILL.cur.answers[qid] = n; pskillProgress(); } }
+function pskillProgress(){
+  var c = PSKILL.cur; if (!c) return;
+  var done = Object.keys(c.answers).length, tot = c.questions.length;
+  var b = document.getElementById('pskillProg'); if (b) b.textContent = done + ' / ' + tot + ' 問 回答済';
+  var sb = document.getElementById('pskillSubmit'); if (sb) { var ok = done >= tot; sb.disabled = !ok; sb.style.opacity = ok ? '1' : '.45'; }
+}
+function pskillQuiz(){
+  var c = PSKILL.cur;
+  var h = '<div style="padding:14px">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' + pskillBackBtn_() + '<span style="font-size:14px;color:#e6cf95;font-weight:700">' + esc(c.grade) + '（合格 ' + c.pass + '%）</span><span style="width:64px"></span></div>';
+  h += '<div id="pskillProg" style="text-align:center;font-size:11px;color:#94886a;margin-bottom:10px">0 / ' + c.questions.length + ' 問 回答済</div>';
+  h += c.questions.map(function(q, i){
+    var opts = q.choices.map(function(ch, ci){ if (ch === '') return ''; var n = ci + 1;
+      return '<label style="display:block;border:1px solid #211a0f;border-radius:9px;padding:11px 13px;margin-top:7px;cursor:pointer;color:#d8c79a;font-size:13px;background:#120f09">'
+        + '<input type="radio" name="pskq_' + q.id + '" style="margin-right:9px" onclick="pskillPick(\'' + q.id + '\',' + n + ')">' + esc(ch) + '</label>';
+    }).join('');
+    return '<div style="border:1px solid #211a0f;border-radius:12px;padding:14px 16px;margin-bottom:12px;background:#16130d">'
+      + '<div style="font-size:14px;color:#f2ead9;font-weight:600">Q' + (i + 1) + '. ' + esc(q.q) + '</div>' + opts + '</div>';
+  }).join('');
+  h += '<button id="pskillSubmit" disabled style="opacity:.45;width:100%;border:none;background:linear-gradient(135deg,#c9a459,#8d6f2e);color:#1a1409;border-radius:11px;padding:14px;font-size:15px;font-weight:800;cursor:pointer" onclick="pskillSubmit()">採点する</button>';
+  h += '</div>';
+  setContent(h);
+}
+function pskillSubmit(){
+  var c = PSKILL.cur; if (!c) return;
+  if (Object.keys(c.answers).length < c.questions.length) { alert('すべての問題に回答してください。'); return; }
+  if (PSKILL.busy) return; PSKILL.busy = true;
+  var sb = document.getElementById('pskillSubmit'); if (sb) { sb.disabled = true; sb.textContent = '採点中...'; }
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'skillSubmit', userId: userId, grade: c.grade, answers: c.answers }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      PSKILL.busy = false;
+      if (!d || !d.ok) { alert((d && d.error) || '採点に失敗しました'); if (sb) { sb.disabled = false; sb.textContent = '採点する'; } return; }
+      PSKILL.status = d.status || PSKILL.status;
+      pskillResult(d);
+    })
+    .catch(function(){ PSKILL.busy = false; alert('通信エラーが発生しました'); if (sb) { sb.disabled = false; sb.textContent = '採点する'; } });
+}
+function pskillResult(d){
+  var ok = d.passed, head = ok ? '🎉 合格' : '✋ 不合格', color = ok ? '#7fd18b' : '#e0908f';
+  var h = '<div style="padding:14px">';
+  h += '<div style="border:1px solid ' + color + ';border-radius:14px;padding:22px 16px;text-align:center;background:linear-gradient(170deg,#1c1710,#100d08)">'
+    + '<div style="font-size:26px;color:' + color + ';font-weight:800">' + head + '</div>'
+    + '<div style="font-size:40px;color:#f2ead9;margin:6px 0;font-weight:700">' + d.pct + '<span style="font-size:16px;color:#94886a">%</span></div>'
+    + '<div style="font-size:12px;color:#94886a">' + d.score + ' / ' + d.max + ' 点（合格ライン ' + d.pass + '%）</div>';
+  if (ok && d.unlock) h += '<div style="margin-top:12px;font-size:13px;color:#e6cf95">この級で <b>時給' + (d.unlock === 'アップ' ? 'アップ' : '維持') + '</b> の資格を満たしました。</div>';
+  if (!ok) h += '<div style="margin-top:12px;font-size:12px;color:#b09f74">もう一度挑戦できます。落ち着いていきましょう。</div>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:10px;margin-top:16px">'
+    + '<button onclick="pskillStart(\'' + encodeURIComponent(d.grade) + '\')" style="flex:1;border:1px solid #33291a;background:#16130d;color:#cbb98a;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">もう一度</button>'
+    + '<button onclick="loadSkill()" style="flex:1;border:1px solid #c9a459;background:#1a1611;color:#e6cf95;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">級一覧へ</button></div>';
+  h += '</div>';
+  setContent(h);
 }
 
 // ---- シャンパン・ワイン在庫 ----
