@@ -1201,7 +1201,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-17f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-25a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -4393,7 +4393,7 @@ function openCashCheck(){
 }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
-  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[]};
+  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:false};
   renderCashCheck();
 }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
@@ -4433,6 +4433,27 @@ function ccDiagHtml(){
     +['運転手さんの日払い、入れた?','キャストの日払い、全員分ある?','経費レシート、撮り忘れてない?','もう一度数えてみる'].map(function(t){return '<label style="display:flex;gap:7px;align-items:center;font-size:13px;color:var(--txt);padding:3px 0"><input type="checkbox"> '+esc(t)+'</label>';}).join('')
     +'</div>';
 }
+/* --- TRUST入力の確認ゲート（閉店送信の最終関門・完全ブロック） ---
+   狙い＝黒服がTRUSTへの日払い/経費入力を忘れて帰るのを止める。TRUSTは外部システムで
+   GASから入力有無を検知できない（403）ため、送信前に黒服自身へ必須チェックを突きつける方式。
+   軍師は当日の日払い伝票（現金袋から出た額）を既に持っているので、有る日は件数と額を添えて気づかせる。 */
+function ccDayPaySlips_(){ var st=cashState||{}; return (st.slips||[]).filter(function(x){ return x.include!==false&&Number(x.amount)>0&&/日払/.test(String(x.category||'')); }); }
+function ccTrustGateHtml(){
+  var st=cashState||{};
+  var dp=ccDayPaySlips_(), dpN=dp.length, dpSum=dp.reduce(function(t,x){ return t+Number(x.amount||0); },0);
+  var on=!!st.trustConfirmed;
+  var hint=dpN?('<div style="font-size:12px;color:#e0a060;margin-top:7px;line-height:1.55">📌 本日の日払い伝票 <b>'+dpN+'件</b>（計 ¥'+dpSum.toLocaleString()+'）。<b>全員分</b>TRUSTに入力しましたか？</div>'):'';
+  return '<div id="cc-trust-gate" style="border:2px solid '+(on?'#3ea06a':'#e05050')+';background:'+(on?'rgba(62,160,106,.12)':'rgba(224,80,80,.10)')+';border-radius:12px;padding:12px 14px;margin-top:16px;transition:border-color .15s,background .15s">'
+    +'<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer">'
+    +'<input type="checkbox" '+(on?'checked':'')+' style="width:22px;height:22px;margin-top:1px;flex:0 0 auto;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;ccTrustRefresh()">'
+    +'<span style="font-size:15px;font-weight:700;color:var(--txt);line-height:1.4">日払い・経費を <span style="color:#ffcf7a">TRUST</span> に入力しました'
+    +'<div style="font-size:12px;font-weight:400;color:var(--dim);margin-top:3px">チェックを入れないと閉店チェックは送信できません</div></span>'
+    +'</label>'+hint+'</div>';
+}
+function ccTrustRefresh(){
+  var w=document.getElementById('cc-trust-gate'); if(w) w.outerHTML=ccTrustGateHtml();
+  var b=document.getElementById('cc-submit-btn'); if(b){ var on=!!(cashState&&cashState.trustConfirmed); b.style.opacity=on?'1':'.45'; b.textContent=(on?'':'🔒 ')+'閉店チェックを送信'; }
+}
 function ccFlowRow(l,v,c){ return '<div class="cc-flow-row"><span style="color:#889">'+l+'</span><span style="color:'+(c||'#ccc')+'">'+v+'</span></div>'; }
 function ccFlowHtml(v,withDiag){
   var h='<div class="cc-flow">';
@@ -4463,7 +4484,8 @@ function renderCashCheck(){
   h+='<div id="cc-slips"></div>';
   h+='<div class="flabel">閉店時の現金を数える（4袋・紙幣の枚数）</div><div id="cc-bags">'+CASH_BAGS.map(ccBagCard).join('')+'</div>';
   h+='<div class="flabel">現金の流れ（自動照合）</div><div id="cc-recon"></div>';
-  h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" onclick="submitCash()">閉店チェックを送信</div>';
+  h+=ccTrustGateHtml();
+  h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" id="cc-submit-btn" onclick="submitCash()" style="opacity:'+(st.trustConfirmed?'1':'.45')+'">'+(st.trustConfirmed?'':'🔒 ')+'閉店チェックを送信</div>';
   b.innerHTML=h; ccRenderSlips(); ccRefresh();
 }
 function slipCatSelect(i){ var s=cashState.slips[i]; return '<select onchange="cashState.slips['+i+'].category=this.value;ccRenderSlips();ccRefresh()">'+SLIP_CATS.map(function(c){return '<option'+(s.category===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'; }
@@ -4503,6 +4525,7 @@ function ccPhoto(idx,file){
 }
 function submitCash(){
   var st=cashState; if(!st.reporterName){ alert('報告者を選択してください'); return; }
+  if(!st.trustConfirmed){ alert('日払い・経費を TRUST に入力してから、チェックを入れて送信してください。'); var g=document.getElementById('cc-trust-gate'); if(g&&g.scrollIntoView)g.scrollIntoView({behavior:'smooth',block:'center'}); return; }
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
   var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
   var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto'};
@@ -4551,7 +4574,7 @@ function showImgOverlay(dataUrl, name){
     +'<div style="color:#cdd;font-size:12px;margin-top:10px">'+(name?esc(name)+'　':'')+'（タップで閉じる）</div>';
   ov.style.display='flex';
 }
-function redoCash(){ cashState.formMode=true; renderCashCheck(); }
+function redoCash(){ cashState.formMode=true; cashState.trustConfirmed=false; renderCashCheck(); }
 
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
