@@ -1312,12 +1312,23 @@ function drawSkill(){
     return '<div class="sec"><div class="sec-t">'+esc(g.grade)+'テスト　<span style="font-weight:400;color:var(--dim);font-size:12px">'+arr.length+'問｜合格ライン '+g.pass+'%｜出題'+(g.count>0?g.count+'問':'全問')+unlockTxt+'</span></div>'
       +list+'<div style="margin-top:10px"><button class="btn pri" onclick="skNewQ(\''+esc(g.grade)+'\')">＋ この級に問題を追加</button>'+seedBtn+'</div></div>';
   }).join('');
+  // 🛠 問題ビルダー（下書き＝未分類/無効）
+  var drafts=(questions||[]).filter(function(q){ return q.draft; });
+  var draftAvail=skAdm.draftsAvailable||0;
+  var importBtn=draftAvail>0 ? '<button class="btn pri" onclick="skImportDrafts()">📥 現場ドラフトを取り込む（'+draftAvail+'問）</button>' : '';
+  var builderBody=drafts.length ? drafts.map(function(q,i){ return skBuilderCard_(q,i+1,grades); }).join('')
+    : '<div class="empty" style="padding:10px;color:var(--dim)">下書きはありません。「📥 現場ドラフトを取り込む」で読み込めます。</div>';
+  var builderHtml='<div class="sec-t" style="margin-top:18px">🛠 問題ビルダー（レビュー）<span style="font-weight:400;color:var(--dim);font-size:12px">　下書きを1問ずつ確認→確定して級へ</span></div>'
+    +'<div class="hint">下書き（未分類）を、りくと相談しながら詰める場所。<b>選択肢をクリックで正解を切替</b>／コメントでやりとり（キャッチボール）／決まったら<b>「✅ 確定して級へ」</b>で受験に載ります。下書き中は受験に出ません。</div>'
+    +'<div style="margin-bottom:10px">'+importBtn+'　<span style="color:var(--dim);font-size:12px">下書き '+drafts.length+' 問</span></div>'
+    +builderBody;
   setBody(
     '<div class="hint">合格した級が時給の<b>維持・アップ</b>の資格になります。判定はここに出ますが、<b>実際の時給の改定は人が確定</b>します（自動では変えません）。受験は軍師の「📝 スキルテスト」から。</div>'
     +'<div class="sec"><div class="sec-t">🎖 時給資格ボード（黒服ごと）</div>'
       +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);text-align:left"><th style="padding:4px 8px">名前</th><th style="padding:4px 8px">役割</th><th style="padding:4px 8px">合格した級</th><th style="padding:4px 8px">時給資格</th><th style="padding:4px 8px">直近の受験</th></tr></thead><tbody>'+resRows+'</tbody></table></div></div>'
     +'<div class="sec"><div class="sec-t">🪜 級の設定 <span style="font-weight:400;color:var(--dim);font-size:12px">解放資格で「維持／アップ」を切り分け</span></div>'
       +gRows+'<div style="margin-top:8px"><button class="btn" onclick="skAddGrade()">＋ 級を追加</button><button class="btn pri" style="margin-left:8px" onclick="skSaveGrades()">💾 級を保存</button></div></div>'
+    +builderHtml
     +(skQEdit?skQFormHtml_():'')
     +'<div class="sec-t" style="margin-top:18px">🗂 問題の一覧・編集</div>'
     +'<div class="hint">各テスト（級）の全問題を、選択肢と正解（<span style="color:#7fd18b">✓</span>）つきで表示。「✏️ 編集」で問題文・選択肢・正解を直せます。「＋ 追加」で新しい問題、「🗑 削除」で不要な問題を消せます。</div>'
@@ -1384,6 +1395,52 @@ function skSeedDefaults(grade){
     if(!r||r.ok===false){ alert((r&&r.error)||'投入に失敗'); return; }
     alert('定番問題を投入しました（追加'+(r.added||0)+'問／サンプル削除'+(r.removedSamples||0)+'問）。');
     renderSkillTest();
+  }).catch(function(){ alert('通信エラー'); });
+}
+
+/* 🛠 問題ビルダー：下書きを1問ずつキャッチボール→確定して級へ */
+function skBuilderCard_(q,num,grades){
+  var stC=q.status==='確定'?'#7fd18b':(q.status==='確認中'?'#f4d98a':'#9a8f70');
+  var statusChip='<span class="chip" style="border-color:'+stC+';color:'+stC+'">'+esc(q.status||'下書き')+'</span>';
+  var choices=(q.choices||[]).map(function(ch,k){ if(!ch)return''; var isC=(k+1)===q.answer;
+    return '<div onclick="skSetAnswer(\''+esc(q.id)+'\','+(k+1)+')" title="クリックで正解に" style="cursor:pointer;display:flex;gap:7px;align-items:flex-start;padding:7px 9px;border-radius:8px;margin-top:5px;border:1px solid '+(isC?'#3f6b3f':'rgba(255,255,255,.1)')+';background:'+(isC?'#12220f':'transparent')+';font-size:12.5px;'+(isC?'color:#7fd18b;font-weight:600':'color:#cbb98a')+'">'
+      +'<span style="width:15px;flex:none;text-align:center">'+(isC?'✓':(k+1))+'</span><span>'+esc(ch)+'</span></div>';
+  }).join('');
+  var reviewLog=q.review ? '<div style="margin-top:9px;font-size:11.5px;color:#c3b083;background:#14110b;border:1px solid #2b2214;border-radius:8px;padding:8px 10px;white-space:pre-wrap;line-height:1.65">'+esc(q.review)+'</div>' : '';
+  var gopts=(grades||[]).map(function(g){ return '<option value="'+esc(g.grade)+'">'+esc(g.grade)+'</option>'; }).join('');
+  return '<div class="sec" style="border-left:3px solid #c9a45c">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div>'+statusChip+(q.cat?' <span class="chip">'+esc(q.cat)+'</span>':'')+'</div><div style="color:var(--dim);font-size:12px">#'+num+'</div></div>'
+    +'<div style="font-size:13.5px;color:#f2ead9;font-weight:600;margin:8px 0 2px;line-height:1.5">'+esc(q.q)+'</div>'
+    +choices
+    +'<div style="font-size:11px;color:var(--dim);margin-top:4px">↑ 選択肢をクリックすると正解（✓）を切り替えます</div>'
+    +reviewLog
+    +'<div style="display:flex;gap:6px;margin-top:9px"><input class="finput" id="skc_'+esc(q.id)+'" style="flex:1" placeholder="コメント（例：13は幹の許可確認まで出さないでOK）"><button class="btn" onclick="skReviewNote(\''+esc(q.id)+'\')">💬 追加</button></div>'
+    +'<div class="lrow" style="align-items:center;gap:8px;margin-top:9px"><select class="finput" style="width:110px" id="skf_'+esc(q.id)+'">'+gopts+'</select>'
+      +'<button class="btn pri" onclick="skFinalize(\''+esc(q.id)+'\')">✅ 確定して級へ</button>'
+      +'<span class="sp" style="flex:1"></span>'
+      +'<button class="btn" style="padding:5px 10px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">✏️ 編集</button>'
+      +'<button class="btn" style="padding:5px 10px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">🗑</button></div></div>';
+}
+function skImportDrafts(){
+  if(!confirm('現場ドラフトを下書きとして取り込みます。（重複はスキップ・受験には出ません）')) return;
+  api('skillImportDrafts',{}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'取込に失敗'); return; }
+    alert('取り込みました（追加'+(r.added||0)+'問／全'+(r.total||0)+'問）。'); renderSkillTest();
+  }).catch(function(){ alert('通信エラー'); });
+}
+function skSetAnswer(id,n){
+  api('skillSetAnswer',{id:id,answer:n}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'変更に失敗'); return; } renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
+}
+function skReviewNote(id){
+  var el=document.getElementById('skc_'+id); var note=el?el.value.trim():'';
+  if(!note){ alert('コメントを入力してください'); return; }
+  api('skillReviewNote',{id:id,note:note}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'追加に失敗'); return; } renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
+}
+function skFinalize(id){
+  var el=document.getElementById('skf_'+id); var grade=el?el.value:'';
+  if(!grade){ alert('級を選んでください'); return; }
+  if(!confirm(grade+'に確定して受験に載せます。よろしいですか？')) return;
+  api('skillFinalize',{id:id,grade:grade}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'確定に失敗'); return; }
+    alert(grade+'に投入しました。'); renderSkillTest();
   }).catch(function(){ alert('通信エラー'); });
 }
 
@@ -3046,9 +3103,12 @@ function MOCKAPI(action,body){
         {id:'Q1',grade:'初級',cat:'サンプル',q:'お客様をお迎えするとき、最初にすべき対応は？',choices:['笑顔で挨拶し人数を伺う','無言で席へ通す','まず料金の説明をする','席が空くまで待たせる'],answer:1,points:1,active:true},
         {id:'Q2',grade:'初級',cat:'サンプル',q:'黒服としてふさわしくない身だしなみは？',choices:['清潔なスーツと磨いた靴','香水を強くつける','髪を整える','爪を短く保つ'],answer:2,points:1,active:true},
         {id:'Q3',grade:'中級',cat:'サンプル',q:'お会計で金額を伝える前に、まず確認すべきことは？',choices:['伝票の内容と合計が正しいか','次回予約の希望','おしぼりの補充','照明の明るさ'],answer:1,points:1,active:true},
-        {id:'Q4',grade:'上級',cat:'サンプル',q:'お客様同士のトラブル、黒服の最優先は？',choices:['双方を落ち着かせ安全を確保','その場を離れる','どちらかの味方をする','会計を急がせる'],answer:1,points:1,active:true}
+        {id:'Q4',grade:'上級',cat:'サンプル',q:'お客様同士のトラブル、黒服の最優先は？',choices:['双方を落ち着かせ安全を確保','その場を離れる','どちらかの味方をする','会計を急がせる'],answer:1,points:1,active:true},
+        {id:'D1',grade:'未分類',cat:'ボトル',q:'枝の客が来店し、幹の客のボトルを飲みたいと言った。対応は？',choices:['枝の客が言うなら出す','勝手に出す','購入者(幹)のもの。許可が確認できるまで出さない','キャストに任せる'],answer:3,points:1,active:false,status:'下書き',review:'[取込 07-25 12:00] 根拠:04.09「勝手にボトル出すのはNG」',draft:true},
+        {id:'D2',grade:'未分類',cat:'休憩',q:'混雑時、キャストがタバコ休憩に行きたいと言ってきた。',choices:['好きに行かせる','一切認めない','状況を見て回るタイミングで短く、ピークは待たせる','キャスト任せ'],answer:3,points:1,active:false,status:'確認中',review:'[取込 07-25 12:00] ⚠️要確認:混雑時の休憩基準\n[07-25 12:30 りく] ピーク帯は原則ダメでいい',draft:true}
       ],
       defaults:['初級','中級'],
+      draftsAvailable:40,
       results:[
         {name:'りく',role:'黒服社員',status:{name:'りく',heldGrades:['初級','中級'],topGrade:'中級',eligibility:'アップ',canMaintain:true,canRaise:true,attempts:3,recent:[{date:'2026-07-24 21:30',grade:'中級',pct:90,result:'合格'}]}},
         {name:'たけし',role:'黒服バイト',status:{name:'たけし',heldGrades:['初級'],topGrade:'初級',eligibility:'維持',canMaintain:true,canRaise:false,attempts:2,recent:[{date:'2026-07-23 20:10',grade:'中級',pct:60,result:'不合格'}]}},
@@ -3057,6 +3117,8 @@ function MOCKAPI(action,body){
   }
   if(action==='skillSaveQuestion'||action==='skillDeleteQuestion'||action==='skillSaveGrade') return {ok:true};
   if(action==='skillSeedDefaults') return {ok:true,grade:body.grade,added:13,removedSamples:2};
+  if(action==='skillImportDrafts') return {ok:true,added:40,total:40};
+  if(action==='skillReviewNote'||action==='skillSetAnswer'||action==='skillSetStatus'||action==='skillFinalize') return {ok:true,grade:body.grade,answer:body.answer};
   if(action==='awardAdminData'){
     return {ok:true, month:(body.month||'2026-07'),
       categories:[

@@ -21,7 +21,8 @@
 var SKILL_GRADE_TAB_    = 'スキル級';
 var SKILL_GRADE_HEAD_   = ['級', '順位', '合格ライン%', '出題数', '解放資格', '説明', '有効'];
 var SKILL_Q_TAB_        = 'スキル問題';
-var SKILL_Q_HEAD_       = ['問題ID', '級', 'カテゴリ', '問題文', '選択肢1', '選択肢2', '選択肢3', '選択肢4', '正解', '配点', '有効', '作成日時'];
+//   ⚠️末尾2列(状態・レビュー)は問題ビルダー用に後付け（非破壊）。状態=下書き/確認中/確定、レビュー=キャッチボールのログ。
+var SKILL_Q_HEAD_       = ['問題ID', '級', 'カテゴリ', '問題文', '選択肢1', '選択肢2', '選択肢3', '選択肢4', '正解', '配点', '有効', '作成日時', '状態', 'レビュー'];
 var SKILL_ATTEMPT_TAB_  = 'スキル受験';
 var SKILL_ATTEMPT_HEAD_ = ['受験ID', '日時', '名前', '役割', '級', '得点', '満点', '得点率%', '合否', '合格ライン%', '回答JSON'];
 
@@ -101,6 +102,17 @@ function skillId_(prefix) {
 
 function skillBool_(v) { return !(v === false || String(v).toUpperCase() === 'FALSE' || String(v).trim() === ''); }
 
+// スキル問題シートに末尾列(状態・レビュー)が無ければヘッダを追記（非破壊・既存列は触らない）
+function skillEnsureQCols_() {
+  var sh = skillSheet_(SKILL_Q_TAB_, SKILL_Q_HEAD_);
+  var lastCol = sh.getLastColumn();
+  if (lastCol < SKILL_Q_HEAD_.length) {
+    var need = SKILL_Q_HEAD_.slice(lastCol);   // 不足しているヘッダ（13列目以降）
+    sh.getRange(1, lastCol + 1, 1, need.length).setValues([need]);
+  }
+  return sh;
+}
+
 // ============================================================
 // 初期データ（空のときだけ投入。ボスは後からコンソールで自由に編集）
 // ============================================================
@@ -113,7 +125,7 @@ function skillEnsureSeed_() {
       ['上級', 3, 80, 10, 'アップ', 'トラブル対応・数字/マネジメント・後輩育成。上位のアップ資格。', true]
     ]);
   }
-  var q = skillSheet_(SKILL_Q_TAB_, SKILL_Q_HEAD_);
+  var q = skillEnsureQCols_();   // 既存シートにも状態・レビュー列を用意
   if (q.getLastRow() < 2) {
     var now = skillNow_();
     var rows = [];
@@ -202,13 +214,17 @@ function skillQuestionsAll_(grade) {
     if (!id) continue;
     var gr = String(vals[i][1]).trim();
     if (grade && gr !== grade) continue;
+    var active = skillBool_(vals[i][10]);
     out.push({
       id: id, grade: gr, cat: String(vals[i][2] || ''),
       q: String(vals[i][3] || ''),
       choices: [String(vals[i][4] || ''), String(vals[i][5] || ''), String(vals[i][6] || ''), String(vals[i][7] || '')],
       answer: Number(vals[i][8]) || 0,
       points: Number(vals[i][9]) || 1,
-      active: skillBool_(vals[i][10]),
+      active: active,
+      status: String(vals[i][12] || ''),   // 下書き/確認中/確定
+      review: String(vals[i][13] || ''),   // キャッチボールのログ
+      draft: (gr === '未分類' || !active),  // ビルダーで扱う下書き
       row: i + 1
     });
   }
@@ -334,7 +350,8 @@ function skillAdminData_() {
   var results = staff
     .filter(function (s) { return !retired[skillNameKey_(s.name)]; })
     .map(function (s) { return { name: s.name, role: s.role, status: skillStatus_(s.name) }; });
-  return { ok: true, grades: grades, questions: questions, results: results, defaults: Object.keys(SKILL_DEFAULTS_) };
+  return { ok: true, grades: grades, questions: questions, results: results, defaults: Object.keys(SKILL_DEFAULTS_),
+           draftsAvailable: (typeof SKILL_DRAFTS_ !== 'undefined' ? SKILL_DRAFTS_.length : 0) };
 }
 
 // 問題の追加/更新。q = {id?, grade, cat, q, choices:[4], answer, points, active}
@@ -392,4 +409,70 @@ function skillAdminSaveGrade_(g) {
   }
   sh.appendRow(rowVals);
   return { ok: true, created: true };
+}
+
+// ============================================================
+// 🛠 問題ビルダー（管理者・りくのキャッチボール用）
+//   下書き取り込み → 1問ずつコメントで正解を詰める → 確定して級へ投入。
+//   下書き＝級'未分類'・有効FALSE・状態'下書き'（本番の受験には出ない）。
+// ============================================================
+
+// 現場ドラフト(SKILL_DRAFTS_)を下書きとして一括取り込み（冪等：本文が既存に無いものだけ）
+function skillImportDrafts_() {
+  if (typeof SKILL_DRAFTS_ === 'undefined' || !SKILL_DRAFTS_.length) return { ok: false, error: '取り込む下書きがありません' };
+  var sh = skillEnsureQCols_();
+  var seen = {}; skillQuestionsAll_(null).forEach(function (x) { seen[String(x.q).replace(/\s/g, '')] = true; });
+  var now = skillNow_();
+  var rows = SKILL_DRAFTS_.filter(function (d) { return !seen[String(d[1]).replace(/\s/g, '')]; })
+    .map(function (d) {
+      // d = [カテゴリ, 問題, 選1..4, 正解(1-4), 初期メモ]
+      var note = d[7] ? ('[取込 ' + now.slice(5, 16) + '] ' + d[7]) : '';
+      return [skillId_('Q'), '未分類', d[0], d[1], d[2], d[3], d[4], d[5], d[6], 1, false, now, '下書き', note];
+    });
+  if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, SKILL_Q_HEAD_.length).setValues(rows);
+  return { ok: true, added: rows.length, total: SKILL_DRAFTS_.length };
+}
+
+function skillQRow_(id) {
+  var all = skillQuestionsAll_(null);
+  return all.filter(function (x) { return x.id === id; })[0] || null;
+}
+
+// レビューコメントを追記（キャッチボール）。by=管理者名。下書きなら状態を確認中へ。
+function skillAdminReviewNote_(id, note, by) {
+  if (!id || !String(note || '').trim()) return { ok: false, error: 'コメントが空です' };
+  var hit = skillQRow_(id); if (!hit) return { ok: false, error: '対象が見つかりません' };
+  var sh = skillEnsureQCols_();
+  var line = '[' + skillNow_().slice(5, 16) + ' ' + (by || '管理者') + '] ' + String(note).trim();
+  var next = hit.review ? (hit.review + '\n' + line) : line;
+  sh.getRange(hit.row, 14).setValue(next);
+  if (hit.status === '下書き' || hit.status === '') sh.getRange(hit.row, 13).setValue('確認中');
+  return { ok: true, review: next };
+}
+
+// 正解を変更（キャッチボールの結論を反映）
+function skillAdminSetAnswer_(id, answer) {
+  var a = Number(answer) || 0; if (a < 1 || a > 4) return { ok: false, error: '正解は選択肢1〜4' };
+  var hit = skillQRow_(id); if (!hit) return { ok: false, error: '対象が見つかりません' };
+  skillEnsureQCols_().getRange(hit.row, 9).setValue(a);
+  return { ok: true, answer: a };
+}
+
+// 状態を変更（下書き/確認中/確定）
+function skillAdminSetStatus_(id, status) {
+  var hit = skillQRow_(id); if (!hit) return { ok: false, error: '対象が見つかりません' };
+  skillEnsureQCols_().getRange(hit.row, 13).setValue(String(status || ''));
+  return { ok: true, status: String(status || '') };
+}
+
+// 確定して級へ投入：級を割り当て・有効化・状態=確定 ＝ 本番の受験に載る
+function skillAdminFinalize_(id, grade) {
+  if (!grade || grade === '未分類') return { ok: false, error: '級を選んでください' };
+  if (!skillGradeCfg_(grade)) return { ok: false, error: 'その級はありません: ' + grade };
+  var hit = skillQRow_(id); if (!hit) return { ok: false, error: '対象が見つかりません' };
+  var sh = skillEnsureQCols_();
+  sh.getRange(hit.row, 2).setValue(grade);   // 級
+  sh.getRange(hit.row, 11).setValue(true);   // 有効
+  sh.getRange(hit.row, 13).setValue('確定'); // 状態
+  return { ok: true, grade: grade };
 }

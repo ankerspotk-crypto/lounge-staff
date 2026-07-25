@@ -1358,6 +1358,12 @@ function handleApiRequest_(body) {
   if (body.action === 'skillDeleteQuestion') { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminDeleteQuestion_(body.id); }
   if (body.action === 'skillSaveGrade')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminSaveGrade_(body.g); }
   if (body.action === 'skillSeedDefaults')   { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillSeedDefaults_(body.grade); }
+  // 🛠 問題ビルダー（下書き取り込み → 1問ずつキャッチボール → 確定して級へ投入）
+  if (body.action === 'skillImportDrafts')   { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillImportDrafts_(); }
+  if (body.action === 'skillReviewNote')     { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminReviewNote_(body.id, body.note, _an); }
+  if (body.action === 'skillSetAnswer')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminSetAnswer_(body.id, body.answer); }
+  if (body.action === 'skillSetStatus')      { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminSetStatus_(body.id, body.status); }
+  if (body.action === 'skillFinalize')       { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return skillAdminFinalize_(body.id, body.grade); }
   // 📝 スキルテスト受験（ポータル：黒服＋管理者が受験。本人はuserIdの名前で解決＝なりすまし不可）
   if (body.action === 'skillStart')  { const _sn = getStaffName(body.userId); if (!_sn) return { ok: false, error: 'unregistered' }; return gunshiSkillStart(_sn, body.grade); }
   if (body.action === 'skillSubmit') { const _sn = getStaffName(body.userId); if (!_sn) return { ok: false, error: 'unregistered' }; return gunshiSkillSubmit(_sn, body.grade, body.answers); }
