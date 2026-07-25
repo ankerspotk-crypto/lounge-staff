@@ -1315,7 +1315,7 @@ function drawSkill(){
   // 🛠 問題ビルダー（下書き＝未分類/無効）
   var drafts=(questions||[]).filter(function(q){ return q.draft; });
   var draftAvail=skAdm.draftsAvailable||0;
-  var importBtn=draftAvail>0 ? '<button class="btn pri" onclick="skImportDrafts()">📥 現場ドラフトを取り込む（'+draftAvail+'問）</button>' : '';
+  var importBtn=draftAvail>0 ? '<button class="btn pri" onclick="skImportDrafts()">🔄 下書きを最新版に入れ替え（'+draftAvail+'問）</button>' : '';
   var builderBody=drafts.length ? drafts.map(function(q,i){ return skBuilderCard_(q,i+1,grades); }).join('')
     : '<div class="empty" style="padding:10px;color:var(--dim)">下書きはありません。「📥 現場ドラフトを取り込む」で読み込めます。</div>';
   var builderHtml='<div class="sec-t" style="margin-top:18px">🛠 問題ビルダー（レビュー）<span style="font-weight:400;color:var(--dim);font-size:12px">　下書きを1問ずつ確認→確定して級へ</span></div>'
@@ -1422,9 +1422,9 @@ function skBuilderCard_(q,num,grades){
       +'<button class="btn" style="padding:5px 10px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">🗑</button></div></div>';
 }
 function skImportDrafts(){
-  if(!confirm('現場ドラフトを下書きとして取り込みます。（重複はスキップ・受験には出ません）')) return;
+  if(!confirm('下書き（未分類）を最新の現場ドラフトに総入れ替えします。\n・確定済み（級に入れた問題）には影響しません\n・受験には出ません')) return;
   api('skillImportDrafts',{}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'取込に失敗'); return; }
-    alert('取り込みました（追加'+(r.added||0)+'問／全'+(r.total||0)+'問）。'); renderSkillTest();
+    alert('入れ替えました（投入'+(r.added||0)+'問／旧下書き削除'+(r.removed||0)+'問）。'); renderSkillTest();
   }).catch(function(){ alert('通信エラー'); });
 }
 function skSetAnswer(id,n){
@@ -3117,7 +3117,7 @@ function MOCKAPI(action,body){
   }
   if(action==='skillSaveQuestion'||action==='skillDeleteQuestion'||action==='skillSaveGrade') return {ok:true};
   if(action==='skillSeedDefaults') return {ok:true,grade:body.grade,added:13,removedSamples:2};
-  if(action==='skillImportDrafts') return {ok:true,added:40,total:40};
+  if(action==='skillImportDrafts') return {ok:true,added:40,removed:42};
   if(action==='skillReviewNote'||action==='skillSetAnswer'||action==='skillSetStatus'||action==='skillFinalize') return {ok:true,grade:body.grade,answer:body.answer};
   if(action==='awardAdminData'){
     return {ok:true, month:(body.month||'2026-07'),

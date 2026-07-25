@@ -417,20 +417,27 @@ function skillAdminSaveGrade_(g) {
 //   下書き＝級'未分類'・有効FALSE・状態'下書き'（本番の受験には出ない）。
 // ============================================================
 
-// 現場ドラフト(SKILL_DRAFTS_)を下書きとして一括取り込み（冪等：本文が既存に無いものだけ）
+// 現場ドラフト(SKILL_DRAFTS_)を下書きとして一括取り込み＝総入れ替え。
+//   既存の「未分類（＝下書き中）」を全削除 → 最新の SKILL_DRAFTS_ を投入。
+//   ⚠️確定済み（級='初級/中級/上級'）には一切触らない＝受験中の本番問題は無傷。
 function skillImportDrafts_() {
   if (typeof SKILL_DRAFTS_ === 'undefined' || !SKILL_DRAFTS_.length) return { ok: false, error: '取り込む下書きがありません' };
   var sh = skillEnsureQCols_();
-  var seen = {}; skillQuestionsAll_(null).forEach(function (x) { seen[String(x.q).replace(/\s/g, '')] = true; });
+  // 既存の未分類（下書き）を下から削除（行ズレ防止）
+  var delRows = skillQuestionsAll_(null)
+    .filter(function (x) { return x.grade === '未分類'; })
+    .map(function (x) { return x.row; })
+    .sort(function (a, b) { return b - a; });
+  delRows.forEach(function (r) { sh.deleteRow(r); });
+  // 最新の下書きを投入（級='未分類'・有効FALSE＝受験には出ない）
   var now = skillNow_();
-  var rows = SKILL_DRAFTS_.filter(function (d) { return !seen[String(d[1]).replace(/\s/g, '')]; })
-    .map(function (d) {
-      // d = [カテゴリ, 問題, 選1..4, 正解(1-4), 初期メモ]
-      var note = d[7] ? ('[取込 ' + now.slice(5, 16) + '] ' + d[7]) : '';
-      return [skillId_('Q'), '未分類', d[0], d[1], d[2], d[3], d[4], d[5], d[6], 1, false, now, '下書き', note];
-    });
+  var rows = SKILL_DRAFTS_.map(function (d) {
+    // d = [カテゴリ, 問題, 選1..4, 正解(1-4), 初期メモ]
+    var note = d[7] ? ('[取込 ' + now.slice(5, 16) + '] ' + d[7]) : '';
+    return [skillId_('Q'), '未分類', d[0], d[1], d[2], d[3], d[4], d[5], d[6], 1, false, now, '下書き', note];
+  });
   if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, SKILL_Q_HEAD_.length).setValues(rows);
-  return { ok: true, added: rows.length, total: SKILL_DRAFTS_.length };
+  return { ok: true, added: rows.length, removed: delRows.length };
 }
 
 function skillQRow_(id) {
