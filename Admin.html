@@ -1291,18 +1291,26 @@ function drawSkill(){
   var qByGrade={}; questions.forEach(function(q){ (qByGrade[q.grade]=qByGrade[q.grade]||[]).push(q); });
   var qSecs=grades.map(function(g){
     var arr=qByGrade[g.grade]||[];
-    var list=arr.length? arr.map(function(q){
-      var correct=q.choices[(q.answer||1)-1]||'';
-      return '<div class="lrow" style="align-items:flex-start;gap:8px">'
-        +'<div class="main"><div>'+(q.active===false?'<span class="chip" style="color:#ff9a9a;border-color:#5a2226">停止</span> ':'')+(q.cat?'<span class="chip">'+esc(q.cat)+'</span> ':'')+esc(q.q)+'</div>'
-        +'<div style="font-size:12px;color:var(--dim);margin-top:2px">正解：'+esc(correct)+'　（'+ (q.points||1) +'点）</div></div>'
-        +'<div style="display:flex;gap:4px;flex:none"><button class="btn" style="padding:5px 9px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">編集</button>'
-        +'<button class="btn" style="padding:5px 9px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">削除</button></div></div>';
+    var list=arr.length? arr.map(function(q,qi){
+      var ci=(q.answer||1);
+      var choicesHtml=(q.choices||[]).map(function(ch,k){
+        if(ch===''||ch==null) return '';
+        var isC=(k+1)===ci;
+        return '<div style="display:flex;align-items:flex-start;gap:7px;font-size:12.5px;margin-top:3px;'+(isC?'color:#7fd18b;font-weight:600':'color:var(--dim)')+'">'
+          +'<span style="width:15px;flex:none;text-align:center">'+(isC?'✓':(k+1))+'</span><span>'+esc(ch)+'</span></div>';
+      }).join('');
+      return '<div class="lrow" style="align-items:flex-start;gap:8px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:10px;margin-bottom:2px">'
+        +'<div class="main"><div style="font-size:13.5px;line-height:1.5"><b style="color:#b8934e">Q'+(qi+1)+'.</b> '+(q.active===false?'<span class="chip" style="color:#ff9a9a;border-color:#5a2226">停止</span> ':'')+(q.cat?'<span class="chip">'+esc(q.cat)+'</span> ':'')+esc(q.q)+'</div>'
+        +choicesHtml
+        +(q.points&&q.points!==1?'<div style="font-size:11px;color:var(--dim);margin-top:3px">配点 '+q.points+'</div>':'')+'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px;flex:none"><button class="btn" style="padding:5px 11px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">✏️ 編集</button>'
+        +'<button class="btn" style="padding:5px 11px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">削除</button></div></div>';
     }).join('') : '<div class="empty" style="padding:8px;color:var(--dim)">まだ問題がありません</div>';
     var seedBtn = ((skAdm.defaults||[]).indexOf(g.grade)>=0)
       ? '<button class="btn" style="margin-left:8px" onclick="skSeedDefaults(\''+esc(g.grade)+'\')">📥 定番問題を投入</button>' : '';
-    return '<div class="sec"><div class="sec-t">'+esc(g.grade)+'　<span style="font-weight:400;color:var(--dim);font-size:12px">'+arr.length+'問（合格ライン '+g.pass+'%・出題'+(g.count>0?g.count+'問':'全問')+'）</span></div>'
-      +list+'<div style="margin-top:8px"><button class="btn" onclick="skNewQ(\''+esc(g.grade)+'\')">＋ この級に問題を追加</button>'+seedBtn+'</div></div>';
+    var unlockTxt = g.unlock? ('・'+g.unlock+'資格') : '';
+    return '<div class="sec"><div class="sec-t">'+esc(g.grade)+'テスト　<span style="font-weight:400;color:var(--dim);font-size:12px">'+arr.length+'問｜合格ライン '+g.pass+'%｜出題'+(g.count>0?g.count+'問':'全問')+unlockTxt+'</span></div>'
+      +list+'<div style="margin-top:10px"><button class="btn pri" onclick="skNewQ(\''+esc(g.grade)+'\')">＋ この級に問題を追加</button>'+seedBtn+'</div></div>';
   }).join('');
   setBody(
     '<div class="hint">合格した級が時給の<b>維持・アップ</b>の資格になります。判定はここに出ますが、<b>実際の時給の改定は人が確定</b>します（自動では変えません）。受験は軍師の「📝 スキルテスト」から。</div>'
@@ -1311,7 +1319,8 @@ function drawSkill(){
     +'<div class="sec"><div class="sec-t">🪜 級の設定 <span style="font-weight:400;color:var(--dim);font-size:12px">解放資格で「維持／アップ」を切り分け</span></div>'
       +gRows+'<div style="margin-top:8px"><button class="btn" onclick="skAddGrade()">＋ 級を追加</button><button class="btn pri" style="margin-left:8px" onclick="skSaveGrades()">💾 級を保存</button></div></div>'
     +(skQEdit?skQFormHtml_():'')
-    +'<div class="sec-t" style="margin-top:18px">🗂 問題の管理</div>'
+    +'<div class="sec-t" style="margin-top:18px">🗂 問題の一覧・編集</div>'
+    +'<div class="hint">各テスト（級）の全問題を、選択肢と正解（<span style="color:#7fd18b">✓</span>）つきで表示。「✏️ 編集」で問題文・選択肢・正解を直せます。「＋ 追加」で新しい問題、「🗑 削除」で不要な問題を消せます。</div>'
     +qSecs
   );
 }
