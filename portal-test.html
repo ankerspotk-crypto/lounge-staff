@@ -994,7 +994,7 @@ var SECTIONS = {
   wine:     { t:'シャンパン・ワイン在庫', i:'🍾' },
   skill:    { t:'スキルテスト',   i:'📝' },
   requests: { t:'申請管理',     i:'📥' },
-  shiftmgmt:{ t:'シフト管理',   i:'🗂' },
+  shiftmgmt:{ t:'全員シフト',   i:'📋' },
   notif:    { t:'通知設定',     i:'🔔' },
   cashset:  { t:'軍師設定',     i:'⚙️' }
 };
@@ -1047,11 +1047,12 @@ function homeMenu() {
   var html = '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
   if (isAdmin) {
-    // 管理者機能(申請管理/シフト管理/通知設定/軍師設定)は管理コンソール(Admin.html)へ集約済み。
-    // ポータルには管理者メニューを出さない。代理(キャスト選択)バーは別系統なので従来通り動く。
-    html += '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:20px 2px 8px">管理者の方へ</div>'
-      + '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:14px;font-size:13px;color:#cbb98a;line-height:1.7">'
-      + '申請管理・シフト管理・通知設定・軍師設定などの管理機能は<b style="color:#f2ead9">管理コンソール</b>に集約しました。管理コンソールからご利用ください。</div>';
+    // 管理者・りく専用：全員シフト（閲覧＋修正）をポータルからも使えるようにする（2026-07-27 ボス指示）。
+    //   ゲートはサーバ側 isAdmin_（管理者ロール＋りく）＝ここに出るのは管理者/りくだけ。
+    //   申請管理・通知設定・軍師設定は従来どおり管理コンソールに集約。
+    html += '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:20px 2px 8px">管理者・りく 専用</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + menuBtn('shiftmgmt') + '</div>'
+      + '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:12px;font-size:12px;color:#cbb98a;line-height:1.6;margin-top:10px">その他の管理機能（申請管理・通知設定・軍師設定）は<b style="color:#f2ead9">管理コンソール</b>に集約しています。</div>';
   }
   return html;
 }
@@ -5955,11 +5956,14 @@ var smgmtData = null;
 var smgmtEditTarget = null; // {name, date, curVal}
 var smgmtAddRole = '';
 var smgmtViewStart = -1; // -1=未初期化（初回は今日から）
+var smgmtViewMode = 'day'; // 'day'=日ごとリスト / 'week'=週グリッド（全員シフト・管理者+りく用）
+var smgmtDayIdx = -1;       // 日ごと表示の対象日インデックス（-1=今日）
 var DOW_JA = ['日','月','火','水','木','金','土'];
 var ROLE_ORDER = ['キャスト','体験','派遣','黒服社員','黒服バイト','黒服'];
 
 function loadShiftMgmt() {
   smgmtViewStart = -1;
+  smgmtDayIdx = -1;
   setContent('<div class="loading">読み込み中...</div>');
   gasFetch(GAS_URL + '?action=portal&tab=shiftMgmt&userId=' + encodeURIComponent(userId))
     .then(function(r) { return r.json(); })
@@ -5989,6 +5993,7 @@ function smgmtGoToday() {
 
 function renderShiftMgmt() {
   if (!smgmtData) { loadShiftMgmt(); return; }
+  if (smgmtViewMode === 'day') { renderShiftMgmtDay(); return; }
   var headers = smgmtData.headers || []; // ['6/1','6/2',...]
   var rows = smgmtData.rows || [];
   var today = new Date();
@@ -6075,6 +6080,7 @@ function renderShiftMgmt() {
   });
 
   var html = '<div class="smgmt-wrap">'
+    + smgmtViewToggle()
     + '<div class="smgmt-nav">'
     + '<button class="smgmt-nav-btn" onclick="smgmtNavWeek(-1)"' + (canPrev ? '' : ' disabled style="opacity:.3"') + '>◀</button>'
     + '<div style="text-align:center;flex:1">'
@@ -6086,12 +6092,32 @@ function renderShiftMgmt() {
     + '<div class="smgmt-grid-outer" id="smgmt-grid-outer">'
     + '<table class="smgmt-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>'
     + '</div>'
-    + '<div class="smgmt-actions">'
+    + smgmtActionsHtml_()
+    + '</div>'
+    + smgmtEditSheetHtml_();
+
+  setContent(html);
+}
+
+// 全員シフトの表示トグル（日ごと / 週表示）。両ビュー共通で先頭に置く。
+function smgmtViewToggle() {
+  var mk = function(m, label){ var on = (smgmtViewMode === m);
+    return '<button onclick="smgmtSetView(\'' + m + '\')" style="flex:1;padding:9px;border-radius:9px;border:1px solid ' + (on?'#c9a459':'#33291a') + ';background:' + (on?'#2a2110':'none') + ';color:' + (on?'#f2ead9':'#94886a') + ';font-size:13px;font-weight:700;cursor:pointer">' + label + '</button>'; };
+  return '<div style="display:flex;gap:8px;margin-bottom:12px">' + mk('day','📋 日ごと') + mk('week','🗓 週表示') + '</div>';
+}
+function smgmtSetView(m){ smgmtViewMode = m; renderShiftMgmt(); }
+function smgmtNavDay(delta){ smgmtDayIdx = (smgmtDayIdx < 0 ? 0 : smgmtDayIdx) + delta; renderShiftMgmt(); }
+function smgmtGoTodayDay(){ var h = (smgmtData && smgmtData.headers) || []; var d = new Date(); var t = (d.getMonth()+1) + '/' + d.getDate(); var i = h.indexOf(t); smgmtDayIdx = i >= 0 ? i : 0; renderShiftMgmt(); }
+
+// 追加ボタン・編集シートは日/週ビュー共通（片方しか描画されないのでID重複は起きない）
+function smgmtActionsHtml_() {
+  return '<div class="smgmt-actions">'
     + '<button class="primary" onclick="openAddStaff(\'派遣\')">＋ 派遣追加</button>'
     + '<button onclick="openAddStaff(\'体験\')">＋ 体験追加</button>'
-    + '</div>'
-    + '</div>'
-    + '<div class="smgmt-sheet-backdrop" id="smgmt-backdrop" onclick="closeShiftEdit()"></div>'
+    + '</div>';
+}
+function smgmtEditSheetHtml_() {
+  return '<div class="smgmt-sheet-backdrop" id="smgmt-backdrop" onclick="closeShiftEdit()"></div>'
     + '<div class="smgmt-sheet" id="smgmt-sheet">'
     + '<div class="smgmt-sheet-title" id="smgmt-sheet-title"></div>'
     + '<div class="smgmt-opts" id="smgmt-opts"></div>'
@@ -6104,7 +6130,63 @@ function renderShiftMgmt() {
     + '<button class="save" onclick="saveShiftCell()">保存</button>'
     + '</div>'
     + '</div>';
+}
 
+// 📋 日ごと表示：日付を1日ずつ選び、その日の出勤者を役割別に一覧（タップで編集）。スマホ向き。
+function renderShiftMgmtDay() {
+  var headers = smgmtData.headers || [];
+  var rows = smgmtData.rows || [];
+  var today = new Date();
+  var todayStr = (today.getMonth()+1) + '/' + today.getDate();
+  if (smgmtDayIdx < 0) { var ti = headers.indexOf(todayStr); smgmtDayIdx = ti >= 0 ? ti : 0; }
+  smgmtDayIdx = Math.max(0, Math.min(Math.max(0, headers.length - 1), smgmtDayIdx));
+  var day = headers[smgmtDayIdx] || todayStr;
+  var pp = String(day).split('/'), mo = parseInt(pp[0]), dd = parseInt(pp[1]);
+  var dow = (mo && dd) ? DOW_JA[new Date(today.getFullYear(), mo-1, dd).getDay()] : '';
+  var dateLabel = mo + '月' + dd + '日（' + dow + '）';
+  var canPrev = smgmtDayIdx > 0, canNext = smgmtDayIdx < headers.length - 1;
+
+  var groups = {}; ROLE_ORDER.forEach(function(r){ groups[r] = []; });
+  rows.forEach(function(row){ var r = row.role || 'キャスト'; if (!groups[r]) groups[r] = []; groups[r].push(row); });
+  var displayGroups = [
+    { label:'キャスト', members: groups['キャスト'] || [] },
+    { label:'体験',    members: groups['体験'] || [] },
+    { label:'派遣',    members: groups['派遣'] || [] },
+    { label:'黒服',    members: (groups['黒服社員']||[]).concat(groups['黒服バイト']||[]).concat(groups['黒服']||[]) }
+  ];
+  var cf = 0, pd = 0;
+  var listHtml = displayGroups.map(function(g){
+    var items = (g.members || []).map(function(row){
+      var val = (row.cells && row.cells[day]) || '';
+      var pend = (!val && row.pending && row.pending[day]) || '';
+      if (!val && !pend) return '';
+      var rest = (val === '休み');
+      if (val && !rest) cf++; else if (pend) pd++;
+      var disp = val ? (rest ? '休み' : esc(val)) : ('<span style="color:#ccaa44">申 ' + esc(pend) + '</span>');
+      return '<div onclick="openShiftEdit(\'' + esc(row.name) + '\',\'' + day + '\',\'' + esc(val) + '\')" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 13px;border-radius:9px;border:1px solid #2a2318;background:' + (rest?'#181209':'#16130d') + ';margin-bottom:6px;cursor:pointer">'
+        + '<span style="font-size:14px;color:' + (rest?'#8a7a5a':'#f2ead9') + '">' + esc(row.name) + '</span>'
+        + '<span style="font-size:13px;color:' + (rest?'#6a5a3a':'#e6cf95') + '">' + disp + '</span></div>';
+    }).filter(Boolean).join('');
+    if (!items) return '';
+    return '<div style="margin-bottom:15px"><div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:0 2px 7px">' + g.label + '</div>' + items + '</div>';
+  }).join('');
+  if (!listHtml) listHtml = '<div style="text-align:center;color:#7a6a4a;padding:34px 10px">この日の出勤予定はまだありません</div>';
+
+  var html = '<div class="smgmt-wrap">'
+    + smgmtViewToggle()
+    + '<div class="smgmt-nav">'
+    + '<button class="smgmt-nav-btn" onclick="smgmtNavDay(-1)"' + (canPrev?'':' disabled style="opacity:.3"') + '>◀</button>'
+    + '<div style="text-align:center;flex:1">'
+    + '<div style="font-size:15px;font-weight:700;color:#f2ead9">' + dateLabel + (day===todayStr?' <span style="font-size:11px;color:#88ffcc">今日</span>':'') + '</div>'
+    + '<div style="font-size:11px;color:#94886a;margin-top:2px">出勤 ' + cf + '名' + (pd?'　申請中 ' + pd:'') + '</div>'
+    + (day!==todayStr?'<button onclick="smgmtGoTodayDay()" style="margin-top:5px;font-size:11px;background:none;border:1px solid #8a6d3a;color:#e6cf95;border-radius:6px;padding:2px 12px;cursor:pointer">今日へ</button>':'')
+    + '</div>'
+    + '<button class="smgmt-nav-btn" onclick="smgmtNavDay(1)"' + (canNext?'':' disabled style="opacity:.3"') + '>▶</button>'
+    + '</div>'
+    + '<div style="margin-top:14px">' + listHtml + '</div>'
+    + smgmtActionsHtml_()
+    + '</div>'
+    + smgmtEditSheetHtml_();
   setContent(html);
 }
 
