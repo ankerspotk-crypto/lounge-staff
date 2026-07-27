@@ -1746,6 +1746,15 @@ function handleReceiptImage_(event) {
       } else if (dt === '領収書' && (ai.issuer || ai.amount)) {
         recordReceipt_(bizDate, ai, file.getUrl());
         extraLine = '\n🧾 領収書: ' + (ai.issuer || '発行元不明') + ' / ¥' + yenComma_(ai.amount) + (ai.note ? ' / ' + ai.note : '') + (ai.date ? ' / ' + ai.date : '') + '\n→「領収書記録」シートに記録しました。';
+      } else if (dt === '公共料金' && (ai.issuer || ai.amount)) { // 電気/ガス/水道等の払込受領証 → 経費（領収書記録）へ。5F/2F・請求月を但し書きに残す＝同額2契約でも見分けられる
+        const utilLabel = ({ 'ガス': 'ガス代', '電気': '電気代', '水道': '水道代', '通信': '通信費' })[String(ai.utility || '').trim()] || (ai.utility ? String(ai.utility) + '代' : '光熱費');
+        const uBits = [utilLabel];
+        if (ai.billing_month) uBits.push(String(ai.billing_month) + '分');
+        if (ai.floor) uBits.push(String(ai.floor));
+        if (ai.customer_no) uBits.push('お客さま番号 ' + String(ai.customer_no));
+        const uNote = uBits.join(' ') + (ai.note ? ' ' + ai.note : '');
+        recordReceipt_(bizDate, { issuer: ai.issuer, amount: ai.amount, note: uNote, date: ai.date }, file.getUrl());
+        extraLine = '\n⚡ 公共料金: ' + (ai.issuer || '事業者不明') + ' / ¥' + yenComma_(ai.amount) + ' / ' + uNote + '\n→「領収書記録」シート（経費）に記録しました。閉店チェックの伝票（経費袋の出金）にも自動で乗ります。';
       } else if (ai && (ai.payee || ai.amount)) { // 日払い受領書
         recordDailyPayment_(bizDate, ai, file.getUrl());
         const amtStr = (ai.amount != null && ai.amount !== '') ? '¥' + yenComma_(ai.amount) : '（金額不明）';
@@ -3179,9 +3188,10 @@ function extractReceiptWithGemini_(blob) {
   const mime = blob.getContentType() || 'image/jpeg';
   const thisYear = Utilities.formatDate(new Date(), TZ, 'yyyy');
   const prompt = 'これは店舗で受け取った書類の写真です。まず書類の種類(doc_type)を判定し、種類に応じた項目をJSONだけで返してください（説明・コードブロック不要）。年が書かれていなければ ' + thisYear + ' を使う。金額は¥やカンマを除いた整数。日付はyyyy-MM-dd（和暦→西暦）。読めない項目はnullまたは空。\n' +
-    'doc_typeは次のいずれか: "会計伝票" / "日払い受領書" / "領収書" / "納品書" / "品薄伝票" / "その他"。\n' +
+    'doc_typeは次のいずれか: "会計伝票" / "日払い受領書" / "領収書" / "公共料金" / "納品書" / "品薄伝票" / "その他"。\n' +
     '【最優先ルール】書類に「報酬」「日払い」「給料」「給与」など、店がキャスト・スタッフへ支払う報酬に関する記載があれば、発行元や体裁・宛名に関わらず必ず doc_type を "日払い受領書" にすること（領収書にしない）。\n' +
     'それ以外で「会計伝票」「お会計伝票」の見出しがあり、テーブル・人数・注文明細・合計が並ぶお客様の会計なら doc_type を "会計伝票" にする（写真に印字伝票と手書き伝票の両方が写っていることが多い）。\n\n' +
+    '「払込受領証」「請求書兼コンビニエンスストア等専用払込受領証」の見出し、または「お客さま番号」「ご請求年月」＋電気・ガス・水道の事業者名（東邦ガス／中部電力／上下水道 等）がそろう書類は、必ず doc_type を "公共料金" にすること（"領収書"にしない）。\n\n' +
     '■会計伝票（お客様の会計。POSレジ印字の「会計伝票」＋手書きの「お会計伝票」）:\n' +
     '{"doc_type":"会計伝票","customer":"お客様名（手書きの「お客様」欄。会員番号・担当/同伴キャスト名・「様」は含めず、お客様の姓のみ 例:新美。お客様欄が空欄ならnull）","table":"POS印字伝票のテーブル 例:2FBOX1、離れBOX1","pos_count":POS印字伝票の人数（整数）,"pos_total":POS印字の合計金額（整数）,"hand_count":手書き伝票の人数（整数。無ければnull）,"cast_drink_pos":POS印字のキャストドリンク合計本数（整数。無ければnull）,"cast_drink_hand":手書き伝票のキャストドリンク本数＝指名キャストの数（整数。無ければnull）,"soda_pos":POS印字の炭酸の点数（整数。無ければnull）,"soda_hand":手書き伝票の炭酸の本数（数量欄の正の字を数える。無ければnull）,"check_issues":["手書きにあってPOS注文に反映されていない品目を短い日本語で列挙。無ければ空配列"]}\n' +
     '【正の字（画線法）の数え方】手書きの数量欄が「正」の字なら、正1つ＝5、書きかけの正はその画数で数える（一=1, 丅=2, 下=3, 疋=4, 正=5）。例:「正 一」＝5+1＝6、「正 正 三」＝5+5+3＝13。炭酸などの本数はこの方法で正確に数える。\n' +
@@ -3194,6 +3204,8 @@ function extractReceiptWithGemini_(blob) {
     '{"doc_type":"日払い受領書","payee":"受け取った本人の氏名（枠外・余白の手書き署名。宛名欄の店名ではない。様は付けない）","amount":金額整数（★☆¥や末尾のー-也は除く。紙幣は使わない。桁を変えない 例★¥20,000ー→20000）,"cash_total":写真に写る紙幣の合計（額面×枚数。無ければnull）,"cash_detail":"紙幣内訳 例:10000円×2","note":"但し書き","date":"日付"}\n\n' +
     '■領収書（店が支払った領収書。発行元の店名/会社名がある）:\n' +
     '{"doc_type":"領収書","issuer":"発行元（誰から。店名/会社名）","amount":金額整数,"note":"但し書き","date":"日付"}\n\n' +
+    '■公共料金（電気・ガス・水道等の払込受領証／請求書。「払込受領証」の見出しや、「ご契約者」「お客さま番号」「ご請求年月」「ご請求金額」があり、東邦ガス・中部電力・上下水道等の事業者名がある。コンビニ受領印が押されていることが多い）:\n' +
+    '{"doc_type":"公共料金","issuer":"事業者名（例:東邦ガス株式会社）","utility":"種別。ガス/電気/水道/通信 のいずれか（事業者名や明細から判定）","amount":ご請求金額の整数,"floor":"店舗フロア。契約者名や使用場所の「サンロード5F」「…ビル5F」等から 5F か 2F（読めなければ空）","billing_month":"ご請求年月（例:2026年7月）","customer_no":"お客さま番号（例:00-1384-1924。先頭ゼロも桁そのまま。無ければ空）","date":"支払日＝コンビニ受領印の日付をyyyy-MM-dd（年が2桁なら20xx。受領印が無ければ請求年月の末日）","note":"補足があれば。無ければ空"}\n\n' +
     '■納品書（仕入先からの納品書。商品明細の表がある）:\n' +
     '{"doc_type":"納品書","supplier":"仕入先の会社名","date":"出荷/納品日","slip_no":"伝票No","total":総合計金額整数,"items":[{"code":"商品名の先頭にある商品コード番号（数字のみ。例 001808 や 118365。先頭ゼロも省かず桁そのまま。同じ番号が2回並ぶ時は片方。無ければ空文字）","name":"商品名（先頭の商品コード番号は除く）","volume":"容量 例:700ML","pack":入数（整数。無ければnull）,"cases":ケース数（整数。無ければ0）,"pieces":バラ数（整数。無ければ0）,"unit_price":単価整数,"amount":金額整数}]}\n' +
     '（納品書の数量はケース列とバラ列に分かれる。ケース×入数＋バラ が実本数。cases/pieces/pack を正確に読む。明細行はすべて漏れなく含める。code は発注との突合キーなので先頭ゼロを含め正確に。）\n\n' +
