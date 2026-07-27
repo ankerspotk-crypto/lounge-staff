@@ -7590,17 +7590,80 @@ function submitShift(payload) {
       }
     } else {
       const writeVal = isKyukin ? '休み' : s.time;
+      // ⚠️2026-07-27 修理: 旧版は先に申請を「承諾」で書き、writeShiftCell_ の失敗を errors に積むだけで
+      //   autoApproved に入れていた＝シフト表に書けなくても「承諾」と表示され、通知にもスプシにも出ない幽霊が
+      //   無言で発生していた（例: ちな／きさき）。→ 書き込み結果でステータスを分け、失敗は黒服へ警告する。
+      let r;
+      try { r = writeShiftCell_(name, s.date, writeVal); }
+      catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
       const newRow = sh.getLastRow() + 1;
       sh.getRange(newRow, 3).setNumberFormat('@');
-      sh.getRange(newRow, 1, 1, 7).setValues([[now, name, s.date, s.time, '承諾', now, role]]);
-      const r = writeShiftCell_(name, s.date, writeVal);
-      if (!r.ok) errors.push(s.date + ': ' + r.error);
-      autoApproved.push(s.date); // シフト表列がなくても承諾扱い（シフト申請に記録済み）
+      sh.getRange(newRow, 1, 1, 7).setValues([[now, name, s.date, s.time, r.ok ? '承諾' : 'シフト表未反映', r.ok ? now : '', role]]);
+      if (r.ok) {
+        autoApproved.push(s.date);
+      } else {
+        errors.push(s.date + ': ' + r.error);
+        try {
+          const KF = prop('GROUP_KUROFUKU');
+          if (KF) push_(KF, '⚠️【シフト未反映】' + name + 'さん ' + s.date + ' の提出をシフト表に書けませんでした。\n理由: ' + r.error + '\n→名簿の登録をご確認ください（軍師「➕派遣/体験を追加」またはコンソールで名簿を修正）。');
+        } catch (e2) {}
+      }
     }
     written.push(s.date);
   });
 
   return { ok: true, name, written, autoApproved, pending: written.length - autoApproved.length, errors };
+}
+
+// ============================================================
+// シフト表の幽霊回収（2026-07-27・Stage0b）
+// ------------------------------------------------------------
+// 「シフト申請には承諾で入っているのに、シフト表に行が無い」人を回収する。
+// 原因: 旧 submitShift が writeShiftCell_ の失敗を握り潰して承諾扱いにしていた（例: ちな・きさき）。
+// 対象: ステータスが「シフト表未反映」の申請、または「承諾」なのにシフト表に行が全く無い人の申請だけ。
+//   → 名簿を根拠に行を自動生成する writeShiftCell_ で書き直す。既にシフト表に居る人の承諾は触らない
+//     （黒服の手編集を壊さないため）。GASエディタから RECON_shiftGhosts を ▶ 実行すれば結果を返す。
+// 冪等: 成功したら申請のステータスを「承諾」に直す。二度流しても無害。名簿に居ない人は failed に残す。
+// ============================================================
+function RECON_shiftGhosts() {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(SHIFT_REQUEST_TAB);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, scanned: 0, fixed: 0, failed: [], note: '申請なし' };
+  const rows = sh.getDataRange().getValues(); // [提出日時, 名前, 日付, 希望シフト, ステータス, 処理日時, 役割]
+  const inSheetCache = {}; // shiftNameKey -> シフト表に行があるか（1回だけ判定してメモ）
+  const isInSheet = (name) => {
+    const k = shiftNameKey_(name);
+    if (k in inSheetCache) return inSheetCache[k];
+    return (inSheetCache[k] = isStaffInShiftSheet_(name));
+  };
+  let scanned = 0, fixed = 0;
+  const failed = [];
+  for (let i = 1; i < rows.length; i++) {
+    const name   = String(rows[i][1] || '').trim();
+    const date   = String(rows[i][2] || '').trim();
+    const want   = String(rows[i][3] || '').trim();
+    const status = String(rows[i][4] || '').trim();
+    if (!name || !date) continue;
+    const isUnreflected   = (status === 'シフト表未反映');
+    const isGhostApproved = (status === '承諾' && !isInSheet(name));
+    if (!isUnreflected && !isGhostApproved) continue;
+    scanned++;
+    const writeVal = (want === '欠勤') ? '休み' : want;
+    let r;
+    try { r = writeShiftCell_(name, date, writeVal); }
+    catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
+    if (r.ok) {
+      sh.getRange(i + 1, 5).setValue('承諾');
+      if (!rows[i][5]) sh.getRange(i + 1, 6).setValue(new Date());
+      inSheetCache[shiftNameKey_(name)] = true; // 行ができたので以降は在籍扱い
+      fixed++;
+    } else {
+      failed.push({ row: i + 1, name: name, date: date, error: r.error });
+    }
+  }
+  const summary = { ok: true, scanned: scanned, fixed: fixed, failed: failed };
+  Logger.log('RECON_shiftGhosts: ' + JSON.stringify(summary));
+  return summary;
 }
 
 // キャストリクエストのログシート（IEYAS軍師で本日分を一覧確認するため）
