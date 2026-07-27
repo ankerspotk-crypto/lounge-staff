@@ -88,6 +88,13 @@ table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
 #scm-wrap .scm-t{font-weight:800;font-size:16px;color:#eef;}
 #scm-wrap .scm-sub{font-size:12px;color:var(--sub);margin:-4px 0 4px;}
 #scm-wrap .scm .btn{width:100%;padding:12px;font-size:14px;}
+#scm-wrap .shp-range{display:flex;gap:6px;align-items:center;}
+#scm-wrap .shp-range select{flex:1;padding:11px 4px;background:#0f0f22;color:#eef;border:1px solid var(--line);border-radius:8px;font-size:14px;min-width:0;}
+#scm-wrap .shp-range .sep{color:var(--sub);flex-shrink:0;}
+#scm-wrap .shp-range .btn{width:auto;flex-shrink:0;padding:11px 14px;}
+#scm-wrap .shp-rest{display:flex;gap:6px;}
+#scm-wrap .shp-rest .btn{width:auto;flex:1;}
+#scm-wrap .shp-step{font-size:11px;color:var(--sub);margin:6px 0 -2px;}
 .mtx-scroll table.mtx{min-width:520px;}
 .mtx-scroll .mtx th{position:sticky;top:0;z-index:1;}
 /* 名前列を左固定（横スクロールしても名前が見える） */
@@ -917,7 +924,7 @@ function drawShift(){
       admShiftSubmitStatusHtml()+
       '<div class="sec compact"><div class="sec-t">📩 承認リクエスト <span class="cnt">'+reqPend.length+'件</span><span class="sp" style="flex:1"></span>'+(reqPend.length?'<button class="btn dng sm" onclick="clearAllReq('+reqPend.length+')">🗑 全てクリア</button>':'')+'</div>'+reqHtml+'</div>'+
       confirmBar+
-      '<div class="sec compact"><div class="sec-t">➕ 派遣/体験を追加</div><div class="addbar"><input class="finput" id="as-name" placeholder="氏名"><select class="finput" id="as-role"><option value="派遣">派遣</option><option value="体験">体験</option></select><select class="finput" id="as-date">'+dateOpts+'</select><input class="finput" id="as-time" placeholder="時刻 例20:00"><button class="btn pri" onclick="addShiftStaff()">追加</button></div></div>'+
+      '<div class="sec compact"><div class="sec-t">➕ 派遣/体験を追加</div><div class="addbar"><input class="finput" id="as-name" placeholder="氏名"><select class="finput" id="as-role"><option value="派遣">派遣</option><option value="体験">体験</option></select><select class="finput" id="as-date">'+dateOpts+'</select><input type="hidden" id="as-time"><button type="button" class="finput" id="as-time-btn" onclick="pickAddTime()" style="text-align:left;cursor:pointer;color:var(--sub)">時刻を選ぶ</button><button class="btn pri" onclick="addShiftStaff()">追加</button></div></div>'+
     '</div>'+
     admShiftHistoryHtml()+
     '<div class="sec"><div class="sec-t">🗓 シフト表 <span class="sub">今日以降・セルをタップで編集</span></div><div class="chips shift-filter">'+rchips+'</div><div class="mtx-scroll"><table class="mtx sm">'+thead+tbody+'</table></div></div>'
@@ -928,10 +935,54 @@ function approveShift(rowIdx,name,date,time,decision){
   if(!confirm(name+' '+date+' '+time+' を「'+decision+'」しますか？'))return;
   api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:decision}).then(function(r){ if(res(r,decision+'しました'))renderShift(); });
 }
+/* ▼ シフト時刻ピッカー（ポータルの申請UIと同じ「型」＝自由入力を廃止・保存値の書式も同一）
+   opts:{role, title, sub, current, allowRest, onPick}
+   onPick(v): v='20:00～24:00' / '予約出勤' / '休み' / ''(消去) 。キャンセル時は呼ばない */
+function shPickTimes(sh,sm,eh,em){ var o=[],t=sh*60+sm,end=eh*60+em; for(;t<=end;t+=30){o.push(('0'+Math.floor(t/60)).slice(-2)+':'+('0'+(t%60)).slice(-2));} return o; }
+function closeShPick(){ var e=document.getElementById('scm-wrap'); if(e)e.remove(); }
+function openShiftPicker(opts){
+  opts=opts||{}; closeShPick();
+  var isKuro=String(opts.role||'').indexOf('黒服')>=0;
+  var W='～'; /* U+FF5E：ポータルの保存値と同一の波ダッシュ */
+  var done=function(v){ closeShPick(); if(opts.onPick)opts.onPick(v); };
+  var w=document.createElement('div'); w.id='scm-wrap';
+  var back=document.createElement('div'); back.className='scm-back'; back.onclick=closeShPick;
+  var box=document.createElement('div'); box.className='scm';
+  var h='<div class="scm-t">'+esc(opts.title||'シフト時刻')+'</div>';
+  if(opts.sub)h+='<div class="scm-sub">'+esc(opts.sub)+'</div>';
+  box.innerHTML=h;
+  function addBtn(label,cls,fn){ var b=document.createElement('button'); b.className='btn '+(cls||''); b.textContent=label; b.onclick=fn; box.appendChild(b); }
+  if(isKuro){
+    addBtn('黒服フル　18:00 ～ 翌2:00','ok',function(){done('18:00'+W+'26:00');});
+  }else{
+    addBtn('キャストフル　20:00 ～ 24:00','ok',function(){done('20:00'+W+'24:00');});
+    addBtn('予約出勤','pri',function(){done('予約出勤');});
+  }
+  var step=document.createElement('div'); step.className='shp-step'; step.textContent='時間を指定'; box.appendChild(step);
+  var row=document.createElement('div'); row.className='shp-range';
+  var startSel=document.createElement('select'), endSel=document.createElement('select');
+  var starts=isKuro?shPickTimes(18,0,25,30):shPickTimes(20,0,23,30);
+  var endsAll=isKuro?shPickTimes(18,30,26,0):shPickTimes(20,30,24,0);
+  starts.forEach(function(t){var o=document.createElement('option');o.value=t;o.textContent=t;startSel.appendChild(o);});
+  function toMin(t){var p=t.split(':');return parseInt(p[0],10)*60+parseInt(p[1],10);}
+  function fillEnds(){ endSel.innerHTML=''; var sm2=toMin(startSel.value); endsAll.forEach(function(t){ if(toMin(t)<=sm2)return; var o=document.createElement('option');o.value=t;o.textContent=t;endSel.appendChild(o); }); }
+  fillEnds(); startSel.onchange=fillEnds;
+  var sep=document.createElement('span'); sep.className='sep'; sep.textContent=W;
+  var ok=document.createElement('button'); ok.className='btn pri'; ok.textContent='決定'; ok.onclick=function(){ if(!endSel.value){toast('終了時刻を選んでください',true);return;} done(startSel.value+W+endSel.value); };
+  row.appendChild(startSel); row.appendChild(sep); row.appendChild(endSel); row.appendChild(ok); box.appendChild(row);
+  if(opts.allowRest){
+    var rest=document.createElement('div'); rest.className='shp-rest';
+    var b1=document.createElement('button'); b1.className='btn'; b1.textContent='休み'; b1.onclick=function(){done('休み');};
+    var b2=document.createElement('button'); b2.className='btn dng'; b2.textContent='クリア（消去）'; b2.onclick=function(){done('');};
+    rest.appendChild(b1); rest.appendChild(b2); box.appendChild(rest);
+  }
+  addBtn('キャンセル','',closeShPick);
+  w.appendChild(back); w.appendChild(box); document.body.appendChild(w);
+}
 function editCell(name,date){
   var row=(shiftMgmt.rows||[]).find(function(x){return x.name===name;}); var cur=(row&&row.cells&&row.cells[date])||'';
-  var v=prompt(name+' の '+date+'（時刻 / 休み / 空欄で消去）', cur); if(v===null)return;
-  api('writeShiftCellPortal',{name:name,date:date,value:v.trim()}).then(function(r){ if(res(r,'更新しました'))renderShift(); });
+  openShiftPicker({ role:(row&&row.role)||'', title:name+' ・ '+date, sub:cur?('現在: '+cur):'未入力', current:cur, allowRest:true,
+    onPick:function(v){ api('writeShiftCellPortal',{name:name,date:date,value:String(v||'').trim()}).then(function(r){ if(res(r,'更新しました'))renderShift(); }); } });
 }
 /* 申請中セルのアクションメニュー：承諾 / 時間変更で承諾 / 却下 */
 function shiftCellMenu(rowIdx,name,date,time){
@@ -952,10 +1003,15 @@ function scmDo(rowIdx,name,date,time,decision){
   api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:decision}).then(function(r){ if(res(r,decision+'しました'))renderShift(); });
 }
 function scmChangeTime(rowIdx,name,date,time){
-  var nv=prompt(name+' '+date+' の時間を変更して承諾（例 20:00～24:00）', time);
-  if(nv===null)return; nv=nv.trim(); if(!nv){toast('時間を入力してください',true);return;}
-  closeScm();
-  api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:'承諾',newTime:nv}).then(function(r){ if(res(r,'時間変更で承諾しました'))renderShift(); });
+  var row=(shiftMgmt.rows||[]).find(function(x){return x.name===name;});
+  openShiftPicker({ role:(row&&row.role)||'', title:name+' ・ '+date, sub:'申請中: '+time+' → 変更して承諾', current:time, allowRest:false,
+    onPick:function(nv){ nv=String(nv||'').trim(); if(!nv){toast('時間を選択してください',true);return;}
+      api('approveShift',{rowIdx:rowIdx,name:name,date:date,time:time,decision:'承諾',newTime:nv}).then(function(r){ if(res(r,'時間変更で承諾しました'))renderShift(); }); } });
+}
+function pickAddTime(){
+  var role=(document.getElementById('as-role')||{}).value||'派遣';
+  openShiftPicker({ role:role, title:'派遣/体験の時刻', sub:'役割: '+role, allowRest:false,
+    onPick:function(v){ v=String(v||'').trim(); var hid=document.getElementById('as-time'); if(hid)hid.value=v; var b=document.getElementById('as-time-btn'); if(b){b.textContent=v||'時刻を選ぶ'; b.style.color=v?'#eef':'var(--sub)';} } });
 }
 function addShiftStaff(){
   var name=(document.getElementById('as-name').value||'').trim(); var role=document.getElementById('as-role').value;
