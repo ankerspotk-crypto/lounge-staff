@@ -6269,7 +6269,8 @@ function saveShiftCell() {
   }
   // empty → writeVal = '' (空白)
 
-  var payload = { action: 'writeShiftCellPortal', userId: userId, name: smgmtEditTarget.name, date: smgmtEditTarget.date, value: writeVal };
+  var target = smgmtEditTarget; // ★退避：closeShiftEdit()がsmgmtEditTargetをnull化する前に確保（非同期コールバックで使う。旧版はnull参照→通信エラー誤表示）
+  var payload = { action: 'writeShiftCellPortal', userId: userId, name: target.name, date: target.date, value: writeVal };
   closeShiftEdit();
   gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify(payload) })
     .then(function(r) { return r.json(); })
@@ -6278,12 +6279,11 @@ function saveShiftCell() {
       // ローカルデータを更新してグリッドを再描画
       if (smgmtData) {
         smgmtData.rows.forEach(function(row) {
-          if (row.name === smgmtEditTarget.name) {
-            if (writeVal) row.cells[smgmtEditTarget.date] = writeVal;
-            else delete row.cells[smgmtEditTarget.date];
+          if (row.name === target.name) {
+            if (writeVal) row.cells[target.date] = writeVal;
+            else delete row.cells[target.date];
           }
         });
-        smgmtEditTarget = null;
         renderShiftMgmt();
       }
     })
