@@ -7569,6 +7569,9 @@ function submitShift(payload) {
   // 役割はスタッフマスタから確定（クライアント申告に依存しない）
   const staffRole = getStaffRoleByName_(normalizeName_(name)) || payload.role || 'キャスト';
   const allNeedApproval = staffRole === '黒服バイト'; // 黒服バイトは全シフト管理者承認制
+  // Stage1(2026-07-27): シフト表の行照合を LINE ID で一意化するため、対象者の userId を名簿から解決して渡す。
+  //   ⚠️payload.userId は「呼び出した人」＝管理者代理提出だと別人になる。必ず name（自分or代理提出先）から引き直すこと。
+  const staffUserId = (rosterEntryByName_(name) || {}).userId || '';
 
   payload.shifts.forEach(s => {
     const role = staffRole;
@@ -7594,7 +7597,7 @@ function submitShift(payload) {
       //   autoApproved に入れていた＝シフト表に書けなくても「承諾」と表示され、通知にもスプシにも出ない幽霊が
       //   無言で発生していた（例: ちな／きさき）。→ 書き込み結果でステータスを分け、失敗は黒服へ警告する。
       let r;
-      try { r = writeShiftCell_(name, s.date, writeVal); }
+      try { r = writeShiftCell_(name, s.date, writeVal, staffUserId); }
       catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
       const newRow = sh.getLastRow() + 1;
       sh.getRange(newRow, 3).setNumberFormat('@');
@@ -7663,6 +7666,45 @@ function RECON_shiftGhosts() {
   }
   const summary = { ok: true, scanned: scanned, fixed: fixed, failed: failed };
   Logger.log('RECON_shiftGhosts: ' + JSON.stringify(summary));
+  return summary;
+}
+
+// ============================================================
+// シフト表に既存行のLINE IDを埋める（2026-07-27・Stage1バックフィル）
+// ------------------------------------------------------------
+// 既にシフト表に居る人の空のLINE_ID列を、名簿の名前→userIdで埋める（ベストエフォート・非破壊）。
+// 既にIDが入ってる行は触らない。名簿にuserIdが無い/名前が食い違う人は unmatched に残す（従来の名前照合で継続動作）。
+// GASエディタから RECON_backfillShiftIds を ▶ 実行。冪等。
+// ※self-healでも提出・編集のたびに徐々に埋まるので必須ではないが、先に一括で埋めると同名別人の取り違えを即・全面的に防げる。
+// ============================================================
+function RECON_backfillShiftIds() {
+  const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
+  if (!sh || sh.getLastRow() < 2) return { ok: true, stamped: 0, unmatched: [], note: '行なし' };
+  const idCol = ensureShiftIdColumn_(sh); // 0-based（無ければ新設）
+  const data = sh.getDataRange().getValues();
+  // 名簿: 空白除去名キー → userId
+  const map = {};
+  const stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (stf) {
+    const sr = stf.getDataRange().getValues();
+    for (let k = 1; k < sr.length; k++) {
+      const key = shiftNameKey_(sr[k][1]);        // 名簿の名前はB列
+      const uid = String(sr[k][0] || '').trim();  // A列 = userId
+      if (key && uid && !(key in map)) map[key] = uid;
+    }
+  }
+  let stamped = 0; const unmatched = [];
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][0] || '').trim();
+    if (!name) continue;
+    const cur = String((data[i][idCol] == null ? '' : data[i][idCol])).trim();
+    if (cur) continue; // 既に刻まれている行は触らない
+    const uid = map[shiftNameKey_(name)];
+    if (uid) { sh.getRange(i + 1, idCol + 1).setValue(uid); stamped++; }
+    else if (unmatched.indexOf(name) < 0) unmatched.push(name);
+  }
+  const summary = { ok: true, stamped: stamped, unmatched: unmatched };
+  Logger.log('RECON_backfillShiftIds: ' + JSON.stringify(summary));
   return summary;
 }
 
@@ -16610,6 +16652,7 @@ function getShiftMgmtData_() {
   cutoff.setHours(0, 0, 0, 0);
   const dateCols = [];
   for (let j = 2; j < headerVals.length; j++) {
+    if (headers[j] === SHIFT_ID_HEADER) continue; // Stage1: LINE ID列は日付列に混ぜない（表示・突合の対象外）
     const v = headerVals[j];
     if (v instanceof Date && !isNaN(v)) {
       const dd = new Date(v); dd.setHours(0, 0, 0, 0);
@@ -16735,6 +16778,22 @@ function ensureShiftDateColumn_(sh, date) {
   sh.getRange(1, newCol).setValue(dt); // Date値で入れる（既存列と同じ型。読取時にM/d化される）
   return newCol - 1;
 }
+
+// Stage1(2026-07-27): シフト表の隠しLINE ID列。名前ジョインをID結合へ移すための一意キー。
+// ⚠️列はヘッダ名で引く（位置決め打ちしない）。末尾に追記するので既存の日付列をずらさない＝非破壊。
+//   日付列は全て「ヘッダ一致 or Date型」で検出されるので、テキスト見出しの本列は日付処理に混ざらない。
+const SHIFT_ID_HEADER = 'LINE_ID';
+function ensureShiftIdColumn_(sh) {
+  const lastCol = sh.getLastColumn();
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(v => String(v == null ? '' : v).trim());
+  const existing = headers.indexOf(SHIFT_ID_HEADER);
+  if (existing >= 0) return existing; // 0-based
+  const newCol = lastCol + 1;
+  sh.getRange(1, newCol).setValue(SHIFT_ID_HEADER);
+  try { sh.hideColumns(newCol); } catch (e) {} // 黒服の手編集の邪魔にならないよう隠す（内部キー）
+  return newCol - 1; // 0-based
+}
+
 // シフト関連の名前照合キー＝空白除去した正規化名。
 // ⚠️normalizeName_ は内部スペースを消さない（「鈴木 海」≠「鈴木海」）。シフト表↔名簿↔シフト申請の突合は必ずこれを通すこと。
 //    getShiftMgmtData_ / shiftSubmitRoster_ が使っているキーと同じ規則＝画面に出た人はここでも必ず引ける。
@@ -16743,7 +16802,7 @@ function shiftNameKey_(s) {
 }
 
 // 名簿（スタッフマスタ＝SSOT）から1人引く。空白除去の正規化名で突合。無ければ null。
-// returns { name（名簿の表記）, role, retired }
+// returns { userId（名簿A列＝LINE ID）, name（名簿の表記）, role, retired }
 function rosterEntryByName_(name) {
   const key = shiftNameKey_(name);
   if (!key) return null;
@@ -16755,6 +16814,7 @@ function rosterEntryByName_(name) {
   for (let i = 1; i < rows.length; i++) {
     if (shiftNameKey_(rows[i][1]) !== key) continue; // 名簿の名前はB列
     return {
+      userId: String(rows[i][0] || '').trim(), // A列 = LINE userId（Stage1のシフト表照合キー）
       name: String(rows[i][1]).trim(),
       role: String(rows[i][2]).trim() || 'キャスト',
       retired: (rc >= 0) ? (String(rows[i][rc]).trim() === '退職') : false
@@ -16768,7 +16828,10 @@ function rosterEntryByName_(name) {
 //   画面(getShiftMgmtData_)はシフト申請からも行を合成して出すので「一覧には居るのに時間変更できない」ねじれが発生していた（例: きさき）。
 //   さらにシフト表に行が無い人は getTodayShiftDetail_（黒服LINEの「シフト確認」／本日の出勤／付け回し）にも一生出てこない。
 //   → 名簿に在籍していれば行を作って両方まとめて解消する。タイポで幽霊行が生えないよう、行の新設は必ず名簿を経由させること。
-function writeShiftCell_(name, date, value) {
+// Stage1(2026-07-27): 第4引数 userId(LINE ID) を追加。行の照合を「ID優先→名前キー」に。
+//   名前で当たった行にIDが空なら刻む(self-heal)＝以降はIDで一意に引ける。同名別人の取り違えを構造的に潰す。
+//   userId 未指定でも従来どおり名前キーで動く（後方互換）。
+function writeShiftCell_(name, date, value, userId) {
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
   const data = sh.getDataRange().getValues();
@@ -16782,27 +16845,44 @@ function writeShiftCell_(name, date, value) {
     colIdx = ensureShiftDateColumn_(sh, date); // 列が無ければ自動生成してから書く
     if (colIdx < 0) return { ok: false, error: '日付列を作成できません: ' + date };
   }
+  const idCol = ensureShiftIdColumn_(sh); // 0-based。列を新設した直後は data[i][idCol] が undefined になり得るが下で吸収
+  const uid = String(userId == null ? '' : userId).trim();
+  const cellAt = (i, c) => String((data[i][c] == null ? '' : data[i][c])).trim();
   const key = shiftNameKey_(name);
-  if (!key) return { ok: false, error: '名前が空です' };
-  for (let i = 1; i < data.length; i++) {
-    if (shiftNameKey_(data[i][0]) === key) {
-      sh.getRange(i + 1, colIdx + 1).setValue(value || '');
-      return { ok: true };
+  // 1) LINE ID で照合（最優先・同名別人を弾く）
+  if (uid) {
+    for (let i = 1; i < data.length; i++) {
+      if (cellAt(i, idCol) === uid) {
+        sh.getRange(i + 1, colIdx + 1).setValue(value || '');
+        return { ok: true, matchedBy: 'id' };
+      }
     }
   }
-  // シフト表に行が無い＝名簿にだけ居る人。名簿の表記と役割で行を新設してから書く。
+  // 2) 名前キーで照合。当たってIDが空なら刻む(self-heal)
+  if (key) {
+    for (let i = 1; i < data.length; i++) {
+      if (shiftNameKey_(data[i][0]) === key) {
+        sh.getRange(i + 1, colIdx + 1).setValue(value || '');
+        if (uid && cellAt(i, idCol) === '') sh.getRange(i + 1, idCol + 1).setValue(uid);
+        return { ok: true, matchedBy: 'name' };
+      }
+    }
+  }
+  if (!key && !uid) return { ok: false, error: '名前が空です' };
+  // 3) シフト表に行が無い＝名簿にだけ居る人。名簿の表記・役割・IDで行を新設してから書く。
   const m = rosterEntryByName_(name);
   if (!m) return { ok: false, error: 'スタッフが見つかりません: ' + name + '（名簿にも未登録です。先に名簿へ登録してください）' };
   if (m.retired) return { ok: false, error: name + ' は退職者です（シフト表に行は作りません）' };
-  const newRow = new Array(Math.max(headers.length, colIdx + 1)).fill(''); // 日付列を新設した直後は headers より広くなる
+  const newRow = new Array(Math.max(headers.length, colIdx + 1, idCol + 1)).fill(''); // 列を新設した直後は headers より広くなる
   newRow[0] = m.name; // 表記は名簿(SSOT)に寄せる
   newRow[1] = m.role;
   newRow[colIdx] = value || '';
+  newRow[idCol] = uid || m.userId || ''; // Stage1: IDも一緒に刻む
   sh.appendRow(newRow);
-  return { ok: true, created: true, name: m.name, role: m.role };
+  return { ok: true, created: true, name: m.name, role: m.role, matchedBy: 'created' };
 }
 
-function addShiftStaff_(staffName, role, date, timeVal) {
+function addShiftStaff_(staffName, role, date, timeVal, userId) {
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
   if (!staffName) return { ok: false, error: '名前を入力してください' };
@@ -16811,20 +16891,25 @@ function addShiftStaff_(staffName, role, date, timeVal) {
     if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
     return String(v).trim();
   });
+  const idCol = ensureShiftIdColumn_(sh); // Stage1: LINE ID列（0-based）
+  const uid = String(userId == null ? '' : userId).trim() || ((rosterEntryByName_(staffName) || {}).userId || '');
+  const cellAt = (i, c) => String((data[i][c] == null ? '' : data[i][c])).trim();
   // ⚠️照合は writeShiftCell_ と同じ空白除去キーで統一すること。
   //   完全一致のままだと「きさき」と「きさき 」を別人と見て行を新設し、writeShiftCell_（正規化照合）は元の行に書くため空の幽霊行が残る。
   const key = shiftNameKey_(staffName);
   for (let i = 1; i < data.length; i++) {
     if (shiftNameKey_(data[i][0]) === key) {
-      if (date && timeVal) return writeShiftCell_(staffName, date, timeVal);
+      if (uid && cellAt(i, idCol) === '') sh.getRange(i + 1, idCol + 1).setValue(uid); // self-heal
+      if (date && timeVal) return writeShiftCell_(staffName, date, timeVal, uid);
       return { ok: true, note: 'existing' };
     }
   }
-  const newRow = new Array(headers.length).fill('');
+  const newRow = new Array(Math.max(headers.length, idCol + 1)).fill('');
   newRow[0] = staffName;
   newRow[1] = role;
+  newRow[idCol] = uid; // Stage1: IDも刻む
   sh.appendRow(newRow);
-  if (date && timeVal) return writeShiftCell_(staffName, date, timeVal); // 列が無ければ自動生成して書く
+  if (date && timeVal) return writeShiftCell_(staffName, date, timeVal, uid); // 列が無ければ自動生成して書く
   return { ok: true };
 }
 // キオスクURLのシークレットキーをリセット（実行するたびに新URLが発行される）
