@@ -243,6 +243,27 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .mn-sug{font-size:11px;color:var(--warn);font-weight:700;white-space:nowrap;}
 .mn-sug b{color:var(--warn);}
 .mn-sug.ex{color:var(--ok);}
+
+/* ===== スマホ実用レスポンシブ（2026-07-28）＝画面幅600px以下で自動適用。PC表示は一切不変 =====
+   下地(flex-wrap／表の overflow-x スクロール)は既に効いているので、ここでは
+   余白の詰め・タップ確保・窮屈スポット(権限トグルの文字折返し等)の解消に絞る。 */
+@media (max-width: 600px){
+  .body{padding:11px;}
+  .hd{padding:10px 12px;gap:8px;}
+  .hd .brand{font-size:15px;}
+  .groups{padding:9px 11px 5px;gap:6px;}
+  .grp{padding:9px 14px;font-size:13px;}
+  .tabs{padding:6px 11px 0;gap:5px;}
+  .tab{padding:9px 12px;font-size:13px;}
+  .sec{padding:12px;margin-bottom:12px;}
+  .sec-t{margin-bottom:10px;}
+  .toolbar{gap:8px;margin-bottom:10px;}
+  .grid{grid-template-columns:1fr;gap:10px;}   /* スタッフカードは確実に1列 */
+  .card{padding:12px 13px;}
+  .perms{flex-wrap:wrap;}                        /* 権限トグル4列→2列＝文字の折返しを解消 */
+  .perms .toggle{flex:1 1 calc(50% - 4px);min-width:0;}
+  .mtx-scroll{max-height:64vh;}
+}
 </style>
 
 <div class="wrap">
