@@ -3724,7 +3724,9 @@ function rcptCalc(){
       +'<div>名目 '+esc(tada||'日払い報酬として')+'</div><div>上記金額を受領いたしました。</div>'
       +'<div style="margin-top:12px;font-size:11px">受取人　'+(atena?esc(atena):'')+'</div>'
       +'<div class="rcpt-sign"><span>ご署名（サイン）</span></div>'
-      +'<div class="issuer"><b>'+esc(RCPT_ISSUER.name)+'</b></div>';
+      +((RCPT_MODE==='M')
+         ? '<div class="issuer" style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px"><span style="font-size:13px;font-weight:800;color:#1a1a1a">'+(atena?esc(atena):'')+'</span><b>'+esc(RCPT_ISSUER.name)+'</b></div>'   // 月払い＝左下にキャスト名／右下に店名
+         : '<div class="issuer"><b>'+esc(RCPT_ISSUER.name)+'</b></div>');
     bd.innerHTML='<div class="row"><span>受領金額</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="big"><span>お渡し</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="row" style="border-bottom:0"><span style="color:var(--sub);font-size:11px">社内書類のため収入印紙・消費税区分なし</span><span></span></div>';
@@ -3806,6 +3808,7 @@ function rcptBuildXml_(o){
     L.push('<feed/>'); L.push(t('受取人 '+(o.atena||'')));
     L.push(t('ご署名：__________________________'));
     L.push('<feed unit="30"/>');
+    if(o.mode==='M'){ L.push('<text width="1" height="1" em="true"/>'); L.push(t(o.atena||'')); L.push('<text width="1" height="1" em="false"/>'); }  // 月払い＝最下部（左寄せ）にキャスト名を太字で
     L.push(t(RCPT_ISSUER.name));
   }
   L.push('<feed unit="40"/>'); L.push('<cut type="feed"/>'); L.push('</epos-print>');
