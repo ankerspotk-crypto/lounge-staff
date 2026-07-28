@@ -5259,8 +5259,8 @@ function renderDenpyo(){
   h+='</div>';
   b.innerHTML=h;
 }
-function dpHead(icon,title,count,total){
-  return '<div class="dp-sec-h"><span>'+icon+' '+title+' <span class="dp-cnt">'+count+'件</span></span>'+(total?'<span class="dp-total">計 ¥'+fmtYen(total)+'</span>':'')+'</div>';
+function dpHead(icon,title,count,total,addType){
+  return '<div class="dp-sec-h"><span>'+icon+' '+title+' <span class="dp-cnt">'+count+'件</span>'+(addType?' <button class="dp-add" onclick="addDenpyoManual(\''+addType+'\')" style="background:#243a5e;border:1px solid #3a5a8a;color:#9fd0ff;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px">＋ 手入力</button>':'')+'</span>'+(total?'<span class="dp-total">計 ¥'+fmtYen(total)+'</span>':'')+'</div>';
 }
 function fmtYen(n){ return String(Math.round(Number(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
 function dpRowActions(type,rowIdx){ return '<div class="dp-acts"><button class="dp-edit" onclick="editDenpyo(\''+type+'\','+rowIdx+')">✏️ 修正</button><button class="dp-del" onclick="delDenpyo(\''+type+'\','+rowIdx+')">🗑</button></div>'; }
@@ -5273,7 +5273,7 @@ function dpSectionDaily(sec){
       +(dpV(sec,c,'但し書き')?' ・ '+esc(dpV(sec,c,'但し書き')):'')+(dpV(sec,c,'伝票日付')?' ・ '+esc(dpV(sec,c,'伝票日付')):'')+'</div>'
       +'<div class="dp-card-b">'+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('daily',r.rowIdx)+'</div></div>';
   }).join(''):'<div class="dp-empty">この日の日払いはありません</div>';
-  return '<div class="dp-sec">'+dpHead('💴','日払い',sec.rows.length,sec.total)+body+'</div>';
+  return '<div class="dp-sec">'+dpHead('💴','日払い',sec.rows.length,sec.total,'daily')+body+'</div>';
 }
 function dpSectionReceipt(sec){
   var body=sec.rows.length?sec.rows.map(function(r){
@@ -5282,7 +5282,7 @@ function dpSectionReceipt(sec){
       +'<div class="dp-meta">'+(dpV(sec,c,'但し書き')?esc(dpV(sec,c,'但し書き')):'')+(dpV(sec,c,'伝票日付')?' ・ '+esc(dpV(sec,c,'伝票日付')):'')+'</div>'
       +'<div class="dp-card-b">'+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('receipt',r.rowIdx)+'</div></div>';
   }).join(''):'<div class="dp-empty">この日の領収書はありません</div>';
-  return '<div class="dp-sec">'+dpHead('🧾','領収書',sec.rows.length,sec.total)+body+'</div>';
+  return '<div class="dp-sec">'+dpHead('🧾','領収書',sec.rows.length,sec.total,'receipt')+body+'</div>';
 }
 function dpSectionDelivery(sec){
   // 伝票No＋仕入先でグループ化
@@ -5317,6 +5317,32 @@ function saveDenpyoEdit(){
     if(res&&res.ok){ toast('✅ 修正しました'); openDenpyoManager(); }
     else { alert('保存エラー: '+((res&&res.error)||'')); if(btn){btn.style.pointerEvents='';btn.textContent='💾 保存';} }
   }).catch(function(e){ alert('保存エラー: '+((e&&e.message)||e)); if(btn){btn.style.pointerEvents='';btn.textContent='💾 保存';} });
+}
+function addDenpyoManual(type){
+  if(type!=='receipt'&&type!=='daily')return;
+  dpEdit={type:type,rowIdx:null,isNew:true};
+  var fields=DP_FIELDS[type]||[];
+  var day=(denpyoState&&denpyoState.date)||TODAY;
+  var form=fields.map(function(f){ var name=f[0],kind=f[1]; var pv=(name==='伝票日付')?day:'';
+    return '<div class="dp-flabel">'+esc(name)+'</div><input id="dpf-'+name+'" class="finput" type="'+(kind==='num'?'number':'text')+'"'+(kind==='num'?' inputmode="numeric"':'')+' value="'+esc(pv)+'">';
+  }).join('');
+  var ttl=(type==='receipt')?'➕ 経費・支払いを手入力':'➕ 日払いを手入力';
+  var body='<div class="dp-editform"><div style="font-size:12px;color:#8a9ac0;margin-bottom:10px;line-height:1.5">写真の無い支払いを直接記録します（<b>'+esc(day)+'</b> の伝票として追加）。経費なら閉店チェックの現金出金にも乗ります。</div>'+form+'<div class="actions" style="margin-top:16px"><div class="act pri" onclick="saveDenpyoNew()">💾 追加</div><div class="act" onclick="openDenpyoManager()">← 戻る</div></div></div>';
+  showSheet(ttl,body,false);
+}
+function saveDenpyoNew(){
+  if(!dpEdit||!dpEdit.isNew)return;
+  var fields=DP_FIELDS[dpEdit.type]||[]; var patch={};
+  fields.forEach(function(f){ var el=document.getElementById('dpf-'+f[0]); if(el)patch[f[0]]=el.value; });
+  var amtKey=(dpEdit.type==='receipt')?'金額':'伝票金額';
+  var nameKey=(dpEdit.type==='receipt')?'発行元':'受取人';
+  if(!String(patch[nameKey]||'').trim()){ alert(nameKey+'を入力してください'); return; }
+  if(!(Number(patch[amtKey])>0)){ alert(amtKey+'を正しく入力してください'); return; }
+  var btn=document.querySelector('.dp-editform .act.pri'); if(btn){btn.style.pointerEvents='none';btn.textContent='追加中...';}
+  gsr('kioskAddDenpyo',DP_SHEET[dpEdit.type],patch,(denpyoState&&denpyoState.date)||TODAY).then(function(res){
+    if(res&&res.ok){ toast('✅ 追加しました'); openDenpyoManager(); }
+    else { alert('追加エラー: '+((res&&res.error)||'')); if(btn){btn.style.pointerEvents='';btn.textContent='💾 追加';} }
+  }).catch(function(e){ alert('追加エラー: '+((e&&e.message)||e)); if(btn){btn.style.pointerEvents='';btn.textContent='💾 追加';} });
 }
 function delDenpyo(type,rowIdx){
   if(!confirm('この伝票行を削除しますか？（元に戻せません）'))return;
