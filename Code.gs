@@ -654,6 +654,11 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(mendanApi_(body)))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    // 【一時・使用後撤去】納品記録の重複掃除。ランダムトークンで施錠。apply:true で実削除、既定はドライラン。
+    if (body.action === 'admin_dedupe_delivery' && body.token === 'DEDUPE-0728-Kx9v2Qp7LmZ4') {
+      return ContentService.createTextOutput(JSON.stringify(dedupeDeliveryRecords_(body.apply === true ? false : true)))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     // LIFF APIリクエスト（actionフィールドあり）
     if (body.action) {
       const result = handleApiRequest_(body);
