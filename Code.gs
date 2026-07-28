@@ -9094,12 +9094,16 @@ function handlePortalApi_(e) {
       if (cat.indexOf('CHAMPAGNE') === 0) group = 'champagne';
       else if (cat.indexOf('WINE') === 0) group = 'wine'; // WINE赤/WINE白 をまとめて「ワイン」
       else return;                                // シャンパン・ワイン以外は対象外
-      if (!agg[s.name]) agg[s.name] = { name: s.name, qty: 0, price: Number(link.price) || 0, group: group, menuCat: cat };
+      // メニュー落ち(仕入れ停止)でも在庫が残っていれば表示する＝除外しない。判定は
+      //   ①店舗メニューの状態(link.status) ②在庫発注マスタの仕入れ区分(s.supplyStatus) のどちらかが'メニュー落ち'。
+      //   （メニューと在庫でドリフトしても拾えるよう両方を OR で見る）
+      if (!agg[s.name]) agg[s.name] = { name: s.name, qty: 0, price: Number(link.price) || 0, group: group, menuCat: cat, dropped: (String(link.status || '') === 'メニュー落ち') };
       agg[s.name].qty += Number(s.qty) || 0;      // 2F/5F を品名で合算
+      if (String(s.supplyStatus || '') === 'メニュー落ち') agg[s.name].dropped = true;
     });
     const items = Object.keys(agg).map(k => agg[k])
       .filter(it => it.qty > 0)                    // 在庫ありのみ（0本は隠す）
-      .map(it => ({ name: it.name, qty: it.qty, price: it.price, menuCat: it.menuCat, group: it.group }))
+      .map(it => ({ name: it.name, qty: it.qty, price: it.price, menuCat: it.menuCat, group: it.group, dropped: it.dropped }))
       .sort((a, b) => b.price - a.price);          // 単価の高い順
     const champagne = items.filter(i => i.group === 'champagne');
     const wine = items.filter(i => i.group === 'wine');
