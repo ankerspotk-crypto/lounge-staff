@@ -3169,8 +3169,16 @@ function renderCustomerShell_() {
   var filterBtns = filters.map(function(f) {
     return '<button class="cust-filter-btn' + (custFilter === f.key ? ' active' : '') + '" onclick="loadCustomers(\'' + f.key + '\', custQuery)">' + f.label + '</button>';
   }).join('');
+  // りく・管理者だけ：新規会員登録＋編集ができる（サーバ側 isAdmin_ で二重ゲート）
+  var adminBar = isAdmin
+    ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+      + '<button onclick="openCustAddForm()" style="flex:1;padding:11px;background:#241d10;border:1px solid #8a6d3a;border-radius:10px;color:#e6cf95;font-size:14px;font-weight:700;cursor:pointer">＋ 新規会員を登録</button>'
+      + '<span style="font-size:11px;color:#94886a">タップで編集</span>'
+      + '</div>'
+    : '';
   setContent('<div style="padding:14px">'
     + '<div class="cust-filter-bar">' + filterBtns + '</div>'
+    + adminBar
     + '<input class="cust-search" id="cust-q" type="text" placeholder="名前・会員番号で検索" value="' + esc(custQuery) + '" oninput="custSearchInput(event,custQueryChange)" oncompositionend="custSearchInput(event,custQueryChange)" onkeydown="custSearchKey(event,custQueryChange)">'
     + '<div id="cust-list"><div style="color:#b8a67c;font-size:12px;padding:10px 0">読み込み中...</div></div>'
     + '</div>');
@@ -3242,6 +3250,8 @@ function fmtVisitDate(d) {
 // 顧客詳細（ポータル・キャスト視点）。担当客の来店履歴＋金額を表示。金額はサーバ側でviewer権限判定済み
 function openPortalCustDetail(i) {
   var c = custList[i]; if (!c) return;
+  // りく・管理者：詳細タップ＝編集フォーム（rowIdx がある＝サーバが編集可と判定した会員のみ）
+  if (isAdmin && c.rowIdx) { openCustEditForm(i); return; }
   var head = '<div style="padding:14px">'
     + '<button onclick="backToCustList()" style="background:#16130d;border:1px solid #33291a;color:#b09f74;border-radius:8px;padding:7px 14px;font-size:13px;margin-bottom:14px;cursor:pointer">← 顧客一覧へ戻る</button>'
     + '<div style="font-size:20px;font-weight:800;color:#f2ead9;margin-bottom:2px">' + esc(c.name || c.card || '') + ' 様</div>'
@@ -3260,6 +3270,149 @@ function openPortalCustDetail(i) {
   }).catch(function(){ renderPortalVisits({ stats: null, history: [] }); });
 }
 function backToCustList() { renderCustomerShell_(); renderCustomerList_(); }
+
+// ==================================================================
+// りく・管理者専用：会員情報の参照＋編集＋新規登録（サーバ側 isAdmin_ で二重ゲート）
+//   ・編集は「元値と違う項目だけ」送る＝未変更の列（会費更新の和暦テキスト等）を誤って上書きしない
+//   ・元値は"描画後のDOM値"を基準にする＝type=date がブラウザで正規化された後の値と一致させ、未変更の誤送信を防ぐ
+//   ・保存/登録の実体は軍師・コンソールと同じ updateCustomer/addCustomer（バックエンド）
+// ==================================================================
+var custEditOrig = {};   // 編集時の元値スナップショット（差分送信の基準）
+var custEditRowIdx = 0;  // 編集対象の行番号（0=新規）
+
+// フォーム項目定義（key は updateCustomer/addCustomer の payload キーと一致）
+var CUST_FORM_FIELDS = [
+  { key:'card',        label:'カード記載名',   type:'text' },
+  { key:'name',        label:'氏名',           type:'text' },
+  { key:'yomigana',    label:'よみがな',       type:'text' },
+  { key:'no',          label:'会員番号',       type:'text', hint:'⚠️ 変更すると過去の来店・売上の紐づけに影響します' },
+  { key:'tantou',      label:'担当',           type:'text' },
+  { key:'bottle',      label:'ボトル種類',     type:'text' },
+  { key:'pos',         label:'ボトル位置',     type:'text' },
+  { key:'company',     label:'会社名',         type:'text' },
+  { key:'bday',        label:'誕生日',         type:'date' },
+  { key:'drink',       label:'飲み方',         type:'text' },
+  { key:'tabaco',      label:'タバコ',         type:'text' },
+  { key:'neck',        label:'ネック名',       type:'text' },
+  { key:'ngStaff',     label:'NGスタッフ',     type:'text' },
+  { key:'memberSince', label:'登録日（入会）', type:'date' },
+  { key:'lastFeeDate', label:'最終会費更新日', type:'date' },
+  { key:'ng',          label:'NG行為',         type:'textarea' },
+  { key:'note',        label:'参考情報・メモ', type:'textarea' }
+];
+
+// 編集フォームに出す項目か（Y3に実在する列だけ＝editHas。新規は全項目）
+function custFieldExists_(c, key) {
+  if (!c || !c.editHas || c.editHas[key] === undefined) return true;
+  return !!c.editHas[key];
+}
+function custFormPrefill_(c, key) {
+  if (!c) return '';
+  if (key === 'bday') return c.eBday || '';
+  return (c[key] != null) ? String(c[key]) : '';
+}
+
+function openCustEditForm(i) { var c = custList[i]; if (c) renderCustForm_('edit', c); }
+function openCustAddForm()   { renderCustForm_('add', null); }
+
+function renderCustForm_(mode, c) {
+  var isEdit = (mode === 'edit');
+  custEditRowIdx = isEdit ? (c.rowIdx || 0) : 0;
+  var inpStyle = 'width:100%;background:#1a1a30;border:1px solid #33291a;border-radius:8px;color:#efe4cd;font-size:14px;padding:9px 10px;box-sizing:border-box';
+  var rows = CUST_FORM_FIELDS.map(function(f){
+    if (isEdit && !custFieldExists_(c, f.key)) return '';
+    var v = isEdit ? custFormPrefill_(c, f.key) : '';
+    var field;
+    if (f.type === 'textarea') {
+      field = '<textarea id="cf-' + f.key + '" rows="2" style="' + inpStyle + ';resize:vertical">' + esc(v) + '</textarea>';
+    } else if (f.type === 'date') {
+      field = '<input id="cf-' + f.key + '" type="date" value="' + esc(v) + '" style="' + inpStyle + '">';
+    } else {
+      field = '<input id="cf-' + f.key + '" type="text" value="' + esc(v) + '" style="' + inpStyle + '">';
+    }
+    return '<div style="margin-bottom:12px">'
+      + '<label style="font-size:11px;color:#b8a67c;display:block;margin-bottom:4px">' + f.label + '</label>'
+      + field
+      + (f.hint ? '<div style="font-size:10px;color:#8c7f5e;margin-top:3px">' + f.hint + '</div>' : '')
+      + '</div>';
+  }).join('');
+  var title = isEdit ? (esc(c.name || c.card || '') + ' 様 の会員情報を編集') : '新規会員を登録';
+  var note = isEdit
+    ? '変更した項目だけ保存されます。空欄にして保存するとその項目は消去されます。'
+    : 'カード記載名または氏名は必須です。会員番号は自動で採番されます。';
+  setContent('<div style="padding:14px">'
+    + '<button onclick="backToCustList()" style="background:#16130d;border:1px solid #33291a;color:#b09f74;border-radius:8px;padding:7px 14px;font-size:13px;margin-bottom:14px;cursor:pointer">← 会員一覧へ戻る</button>'
+    + '<div style="font-size:18px;font-weight:800;color:#f2ead9;margin-bottom:4px">' + title + '</div>'
+    + '<div style="font-size:11px;color:#94886a;margin-bottom:12px">' + note + '</div>'
+    + '<div id="cf-msg"></div>'
+    + '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:14px">' + rows + '</div>'
+    + '<button id="cf-save" onclick="submitCustForm(' + (isEdit ? 'false' : 'true') + ')" style="width:100%;margin-top:14px;padding:12px;background:#241d10;border:1px solid #8a6d3a;border-radius:10px;color:#e6cf95;font-size:15px;font-weight:700;cursor:pointer">' + (isEdit ? '保存する' : '登録する') + '</button>'
+    + '</div>');
+  // ⚠️元値は"描画後のDOM値"を基準に（type=date のブラウザ正規化後の値と一致＝未変更の誤送信を防ぐ）
+  custEditOrig = isEdit ? custFormRead_() : {};
+}
+
+function custFormRead_() {
+  var out = {};
+  CUST_FORM_FIELDS.forEach(function(f){
+    var el = document.getElementById('cf-' + f.key);
+    if (el) out[f.key] = el.value;
+  });
+  return out;
+}
+
+// 送信。編集＝元値と違う項目だけ／新規＝空でない項目すべて。duplicate は force で再送。
+function submitCustForm(isAdd, force) {
+  var cur = custFormRead_();
+  var payload = {};
+  if (isAdd) {
+    Object.keys(cur).forEach(function(k){ if (String(cur[k]).trim() !== '') payload[k] = cur[k]; });
+    if (!String(payload.card||'').trim() && !String(payload.name||'').trim()) {
+      custFormMsg_('カード記載名または氏名を入力してください', true); return;
+    }
+    if (force) payload.force = true;
+  } else {
+    Object.keys(cur).forEach(function(k){
+      var was = (custEditOrig[k] == null) ? '' : String(custEditOrig[k]);
+      if (String(cur[k]) !== was) payload[k] = cur[k];
+    });
+    if (Object.keys(payload).length === 0) { custFormMsg_('変更がありません', true); return; }
+  }
+  var btn = document.getElementById('cf-save'); if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
+  var body = isAdd
+    ? { action:'adminAddCustomer', userId: userId, payload: payload }
+    : { action:'adminUpdateCustomer', userId: userId, rowIdx: custEditRowIdx, payload: payload };
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.ok) {
+        custFormMsg_(isAdd ? '✅ 登録しました' : '✅ 保存しました', false);
+        setTimeout(function(){ loadCustomers(custFilter, custQuery); }, 700);
+        return;
+      }
+      if (btn) { btn.disabled = false; btn.textContent = isAdd ? '登録する' : '保存する'; }
+      if (d && d.duplicate && isAdd) {
+        var m = d.match || {};
+        var ok = confirm('同名のお客様が既に登録されています。\n'
+          + (m.name || m.card || '') + (m.no ? '（会員' + m.no + '）' : '') + (m.tantou ? ' 担当' + m.tantou : '')
+          + '\n\n別のお客様として登録しますか？');
+        if (ok) submitCustForm(true, true);
+        return;
+      }
+      custFormMsg_('⚠️ ' + ((d && d.error) || 'エラーが発生しました'), true);
+    })
+    .catch(function(){
+      if (btn) { btn.disabled = false; btn.textContent = isAdd ? '登録する' : '保存する'; }
+      custFormMsg_('通信エラーが発生しました', true);
+    });
+}
+
+function custFormMsg_(msg, isErr) {
+  var el = document.getElementById('cf-msg'); if (!el) return;
+  el.innerHTML = '<div style="margin-bottom:10px;padding:9px 12px;border-radius:8px;font-size:13px;'
+    + (isErr ? 'background:#2a1410;border:1px solid #6a2e1a;color:#f0b0a0' : 'background:#0f2418;border:1px solid #1f5a3a;color:#8fe0b0')
+    + '">' + esc(msg) + '</div>';
+}
 
 // 来店情報BOX（ポータル配色）。金額はサーバがviewer権限で出し分け済み（非担当はnull）
 function renderPortalVisits(v) {
