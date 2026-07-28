@@ -1201,7 +1201,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-07-25a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-07-29a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -5218,18 +5218,18 @@ function dpSectionDaily(sec){
     return '<div class="dp-card"><div class="dp-card-top"><span class="dp-nm">'+esc(dpV(sec,c,'受取人')||'（受取人不明）')+' 様</span><span class="dp-amt">¥'+fmtYen(dpV(sec,c,'伝票金額'))+'</span></div>'
       +'<div class="dp-meta">現金 ¥'+fmtYen(dpV(sec,c,'現金合計'))+(match?' <span style="color:'+mcol+';font-weight:800">'+esc(match)+'</span>':'')
       +(dpV(sec,c,'但し書き')?' ・ '+esc(dpV(sec,c,'但し書き')):'')+(dpV(sec,c,'伝票日付')?' ・ '+esc(dpV(sec,c,'伝票日付')):'')+'</div>'
-      +'<div class="dp-card-b">'+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('daily',r.rowIdx)+'</div></div>';
+      +'<div class="dp-card-b">'+dpChk('daily',r.rowIdx)+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('daily',r.rowIdx)+'</div></div>';
   }).join(''):'<div class="dp-empty">この日の日払いはありません</div>';
-  return '<div class="dp-sec">'+dpHead('💴','日払い',sec.rows.length,sec.total,'daily')+body+'</div>';
+  return '<div class="dp-sec">'+dpHead('💴','日払い',sec.rows.length,sec.total,'daily')+(sec.rows.length?dpBulkBar('daily'):'')+body+'</div>';
 }
 function dpSectionReceipt(sec){
   var body=sec.rows.length?sec.rows.map(function(r){
     var c=r.cells;
     return '<div class="dp-card"><div class="dp-card-top"><span class="dp-nm">'+esc(dpV(sec,c,'発行元')||'（発行元不明）')+'</span><span class="dp-amt">¥'+fmtYen(dpV(sec,c,'金額'))+'</span></div>'
       +'<div class="dp-meta">'+(dpV(sec,c,'但し書き')?esc(dpV(sec,c,'但し書き')):'')+(dpV(sec,c,'伝票日付')?' ・ '+esc(dpV(sec,c,'伝票日付')):'')+'</div>'
-      +'<div class="dp-card-b">'+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('receipt',r.rowIdx)+'</div></div>';
+      +'<div class="dp-card-b">'+dpChk('receipt',r.rowIdx)+dpImg(dpV(sec,c,'画像リンク'))+dpRowActions('receipt',r.rowIdx)+'</div></div>';
   }).join(''):'<div class="dp-empty">この日の領収書はありません</div>';
-  return '<div class="dp-sec">'+dpHead('🧾','領収書',sec.rows.length,sec.total,'receipt')+body+'</div>';
+  return '<div class="dp-sec">'+dpHead('🧾','領収書',sec.rows.length,sec.total,'receipt')+(sec.rows.length?dpBulkBar('receipt'):'')+body+'</div>';
 }
 function dpSectionDelivery(sec){
   // 伝票No＋仕入先でグループ化
@@ -5237,11 +5237,12 @@ function dpSectionDelivery(sec){
   sec.rows.forEach(function(r){ var c=r.cells; var key=(dpV(sec,c,'仕入先'))+'|'+(dpV(sec,c,'伝票No')); if(!groups[key]){groups[key]={supplier:dpV(sec,c,'仕入先'),slip:dpV(sec,c,'伝票No'),date:dpV(sec,c,'伝票日付'),img:dpV(sec,c,'画像リンク'),rows:[]};order.push(key);} groups[key].rows.push(r); });
   var body=order.length?order.map(function(k){ var g=groups[k];
     var lines=g.rows.map(function(r){ var c=r.cells; var refl=dpV(sec,c,'在庫反映');
-      return '<div class="dp-dline"><div class="dp-dline-l"><span class="dp-dnm">'+esc(dpV(sec,c,'商品名'))+'</span> <span class="dp-dqty">×'+esc(dpV(sec,c,'本数'))+'</span>'+(refl?'<span class="dp-refl">✓在庫反映済</span>':'')+'</div><span class="dp-damt">¥'+fmtYen(dpV(sec,c,'金額'))+'</span>'+dpRowActions('delivery',r.rowIdx)+'</div>';
+      return '<div class="dp-dline">'+dpChk('delivery',r.rowIdx)+'<div class="dp-dline-l"><span class="dp-dnm">'+esc(dpV(sec,c,'商品名'))+'</span> <span class="dp-dqty">×'+esc(dpV(sec,c,'本数'))+'</span>'+(refl?'<span class="dp-refl">✓在庫反映済</span>':'')+'</div><span class="dp-damt">¥'+fmtYen(dpV(sec,c,'金額'))+'</span>'+dpRowActions('delivery',r.rowIdx)+'</div>';
     }).join('');
-    return '<div class="dp-dgroup"><div class="dp-dhead">🚚 '+esc(g.supplier||'仕入先不明')+' <span class="dp-dsub">伝票'+esc(g.slip)+(g.date?' / '+esc(g.date):'')+'</span>'+dpImg(g.img)+'</div>'+lines+'</div>';
+    var gids=g.rows.map(function(r){return r.rowIdx;}).join(',');
+    return '<div class="dp-dgroup"><div class="dp-dhead">🚚 '+esc(g.supplier||'仕入先不明')+' <span class="dp-dsub">伝票'+esc(g.slip)+(g.date?' / '+esc(g.date):'')+'</span>'+dpImg(g.img)+' <button class="dp-dslipdel" onclick="dpDelSlipIdx(\''+gids+'\','+g.rows.length+')" style="background:#3a2430;border:1px solid #6a3a52;color:#ff9ab0;border-radius:7px;padding:2px 9px;font-size:11px;font-weight:700;cursor:pointer;margin-left:6px" title="この伝票の明細をまとめて削除">🗑 伝票ごと</button></div>'+lines+'</div>';
   }).join(''):'<div class="dp-empty">この日の納品はありません</div>';
-  return '<div class="dp-sec">'+dpHead('📦','納品',sec.rows.length,sec.total)+body+'</div>';
+  return '<div class="dp-sec">'+dpHead('📦','納品',sec.rows.length,sec.total)+(sec.rows.length?dpBulkBar('delivery'):'')+body+'</div>';
 }
 var dpEdit=null;
 function editDenpyo(type,rowIdx){
@@ -5295,6 +5296,37 @@ function delDenpyo(type,rowIdx){
   if(!confirm('この伝票行を削除しますか？（元に戻せません）'))return;
   gsr('kioskDeleteDenpyo',DP_SHEET[type],rowIdx).then(function(res){
     if(res&&res.ok){ toast('🗑 削除しました'); openDenpyoManager(); }
+    else { alert('削除エラー: '+((res&&res.error)||'')); }
+  }).catch(function(e){ alert('削除エラー: '+((e&&e.message)||e)); });
+}
+/* ==== 伝票 まとめて削除（チェックした行を一括削除） ==== */
+function dpChk(type,rowIdx){ return '<input type="checkbox" class="dp-chk" data-type="'+type+'" data-row="'+rowIdx+'" onchange="dpUpdCnt(\''+type+'\')" style="width:18px;height:18px;margin-right:8px;vertical-align:middle;flex:0 0 auto" title="まとめて削除に選択">'; }
+function dpBulkBar(type){
+  return '<div class="dp-bulkbar" style="display:flex;align-items:center;gap:12px;margin:4px 0 10px;padding:6px 10px;background:#1a2436;border:1px solid #2a3a55;border-radius:8px">'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9fb2d4;cursor:pointer"><input type="checkbox" onchange="dpToggleAll(\''+type+'\',this.checked)" style="width:16px;height:16px"> 全選択</label>'
+    +'<span class="dp-selcnt" data-type="'+type+'" style="font-size:12px;color:#8a9ac0"></span>'
+    +'<button onclick="dpBulkDel(\''+type+'\')" style="margin-left:auto;background:#5a2438;border:1px solid #8a3a5a;color:#ff9ab0;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">🗑 選択をまとめて削除</button>'
+    +'</div>';
+}
+function dpToggleAll(type,on){ Array.prototype.forEach.call(document.querySelectorAll('.dp-chk[data-type="'+type+'"]'),function(cb){cb.checked=on;}); dpUpdCnt(type); }
+function dpUpdCnt(type){ var n=document.querySelectorAll('.dp-chk[data-type="'+type+'"]:checked').length; var el=document.querySelector('.dp-selcnt[data-type="'+type+'"]'); if(el)el.textContent=n?('選択 '+n+'件'):''; }
+function dpBulkDel(type){
+  var boxes=Array.prototype.slice.call(document.querySelectorAll('.dp-chk[data-type="'+type+'"]:checked'));
+  if(!boxes.length){ alert('削除する行にチェックを入れてください'); return; }
+  var idxs=boxes.map(function(cb){ return Number(cb.getAttribute('data-row')); });
+  if(!confirm(idxs.length+'件の伝票行を削除しますか？（元に戻せません）'))return;
+  gsr('kioskDeleteDenpyoBulk',DP_SHEET[type],idxs).then(function(res){
+    if(res&&res.ok){ toast('🗑 '+(res.deleted||idxs.length)+'件を削除しました'); openDenpyoManager(); }
+    else { alert('削除エラー: '+((res&&res.error)||'')); }
+  }).catch(function(e){ alert('削除エラー: '+((e&&e.message)||e)); });
+}
+/* 納品の「伝票ごと削除」＝その仕入先+伝票Noの全明細を一括（rowIdxは数値のみ渡す＝安全） */
+function dpDelSlipIdx(idsStr,n){
+  var idxs=String(idsStr).split(',').map(Number).filter(function(x){ return x>=2; });
+  if(!idxs.length)return;
+  if(!confirm('この伝票の '+(n||idxs.length)+'明細をまとめて削除しますか？（元に戻せません）'))return;
+  gsr('kioskDeleteDenpyoBulk',DP_SHEET.delivery,idxs).then(function(res){
+    if(res&&res.ok){ toast('🗑 '+(res.deleted||idxs.length)+'件を削除しました'); openDenpyoManager(); }
     else { alert('削除エラー: '+((res&&res.error)||'')); }
   }).catch(function(e){ alert('削除エラー: '+((e&&e.message)||e)); });
 }
