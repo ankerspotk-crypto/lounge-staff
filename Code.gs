@@ -654,8 +654,18 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(mendanApi_(body)))
         .setMimeType(ContentService.MimeType.JSON);
     }
-    // 【一時・使用後撤去】納品記録の重複掃除。ランダムトークンで施錠。apply:true で実削除、既定はドライラン。
+    // 【一時・使用後撤去】納品記録の重複掃除。ランダムトークンで施錠。dump:全行ダンプ / apply:true で実削除 / 既定ドライラン。
     if (body.action === 'admin_dedupe_delivery' && body.token === 'DEDUPE-0728-Kx9v2Qp7LmZ4') {
+      if (body.dump === true) {
+        const dsh = getOrOpenSS_().getSheetByName('納品記録');
+        const dv = dsh.getDataRange().getValues();
+        const fmt = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : v; };
+        const out = [];
+        for (let i = 1; i < dv.length; i++) {
+          out.push({ row: i + 1, 営業日: fmt(dv[i][0]), 伝票日付: fmt(dv[i][2]), 伝票No: String(dv[i][3] || ''), 商品名: String(dv[i][4] || ''), 本数: dv[i][6], ケース: dv[i][7], バラ: dv[i][8], 金額: dv[i][11], 品番: String(dv[i][14] || '') });
+        }
+        return ContentService.createTextOutput(JSON.stringify({ ok: true, rows: out })).setMimeType(ContentService.MimeType.JSON);
+      }
       return ContentService.createTextOutput(JSON.stringify(dedupeDeliveryRecords_(body.apply === true ? false : true)))
         .setMimeType(ContentService.MimeType.JSON);
     }
