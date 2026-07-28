@@ -7118,6 +7118,10 @@ function getTodayShiftDetail_() {
   // 当日の源氏名リネーム（体験の子など）を全ロスターに横断適用。付け回しプール/送り/シフト/ラインナップは全てこの関数経由。
   const genji = (typeof kioskGetGenji_ === 'function') ? (kioskGetGenji_() || {}) : {}; // { 元名: 当日の表示名 }
   const cast = [], kurofuku = [], haken = [];
+  // 退職者は当日シフト（本日シフト盤/LINEシフト確認/付け回し/送り/出勤漏れ等）に出さない。
+  // 名簿(SSOT)の退職列で判定し、空白除去の正規化名で突合（シート/名簿の表記ゆれ対策）。getShiftMgmtData_ と同型。
+  const retiredKeys = (typeof retiredNameKeys_ === 'function') ? retiredNameKeys_() : {};
+  const nkeyOf = s => normalizeName_(String(s).trim()).replace(/[\s　]/g, '');
   for (let i = 1; i < data.length; i++) {
     const origName = String(data[i][0]).trim();
     const role     = String(data[i][1]).trim();
@@ -7126,6 +7130,7 @@ function getTodayShiftDetail_() {
       ? Utilities.formatDate(shiftRaw, TZ, 'HH:mm')
       : String(shiftRaw).trim();
     if (!origName || !shift || shift === '休み') continue;
+    if (retiredKeys[nkeyOf(origName)]) continue; // 退職者は当日シフトに出さない（例: まき）
     const name = genji[origName] || origName; // 当日の表示名（源氏名）。origNameはシフト表の元名
     if (role === 'キャスト' || role === '体験') cast.push({ name, origName, shift, role });
     else if (role === '黒服社員' || role === '黒服バイト' || role === '黒服') kurofuku.push({ name, origName, shift });
