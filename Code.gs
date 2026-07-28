@@ -7139,6 +7139,63 @@ function getTodayShiftDetail_() {
   return { cast, kurofuku, haken };
 }
 
+// 【一時・診断/読み取り専用】退職者がシフト一覧に残る原因(名前照合ズレ/退職フラグ生値)を特定する。
+// GASエディタで RECON_diagRetiredLeak を実行→戻り値/実行ログに、名簿の退職者・「佐々木」を含む名簿行の退職列生値・
+// シフト表/申請の該当行(raw名/nkey/LINE_ID)を出す。非公開(GUNSHI_API_FNS非登録)・データ改変なし。
+function RECON_diagRetiredLeak() {
+  var norm = function (s) { return normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, ''); };
+  var HIT = function (s) { return s.indexOf('佐々木') >= 0 || s.indexOf('ささき') >= 0 || s.indexOf('成真') >= 0; };
+  var out = [];
+  var stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  var rc = stf ? getStaffRetireCols_(stf, false)['退職'] : -1;
+  var byNk = {}, byId = {}, retired = [];
+  if (stf && rc != null && rc >= 0) {
+    var sr = stf.getDataRange().getValues();
+    for (var k = 1; k < sr.length; k++) {
+      if (String(sr[k][rc]).trim() === '退職') {
+        var nm = String(sr[k][1]), uid = String(sr[k][0]).trim(), nk = norm(nm);
+        retired.push({ nm: nm, uid: uid, nk: nk });
+        byNk[nk] = true; if (uid) byId[uid] = nm;
+      }
+    }
+  }
+  out.push('退職列インデックス rc=' + rc);
+  out.push('=== 名簿の退職者 (' + retired.length + '名)  名簿名 / userId / nkey ===');
+  retired.forEach(function (r) { out.push('  名簿名="' + r.nm + '"  userId="' + r.uid + '"  nkey="' + r.nk + '"'); });
+  if (stf && rc != null && rc >= 0) {
+    var all = stf.getDataRange().getValues();
+    out.push('=== 名簿で「佐々木/ささき/成真」を含む行  名簿名 / 退職列の生値 / nkey ===');
+    for (var a = 1; a < all.length; a++) {
+      var an = String(all[a][1]); if (!HIT(an)) continue;
+      out.push('  名簿名="' + an + '"  退職列生値="' + String(all[a][rc]) + '"  nkey="' + norm(an) + '"');
+    }
+  }
+  var sh = getShiftSS_().getSheetByName(SHIFT_TAB);
+  var sd = sh.getDataRange().getValues();
+  var hdr = sd[0].map(function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'M/d') : String(v).trim(); });
+  var idCol = hdr.indexOf(SHIFT_ID_HEADER);
+  out.push('=== シフト表で「佐々木/ささき/成真」を含む行  raw名 / nkey / LINE_ID / 退職判定 ===');
+  for (var i = 1; i < sd.length; i++) {
+    var snm = String(sd[i][0]); if (!snm.trim() || !HIT(snm)) continue;
+    var snk = norm(snm), lid = idCol >= 0 ? String(sd[i][idCol]).trim() : '';
+    var tag = byNk[snk] ? '←退職と名前一致(除外されるはず)' : (lid && byId[lid] ? '★LINE_IDは退職者「' + byId[lid] + '」と一致・名前nkey不一致' : '×退職と不一致(残る)');
+    out.push('  raw="' + snm + '"  nkey="' + snk + '"  LINE_ID="' + lid + '"  ' + tag);
+  }
+  var req = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+  if (req) {
+    var rq = req.getDataRange().getValues();
+    out.push('=== シフト申請で「佐々木/ささき/成真」を含む承諾/pending行  raw名 / nkey / status / 退職判定 ===');
+    for (var j = 1; j < rq.length; j++) {
+      var qnm = String(rq[j][1]); if (!qnm.trim() || !HIT(qnm)) continue;
+      var qst = String(rq[j][4]).trim(); if (qst !== '承諾' && qst !== 'pending') continue;
+      out.push('  raw="' + qnm + '"  nkey="' + norm(qnm) + '"  status="' + qst + '"  ' + (byNk[norm(qnm)] ? '←退職と一致' : '×不一致(残る)'));
+    }
+  }
+  var txt = out.join('\n');
+  Logger.log(txt);
+  return txt;
+}
+
 // ============================================================
 // 📋 黒服 日次申し送り（引き継ぎボード）
 //   前日/当日の黒服が軍師から書き、翌日の黒服が朝イチで見る。未doneのTODOは翌営業日へ自動繰り越し。
