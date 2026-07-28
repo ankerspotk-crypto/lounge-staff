@@ -1746,12 +1746,38 @@ function handleKaikeiCheck_(event, blob, bizDate, tstamp, fileExt, ai) {
   reply(event.replyToken, r.msg);
 }
 
+// LINE画像メッセージの二重処理を防止する。処理済み message.id を最新300件だけ保持し照合する。
+//   （LINEは応答が遅いと同じ画像イベントを再送する＝同じ写真をOCR＆記録してしまうのを入口で止める）
+function imgMsgAlreadyProcessed_(msgId) {
+  if (!msgId) return false;
+  try { const raw = prop('PROCESSED_IMG_MSG_IDS'); return raw ? JSON.parse(raw).indexOf(String(msgId)) >= 0 : false; }
+  catch (e) { return false; }
+}
+function markImgMsgProcessed_(msgId) {
+  if (!msgId) return;
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000); // 再送が同時に走っても取りこぼさないよう read-modify-write をロック
+    const ps = PropertiesService.getScriptProperties();
+    let arr = []; try { arr = JSON.parse(ps.getProperty('PROCESSED_IMG_MSG_IDS') || '[]'); } catch (e) { arr = []; }
+    if (arr.indexOf(String(msgId)) < 0) {
+      arr.push(String(msgId));
+      if (arr.length > 300) arr = arr.slice(arr.length - 300);
+      ps.setProperty('PROCESSED_IMG_MSG_IDS', JSON.stringify(arr));
+    }
+  } catch (e) { /* ロックが取れなくても致命ではない（内容ガードが別途効く） */ }
+  finally { try { lock.releaseLock(); } catch (e) { } }
+}
+
 // 黒服グループに営業時間帯(16:00〜翌6:00)にアップされた画像を、その営業日フォルダに保存
 function handleReceiptImage_(event) {
   try {
     const groupId = event.source && event.source.groupId;
     const KF = prop('GROUP_KUROFUKU');
     if (!KF || groupId !== KF) return; // 黒服グループのみ（時間帯は制限せず24時間対応。日付は営業日で振り分け）
+    // Webhook再送・同一メッセージの二重処理を防止（同じ画像の再送はここで打ち切る＝OCRも記録も走らせない）
+    const msgId = event.message && event.message.id;
+    if (imgMsgAlreadyProcessed_(msgId)) { console.log('duplicate image message skipped', msgId); return; }
     const res = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/message/' + event.message.id + '/content', {
       headers: { Authorization: 'Bearer ' + prop('LINE_TOKEN') },
       muteHttpExceptions: true
@@ -1766,11 +1792,12 @@ function handleReceiptImage_(event) {
     try { ai = extractReceiptWithGemini_(blob); } catch (e2) { console.error('gemini extract', e2); }
 
     // 会計伝票（お客様の会計）→ 売上伝票フォルダに「時刻_客名」で保存＋手書き/予約人数とPOS印字を突合（シート記録なし）
-    if (ai && ai.doc_type === '会計伝票') { handleKaikeiCheck_(event, blob, bizDate, tstamp, fileExt, ai); return; }
+    if (ai && ai.doc_type === '会計伝票') { handleKaikeiCheck_(event, blob, bizDate, tstamp, fileExt, ai); markImgMsgProcessed_(msgId); return; }
 
     // 品薄伝票（マルト等の欠品・入荷連絡）→ 納品書と紛らわしいが実納品ではないので保存も記録もせず無視
     if (ai && ai.doc_type === '品薄伝票') {
       reply(event.replyToken, '📩 品薄伝票を確認しました（納品書ではないため、在庫・記録には反映しません）。');
+      markImgMsgProcessed_(msgId);
       return;
     }
 
@@ -1778,6 +1805,7 @@ function handleReceiptImage_(event) {
     blob.setName('受領書_' + bizDate + '_' + tstamp + '.' + fileExt);
     const folder = getReceiptDayFolder_(bizDate);
     const file = folder.createFile(blob);
+    markImgMsgProcessed_(msgId); // 画像を保存できた時点で「処理済み」＝以降の再送はOCR/記録を走らせない（保存後なので画像は失わない）
     let count = 0; const fit = folder.getFiles(); while (fit.hasNext()) { fit.next(); count++; }
 
     let extraLine = '';
@@ -1785,13 +1813,21 @@ function handleReceiptImage_(event) {
       const dt = ai && ai.doc_type;
       if (dt === '納品書' && Array.isArray(ai.items)) {
         const r = recordDelivery_(bizDate, ai, file.getUrl());
-        // 納品を記録したら発注予定と品番で突合＝この伝票で埋まった発注を即クローズ（失敗しても記録は生かす）
-        let recLine = '';
-        try { const rc = reconcile010mDelivery_(); if (rc && rc.updated) recLine = '\n🔗 発注予定を更新: ' + rc.updated + '件'; } catch (e) { }
-        extraLine = '\n📦 納品書: ' + (ai.supplier || '仕入先不明') + (ai.date ? '（' + ai.date + '）' : '')
-          + '\n' + r.lines
-          + (r.count > r.shown ? '\n…他' + (r.count - r.shown) + '品目' : '')
-          + '\n計 ' + r.count + '品目 / ¥' + yenComma_(ai.total || r.total) + '\n→「納品記録」シートに記録しました（在庫加算は別途確認）。' + recLine;
+        if (r.dup) {
+          // 既に記録済みの納品書＝二重登録を防ぎ、追記しない（同じ伝票の撮り直し・Webhook再送のどちらでも弾く）
+          extraLine = '\n⛔ この納品書は既に記録済みです（'
+            + (r.dupInfo.by === '伝票No' ? '伝票No ' + r.dupInfo.slipNo : '明細が一致')
+            + '／' + (r.dupInfo.supplier || ai.supplier || '仕入先不明') + (r.dupInfo.bizDate ? '・' + r.dupInfo.bizDate : '') + '）。'
+            + '\n→ 二重登録を防ぐため、今回は記録しませんでした。';
+        } else {
+          // 納品を記録したら発注予定と品番で突合＝この伝票で埋まった発注を即クローズ（失敗しても記録は生かす）
+          let recLine = '';
+          try { const rc = reconcile010mDelivery_(); if (rc && rc.updated) recLine = '\n🔗 発注予定を更新: ' + rc.updated + '件'; } catch (e) { }
+          extraLine = '\n📦 納品書: ' + (ai.supplier || '仕入先不明') + (ai.date ? '（' + ai.date + '）' : '')
+            + '\n' + r.lines
+            + (r.count > r.shown ? '\n…他' + (r.count - r.shown) + '品目' : '')
+            + '\n計 ' + r.count + '品目 / ¥' + yenComma_(ai.total || r.total) + '\n→「納品記録」シートに記録しました（在庫加算は別途確認）。' + recLine;
+        }
       } else if (dt === '領収書' && (ai.issuer || ai.amount)) {
         recordReceipt_(bizDate, ai, file.getUrl());
         extraLine = '\n🧾 領収書: ' + (ai.issuer || '発行元不明') + ' / ¥' + yenComma_(ai.amount) + (ai.note ? ' / ' + ai.note : '') + (ai.date ? ' / ' + ai.date : '') + '\n→「領収書記録」シートに記録しました。';
@@ -1845,7 +1881,7 @@ function recordReceipt_(bizDate, ai, fileUrl) {
   sh.appendRow([bizDate, String(ai.issuer || ''), (hasAmt ? Number(ai.amount) : ''), String(ai.note || ''), String(ai.date || ''), new Date(), fileUrl || '']);
 }
 
-// 納品記録シートに明細を1行ずつ追記。返り値: {count, shown, total, lines(リプライ用サマリ)}
+// 納品記録シートに明細を1行ずつ追記。返り値: {count, shown, total, lines(リプライ用サマリ), dup, dupInfo}
 function recordDelivery_(bizDate, ai, fileUrl) {
   const ss = getOrOpenSS_();
   // ⚠️列は末尾追加のみ（在庫反映=13/画像=14が全関数でハードコード）。品番は15列目に足す＝非破壊で突合キーを持つ。
@@ -1855,7 +1891,13 @@ function recordDelivery_(bizDate, ai, fileUrl) {
   // 既存シート(14列)には品番見出しが無い＝15列目に生やす（値は空欄のまま＝既存行は移行不要）
   if (String(sh.getRange(1, 15).getValue() || '').trim() !== '品番') { sh.getRange(1, 15).setValue('品番'); sh.getRange('O:O').setNumberFormat('@'); }
   const items = Array.isArray(ai.items) ? ai.items : [];
-  const now = new Date();
+
+  // ── 二重登録ガード：同じ納品書が既に記録済みなら追記しない（Webhook再送・同じ伝票の撮り直し対策）──
+  const dup = deliveryAlreadyRecorded_(sh, ai);
+  if (dup) {
+    return { count: items.length, shown: 0, total: Number(ai.total) || 0, lines: '', dup: true, dupInfo: dup };
+  }
+
   let total = 0; const lines = [];
   items.forEach(function (it) {
     const pack = Number(it.pack) || 0, cases = Number(it.cases) || 0, pieces = Number(it.pieces) || 0;
@@ -1864,8 +1906,76 @@ function recordDelivery_(bizDate, ai, fileUrl) {
     sh.appendRow([bizDate, String(ai.supplier || ''), String(ai.date || ''), String(ai.slip_no || ''), String(it.name || ''), String(it.volume || ''), honCount, cases, pieces, pack, Number(it.unit_price) || '', amt, '', fileUrl || '', String(it.code || '')]);
     if (lines.length < 5) lines.push('・' + String(it.name || '') + ' ×' + honCount + '　¥' + yenComma_(amt));
   });
-  return { count: items.length, shown: lines.length, total: total, lines: lines.join('\n') };
+  return { count: items.length, shown: lines.length, total: total, lines: lines.join('\n'), dup: false };
 }
+
+// 納品記録シートに同じ伝票が既に入っているか判定（重複追記の防止）。
+//  ・伝票Noがあれば「仕入先＋伝票No」が最強キー（同じ番号の伝票が正しく2度来ることは無い）。
+//  ・伝票Noが無い伝票は、全明細（商品名＋本数＋金額）が同じ仕入先・同じ伝票日付で既に揃っていれば重複とみなす。
+// 見つかれば {by, supplier, slipNo, bizDate}、無ければ null。
+function deliveryAlreadyRecorded_(sh, ai) {
+  if (!sh || sh.getLastRow() < 2) return null;
+  const norm = function (s) { return String(s == null ? '' : s).replace(/[\s　]/g, ''); };
+  const vals = sh.getDataRange().getValues(); // 列: 0営業日 1仕入先 2伝票日付 3伝票No 4商品名 6本数 11金額
+  const supKey = norm(ai.supplier), slipNo = norm(ai.slip_no);
+  const bd = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || ''); };
+  if (slipNo) {
+    for (let i = 1; i < vals.length; i++) {
+      if (norm(vals[i][1]) === supKey && norm(vals[i][3]) === slipNo) {
+        return { by: '伝票No', supplier: String(vals[i][1] || ''), slipNo: String(ai.slip_no || ''), bizDate: bd(vals[i][0]) };
+      }
+    }
+    return null;
+  }
+  // 伝票No無し：全明細が同じ仕入先・同じ伝票日付で既に揃っていれば重複（別内容の納品なら必ず新品目が混じるので通す）
+  const items = Array.isArray(ai.items) ? ai.items : [];
+  if (!items.length) return null;
+  const dateKey = norm(ai.date);
+  const seen = {};
+  for (let i = 1; i < vals.length; i++) {
+    if (norm(vals[i][1]) !== supKey) continue;
+    if (norm(vals[i][3]) !== '') continue;               // 伝票No付きの行はこのフォールバック対象外
+    if (dateKey && norm(vals[i][2]) !== dateKey) continue;
+    seen[norm(vals[i][4]) + '|' + (Number(vals[i][6]) || 0) + '|' + (Number(vals[i][11]) || 0)] = true;
+  }
+  if (!Object.keys(seen).length) return null;
+  const allPresent = items.every(function (it) {
+    const pack = Number(it.pack) || 0, cases = Number(it.cases) || 0, pieces = Number(it.pieces) || 0;
+    const hon = (cases * pack) + pieces || pieces || cases;
+    return seen[norm(it.name) + '|' + hon + '|' + (Number(it.amount) || 0)] === true;
+  });
+  return allPresent ? { by: '明細一致', supplier: String(ai.supplier || ''), slipNo: '', bizDate: dateKey } : null;
+}
+
+// 【手動実行用】既存の納品記録から重複行を掃除する。既定はドライラン（削除せずレポートのみ）。
+//   実削除は dedupeDeliveryRecordsApply_() を実行。
+//   同じ伝票を2〜3回読み取ると生まれる重複行を消す。判定は伝票の同一性（営業日+仕入先+伝票No+商品名+本数+金額+品番）。
+//   ⚠️ 伝票Noが空の行は自動掃除の対象外（安全のため手動確認）＝rowsNoSlip に件数だけ報告。
+function dedupeDeliveryRecords_(dryRun) {
+  if (dryRun === undefined) dryRun = true;
+  const sh = getOrOpenSS_().getSheetByName('納品記録');
+  if (!sh || sh.getLastRow() < 2) return { ok: true, msg: '納品記録が空です', duplicateRows: 0 };
+  const vals = sh.getDataRange().getValues();
+  const norm = function (s) { return String(s == null ? '' : s).replace(/[\s　]/g, ''); };
+  const bd = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : norm(v); };
+  // 伝票の同一性 = 営業日+仕入先+伝票No+商品名+本数+金額+品番（画像リンク13/在庫反映12は毎回変わるので除外）
+  const idKey = function (r) { return [bd(r[0]), norm(r[1]), norm(r[3]), norm(r[4]), Number(r[6]) || 0, Number(r[11]) || 0, norm(r[14])].join('\u0001'); };
+  const seen = {}; const dupRows = []; let noSlip = 0;
+  for (let i = 1; i < vals.length; i++) {
+    if (norm(vals[i][3]) === '') { noSlip++; continue; } // 伝票No空は自動掃除の対象外（手動確認）
+    const k = idKey(vals[i]);
+    if (seen[k]) dupRows.push({ row: i + 1, 仕入先: String(vals[i][1] || ''), 伝票No: String(vals[i][3] || ''), 商品名: String(vals[i][4] || ''), 金額: Number(vals[i][11]) || 0 });
+    else seen[k] = true;
+  }
+  const report = { ok: true, dryRun: dryRun, totalRows: vals.length - 1, duplicateRows: dupRows.length, rowsNoSlip: noSlip, rows: dupRows };
+  console.log('[納品重複掃除] ' + (dryRun ? 'ドライラン（削除なし）' : '実削除') + ' / 全' + (vals.length - 1) + '行 / 重複' + dupRows.length + '行 / 伝票No空' + noSlip + '行'
+    + (dupRows.length ? ' → 対象行: ' + dupRows.map(function (x) { return x.row + '(' + x.仕入先 + '/' + x.伝票No + '/' + x.商品名 + ')'; }).join(', ') : ''));
+  if (dryRun || !dupRows.length) return report;
+  dupRows.map(function (x) { return x.row; }).sort(function (a, b) { return b - a; }).forEach(function (rn) { sh.deleteRow(rn); }); // 下から消す
+  report.deleted = dupRows.length;
+  return report;
+}
+function dedupeDeliveryRecordsApply_() { return dedupeDeliveryRecords_(false); }
 
 /* ===== 伝票管理（一覧・修正・削除） ===== */
 // 指定営業日の 日払い/領収書/納品 記録を返す（各: headers＋rows[{rowIdx,cells}]＋合計）
@@ -10718,7 +10828,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS'];
   const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
