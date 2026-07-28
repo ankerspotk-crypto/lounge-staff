@@ -1,415 +1,375 @@
 <meta charset="utf-8">
 <style>
   :root{
-    --ground:#0e0b06; --ground-2:#17110a; --panel:#1b1409; --panel-2:#211809;
-    --edge:rgba(216,178,90,.16); --edge-strong:rgba(216,178,90,.34);
-    --gold:#d8b25a; --gold-bright:#f2d68a; --gold-dim:#9a7d3e;
-    --jade:#5cc29c; --jade-dim:#2f6b57;
-    --vermilion:#dd5a41; --vermilion-bright:#f0765c;
-    --indigo:#6784ab; --indigo-dim:#3a4c66;
-    --washi:#efe6d1; --washi-dim:#b8aa89; --washi-faint:#7c7059;
-    --serif:"Hiragino Mincho ProN","YuMincho","Yu Mincho","Songti SC",serif;
-    --gothic:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP",sans-serif;
+    --bg:#080b12; --bg2:#0b1019; --panel:#0e1622; --panel2:#0c1420;
+    --line:rgba(120,150,198,.14); --line2:rgba(120,150,198,.26);
+    --blue:#3d7dff; --blue-bt:#6aa0ff; --blue-dim:#22457e;
+    --txt:#e7edf7; --dim:#8f9fbb; --faint:#556483;
+    --ok:#33d69a; --ok-dim:#155641;
+    --warn:#f5b63c; --warn-dim:#7d611f;
+    --crit:#ff5566; --crit-dim:#7c2731;
+    --sans:-apple-system,"SF Pro Text","Helvetica Neue","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;
     --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,monospace;
   }
   *{box-sizing:border-box;}
-  html,body{height:100%;margin:0;overflow:hidden;background:var(--ground);}
+  html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);}
   .bg{position:fixed;inset:0;z-index:0;
     background:
-      radial-gradient(120% 90% at 50% -10%, #241a0c 0%, var(--ground-2) 42%, var(--ground) 100%),
-      repeating-linear-gradient(0deg, rgba(216,178,90,.020) 0 1px, transparent 1px 3px);
-  }
-  #embers{position:fixed;inset:0;z-index:1;pointer-events:none;}
-  .board{position:relative;z-index:2;height:100dvh;height:100vh;
+      radial-gradient(130% 100% at 50% -20%, #14203a 0%, var(--bg2) 45%, var(--bg) 100%);}
+  .scan{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.5;
+    background:repeating-linear-gradient(0deg, rgba(120,150,198,.035) 0 1px, transparent 1px 3px);}
+
+  .app{position:relative;z-index:2;height:100dvh;height:100vh;
     display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;
-    gap:clamp(8px,.9vh,14px);padding:clamp(10px,1.4vh,20px);
-    color:var(--washi);font-family:var(--gothic);
-  }
+    gap:clamp(7px,.85vh,12px);padding:clamp(9px,1.2vh,16px);
+    color:var(--txt);font-family:var(--sans);
+    font-feature-settings:"tnum" 1;}
 
-  /* ---------- header rail ---------- */
-  .rail{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;
-    gap:clamp(14px,2vw,34px);
-    padding:clamp(10px,1.4vh,18px) clamp(16px,1.8vw,28px);
-    background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--edge);border-radius:4px;position:relative;overflow:hidden;}
-  .rail::after{content:"";position:absolute;top:0;bottom:0;left:-30%;width:22%;
-    background:linear-gradient(90deg,transparent,rgba(242,214,138,.10),transparent);
-    animation:sweep 7s linear infinite;}
-  .crest{width:clamp(46px,4.4vw,74px);height:clamp(46px,4.4vw,74px);flex:none;filter:drop-shadow(0 0 8px rgba(216,178,90,.25));}
-  .titleblock{min-width:0;}
-  .eyebrow{font-family:var(--serif);letter-spacing:.42em;text-transform:uppercase;
-    color:var(--gold-dim);font-size:clamp(9px,.82vw,13px);margin-bottom:.35em;}
-  .title{font-family:var(--serif);font-weight:600;line-height:1;
-    font-size:clamp(24px,2.9vw,50px);letter-spacing:.06em;
-    color:var(--washi);text-shadow:0 0 22px rgba(216,178,90,.18);white-space:nowrap;}
-  .title b{color:var(--gold-bright);font-weight:600;}
-  .latin{font-family:var(--mono);letter-spacing:.34em;color:var(--washi-faint);
-    font-size:clamp(8px,.7vw,11px);margin-top:.5em;text-transform:uppercase;}
-  .kpis{display:flex;gap:clamp(8px,.9vw,16px);}
-  .kpi{min-width:clamp(64px,6vw,108px);padding:clamp(6px,.8vh,12px) clamp(8px,.9vw,16px);
-    background:rgba(0,0,0,.28);border:1px solid var(--edge);border-radius:3px;
-    border-top:2px solid var(--kc,var(--gold));text-align:center;}
-  .kpi .n{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;
-    line-height:1;font-size:clamp(20px,2.4vw,40px);color:var(--kc,var(--gold));}
-  .kpi .l{font-size:clamp(8px,.72vw,12px);letter-spacing:.24em;color:var(--washi-dim);margin-top:.5em;}
+  /* label helper */
+  .eyebrow{font-family:var(--mono);text-transform:uppercase;letter-spacing:.22em;
+    color:var(--faint);font-size:clamp(8px,.66vw,11px);}
+
+  /* ---------- top bar ---------- */
+  .topbar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;
+    gap:clamp(14px,2vw,30px);padding:clamp(9px,1.2vh,15px) clamp(14px,1.6vw,24px);
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:8px;position:relative;overflow:hidden;}
+  .topbar::after{content:"";position:absolute;left:-25%;top:0;bottom:0;width:18%;
+    background:linear-gradient(90deg,transparent,rgba(106,160,255,.07),transparent);
+    animation:sweep 9s linear infinite;}
+  .brand{display:flex;align-items:center;gap:clamp(10px,1vw,16px);min-width:0;}
+  .shield{width:clamp(34px,3.2vw,50px);height:clamp(34px,3.2vw,50px);flex:none;}
+  .brand-tx .name{font-weight:650;letter-spacing:.02em;line-height:1;
+    font-size:clamp(17px,1.9vw,32px);color:var(--txt);}
+  .brand-tx .sub{margin-top:.5em;}
+  .sysstat{display:flex;align-items:center;gap:clamp(10px,1.4vw,26px);flex-wrap:wrap;}
+  .sys-led{display:flex;align-items:center;gap:.55em;font-family:var(--mono);
+    font-size:clamp(9px,.8vw,13px);letter-spacing:.14em;color:var(--ok);
+    padding:.4em .8em;border:1px solid var(--ok-dim);border-radius:5px;background:rgba(51,214,154,.06);}
+  .sys-led .led{width:.55em;height:.55em;border-radius:50%;background:var(--ok);
+    box-shadow:0 0 9px var(--ok);animation:blink 2s infinite;}
+  .mini{display:flex;gap:clamp(9px,1vw,18px);}
+  .mini .m{text-align:center;}
+  .mini .m b{font-family:var(--mono);font-weight:600;font-size:clamp(15px,1.6vw,26px);line-height:1;color:var(--mc,var(--txt));}
+  .mini .m span{display:block;margin-top:.4em;font-size:clamp(8px,.64vw,11px);color:var(--dim);letter-spacing:.1em;}
   .clock{text-align:right;font-family:var(--mono);flex:none;}
-  .clock .t{font-size:clamp(20px,2.3vw,40px);font-weight:600;letter-spacing:.06em;
-    color:var(--washi);line-height:1;font-variant-numeric:tabular-nums;}
-  .clock .d{font-size:clamp(9px,.82vw,14px);color:var(--washi-dim);letter-spacing:.2em;margin-top:.5em;}
-  .live-dot{display:inline-block;width:.5em;height:.5em;border-radius:50%;background:var(--jade);
-    margin-right:.5em;box-shadow:0 0 8px var(--jade);animation:pulse 1.8s ease-in-out infinite;vertical-align:middle;}
+  .clock .t{font-size:clamp(19px,2.1vw,36px);font-weight:600;line-height:1;color:var(--txt);letter-spacing:.04em;}
+  .clock .d{font-size:clamp(9px,.82vw,13px);color:var(--dim);letter-spacing:.16em;margin-top:.5em;}
 
-  /* ---------- 戦況バンド (live) ---------- */
-  .warband{display:flex;align-items:center;gap:clamp(10px,1.2vw,22px);
-    padding:clamp(6px,.9vh,12px) clamp(14px,1.6vw,24px);animation-delay:.1s;
-    background:linear-gradient(180deg,rgba(32,24,10,.7),rgba(18,13,7,.72));
-    border:1px solid var(--edge);border-radius:4px;overflow:hidden;}
-  .wb-title{display:flex;flex-direction:column;gap:.4em;flex:none;
-    padding-right:clamp(10px,1.2vw,20px);border-right:1px solid var(--edge);}
-  .wb-jp{font-family:var(--serif);font-size:clamp(12px,1.15vw,20px);letter-spacing:.16em;color:var(--washi);white-space:nowrap;}
-  .wb-live{font-family:var(--mono);font-size:clamp(8px,.66vw,11px);letter-spacing:.2em;
-    color:var(--washi-faint);display:flex;align-items:center;gap:.5em;white-space:nowrap;}
-  .wb-live::before{content:"";width:.5em;height:.5em;border-radius:50%;background:var(--washi-faint);}
-  .wb-live.on{color:var(--jade);}
-  .wb-live.on::before{background:var(--jade);box-shadow:0 0 7px var(--jade);animation:pulse 1.6s infinite;}
-  .wt-row{display:flex;gap:clamp(8px,1vw,18px);flex:1;overflow-x:auto;scrollbar-width:none;}
-  .wt-row::-webkit-scrollbar{display:none;}
-  .wt{display:flex;flex-direction:column;align-items:center;gap:.32em;flex:none;
-    min-width:clamp(58px,5.4vw,94px);padding:clamp(4px,.55vh,10px) clamp(6px,.7vw,13px);
-    border-radius:3px;background:rgba(0,0,0,.22);border:1px solid var(--edge);}
-  .wt .v{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;line-height:1;
-    font-size:clamp(18px,2vw,34px);color:var(--washi);}
-  .wt.good .v{color:var(--jade);}
-  .wt.alert{border-color:var(--vermilion);}
-  .wt.alert .v{color:var(--vermilion-bright);}
-  .wt .l{font-size:clamp(8px,.7vw,12px);letter-spacing:.12em;color:var(--washi-dim);white-space:nowrap;}
-  .wt.flash{animation:flash .9s ease;}
-  @keyframes flash{0%{background:rgba(216,178,90,.30)}100%{background:rgba(0,0,0,.22)}}
+  /* ---------- live status strip ---------- */
+  .strip{display:flex;align-items:stretch;gap:clamp(8px,1vw,16px);
+    padding:clamp(6px,.8vh,11px) clamp(12px,1.4vw,20px);
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .strip-h{display:flex;flex-direction:column;justify-content:center;gap:.45em;flex:none;
+    padding-right:clamp(10px,1.2vw,18px);border-right:1px solid var(--line);}
+  .strip-h .jp{font-weight:600;font-size:clamp(12px,1.15vw,19px);letter-spacing:.05em;color:var(--txt);white-space:nowrap;}
+  .live-tag{display:flex;align-items:center;gap:.5em;font-family:var(--mono);
+    font-size:clamp(8px,.66vw,11px);letter-spacing:.16em;color:var(--faint);white-space:nowrap;}
+  .live-tag::before{content:"";width:.5em;height:.5em;border-radius:50%;background:var(--faint);}
+  .live-tag.on{color:var(--ok);}
+  .live-tag.on::before{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:blink 1.5s infinite;}
+  .metrics{display:flex;gap:clamp(7px,.9vw,15px);flex:1;overflow-x:auto;scrollbar-width:none;}
+  .metrics::-webkit-scrollbar{display:none;}
+  .metric{flex:none;min-width:clamp(62px,5.6vw,100px);padding:clamp(4px,.5vh,9px) clamp(7px,.8vw,13px);
+    border-radius:6px;background:rgba(120,150,198,.05);border:1px solid var(--line);
+    border-left:2px solid var(--mc,var(--blue));display:flex;flex-direction:column;gap:.3em;justify-content:center;}
+  .metric .v{font-family:var(--mono);font-weight:600;line-height:1;
+    font-size:clamp(18px,2vw,33px);color:var(--mc,var(--txt));}
+  .metric .l{font-size:clamp(8px,.7vw,12px);letter-spacing:.06em;color:var(--dim);white-space:nowrap;}
+  .metric.flash{animation:flash 1s ease;}
 
   /* ---------- main grid ---------- */
-  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.15fr) minmax(0,1.15fr);
-    gap:clamp(8px,.9vw,14px);min-height:0;}
-  .col{display:flex;flex-direction:column;gap:clamp(8px,.9vh,14px);min-height:0;}
-  .panel{background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--edge);border-radius:4px;
-    display:flex;flex-direction:column;min-height:0;overflow:hidden;}
-  .panel-h{display:flex;align-items:baseline;justify-content:space-between;
-    padding:clamp(8px,1vh,14px) clamp(12px,1vw,18px);border-bottom:1px solid var(--edge);flex:none;}
-  .panel-h .jp{font-family:var(--serif);font-size:clamp(13px,1.2vw,20px);letter-spacing:.14em;color:var(--washi);}
-  .panel-h .en{font-family:var(--mono);font-size:clamp(8px,.68vw,11px);letter-spacing:.3em;color:var(--gold-dim);text-transform:uppercase;}
-  .panel-body{padding:clamp(8px,1vh,14px) clamp(10px,1vw,16px);overflow:auto;min-height:0;
-    scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;}
-  .panel-body::-webkit-scrollbar{width:6px;}
-  .panel-body::-webkit-scrollbar-thumb{background:var(--gold-dim);border-radius:3px;}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.1fr) minmax(0,1.15fr);
+    gap:clamp(8px,1vw,14px);min-height:0;}
+  .col{display:flex;flex-direction:column;gap:clamp(8px,1vh,14px);min-height:0;}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+  .col-side .panel{flex:none;}
+  .col-side .panel.grow{flex:1;}
+  .col-agents .panel,.col-main .panel{flex:1;}
+  .ph{display:flex;align-items:center;justify-content:space-between;gap:.5em;
+    padding:clamp(8px,1vh,13px) clamp(12px,1.1vw,18px);border-bottom:1px solid var(--line);flex:none;}
+  .ph h2{margin:0;font-size:clamp(12px,1.15vw,19px);font-weight:600;letter-spacing:.03em;color:var(--txt);}
+  .pb{padding:clamp(6px,.8vh,12px) clamp(8px,.9vw,14px);overflow:auto;min-height:0;
+    scrollbar-width:thin;scrollbar-color:var(--blue-dim) transparent;}
+  .pb::-webkit-scrollbar{width:6px;}
+  .pb::-webkit-scrollbar-thumb{background:var(--blue-dim);border-radius:3px;}
 
-  /* ---------- agents (部隊) ---------- */
-  .col--agents .panel{flex:1;}
-  .unit{display:grid;grid-template-columns:auto 1fr auto;gap:clamp(8px,.8vw,14px);align-items:center;
-    padding:clamp(8px,1vh,13px) clamp(6px,.5vw,10px);border-bottom:1px solid rgba(216,178,90,.08);}
+  /* ---------- units ---------- */
+  .unit{display:grid;grid-template-columns:auto 1fr auto;gap:clamp(8px,.7vw,12px);align-items:center;
+    padding:clamp(8px,1vh,13px) clamp(6px,.5vw,9px);border-bottom:1px solid rgba(120,150,198,.08);}
   .unit:last-child{border-bottom:0;}
-  .unit-sig{width:clamp(28px,2.6vw,42px);height:clamp(28px,2.6vw,42px);border-radius:50%;flex:none;
-    display:grid;place-items:center;font-family:var(--mono);font-size:clamp(11px,1vw,16px);font-weight:600;
-    border:1.5px solid var(--u,var(--gold-dim));color:var(--u,var(--gold));background:rgba(0,0,0,.25);position:relative;}
-  .unit.on .unit-sig{box-shadow:0 0 0 0 rgba(92,194,156,.5);animation:ring 2.4s ease-out infinite;}
-  .unit-name{font-size:clamp(12px,1.05vw,18px);letter-spacing:.06em;color:var(--washi);}
-  .unit-code{font-family:var(--mono);font-size:clamp(8px,.62vw,11px);letter-spacing:.24em;color:var(--washi-faint);text-transform:uppercase;}
-  .unit-task{font-size:clamp(9px,.78vw,13px);color:var(--washi-dim);margin-top:.35em;}
-  .unit-state{font-family:var(--mono);font-size:clamp(8px,.66vw,11px);letter-spacing:.14em;
-    padding:.32em .6em;border-radius:2px;white-space:nowrap;
-    color:var(--washi-faint);border:1px solid var(--edge);}
-  .unit.on .unit-state{color:var(--jade);border-color:var(--jade-dim);}
-  .unit.on .unit-state::before{content:"";display:inline-block;width:.45em;height:.45em;border-radius:50%;
-    background:var(--jade);margin-right:.45em;box-shadow:0 0 6px var(--jade);animation:pulse 1.6s infinite;}
+  .unit-badge{font-family:var(--mono);font-size:clamp(8px,.66vw,11px);letter-spacing:.06em;
+    padding:.4em .5em;border-radius:5px;color:var(--dim);border:1px solid var(--line2);
+    background:rgba(120,150,198,.05);white-space:nowrap;flex:none;text-align:center;line-height:1.1;}
+  .unit.on .unit-badge{color:var(--ok);border-color:var(--ok-dim);background:rgba(51,214,154,.07);}
+  .unit-name{font-size:clamp(12px,1.05vw,18px);font-weight:550;color:var(--txt);letter-spacing:.02em;}
+  .unit-code{font-family:var(--mono);font-size:clamp(8px,.62vw,11px);letter-spacing:.14em;color:var(--faint);text-transform:uppercase;}
+  .unit-task{font-size:clamp(9px,.78vw,13px);color:var(--dim);margin-top:.32em;}
+  .unit-state{display:flex;align-items:center;gap:.45em;font-family:var(--mono);
+    font-size:clamp(8px,.68vw,11px);letter-spacing:.1em;color:var(--faint);white-space:nowrap;}
+  .unit-state .dot{width:.5em;height:.5em;border-radius:50%;background:var(--faint);}
+  .unit.on .unit-state{color:var(--ok);}
+  .unit.on .unit-state .dot{background:var(--ok);box-shadow:0 0 7px var(--ok);animation:blink 1.6s infinite;}
 
-  /* ---------- ops board (陣) ---------- */
-  .col--ops .panel{flex:1;}
-  .ops-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(148px,15vw,220px),1fr));
-    gap:clamp(8px,.8vw,13px);}
-  .zin{position:relative;background:rgba(0,0,0,.24);border:1px solid var(--edge);
-    border-left:3px solid var(--sc);border-radius:3px;padding:clamp(9px,1vh,15px) clamp(10px,.9vw,15px);
-    display:flex;flex-direction:column;gap:.55em;overflow:hidden;transition:border-color .4s,box-shadow .4s;}
-  .zin.active{animation:breathe 3.6s ease-in-out infinite;}
-  .zin.is-focus{border-color:var(--sc);box-shadow:0 0 0 1px var(--sc),0 0 26px -4px var(--sc);}
-  .zin.is-focus::after{content:"";position:absolute;top:5px;right:5px;width:11px;height:11px;
-    border-top:2px solid var(--sc);border-right:2px solid var(--sc);opacity:.9;}
-  .zin-top{display:flex;align-items:center;justify-content:space-between;gap:.5em;}
-  .pill{font-family:var(--mono);font-size:clamp(8px,.64vw,11px);letter-spacing:.14em;
-    padding:.24em .55em;border-radius:2px;color:var(--sc);border:1px solid var(--sc);
-    background:color-mix(in srgb,var(--sc) 12%,transparent);white-space:nowrap;}
-  .zin-tag{font-family:var(--mono);font-size:clamp(8px,.6vw,10px);color:var(--washi-faint);letter-spacing:.1em;}
-  .zin-name{font-size:clamp(12px,1.12vw,19px);line-height:1.28;letter-spacing:.03em;color:var(--washi);
-    text-wrap:balance;}
-  .zin-note{font-size:clamp(9px,.74vw,12px);color:var(--washi-dim);line-height:1.35;}
-  .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:auto;}
-  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--sc),color-mix(in srgb,var(--sc) 55%,#fff));
-    border-radius:2px;box-shadow:0 0 8px -1px var(--sc);}
-  .bar.dash{background:repeating-linear-gradient(90deg,var(--indigo-dim) 0 8px,transparent 8px 16px);}
+  /* ---------- cases ---------- */
+  .caselist{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(150px,15vw,230px),1fr));
+    gap:clamp(8px,.85vw,13px);}
+  .case{position:relative;background:rgba(120,150,198,.045);border:1px solid var(--line);
+    border-left:3px solid var(--sc);border-radius:6px;padding:clamp(9px,1vh,14px) clamp(10px,.9vw,15px);
+    display:flex;flex-direction:column;gap:.5em;overflow:hidden;transition:box-shadow .35s,border-color .35s;}
+  .case.p-active.is-focus{box-shadow:0 0 0 1px var(--sc),0 0 22px -6px var(--sc);}
+  .case-top{display:flex;align-items:center;justify-content:space-between;gap:.5em;}
+  .case-id{font-family:var(--mono);font-size:clamp(8px,.62vw,11px);letter-spacing:.08em;color:var(--faint);}
+  .badge{font-family:var(--mono);font-size:clamp(8px,.64vw,11px);letter-spacing:.08em;
+    padding:.26em .6em;border-radius:4px;color:var(--sc);border:1px solid var(--sc);
+    background:color-mix(in srgb,var(--sc) 13%,transparent);white-space:nowrap;display:flex;align-items:center;gap:.4em;}
+  .badge .dot{width:.45em;height:.45em;border-radius:50%;background:var(--sc);}
+  .case.p-active .badge .dot{box-shadow:0 0 6px var(--sc);animation:blink 1.5s infinite;}
+  .case-name{font-size:clamp(12px,1.1vw,19px);line-height:1.3;font-weight:550;color:var(--txt);letter-spacing:.01em;text-wrap:balance;}
+  .case-note{font-size:clamp(9px,.74vw,12px);color:var(--dim);line-height:1.35;}
+  .bar{height:4px;border-radius:2px;background:rgba(120,150,198,.12);overflow:hidden;margin-top:auto;}
+  .bar>i{display:block;height:100%;border-radius:2px;background:var(--sc);box-shadow:0 0 8px -2px var(--sc);}
+  .bar.idle{background:repeating-linear-gradient(90deg,rgba(120,150,198,.22) 0 7px,transparent 7px 14px);}
 
-  /* ---------- flank (三本柱 / 担当 / 他戦線) ---------- */
-  .col--flank .panel{flex:none;}
-  .col--flank .panel.grow{flex:1;}
-  .castle{display:flex;align-items:center;gap:clamp(8px,.8vw,14px);
-    padding:clamp(7px,.9vh,12px) clamp(4px,.4vw,8px);border-bottom:1px solid rgba(216,178,90,.08);}
-  .castle:last-child{border-bottom:0;}
-  .castle-ico{font-family:var(--serif);font-size:clamp(16px,1.5vw,26px);color:var(--gold);width:1.6em;text-align:center;flex:none;}
-  .castle-name{font-size:clamp(11px,.95vw,17px);color:var(--washi);letter-spacing:.05em;}
-  .castle-sub{font-size:clamp(8px,.66vw,11px);color:var(--washi-faint);margin-top:.3em;}
-  .castle-hb{margin-left:auto;display:flex;align-items:center;gap:.5em;font-family:var(--mono);
-    font-size:clamp(8px,.64vw,11px);color:var(--jade);letter-spacing:.1em;}
-  .castle-hb .beat{width:.55em;height:.55em;border-radius:50%;background:var(--jade);box-shadow:0 0 7px var(--jade);animation:pulse 2s infinite;}
-  .roles{display:flex;flex-wrap:wrap;gap:clamp(5px,.5vw,9px);}
-  .role{display:flex;flex-direction:column;gap:.25em;padding:.5em .7em;border-radius:3px;
-    background:rgba(0,0,0,.24);border:1px solid var(--edge);min-width:0;}
-  .role b{font-size:clamp(11px,.95vw,16px);color:var(--washi);font-weight:600;letter-spacing:.05em;}
-  .role span{font-size:clamp(8px,.62vw,10px);color:var(--washi-faint);letter-spacing:.06em;}
-  .fronts{display:flex;flex-direction:column;gap:clamp(5px,.5vh,8px);}
-  .front{display:flex;align-items:baseline;gap:.6em;font-size:clamp(9px,.8vw,13px);color:var(--washi-dim);}
-  .front .k{font-family:var(--serif);color:var(--gold);font-size:clamp(10px,.9vw,15px);min-width:5.5em;letter-spacing:.06em;}
-  .front .s{font-size:clamp(8px,.64vw,11px);color:var(--washi-faint);}
+  /* ---------- systems / roster / other ---------- */
+  .srow{display:flex;align-items:center;gap:clamp(9px,.9vw,14px);
+    padding:clamp(7px,.9vh,12px) clamp(4px,.4vw,8px);border-bottom:1px solid rgba(120,150,198,.08);}
+  .srow:last-child{border-bottom:0;}
+  .s-code{font-family:var(--mono);font-size:clamp(8px,.62vw,11px);letter-spacing:.1em;color:var(--faint);
+    border:1px solid var(--line2);border-radius:5px;padding:.4em .5em;flex:none;min-width:clamp(46px,4.4vw,68px);text-align:center;}
+  .s-name{font-size:clamp(11px,.98vw,17px);font-weight:550;color:var(--txt);}
+  .s-sub{font-size:clamp(8px,.66vw,11px);color:var(--faint);margin-top:.3em;}
+  .s-stat{margin-left:auto;display:flex;align-items:center;gap:.5em;font-family:var(--mono);
+    font-size:clamp(8px,.66vw,11px);color:var(--ok);letter-spacing:.08em;}
+  .s-stat .led{width:.5em;height:.5em;border-radius:50%;background:var(--ok);box-shadow:0 0 7px var(--ok);animation:blink 2.2s infinite;}
+  .roster{display:flex;flex-wrap:wrap;gap:clamp(5px,.5vw,9px);}
+  .rtag{display:flex;flex-direction:column;gap:.28em;padding:.5em .7em;border-radius:6px;
+    background:rgba(120,150,198,.05);border:1px solid var(--line);min-width:0;}
+  .rtag b{font-size:clamp(11px,.95vw,16px);font-weight:600;color:var(--txt);letter-spacing:.02em;}
+  .rtag span{font-family:var(--mono);font-size:clamp(8px,.6vw,10px);color:var(--faint);letter-spacing:.06em;}
+  .fronts{display:flex;flex-direction:column;gap:clamp(5px,.55vh,9px);}
+  .front{display:flex;align-items:baseline;gap:.65em;font-size:clamp(9px,.8vw,13px);}
+  .front .k{font-weight:600;color:var(--blue-bt);font-size:clamp(10px,.92vw,15px);min-width:6em;letter-spacing:.01em;}
+  .front .s{color:var(--dim);}
 
-  /* ---------- ticker (戦果報) ---------- */
-  .ticker{display:flex;align-items:center;gap:clamp(10px,1vw,18px);
-    padding:0 clamp(14px,1.4vw,22px);height:clamp(38px,5vh,58px);
-    background:linear-gradient(180deg,var(--panel),var(--panel-2));
-    border:1px solid var(--edge);border-radius:4px;overflow:hidden;}
-  .ticker-label{font-family:var(--serif);letter-spacing:.2em;color:var(--vermilion-bright);flex:none;
-    font-size:clamp(11px,1vw,17px);padding-right:clamp(10px,1vw,18px);border-right:1px solid var(--edge);}
-  .ticker-track{flex:1;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);}
-  .ticker-run{display:inline-block;white-space:nowrap;animation:marquee 44s linear infinite;}
-  .ti{display:inline-flex;align-items:center;gap:.6em;margin:0 clamp(16px,1.6vw,30px);
-    font-size:clamp(10px,.86vw,15px);color:var(--washi-dim);letter-spacing:.04em;}
-  .ti .v{font-family:var(--mono);font-size:.82em;color:var(--gold);letter-spacing:.06em;}
-  .ti .dot{width:.4em;height:.4em;border-radius:50%;background:var(--jade);box-shadow:0 0 6px var(--jade);flex:none;}
+  /* ---------- activity log ---------- */
+  .logbar{display:flex;align-items:center;gap:clamp(10px,1vw,18px);
+    padding:0 clamp(13px,1.4vw,20px);height:clamp(36px,4.8vh,54px);
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .log-label{font-family:var(--mono);letter-spacing:.16em;color:var(--blue-bt);flex:none;
+    font-size:clamp(9px,.82vw,13px);padding-right:clamp(10px,1vw,16px);border-right:1px solid var(--line);text-transform:uppercase;}
+  .log-track{flex:1;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);}
+  .log-run{display:inline-block;white-space:nowrap;animation:marquee 46s linear infinite;}
+  .li{display:inline-flex;align-items:center;gap:.55em;margin:0 clamp(14px,1.5vw,28px);
+    font-size:clamp(10px,.84vw,14px);color:var(--dim);letter-spacing:.02em;}
+  .li .code{font-family:var(--mono);font-size:.82em;color:var(--blue-bt);letter-spacing:.04em;}
+  .li .dot{width:.42em;height:.42em;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok);flex:none;}
 
-  @keyframes sweep{from{left:-30%}to{left:130%}}
+  @keyframes sweep{from{left:-25%}to{left:130%}}
   @keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-  @keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(216,178,90,0)}50%{box-shadow:0 0 20px -6px var(--sc)}}
-  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(92,194,156,.45)}100%{box-shadow:0 0 0 12px rgba(92,194,156,0)}}
-  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-  .board>*{animation:rise .7s cubic-bezier(.2,.7,.2,1) both;}
-  .rail{animation-delay:.02s}.col--agents{animation-delay:.14s}.col--ops{animation-delay:.22s}
-  .col--flank{animation-delay:.3s}.ticker{animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.32}}
+  @keyframes flash{0%{background:rgba(61,125,255,.28)}100%{background:rgba(120,150,198,.05)}}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .app>*{animation:rise .6s cubic-bezier(.2,.7,.2,1) both;}
+  .topbar{animation-delay:.02s}.strip{animation-delay:.1s}.grid{animation-delay:.18s}.logbar{animation-delay:.28s}
 
-  @media (prefers-reduced-motion:reduce){
-    *{animation:none!important;}
-    .ticker-run{animation:none!important;}
-  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;}.log-run{animation:none!important;}}
 </style>
 
 <div class="bg"></div>
-<canvas id="embers"></canvas>
+<div class="scan"></div>
 
-<div class="board">
-  <header class="rail">
-    <svg class="crest" viewBox="-50 -50 100 100" aria-hidden="true">
-      <circle cx="0" cy="0" r="47" fill="none" stroke="var(--gold-dim)" stroke-width="2.4"/>
-      <circle cx="0" cy="0" r="41" fill="none" stroke="var(--gold)" stroke-width="1.2" opacity=".7"/>
-      <g fill="var(--gold)" stroke="var(--gold-bright)" stroke-width="1">
-        <g transform="translate(0,-16) rotate(0)"><path d="M0,17 C-15,-1 -13,-17 -4,-13 C-1,-12 0,-8 0,-6 C0,-8 1,-12 4,-13 C13,-17 15,-1 0,17 Z"/><path d="M0,15 L0,-4" stroke="var(--panel)" stroke-width="1.4" opacity=".5"/></g>
-        <g transform="translate(0,-16) rotate(120)"><path d="M0,17 C-15,-1 -13,-17 -4,-13 C-1,-12 0,-8 0,-6 C0,-8 1,-12 4,-13 C13,-17 15,-1 0,17 Z"/></g>
-        <g transform="translate(0,-16) rotate(240)"><path d="M0,17 C-15,-1 -13,-17 -4,-13 C-1,-12 0,-8 0,-6 C0,-8 1,-12 4,-13 C13,-17 15,-1 0,17 Z"/></g>
-      </g>
-      <circle cx="0" cy="0" r="4.5" fill="var(--ground)" stroke="var(--gold-bright)" stroke-width="1.6"/>
-    </svg>
-    <div class="titleblock">
-      <div class="eyebrow">特務作戦司令室 · Operations</div>
-      <div class="title">軍師の<b>作戦盤</b></div>
-      <div class="latin">Ieyasu · Cloud War Council</div>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="shield" viewBox="0 0 40 44" aria-hidden="true">
+        <path d="M20 3 L35 9 V22 C35 33 28.5 39.5 20 42 C11.5 39.5 5 33 5 22 V9 Z"
+              fill="rgba(61,125,255,.10)" stroke="var(--blue)" stroke-width="1.8" stroke-linejoin="round"/>
+        <polyline points="9,23 14.5,23 17.5,15 22.5,31 25.5,23 31,23" fill="none"
+              stroke="var(--blue-bt)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="brand-tx">
+        <div class="name">オペレーションセンター</div>
+        <div class="sub eyebrow">Ieyasu · Operations Control</div>
+      </div>
     </div>
-    <div class="kpis" id="kpis"></div>
+    <div class="sysstat">
+      <div class="sys-led"><span class="led"></span>SYSTEM: OPERATIONAL</div>
+      <div class="mini" id="mini"></div>
+    </div>
     <div class="clock">
-      <div class="t"><span class="live-dot"></span><span id="ck-t">--:--:--</span></div>
+      <div class="t" id="ck-t">--:--:--</div>
       <div class="d" id="ck-d">----</div>
     </div>
   </header>
 
-  <section class="warband">
-    <div class="wb-title"><span class="wb-jp">戦況 — 今</span><span class="wb-live" id="wb-live">接続待ち</span></div>
-    <div class="wt-row" id="wt-row"></div>
+  <section class="strip">
+    <div class="strip-h"><span class="jp">現在の状況</span><span class="live-tag" id="live-tag">接続待ち</span></div>
+    <div class="metrics" id="metrics"></div>
   </section>
 
   <main class="grid">
-    <section class="col col--agents">
+    <section class="col col-agents">
       <div class="panel">
-        <div class="panel-h"><span class="jp">部隊</span><span class="en">AI Units</span></div>
-        <div class="panel-body" id="agents"></div>
+        <div class="ph"><h2>ユニット</h2><span class="eyebrow">Units</span></div>
+        <div class="pb" id="units"></div>
       </div>
     </section>
 
-    <section class="col col--ops">
+    <section class="col col-main">
       <div class="panel">
-        <div class="panel-h"><span class="jp">作戦盤 — 陣立て</span><span class="en" id="ops-count">Missions</span></div>
-        <div class="panel-body"><div class="ops-grid" id="ops"></div></div>
+        <div class="ph"><h2>進行中の案件</h2><span class="eyebrow" id="cases-count">Active Cases</span></div>
+        <div class="pb"><div class="caselist" id="cases"></div></div>
       </div>
     </section>
 
-    <section class="col col--flank">
+    <section class="col col-side">
       <div class="panel">
-        <div class="panel-h"><span class="jp">三本柱 — 本陣</span><span class="en">Systems</span></div>
-        <div class="panel-body" id="systems"></div>
+        <div class="ph"><h2>システム稼働状況</h2><span class="eyebrow">Systems</span></div>
+        <div class="pb" id="systems"></div>
       </div>
       <div class="panel">
-        <div class="panel-h"><span class="jp">担当 — 陣立</span><span class="en">Roster</span></div>
-        <div class="panel-body"><div class="roles" id="roles"></div></div>
+        <div class="ph"><h2>要員</h2><span class="eyebrow">Personnel</span></div>
+        <div class="pb"><div class="roster" id="roster"></div></div>
       </div>
       <div class="panel grow">
-        <div class="panel-h"><span class="jp">他戦線</span><span class="en">Other Fronts</span></div>
-        <div class="panel-body"><div class="fronts" id="fronts"></div></div>
+        <div class="ph"><h2>その他の案件</h2><span class="eyebrow">Other</span></div>
+        <div class="pb"><div class="fronts" id="fronts"></div></div>
       </div>
     </section>
   </main>
 
-  <footer class="ticker">
-    <span class="ticker-label">戦果報</span>
-    <div class="ticker-track"><span class="ticker-run" id="ticker"></span></div>
+  <footer class="logbar">
+    <span class="log-label">Activity Log</span>
+    <div class="log-track"><span class="log-run" id="log"></span></div>
   </footer>
 </div>
 
 <script>
 (function(){
-  const SC={live:'var(--jade)',active:'var(--gold)',parked:'var(--indigo)'};
-  const LABEL={live:'稼働中',active:'進行中',parked:'待機'};
+  const SC={active:'var(--blue)',live:'var(--ok)',parked:'var(--faint)'};
+  const LABEL={active:'進行中',live:'稼働',parked:'待機'};
 
-  const kpis=[
-    {n:24,l:'稼働',c:'var(--jade)'},
-    {n:4,l:'進行中',c:'var(--gold)'},
-    {n:3,l:'待機',c:'var(--indigo)'},
-    {n:5,l:'他戦線',c:'var(--vermilion)'},
+  const mini=[
+    {n:24,l:'稼働',c:'var(--ok)'},
+    {n:4,l:'進行中',c:'var(--blue-bt)'},
+    {n:3,l:'待機',c:'var(--dim)'},
   ];
-  const agents=[
-    {name:'本営',code:'CLAUDE',task:'作戦盤を構築・指揮',on:true,u:'var(--gold)'},
-    {name:'伝令隊',code:'SIGNAL',task:'LINE通達・通知配信',on:true,u:'var(--jade)'},
-    {name:'探索隊',code:'EXPLORE',task:'コード地図の索敵',on:false,u:'var(--indigo)'},
-    {name:'軍略隊',code:'PLAN',task:'実装計画の立案',on:false,u:'var(--indigo)'},
-    {name:'検分隊',code:'REVIEW',task:'検証・査読',on:false,u:'var(--indigo)'},
+  const units=[
+    {badge:'U-01',name:'メインAI',code:'CLAUDE',task:'ダッシュボード構築・指揮',on:true},
+    {badge:'U-02',name:'通知',code:'SIGNAL',task:'LINE配信・通達',on:true},
+    {badge:'U-03',name:'探索',code:'EXPLORE',task:'コード探索・調査',on:false},
+    {badge:'U-04',name:'計画',code:'PLAN',task:'実装計画の立案',on:false},
+    {badge:'U-05',name:'レビュー',code:'REVIEW',task:'検証・査読',on:false},
   ];
-  const ops=[
-    {name:'システム的付け回し',status:'active',p:30,tag:'設計',note:'Phase1・希望を置く盤面'},
-    {name:'いえやす合戦',status:'active',p:55,tag:'TEST',note:'Phase1実装・テスト環境'},
-    {name:'領収書・受領書 発行',status:'active',p:70,tag:'WIP',note:'作成中・本番未反映'},
-    {name:'匿名ピア投票・表彰',status:'active',p:90,tag:'@727',note:'本番portal昇格待ち'},
-    {name:'面談表（面談のiPad化）',status:'live',p:100,tag:'@701',note:'一気通貫で稼働'},
-    {name:'黒服 勤怠管理＋手当',status:'live',p:100,tag:'@702',note:'8/1施行'},
-    {name:'キャスト交通費',status:'live',p:100,tag:'@746',note:'往路自動＋復路'},
-    {name:'発注済み未着アラート',status:'live',p:100,tag:'@721',note:'終売・欠品を検知'},
-    {name:'通知管理センター',status:'live',p:100,tag:'@719',note:'44通知を一元ON/OFF'},
-    {name:'ボトル棚 照準ガイド',status:'live',p:100,tag:'Pages',note:'エヴァ風・5F実写'},
-    {name:'今月誕生日のお客様',status:'live',p:100,tag:'@662',note:'4画面＋自動通知'},
-    {name:'黒服 スキルテスト',status:'live',p:100,tag:'@731',note:'時給ゲート'},
-    {name:'送りの手段集計',status:'parked',p:0,tag:'⏸',note:'仕様から再検討'},
-    {name:'連絡フロー再設計',status:'parked',p:0,tag:'⏸',note:'家康くん一本化 検討'},
-    {name:'付け回しダッシュボード',status:'parked',p:0,tag:'⏸',note:'設計済・寝かせ'},
+  const cases=[
+    {name:'システム的付け回し',status:'active',p:30,note:'設計段階・希望を置く盤面'},
+    {name:'いえやす合戦',status:'active',p:55,note:'Phase1実装・テスト環境'},
+    {name:'領収書・受領書 発行',status:'active',p:70,note:'作成中・本番未反映'},
+    {name:'匿名ピア投票・表彰',status:'active',p:90,note:'本番ポータル昇格待ち'},
+    {name:'面談表（面談のiPad化）',status:'live',p:100,note:'一気通貫で稼働'},
+    {name:'黒服 勤怠管理＋手当',status:'live',p:100,note:'8/1施行'},
+    {name:'キャスト交通費',status:'live',p:100,note:'往路自動＋復路'},
+    {name:'発注済み未着アラート',status:'live',p:100,note:'終売・欠品を検知'},
+    {name:'通知管理センター',status:'live',p:100,note:'44通知を一元管理'},
+    {name:'ボトル棚 表示ガイド',status:'live',p:100,note:'5F実写・場所案内'},
+    {name:'今月誕生日のお客様',status:'live',p:100,note:'4画面＋自動通知'},
+    {name:'黒服 スキルテスト',status:'live',p:100,note:'時給ゲート'},
+    {name:'送りの手段集計',status:'parked',p:0,note:'仕様から再検討'},
+    {name:'連絡フロー再設計',status:'parked',p:0,note:'家康くん一本化 検討'},
+    {name:'付け回しダッシュボード',status:'parked',p:0,note:'設計済・保留'},
   ];
   const systems=[
-    {ico:'城',name:'ポータル',sub:'キャスト向け · portal.html'},
-    {ico:'軍',name:'軍師 gunshi',sub:'店内iPad · 黒服の実戦'},
-    {ico:'政',name:'管理コンソール',sub:'管理者機能 · Admin.html'},
+    {code:'PORTAL',name:'ポータル',sub:'キャスト向け'},
+    {code:'GUNSHI',name:'軍師',sub:'店内iPad端末'},
+    {code:'ADMIN',name:'管理コンソール',sub:'管理者機能'},
   ];
-  const roles=[
-    {b:'ボス',s:'総大将'},{b:'りく',s:'副官'},{b:'管理者',s:'統制'},
-    {b:'黒服',s:'現場'},{b:'キャスト',s:'前線'},
+  const roster=[
+    {b:'ボス',s:'統括'},{b:'りく',s:'副管理'},{b:'管理者',s:'管理'},
+    {b:'黒服',s:'現場'},{b:'キャスト',s:'接客'},
   ];
   const fronts=[
     {k:'NOCT',s:'夜職経営OS 商品化構想'},
     {k:'キレイン',s:'清潔さ認証サービス'},
     {k:'SECRET',s:'完全招待制ラウンジ'},
-    {k:'公式サイト',s:'店舗＋求人 和モダン'},
-    {k:'SECTION 04',s:'趣味 · 攻殻風 部隊'},
+    {k:'公式サイト',s:'店舗＋求人'},
+    {k:'SECTION 04',s:'趣味プロジェクト'},
   ];
-  const wins=[
-    {v:'@746',t:'キャスト交通費 本番稼働'},
-    {v:'@731',t:'黒服スキルテスト 稼働'},
-    {v:'@727',t:'匿名ピア投票 配信'},
-    {v:'@721',t:'発注未着アラート 稼働'},
-    {v:'@720',t:'通知管理センター 44通知'},
-    {v:'@718',t:'シャンパン在庫 稼働'},
-    {v:'@716',t:'退店予定時刻 稼働'},
-    {v:'149ce2e',t:'全員シフト 稼働'},
-    {v:'@702',t:'黒服勤怠 8/1施行'},
-    {v:'72cc20f',t:'ポータル刷新 稼働'},
+  const logs=[
+    {code:'@746',t:'キャスト交通費 稼働'},
+    {code:'@731',t:'黒服スキルテスト 稼働'},
+    {code:'@727',t:'匿名ピア投票 配信'},
+    {code:'@721',t:'発注未着アラート 稼働'},
+    {code:'@720',t:'通知管理センター 44通知'},
+    {code:'@718',t:'シャンパン在庫 稼働'},
+    {code:'@716',t:'退店予定時刻 稼働'},
+    {code:'149ce2e',t:'全員シフト 稼働'},
+    {code:'@702',t:'黒服勤怠 8/1施行'},
+    {code:'72cc20f',t:'ポータル刷新 稼働'},
   ];
 
   const $=id=>document.getElementById(id);
   const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const p2=n=>String(n).padStart(2,'0');
 
-  $('kpis').innerHTML=kpis.map(k=>
-    `<div class="kpi" style="--kc:${k.c}"><div class="n">${k.n}</div><div class="l">${k.l}</div></div>`).join('');
+  $('mini').innerHTML=mini.map(m=>
+    `<div class="m"><b style="color:${m.c}">${m.n}</b><span>${m.l}</span></div>`).join('');
 
-  $('agents').innerHTML=agents.map(a=>
-    `<div class="unit ${a.on?'on':''}" style="--u:${a.u}">
-       <div class="unit-sig">${esc(a.code[0])}</div>
-       <div><div class="unit-name">${esc(a.name)} <span class="unit-code">${esc(a.code)}</span></div>
-       <div class="unit-task">${esc(a.task)}</div></div>
-       <div class="unit-state">${a.on?'稼働':'待機'}</div>
+  $('units').innerHTML=units.map(u=>
+    `<div class="unit ${u.on?'on':''}">
+       <div class="unit-badge">${esc(u.badge)}</div>
+       <div><div class="unit-name">${esc(u.name)} <span class="unit-code">${esc(u.code)}</span></div>
+       <div class="unit-task">${esc(u.task)}</div></div>
+       <div class="unit-state"><span class="dot"></span>${u.on?'稼働':'待機'}</div>
      </div>`).join('');
 
-  $('ops').innerHTML=ops.map((o,i)=>
-    `<div class="zin ${o.status}" data-i="${i}" style="--sc:${SC[o.status]}">
-       <div class="zin-top"><span class="pill">${LABEL[o.status]}</span><span class="zin-tag">${esc(o.tag)}</span></div>
-       <div class="zin-name">${esc(o.name)}</div>
-       <div class="zin-note">${esc(o.note)}</div>
-       <div class="bar ${o.status==='parked'?'dash':''}">${o.status!=='parked'?`<i style="width:${o.p}%"></i>`:''}</div>
+  $('cases').innerHTML=cases.map((c,i)=>
+    `<div class="case p-${c.status}" data-i="${i}" style="--sc:${SC[c.status]}">
+       <div class="case-top"><span class="case-id">CASE-${p2(i+1)}</span>
+         <span class="badge"><span class="dot"></span>${LABEL[c.status]}</span></div>
+       <div class="case-name">${esc(c.name)}</div>
+       <div class="case-note">${esc(c.note)}</div>
+       <div class="bar ${c.status==='parked'?'idle':''}">${c.status!=='parked'?`<i style="width:${c.p}%"></i>`:''}</div>
      </div>`).join('');
-  $('ops-count').textContent=ops.length+' MISSIONS';
+  $('cases-count').textContent=cases.length+' CASES';
 
   $('systems').innerHTML=systems.map(s=>
-    `<div class="castle"><div class="castle-ico">${esc(s.ico)}</div>
-       <div><div class="castle-name">${esc(s.name)}</div><div class="castle-sub">${esc(s.sub)}</div></div>
-       <div class="castle-hb"><span class="beat"></span>稼働</div></div>`).join('');
+    `<div class="srow"><div class="s-code">${esc(s.code)}</div>
+       <div><div class="s-name">${esc(s.name)}</div><div class="s-sub">${esc(s.sub)}</div></div>
+       <div class="s-stat"><span class="led"></span>正常</div></div>`).join('');
 
-  $('roles').innerHTML=roles.map(r=>
-    `<div class="role"><b>${esc(r.b)}</b><span>${esc(r.s)}</span></div>`).join('');
+  $('roster').innerHTML=roster.map(r=>
+    `<div class="rtag"><b>${esc(r.b)}</b><span>${esc(r.s)}</span></div>`).join('');
 
   $('fronts').innerHTML=fronts.map(f=>
     `<div class="front"><span class="k">${esc(f.k)}</span><span class="s">${esc(f.s)}</span></div>`).join('');
 
-  const tickHtml=wins.map(w=>
-    `<span class="ti"><span class="dot"></span><span class="v">${esc(w.v)}</span>${esc(w.t)}</span>`).join('');
-  $('ticker').innerHTML=tickHtml+tickHtml;
+  const logHtml=logs.map(w=>
+    `<span class="li"><span class="dot"></span><span class="code">${esc(w.code)}</span>${esc(w.t)}</span>`).join('');
+  $('log').innerHTML=logHtml+logHtml;
 
   // clock
   const WD=['日','月','火','水','木','金','土'];
-  const p2=n=>String(n).padStart(2,'0');
-  function tick(){
-    const d=new Date();
+  function tick(){const d=new Date();
     $('ck-t').textContent=`${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
-    $('ck-d').textContent=`${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())} （${WD[d.getDay()]}）`;
+    $('ck-d').textContent=`${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())}  ${WD[d.getDay()]}`;
   }
   tick();setInterval(tick,1000);
 
   const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
 
-  // roving focus reticle over active 陣
+  // roving focus on active cases
   if(!reduce){
-    const cards=[...document.querySelectorAll('.zin.active')];
+    const act=[...document.querySelectorAll('.case.p-active')];
     let fi=0;
-    if(cards.length){
-      const rove=()=>{cards.forEach(c=>c.classList.remove('is-focus'));
-        cards[fi%cards.length].classList.add('is-focus');fi++;};
-      rove();setInterval(rove,3200);
-    }
+    if(act.length){const rove=()=>{act.forEach(c=>c.classList.remove('is-focus'));
+      act[fi%act.length].classList.add('is-focus');fi++;};rove();setInterval(rove,3400);}
   }
 
-  // drifting gold embers (金粉)
-  if(!reduce){
-    const cv=$('embers'),cx=cv.getContext('2d');let W,H,parts;
-    function fit(){W=cv.width=innerWidth;H=cv.height=innerHeight;
-      const n=Math.min(46,Math.round(W*H/48000));
-      parts=Array.from({length:n},()=>({x:Math.random()*W,y:Math.random()*H,
-        r:Math.random()*1.6+.5,v:Math.random()*.22+.06,a:Math.random()*.5+.15,
-        d:Math.random()*Math.PI*2,sw:Math.random()*.4+.1}));}
-    fit();addEventListener('resize',fit);
-    (function loop(){cx.clearRect(0,0,W,H);
-      for(const p of parts){p.y-=p.v;p.d+=.01;p.x+=Math.sin(p.d)*p.sw;
-        if(p.y<-4){p.y=H+4;p.x=Math.random()*W;}
-        cx.beginPath();cx.arc(p.x,p.y,p.r,0,6.283);
-        cx.fillStyle=`rgba(230,196,120,${p.a})`;
-        cx.shadowBlur=6;cx.shadowColor='rgba(216,178,90,.6)';cx.fill();}
-      requestAnimationFrame(loop);})();
-  }
-
-  /* ============ ライブ配線 — 戦況（今） ============ */
+  /* ============ ライブ配線 — 現在の状況 ============ */
   const P=new URLSearchParams(location.search);
   const GAS_URL=P.get('api')||'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
   let KIOSK_KEY=P.get('key')||'';
@@ -417,7 +377,7 @@
   const DEMO=P.get('demo')==='1';
   const REFRESH_MS=60000;
 
-  const LIVE_TILES=[
+  const TILES=[
     {k:'workingCasts',l:'出勤',good:true},
     {k:'reservations',l:'予約'},
     {k:'seatedTables',l:'在席'},
@@ -426,35 +386,35 @@
     {k:'orderAlerts',l:'アラート',alert:true},
     {k:'birthdays',l:'今月誕生日'},
   ];
-  const DEMO_LIVE={workingCasts:12,reservations:8,seatedTables:5,tsukemawashi:2,openTasks:4,orderAlerts:1,birthdays:6};
-  const prev={},wtRow=$('wt-row'),wbLive=$('wb-live');
+  const DEMO_LIVE={workingCasts:9,reservations:4,seatedTables:0,tsukemawashi:0,openTasks:1,orderAlerts:3,birthdays:29};
+  const prev={},metricsEl=$('metrics'),liveTag=$('live-tag');
 
-  function drawTiles(live){
-    wtRow.innerHTML=LIVE_TILES.map(t=>{
+  function draw(live){
+    metricsEl.innerHTML=TILES.map(t=>{
       const has=live&&live[t.k]!=null, v=has?live[t.k]:'—';
-      const cls=(t.alert&&has&&+v>0)?'alert':(t.good&&has?'good':'');
+      const mc=(t.alert&&has&&+v>0)?'var(--crit)':(t.good&&has?'var(--ok)':'var(--blue-bt)');
       const fl=(has&&prev[t.k]!=null&&prev[t.k]!==v)?'flash':'';
       if(has)prev[t.k]=v;
-      return `<div class="wt ${cls} ${fl}"><span class="v">${esc(v)}</span><span class="l">${esc(t.l)}</span></div>`;
+      return `<div class="metric ${fl}" style="--mc:${mc}"><span class="v">${esc(v)}</span><span class="l">${esc(t.l)}</span></div>`;
     }).join('');
   }
   function setLive(on,ts){
-    wbLive.classList.toggle('on',!!on);
+    liveTag.classList.toggle('on',!!on);
     if(on){const d=ts?new Date(ts):new Date();
-      wbLive.textContent='LIVE · 更新 '+p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds());}
-    else wbLive.textContent='接続待ち — スナップショット表示中';
+      liveTag.textContent='LIVE · 更新 '+p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds());}
+    else liveTag.textContent='接続待ち — 記録値を表示中';
   }
   function gsrPost(fn){const a=[].slice.call(arguments,1);
     return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a})})
       .then(r=>r.json()).then(j=>{if(j&&j.__ok===false)throw new Error(j.error||'server');return j?j.data:j;});
   }
   function poll(){
-    if(DEMO){drawTiles(DEMO_LIVE);setLive(true);return;}
+    if(DEMO){draw(DEMO_LIVE);setLive(true);return;}
     gsrPost('getWarCouncil')
-      .then(d=>{drawTiles(d&&d.live?d.live:null);setLive(true,d&&d.ts);})
-      .catch(()=>{drawTiles(null);setLive(false);});
+      .then(d=>{draw(d&&d.live?d.live:null);setLive(true,d&&d.ts);})
+      .catch(()=>{draw(null);setLive(false);});
   }
-  drawTiles(DEMO?DEMO_LIVE:null); setLive(DEMO);
+  draw(DEMO?DEMO_LIVE:null); setLive(DEMO);
   poll(); setInterval(poll,REFRESH_MS);
 })();
 </script>
