@@ -834,6 +834,20 @@ function handleApiRequest_(body) {
     return portalBillDetail_('', body.date, body.uuid, true, '');
   }
 
+  // === 👥 会員情報の編集／新規登録（りく・管理者だけ／ポータル会員管理） ===
+  //   参照は tab=customers（fullAccess）で既に全件返している。ここは書き込み専用＝isAdmin_ で必ずゲート。
+  //   実体は軍師・コンソールと同じ updateCustomer/addCustomer を再利用（会費マップキャッシュ破棄も込み）。
+  if (body.action === 'adminUpdateCustomer') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kioskUpdateCustomer(body.rowIdx, body.payload || {});
+  }
+  if (body.action === 'adminAddCustomer') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return addCustomer(body.payload || {});
+  }
+
   // === お知らせ配信＋既読 ===
   if (body.action === 'createNotice') {
     const adminName = getStaffName(body.userId);
@@ -8978,7 +8992,8 @@ function handlePortalApi_(e) {
   if (tab === 'customers') {
     // 管理者・黒服は全項目。キャストは担当のみ全項目。管理者ならスタッフシート読込をスキップ（短絡評価）
     const cFull = isAdmin || (function () { const r = getStaffRoleByName_(normalizeName_(name)); return r === '黒服社員' || r === '黒服バイト'; })();
-    const cust = getCustomerList_({ q: e.parameter.q || '', filter: e.parameter.filter || '', viewer: name, fullAccess: cFull });
+    // 会員編集フォーム用の rowIdx＋全項目は りく・管理者(isAdmin)にだけ載せる（黒服は閲覧のみ・編集不可）
+    const cust = getCustomerList_({ q: e.parameter.q || '', filter: e.parameter.filter || '', viewer: name, fullAccess: cFull, canEdit: isAdmin });
     // 来店集計をjoin（回数/前回来店/同伴は全員に、金額=累計売上は担当キャスト本人or黒服=!restrictedのみ）
     try {
       const vmap = getMemberVisitMap_();
@@ -11044,6 +11059,10 @@ function getCustomerList_(opts) {
   const filter = opts.filter || '';
   const thisMonth = Number(Utilities.formatDate(new Date(), TZ, 'M'));
   const viewerNorm = opts.viewer ? normalizeName_(String(opts.viewer)) : '';
+  // りく・管理者だけ：ポータルの会員編集フォーム用に、updateCustomer と同じ列マッピング（getCustomerMasterCols_）で
+  //   全項目＋rowIdx を各行に載せる。⚠️編集の可否は canEdit（isAdmin_＝りく＋管理者）のみ＝黒服はfullAccess閲覧でも編集フィールドは載せない。
+  //   プレフィルと保存を同じ列で揃えるため、getCustomerList_ 独自の cA/cI 系ではなく getCustomerMasterCols_ を使う。
+  const editCols = opts.canEdit ? getCustomerMasterCols_(values) : null;
   const results = [];
   for (let r = h + 1; r < values.length && results.length < 100; r++) {
     const row = values[r];
@@ -11075,6 +11094,29 @@ function getCustomerList_(opts) {
       obj.bday = bday; obj.drink = val(row,cS); obj.tabaco = val(row,cT); obj.note = val(row,cP); obj.annualFeeDate = annualFeeDate;
     } else {
       obj.restricted = true; // 担当以外＝制限表示
+    }
+    // りく・管理者：会員編集フォーム用の全項目＋行番号を付与。updateCustomer と同じ列＝プレフィルと保存が完全一致。
+    //   日付は yyyy-MM-dd（<input type=date> 用）。⚠️和暦テキスト列（2年目/3年目更新）は編集対象にしない＝会費ワンタップ反映を壊さない。
+    if (editCols) {
+      const ev = c => (c >= 0 && row[c] != null) ? row[c] : '';
+      obj.rowIdx      = r + 1;
+      obj.yomigana    = String(ev(editCols.yomigana));
+      obj.company     = String(ev(editCols.company));
+      obj.pos         = String(ev(editCols.pos));
+      obj.neck        = String(ev(editCols.neck));
+      obj.ng          = String(ev(editCols.ng));
+      obj.ngStaff     = String(ev(editCols.ngStaff));
+      obj.eBday       = fmtDateFull_(ev(editCols.bday));        // 編集用（yyyy-MM-dd）。表示用 bday とは別
+      obj.memberSince = fmtDateFull_(ev(editCols.memberSince));
+      obj.lastFeeDate = fmtDateFull_(ev(editCols.lastFeeDate));
+      // どの列がY3に実在するか（-1=無い列はフォームに出さない）
+      obj.editHas = {
+        yomigana: editCols.yomigana >= 0, company: editCols.company >= 0, pos: editCols.pos >= 0,
+        neck: editCols.neck >= 0, ng: editCols.ng >= 0, ngStaff: editCols.ngStaff >= 0,
+        bday: editCols.bday >= 0, memberSince: editCols.memberSince >= 0, lastFeeDate: editCols.lastFeeDate >= 0,
+        no: editCols.no >= 0, tantou: editCols.tantou >= 0, bottle: editCols.bottle >= 0,
+        drink: editCols.drink >= 0, tabaco: editCols.tabaco >= 0, note: editCols.note >= 0, card: editCols.card >= 0
+      };
     }
     results.push(obj);
   }
