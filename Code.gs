@@ -1104,6 +1104,11 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return kintaiFixPunch_(body.bizDate, body.name, body.type, body.time, adminName);
   }
+  if (body.action === 'kintaiRegister') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kintaiRegisterMonth_(String(body.month || '').slice(0, 7), body.name || '');
+  }
   if (body.action === 'getShiftMgmt') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
@@ -5787,6 +5792,92 @@ function kintaiPrevMonth_(m) {
   var y = parseInt(p[0], 10), mo = parseInt(p[1], 10) - 1;
   if (mo < 1) { mo = 12; y -= 1; }
   return y + '-' + (mo < 10 ? '0' : '') + mo;
+}
+
+// ============================================================
+// 🗂 出勤簿（労基署対応）：勤怠ログ1スキャンで月の個人別・日別の出退勤を返す
+//   ・勤務時間＝退勤−出勤（拘束時間）。休憩は打刻対象外＝差し引かない（画面/CSVに注記）。
+//   ・営業日列で束ねる（朝6時境界）＝深夜退勤が翌日に割れない。古い行は日付列で代用。
+//   ・出勤＝最初の1打、退勤＝最後の1打（kintaiPunchMap_と同じ常道）。取消行(出勤(取消))は自然に除外。
+//   ・管理者/テスト(徳子)は除外（recordKintaiと同じ名寄せ）＝出勤簿に混ぜない。
+//   nameFilter を渡すとその1名だけ。空なら当月に打刻のある全員。
+// ============================================================
+function kintaiRegisterMonth_(month, nameFilter) {
+  var m = String(month || '').slice(0, 7);
+  var out = { ok: true, month: m, list: [], note: '勤務時間は「退勤−出勤」の拘束時間です（休憩は打刻対象外＝差し引いていません）。' };
+  var sh = getOrOpenSS_().getSheetByName(KINTAI_TAB);
+  if (!sh || sh.getLastRow() < 2) return out;
+  var vals = sh.getDataRange().getValues();
+  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  var iDate = heads.indexOf('日付'), iTime = heads.indexOf('時刻');
+  var iName = heads.indexOf('名前'), iType = heads.indexOf('種別');
+  var iBiz = heads.indexOf('営業日'), iSrc = heads.indexOf('記録元');
+  if (iName < 0 || iType < 0) return out;
+  var dstr = function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); };
+  var exempt = kintaiExemptKeys_();
+  var filterKey = nameFilter ? kintaiNameKey_(nameFilter) : '';
+  // agg[nameKey] = { name, days: { 'yyyy-MM-dd': {in,out,inSrc,outSrc} } }
+  var agg = {};
+  for (var i = 1; i < vals.length; i++) {
+    var r = vals[i];
+    var biz = iBiz >= 0 ? dstr(r[iBiz]) : '';
+    if (!biz) biz = iDate >= 0 ? dstr(r[iDate]) : '';
+    if (biz.slice(0, 7) !== m) continue;
+    var nm = String(r[iName] || '').trim();
+    if (!nm) continue;
+    var key = kintaiNameKey_(nm);
+    if (exempt[key]) continue;
+    if (filterKey && key !== filterKey) continue;
+    var ty = String(r[iType] || '').trim();
+    if (ty !== '出勤' && ty !== '退勤') continue;
+    if (!agg[key]) agg[key] = { name: nm, days: {} };
+    if (!agg[key].days[biz]) agg[key].days[biz] = { in: '', out: '', inSrc: '', outSrc: '' };
+    var d = agg[key].days[biz];
+    var tm = iTime >= 0 ? fmtStamp_(r[iTime]) : '';
+    var src = iSrc >= 0 ? String(r[iSrc] || '') : '';
+    if (ty === '出勤') { if (!d.in) { d.in = tm; d.inSrc = src; } }  // 最初の出勤
+    else { d.out = tm; d.outSrc = src; }                            // 最後の退勤
+  }
+  // 役割・退職状態は勤怠ログに無い＝名簿から一括で引く。
+  // ⚠️退職者は名簿に「残る」（退職フラグ＋退職日）＝ここでは除外しない。打刻があれば出勤簿に出したうえで
+  //   「退職（日付）」ラベルを付ける（その月に働いて後で辞めた人の記録は労基署に必要）。
+  var infoMap = {};
+  try {
+    var stSh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    var srows = staffSheetValues_();
+    var rc = stSh ? getStaffRetireCols_(stSh, false) : {};
+    var iRet = (rc && rc['退職'] != null) ? rc['退職'] : -1;
+    var iRetAt = (rc && rc['退職日'] != null) ? rc['退職日'] : -1;
+    if (srows) for (var s = 1; s < srows.length; s++) {
+      var k = kintaiNameKey_(srows[s][1]);
+      var retired = (iRet >= 0 && String(srows[s][iRet]).trim() === '退職');
+      var retAt = '';
+      if (iRetAt >= 0) { var rv = srows[s][iRetAt]; retAt = (rv instanceof Date) ? Utilities.formatDate(rv, TZ, 'yyyy-MM-dd') : String(rv == null ? '' : rv).trim(); }
+      infoMap[k] = { role: String(srows[s][2] || '').trim(), retired: retired, retiredAt: retAt };
+    }
+  } catch (e) {}
+  var WD = ['日', '月', '火', '水', '木', '金', '土'];
+  var list = Object.keys(agg).map(function (key) {
+    var a = agg[key];
+    var info = infoMap[key] || {};
+    var days = Object.keys(a.days).sort().map(function (dt) {
+      var d = a.days[dt];
+      var inM = kintaiHmToBizMin_(d.in), outM = kintaiHmToBizMin_(d.out);
+      var mins = (inM != null && outM != null && outM >= inM) ? (outM - inM) : null;
+      var note = '';
+      if (d.in && !d.out) note = '退勤打刻なし';
+      else if (!d.in && d.out) note = '出勤打刻なし';
+      else if (inM != null && outM != null && outM < inM) note = '時刻逆転（要確認）';
+      var p = dt.split('-'); var dow = WD[new Date(+p[0], +p[1] - 1, +p[2]).getDay()];
+      return { date: dt, dow: dow, 'in': d.in, out: d.out, mins: mins, inSrc: d.inSrc, outSrc: d.outSrc, note: note };
+    });
+    var totalMins = days.reduce(function (t, x) { return t + (x.mins || 0); }, 0);
+    var workDays = days.filter(function (x) { return x['in'] || x.out; }).length;
+    return { name: a.name, role: info.role || '', retired: !!info.retired, retiredAt: info.retiredAt || '', days: days, workDays: workDays, totalMins: totalMins };
+  });
+  list.sort(function (x, y) { return String(x.role).localeCompare(String(y.role), 'ja') || String(x.name).localeCompare(String(y.name), 'ja'); });
+  out.list = list;
+  return out;
 }
 
 // 指定月に適用される勤怠手当の単価（＝前月のポイントで決まる。同意書 第4条）
