@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>付け回し ライブ</title>
+<style>
+:root{
+  --bg:#0e0f13; --panel:#161821; --panel2:#1c1f29; --line:#2a2d38; --line2:#373b48;
+  --gold:#c9a24b; --gold2:#e3c987; --ink:#ece8dd; --ink2:#c3c0b6; --mut:#8b897f;
+  --nom:#e0888a; --doh:#8fb0e0; --vip:#c3b1ec; --aki:#8fd3bf; --big:#e7bd82; --warn:#e6a94c; --dep:#9aa0af;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  line-height:1.55;-webkit-font-smoothing:antialiased;padding:16px 14px 40px;min-height:100vh;
+  overscroll-behavior:none;}
+.mincho{font-family:"Hiragino Mincho ProN","Yu Mincho",serif}
+.num{font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace}
+.wrap{max-width:960px;margin:0 auto}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h1{font-size:20px;font-weight:600;letter-spacing:.06em;color:var(--gold2);margin:0}
+.sub{font-size:12px;color:var(--mut);letter-spacing:.03em}
+.bar{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px}
+.badge{font-size:11px;padding:3px 10px;border-radius:999px;border:1px solid var(--line2);color:var(--mut)}
+.badge.on{border-color:var(--aki);color:var(--aki)}
+.badge.demo{border-color:var(--warn);color:var(--warn)}
+button{font-family:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font-size:13px;padding:7px 12px;transition:.12s}
+button:hover{border-color:var(--gold);color:var(--gold2)}
+button:active{transform:scale(.98)}
+.grid{display:grid;grid-template-columns:1.15fr .95fr;gap:16px}
+@media(max-width:740px){.grid{grid-template-columns:1fr}}
+.sect{font-size:11px;letter-spacing:.12em;color:var(--gold);margin:0 2px 9px}
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.seat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 11px;min-height:92px}
+.seat.empty{border-style:dashed;opacity:.55}
+.seat.alarm{border-color:var(--nom)}
+.seat .lbl{font-size:13px;font-weight:600;color:var(--gold2)}
+.seat .cust{font-size:11.5px;color:var(--ink2);margin-top:1px;min-height:16px}
+.seat .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.mini{font-size:10px;padding:1px 6px;border-radius:999px;font-weight:600}
+.m-nom{background:rgba(198,72,75,.2);color:var(--nom)} .m-mem{background:rgba(157,132,214,.18);color:var(--vip)}
+.m-doh{background:rgba(97,136,196,.2);color:var(--doh)} .m-big{background:rgba(208,145,63,.2);color:var(--big)}
+.m-wait{background:rgba(230,169,76,.2);color:var(--warn)}
+.casts{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.cc{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line2)}
+.cc.tantou{border-color:var(--gold);color:var(--gold2)}
+.cc.over{border-color:var(--nom);color:var(--nom)}
+.idle{display:flex;gap:5px;flex-wrap:wrap}
+.prop{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px 12px 10px}
+.pe{display:flex;align-items:flex-start;gap:10px;padding:9px 2px;border-bottom:1px dashed var(--line)}
+.pe:last-child{border-bottom:0}
+.pe .pr{font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;margin-top:1px;white-space:nowrap}
+.pr-urgent{background:rgba(198,72,75,.2);color:var(--nom)} .pr-tantou{background:rgba(201,162,75,.18);color:var(--gold2)}
+.pr-kake{background:rgba(97,136,196,.18);color:var(--doh)} .pr-fill{background:rgba(69,163,137,.16);color:var(--aki)}
+.pe .txt{font-size:13px;flex:1}
+.pe .why{display:block;font-size:11px;color:var(--mut);margin-top:1px}
+.info{font-size:11.5px;color:var(--mut);padding:7px 2px;border-bottom:1px dashed var(--line)}
+.none{font-size:12.5px;color:var(--aki);padding:10px 2px}
+.load{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-top:12px}
+.lb{display:flex;align-items:center;gap:8px;margin:4px 0}
+.lb .nm{font-size:11.5px;min-width:46px}.lb .nm.st{color:var(--gold2)}
+.lb .track{flex:1;height:7px;background:var(--panel2);border-radius:999px;overflow:hidden}
+.lb .fill{height:100%;background:var(--gold);border-radius:999px}
+.lb .vv{font-size:10.5px;color:var(--mut);min-width:52px;text-align:right}
+.err{background:rgba(198,72,75,.12);border:1px solid rgba(198,72,75,.4);color:var(--nom);font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:12px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar row">
+    <div>
+      <h1 class="mincho">付け回し ライブ</h1>
+      <div class="sub">現在の営業状況をAIが読んで付け回しを提案 ・ 読み取り専用（本番は書き換えません）</div>
+    </div>
+    <div class="row" style="margin-left:auto;gap:8px">
+      <span class="badge" id="live">接続待ち</span>
+      <button id="reload">再読込</button>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="grid">
+    <div>
+      <div class="sect">フロア（実データ）</div>
+      <div class="board" id="board"></div>
+      <div class="sect" style="margin-top:16px">手空き</div>
+      <div class="idle" id="idle"></div>
+    </div>
+    <div>
+      <div class="sect">AIの付け回し提案</div>
+      <div class="prop" id="prop"></div>
+      <div class="load">
+        <div class="row" style="margin-bottom:6px"><span style="font-size:12px;font-weight:600">キャストの持ち場</span><span class="sub" style="margin-left:auto">在席の長さ</span></div>
+        <div id="loadbars"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var P=new URLSearchParams(location.search);
+  var GAS_URL=P.get('api')||'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+  var KIOSK_KEY=P.get('key')||'';
+  try{ if(P.get('key'))localStorage.setItem('tmw_key',P.get('key')); else KIOSK_KEY=localStorage.getItem('tmw_key')||''; }catch(_){}
+  var DEMO=P.get('demo')==='1';
+  var REFRESH_MS=60000, MINDWELL=15;
+  function $(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+
+  function gsrPost(fn){var a=[].slice.call(arguments,1);
+    return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a})})
+      .then(function(r){return r.json();}).then(function(j){if(j&&j.__ok===false)throw new Error(j.error||'server');return j?j.data:j;});
+  }
+
+  /* ---- 実データと同形のモック（?demo=1 または 取得失敗時） ---- */
+  var MOCK={
+    hall:{seats:[
+      {code:"5C1",label:"カウンター1",short:"カ1",floor:"5F",type:"C",occupied:true,casts:[{name:"れな",elapsed:32,start:"21:05",status:"over"}],rsrv:{customer:"佐藤様",memberId:"1234",pax:1,tantouCast:"れな",rowIdx:12}},
+      {code:"5C2",label:"カウンター2",short:"カ2",floor:"5F",type:"C",occupied:true,casts:[{name:"みく",elapsed:12,start:"21:25",status:"ok"}],rsrv:{customer:"田村様",memberId:"2001",pax:1,tantouCast:"花子",rowIdx:15}},
+      {code:"5C3",label:"カウンター3",short:"カ3",floor:"5F",type:"C",occupied:true,casts:[],rsrv:{customer:"鈴木様",memberId:"3050",pax:1,tantouCast:"花子",rowIdx:20}},
+      {code:"5C4",label:"カウンター4",short:"カ4",floor:"5F",type:"C",occupied:false,casts:[],rsrv:null},
+      {code:"5B1",label:"BOX1",short:"B1",floor:"5F",type:"B",occupied:true,casts:[{name:"さき",elapsed:20,start:"21:17",status:"ok"},{name:"花子",elapsed:18,start:"21:19",status:"ok"}],rsrv:{customer:"山本様 他2",memberId:"",pax:3,tantouCast:""}},
+      {code:"5B2",label:"BOX2",short:"B2",floor:"5F",type:"B",occupied:false,casts:[],rsrv:null}
+    ],combines:[]},
+    shift:[
+      {name:"れな",in:"20:00",out:"",punchIn:"20:02",punchOut:""},{name:"花子",in:"20:00",out:"",punchIn:"20:00",punchOut:""},
+      {name:"みく",in:"20:00",out:"",punchIn:"20:01",punchOut:""},{name:"さき",in:"20:00",out:"",punchIn:"20:05",punchOut:""},
+      {name:"なな",in:"20:00",out:"",punchIn:"20:00",punchOut:""},{name:"ゆい",in:"20:30",out:"",punchIn:"20:33",punchOut:""},
+      {name:"ほのか",in:"20:30",out:"",punchIn:"20:31",punchOut:""},{name:"あや",in:"20:00",out:"23:00",punchIn:"20:00",punchOut:"22:50"}
+    ],
+    resv:[
+      {rowIdx:12,customer:"佐藤様",memberId:"1234",tantouCast:"れな",yoyakuCast:"れな",dohanCast:"",memberSince:"2019/03"},
+      {rowIdx:15,customer:"田村様",memberId:"2001",tantouCast:"花子",yoyakuCast:"花子",dohanCast:"",memberSince:"2021/07"},
+      {rowIdx:20,customer:"鈴木様",memberId:"3050",tantouCast:"花子",yoyakuCast:"",dohanCast:"",memberSince:""}
+    ]
+  };
+
+  /* ---- 結合：3本の返り値 → エンジンの世界モデル ---- */
+  function buildWorld(hall,shift,resv){
+    var resvByRow={}, resvByName={};
+    (resv||[]).forEach(function(r){ if(r.rowIdx!=null)resvByRow[r.rowIdx]=r; if(r.customer)resvByName[r.customer]=r; });
+    var working={};
+    (shift||[]).forEach(function(s){
+      var on = s.punchIn ? !s.punchOut : true; // 打刻あり=退勤前のみ / 打刻なしはシフト在籍とみなす
+      if(on) working[s.name]=true;
+    });
+    var seats=(hall&&hall.seats||[]).map(function(s){
+      var r=s.rsrv||{};
+      var res=(r.rowIdx!=null&&resvByRow[r.rowIdx])||resvByName[r.customer]||{};
+      var shimei=res.yoyakuCast||r.tantouCast||res.tantouCast||"";
+      var dohan=res.dohanCast||"";
+      var member=!!(res.memberSince);
+      var pax=r.pax||res.pax||1;
+      return {code:s.code,label:s.short||s.label||s.code,floor:s.floor,type:s.type,
+        occupied:!!s.occupied,
+        customer:r.customer||"",pax:pax,shimei:shimei,dohan:dohan,member:member,
+        big:(s.type==='B'||pax>=3),
+        casts:(s.casts||[]).map(function(c){return {name:c.name,elapsed:c.elapsed||0,status:c.status||'ok'};})};
+    });
+    return {seats:seats,working:working};
+  }
+
+  function castSeats(world){ var m={}; world.seats.forEach(function(s){ s.casts.forEach(function(c){ (m[c.name]=m[c.name]||[]).push({seat:s,elapsed:c.elapsed}); }); }); return m; }
+
+  /* ---- 提案エンジン（読み取り専用・ルール型・説明可能） ---- */
+  function propose(world){
+    var props=[], infos=[];
+    var cs=castSeats(world);
+    var seatedNames={}; Object.keys(cs).forEach(function(n){seatedNames[n]=1;});
+    var idle=Object.keys(world.working).filter(function(n){return !seatedNames[n];});
+    var takenBy={}; // cast -> chosen seat code (avoid double proposing a cast)
+
+    function claim(cast,code){ if(takenBy[cast])return false; takenBy[cast]=code; return true; }
+    function isWorking(n){ return !!world.working[n]; }
+    function whereMovable(name){ var at=cs[name]; if(!at||!at.length)return {from:null,elapsed:0,ok:true}; var a=at.slice().sort(function(x,y){return y.elapsed-x.elapsed;})[0]; return {from:a.seat,elapsed:a.elapsed,ok:a.elapsed>=MINDWELL}; }
+
+    var occ=world.seats.filter(function(s){return s.occupied;});
+
+    // 1) 無人の在席卓（最優先）
+    occ.forEach(function(s){
+      if(s.casts.length>0) return;
+      var lead=s.shimei;
+      var cand = (lead&&isWorking(lead))? lead : idle[0];
+      if(cand&&claim(cand,s.code)){
+        if(idle.indexOf(cand)>=0) idle.splice(idle.indexOf(cand),1);
+        var mv=whereMovable(cand);
+        props.push({prio:0,cls:'urgent',pr:'空席',cast:cand,seat:s,
+          txt:cand+'：'+(mv.from?mv.from.label+' → ':'')+s.label,
+          why:s.customer+'の席が無人'+(cand===lead?' → 担当の'+cand+'を':' → 手空きの'+cand+'を')+(mv.from&&!mv.ok?'（あと'+(MINDWELL-mv.elapsed)+'分で交代可）':'')});
+      } else {
+        infos.push(s.customer+'（'+s.label+'）が無人だが手空き無し → 順番待ち');
+      }
+    });
+
+    // 2) 担当不在（指名＝担当が出勤中なのに在席していない）
+    occ.forEach(function(s){
+      var lead=s.shimei; if(!lead||!isWorking(lead)) return;
+      if(s.casts.some(function(c){return c.name===lead;})) return; // 既に居る
+      if(takenBy[lead]){ if(takenBy[lead]!==s.code) infos.push(s.customer+'の担当'+lead+'は '+labelOf(world,takenBy[lead])+' を優先 → 現状維持'); return; }
+      var mv=whereMovable(lead);
+      claim(lead,s.code);
+      if(idle.indexOf(lead)>=0) idle.splice(idle.indexOf(lead),1);
+      props.push({prio:s.member?1:2,cls:'tantou',pr:'担当',cast:lead,seat:s,
+        txt:lead+'：'+(mv.from?mv.from.label+' → ':'')+s.label,
+        why:s.customer+'の担当'+lead+'が不在'+(mv.from?'（現在 '+mv.from.label+'）':'（手空き）')+(mv.from&&!mv.ok?' ・あと'+(MINDWELL-mv.elapsed)+'分':'')});
+    });
+
+    // 3) 掛け持ちの整理（2卓以上に在席＝担当でない卓から抜けて専念）
+    Object.keys(cs).forEach(function(name){
+      var at=cs[name]; if(at.length<2) return;
+      // 担当している卓 or 最長滞在の卓に専念
+      var keep=at.filter(function(a){return a.seat.shimei===name;})[0] || at.slice().sort(function(x,y){return y.elapsed-x.elapsed;})[0];
+      at.forEach(function(a){
+        if(a.seat.code===keep.seat.code) return;
+        if(takenBy[name]&&takenBy[name]!==a.seat.code){ /* already moving elsewhere */ }
+        props.push({prio:3,cls:'kake',pr:'掛け持ち',cast:name,seat:a.seat,
+          txt:name+'：'+a.seat.label+' を交代',
+          why:name+'は掛け持ち → '+(keep.seat.shimei===name?keep.seat.customer+'（担当）':keep.seat.label)+'に専念、'+a.seat.label+'は交代'});
+      });
+    });
+
+    // 4) 手空きの活用（大箱で人手が薄い所へ）＝引き抜かれる担当を差し引いた「残る人数」で判定
+    world.seats.filter(function(s){return s.occupied&&s.big;}).forEach(function(s){
+      var staying=s.casts.filter(function(c){return !takenBy[c.name]||takenBy[c.name]===s.code;}).length;
+      var incoming=props.filter(function(p){return p.seat.code===s.code&&p.cls==='fill';}).length;
+      var need=2, have=staying+incoming;
+      while(have<need && idle.length){
+        var c=idle.shift(); claim(c,s.code);
+        props.push({prio:4,cls:'fill',pr:'増員',cast:c,seat:s,txt:c+'：手空き → '+s.label,why:s.customer+'（大箱）へ手空きの'+c});
+        have++;
+      }
+    });
+
+    props.sort(function(a,b){return a.prio-b.prio;});
+    return {props:props,infos:infos,idle:idle};
+  }
+  function labelOf(world,code){ var s=world.seats.filter(function(x){return x.code===code;})[0]; return s?s.label:code; }
+
+  /* ---- 描画 ---- */
+  function render(world){
+    var r=propose(world);
+    var board=$('board'); board.innerHTML='';
+    world.seats.forEach(function(s){
+      var el=document.createElement('div');
+      var noCast=s.occupied&&s.casts.length===0;
+      el.className='seat'+(s.occupied?'':' empty')+(noCast?' alarm':'');
+      var tags='';
+      if(s.occupied){
+        if(s.shimei)tags+='<span class="mini m-nom">担当'+esc(s.shimei)+'</span>';
+        if(s.dohan)tags+='<span class="mini m-doh">同伴</span>';
+        if(s.member)tags+='<span class="mini m-mem">会員</span>';
+        if(s.big)tags+='<span class="mini m-big">大箱</span>';
+        if(noCast)tags+='<span class="mini m-wait">無人</span>';
+      }
+      var castHtml=s.casts.map(function(c){return '<span class="cc'+(c.name===s.shimei?' tantou':'')+(c.status==='over'?' over':'')+'">'+esc(c.name)+(c.elapsed?' <span class="num" style="color:var(--mut);font-size:10.5px">'+c.elapsed+'分</span>':'')+'</span>';}).join('');
+      el.innerHTML='<div class="lbl">'+esc(s.label)+'</div>'+
+        '<div class="cust">'+(s.occupied?esc(s.customer||'ご来店'):'—')+'</div>'+
+        '<div class="tags">'+tags+'</div>'+
+        '<div class="casts">'+(castHtml||(s.occupied?'<span class="sub" style="font-size:10.5px;color:var(--warn)">配置待ち</span>':''))+'</div>';
+      board.appendChild(el);
+    });
+
+    $('idle').innerHTML = r.idle.length? r.idle.map(function(n){return '<span class="cc">'+esc(n)+'</span>';}).join('') : '<span class="sub">なし</span>';
+
+    var ph=$('prop');
+    if(!r.props.length && !r.infos.length){ ph.innerHTML='<div class="none">◎ いまは付け回しの必要なし。全卓に担当が付いています。</div>'; }
+    else{
+      ph.innerHTML = r.props.map(function(p){
+        return '<div class="pe"><span class="pr pr-'+p.cls+'">'+p.pr+'</span>'+
+          '<span class="txt">'+esc(p.txt)+'<span class="why">'+esc(p.why)+'</span></span></div>';
+      }).join('') + r.infos.map(function(i){return '<div class="info">・'+esc(i)+'</div>';}).join('');
+    }
+
+    var mx=Math.max(30,Math.max.apply(null,world.seats.reduce(function(a,s){s.casts.forEach(function(c){a.push(c.elapsed);});return a;},[0])));
+    var loadByCast={};
+    world.seats.forEach(function(s){ s.casts.forEach(function(c){ loadByCast[c.name]=(loadByCast[c.name]||0)+c.elapsed; }); });
+    var names=Object.keys(world.working);
+    $('loadbars').innerHTML = names.map(function(n){
+      var v=loadByCast[n]||0, seats=world.seats.filter(function(s){return s.casts.some(function(c){return c.name===n;});}).length;
+      return '<div class="lb"><span class="nm">'+esc(n)+'</span>'+
+        '<span class="track"><span class="fill" style="width:'+Math.round(v/mx*100)+'%"></span></span>'+
+        '<span class="vv num">'+(seats>1?seats+'卓 ':'')+v+'分</span></div>';
+    }).join('');
+  }
+
+  function setLive(on,demo){
+    var b=$('live'); b.className='badge'+(demo?' demo':(on?' on':''));
+    b.textContent = demo?'デモ（モック）':(on? 'LIVE · '+new Date().toLocaleTimeString('ja-JP') : '接続待ち');
+  }
+  function showErr(m){ var e=$('err'); if(!m){e.style.display='none';return;} e.style.display='block'; e.textContent=m; }
+
+  function loadDemo(){ render(buildWorld(MOCK.hall,MOCK.shift,MOCK.resv)); setLive(false,true); showErr(''); }
+  function loadLive(){
+    if(DEMO){ loadDemo(); return; }
+    if(!KIOSK_KEY){ loadDemo(); showErr('キー未設定です（?key=<軍師key> を付けてください）。今はモック表示中。'); return; }
+    Promise.all([gsrPost('getKioskHall2'),gsrPost('getKioskShiftBoard'),gsrPost('getKioskReservations')])
+      .then(function(res){ render(buildWorld(res[0],res[1],res[2])); setLive(true,false); showErr(''); })
+      .catch(function(e){ loadDemo(); showErr('取得に失敗（'+(e&&e.message||'error')+'）。モック表示中。'); setLive(false,false); });
+  }
+
+  $('reload').addEventListener('click',loadLive);
+  loadLive();
+  setInterval(loadLive,REFRESH_MS);
+})();
+</script>
+</body>
+</html>
