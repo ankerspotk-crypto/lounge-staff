@@ -2718,15 +2718,31 @@ function drawSlips(r){
   var body=r.groups.map(dpTable).join('');
   setBody(dpSubToggle('slip')+nav+(any?'':'<div class="hint" style="margin:2px 0 12px">この営業日に登録された伝票はありません。日付を変えてご確認ください。</div>')+body);
 }
+var DP_KEY_SHEET={daily:'日払い記録',receipt:'領収書記録',delivery:'納品記録'}; // 削除可能な伝票シートだけ（現金チェック等は対象外）
 function dpTable(g){
   var d=g.data||{headers:[],rows:[],total:0};
   var meta=d.rows.length+'件'+(d.total?' ・ 計'+fmtYen(d.total):'');
-  var h='<div class="sec"><div class="sec-t">'+g.title+' <span style="color:var(--dim);font-weight:600;font-size:12px">'+meta+'</span></div>';
+  var del=DP_KEY_SHEET[g.key]; // 日払い/領収書/納品のみチェック削除を出す
+  var h='<div class="sec"><div class="sec-t">'+g.title+' <span style="color:var(--dim);font-weight:600;font-size:12px">'+meta+'</span>'
+    +((del&&d.rows.length)?' <button class="btn" onclick="dpcBulkDel(\''+g.key+'\')" style="margin-left:8px;padding:5px 11px;font-size:12px;border-color:#8a3a5a;color:#ff9ab0">🗑 選択をまとめて削除</button>':'')
+    +'</div>';
   if(!d.rows.length){ return h+'<div class="empty" style="padding:12px 0">—</div></div>'; }
   h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="border-collapse:collapse;min-width:100%;font-size:12px;white-space:nowrap">';
-  h+='<tr>'+d.headers.map(function(hd){return '<th style="text-align:left;padding:6px 9px;border-bottom:1px solid var(--line2);color:var(--dim);font-weight:700">'+esc(hd)+'</th>';}).join('')+'</tr>';
-  h+=d.rows.map(function(row){ return '<tr>'+row.cells.map(function(c){return '<td style="padding:6px 9px;border-bottom:1px solid var(--line2)">'+dpCell(c)+'</td>';}).join('')+'</tr>'; }).join('');
+  h+='<tr>'+(del?'<th style="padding:6px 9px;border-bottom:1px solid var(--line2)"><input type="checkbox" onchange="dpcToggleAll(\''+g.key+'\',this.checked)" title="全選択"></th>':'')+d.headers.map(function(hd){return '<th style="text-align:left;padding:6px 9px;border-bottom:1px solid var(--line2);color:var(--dim);font-weight:700">'+esc(hd)+'</th>';}).join('')+'</tr>';
+  h+=d.rows.map(function(row){ return '<tr>'+(del?'<td style="padding:6px 9px;border-bottom:1px solid var(--line2);text-align:center"><input type="checkbox" class="dpc-chk" data-key="'+g.key+'" data-row="'+row.rowIdx+'"></td>':'')+row.cells.map(function(c){return '<td style="padding:6px 9px;border-bottom:1px solid var(--line2)">'+dpCell(c)+'</td>';}).join('')+'</tr>'; }).join('');
   return h+'</table></div></div>';
+}
+function dpcToggleAll(key,on){ Array.prototype.forEach.call(document.querySelectorAll('.dpc-chk[data-key="'+key+'"]'),function(cb){cb.checked=on;}); }
+function dpcBulkDel(key){
+  var sheet=DP_KEY_SHEET[key]; if(!sheet)return;
+  var boxes=Array.prototype.slice.call(document.querySelectorAll('.dpc-chk[data-key="'+key+'"]:checked'));
+  if(!boxes.length){ toast('削除する行にチェックを入れてください',true); return; }
+  var idxs=boxes.map(function(cb){ return Number(cb.getAttribute('data-row')); });
+  if(!confirm(idxs.length+'件の伝票を削除しますか？（元に戻せません）'))return;
+  gsr('kioskDeleteDenpyoBulk',sheet,idxs).then(function(r2){
+    if(r2&&r2.ok){ toast('🗑 '+(r2.deleted||idxs.length)+'件を削除しました'); renderDenpyo(); }
+    else { toast((r2&&r2.error)||'削除エラー',true); }
+  }).catch(function(e){ toast('削除エラー: '+((e&&e.message)||e),true); });
 }
 function slipDay(n){ denpyoDate=dpAddDays(denpyoDate,n); renderDenpyo(); }
 function slipPick(){ var v=document.getElementById('dpd').value; if(v){denpyoDate=v;renderDenpyo();} }
