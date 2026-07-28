@@ -657,6 +657,7 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
+var PORTAL_BUILD = '2026-07-29a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
 
 var userId = '', userName = '', portalData = null;
@@ -1037,6 +1038,16 @@ function menuBtn(key) {
     + '<span style="font-size:23px;line-height:1;filter:saturate(.85)">' + s.i + '</span>'
     + '<span style="font-size:14px;font-weight:700;color:#f2ead9">' + s.t + '</span></button>';
 }
+// ホーム最下部の常設バージョン表記（端末のキャッシュ版照合用。さりげなく・エレガントに）
+function versionFooter() {
+  var isTest = /-test\.html/i.test(location.pathname); // 本番portal.htmlではfalse＝TESTバッジは出ない（IS_TEST_ENV非依存で自己完結）
+  return '<div style="text-align:center;margin:26px 2px 6px;font-size:11px;letter-spacing:.1em;line-height:1.7">'
+    +   '<div style="color:#6f6650">ラウンジいえやす ポータル</div>'
+    +   '<div style="color:#8d7c56;margin-top:2px">version <b style="color:#c9a95f;font-weight:700">' + PORTAL_BUILD + '</b>'
+    +     (isTest ? '　<span style="color:#c8a24a;font-weight:700">TEST環境</span>' : '') + '</div>'
+    + '</div>';
+}
+
 function homeMenu() {
   ksPingOnce();   // ⚔️合戦の「手番」バッジ用。ホーム描画をブロックしない（結果が来たら描き直す）
   var castKeys = ['board','awards','kassen','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','wine'];
@@ -1054,7 +1065,7 @@ function homeMenu() {
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + menuBtn('shiftmgmt') + '</div>'
       + '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:12px;font-size:12px;color:#cbb98a;line-height:1.6;margin-top:10px">その他の管理機能（申請管理・通知設定・軍師設定）は<b style="color:#f2ead9">管理コンソール</b>に集約しています。</div>';
   }
-  return html;
+  return html + versionFooter();
 }
 
 function updateAdminBar(castList) {
