@@ -685,6 +685,18 @@ function cardHtml(s,i){
       +'<button class="btn pri sm" id="brsave'+i+'" onclick="saveBackRule('+i+',\''+jstr(s.name)+'\')" style="display:'+(showR?'inline-block':'none')+'">保存</button>'
       +'</div>';
   }
+  /* 🚕 交通費設定（キャスト・体験のみ。ONで出勤日=往路、送りなしの日=復路を月次で自動加算） */
+  var kotsuHtml='';
+  var isCastRole=(String(s.role).indexOf('キャスト')>=0||String(s.role).indexOf('体験')>=0);
+  if(isCastRole){
+    var kOn=!!s.kotsuOn, kAmt=s.kotsuAmount||0;
+    kotsuHtml='<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px;align-items:center;gap:6px;flex-wrap:wrap">'
+      +'<div class="toggle '+(kOn?'on':'off')+'" onclick="toggleKotsu('+i+',\''+jstr(s.name)+'\')" title="交通費の対象キャスト。ONにすると出勤日に往路、送りを使わなかった日に復路を、給与へ非課税で自動加算します">🚕 交通費'+(kOn?'':' 対象外')+'</div>'
+      +'<input class="finput" id="kamt'+i+'" type="number" min="0" step="10" value="'+(kAmt||'')+'" placeholder="片道¥" style="width:92px;display:'+(kOn?'inline-block':'none')+'">'
+      +'<span id="kamtu'+i+'" style="font-size:12px;opacity:.7;display:'+(kOn?'inline':'none')+'">円 / 片道</span>'
+      +'<button class="btn pri sm" id="ksave'+i+'" onclick="saveKotsu('+i+',\''+jstr(s.name)+'\')" style="display:'+(kOn?'inline-block':'none')+'">保存</button>'
+      +'</div>';
+  }
   var bdayInfoHtml='';
   if(isTermRole(s.role)){
     var bd=((s.terms&&s.terms['誕生日'])||'').trim();
@@ -749,7 +761,33 @@ function cardHtml(s,i){
     ? '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px;gap:6px">'+leaveBtn+retireBtn+'</div>' : '';
   return '<div class="card"'+(s.retired?' style="opacity:.72"':(s.onLeave?' style="opacity:.85"':''))+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+leaveBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+onboardHtml+termHtml+retireRow+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+kotsuHtml+onboardHtml+termHtml+retireRow+'</div>';
+}
+/* 🚕 交通費（対象ON/OFF＋片道額）＝キャスト永続設定・給与に非課税で自動加算 */
+function toggleKotsu(i,name){
+  var s=findStaff(name); var willOn=!(s&&s.kotsuOn);
+  var amtEl=document.getElementById('kamt'+i);
+  var amt=amtEl?(parseInt(amtEl.value,10)||0):((s&&s.kotsuAmount)||0);
+  if(willOn && amt<=0){
+    // ONにする瞬間に金額が未入力＝金額欄を出してフォーカス（0のまま対象化して静かに0加算になるのを防ぐ）
+    if(s)s.kotsuOn=true; renderStaff();
+    var el=document.getElementById('kamt'+i); if(el){el.style.display='inline-block';el.focus();}
+    var u=document.getElementById('kamtu'+i); if(u)u.style.display='inline';
+    var b=document.getElementById('ksave'+i); if(b)b.style.display='inline-block';
+    toast('片道の交通費（円）を入れて「保存」を押してください');
+    return;
+  }
+  saveKotsuValue(name,willOn,amt,i);
+}
+function saveKotsu(i,name){
+  var amt=parseInt(document.getElementById('kamt'+i).value,10)||0;
+  if(amt<=0){ toast('片道の交通費（円）を入力してください',true); return; }
+  saveKotsuValue(name,true,amt,i);
+}
+function saveKotsuValue(name,on,amt,i){
+  var s=findStaff(name); if(s){s.kotsuOn=on;s.kotsuAmount=amt;}
+  if(!IS_GAS){ toast(name+' 交通費='+(on?('対象 片道¥'+amt):'対象外')+'（ローカル）'); renderStaff(); return; }
+  gsr('adminSetCastKotsuhi',USER_ID,name,on,amt).then(function(r){ res(r,name+' の交通費設定を保存しました')||load(); }).catch(function(){ toast('通信エラー',true); load(); });
 }
 /* バック方式（新ルール/固定率）＝キャスト永続設定・給与計算に直結 */
 function onBackModeChange(i,name){
@@ -1909,7 +1947,7 @@ var payMonth=null, payStat=null, paySub='tatekae';
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
 function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
+  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('kotsu','🚕 交通費')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
 }
 function paySwitch(k){ paySub=k; renderPay(); }
 function renderPay(){
@@ -1919,6 +1957,7 @@ function renderPay(){
   if(paySub==='bills')   return renderBillsAdmin('all');
   if(paySub==='mybills') return renderBillsAdmin('cast');
   if(paySub==='kyuyo')   return renderKyuyo();
+  if(paySub==='kotsu')   return renderKotsu();
   if(paySub==='bday')    return renderBday();
   renderPublish();
 }
@@ -2391,7 +2430,7 @@ function drawKyuyo(r){
   var body;
   if(!r.casts.length){ body='<div class="empty">この月のTRUST報酬データがありません。「📥 TRUST取込」から取込んでください。</div>'; }
   else{
-    var cols=[['名前','nm'],['勤務','日'],['時間報酬','¥'],['担当小計','¥'],['倍率',''],['率',''],['新バック','¥'],['課税支給','¥'],['源泉','¥'],['日払','¥'],['マイナス','¥'],['残り','¥'],['立替+','¥'],['最終支給','¥'],['','']];
+    var cols=[['名前','nm'],['勤務','日'],['時間報酬','¥'],['担当小計','¥'],['倍率',''],['率',''],['新バック','¥'],['課税支給','¥'],['源泉','¥'],['日払','¥'],['マイナス','¥'],['🚕交通費','¥'],['残り','¥'],['立替+','¥'],['最終支給','¥'],['','']];
     var th='<thead><tr>'+cols.map(function(c,i){return '<th'+(i===cols.length-1?' class="kyu-act"':'')+' style="'+(i===0?'text-align:left':(i>=4&&i<=5?'text-align:center':''))+'">'+esc(c[0])+'</th>';}).join('')+'</tr></thead>';
     var rows=r.casts.map(function(c){
       function y(v,cls){ return '<td style="text-align:right'+(cls?';'+cls:'')+'">'+(v?fmtYen(v):'<span style="color:var(--dim)">—</span>')+'</td>'; }
@@ -2416,25 +2455,40 @@ function drawKyuyo(r){
         +'<td style="text-align:right;color:#e88">'+(c.gensen?'-'+fmtYen(c.gensen):'—')+'</td>'
         +'<td style="text-align:right;color:#e88">'+(c.hibarai?'-'+fmtYen(c.hibarai):'—')+'</td>'
         +'<td style="text-align:right;color:#e88">'+(c.minusTotal?'-'+fmtYen(c.minusTotal):'—')+'</td>'
+        +'<td style="text-align:right;color:#7fd88f;white-space:nowrap">'+kotsuCellHtml(c)+'</td>'
         +y(c.net)
         +'<td style="text-align:right;color:#7fd88f">'+(c.tatekae?'+'+fmtYen(c.tatekae):'—')+'</td>'
         +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.finalPay)+'</td>'
-        +'<td class="kyu-act" style="text-align:center"><button class="btn sm" style="padding:2px 6px;font-size:11px" onclick=\'editKyuyoManual('+JSON.stringify(c.name)+','+(c.intro||0)+','+(c.nyuten||0)+','+(c.adjust||0)+')\'>✎</button></td></tr>';
+        +'<td class="kyu-act" style="text-align:center"><button class="btn sm" style="padding:2px 6px;font-size:11px" onclick=\'editKyuyoManual('+JSON.stringify(c.name)+','+(c.intro||0)+','+(c.nyuten||0)+','+(c.adjust||0)+','+(c.kotsu||0)+','+(c.kotsuManual?1:0)+','+((c.kotsuInfo&&c.kotsuInfo.kotsu)||0)+')\'>✎</button></td></tr>';
     }).join('');
     var t=r.totals;
     var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td><td></td>'
       +'<td style="text-align:right">'+fmtYen(t.jikan)+'</td><td style="text-align:right">'+fmtYen(t.tanto)+'</td><td></td><td></td>'
       +'<td style="text-align:right">'+fmtYen(t.newBack)+'</td><td style="text-align:right">'+fmtYen(t.kazei)+'</td>'
       +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.minusTotal)+'</td>'
+      +'<td style="text-align:right;color:#7fd88f">'+(t.kotsu?'+'+fmtYen(t.kotsu):'—')+'</td>'
       +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td><td class="kyu-act"></td></tr>';
     body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'
-      +'<div class="hint" style="margin-top:8px"><b>📅 対象月は先月まで</b>（当月はTRUST報酬が締まっておらず、取込途中の数字が給与の顔で出てしまうため出しません）。当月の売上を見るなら「🧾 売上明細」「👤 個人売上明細」へ。<br>🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。公開は「📣 公開設定」から。</div>';
+      +'<div class="hint" style="margin-top:8px"><b>📅 対象月は先月まで</b>（当月はTRUST報酬が締まっておらず、取込途中の数字が給与の顔で出てしまうため出しません）。当月の売上を見るなら「🧾 売上明細」「👤 個人売上明細」へ。<br>🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。<br>🚕 <b>交通費</b>（非課税）＝<b>往路（出勤日）＋復路（送りを使わなかった日）× 片道額</b>を月次で自動集計。片道額と対象ON/OFFは<b>👥スタッフの各カード「🚕交通費」</b>で設定。源泉には掛からず残り支給に加算（日払いの逆）。セルの<b>✎</b>から1件だけ手修正も可（空欄で自動へ戻す）。公開は「📣 公開設定」から。</div>';
   }
   setBody(paySubToggle('kyuyo')+head+body);
 }
-// ✎の入力順＝使う頻度の順（売上調整→紹介料→入店祝金）。紹介料が先頭だと、売上調整を出す前に
+/* 🚕 交通費セル：自動値＋内訳（往路/復路/送りあり）をツールチップで。手修正中は✎印 */
+function kotsuCellHtml(c){
+  if(!c.kotsu) return '<span style="color:var(--dim)">—</span>';
+  var info=c.kotsuInfo, sub='', tip='';
+  if(c.kotsuManual){
+    sub='手修正'; tip='手修正額（自動計算を上書き中）'+(info?'／自動なら'+fmtYen(info.kotsu):'');
+  }else if(info){
+    sub='往'+info.days+'/復'+info.fukuroDays;
+    tip='往路 '+info.days+'日 ＋ 復路 '+info.fukuroDays+'日 × 片道'+fmtYen(info.oneWay)+'（送りあり'+info.okuriDays+'日は復路なし）';
+  }
+  return '<span title="'+esc(tip)+'">+'+fmtYen(c.kotsu)+(c.kotsuManual?' <span style="color:#e0b060">✎</span>':'')
+    +(sub?'<div style="font-size:10px;color:var(--sub)">'+esc(sub)+'</div>':'')+'</span>';
+}
+// ✎の入力順＝使う頻度の順（売上調整→紹介料→入店祝金→交通費）。紹介料が先頭だと、売上調整を出す前に
 // 「別物だ」と判断して閉じてしまう＝機能に辿り着けない。理由は売上調整を変えた直後に聞く（離すと何の理由か分からない）。
-function editKyuyoManual(name,intro,nyuten,adjust){
+function editKyuyoManual(name,intro,nyuten,adjust,kotsuCur,kotsuManual,kotsuAuto){
   var c=prompt('【'+name+'】'+(payMonth||'')+' 売上調整（円）\n\n担当小計に合算されます。実売上と同じ扱いなのでバック率の倍率にも効き、率が上がると売上全体に新しい率がかかります。\nマイナスを入れると減算（バックは0で打ち止め）。',adjust||0); if(c===null)return;
   var adj=parseInt(c,10)||0;
   var vals={adjust:adj};
@@ -2447,11 +2501,47 @@ function editKyuyoManual(name,intro,nyuten,adjust){
   var a=prompt('【'+name+'】'+(payMonth||'')+' キャスト紹介料（円）',intro||0); if(a===null)return;
   var b=prompt('【'+name+'】'+(payMonth||'')+' 入店祝い金（円）',nyuten||0); if(b===null)return;
   vals.intro=parseInt(a,10)||0; vals.nyuten=parseInt(b,10)||0;
+  // 🚕交通費の手修正（任意）。空欄=自動計算に戻す／数値=上書き。当日欠勤の誤加算などをここで1件だけ直せる。
+  var kd=prompt('【'+name+'】'+(payMonth||'')+' 🚕交通費（円）\n\n通常は自動計算（往路＋復路×片道）です。金額を入れると上書き、空欄にすると自動へ戻します。\n自動計算＝'+fmtYen(kotsuAuto||0)+' ／ 現在＝'+(kotsuManual?('手修正 '+fmtYen(kotsuCur||0)):'自動'),(kotsuManual?(kotsuCur||0):''));
+  if(kd!==null){ vals.kotsu=(String(kd).trim()==='')?'':(parseInt(kd,10)||0); }
   if(!IS_GAS){ toast('（ローカルでは保存不可）'); return; }
   loading();
   gsr('adminSetKyuyoManual',USER_ID,payMonth,name,vals).then(function(r){ if(res(r,name+' の手入力を保存しました')) renderKyuyo(); }).catch(function(){ toast('保存に失敗しました',true); renderKyuyo(); });
 }
 function onKyuyoMonth(){ payMonth=document.getElementById('km').value; renderKyuyo(); }
+/* --- 🚕 交通費プレビュー（当月も見られる・給与明細は先月までなので別口。read-only） --- */
+var kotsuMonth=null;
+function renderKotsu(){
+  if(!IS_GAS){ setBody(paySubToggle('kotsu')+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; }
+  loading();
+  gsr('adminGetKotsuPreview',USER_ID,kotsuMonth||'').then(function(r){ if(!res(r))return; drawKotsu(r); }).catch(function(){setBody(paySubToggle('kotsu')+'<div class="empty">読み込みエラー</div>');});
+}
+function drawKotsu(r){
+  kotsuMonth=r.month;
+  var mIn=String(r.month||'').replace('/','-'); // yyyy-MM（月入力欄用）
+  var head='<div class="toolbar"><span class="cnt">対象月</span><input class="finput" id="kmonth" type="month" value="'+esc(mIn)+'" onchange="onKotsuMonth()" style="width:160px">'
+    +'<span class="cnt">'+(r.rows.length)+'名 ・ 交通費計 '+fmtYen(r.total)+'</span>'
+    +(r.startMonth?'<span style="color:var(--dim);font-size:12px">開始月 '+esc(r.startMonth)+' 以降</span>':'')+'</div>';
+  var body;
+  if(!r.rows.length){ body='<div class="empty">この月は交通費の対象キャストの出勤がありません。<br>「👥スタッフ」の各カード「🚕交通費」をONにして片道額を登録してください。</div>'; }
+  else{
+    var rows=r.rows.map(function(c){
+      return '<tr><td class="nm">'+esc(c.name)+'</td>'
+        +'<td style="text-align:center">'+c.days+'</td>'
+        +'<td style="text-align:center;color:var(--sub)">'+c.okuriDays+'</td>'
+        +'<td style="text-align:center;color:#7fd88f">'+c.fukuroDays+'</td>'
+        +'<td style="text-align:center">'+(c.days+c.fukuroDays)+'</td>'
+        +'<td style="text-align:right">'+fmtYen(c.oneWay)+'</td>'
+        +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.kotsu)+'</td></tr>';
+    }).join('');
+    body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'
+      +'<thead><tr><th style="text-align:left">名前</th><th title="出勤日数＝往路の件数">出勤/往路</th><th title="店の送りを使った日数">送りあり</th><th title="出勤−送りあり＝復路の件数">復路</th><th>往復計</th><th>片道</th><th>交通費</th></tr></thead>'
+      +'<tbody>'+rows+'<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td><td colspan="5"></td><td style="text-align:right;font-weight:900">'+fmtYen(r.total)+'</td></tr></tbody></table></div>'
+      +'<div class="hint" style="margin-top:8px">🚕 <b>交通費＝片道 ×（往路＋復路）</b>。往路＝出勤日、復路＝出勤のうち店の送りを使わなかった日。母集合はシフト表の出勤予定（当日欠勤で「休み」になった日は自動で除外）。<b>当月も表示できます</b>（給与明細は先月までですが、ここは締め前の積み上がりを確認できます）。給与への反映は「🧮給与明細」の🚕交通費列（源泉には掛からず残り支給に加算）。1件だけの手修正は給与明細の✎から。</div>';
+  }
+  setBody(paySubToggle('kotsu')+head+body);
+}
+function onKotsuMonth(){ kotsuMonth=(document.getElementById('kmonth').value||'').replace('-','/'); renderKotsu(); }
 /* --- 🎂 誕生日バック（キャスト×月：指定した来店日レンジだけ小計バック率を上書き） --- */
 var bdayCasts=[];
 function renderBday(){
@@ -3169,7 +3259,7 @@ function MOCK(){
     {name:'りく',role:'管理者',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'ひろき',role:'黒服社員',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'たかし',role:'黒服社員',registered:true,isAdmin:false,adminFlag:true,hardAdmin:false,isSafeAdmin:true,safeFlag:true,hardSafe:false,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
-    {name:'まや',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'○',hasPin:true},
+    {name:'まや',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'○',hasPin:true,kotsuOn:true,kotsuAmount:1200},
     {name:'ゆい',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
     {name:'あん',role:'体験',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
     {name:'かな',role:'キャスト',retired:true,registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},

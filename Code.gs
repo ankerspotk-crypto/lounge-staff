@@ -2066,7 +2066,7 @@ function adminGetTrustImport(userId) {
 var KYUYO_MANUAL_TAB  = '給与手入力';
 // ⚠️「勤務時間」は勤怠手当の計算に使う実勤務時間(h)の手入力欄（2026-08の勤怠手当制度）。
 //   空なら自動（TRUSTの時間報酬÷基本時給→打刻集計）にフォールバックする＝入れた時だけ人の値が勝つ。
-var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整', '勤務時間', '投票賞'];
+var KYUYO_MANUAL_HEAD = ['月', '名前', 'キャスト紹介料', '入店祝い金', '売上調整', '勤務時間', '投票賞', '交通費'];
 
 // 給与手入力シートを取得（無ければ作成）。既存シートには不足ヘッダ列を後方互換で追加。
 // ⚠️追補が無いと ci('売上調整') が -1 になり、入力した調整額が黙って0扱いになる（金額に直結）。
@@ -2089,7 +2089,7 @@ function getKyuyoManual_(ss, monthKey) {
   const rows = sh.getDataRange().getValues();
   const h = rows[0].map(String);
   const ci = function (n) { return h.indexOf(n); };
-  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整'), iVote = ci('投票賞');
+  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整'), iVote = ci('投票賞'), iKotsu = ci('交通費');
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== monthKey) continue;
     const nm = normalizeName_(String(rows[i][1]).trim());
@@ -2097,7 +2097,10 @@ function getKyuyoManual_(ss, monthKey) {
       intro:  iIntro >= 0 ? (Number(rows[i][iIntro]) || 0) : 0,
       nyuten: iNyu   >= 0 ? (Number(rows[i][iNyu])   || 0) : 0,
       adjust: iAdj   >= 0 ? (Number(rows[i][iAdj])   || 0) : 0,
-      vote:   iVote  >= 0 ? (Number(rows[i][iVote])  || 0) : 0  // 🏆月間投票賞（¥1:¥1直加算）
+      vote:   iVote  >= 0 ? (Number(rows[i][iVote])  || 0) : 0, // 🏆月間投票賞（¥1:¥1直加算）
+      // 🚕交通費: 手入力があればその値、空なら自動集計にフォールバック（勤務時間と同型）。kotsuSet=手入力あり
+      kotsu:    iKotsu >= 0 ? (Number(rows[i][iKotsu]) || 0) : 0,
+      kotsuSet: iKotsu >= 0 && String(rows[i][iKotsu]).trim() !== ''
     };
   }
   return map;
@@ -2158,6 +2161,174 @@ function adminSetCastBackRule(userId, targetName, mode, rate) {
     }
   }
   return { ok: false, error: targetName + ' が見つかりません' };
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🚕 キャスト交通費（往路=出勤日は自動 / 復路=送りなしの日だけ自動 / 給与に非課税で加算）
+//   設定: スタッフマスタに「交通費対象」(○)「片道交通費」(円) の2列（末尾追加・非破壊）。
+//   金額: 月次で 片道 ×（往路件数 ＋ 復路件数）。往路=出勤日数、復路=出勤日数−送りあり日数。
+//   母集合=シフト表の出勤予定日（当日欠勤は承認時にセルが'休み'化→自動で往路対象外＝来なきゃ0）。
+//   送りあり=送迎ログ 状態'依頼'。名寄せは normalizeName_＋内部スペース除去で全シート統一。
+//   給与反映=給与手入力シートの「交通費」列（自動値が既定／手入力があれば手が勝つ＝勤務時間と同型）→
+//     newBackCalc_ で「日払いの鏡像」＝源泉基礎(kazei)には入れず、残り支給(nokori)に最後に加算。
+//   ⚠️対象0人のときはシフト表/送迎ログを一切読まない＝未設定なら完全に無負荷。
+//   ⚠️遡及ガード: 開始月(kotsuStartMonth_)より前の月は対象外。ボス確定=2026/07から。
+// ══════════════════════════════════════════════════════════════════════════
+var STAFF_KOTSU_HEADERS = ['交通費対象', '片道交通費'];
+
+// 交通費の開始月（この月より前は交通費を付けない）。ボス確定=2026/07。
+// ScriptProperty KOTSU_START_MONTH（'yyyy/MM'）で変更可（KOTSU_ prefix＝軍師設定リセットで消えない）。
+function kotsuStartMonth_() { return prop('KOTSU_START_MONTH') || '2026/07'; }
+
+// スタッフマスタから交通費2列の0-based indexを解決（create=trueで無ければ末尾に新設）
+function getStaffKotsuCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_KOTSU_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) { lastCol += 1; sh.getRange(1, lastCol).setValue(name); idx = lastCol - 1; }
+    cols[name] = idx;
+  });
+  return cols;
+}
+
+// 空白除去まで含めた名寄せキー（シフト表・送迎ログの表記ゆれに合わせる。gunshiGetGenjiShiftと同流儀）
+function kotsuNameKey_(name) { return normalizeName_(String(name || '').trim()).replace(/[\s　]/g, ''); }
+
+// 管理者: キャストの交通費設定（対象ON/OFF＋片道額）をスタッフマスタに保存
+function adminSetCastKotsuhi(userId, targetName, on, amount) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  targetName = String(targetName || '').trim();
+  var cols = getStaffKotsuCols_(sh, true);
+  var onCol = cols['交通費対象'], amtCol = cols['片道交通費'];
+  var isOn = (on === true || on === '○' || on === 'on' || on === 1 || on === '1');
+  var amt = Math.max(0, Math.round(Number(amount) || 0));
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, onCol + 1).setValue(isOn ? '○' : '');
+      if (amtCol >= 0) sh.getRange(i + 1, amtCol + 1).setValue(amt);
+      return { ok: true, name: targetName, on: isOn, amount: amt };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+
+// 交通費対象キャストの一覧（対象'○'・片道>0・黒服/幽霊/退職を除外）。
+// return [{name, nmKey(正規化名), matchKey(空白除去), oneWay, role}]
+function castKotsuTargets_(ss) {
+  var out = [];
+  var sh = ss.getSheetByName(STAFF_TAB);
+  if (!sh) return out;
+  var cols = getStaffKotsuCols_(sh, false);
+  var onCol = cols['交通費対象'], amtCol = cols['片道交通費'];
+  if (onCol < 0) return out; // 一度も設定していない＝対象0人（以降のシフト/送迎読みをスキップ）
+  var retCols = getStaffRetireCols_(sh, false);
+  var retCol = retCols['退職'];
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    var name = String(rows[i][1]).trim();
+    if (!name) continue;
+    if (String(rows[i][onCol]).trim() !== '○') continue;
+    var amt = amtCol >= 0 ? (Number(rows[i][amtCol]) || 0) : 0;
+    if (amt <= 0) continue;
+    var role = String(rows[i][2]).trim() || 'キャスト';
+    if (isGhostRole_(role) || kintaiIsTargetRole_(role)) continue; // 幽霊・黒服は対象外（黒服は勤怠手当で別制度）
+    if (retCol != null && retCol >= 0 && String(rows[i][retCol]).trim() === '退職') continue;
+    out.push({ name: name, nmKey: normalizeName_(name), matchKey: kotsuNameKey_(name), oneWay: amt, role: role });
+  }
+  return out;
+}
+
+// 指定月・対象キャストの「出勤予定日数」をシフト表（別ブック）から直読み。{matchKey: 日数}
+// ⚠️シフト表が対象月の日付列を保持している前提。無ければ0（自動0＝手入力で補える）。
+function shiftWorkedDaysInMonth_(ss, ymSlash, targets) {
+  var worked = {};
+  if (!targets || !targets.length) return worked;
+  var parts = String(ymSlash).split(/[\/\-]/);
+  var yy = Number(parts[0]), mm = Number(parts[1]);
+  var sh;
+  try { sh = getShiftSS_().getSheetByName(SHIFT_TAB); } catch (e) { return worked; }
+  if (!sh || sh.getLastRow() < 2) return worked;
+  var data = sh.getDataRange().getValues();
+  var header = data[0];
+  // 対象月の日付列インデックスを抽出（Date型ヘッダのみ・'LINE_ID'等の文字列列は自然に除外）
+  var dateCols = [];
+  for (var j = 2; j < header.length; j++) {
+    var hv = header[j];
+    if (hv instanceof Date && !isNaN(hv) && hv.getFullYear() === yy && (hv.getMonth() + 1) === mm) dateCols.push(j);
+  }
+  if (!dateCols.length) return worked;
+  var want = {};
+  targets.forEach(function (t) { want[t.matchKey] = true; });
+  for (var i = 1; i < data.length; i++) {
+    var key = kotsuNameKey_(data[i][0]);
+    if (!want[key]) continue;
+    var days = 0;
+    for (var k = 0; k < dateCols.length; k++) {
+      var val = String(data[i][dateCols[k]] || '').trim();
+      if (val && /\d/.test(val)) days++; // 時刻入り＝出勤予定（'休み'/'欠勤'/空は数字なしで自然に除外）
+    }
+    worked[key] = (worked[key] || 0) + days;
+  }
+  return worked;
+}
+
+// 指定月の「送りあり日数」を送迎ログから集計（状態'依頼'・日付×名前で重複排除）。{matchKey: 日数}
+function okuriDaysInMonth_(ss, ymSlash) {
+  var out = {};
+  var sh = ss.getSheetByName(OKURI_TAB);
+  if (!sh || sh.getLastRow() < 2) return out;
+  var parts = String(ymSlash).split(/[\/\-]/);
+  var ymDash = parts[0] + '-' + ('0' + Number(parts[1])).slice(-2);
+  var vals = sh.getDataRange().getValues();
+  var seen = {};
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][4]).trim() !== '依頼') continue; // 有効な送りのみ（キャンセルは行削除済み）
+    var d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (d.slice(0, 7) !== ymDash) continue;
+    var key = kotsuNameKey_(vals[i][1]);
+    var sk = key + '|' + d;
+    if (seen[sk]) continue;
+    seen[sk] = true;
+    out[key] = (out[key] || 0) + 1;
+  }
+  return out;
+}
+
+// 月次の交通費を対象キャスト分まとめて算出。optNmKey指定でそのキャストだけ（ポータル用）。
+// return { 正規化名(nmKey): {name, oneWay, days, okuriDays, fukuroDays, legCount, kotsu} }
+function computeMonthlyKotsu_(ss, ymSlash, optNmKey) {
+  var out = {};
+  var startYM = kotsuStartMonth_(); // ボス確定=2026/07（propで変更可）
+  var ymN = String(ymSlash).replace('-', '/');
+  if (startYM && ymN < startYM) return out; // 遡及ガード（開始月より前は交通費を付けない）
+  var targets = castKotsuTargets_(ss);
+  if (optNmKey) targets = targets.filter(function (t) { return t.nmKey === optNmKey; });
+  if (!targets.length) return out; // 対象0人 → シフト表/送迎ログは読まない（無負荷）
+  var worked = shiftWorkedDaysInMonth_(ss, ymSlash, targets);
+  var okuri = okuriDaysInMonth_(ss, ymSlash);
+  targets.forEach(function (t) {
+    var days = worked[t.matchKey] || 0;
+    var ok = Math.min(okuri[t.matchKey] || 0, days); // 送りは出勤日を超えない
+    var fukuro = Math.max(0, days - ok);              // 復路＝出勤かつ送りなしの日
+    var legs = days + fukuro;                          // 往路(=days) ＋ 復路(=fukuro)
+    out[t.nmKey] = { name: t.name, oneWay: t.oneWay, days: days, okuriDays: ok, fukuroDays: fukuro, legCount: legs, kotsu: t.oneWay * legs };
+  });
+  return out;
+}
+
+// 管理者: 指定月の交通費プレビュー（当月も見られる・給与明細は先月までなので別口）。read-only。
+function adminGetKotsuPreview(userId, month) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var mk = monthKey_(month) || Utilities.formatDate(new Date(), TZ, 'yyyy/MM');
+  var map = computeMonthlyKotsu_(getOrOpenSS_(), mk);
+  var list = Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.kotsu - a.kotsu; });
+  var total = list.reduce(function (s, r) { return s + r.kotsu; }, 0);
+  return { ok: true, month: mk, rows: list, total: total, startMonth: kotsuStartMonth_() };
 }
 
 // ── 誕生日バック週：キャスト×月ごとに「この来店日レンジだけ小計バック率を上書き」する設定ストア ──────────
@@ -2878,6 +3049,9 @@ function newBackCalc_(g, m) {
   const tantoBk  = Number(g('担当バック')) || 0;
   const hibarai  = Number(g('日払'))       || 0;
   const minusT   = Number(g('マイナス計')) || 0;
+  // 🚕交通費（非課税）。日払いの鏡像＝課税支給(kazei)・源泉(gensen)には入れず、残り支給(nokori)に最後に加算。
+  // 値は呼び出し側で解決済み（給与手入力の手入力があればその値／空なら月次自動集計 computeMonthlyKotsu_）。
+  const kotsu    = Number(m.kotsu)         || 0;
   // 売上調整（コンソール手入力・給与手入力シートの「売上調整」列）。ユーザー確定ルール＝実売上と完全に同等に扱う
   // ＝倍率にも貢献し、率が上がれば売上全体に新しい率がかかる。減算は担当小計を0で打ち止め（バックはマイナスにしない）。
   const adjust = Number(m.adjust) || 0;
@@ -2916,10 +3090,10 @@ function newBackCalc_(g, m) {
   const stripTantoBk = tantoTru > 0 ? tantoBk : 0;
   const kazei   = gross - stripTantoBk + newBack + nyuten + intro + vote;
   const gensen  = Math.floor(kazei * 0.1021);
-  const nokori  = kazei - gensen - hibarai - minusT;
+  const nokori  = kazei - gensen - hibarai - minusT + kotsu; // 🚕交通費は非課税＝源泉の後に加算（日払いの鏡像）
   return {
     bairitu: Math.round(bairitu * 100) / 100, ratePct: ratePct, newBack: newBack,
-    fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten, vote: vote,
+    fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten, vote: vote, kotsu: kotsu,
     kazei: kazei, gensen: gensen, nokori: nokori,
     hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross,
     tantoTrust: tantoTru, adjust: adjust,   // 調整の内訳（tanto = max(0, tantoTrust + adjust)）
@@ -2958,7 +3132,7 @@ function adminSetKyuyoManual(userId, month, name, vals) {
   const rows = sh.getDataRange().getValues();
   const h = rows[0].map(function (x) { return String(x).trim(); });
   const ci = function (n) { return h.indexOf(n); };
-  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整');
+  const iIntro = ci('キャスト紹介料'), iNyu = ci('入店祝い金'), iAdj = ci('売上調整'), iKotsu = ci('交通費');
   const nmNorm = normalizeName_(nm);
   let found = -1;
   for (let i = 1; i < rows.length; i++) {
@@ -2992,7 +3166,18 @@ function adminSetKyuyoManual(userId, month, name, vals) {
       logKyuyoManual_(ss, { month: mk, name: nm, item: w.item, before: w.before, after: w.after, reason: reason, operator: operator });
     }
   });
-  return { ok: true, month: mk, name: nm, intro: intro, nyuten: nyuten, adjust: adjust };
+  // 🚕交通費の手修正: '' or null → セルを空に戻す（自動集計にフォールバック）／数値(0含む) → 上書き。
+  //   'kotsu' キーが送られた時だけ触る（他項目だけの更新で交通費を潰さない）。0上書きと自動戻しを区別できる。
+  var kotsuOut;
+  if (iKotsu >= 0 && vals && Object.prototype.hasOwnProperty.call(vals, 'kotsu')) {
+    var kBefore = cur(iKotsu);
+    kotsuOut = (vals.kotsu === '' || vals.kotsu == null) ? '' : Math.max(0, Math.round(Number(vals.kotsu) || 0));
+    sh.getRange(rowIdx, iKotsu + 1).setValue(kotsuOut);
+    if (String(kotsuOut) !== String(kBefore)) {
+      logKyuyoManual_(ss, { month: mk, name: nm, item: '交通費(手修正)', before: kBefore, after: kotsuOut === '' ? '(自動に戻す)' : kotsuOut, reason: reason, operator: operator });
+    }
+  }
+  return { ok: true, month: mk, name: nm, intro: intro, nyuten: nyuten, adjust: adjust, kotsu: kotsuOut };
 }
 
 // ── 管理コンソール: 給与明細（新バック方式で再計算＋立替代を合算） ──────────
@@ -3023,8 +3208,9 @@ function payrollDetail_(ss, month) {
   const manual = getKyuyoManual_(ss, mSel);
   const castRule = getCastBackRuleMap_(ss);
   const bdayMap = getBirthdayBackMap_(ss, mSel); // 誕生日バック週設定 { 正規化名: {start,end,rate} }
+  const kotsuAuto = computeMonthlyKotsu_(ss, mSel); // 🚕交通費 月次自動集計 { 正規化名: {days,okuriDays,fukuroDays,legCount,oneWay,kotsu} }
   const list = [];
-  const tot = { jikan: 0, tanto: 0, newBack: 0, backTotal: 0, plusTotal: 0, gross: 0, kazei: 0, gensen: 0, hibarai: 0, okuri: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
+  const tot = { jikan: 0, tanto: 0, newBack: 0, backTotal: 0, plusTotal: 0, gross: 0, kazei: 0, gensen: 0, hibarai: 0, okuri: 0, kotsu: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== mSel) continue;
     const g = function (h) { const j = ci(h); return j >= 0 ? (Number(rows[i][j]) || 0) : 0; };
@@ -3034,7 +3220,11 @@ function payrollDetail_(ss, month) {
     getHairReceipts_(ss, nmN, mSel).forEach(function (r) { tatekae += r.amount; });
     // 新バック方式で再計算（TRUSTの担当バック・源泉・残りは使わず、この式で置き換え）
     // 固定率はキャスト設定を優先で反映（未設定＝倍率ルール）
-    const m = Object.assign({}, manual[nmN] || {}, { fixedRate: (castRule[nmN] != null ? castRule[nmN] : null) });
+    // 🚕交通費: 手入力があればその値、無ければ月次自動集計を既定にして newBackCalc_ へ渡す
+    const manRow = manual[nmN] || {};
+    const kInfo = kotsuAuto[nmN] || null;
+    const effKotsu = manRow.kotsuSet ? manRow.kotsu : (kInfo ? kInfo.kotsu : 0);
+    const m = Object.assign({}, manRow, { fixedRate: (castRule[nmN] != null ? castRule[nmN] : null), kotsu: effKotsu });
     // 誕生日バック週: 設定があれば伝票シートから比率を出して率上書きを仕込む（案A・比率方式）
     const bcfg = bdayMap[nmN];
     if (bcfg) {
@@ -3053,6 +3243,8 @@ function payrollDetail_(ss, month) {
       drinkBk: g('ドリンクバック'), bottleBk: g('ボトルバック'), foodBk: g('フードバック'),
       plusTotal: g('プラス計'), gross: nb.gross, kazei: nb.kazei,
       gensen: nb.gensen, hibarai: nb.hibarai, okuri: g('送り代'), minusTotal: nb.minusTotal,
+      // 🚕交通費（非課税・残り支給に加算済み）。kotsuInfo=内訳(往路/復路/日数)、kotsuManual=手修正で自動を上書き中
+      kotsu: nb.kotsu, kotsuInfo: kInfo, kotsuManual: !!manRow.kotsuSet,
       net: nb.nokori, tatekae: tatekae, finalPay: finalPay,
       // 参考: TRUST自身の数字（支給には使わない）
       trustGross: g('総支給額'), trustBackTotal: g('バック計'), trustGensen: g('源泉徴収'), trustNet: g('残り支給額'), trustTantoBk: nb.tantoBk
@@ -3061,7 +3253,7 @@ function payrollDetail_(ss, month) {
     tot.jikan += rec.jikan; tot.tanto += rec.tanto; tot.newBack += rec.newBack;
     tot.backTotal += rec.newBack; tot.plusTotal += rec.plusTotal; tot.gross += rec.gross;
     tot.kazei += rec.kazei; tot.gensen += rec.gensen; tot.hibarai += rec.hibarai;
-    tot.okuri += rec.okuri; tot.minusTotal += rec.minusTotal; tot.net += rec.net;
+    tot.okuri += rec.okuri; tot.kotsu += rec.kotsu; tot.minusTotal += rec.minusTotal; tot.net += rec.net;
     tot.tatekae += rec.tatekae; tot.finalPay += rec.finalPay;
   }
   list.sort(function (a, b) { return b.finalPay - a.finalPay; });
@@ -3091,6 +3283,7 @@ function portalTrustPay_(ss, name, filterMonth) {
   const idx = function (h) { return hdrs.indexOf(h); };
   const castFixed = getCastBackRuleMap_(ss)[name]; // 固定率（無ければundefined＝倍率ルール）
   const bdayCache = {}; // 月別 誕生日バック設定キャッシュ { monthKey: {start,end,rate}|null }
+  const kotsuCache = {}; // 🚕月別 交通費自動集計キャッシュ（対象外キャストはnull＝シフト/送迎を読まない）
   const out = {};
   for (let i = 1; i < rows.length; i++) {
     const m = mStr_(rows[i][0]);
@@ -3102,6 +3295,9 @@ function portalTrustPay_(ss, name, filterMonth) {
     // 新バック方式で再計算（キャスト画面もTRUSTの数字ではなく新方式で見せる）
     // 残り支給額は「立替前net」で返す。立替(ヘアサロン)はポータル側が自前で最終支給に加算するため二重計上しない。
     const mm = Object.assign({}, getKyuyoManual_(ss, m)[name] || {}, { fixedRate: (castFixed != null ? castFixed : null) });
+    // 🚕交通費: 手入力が無ければ月次自動集計を既定に（対象外キャストはcomputeが{}を返す＝0）
+    if (!(m in kotsuCache)) kotsuCache[m] = (computeMonthlyKotsu_(ss, m, name)[name] || null);
+    mm.kotsu = mm.kotsuSet ? mm.kotsu : (kotsuCache[m] ? kotsuCache[m].kotsu : 0);
     // 誕生日バック週: 本人の画面もTRUST数字ではなく分割後で見せる
     if (!(m in bdayCache)) bdayCache[m] = getBirthdayBackMap_(ss, m)[name] || null;
     const bcfg = bdayCache[m];
@@ -3120,7 +3316,7 @@ function portalTrustPay_(ss, name, filterMonth) {
       'ボーナス': g('運営手当'), '送迎手当': g('送迎手当'), '残業代': g('残業代'), '売り半': g('売り半'),
       '新バック': nb.newBack, '倍率': nb.bairitu, 'バック率(%)': nb.ratePct, '__bday': nb.bday, '課税支給': nb.kazei,
       '源泉徴収': nb.gensen, '日払': g('日払'), 'マイナス': g('マイナス計'), '送り代': g('送り代'),
-      '残り支給額': nb.nokori, '__trust': true
+      '交通費': nb.kotsu, '残り支給額': nb.nokori, '__trust': true
     };
   }
   return out;
@@ -8936,6 +9132,7 @@ function getAdminConsoleData(userId) {
   const leaveCols  = sh ? getStaffLeaveCols_(sh, false) : {};
   const noticeCols = sh ? getStaffNoticeCols_(sh, false) : {};
   const onboardCol = sh ? getStaffOnboardCol_(sh, false) : -1;
+  const kotsuCols  = sh ? getStaffKotsuCols_(sh, false) : {};
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
@@ -8971,6 +9168,9 @@ function getAdminConsoleData(userId) {
       onLeaveAt: (function () { var c = leaveCols['休職開始日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })(),
       // お知らせ配信対象: '×'のときだけOFF。列が無い/空欄は配信ON（既定）
       noticeOn: !(noticeCols['お知らせ配信'] >= 0 && String(rows[i][noticeCols['お知らせ配信']]).trim() === '×'),
+      // 🚕交通費設定: 対象ON/OFF＋片道額（円）。列が無ければ OFF/0
+      kotsuOn: (kotsuCols['交通費対象'] >= 0 && String(rows[i][kotsuCols['交通費対象']]).trim() === '○'),
+      kotsuAmount: (kotsuCols['片道交通費'] >= 0 ? (Number(rows[i][kotsuCols['片道交通費']]) || 0) : 0),
       // 入店チェック（新人オンボーディング）: {項目:'対応中'|'完了'}。列が無ければ空
       onboard: (onboardCol >= 0) ? parseOnboard_(rows[i][onboardCol]) : {}
     });
