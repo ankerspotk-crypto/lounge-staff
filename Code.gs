@@ -834,9 +834,14 @@ function handleApiRequest_(body) {
     return portalBillDetail_('', body.date, body.uuid, true, '');
   }
 
-  // === 👥 会員情報の編集／新規登録（りく・管理者だけ／ポータル会員管理） ===
-  //   参照は tab=customers（fullAccess）で既に全件返している。ここは書き込み専用＝isAdmin_ で必ずゲート。
-  //   実体は軍師・コンソールと同じ updateCustomer/addCustomer を再利用（会費マップキャッシュ破棄も込み）。
+  // === 👥 会員情報の参照／編集／新規登録（りく・管理者だけ／ポータル＋管理コンソール） ===
+  //   ポータルの参照は tab=customers（fullAccess）。コンソールは下の adminGetCustomers で全件フル取得。
+  //   書き込みは isAdmin_ で必ずゲート。実体は軍師・コンソールと同じ updateCustomer/addCustomer を再利用。
+  if (body.action === 'adminGetCustomers') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return adminGetCustomers_();
+  }
   if (body.action === 'adminUpdateCustomer') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
@@ -17086,6 +17091,46 @@ function getCustomerList() {
     });
   }
   return { customers: results, activeCasts };
+}
+
+// 管理コンソール 会員管理：全会員を編集可能な形（rowIdx＋全項目）で返す。ゲートは handleApiRequest_ 側の isAdmin_。
+// 列マッピングは getCustomerMasterCols_（＝updateCustomer と同一）＝コンソール/ポータルの編集フォームで
+// プレフィルと保存が揃う。会費更新の和暦テキスト列（2年目/3年目更新）は編集対象外＝feeDate は表示専用。
+function adminGetCustomers_() {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(MASTER_TAB);
+  if (!sh) return { ok: false, error: '顧客マスタが見つかりません' };
+  // 在籍外の担当キャストを店担当へ整理（軍師「顧客管理」と同じ挙動・黒服を在籍に含める＝担当の誤消去を防ぐ）
+  const activeCasts = getCastNamesForYoyaku_(ss, { withKurofuku: true });
+  const { values, cols } = reassignInactiveTantou_(sh, activeCasts);
+  if (!cols) return { ok: false, error: '顧客マスタの列構成を認識できませんでした' };
+  const ev = (row, c) => (c >= 0 && row[c] != null) ? row[c] : '';
+  const editHas = {
+    card: cols.card >= 0, no: cols.no >= 0, tantou: cols.tantou >= 0, yomigana: cols.yomigana >= 0,
+    company: cols.company >= 0, pos: cols.pos >= 0, neck: cols.neck >= 0, ng: cols.ng >= 0, ngStaff: cols.ngStaff >= 0,
+    bottle: cols.bottle >= 0, drink: cols.drink >= 0, tabaco: cols.tabaco >= 0, note: cols.note >= 0,
+    bday: cols.bday >= 0, memberSince: cols.memberSince >= 0, lastFeeDate: cols.lastFeeDate >= 0
+  };
+  const list = [];
+  for (let r = cols.headerRow + 1; r < values.length; r++) {
+    const row = values[r];
+    const card = String(ev(row, cols.card)).trim();
+    const name = String(ev(row, cols.name)).trim();
+    if (!card && !name) continue;
+    list.push({
+      rowIdx: r + 1,
+      card: card, name: name, no: String(ev(row, cols.no)), tantou: String(ev(row, cols.tantou)),
+      yomigana: String(ev(row, cols.yomigana)), company: String(ev(row, cols.company)),
+      bottle: String(ev(row, cols.bottle)), pos: String(ev(row, cols.pos)),
+      neck: String(ev(row, cols.neck)), drink: String(ev(row, cols.drink)), tabaco: String(ev(row, cols.tabaco)),
+      ng: String(ev(row, cols.ng)), ngStaff: String(ev(row, cols.ngStaff)), note: String(ev(row, cols.note)),
+      eBday: fmtDateFull_(ev(row, cols.bday)),
+      memberSince: fmtDateFull_(ev(row, cols.memberSince)),
+      lastFeeDate: fmtDateFull_(ev(row, cols.lastFeeDate)),
+      feeDate: resolveRenewal_(ev(row, cols.feeDate)) || resolveRenewal_(ev(row, cols.renewal2)) || extractRenewalFromNote_(ev(row, cols.note)) // 表示専用（会員期限）
+    });
+  }
+  return { ok: true, customers: list, editHas: editHas, count: list.length };
 }
 
 // 顧客新規登録
