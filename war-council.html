@@ -1,0 +1,460 @@
+<meta charset="utf-8">
+<style>
+  :root{
+    --ground:#0e0b06; --ground-2:#17110a; --panel:#1b1409; --panel-2:#211809;
+    --edge:rgba(216,178,90,.16); --edge-strong:rgba(216,178,90,.34);
+    --gold:#d8b25a; --gold-bright:#f2d68a; --gold-dim:#9a7d3e;
+    --jade:#5cc29c; --jade-dim:#2f6b57;
+    --vermilion:#dd5a41; --vermilion-bright:#f0765c;
+    --indigo:#6784ab; --indigo-dim:#3a4c66;
+    --washi:#efe6d1; --washi-dim:#b8aa89; --washi-faint:#7c7059;
+    --serif:"Hiragino Mincho ProN","YuMincho","Yu Mincho","Songti SC",serif;
+    --gothic:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP",sans-serif;
+    --mono:ui-monospace,"SF Mono","SFMono-Regular",Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;overflow:hidden;background:var(--ground);}
+  .bg{position:fixed;inset:0;z-index:0;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #241a0c 0%, var(--ground-2) 42%, var(--ground) 100%),
+      repeating-linear-gradient(0deg, rgba(216,178,90,.020) 0 1px, transparent 1px 3px);
+  }
+  #embers{position:fixed;inset:0;z-index:1;pointer-events:none;}
+  .board{position:relative;z-index:2;height:100dvh;height:100vh;
+    display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;
+    gap:clamp(8px,.9vh,14px);padding:clamp(10px,1.4vh,20px);
+    color:var(--washi);font-family:var(--gothic);
+  }
+
+  /* ---------- header rail ---------- */
+  .rail{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;
+    gap:clamp(14px,2vw,34px);
+    padding:clamp(10px,1.4vh,18px) clamp(16px,1.8vw,28px);
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--edge);border-radius:4px;position:relative;overflow:hidden;}
+  .rail::after{content:"";position:absolute;top:0;bottom:0;left:-30%;width:22%;
+    background:linear-gradient(90deg,transparent,rgba(242,214,138,.10),transparent);
+    animation:sweep 7s linear infinite;}
+  .crest{width:clamp(46px,4.4vw,74px);height:clamp(46px,4.4vw,74px);flex:none;filter:drop-shadow(0 0 8px rgba(216,178,90,.25));}
+  .titleblock{min-width:0;}
+  .eyebrow{font-family:var(--serif);letter-spacing:.42em;text-transform:uppercase;
+    color:var(--gold-dim);font-size:clamp(9px,.82vw,13px);margin-bottom:.35em;}
+  .title{font-family:var(--serif);font-weight:600;line-height:1;
+    font-size:clamp(24px,2.9vw,50px);letter-spacing:.06em;
+    color:var(--washi);text-shadow:0 0 22px rgba(216,178,90,.18);white-space:nowrap;}
+  .title b{color:var(--gold-bright);font-weight:600;}
+  .latin{font-family:var(--mono);letter-spacing:.34em;color:var(--washi-faint);
+    font-size:clamp(8px,.7vw,11px);margin-top:.5em;text-transform:uppercase;}
+  .kpis{display:flex;gap:clamp(8px,.9vw,16px);}
+  .kpi{min-width:clamp(64px,6vw,108px);padding:clamp(6px,.8vh,12px) clamp(8px,.9vw,16px);
+    background:rgba(0,0,0,.28);border:1px solid var(--edge);border-radius:3px;
+    border-top:2px solid var(--kc,var(--gold));text-align:center;}
+  .kpi .n{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;
+    line-height:1;font-size:clamp(20px,2.4vw,40px);color:var(--kc,var(--gold));}
+  .kpi .l{font-size:clamp(8px,.72vw,12px);letter-spacing:.24em;color:var(--washi-dim);margin-top:.5em;}
+  .clock{text-align:right;font-family:var(--mono);flex:none;}
+  .clock .t{font-size:clamp(20px,2.3vw,40px);font-weight:600;letter-spacing:.06em;
+    color:var(--washi);line-height:1;font-variant-numeric:tabular-nums;}
+  .clock .d{font-size:clamp(9px,.82vw,14px);color:var(--washi-dim);letter-spacing:.2em;margin-top:.5em;}
+  .live-dot{display:inline-block;width:.5em;height:.5em;border-radius:50%;background:var(--jade);
+    margin-right:.5em;box-shadow:0 0 8px var(--jade);animation:pulse 1.8s ease-in-out infinite;vertical-align:middle;}
+
+  /* ---------- 戦況バンド (live) ---------- */
+  .warband{display:flex;align-items:center;gap:clamp(10px,1.2vw,22px);
+    padding:clamp(6px,.9vh,12px) clamp(14px,1.6vw,24px);animation-delay:.1s;
+    background:linear-gradient(180deg,rgba(32,24,10,.7),rgba(18,13,7,.72));
+    border:1px solid var(--edge);border-radius:4px;overflow:hidden;}
+  .wb-title{display:flex;flex-direction:column;gap:.4em;flex:none;
+    padding-right:clamp(10px,1.2vw,20px);border-right:1px solid var(--edge);}
+  .wb-jp{font-family:var(--serif);font-size:clamp(12px,1.15vw,20px);letter-spacing:.16em;color:var(--washi);white-space:nowrap;}
+  .wb-live{font-family:var(--mono);font-size:clamp(8px,.66vw,11px);letter-spacing:.2em;
+    color:var(--washi-faint);display:flex;align-items:center;gap:.5em;white-space:nowrap;}
+  .wb-live::before{content:"";width:.5em;height:.5em;border-radius:50%;background:var(--washi-faint);}
+  .wb-live.on{color:var(--jade);}
+  .wb-live.on::before{background:var(--jade);box-shadow:0 0 7px var(--jade);animation:pulse 1.6s infinite;}
+  .wt-row{display:flex;gap:clamp(8px,1vw,18px);flex:1;overflow-x:auto;scrollbar-width:none;}
+  .wt-row::-webkit-scrollbar{display:none;}
+  .wt{display:flex;flex-direction:column;align-items:center;gap:.32em;flex:none;
+    min-width:clamp(58px,5.4vw,94px);padding:clamp(4px,.55vh,10px) clamp(6px,.7vw,13px);
+    border-radius:3px;background:rgba(0,0,0,.22);border:1px solid var(--edge);}
+  .wt .v{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;line-height:1;
+    font-size:clamp(18px,2vw,34px);color:var(--washi);}
+  .wt.good .v{color:var(--jade);}
+  .wt.alert{border-color:var(--vermilion);}
+  .wt.alert .v{color:var(--vermilion-bright);}
+  .wt .l{font-size:clamp(8px,.7vw,12px);letter-spacing:.12em;color:var(--washi-dim);white-space:nowrap;}
+  .wt.flash{animation:flash .9s ease;}
+  @keyframes flash{0%{background:rgba(216,178,90,.30)}100%{background:rgba(0,0,0,.22)}}
+
+  /* ---------- main grid ---------- */
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.15fr) minmax(0,1.15fr);
+    gap:clamp(8px,.9vw,14px);min-height:0;}
+  .col{display:flex;flex-direction:column;gap:clamp(8px,.9vh,14px);min-height:0;}
+  .panel{background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--edge);border-radius:4px;
+    display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+  .panel-h{display:flex;align-items:baseline;justify-content:space-between;
+    padding:clamp(8px,1vh,14px) clamp(12px,1vw,18px);border-bottom:1px solid var(--edge);flex:none;}
+  .panel-h .jp{font-family:var(--serif);font-size:clamp(13px,1.2vw,20px);letter-spacing:.14em;color:var(--washi);}
+  .panel-h .en{font-family:var(--mono);font-size:clamp(8px,.68vw,11px);letter-spacing:.3em;color:var(--gold-dim);text-transform:uppercase;}
+  .panel-body{padding:clamp(8px,1vh,14px) clamp(10px,1vw,16px);overflow:auto;min-height:0;
+    scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;}
+  .panel-body::-webkit-scrollbar{width:6px;}
+  .panel-body::-webkit-scrollbar-thumb{background:var(--gold-dim);border-radius:3px;}
+
+  /* ---------- agents (部隊) ---------- */
+  .col--agents .panel{flex:1;}
+  .unit{display:grid;grid-template-columns:auto 1fr auto;gap:clamp(8px,.8vw,14px);align-items:center;
+    padding:clamp(8px,1vh,13px) clamp(6px,.5vw,10px);border-bottom:1px solid rgba(216,178,90,.08);}
+  .unit:last-child{border-bottom:0;}
+  .unit-sig{width:clamp(28px,2.6vw,42px);height:clamp(28px,2.6vw,42px);border-radius:50%;flex:none;
+    display:grid;place-items:center;font-family:var(--mono);font-size:clamp(11px,1vw,16px);font-weight:600;
+    border:1.5px solid var(--u,var(--gold-dim));color:var(--u,var(--gold));background:rgba(0,0,0,.25);position:relative;}
+  .unit.on .unit-sig{box-shadow:0 0 0 0 rgba(92,194,156,.5);animation:ring 2.4s ease-out infinite;}
+  .unit-name{font-size:clamp(12px,1.05vw,18px);letter-spacing:.06em;color:var(--washi);}
+  .unit-code{font-family:var(--mono);font-size:clamp(8px,.62vw,11px);letter-spacing:.24em;color:var(--washi-faint);text-transform:uppercase;}
+  .unit-task{font-size:clamp(9px,.78vw,13px);color:var(--washi-dim);margin-top:.35em;}
+  .unit-state{font-family:var(--mono);font-size:clamp(8px,.66vw,11px);letter-spacing:.14em;
+    padding:.32em .6em;border-radius:2px;white-space:nowrap;
+    color:var(--washi-faint);border:1px solid var(--edge);}
+  .unit.on .unit-state{color:var(--jade);border-color:var(--jade-dim);}
+  .unit.on .unit-state::before{content:"";display:inline-block;width:.45em;height:.45em;border-radius:50%;
+    background:var(--jade);margin-right:.45em;box-shadow:0 0 6px var(--jade);animation:pulse 1.6s infinite;}
+
+  /* ---------- ops board (陣) ---------- */
+  .col--ops .panel{flex:1;}
+  .ops-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(148px,15vw,220px),1fr));
+    gap:clamp(8px,.8vw,13px);}
+  .zin{position:relative;background:rgba(0,0,0,.24);border:1px solid var(--edge);
+    border-left:3px solid var(--sc);border-radius:3px;padding:clamp(9px,1vh,15px) clamp(10px,.9vw,15px);
+    display:flex;flex-direction:column;gap:.55em;overflow:hidden;transition:border-color .4s,box-shadow .4s;}
+  .zin.active{animation:breathe 3.6s ease-in-out infinite;}
+  .zin.is-focus{border-color:var(--sc);box-shadow:0 0 0 1px var(--sc),0 0 26px -4px var(--sc);}
+  .zin.is-focus::after{content:"";position:absolute;top:5px;right:5px;width:11px;height:11px;
+    border-top:2px solid var(--sc);border-right:2px solid var(--sc);opacity:.9;}
+  .zin-top{display:flex;align-items:center;justify-content:space-between;gap:.5em;}
+  .pill{font-family:var(--mono);font-size:clamp(8px,.64vw,11px);letter-spacing:.14em;
+    padding:.24em .55em;border-radius:2px;color:var(--sc);border:1px solid var(--sc);
+    background:color-mix(in srgb,var(--sc) 12%,transparent);white-space:nowrap;}
+  .zin-tag{font-family:var(--mono);font-size:clamp(8px,.6vw,10px);color:var(--washi-faint);letter-spacing:.1em;}
+  .zin-name{font-size:clamp(12px,1.12vw,19px);line-height:1.28;letter-spacing:.03em;color:var(--washi);
+    text-wrap:balance;}
+  .zin-note{font-size:clamp(9px,.74vw,12px);color:var(--washi-dim);line-height:1.35;}
+  .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:auto;}
+  .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--sc),color-mix(in srgb,var(--sc) 55%,#fff));
+    border-radius:2px;box-shadow:0 0 8px -1px var(--sc);}
+  .bar.dash{background:repeating-linear-gradient(90deg,var(--indigo-dim) 0 8px,transparent 8px 16px);}
+
+  /* ---------- flank (三本柱 / 担当 / 他戦線) ---------- */
+  .col--flank .panel{flex:none;}
+  .col--flank .panel.grow{flex:1;}
+  .castle{display:flex;align-items:center;gap:clamp(8px,.8vw,14px);
+    padding:clamp(7px,.9vh,12px) clamp(4px,.4vw,8px);border-bottom:1px solid rgba(216,178,90,.08);}
+  .castle:last-child{border-bottom:0;}
+  .castle-ico{font-family:var(--serif);font-size:clamp(16px,1.5vw,26px);color:var(--gold);width:1.6em;text-align:center;flex:none;}
+  .castle-name{font-size:clamp(11px,.95vw,17px);color:var(--washi);letter-spacing:.05em;}
+  .castle-sub{font-size:clamp(8px,.66vw,11px);color:var(--washi-faint);margin-top:.3em;}
+  .castle-hb{margin-left:auto;display:flex;align-items:center;gap:.5em;font-family:var(--mono);
+    font-size:clamp(8px,.64vw,11px);color:var(--jade);letter-spacing:.1em;}
+  .castle-hb .beat{width:.55em;height:.55em;border-radius:50%;background:var(--jade);box-shadow:0 0 7px var(--jade);animation:pulse 2s infinite;}
+  .roles{display:flex;flex-wrap:wrap;gap:clamp(5px,.5vw,9px);}
+  .role{display:flex;flex-direction:column;gap:.25em;padding:.5em .7em;border-radius:3px;
+    background:rgba(0,0,0,.24);border:1px solid var(--edge);min-width:0;}
+  .role b{font-size:clamp(11px,.95vw,16px);color:var(--washi);font-weight:600;letter-spacing:.05em;}
+  .role span{font-size:clamp(8px,.62vw,10px);color:var(--washi-faint);letter-spacing:.06em;}
+  .fronts{display:flex;flex-direction:column;gap:clamp(5px,.5vh,8px);}
+  .front{display:flex;align-items:baseline;gap:.6em;font-size:clamp(9px,.8vw,13px);color:var(--washi-dim);}
+  .front .k{font-family:var(--serif);color:var(--gold);font-size:clamp(10px,.9vw,15px);min-width:5.5em;letter-spacing:.06em;}
+  .front .s{font-size:clamp(8px,.64vw,11px);color:var(--washi-faint);}
+
+  /* ---------- ticker (戦果報) ---------- */
+  .ticker{display:flex;align-items:center;gap:clamp(10px,1vw,18px);
+    padding:0 clamp(14px,1.4vw,22px);height:clamp(38px,5vh,58px);
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--edge);border-radius:4px;overflow:hidden;}
+  .ticker-label{font-family:var(--serif);letter-spacing:.2em;color:var(--vermilion-bright);flex:none;
+    font-size:clamp(11px,1vw,17px);padding-right:clamp(10px,1vw,18px);border-right:1px solid var(--edge);}
+  .ticker-track{flex:1;overflow:hidden;white-space:nowrap;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);}
+  .ticker-run{display:inline-block;white-space:nowrap;animation:marquee 44s linear infinite;}
+  .ti{display:inline-flex;align-items:center;gap:.6em;margin:0 clamp(16px,1.6vw,30px);
+    font-size:clamp(10px,.86vw,15px);color:var(--washi-dim);letter-spacing:.04em;}
+  .ti .v{font-family:var(--mono);font-size:.82em;color:var(--gold);letter-spacing:.06em;}
+  .ti .dot{width:.4em;height:.4em;border-radius:50%;background:var(--jade);box-shadow:0 0 6px var(--jade);flex:none;}
+
+  @keyframes sweep{from{left:-30%}to{left:130%}}
+  @keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  @keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(216,178,90,0)}50%{box-shadow:0 0 20px -6px var(--sc)}}
+  @keyframes ring{0%{box-shadow:0 0 0 0 rgba(92,194,156,.45)}100%{box-shadow:0 0 0 12px rgba(92,194,156,0)}}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .board>*{animation:rise .7s cubic-bezier(.2,.7,.2,1) both;}
+  .rail{animation-delay:.02s}.col--agents{animation-delay:.14s}.col--ops{animation-delay:.22s}
+  .col--flank{animation-delay:.3s}.ticker{animation-delay:.4s}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;}
+    .ticker-run{animation:none!important;}
+  }
+</style>
+
+<div class="bg"></div>
+<canvas id="embers"></canvas>
+
+<div class="board">
+  <header class="rail">
+    <svg class="crest" viewBox="-50 -50 100 100" aria-hidden="true">
+      <circle cx="0" cy="0" r="47" fill="none" stroke="var(--gold-dim)" stroke-width="2.4"/>
+      <circle cx="0" cy="0" r="41" fill="none" stroke="var(--gold)" stroke-width="1.2" opacity=".7"/>
+      <g fill="var(--gold)" stroke="var(--gold-bright)" stroke-width="1">
+        <g transform="translate(0,-16) rotate(0)"><path d="M0,17 C-15,-1 -13,-17 -4,-13 C-1,-12 0,-8 0,-6 C0,-8 1,-12 4,-13 C13,-17 15,-1 0,17 Z"/><path d="M0,15 L0,-4" stroke="var(--panel)" stroke-width="1.4" opacity=".5"/></g>
+        <g transform="translate(0,-16) rotate(120)"><path d="M0,17 C-15,-1 -13,-17 -4,-13 C-1,-12 0,-8 0,-6 C0,-8 1,-12 4,-13 C13,-17 15,-1 0,17 Z"/></g>
+        <g transform="translate(0,-16) rotate(240)"><path d="M0,17 C-15,-1 -13,-17 -4,-13 C-1,-12 0,-8 0,-6 C0,-8 1,-12 4,-13 C13,-17 15,-1 0,17 Z"/></g>
+      </g>
+      <circle cx="0" cy="0" r="4.5" fill="var(--ground)" stroke="var(--gold-bright)" stroke-width="1.6"/>
+    </svg>
+    <div class="titleblock">
+      <div class="eyebrow">特務作戦司令室 · Operations</div>
+      <div class="title">軍師の<b>作戦盤</b></div>
+      <div class="latin">Ieyasu · Cloud War Council</div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="clock">
+      <div class="t"><span class="live-dot"></span><span id="ck-t">--:--:--</span></div>
+      <div class="d" id="ck-d">----</div>
+    </div>
+  </header>
+
+  <section class="warband">
+    <div class="wb-title"><span class="wb-jp">戦況 — 今</span><span class="wb-live" id="wb-live">接続待ち</span></div>
+    <div class="wt-row" id="wt-row"></div>
+  </section>
+
+  <main class="grid">
+    <section class="col col--agents">
+      <div class="panel">
+        <div class="panel-h"><span class="jp">部隊</span><span class="en">AI Units</span></div>
+        <div class="panel-body" id="agents"></div>
+      </div>
+    </section>
+
+    <section class="col col--ops">
+      <div class="panel">
+        <div class="panel-h"><span class="jp">作戦盤 — 陣立て</span><span class="en" id="ops-count">Missions</span></div>
+        <div class="panel-body"><div class="ops-grid" id="ops"></div></div>
+      </div>
+    </section>
+
+    <section class="col col--flank">
+      <div class="panel">
+        <div class="panel-h"><span class="jp">三本柱 — 本陣</span><span class="en">Systems</span></div>
+        <div class="panel-body" id="systems"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><span class="jp">担当 — 陣立</span><span class="en">Roster</span></div>
+        <div class="panel-body"><div class="roles" id="roles"></div></div>
+      </div>
+      <div class="panel grow">
+        <div class="panel-h"><span class="jp">他戦線</span><span class="en">Other Fronts</span></div>
+        <div class="panel-body"><div class="fronts" id="fronts"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ticker">
+    <span class="ticker-label">戦果報</span>
+    <div class="ticker-track"><span class="ticker-run" id="ticker"></span></div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  const SC={live:'var(--jade)',active:'var(--gold)',parked:'var(--indigo)'};
+  const LABEL={live:'稼働中',active:'進行中',parked:'待機'};
+
+  const kpis=[
+    {n:24,l:'稼働',c:'var(--jade)'},
+    {n:4,l:'進行中',c:'var(--gold)'},
+    {n:3,l:'待機',c:'var(--indigo)'},
+    {n:5,l:'他戦線',c:'var(--vermilion)'},
+  ];
+  const agents=[
+    {name:'本営',code:'CLAUDE',task:'作戦盤を構築・指揮',on:true,u:'var(--gold)'},
+    {name:'伝令隊',code:'SIGNAL',task:'LINE通達・通知配信',on:true,u:'var(--jade)'},
+    {name:'探索隊',code:'EXPLORE',task:'コード地図の索敵',on:false,u:'var(--indigo)'},
+    {name:'軍略隊',code:'PLAN',task:'実装計画の立案',on:false,u:'var(--indigo)'},
+    {name:'検分隊',code:'REVIEW',task:'検証・査読',on:false,u:'var(--indigo)'},
+  ];
+  const ops=[
+    {name:'システム的付け回し',status:'active',p:30,tag:'設計',note:'Phase1・希望を置く盤面'},
+    {name:'いえやす合戦',status:'active',p:55,tag:'TEST',note:'Phase1実装・テスト環境'},
+    {name:'領収書・受領書 発行',status:'active',p:70,tag:'WIP',note:'作成中・本番未反映'},
+    {name:'匿名ピア投票・表彰',status:'active',p:90,tag:'@727',note:'本番portal昇格待ち'},
+    {name:'面談表（面談のiPad化）',status:'live',p:100,tag:'@701',note:'一気通貫で稼働'},
+    {name:'黒服 勤怠管理＋手当',status:'live',p:100,tag:'@702',note:'8/1施行'},
+    {name:'キャスト交通費',status:'live',p:100,tag:'@746',note:'往路自動＋復路'},
+    {name:'発注済み未着アラート',status:'live',p:100,tag:'@721',note:'終売・欠品を検知'},
+    {name:'通知管理センター',status:'live',p:100,tag:'@719',note:'44通知を一元ON/OFF'},
+    {name:'ボトル棚 照準ガイド',status:'live',p:100,tag:'Pages',note:'エヴァ風・5F実写'},
+    {name:'今月誕生日のお客様',status:'live',p:100,tag:'@662',note:'4画面＋自動通知'},
+    {name:'黒服 スキルテスト',status:'live',p:100,tag:'@731',note:'時給ゲート'},
+    {name:'送りの手段集計',status:'parked',p:0,tag:'⏸',note:'仕様から再検討'},
+    {name:'連絡フロー再設計',status:'parked',p:0,tag:'⏸',note:'家康くん一本化 検討'},
+    {name:'付け回しダッシュボード',status:'parked',p:0,tag:'⏸',note:'設計済・寝かせ'},
+  ];
+  const systems=[
+    {ico:'城',name:'ポータル',sub:'キャスト向け · portal.html'},
+    {ico:'軍',name:'軍師 gunshi',sub:'店内iPad · 黒服の実戦'},
+    {ico:'政',name:'管理コンソール',sub:'管理者機能 · Admin.html'},
+  ];
+  const roles=[
+    {b:'ボス',s:'総大将'},{b:'りく',s:'副官'},{b:'管理者',s:'統制'},
+    {b:'黒服',s:'現場'},{b:'キャスト',s:'前線'},
+  ];
+  const fronts=[
+    {k:'NOCT',s:'夜職経営OS 商品化構想'},
+    {k:'キレイン',s:'清潔さ認証サービス'},
+    {k:'SECRET',s:'完全招待制ラウンジ'},
+    {k:'公式サイト',s:'店舗＋求人 和モダン'},
+    {k:'SECTION 04',s:'趣味 · 攻殻風 部隊'},
+  ];
+  const wins=[
+    {v:'@746',t:'キャスト交通費 本番稼働'},
+    {v:'@731',t:'黒服スキルテスト 稼働'},
+    {v:'@727',t:'匿名ピア投票 配信'},
+    {v:'@721',t:'発注未着アラート 稼働'},
+    {v:'@720',t:'通知管理センター 44通知'},
+    {v:'@718',t:'シャンパン在庫 稼働'},
+    {v:'@716',t:'退店予定時刻 稼働'},
+    {v:'149ce2e',t:'全員シフト 稼働'},
+    {v:'@702',t:'黒服勤怠 8/1施行'},
+    {v:'72cc20f',t:'ポータル刷新 稼働'},
+  ];
+
+  const $=id=>document.getElementById(id);
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  $('kpis').innerHTML=kpis.map(k=>
+    `<div class="kpi" style="--kc:${k.c}"><div class="n">${k.n}</div><div class="l">${k.l}</div></div>`).join('');
+
+  $('agents').innerHTML=agents.map(a=>
+    `<div class="unit ${a.on?'on':''}" style="--u:${a.u}">
+       <div class="unit-sig">${esc(a.code[0])}</div>
+       <div><div class="unit-name">${esc(a.name)} <span class="unit-code">${esc(a.code)}</span></div>
+       <div class="unit-task">${esc(a.task)}</div></div>
+       <div class="unit-state">${a.on?'稼働':'待機'}</div>
+     </div>`).join('');
+
+  $('ops').innerHTML=ops.map((o,i)=>
+    `<div class="zin ${o.status}" data-i="${i}" style="--sc:${SC[o.status]}">
+       <div class="zin-top"><span class="pill">${LABEL[o.status]}</span><span class="zin-tag">${esc(o.tag)}</span></div>
+       <div class="zin-name">${esc(o.name)}</div>
+       <div class="zin-note">${esc(o.note)}</div>
+       <div class="bar ${o.status==='parked'?'dash':''}">${o.status!=='parked'?`<i style="width:${o.p}%"></i>`:''}</div>
+     </div>`).join('');
+  $('ops-count').textContent=ops.length+' MISSIONS';
+
+  $('systems').innerHTML=systems.map(s=>
+    `<div class="castle"><div class="castle-ico">${esc(s.ico)}</div>
+       <div><div class="castle-name">${esc(s.name)}</div><div class="castle-sub">${esc(s.sub)}</div></div>
+       <div class="castle-hb"><span class="beat"></span>稼働</div></div>`).join('');
+
+  $('roles').innerHTML=roles.map(r=>
+    `<div class="role"><b>${esc(r.b)}</b><span>${esc(r.s)}</span></div>`).join('');
+
+  $('fronts').innerHTML=fronts.map(f=>
+    `<div class="front"><span class="k">${esc(f.k)}</span><span class="s">${esc(f.s)}</span></div>`).join('');
+
+  const tickHtml=wins.map(w=>
+    `<span class="ti"><span class="dot"></span><span class="v">${esc(w.v)}</span>${esc(w.t)}</span>`).join('');
+  $('ticker').innerHTML=tickHtml+tickHtml;
+
+  // clock
+  const WD=['日','月','火','水','木','金','土'];
+  const p2=n=>String(n).padStart(2,'0');
+  function tick(){
+    const d=new Date();
+    $('ck-t').textContent=`${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+    $('ck-d').textContent=`${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())} （${WD[d.getDay()]}）`;
+  }
+  tick();setInterval(tick,1000);
+
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  // roving focus reticle over active 陣
+  if(!reduce){
+    const cards=[...document.querySelectorAll('.zin.active')];
+    let fi=0;
+    if(cards.length){
+      const rove=()=>{cards.forEach(c=>c.classList.remove('is-focus'));
+        cards[fi%cards.length].classList.add('is-focus');fi++;};
+      rove();setInterval(rove,3200);
+    }
+  }
+
+  // drifting gold embers (金粉)
+  if(!reduce){
+    const cv=$('embers'),cx=cv.getContext('2d');let W,H,parts;
+    function fit(){W=cv.width=innerWidth;H=cv.height=innerHeight;
+      const n=Math.min(46,Math.round(W*H/48000));
+      parts=Array.from({length:n},()=>({x:Math.random()*W,y:Math.random()*H,
+        r:Math.random()*1.6+.5,v:Math.random()*.22+.06,a:Math.random()*.5+.15,
+        d:Math.random()*Math.PI*2,sw:Math.random()*.4+.1}));}
+    fit();addEventListener('resize',fit);
+    (function loop(){cx.clearRect(0,0,W,H);
+      for(const p of parts){p.y-=p.v;p.d+=.01;p.x+=Math.sin(p.d)*p.sw;
+        if(p.y<-4){p.y=H+4;p.x=Math.random()*W;}
+        cx.beginPath();cx.arc(p.x,p.y,p.r,0,6.283);
+        cx.fillStyle=`rgba(230,196,120,${p.a})`;
+        cx.shadowBlur=6;cx.shadowColor='rgba(216,178,90,.6)';cx.fill();}
+      requestAnimationFrame(loop);})();
+  }
+
+  /* ============ ライブ配線 — 戦況（今） ============ */
+  const P=new URLSearchParams(location.search);
+  const GAS_URL=P.get('api')||'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+  let KIOSK_KEY=P.get('key')||'';
+  try{ if(P.get('key'))localStorage.setItem('wc_key',P.get('key')); else KIOSK_KEY=localStorage.getItem('wc_key')||''; }catch(_){}
+  const DEMO=P.get('demo')==='1';
+  const REFRESH_MS=60000;
+
+  const LIVE_TILES=[
+    {k:'workingCasts',l:'出勤',good:true},
+    {k:'reservations',l:'予約'},
+    {k:'seatedTables',l:'在席'},
+    {k:'tsukemawashi',l:'付け回し'},
+    {k:'openTasks',l:'未対応'},
+    {k:'orderAlerts',l:'アラート',alert:true},
+    {k:'birthdays',l:'今月誕生日'},
+  ];
+  const DEMO_LIVE={workingCasts:12,reservations:8,seatedTables:5,tsukemawashi:2,openTasks:4,orderAlerts:1,birthdays:6};
+  const prev={},wtRow=$('wt-row'),wbLive=$('wb-live');
+
+  function drawTiles(live){
+    wtRow.innerHTML=LIVE_TILES.map(t=>{
+      const has=live&&live[t.k]!=null, v=has?live[t.k]:'—';
+      const cls=(t.alert&&has&&+v>0)?'alert':(t.good&&has?'good':'');
+      const fl=(has&&prev[t.k]!=null&&prev[t.k]!==v)?'flash':'';
+      if(has)prev[t.k]=v;
+      return `<div class="wt ${cls} ${fl}"><span class="v">${esc(v)}</span><span class="l">${esc(t.l)}</span></div>`;
+    }).join('');
+  }
+  function setLive(on,ts){
+    wbLive.classList.toggle('on',!!on);
+    if(on){const d=ts?new Date(ts):new Date();
+      wbLive.textContent='LIVE · 更新 '+p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds());}
+    else wbLive.textContent='接続待ち — スナップショット表示中';
+  }
+  function gsrPost(fn){const a=[].slice.call(arguments,1);
+    return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a})})
+      .then(r=>r.json()).then(j=>{if(j&&j.__ok===false)throw new Error(j.error||'server');return j?j.data:j;});
+  }
+  function poll(){
+    if(DEMO){drawTiles(DEMO_LIVE);setLive(true);return;}
+    gsrPost('getWarCouncil')
+      .then(d=>{drawTiles(d&&d.live?d.live:null);setLive(true,d&&d.ts);})
+      .catch(()=>{drawTiles(null);setLive(false);});
+  }
+  drawTiles(DEMO?DEMO_LIVE:null); setLive(DEMO);
+  poll(); setInterval(poll,REFRESH_MS);
+})();
+</script>
