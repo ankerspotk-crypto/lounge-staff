@@ -464,7 +464,7 @@ function pollAdminAuth(token){
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kintaireg','🗂 出勤簿'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
-  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
+  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
@@ -483,7 +483,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -575,6 +575,118 @@ function drawFeeRenew(){
 function frSel(v){ FR_SEL=v; FR_Q=''; FR_MODE='due'; drawFeeRenew(); } // 月を変えたら「期限の人」に戻す
 function frMode(m){ FR_MODE=m; drawFeeRenew(); }
 function frSearch(){ var el=document.getElementById('fr-q'); FR_Q=el?el.value:''; drawFeeRenew(); }
+
+/* ============ 👤 会員管理（お客様管理Y3のフル操作：参照・編集・新規登録） ============
+ * バック: adminGetCustomers（全件・rowIdx＋全項目）／ adminUpdateCustomer ／ adminAddCustomer（すべて isAdmin_ ゲート）。
+ * 編集は「変更した項目だけ」送る＝未変更列（会費更新の和暦テキスト等）を誤って上書きしない。
+ * 元値は"描画後DOM値"を基準（type=date のブラウザ正規化と一致＝未変更の誤送信を防ぐ）。ポータルの会員編集と同じ流儀。 */
+var MB_DATA=null, MB_Q='', MB_FILTER='', MB_ORIG={}, MB_ROWIDX=0;
+var MB_FIELDS=[
+  {k:'card',label:'カード記載名',type:'text'},
+  {k:'name',label:'氏名',type:'text'},
+  {k:'yomigana',label:'よみがな',type:'text'},
+  {k:'no',label:'会員番号',type:'text',hint:'⚠️ 変更すると過去の来店・売上の紐づけに影響します'},
+  {k:'tantou',label:'担当',type:'text'},
+  {k:'bottle',label:'ボトル種類',type:'text'},
+  {k:'pos',label:'ボトル位置',type:'text'},
+  {k:'company',label:'会社名',type:'text'},
+  {k:'bday',label:'誕生日',type:'date'},
+  {k:'drink',label:'飲み方',type:'text'},
+  {k:'tabaco',label:'タバコ',type:'text'},
+  {k:'neck',label:'ネック名',type:'text'},
+  {k:'ngStaff',label:'NGスタッフ',type:'text'},
+  {k:'memberSince',label:'登録日（入会）',type:'date'},
+  {k:'lastFeeDate',label:'最終会費更新日',type:'date'},
+  {k:'ng',label:'NG行為',type:'textarea'},
+  {k:'note',label:'参考情報・メモ',type:'textarea'}
+];
+function renderMembers(){
+  loading();
+  api('adminGetCustomers').then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込みエラー')+'</div>'); return; }
+    MB_DATA=r; mbDrawList();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function mbHas_(k){ var e=MB_DATA&&MB_DATA.editHas; if(!e||e[k]===undefined)return true; return !!e[k]; }
+function mbFiltered_(){
+  var list=(MB_DATA&&MB_DATA.customers)||[];
+  var q=(MB_Q||'').replace(/\s/g,'');
+  return list.filter(function(c){
+    if(MB_FILTER==='member'&&!String(c.no).trim())return false;
+    if(MB_FILTER==='bottle'&&!String(c.bottle).trim())return false;
+    if(!q)return true;
+    return [c.name,c.card,c.no,c.company,c.tantou,c.yomigana].some(function(v){return String(v||'').replace(/\s/g,'').indexOf(q)>=0;});
+  });
+}
+function mbDrawList(){
+  var shown=mbFiltered_(), total=((MB_DATA&&MB_DATA.customers)||[]).length;
+  var chip=function(key,lbl){ return '<span class="chip'+(MB_FILTER===key?' on':'')+'" onclick="mbFilter(\''+key+'\')">'+lbl+'</span>'; };
+  var bar='<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
+    +'<input class="finput grow" id="mb-q" placeholder="氏名・会員番号・会社・担当で検索" value="'+esc(MB_Q)+'" oninput="mbSearch()">'
+    +'<button class="btn pri" onclick="mbAddForm()">＋ 新規会員を登録</button>'
+    +'<span class="cnt">'+shown.length+' / '+total+' 名</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+chip('','すべて')+chip('member','💳 会員番号あり')+chip('bottle','🍶 ボトルあり')+'</div>';
+  var rows=shown.map(function(c){
+    var no=c.no?(' <span class="sub">#'+esc(c.no)+'</span>'):'';
+    var tantou=c.tantou?('担当 '+esc(c.tantou)):'<span style="color:var(--dim)">担当なし</span>';
+    var extra=[c.company?('🏢'+esc(c.company)):'',c.bottle?('🍶'+esc(c.bottle)):'',c.eBday?('🎂'+esc(c.eBday)):''].filter(Boolean).join(' ・ ');
+    return '<div class="lrow" style="cursor:pointer" onclick="mbEditForm('+c.rowIdx+')"><div class="main"><div class="nm">'+esc(c.name||c.card)+'様'+no
+      +'</div><div class="meta">'+tantou+(extra?' ・ '+extra:'')+'</div></div><div style="color:var(--dim);font-size:12px;font-weight:700">編集 ›</div></div>';
+  }).join('')||'<div class="empty" style="padding:14px">該当する会員がいません</div>';
+  var hint='<div class="hint">お客様管理Y3の全会員をフル操作（参照・編集・新規登録）。編集は<b>変更した項目だけ</b>保存されます。会費更新の記録は 伝票検知→軍師ワンタップ か、この編集の「最終会費更新日」で。</div>';
+  setBody(bar+'<div class="sec">'+rows+'</div>'+hint);
+  var el=document.getElementById('mb-q'); if(el&&MB_Q){ el.focus(); try{el.setSelectionRange(el.value.length,el.value.length);}catch(_){} }
+}
+function mbSearch(){ var el=document.getElementById('mb-q'); MB_Q=el?el.value:''; mbDrawList(); }
+function mbFilter(k){ MB_FILTER=k; mbDrawList(); }
+function mbBack(){ if(MB_DATA)mbDrawList(); else renderMembers(); }
+function mbFieldHtml_(f,isEdit,c){
+  var v=isEdit?(f.k==='bday'?(c.eBday||''):(c[f.k]!=null?String(c[f.k]):'')):'';
+  var field;
+  if(f.type==='textarea') field='<textarea class="ta" id="mb-'+f.k+'" rows="2">'+esc(v)+'</textarea>';
+  else if(f.type==='date') field='<input class="finput" id="mb-'+f.k+'" type="date" value="'+esc(v)+'" style="width:100%">';
+  else field='<input class="finput" id="mb-'+f.k+'" type="text" value="'+esc(v)+'" style="width:100%">';
+  return '<div style="'+(f.type==='textarea'?'grid-column:1/-1':'')+'"><label style="display:block;font-size:11px;font-weight:700;color:var(--dim);margin-bottom:3px">'+f.label+'</label>'+field
+    +(f.hint?'<div style="font-size:10px;color:var(--dim);margin-top:2px">'+f.hint+'</div>':'')+'</div>';
+}
+function mbForm_(mode,c){
+  var isEdit=(mode==='edit');
+  MB_ROWIDX=isEdit?(c.rowIdx||0):0;
+  var fields=MB_FIELDS.filter(function(f){ return !isEdit||mbHas_(f.k); }).map(function(f){ return mbFieldHtml_(f,isEdit,c||{}); }).join('');
+  var title=isEdit?(esc(c.name||c.card||'')+' 様 の会員情報を編集'):'新規会員を登録';
+  var note=isEdit?'変更した項目だけ保存されます。空欄にして保存するとその項目は消去されます。':'カード記載名または氏名は必須です。会員番号は自動で採番されます。';
+  var html='<div class="toolbar"><button class="btn" onclick="mbBack()">← 会員一覧へ戻る</button><span class="cnt">'+title+'</span></div>'
+    +'<div class="sec"><div class="hint" style="margin:0 0 12px">'+note+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+fields+'</div>'
+    +'<div class="toolbar" style="margin-top:16px"><button class="btn pri" onclick="mbSave('+(isEdit?'false':'true')+')">'+(isEdit?'💾 保存する':'＋ 登録する')+'</button></div></div>';
+  setBody(html);
+  MB_ORIG=isEdit?mbReadForm_():{}; // 描画後DOM値を基準（type=date正規化と一致＝未変更の誤送信を防ぐ）
+}
+function mbEditForm(rowIdx){ var c=((MB_DATA&&MB_DATA.customers)||[]).filter(function(x){return x.rowIdx===rowIdx;})[0]; if(c)mbForm_('edit',c); }
+function mbAddForm(){ mbForm_('add',null); }
+function mbReadForm_(){ var o={}; MB_FIELDS.forEach(function(f){ var el=document.getElementById('mb-'+f.k); if(el)o[f.k]=el.value; }); return o; }
+function mbSave(isAdd,force){
+  var cur=mbReadForm_(), payload={};
+  if(isAdd){
+    Object.keys(cur).forEach(function(k){ if(String(cur[k]).trim()!=='')payload[k]=cur[k]; });
+    if(!String(payload.card||'').trim()&&!String(payload.name||'').trim()){ toast('カード記載名または氏名を入力してください',true); return; }
+    if(force)payload.force=true;
+  }else{
+    Object.keys(cur).forEach(function(k){ var was=(MB_ORIG[k]==null)?'':String(MB_ORIG[k]); if(String(cur[k])!==was)payload[k]=cur[k]; });
+    if(!Object.keys(payload).length){ toast('変更がありません'); return; }
+  }
+  var act=isAdd?'adminAddCustomer':'adminUpdateCustomer';
+  var extra=isAdd?{payload:payload}:{rowIdx:MB_ROWIDX,payload:payload};
+  api(act,extra).then(function(r){
+    if(r&&r.ok){ toast(isAdd?'登録しました':'保存しました'); renderMembers(); return; }
+    if(r&&r.duplicate&&isAdd){
+      var m=r.match||{};
+      if(confirm('同名のお客様が既に登録されています。\n'+(m.name||m.card||'')+(m.no?'（会員'+m.no+'）':'')+(m.tantou?' 担当'+m.tantou:'')+'\n\n別のお客様として登録しますか？')) mbSave(true,true);
+      return;
+    }
+    toast((r&&r.error)||'保存に失敗しました',true);
+  }).catch(function(){ toast('通信エラー',true); });
+}
 
 /* 🚗 送迎集計：月ごとの手段内訳（自社便◯件／ドライバー◯件）。バックは getOkuriMeansStats（管理者=全件・閲覧専用）。
    記録＝軍師シフト盤の 🚙ドライバー⇄🚶自便 トグル → 送迎ログの「手段」列に残る。ここはそれを月別で数えるだけ。 */
@@ -3403,6 +3515,20 @@ function blMockDetail(uuid){
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
 function MOCKAPI(action,body){
+  if(action==='adminGetCustomers'){
+    return {ok:true, editHas:{card:true,no:true,tantou:true,yomigana:true,company:true,pos:true,neck:false,ng:false,ngStaff:false,bottle:true,drink:true,tabaco:true,note:true,bday:true,memberSince:true,lastFeeDate:true},
+      customers:[
+        {rowIdx:12,card:'山田',name:'山田太郎',no:'0451',tantou:'美玲',yomigana:'やまだたろう',company:'山田商事',bottle:'白州12年',pos:'A-3',neck:'',drink:'ロック',tabaco:'なし',ng:'',ngStaff:'',note:'常連・接待多め',eBday:'1980-05-01',memberSince:'2023-04-01',lastFeeDate:'2026-04-01',feeDate:'2026-04-01'},
+        {rowIdx:20,card:'鈴木',name:'鈴木一郎',no:'0462',tantou:'店担当',yomigana:'',company:'',bottle:'',pos:'',neck:'',drink:'',tabaco:'',ng:'',ngStaff:'',note:'',eBday:'',memberSince:'2024-01-10',lastFeeDate:'',feeDate:''},
+        {rowIdx:33,card:'佐藤',name:'佐藤花子',no:'',tantou:'ゆい',yomigana:'さとうはなこ',company:'佐藤物産',bottle:'ドンペリ',pos:'B-1',neck:'',drink:'水割り',tabaco:'あり',ng:'',ngStaff:'',note:'',eBday:'1992-12-24',memberSince:'2025-06-01',lastFeeDate:'',feeDate:''}
+      ], count:3};
+  }
+  if(action==='adminUpdateCustomer') return {ok:true};
+  if(action==='adminAddCustomer'){
+    var _p=(body&&body.payload)||{};
+    if(!_p.force && (_p.name==='山田太郎'||_p.card==='山田')) return {ok:false,duplicate:true,match:{no:'0451',name:'山田太郎',tantou:'美玲'}};
+    return {ok:true,rowIdx:99};
+  }
   if(action==='skillAdminData'){
     return {ok:true,
       grades:[
