@@ -1916,6 +1916,9 @@ function homeToast(msg, ok){
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
 var statsSubTab = 'sales';
 var billsJumpDate = '';  // 顧客の来店記録タップ→その日の伝票へ飛ぶ時だけセット（renderBillsBodyで1回だけ消費）
+// 給与ロック画面での自動リフレッシュ済みフラグ（月キー単位・1度だけ）。公開直後の反映漏れ対策で
+// ロックを踏んだら一度だけ最新の公開状態を取り直す。ループ防止に月ごとに済みを記録する。
+var payLockAutoRefreshed = {};
 
 // 来店記録（顧客詳細）から、その来店日の伝票へ飛ぶ。担当キャスト/管理者のみ呼ばれる（呼び出し側でガード済み）
 function jumpToBillDayFromVisit(date) {
@@ -2323,13 +2326,24 @@ function renderPay() {
 
   var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
   if (!isAdmin && !payPublished[sel] && !isHairOnlyMonth) {
+    // ⚠️ 成績データは初回のみ取得（loadStatsDataのload-onceガード）。管理者が公開した後に
+    //    アプリを開いたままだと payPublished が古いまま＝「公開したのにキャストはロックのまま」になる。
+    //    ここで手動リロード導線を必ず出す＝webviewを閉じ直さずワンタップで最新の公開状態を取り直せる。
     var hLock = '<div style="padding:14px">' + monthTabsHtml(sel)
       + '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
       + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与明細は確認中です。<br>公開されるまでお待ちください。</div>'
+      + '<button onclick="loadStatsData(true, renderStats)" style="margin-top:22px;padding:9px 22px;border-radius:18px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:13px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button>'
+      + '<div style="font-size:11px;color:#7a6f52;margin-top:10px;line-height:1.7">公開直後はアプリ側が古いままのことがあります。<br>このボタンで最新の公開状態を取り直せます。</div>'
       + '</div></div>';
     setContent(hLock);
+    // 公開直後の反映漏れ対策: この月でまだ自動更新していなければ、一度だけ最新の公開状態を取り直す。
+    // 取り直して公開済みなら payslip を表示、まだ未公開ならロックのまま（ガードで再ループしない）。
+    if (!payLockAutoRefreshed[sel]) {
+      payLockAutoRefreshed[sel] = true;
+      loadStatsData(true, renderStats);
+    }
     return;
   }
 
