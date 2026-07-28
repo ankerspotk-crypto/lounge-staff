@@ -669,6 +669,23 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(dedupeDeliveryRecords_(body.apply === true ? false : true)))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    // 【一時・使用後撤去】明示した行番号だけ削除。各行の 伝票No+品番+金額 が想定と一致した時のみ消す（行ズレ防止）。apply未指定はドライラン。
+    if (body.action === 'admin_del_delivery_rows' && body.token === 'DEDUPE-0728-Kx9v2Qp7LmZ4') {
+      const sh = getOrOpenSS_().getSheetByName('納品記録');
+      const dv = sh.getDataRange().getValues();
+      const targets = Array.isArray(body.targets) ? body.targets : [];
+      const mism = [];
+      targets.forEach(function (t) {
+        const r = dv[t.row - 1];
+        if (!r || String(r[3] || '') !== String(t.denpyo) || String(r[14] || '') !== String(t.code) || (Number(r[11]) || 0) !== Number(t.amount)) {
+          mism.push({ row: t.row, expect: t, got: r ? { denpyo: String(r[3] || ''), code: String(r[14] || ''), amount: Number(r[11]) || 0 } : null });
+        }
+      });
+      if (mism.length) return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '照合不一致（行ズレの可能性）＝1行も削除せず中止', mismatches: mism })).setMimeType(ContentService.MimeType.JSON);
+      if (body.apply !== true) return ContentService.createTextOutput(JSON.stringify({ ok: true, dryRun: true, verified: targets.length, wouldDelete: targets.map(function (t) { return t.row; }) })).setMimeType(ContentService.MimeType.JSON);
+      targets.map(function (t) { return t.row; }).sort(function (a, b) { return b - a; }).forEach(function (rn) { sh.deleteRow(rn); }); // 下から消す
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, deleted: targets.length, rows: targets.map(function (t) { return t.row; }) })).setMimeType(ContentService.MimeType.JSON);
+    }
     // LIFF APIリクエスト（actionフィールドあり）
     if (body.action) {
       const result = handleApiRequest_(body);
