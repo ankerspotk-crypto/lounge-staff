@@ -613,7 +613,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 
 <header>
   <div class="header-row">
-    <h1><span class="wm">IEYAS</span><span class="wm-sub">LOUNGE</span></h1>
+    <h1 onclick="switchTab('home')" role="button" tabindex="0" title="ホームへ戻る" style="cursor:pointer" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchTab('home');}"><span class="wm">IEYAS</span><span class="wm-sub">LOUNGE</span></h1>
     <span class="user-name" id="user-name">読み込み中...</span>
   </div>
   <div class="navbar" id="navbar" style="display:none;align-items:center;justify-content:space-between;padding:4px 2px 12px"></div>
