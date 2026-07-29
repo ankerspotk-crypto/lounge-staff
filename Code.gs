@@ -7049,6 +7049,14 @@ function getCastSeats_(body) {
   return { ok: true, name, seats: castCurrentSeats_(name), working: isOnShiftToday_(name) || isWorkingToday_(name) || isAdmin_(name) };
 }
 
+// 呼び出し機能の有効時間帯（19:45〜翌1:00）。この外はキャスト呼び出しを受け付けない（管理者は castCall_ 側で時間外も許可）。
+// フロント(portal.htmlのisCallWindowOpen)でもボタンを無効化するが、連打・直叩き対策でここでも弾く。
+function isCallWindowOpen_() {
+  const hm = Utilities.formatDate(new Date(), TZ, 'HHmm');   // 例 "1950" / "0055"
+  const mins = Number(hm.slice(0, 2)) * 60 + Number(hm.slice(2));
+  return mins >= 19 * 60 + 45 || mins <= 60;   // 19:45〜23:59 と 00:00〜01:00
+}
+
 // キャストがポータルのホームから黒服を呼ぶ（ヘルプ＝抜き／炭酸／アイス／その他）
 // body.table があればそれを優先（掛け持ち時にフロントで選んだ席）。無ければ軍師の付け回しから自動判定
 function castCall_(body) {
@@ -7071,6 +7079,8 @@ function castCall_(body) {
   if (!m) return { ok: false, error: 'unknown kind' };
   // 本日シフトに入っているスタッフのみ利用可（打刻済み・管理者も可）
   if (!isOnShiftToday_(name) && !isWorkingToday_(name) && !isAdmin_(name)) return { ok: false, error: 'not_working', message: '本日シフトの方のみ利用できます' };
+  // 有効時間帯ゲート（19:45〜翌1:00のみ／管理者は時間外も可）。この外は押しても反応しない＝黒服へ通知しない。
+  if (!isCallWindowOpen_() && !isAdmin_(name)) return { ok: false, error: 'closed', message: '呼び出しは19:45〜1:00のみ利用できます' };
   const KF = notifTarget_('cast_call', null, 'GROUP_KUROFUKU'); // 通知管理センター: 宛先切替可（呼び出しはサービス根幹＝常時ON）
   if (!KF) return { ok: false, error: 'GROUP_KUROFUKU未設定' };
 

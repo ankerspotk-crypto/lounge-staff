@@ -1791,6 +1791,11 @@ function renderHome(){
   else if (!homeRestPending) fetchVacancy();   // rest待ち中は個別取得せず、届くのを待つ
   if(window._vacTimer) clearInterval(window._vacTimer);
   window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } fetchVacancy(); }, 60000);
+
+  // 呼び出しの有効時間帯(20:00〜0:30)は時計で変わるため、席表示とボタンゲートを定期的に貼り直して自己修復する
+  // （例: 19:55にホームを開いた人も、20:00になれば再読込せずボタンが有効化される）
+  if(window._callGateTimer) clearInterval(window._callGateTimer);
+  window._callGateTimer = setInterval(function(){ if(!document.getElementById('home-callbtns')){ clearInterval(window._callGateTimer); return; } renderMySeat(); applyWorkingGate(); }, 30000);
 }
 function fetchVacancy(){
   gasFetch(GAS_URL + '?action=portal&tab=vacancy&userId=' + encodeURIComponent(userId))
@@ -1866,15 +1871,25 @@ function loadMySeat(){
     .then(function(d){ homeMySeats = (d && d.seats) || []; homeWorking = homeOnShift() || (d && d.working === true); renderMySeat(); applyWorkingGate(); })
     .catch(function(){ var el = document.getElementById('home-myseat'); if (el) el.textContent = '現在の席：取得できませんでした'; });
 }
-// 本日シフトに入っていない人は呼び出しボタンを無効化（バックエンドでも拒否）
+// 呼び出し機能の有効時間帯（19:45〜翌1:00）。この外はボタンを無効化し、押しても反応しない。
+// 端末時計基準の即時ゲート。バックエンド(castCall_)でも同じ判定で二重に弾く。管理者(isAdmin)は時間外も可。
+function isCallWindowOpen(){
+  var now = new Date();
+  var mins = now.getHours() * 60 + now.getMinutes();
+  return mins >= 19 * 60 + 45 || mins <= 60;   // 19:45〜23:59 と 00:00〜01:00
+}
+// 本日シフトに入っていない人／時間外は呼び出しボタンを無効化（バックエンドでも拒否）。管理者は時間外も押せる。
 function applyWorkingGate(){
   var box = document.getElementById('home-callbtns');
   if (!box) return;
-  box.style.opacity = homeWorking ? '' : '.35';
-  box.style.pointerEvents = homeWorking ? '' : 'none';
-  box.style.filter = homeWorking ? '' : 'grayscale(1)';
+  var winOpen = isCallWindowOpen();
+  var enabled = homeWorking && (winOpen || isAdmin);   // 管理者は時間外も押せる
+  box.style.opacity = enabled ? '' : '.35';
+  box.style.pointerEvents = enabled ? '' : 'none';
+  box.style.filter = enabled ? '' : 'grayscale(1)';
   var seat = document.getElementById('home-myseat');
   if (!homeWorking && seat) seat.innerHTML = '<span style="color:#c8925a">🔒 本日シフトの方のみ呼び出しできます</span>';
+  else if (!winOpen && !isAdmin && seat) seat.innerHTML = '<span style="color:#c8925a">🕗 呼び出しは19:45〜1:00のみ利用できます</span>';
 }
 function renderMySeat(){
   var el = document.getElementById('home-myseat');
@@ -1902,6 +1917,7 @@ function homePickSeat(label){ homeSelSeat = label; renderMySeat(); }
 // キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
 function castCall(kind, btn){
   if (!homeWorking) { homeToast('本日シフトの方のみ利用できます', false); return; }
+  if (!isCallWindowOpen() && !isAdmin) { homeToast('呼び出しは19:45〜1:00のみ利用できます', false); return; }
   var seatMsg = homeSelSeat ? '（' + homeSelSeat + '）' : '（席不明）';
   if (kind === 'help' && !confirm('黒服にヘルプを送りますか？' + seatMsg + '\n（声をかけて一旦抜いてもらいます）')) return;
   if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
