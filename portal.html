@@ -2971,16 +2971,37 @@ function loadWine() {
 function renderWine(d) {
   var champagne = d.champagne || [];
   var wine = d.wine || [];
+  // メニュー落ち(仕入れ停止)は下の専用セクションにまとめる。上のカードは掲載中のみ。
+  var champActive = champagne.filter(function(x){ return !x.dropped; });
+  var wineActive  = wine.filter(function(x){ return !x.dropped; });
+  var dropped = champagne.filter(function(x){ return x.dropped; })
+                 .concat(wine.filter(function(x){ return x.dropped; }));
 
   var h = '<div style="padding:14px">';
-  h += wineCard_('🍾 シャンパン', champagne);
-  h += wineCard_('🍷 ワイン', wine);
+  h += wineCard_('🍾 シャンパン', champActive);
+  h += wineCard_('🍷 ワイン', wineActive);
+  if (dropped.length) h += wineDroppedCard_(dropped);
   h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:8px 4px;line-height:1.6">'
     + '単価は店舗メニューの価格です（会計はTRUSTが正）。<br>'
-    + '<span style="color:#e6b768">メニュー落ち</span>＝仕入れ停止ですが在庫が残っている銘柄です。<br>'
     + 'メニューに紐づいた銘柄のみ表示・在庫0本は非表示。</div>';
   h += '</div>';
   setContent(h);
+}
+
+// メニュー落ち（仕入れ停止だけど在庫が残っている）シャンパン・ワインを下にまとめる専用カード
+function wineDroppedCard_(list) {
+  var c = '<div style="background:#1c1509;border:1px solid #4a3a18;border-radius:12px;padding:14px;margin-bottom:14px">';
+  c += '<div style="font-size:13px;font-weight:700;color:#e6b768;letter-spacing:.5px">🚫 メニュー落ち（在庫あり）</div>';
+  c += '<div style="font-size:10px;color:#b09256;margin:4px 0 10px">仕入れ停止だけど在庫が残っているシャンパン・ワイン</div>';
+  list.forEach(function(it) {
+    c += '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #2a2010">';
+    c += '<span style="flex:1;font-size:13px;color:#cbb98a">' + esc(it.name) + wineTag_(it.menuCat) + '</span>';
+    c += '<span style="font-size:13px;color:#cbb98a;width:52px;text-align:right;flex-shrink:0">' + (it.qty || 0) + '本</span>';
+    c += '<span style="font-size:13px;font-weight:600;color:#efe4cd;width:96px;text-align:right;flex-shrink:0">' + yen(it.price) + '</span>';
+    c += '</div>';
+  });
+  c += '</div>';
+  return c;
 }
 
 function wineCard_(title, list) {
