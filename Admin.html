@@ -465,7 +465,7 @@ function pollAdminAuth(token){
 var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kintaireg','🗂 出勤簿'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
-  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
+  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
 ];
@@ -483,7 +483,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -3597,7 +3597,272 @@ function blMockDetail(uuid){
   };
   return m[uuid]||{items:[{category:'セット',product:'セット料金',detail:'',qty:1,amount:15000,isBottle:false}],bottleCount:0,bottles:[]};
 }
+/* ===== 📄 請求書管理（管理者・コンソール）：軍師で入力された請求を管理し、A4請求書(PDF)を生成 =====
+   backend actions（handleApiRequest_・isAdmin_ゲート）: seikyuData / seikyuGenerate / seikyuSetStatus / seikyuUpdate / seikyuSaveSettings / seikyuSaveSender / seikyuImage
+   請求書のPDFは 出勤簿と同じ window.open + print CSS 方式（ブラウザのPDF保存）。写真は制限付きDriveをGAS経由base64で閲覧。 */
+var skData=null, skFilter='open', skSenderF='', skSettingsOpen=false, skEditState=null;
+
+function skEnsureAdminCss_(){ if(document.getElementById('sk-admin-css'))return; var s=document.createElement('style'); s.id='sk-admin-css'; s.textContent=
+  '.sk-fl{font-size:11px;color:var(--dim,#8a9ac0);font-weight:700;margin:0 0 4px;}'
+ +'.skf{background:var(--panel2,#141428);border:1px solid var(--line2,#2a2f45);color:var(--dim,#9aa);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;}'
+ +'.skf.on{background:#123;border-color:#3a7;color:#7fe0c0;}'
+ +'.sk-inv{background:var(--panel2,#141428);border:1px solid var(--line2,#2a2f45);border-radius:10px;padding:12px 14px;margin-bottom:9px;}'
+ +'.sk-inv-h{display:flex;justify-content:space-between;align-items:center;gap:10px;}'
+ +'.sk-inv-h b{font-size:15px;}.sk-amt{font-size:18px;font-weight:800;color:#ffd479;white-space:nowrap;}'
+ +'.sk-inv-m{font-size:12px;color:var(--txt,#c9d3e6);margin-top:5px;}'
+ +'.sk-inv-a{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}'
+ +'.sk-inv-a .btn{font-size:12px;padding:6px 10px;}'
+ +'.sk-chip{font-size:12px;color:#9dc8ff;background:var(--panel,#0d0d1a);border:1px solid var(--line2,#2a2f45);border-radius:20px;padding:5px 12px;cursor:pointer;}'
+ +'.sk-badge{font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;margin-left:8px;}'
+ +'.sk-ov{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;}'
+ +'.sk-ov-card{background:var(--panel,#12121f);border:1px solid var(--line2,#2a2f45);border-radius:12px;padding:18px;max-width:560px;width:100%;max-height:90vh;overflow:auto;}'
+ +'.sk-item-row{display:flex;gap:6px;margin-bottom:6px;}.sk-item-row .finput{flex:1;}.sk-item-row .sk-iamt{max-width:120px;}'
+ +'.sk-irm{background:#241014;border:1px solid #5a2430;color:#e0a0b0;border-radius:8px;padding:0 12px;cursor:pointer;}';
+  document.head.appendChild(s);
+}
+function skBadge_(s){ var c={'未請求':['#20304a','#8fb4e0'],'請求済':['#123a2a','#5fd0a0'],'入金済':['#1a3a1a','#7fe07f'],'取消':['#3a1a24','#e0a0b0']}[s]||['#20304a','#8fb4e0']; return '<span class="sk-badge" style="background:'+c[0]+';color:'+c[1]+'">'+esc(s)+'</span>'; }
+function skInvById_(id){ var a=(skData&&skData.invoices)||[]; for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i]; return null; }
+function skSenderById_(id){ var a=(skData&&skData.senders)||[]; for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i]; return null; }
+
+function renderSeikyu(){
+  skEnsureAdminCss_(); loading();
+  api('seikyuData').then(function(r){ if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; } drawSeikyu(r); }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function skSetFilter(k){ skFilter=k; drawSeikyu(skData); }
+function drawSeikyu(d){
+  if(!d){ setBody('<div class="empty">読み込みエラー</div>'); return; }
+  skData=d;
+  var invs=d.invoices||[], senders=d.senders||[], st=d.settings||{};
+  var overdue=invs.filter(function(x){return x.overdue;}).length;
+  var soon=invs.filter(function(x){return x.dueSoon;}).length;
+  var unpaid=invs.filter(function(x){return x.status!=='入金済'&&x.status!=='取消';}).length;
+  var view=invs.filter(function(x){
+    if(skSenderF && x.senderId!==skSenderF) return false;
+    if(skFilter==='open') return x.status!=='入金済'&&x.status!=='取消';
+    if(skFilter==='overdue') return x.overdue;
+    if(skFilter==='paid') return x.status==='入金済';
+    return true;
+  });
+  var senderOpts='<option value="">すべての請求先</option>'+senders.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===skSenderF?' selected':'')+'>'+esc(s.name)+'</option>';}).join('');
+  var fbtn=function(k,label){ return '<button class="skf'+(skFilter===k?' on':'')+'" onclick="skSetFilter(\''+k+'\')">'+label+'</button>'; };
+  var bar='<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
+    +fbtn('open','未入金')+fbtn('overdue','期限超過')+fbtn('paid','入金済')+fbtn('all','すべて')
+    +'<select class="finput" style="max-width:220px" onchange="skSenderF=this.value;drawSeikyu(skData)">'+senderOpts+'</select>'
+    +'<span style="flex:1"></span>'
+    +'<button class="btn" onclick="skToggleSettings()">⚙️ 発行者・振込先設定</button></div>';
+  var alertHtml='';
+  if(overdue||soon){ alertHtml='<div class="hint" style="border-left:3px solid #d66">⚠️ 支払期限：超過 <b>'+overdue+'</b>件'+(soon?(' ／ 7日以内 <b>'+soon+'</b>件'):'')+'</div>'; }
+  var rows=view.map(function(inv){ return skRowHtml_(inv,st); }).join('')||'<div class="empty" style="padding:16px">該当する請求はありません</div>';
+  var listSec='<div class="sec"><div class="sec-t">📄 請求一覧 <span class="sub">未入金 '+unpaid+'件 ／ 全'+invs.length+'件</span></div>'+rows+'</div>';
+  setBody(bar+alertHtml+skSettingsPanel_(st)+listSec);
+}
+function skRowHtml_(inv, st){
+  var rate=inv.taxRate||st.taxRate||0.10, pct=Math.round(rate*100);
+  var tax=Math.floor(inv.amount*pct/(100+pct)), excl=inv.amount-tax;
+  var dueColor=inv.overdue?'#e77':(inv.dueSoon?'#e8a94a':'var(--dim)');
+  var sender=skSenderById_(inv.senderId);
+  var meishi=(sender&&sender.meishiUrl)?'<span class="sk-chip" onclick="skViewImg(\''+esc(sender.meishiUrl)+'\')">🪪 名刺</span>':'';
+  var photos=(inv.slips&&inv.slips.length)?'<span class="sk-chip" onclick="skViewPhotos(\''+esc(inv.id)+'\')">📷 対象伝票 '+inv.slips.length+'</span>':'';
+  var noLine=inv.no?('請求番号 '+esc(inv.no)+' ／ 発行 '+esc(inv.issueDate)):'<span style="color:var(--dim)">請求書 未作成</span>';
+  var paidLine=(inv.status==='入金済'&&inv.paidDate)?('　入金 '+esc(inv.paidDate)):'';
+  return '<div class="sk-inv">'
+    +'<div class="sk-inv-h"><div><b>'+esc(inv.senderName)+'</b>'+skBadge_(inv.status)+'</div><div class="sk-amt">¥'+Number(inv.amount).toLocaleString()+'</div></div>'
+    +'<div class="sk-inv-m">'+esc(inv.closeMonth)+'締め ／ 支払期限 <b style="color:'+dueColor+'">'+esc(inv.due||'—')+'</b> ／ 税抜¥'+excl.toLocaleString()+'・消費税¥'+tax.toLocaleString()+'</div>'
+    +'<div class="sk-inv-m" style="color:var(--dim)">'+noLine+paidLine+(inv.registeredBy?('　登録 '+esc(inv.registeredBy)):'')+(inv.note?('　📝 '+esc(inv.note)):'')+'</div>'
+    +'<div class="sk-inv-a">'
+      +'<button class="btn pri" onclick="skInvoice(\''+esc(inv.id)+'\')">'+(inv.no?'🖨 請求書を再表示':'📄 請求書を作成')+'</button>'
+      +skStatusBtns_(inv)+meishi+photos
+      +'<button class="btn" onclick="skEdit(\''+esc(inv.id)+'\')">✎ 編集</button>'
+    +'</div></div>';
+}
+function skStatusBtns_(inv){
+  var h='';
+  if(inv.status==='未請求') h+='<button class="btn" onclick="skStatus(\''+esc(inv.id)+'\',\'請求済\')">請求済にする</button>';
+  if(inv.status==='請求済') h+='<button class="btn" onclick="skStatus(\''+esc(inv.id)+'\',\'入金済\')">✅ 入金済にする</button>';
+  if(inv.status==='入金済') h+='<button class="btn" onclick="skStatus(\''+esc(inv.id)+'\',\'請求済\')">↩ 入金取消</button>';
+  if(inv.status!=='取消') h+='<button class="btn" onclick="skStatus(\''+esc(inv.id)+'\',\'取消\')">取消</button>';
+  else h+='<button class="btn" onclick="skStatus(\''+esc(inv.id)+'\',\'未請求\')">復活</button>';
+  return h;
+}
+function skStatus(id,status){
+  var inv=skInvById_(id); if(!inv)return;
+  var paidDate='';
+  if(status==='入金済'){ paidDate=prompt('入金日（YYYY-MM-DD）',(skData&&skData.today)||'')||''; if(!paidDate)return; }
+  if(status==='取消'&&!confirm('この請求を取消にしますか？'))return;
+  api('seikyuSetStatus',{rowIdx:inv.rowIdx,status:status,paidDate:paidDate}).then(function(r){ if(!res(r,'ステータスを更新しました'))return; renderSeikyu(); }).catch(function(){ toast('通信エラー',true); });
+}
+
+/* 請求書(A4) 生成：ポップアップは同期で開き、採番後に書き込む（ブロッカー回避） */
+function skInvoice(id){
+  var inv=skInvById_(id); if(!inv)return;
+  var w=window.open('','_blank');
+  if(!w){ toast('ポップアップがブロックされました',true); return; }
+  w.document.write('<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;color:#666">請求書を生成中…</body>');
+  var finish=function(){ w.document.open(); w.document.write(skInvoiceDoc_(inv)); w.document.close(); };
+  api('seikyuGenerate',{rowIdx:inv.rowIdx}).then(function(r){
+    if(r&&r.ok===false){ try{w.document.body.innerHTML='作成に失敗: '+esc(r.error||'');}catch(e){} toast(r.error||'作成に失敗',true); return; }
+    inv.no=r.no; inv.issueDate=r.issueDate; if(inv.status==='未請求')inv.status='請求済';
+    finish(); renderSeikyu();
+  }).catch(function(){ try{w.document.body.innerHTML='通信エラー';}catch(e){} toast('通信エラー',true); });
+}
+function skInvoiceDoc_(inv){
+  var st=(skData&&skData.settings)||{};
+  var sender=skSenderById_(inv.senderId)||{name:inv.senderName,keisho:'御中',addr:'',zip:'',contact:''};
+  var rate=inv.taxRate||st.taxRate||0.10, pct=Math.round(rate*100);
+  var tax=Math.floor(inv.amount*pct/(100+pct)), excl=inv.amount-tax;
+  var items=(inv.items&&inv.items.length)?inv.items:[{name:(inv.closeMonth||'')+' ご利用分',amount:inv.amount}];
+  var itemRows=items.map(function(it){ return '<tr><td>'+esc(it.name)+'</td><td class="r">¥'+Number(it.amount||0).toLocaleString()+'</td></tr>'; }).join('');
+  var pad=Math.max(0,6-items.length); for(var i=0;i<pad;i++) itemRows+='<tr><td>&nbsp;</td><td></td></tr>';
+  var bank=[st.bankName,st.bankBranch].filter(Boolean).join('　');
+  var bankBlock=(st.bankName||st.accountNo)
+    ? '<div class="bank"><div class="bank-t">お振込先</div>'+esc(bank)+'　'+esc((st.accountType||'')+' '+(st.accountNo||''))+(st.accountHolder?('<br>口座名義：'+esc(st.accountHolder)):'')+'</div>'
+    : '<div class="bank"><div class="bank-t">お振込先</div><span style="color:#c00">（振込先が未設定です。コンソールの「⚙️ 発行者・振込先設定」で登録してください）</span></div>';
+  var css='@page{size:A4;margin:16mm}*{box-sizing:border-box}'
+    +'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1a1a1a;margin:0;padding:20px;background:#eceef3}'
+    +'.noprint button{padding:9px 18px;font-size:14px;cursor:pointer;border-radius:6px;border:1px solid #888;background:#fff}'
+    +'.page{background:#fff;max-width:186mm;margin:0 auto;padding:14mm;box-shadow:0 2px 14px rgba(0,0,0,.18)}'
+    +'@media print{body{background:#fff;padding:0}.page{box-shadow:none;max-width:none;padding:0}.noprint{display:none}}'
+    +'h1{text-align:center;font-size:26px;letter-spacing:10px;margin:0 0 22px;border-bottom:2px solid #333;padding-bottom:10px}'
+    +'.top{display:flex;justify-content:space-between;gap:24px;margin-bottom:16px}'
+    +'.to{flex:1.1}.to-name{font-size:18px;font-weight:700;border-bottom:1px solid #333;padding-bottom:5px;display:inline-block;min-width:70%}'
+    +'.keisho{font-size:13px;font-weight:400;margin-left:4px}.to-addr{font-size:12px;color:#444;margin-top:6px;line-height:1.5}'
+    +'.from{text-align:right;font-size:12px;flex:0.9}'
+    +'.inv-no{font-size:12px;color:#333}.fr-name{font-size:15px;font-weight:700;margin-top:8px}.fr-line{font-size:11px;color:#444;line-height:1.5}'
+    +'.lead{font-size:13px;margin:6px 0 10px}'
+    +'.total-box{display:flex;justify-content:space-between;align-items:center;border:2px solid #333;padding:11px 18px;margin:4px 0}'
+    +'.total-box span{font-size:15px;font-weight:700}.total-box b{font-size:25px}'
+    +'.due{font-size:13px;margin:8px 0 16px}'
+    +'.items{width:100%;border-collapse:collapse;font-size:13px}'
+    +'.items th,.items td{border:1px solid #999;padding:8px 10px}.items th{background:#f0f0f0;text-align:left}.items .r{text-align:right}'
+    +'.items tfoot td{background:#fafafa}.items tfoot .grand td{background:#eef0f3;font-weight:700;font-size:15px}'
+    +'.bank{margin-top:16px;font-size:13px;border:1px solid #999;padding:9px 12px;line-height:1.6}'
+    +'.bank-t{font-weight:700;font-size:12px;color:#333;margin-bottom:2px}'
+    +'.note{margin-top:12px;font-size:12px;line-height:1.6}.foot{margin-top:18px;font-size:11px;color:#555}';
+  return '<!doctype html><html><head><meta charset="utf-8"><title>請求書_'+esc(inv.no||inv.closeMonth||'')+'_'+esc(inv.senderName)+'</title><style>'+css+'</style></head><body>'
+    +'<div class="noprint" style="margin-bottom:12px"><button onclick="window.print()">🖨 印刷 / PDF保存</button></div>'
+    +'<div class="page">'
+      +'<h1>請求書</h1>'
+      +'<div class="top"><div class="to">'
+        +'<div class="to-name">'+esc(sender.name)+'<span class="keisho">'+esc(sender.keisho||'御中')+'</span></div>'
+        +((sender.zip||sender.addr)?'<div class="to-addr">〒'+esc(sender.zip||'')+' '+esc(sender.addr||'')+'</div>':'')
+        +(sender.contact?'<div class="to-addr">'+esc(sender.contact)+' 様</div>':'')
+      +'</div><div class="from">'
+        +'<div class="inv-no">請求番号：'+esc(inv.no||'（未採番）')+'</div>'
+        +'<div class="inv-no">発行日：'+esc(inv.issueDate||(skData&&skData.today)||'')+'</div>'
+        +'<div class="fr-name">'+esc(st.issuerName||'ラウンジいえやす')+'</div>'
+        +((st.issuerZip||st.issuerAddr)?'<div class="fr-line">〒'+esc(st.issuerZip||'')+' '+esc(st.issuerAddr||'')+'</div>':'')
+        +(st.issuerTel?'<div class="fr-line">TEL '+esc(st.issuerTel)+'</div>':'')
+        +'<div class="fr-line">登録番号 '+esc(st.invoiceNo||'')+'</div>'
+      +'</div></div>'
+      +'<div class="lead">下記の通りご請求申し上げます。</div>'
+      +'<div class="total-box"><span>ご請求金額（税込）</span><b>¥'+Number(inv.amount).toLocaleString()+'</b></div>'
+      +'<div class="due">お支払期限：<b>'+esc(inv.due||'')+'</b>'+(inv.closeMonth?('　（'+esc(inv.closeMonth)+'締め）'):'')+'</div>'
+      +'<table class="items"><thead><tr><th>品目</th><th class="r">金額（税込）</th></tr></thead><tbody>'+itemRows+'</tbody>'
+        +'<tfoot><tr><td class="r">小計（税抜）</td><td class="r">¥'+excl.toLocaleString()+'</td></tr>'
+        +'<tr><td class="r">消費税（'+Math.round(rate*100)+'%）</td><td class="r">¥'+tax.toLocaleString()+'</td></tr>'
+        +'<tr class="grand"><td class="r">合計（税込）</td><td class="r">¥'+Number(inv.amount).toLocaleString()+'</td></tr></tfoot></table>'
+      +bankBlock
+      +(inv.note?'<div class="note"><div class="bank-t">備考</div>'+esc(inv.note).replace(/\n/g,'<br>')+'</div>':'')
+      +(st.footerNote?'<div class="foot">'+esc(st.footerNote)+'</div>':'')
+    +'</div></body></html>';
+}
+
+/* 写真ビューア（制限付きDrive→GAS経由base64） */
+function skImgOverlay_(inner){
+  var ov=document.getElementById('skImgOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='skImgOv'; ov.className='sk-ov'; ov.style.cursor='zoom-out'; ov.onclick=function(e){ if(e.target===ov)skImgOverlayClose_(); }; document.body.appendChild(ov); }
+  ov.innerHTML=inner; ov.style.display='flex';
+}
+function skImgOverlayClose_(){ var ov=document.getElementById('skImgOv'); if(ov){ov.style.display='none';ov.innerHTML='';} }
+function skViewImg(url){
+  if(!IS_GAS){ toast('（ローカルでは画像プレビュー不可）'); return; }
+  skImgOverlay_('<div style="color:#ccd">読み込み中…</div>');
+  api('seikyuImage',{ref:url}).then(function(r){ if(r&&r.ok===false){ toast(r.error||'画像取得失敗',true); skImgOverlayClose_(); return; } skImgOverlay_('<img src="'+r.dataUrl+'" style="max-width:92vw;max-height:86vh;object-fit:contain;border-radius:8px">'); }).catch(function(){ toast('画像取得失敗',true); skImgOverlayClose_(); });
+}
+function skViewPhotos(id){
+  var inv=skInvById_(id); if(!inv||!inv.slips||!inv.slips.length){ toast('写真がありません'); return; }
+  if(!IS_GAS){ toast('（ローカルでは画像プレビュー不可）'); return; }
+  skImgOverlay_('<div style="color:#ccd">読み込み中…</div>');
+  Promise.all(inv.slips.map(function(u){ return api('seikyuImage',{ref:u}).then(function(r){ return (r&&r.dataUrl)?r.dataUrl:null; }).catch(function(){return null;}); })).then(function(urls){
+    var imgs=urls.filter(Boolean).map(function(du){ return '<img src="'+du+'" style="max-width:88vw;max-height:78vh;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block">'; }).join('');
+    skImgOverlay_('<div style="overflow:auto;max-height:88vh;text-align:center">'+(imgs||'画像を取得できませんでした')+'<div style="color:#889;font-size:12px;margin-top:6px">（背景タップで閉じる）</div></div>');
+  });
+}
+
+/* 編集オーバーレイ（締め月・支払期限・明細・注意書き） */
+function skEdit(id){
+  var inv=skInvById_(id); if(!inv)return;
+  var items=(inv.items&&inv.items.length)?inv.items.map(function(x){return {name:x.name,amount:x.amount};}):[{name:'',amount:inv.amount}];
+  skEditState={id:id,rowIdx:inv.rowIdx,close:inv.closeMonth,due:inv.due,items:items,note:inv.note||'',name:inv.senderName};
+  skRenderEdit_();
+}
+function skEditItemsHtml_(){
+  return skEditState.items.map(function(it,i){
+    return '<div class="sk-item-row"><input class="finput" placeholder="品目" value="'+esc(it.name)+'" oninput="skEditState.items['+i+'].name=this.value">'
+      +'<input class="finput sk-iamt" type="number" inputmode="numeric" placeholder="金額" value="'+(it.amount||'')+'" oninput="skEditState.items['+i+'].amount=Number(this.value)||0;skEditTotal_()">'
+      +(skEditState.items.length>1?'<button class="sk-irm" onclick="skEditState.items.splice('+i+',1);skRenderEdit_()">✕</button>':'')+'</div>';
+  }).join('');
+}
+function skEditTotal_(){ var t=skEditState.items.reduce(function(a,b){return a+(Number(b.amount)||0);},0); var el=document.getElementById('sk-edit-total'); if(el)el.textContent='¥'+t.toLocaleString(); }
+function skRenderEdit_(){
+  var e=skEditState; if(!e)return;
+  var h='<div class="sk-ov-card"><div style="font-weight:800;font-size:15px;margin-bottom:12px">✎ 請求を編集 <span style="color:var(--dim);font-weight:600;font-size:12px">'+esc(e.name)+'</span></div>'
+    +'<div style="display:flex;gap:10px"><div style="flex:1"><div class="sk-fl">締め月</div><input type="month" class="finput" value="'+esc(e.close)+'" onchange="skEditState.close=this.value"></div>'
+    +'<div style="flex:1"><div class="sk-fl">支払期限</div><input type="date" class="finput" value="'+esc(e.due)+'" onchange="skEditState.due=this.value"></div></div>'
+    +'<div class="sk-fl" style="margin-top:12px">明細（税込）</div><div id="sk-edit-items">'+skEditItemsHtml_()+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px"><span style="color:#7ac6ff;font-size:13px;cursor:pointer" onclick="skEditState.items.push({name:\'\',amount:0});skRenderEdit_()">＋ 明細を追加</span>'
+    +'<span style="font-weight:800">合計 <b id="sk-edit-total">¥'+e.items.reduce(function(a,b){return a+(Number(b.amount)||0);},0).toLocaleString()+'</b></span></div>'
+    +'<div class="sk-fl">注意書き</div><textarea class="finput" rows="2" oninput="skEditState.note=this.value">'+esc(e.note)+'</textarea>'
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn pri" onclick="skSaveEdit()">💾 保存</button><button class="btn" onclick="skCloseEdit()">キャンセル</button></div></div>';
+  var ov=document.getElementById('skEditOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='skEditOv'; ov.className='sk-ov'; ov.onclick=function(ev){ if(ev.target===ov)skCloseEdit(); }; document.body.appendChild(ov); }
+  ov.innerHTML=h; ov.style.display='flex';
+}
+function skCloseEdit(){ var ov=document.getElementById('skEditOv'); if(ov){ov.style.display='none';ov.innerHTML='';} skEditState=null; }
+function skSaveEdit(){
+  var e=skEditState; if(!e)return;
+  var items=e.items.filter(function(x){return (x.name||'').trim()||Number(x.amount)>0;}).map(function(x){return {name:x.name||'',amount:Number(x.amount)||0};});
+  var patch={ closeMonth:e.close, due:e.due, note:e.note, items:items };
+  api('seikyuUpdate',{rowIdx:e.rowIdx,patch:patch}).then(function(r){ if(!res(r,'請求を更新しました'))return; skCloseEdit(); renderSeikyu(); }).catch(function(){ toast('通信エラー',true); });
+}
+
+/* 発行者・振込先・消費税率の設定 */
+function skToggleSettings(){ skSettingsOpen=!skSettingsOpen; drawSeikyu(skData); }
+function skSettingsPanel_(st){
+  if(!skSettingsOpen) return '';
+  function f(id,label,val,ph){ return '<div style="flex:1;min-width:150px"><div class="sk-fl">'+label+'</div><input id="sks-'+id+'" class="finput" value="'+esc(val||'')+'"'+(ph?' placeholder="'+esc(ph)+'"':'')+'></div>'; }
+  return '<div class="sec"><div class="sec-t">⚙️ 発行者・振込先設定 <span class="sub">請求書(A4)に印字されます</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px">'+f('issuerName','発行者名',st.issuerName)+f('invoiceNo','登録番号（インボイス）',st.invoiceNo)+f('issuerZip','郵便番号',st.issuerZip)+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">'+f('issuerAddr','住所',st.issuerAddr)+f('issuerTel','電話',st.issuerTel)+'</div>'
+    +'<div class="sk-fl" style="margin-top:14px;color:#7fe0c0">お振込先</div><div style="display:flex;flex-wrap:wrap;gap:10px">'
+      +f('bankName','銀行名',st.bankName,'○○銀行')+f('bankBranch','支店名',st.bankBranch,'○○支店')
+      +'<div style="min-width:110px"><div class="sk-fl">種別</div><select id="sks-accountType" class="finput"><option'+(st.accountType!=='当座'?' selected':'')+'>普通</option><option'+(st.accountType==='当座'?' selected':'')+'>当座</option></select></div>'
+      +f('accountNo','口座番号',st.accountNo)+f('accountHolder','口座名義',st.accountHolder)+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;align-items:flex-end">'
+      +'<div style="width:120px"><div class="sk-fl">消費税率（%）</div><input id="sks-taxRate" class="finput" value="'+Math.round((Number(st.taxRate)||0.1)*100)+'" inputmode="numeric"></div>'
+      +'<div style="flex:1;min-width:220px"><div class="sk-fl">請求書フッター</div><input id="sks-footerNote" class="finput" value="'+esc(st.footerNote||'')+'"></div></div>'
+    +'<div style="margin-top:14px;display:flex;gap:8px"><button class="btn pri" onclick="skSaveSettings()">💾 設定を保存</button><button class="btn" onclick="skToggleSettings()">閉じる</button></div></div>';
+}
+function skSaveSettings(){
+  function v(id){ return (document.getElementById('sks-'+id)||{}).value||''; }
+  var patch={ issuerName:v('issuerName'), invoiceNo:v('invoiceNo'), issuerZip:v('issuerZip'), issuerAddr:v('issuerAddr'), issuerTel:v('issuerTel'),
+    bankName:v('bankName'), bankBranch:v('bankBranch'), accountType:v('accountType'), accountNo:v('accountNo'), accountHolder:v('accountHolder'),
+    taxRate:(Number(v('taxRate'))||10)/100, footerNote:v('footerNote') };
+  api('seikyuSaveSettings',{patch:patch}).then(function(r){ if(!res(r,'設定を保存しました'))return; if(r.settings&&skData)skData.settings=r.settings; skSettingsOpen=false; renderSeikyu(); }).catch(function(){ toast('通信エラー',true); });
+}
+
 function MOCKAPI(action,body){
+  if(action==='seikyuData'){ return {ok:true,today:'2026-07-30',statuses:['未請求','請求済','入金済','取消'],
+    settings:{issuerName:'ラウンジいえやす',issuerZip:'460-0003',issuerAddr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル',issuerTel:'',invoiceNo:'T4180302027983',bankName:'',bankBranch:'',accountType:'普通',accountNo:'',accountHolder:'',taxRate:0.10,footerNote:'お振込手数料は御社にてご負担くださいますようお願い申し上げます。'},
+    senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込',state:'有効',rowIdx:2}],
+    invoices:[
+      {id:'INV1',no:'',senderId:'demoA',senderName:'株式会社デモ商事',closeMonth:'2026-07',issueDate:'',due:'2026-08-31',amount:110000,taxRate:0.10,taxExcl:100000,taxAmount:10000,items:[{name:'2026年7月分 ご利用料金',amount:88000},{name:'ボトルキープ',amount:22000}],slips:[],note:'7月接待分',status:'未請求',paidDate:'',registeredBy:'徳子',registeredAt:'2026-07-30 21:00',overdue:false,dueSoon:false,rowIdx:2},
+      {id:'INV2',no:'202606-001',senderId:'demoA',senderName:'株式会社デモ商事',closeMonth:'2026-06',issueDate:'2026-07-01',due:'2026-07-31',amount:66000,taxRate:0.10,taxExcl:60000,taxAmount:6000,items:[{name:'2026年6月分 ご利用料金',amount:66000}],slips:[],note:'',status:'請求済',paidDate:'',registeredBy:'りく',registeredAt:'2026-06-30 23:00',overdue:true,dueSoon:false,rowIdx:3}
+    ]}; }
+  if(action==='seikyuGenerate') return {ok:true,no:'202607-001',issueDate:'2026-07-30'};
+  if(action==='seikyuSetStatus'||action==='seikyuUpdate'||action==='seikyuSaveSettings'||action==='seikyuSaveSender') return {ok:true};
+  if(action==='seikyuImage') return {ok:false,error:'ローカルでは画像不可'};
+
   if(action==='adminGetCustomers'){
     return {ok:true, editHas:{card:true,no:true,tantou:true,yomigana:true,company:true,pos:true,neck:false,ng:false,ngStaff:false,bottle:true,drink:true,tabaco:true,note:true,bday:true,memberSince:true,lastFeeDate:true},
       customers:[

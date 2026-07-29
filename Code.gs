@@ -677,7 +677,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -819,6 +819,36 @@ function handleApiRequest_(body) {
     const month = Number(body.month) || Number(Utilities.formatDate(new Date(), TZ, 'M'));
     const list = customerBirthdaysByMonth_(getOrOpenSS_(), month, admin ? null : who);
     return { ok: true, month: month, admin: admin, list: list };
+  }
+
+  // === 📄 請求書管理（管理者のみ／軍師で入力→コンソールで管理＆請求書生成） ===
+  if (body.action === 'seikyuData') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return seikyuAdminData_();
+  }
+  if (body.action === 'seikyuGenerate') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return seikyuGenerate_(Number(body.rowIdx), body.overrides || {});
+  }
+  if (body.action === 'seikyuSetStatus') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return seikyuSetStatus_(Number(body.rowIdx), String(body.status || ''), String(body.paidDate || ''));
+  }
+  if (body.action === 'seikyuUpdate') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return seikyuUpdate_(Number(body.rowIdx), body.patch || {});
+  }
+  if (body.action === 'seikyuSaveSettings') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return seikyuSaveSettings_(body.patch || {});
+  }
+  if (body.action === 'seikyuSaveSender') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return seikyuSaveSenderCore_(body.payload || {}, who);
+  }
+  if (body.action === 'seikyuImage') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return drivePhotoAsDataUrl_(String(body.ref || ''), 'seikyu');
   }
 
   // === 🧾 売上伝票（TRUST取込の伝票を管理者が全体/個人で見る） ===
@@ -10608,7 +10638,8 @@ function deleteHairReceipt_(callerName, rowIdx, isAdmin) {
 //      fileId が所定フォルダ木の配下かを検証して、キーを知る者による任意ファイル読み出しを防ぐ。
 var PHOTO_ROOTS_ = {
   receipt: /^ラウンジ家康_領収書_/,          // 月フォルダ ラウンジ家康_領収書_YYYY-MM 配下
-  slip:    /^ラウンジ家康_現金チェック伝票$/  // 現金チェック伝票（直下に日付フォルダ）配下
+  slip:    /^ラウンジ家康_現金チェック伝票$/, // 現金チェック伝票（直下に日付フォルダ）配下
+  seikyu:  /^ラウンジ家康_請求書$/            // 請求書（配下に 名刺／対象伝票/YYYY-MM フォルダ）
 };
 var PHOTO_MAX_BYTES_ = 8 * 1024 * 1024;      // base64転送の暴発を防ぐ上限（8MB）
 
@@ -10963,7 +10994,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS'];
   const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
@@ -18516,3 +18547,378 @@ function getKioskCustomerRoster() {
   return { ok: true, customers: customers };
 }
 
+
+
+/* =====================================================================================
+   請求書管理（請求書払いのお客様）  2026-07-30 ボス依頼で新設
+   ─ 月末締めの翌月末払いが基本。軍師（黒服・iPad）で入力 → 管理コンソール（管理者）で管理＆請求書(A4/PDF)生成。
+   ─ 2シート（いずれも本体ブック SHEET_ID・無ければ自動生成・非破壊）:
+       請求先マスタ … 法人/個人の請求先を一度登録して毎月使い回す（名刺写真・住所・宛名・既定注意書き）
+       請求書管理   … 1請求＝1行（締め月・対象伝票写真・金額・明細・注意書き・ステータス・支払期限）
+   ─ 写真は現金伝票と同じ「制限付き保存＋GAS経由閲覧」インフラを流用（PHOTO_ROOTS_ に seikyu 種別を追加）。
+   ─ 発行者情報・振込先・消費税率は ScriptProperty SEIKYU_SETTINGS（KEEP登録済＝軍師設定リセットで消えない）。
+   ─ 軍師関数は GUNSHI_API_FNS 登録必須。コンソールは handleApiRequest_ の action で isAdmin_ ゲート。
+   ===================================================================================== */
+
+var SEIKYU_SAKI_TAB_ = '請求先マスタ';
+var SEIKYU_TAB_      = '請求書管理';
+var SEIKYU_SAKI_COLS_ = ['請求先ID','請求先名','敬称','郵便番号','住所','担当者','電話','メール','名刺画像URL','既定注意書き','状態','登録者','登録日時','更新日時'];
+var SEIKYU_COLS_      = ['請求ID','請求番号','請求先ID','請求先名','締め月','発行日','支払期限','金額税込','税率','明細JSON','対象伝票画像URLs','注意書き','ステータス','入金日','登録者','登録日時','更新日時'];
+var SEIKYU_PHOTO_ROOT_   = 'ラウンジ家康_請求書';
+var SEIKYU_SETTINGS_KEY_ = 'SEIKYU_SETTINGS';
+var SEIKYU_STATUSES_     = ['未請求','請求済','入金済','取消'];
+
+// ── シート（無ければヘッダー付きで自動生成・不足列は末尾に非破壊で追加） ─────────
+function ensureSeikyuSheet_(name, cols) {
+  var ss = getOrOpenSS_();
+  var sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]);
+    sh.setFrozenRows(1);
+  } else if (sh.getLastColumn() < cols.length) {
+    for (var i = sh.getLastColumn(); i < cols.length; i++) sh.getRange(1, i + 1).setValue(cols[i]);
+  }
+  return sh;
+}
+function getSeikyusakiSheet_() { return ensureSeikyuSheet_(SEIKYU_SAKI_TAB_, SEIKYU_SAKI_COLS_); }
+function getSeikyuSheet_()     { return ensureSeikyuSheet_(SEIKYU_TAB_, SEIKYU_COLS_); }
+
+// ヘッダー名→列index(0基点)。末尾に列を足しても壊れない読み書きに使う。
+function seikyuColMap_(sh) {
+  var hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  var m = {}; hdr.forEach(function (h, i) { m[String(h).trim()] = i; }); return m;
+}
+// 日付セルの表示整形（Sheetsが 'yyyy-MM-dd' 文字列を日付値へ自動変換する罠を吸収）。
+function seikyuFmt_(v, f) {
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, f || 'yyyy-MM-dd');
+  return String(v == null ? '' : v);
+}
+// cm を使って行オブジェクト→全幅配列（余分な列があっても壊れない appendRow 用）
+function seikyuRowArr_(sh, cm, rowObj) {
+  var width = sh.getLastColumn(); var arr = []; for (var i = 0; i < width; i++) arr.push('');
+  Object.keys(rowObj).forEach(function (k) { if (cm[k] !== undefined) arr[cm[k]] = rowObj[k]; });
+  return arr;
+}
+
+// ── 写真フォルダ＆保存（現金伝票と同じ制限付き保存＝公開共有しない） ─────────────
+function getSeikyuRootFolder_() {
+  var root = DriveApp.getRootFolder();
+  var it = root.getFoldersByName(SEIKYU_PHOTO_ROOT_);
+  return it.hasNext() ? it.next() : root.createFolder(SEIKYU_PHOTO_ROOT_);
+}
+function getSeikyuSubFolder_(sub) {
+  var r = getSeikyuRootFolder_();
+  var it = r.getFoldersByName(sub);
+  return it.hasNext() ? it.next() : r.createFolder(sub);
+}
+function getSeikyuSlipFolder_(month) {
+  var s = getSeikyuSubFolder_('対象伝票');
+  var nm = month || '未分類';
+  var it = s.getFoldersByName(nm);
+  return it.hasNext() ? it.next() : s.createFolder(nm);
+}
+function saveSeikyuPhoto_(folder, base64, mime, name) {
+  var blob = Utilities.newBlob(
+    Utilities.base64Decode(String(base64).replace(/^data:[^;]+;base64,/, '')),
+    mime || 'image/jpeg', name);
+  var file = folder.createFile(blob);
+  // ⚠️ setSharing しない＝Drive「制限付き」。閲覧は drivePhotoAsDataUrl_(ref,'seikyu') 経由でGASが読む。
+  return 'https://drive.google.com/uc?id=' + file.getId();
+}
+
+// ── ID・締め月・支払期限・消費税 ────────────────────────────────────────
+function newSeikyusakiId_() { return 'SK' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10); }
+function newSeikyuId_()     { return 'INV' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10); }
+function seikyuCloseMonthDefault_() {
+  var d = new Date(); if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+  return Utilities.formatDate(d, TZ, 'yyyy-MM');
+}
+// 締め月(YYYY-MM)→支払期限＝翌月末（月末締め・翌月末払い）
+function seikyuDueFromClose_(closeMonth) {
+  var mm = String(closeMonth || '').match(/(\d{4})-(\d{1,2})/);
+  var y, m;
+  if (mm) { y = +mm[1]; m = +mm[2]; } else { var d = new Date(); y = d.getFullYear(); m = d.getMonth() + 1; }
+  var dueY = y, dueM = m + 1; if (dueM > 12) { dueM = 1; dueY = y + 1; }
+  var last = new Date(dueY, dueM, 0);   // dueM(1基点)月の末日
+  return Utilities.formatDate(last, TZ, 'yyyy-MM-dd');
+}
+function seikyuNormMonth_(v) {
+  var mm = String(v || '').match(/(\d{4})-(\d{1,2})/);
+  return mm ? (mm[1] + '-' + ('0' + mm[2]).slice(-2)) : '';
+}
+// 税込→内訳。消費税=切り捨て。税抜=税込−消費税。
+// ⚠️率を小数(0.1)のまま掛けると浮動小数の誤差で値により1円ずれる（66000→5999/60001）。
+//   率を整数％(pct)にして floor(税込×pct/(100+pct)) と整数演算すれば 66000→6000・110000→10000 と常に正確。
+function seikyuTaxBreak_(incl, rate) {
+  incl = Number(incl) || 0; rate = Number(rate) || 0.10;
+  var pct = Math.round(rate * 100);
+  var tax = Math.floor(incl * pct / (100 + pct));
+  return { incl: incl, excl: incl - tax, tax: tax, rate: rate };
+}
+function seikyuDaysBetween_(a, b) {
+  var da = new Date(a + 'T00:00:00'), db = new Date(b + 'T00:00:00');
+  return Math.round((db - da) / 86400000);
+}
+
+// ── 発行者・振込先・税率の設定（ScriptProperty） ───────────────────────
+function seikyuSettingsDefault_() {
+  return {
+    issuerName: 'ラウンジいえやす', issuerZip: '', issuerAddr: '愛知県名古屋市中区錦3-9-15 サンロード錦ビル', issuerTel: '',
+    invoiceNo: 'T4180302027983',
+    bankName: '', bankBranch: '', accountType: '普通', accountNo: '', accountHolder: '',
+    taxRate: 0.10,
+    footerNote: 'お振込手数料は御社にてご負担くださいますようお願い申し上げます。'
+  };
+}
+function getSeikyuSettings_() {
+  var s = seikyuSettingsDefault_();
+  var raw = PropertiesService.getScriptProperties().getProperty(SEIKYU_SETTINGS_KEY_);
+  if (raw) { try { var o = JSON.parse(raw); Object.keys(s).forEach(function (k) { if (o[k] !== undefined && o[k] !== null) s[k] = o[k]; }); } catch (e) {} }
+  s.taxRate = Number(s.taxRate) || 0.10;
+  return s;
+}
+function seikyuSaveSettings_(patch) {
+  var s = getSeikyuSettings_(); patch = patch || {};
+  Object.keys(seikyuSettingsDefault_()).forEach(function (k) { if (patch[k] !== undefined) s[k] = patch[k]; });
+  s.taxRate = Number(s.taxRate) || 0.10;
+  PropertiesService.getScriptProperties().setProperty(SEIKYU_SETTINGS_KEY_, JSON.stringify(s));
+  return { ok: true, settings: s };
+}
+
+// ── 請求先マスタ 読み書き ─────────────────────────────────────────────
+function seikyuReadSenders_(includeDeleted) {
+  var sh = getSeikyusakiSheet_(); var last = sh.getLastRow();
+  if (last < 2) return [];
+  var cm = seikyuColMap_(sh);
+  var vals = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var out = [];
+  vals.forEach(function (r, i) {
+    var id = String(r[cm['請求先ID']] || '').trim(); if (!id) return;
+    var state = String(r[cm['状態']] || '').trim() || '有効';
+    if (!includeDeleted && state === '削除') return;
+    out.push({
+      id: id, name: String(r[cm['請求先名']] || ''), keisho: String(r[cm['敬称']] || '御中'),
+      zip: String(r[cm['郵便番号']] || ''), addr: String(r[cm['住所']] || ''),
+      contact: String(r[cm['担当者']] || ''), tel: String(r[cm['電話']] || ''), email: String(r[cm['メール']] || ''),
+      meishiUrl: String(r[cm['名刺画像URL']] || ''), note: String(r[cm['既定注意書き']] || ''),
+      state: state, rowIdx: i + 2
+    });
+  });
+  return out;
+}
+function seikyuFindSenderRow_(sh, cm, id) {
+  var last = sh.getLastRow(); if (last < 2) return 0;
+  var vals = sh.getRange(2, cm['請求先ID'] + 1, last - 1, 1).getValues();
+  for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).trim() === String(id).trim()) return i + 2;
+  return 0;
+}
+function seikyuSaveSenderCore_(payload, by) {
+  payload = payload || {};
+  var sh = getSeikyusakiSheet_(); var cm = seikyuColMap_(sh);
+  var id = String(payload.id || '').trim();
+  var now = nowStamp_();
+  var rowIdx = id ? seikyuFindSenderRow_(sh, cm, id) : 0;
+  if (!id) id = newSeikyusakiId_();
+  // 名刺: 新規アップロードがあれば保存、無ければ既存を保持
+  var meishiUrl = String(payload.meishiUrl || '');
+  if (payload.meishiBase64) {
+    meishiUrl = saveSeikyuPhoto_(getSeikyuSubFolder_('名刺'), payload.meishiBase64, payload.meishiMime,
+      (payload.name || 'meishi') + '_' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd_HHmmss') + '.jpg');
+  }
+  if (!meishiUrl && rowIdx > 0) meishiUrl = String(sh.getRange(rowIdx, cm['名刺画像URL'] + 1).getValue() || '');
+  var rowObj = {
+    '請求先ID': id, '請求先名': String(payload.name || ''), '敬称': String(payload.keisho || '御中'),
+    '郵便番号': String(payload.zip || ''), '住所': String(payload.addr || ''), '担当者': String(payload.contact || ''),
+    '電話': String(payload.tel || ''), 'メール': String(payload.email || ''), '名刺画像URL': meishiUrl,
+    '既定注意書き': String(payload.note || ''), '状態': String(payload.state || '有効'), '更新日時': now
+  };
+  if (rowIdx > 0) {
+    Object.keys(rowObj).forEach(function (k) { if (cm[k] !== undefined) sh.getRange(rowIdx, cm[k] + 1).setValue(rowObj[k]); });
+  } else {
+    rowObj['登録者'] = String(by || ''); rowObj['登録日時'] = now;
+    sh.appendRow(seikyuRowArr_(sh, cm, rowObj));
+  }
+  return { ok: true, id: id, meishiUrl: meishiUrl };
+}
+
+// ── 請求 読み取り ────────────────────────────────────────────────────
+function seikyuReadInvoices_() {
+  var sh = getSeikyuSheet_(); var last = sh.getLastRow();
+  if (last < 2) return [];
+  var cm = seikyuColMap_(sh);
+  var vals = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var out = [];
+  vals.forEach(function (r, i) {
+    var id = String(r[cm['請求ID']] || '').trim(); if (!id) return;
+    var items = []; try { items = JSON.parse(r[cm['明細JSON']] || '[]') || []; } catch (e) {}
+    var slips = []; try { slips = JSON.parse(r[cm['対象伝票画像URLs']] || '[]') || []; } catch (e) {}
+    out.push({
+      id: id, no: String(r[cm['請求番号']] || ''), senderId: String(r[cm['請求先ID']] || ''), senderName: String(r[cm['請求先名']] || ''),
+      closeMonth: seikyuFmt_(r[cm['締め月']], 'yyyy-MM'), issueDate: seikyuFmt_(r[cm['発行日']], 'yyyy-MM-dd'), due: seikyuFmt_(r[cm['支払期限']], 'yyyy-MM-dd'),
+      amount: Number(r[cm['金額税込']]) || 0, taxRate: Number(r[cm['税率']]) || 0.10, items: items, slips: slips,
+      note: String(r[cm['注意書き']] || ''), status: String(r[cm['ステータス']] || '未請求'), paidDate: seikyuFmt_(r[cm['入金日']], 'yyyy-MM-dd'),
+      registeredBy: String(r[cm['登録者']] || ''), registeredAt: seikyuFmt_(r[cm['登録日時']], 'yyyy-MM-dd HH:mm'), rowIdx: i + 2
+    });
+  });
+  out.sort(function (a, b) { return b.rowIdx - a.rowIdx; });   // 新しい順
+  return out;
+}
+
+/* ============================ 軍師（GUNSHI_API_FNS） ============================ */
+
+// 軍師：請求書入力画面の初期データ（請求先マスタ＋締め月/支払期限の初期値）
+function getSeikyuBootstrap() {
+  try {
+    var close = seikyuCloseMonthDefault_();
+    var st = getSeikyuSettings_();
+    return { ok: true, senders: seikyuReadSenders_(false), closeMonth: close, due: seikyuDueFromClose_(close), issuerName: st.issuerName, taxRate: st.taxRate };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
+// 軍師：請求先マスタの登録／更新（名刺写真 base64 可）
+function saveSeikyusaki(payload) {
+  try {
+    payload = payload || {};
+    if (!String(payload.name || '').trim()) return { ok: false, error: '請求先名を入力してください' };
+    return seikyuSaveSenderCore_(payload, payload.by || '');
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
+// 軍師：請求（1件）を登録。対象伝票写真は複数可。締め月から支払期限を自動算出。
+function submitSeikyu(payload) {
+  try {
+    payload = payload || {};
+    var senderId = String(payload.senderId || '').trim();
+    if (!senderId) return { ok: false, error: '請求先を選択してください' };
+    var senders = seikyuReadSenders_(true);
+    var sender = null; for (var i = 0; i < senders.length; i++) if (senders[i].id === senderId) { sender = senders[i]; break; }
+    if (!sender) return { ok: false, error: '請求先が見つかりません' };
+
+    var close = seikyuNormMonth_(payload.closeMonth) || seikyuCloseMonthDefault_();
+    var due = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.due || '')) ? payload.due : seikyuDueFromClose_(close);
+
+    var items = (Array.isArray(payload.items) ? payload.items : [])
+      .map(function (x) { return { name: String((x && x.name) || ''), amount: Number(x && x.amount) || 0 }; })
+      .filter(function (x) { return x.name.trim() || x.amount > 0; });
+    var amount = Number(payload.amount) || items.reduce(function (a, b) { return a + b.amount; }, 0);
+    if (!amount && !items.length) return { ok: false, error: '金額を入力してください' };
+    if (!items.length) items = [{ name: close + ' ご利用分', amount: amount }];
+    if (!amount) amount = items.reduce(function (a, b) { return a + b.amount; }, 0);
+
+    // 対象伝票写真を保存（複数）
+    var slips = Array.isArray(payload.slips) ? payload.slips : [];
+    var folder = slips.some(function (s) { return s && s.base64; }) ? getSeikyuSlipFolder_(close) : null;
+    var urls = [];
+    slips.forEach(function (s, idx) {
+      if (s && s.base64 && folder) urls.push(saveSeikyuPhoto_(folder, s.base64, s.mime, sender.name + '_' + close + '_' + (idx + 1) + '.jpg'));
+      else if (s && s.url) urls.push(String(s.url));
+    });
+
+    var settings = getSeikyuSettings_();
+    var id = newSeikyuId_(); var now = nowStamp_();
+    var sh = getSeikyuSheet_(); var cm = seikyuColMap_(sh);
+    var rowObj = {
+      '請求ID': id, '請求番号': '', '請求先ID': senderId, '請求先名': sender.name, '締め月': close,
+      '発行日': '', '支払期限': due, '金額税込': amount, '税率': settings.taxRate,
+      '明細JSON': JSON.stringify(items), '対象伝票画像URLs': JSON.stringify(urls),
+      '注意書き': String(payload.note !== undefined ? payload.note : (sender.note || '')), 'ステータス': '未請求', '入金日': '',
+      '登録者': String(payload.by || ''), '登録日時': now, '更新日時': now
+    };
+    sh.appendRow(seikyuRowArr_(sh, cm, rowObj));
+    return { ok: true, id: id, closeMonth: close, due: due, amount: amount, slipCount: urls.length };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
+// 軍師／コンソール共通：請求書系の写真を base64 で返す（seikyu 種別・所定フォルダ木に限定）
+function kioskGetSeikyuImage(ref) { return drivePhotoAsDataUrl_(String(ref || ''), 'seikyu'); }
+
+// 軍師：最近の請求一覧（黒服が自分の登録を確認）
+function getSeikyuListKiosk() {
+  try {
+    var list = seikyuReadInvoices_().slice(0, 40).map(function (r) {
+      return { id: r.id, no: r.no, senderName: r.senderName, closeMonth: r.closeMonth, amount: r.amount, due: r.due, status: r.status, registeredAt: r.registeredAt, slipCount: (r.slips || []).length };
+    });
+    return { ok: true, list: list };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+
+/* ============================ コンソール（管理者・handleApiRequest_ 経由） ============================ */
+
+// 一覧（請求先＋請求＋設定＋期限アラート）
+function seikyuAdminData_() {
+  var senders = seikyuReadSenders_(true);
+  var invoices = seikyuReadInvoices_();
+  var settings = getSeikyuSettings_();
+  var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  invoices.forEach(function (inv) {
+    var open = (inv.status !== '入金済' && inv.status !== '取消');
+    inv.overdue = !!(open && inv.due && inv.due < today);
+    inv.dueSoon = !!(open && inv.due && inv.due >= today && seikyuDaysBetween_(today, inv.due) <= 7);
+    var b = seikyuTaxBreak_(inv.amount, inv.taxRate);
+    inv.taxExcl = b.excl; inv.taxAmount = b.tax;
+  });
+  return { ok: true, senders: senders, invoices: invoices, settings: settings, today: today, statuses: SEIKYU_STATUSES_ };
+}
+
+// 請求書を生成（請求番号採番＋発行日→ステータス請求済）。既に番号があれば保持（再発行）。
+function seikyuGenerate_(rowIdx, overrides) {
+  var sh = getSeikyuSheet_(); var cm = seikyuColMap_(sh);
+  if (!(rowIdx >= 2)) return { ok: false, error: '対象が不正です' };
+  var r = sh.getRange(rowIdx, 1, 1, sh.getLastColumn()).getValues()[0];
+  var id = String(r[cm['請求ID']] || ''); if (!id) return { ok: false, error: '対象が見つかりません' };
+  overrides = overrides || {};
+  var close = seikyuFmt_(r[cm['締め月']], 'yyyy-MM');
+  var no = String(r[cm['請求番号']] || '').trim();
+  var issueDate = String(overrides.issueDate || '').match(/^\d{4}-\d{2}-\d{2}$/) ? overrides.issueDate
+    : (seikyuFmt_(r[cm['発行日']], 'yyyy-MM-dd') || Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'));
+  if (!no) { no = seikyuNextNumber_(close); sh.getRange(rowIdx, cm['請求番号'] + 1).setValue(no); }
+  sh.getRange(rowIdx, cm['発行日'] + 1).setValue(issueDate);
+  var cur = String(r[cm['ステータス']] || '');
+  if (cur === '未請求' || cur === '') sh.getRange(rowIdx, cm['ステータス'] + 1).setValue('請求済');
+  sh.getRange(rowIdx, cm['更新日時'] + 1).setValue(nowStamp_());
+  return { ok: true, no: no, issueDate: issueDate };
+}
+// 請求番号：締め月ベースの連番 YYYYMM-###
+function seikyuNextNumber_(closeMonth) {
+  var ym = String(closeMonth || '').replace(/[^0-9]/g, '').slice(0, 6) || Utilities.formatDate(new Date(), TZ, 'yyyyMM');
+  var sh = getSeikyuSheet_(); var cm = seikyuColMap_(sh); var last = sh.getLastRow(); var max = 0;
+  if (last >= 2) {
+    var vals = sh.getRange(2, cm['請求番号'] + 1, last - 1, 1).getValues();
+    var re = new RegExp('^' + ym + '-(\\d+)$');
+    vals.forEach(function (v) { var mm = String(v[0] || '').match(re); if (mm) max = Math.max(max, +mm[1]); });
+  }
+  return ym + '-' + ('00' + (max + 1)).slice(-3);
+}
+function seikyuSetStatus_(rowIdx, status, paidDate) {
+  if (!(rowIdx >= 2)) return { ok: false, error: '対象が不正です' };
+  if (SEIKYU_STATUSES_.indexOf(status) < 0) return { ok: false, error: '不正なステータス' };
+  var sh = getSeikyuSheet_(); var cm = seikyuColMap_(sh);
+  sh.getRange(rowIdx, cm['ステータス'] + 1).setValue(status);
+  if (status === '入金済') sh.getRange(rowIdx, cm['入金日'] + 1).setValue(String(paidDate || '').match(/^\d{4}-\d{2}-\d{2}$/) ? paidDate : Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'));
+  else sh.getRange(rowIdx, cm['入金日'] + 1).setValue('');
+  sh.getRange(rowIdx, cm['更新日時'] + 1).setValue(nowStamp_());
+  return { ok: true };
+}
+function seikyuUpdate_(rowIdx, patch) {
+  if (!(rowIdx >= 2)) return { ok: false, error: '対象が不正です' };
+  var sh = getSeikyuSheet_(); var cm = seikyuColMap_(sh); patch = patch || {};
+  function setIf(col, val) { if (val !== undefined && cm[col] !== undefined) sh.getRange(rowIdx, cm[col] + 1).setValue(val); }
+  if (patch.closeMonth !== undefined) {
+    var cmv = seikyuNormMonth_(patch.closeMonth);
+    if (cmv) { setIf('締め月', cmv); if (patch.due === undefined) setIf('支払期限', seikyuDueFromClose_(cmv)); }
+  }
+  if (patch.due !== undefined) setIf('支払期限', patch.due);
+  if (patch.note !== undefined) setIf('注意書き', String(patch.note));
+  if (patch.status !== undefined && SEIKYU_STATUSES_.indexOf(patch.status) >= 0) setIf('ステータス', patch.status);
+  var newAmt;
+  if (patch.items !== undefined) {
+    var items = (patch.items || []).map(function (x) { return { name: String((x && x.name) || ''), amount: Number(x && x.amount) || 0 }; });
+    setIf('明細JSON', JSON.stringify(items));
+    newAmt = items.reduce(function (a, b) { return a + b.amount; }, 0);
+  }
+  if (patch.amount !== undefined) newAmt = Number(patch.amount) || 0;
+  if (newAmt !== undefined) setIf('金額税込', newAmt);
+  setIf('更新日時', nowStamp_());
+  return { ok: true };
+}

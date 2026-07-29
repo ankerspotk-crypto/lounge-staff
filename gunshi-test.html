@@ -3439,6 +3439,7 @@ var MENU_TILES=[
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🖨', t:'領収書・受領書',     act:"openReceipt()"},
+    {ic:'📄', t:'請求書',             act:"openSeikyu()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
     {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
     {ic:'📢', t:'お知らせ配信',       act:"openBroadcast()"},
@@ -4004,6 +4005,7 @@ function renderMenu(){
     return;
   }
   if(menuView==='receipt'){ rcptRenderMenu_(el); return; }
+  if(menuView==='seikyu'){ seikyuRenderMenu_(el); return; }
   el.innerHTML=MENU_TILES.map(function(g){
     return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
       return '<div class="menu-tile" onclick="'+it.act+'"><span class="mt-ic">'+it.ic+'</span><span class="mt-t">'+esc(it.t)+'</span></div>';
@@ -5252,6 +5254,191 @@ var DP_FIELDS={
   receipt:[['発行元','text'],['金額','num'],['但し書き','text'],['伝票日付','text']],
   delivery:[['商品名','text'],['容量','text'],['本数','num'],['単価','num'],['金額','num']]
 };
+/* ===== 📄 請求書（請求書払いのお客様・軍師で入力 → コンソールで管理＆請求書生成） =====
+   月末締め・翌月末払いが既定。請求先はマスタに登録して毎月使い回す。名刺・対象伝票の写真を撮って登録。
+   backend: getSeikyuBootstrap / saveSeikyusaki / submitSeikyu / kioskGetSeikyuImage / getSeikyuListKiosk（GUNSHI_API_FNS登録済）。 */
+var SK_BOOT=null, SK_VIEW='form', SK_SEL='', SK_CLOSE='', SK_DUE='',
+    SK_ITEMS=[{name:'',amount:0}], SK_SLIPS=[], SK_NOTE='', SK_NOTE_TOUCHED=false,
+    SK_MEISHI=null, SK_EDIT_ID='', SK_LIST=null;
+
+function openSeikyu(){
+  menuView='seikyu'; SK_VIEW='form'; SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[];
+  SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null;
+  document.getElementById('menuOverlay').classList.add('show'); renderMenu();
+  if(!IS_GAS){ SK_BOOT={ok:true,senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込'}],closeMonth:'2026-07',due:'2026-08-31',taxRate:0.10}; SK_CLOSE='2026-07'; SK_DUE='2026-08-31'; renderMenu(); return; }
+  gsr('getSeikyuBootstrap').then(function(r){
+    SK_BOOT=(r&&r.ok!==false)?r:{senders:[],closeMonth:'',due:'',taxRate:0.10};
+    SK_CLOSE=SK_BOOT.closeMonth||''; SK_DUE=SK_BOOT.due||'';
+    if(menuView==='seikyu')renderMenu();
+  }).catch(function(){ SK_BOOT={senders:[],closeMonth:'',due:'',taxRate:0.10}; if(menuView==='seikyu')renderMenu(); });
+}
+function seikyuRenderMenu_(el){
+  skEnsureCss_();
+  document.getElementById('menuTitle').textContent='📄 請求書';
+  if(!SK_BOOT){ el.innerHTML=skBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>'; return; }
+  if(SK_VIEW==='newsender'){ el.innerHTML=skNewSenderHtml_(); return; }
+  if(SK_VIEW==='list'){ el.innerHTML=skListHtml_(); skLoadListIfNeeded_(); return; }
+  el.innerHTML=skFormHtml_();
+}
+function skBack_(){ return '<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>'; }
+function skSenderById_(id){ var a=(SK_BOOT&&SK_BOOT.senders)||[]; for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i]; return null; }
+function skRate_(){ return (SK_BOOT&&Number(SK_BOOT.taxRate))||0.10; }
+function skTotal_(){ return SK_ITEMS.reduce(function(a,b){return a+(Number(b.amount)||0);},0); }
+function skDueFromClose_(cm){ var mm=String(cm||'').match(/(\d{4})-(\d{1,2})/); if(!mm)return SK_DUE; var y=+mm[1],m=+mm[2],dy=y,dm=m+1; if(dm>12){dm=1;dy=y+1;} var last=new Date(dy,dm,0); return last.getFullYear()+'-'+('0'+(last.getMonth()+1)).slice(-2)+'-'+('0'+last.getDate()).slice(-2); }
+
+function skFormHtml_(){
+  var senders=(SK_BOOT&&SK_BOOT.senders)||[];
+  var opts='<option value="">請求先を選択…</option>'+senders.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===SK_SEL?' selected':'')+'>'+esc(s.name)+(s.keisho?(' '+esc(s.keisho)):'')+'</option>';}).join('');
+  var sender=skSenderById_(SK_SEL);
+  var h=skBack_();
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin:4px 0 10px">'
+    +'<div style="font-size:12px;color:var(--dim);line-height:1.5">請求書払いのお客様の請求を登録します。<br>月末締め・翌月末払いが既定です。</div>'
+    +'<span class="sk-listlink" onclick="SK_VIEW=\'list\';SK_LIST=null;renderMenu()">📋 最近の請求</span></div>';
+  h+='<div class="flabel">請求先</div><div style="display:flex;gap:8px"><select class="finput" style="flex:1" onchange="skPickSender(this.value)">'+opts+'</select>'
+    +'<button class="sk-btn2" onclick="skNewSender()">＋ 新規</button></div>';
+  if(sender){
+    h+='<div class="sk-sender-card">'
+      +'<div class="sk-sc-name">'+esc(sender.name)+' <span style="color:var(--dim);font-size:12px">'+esc(sender.keisho||'')+'</span></div>'
+      +(sender.addr?'<div class="sk-sc-sub">〒'+esc(sender.zip||'')+' '+esc(sender.addr)+'</div>':'')
+      +((sender.contact||sender.tel)?'<div class="sk-sc-sub">'+esc(sender.contact||'')+(sender.tel?' / '+esc(sender.tel):'')+'</div>':'')
+      +'<div class="sk-sc-actions">'
+        +(sender.meishiUrl?'<span class="sk-chip" onclick="skViewImg(\''+esc(sender.meishiUrl)+'\')">🪪 名刺を見る</span>':'<span class="sk-chip dim">名刺なし</span>')
+        +'<span class="sk-chip" onclick="skEditSender()">✎ 請求先を編集</span></div>'
+      +'</div>';
+  }
+  h+='<div style="display:flex;gap:10px"><div style="flex:1"><div class="flabel">締め月</div>'
+    +'<input type="month" class="finput" value="'+esc(SK_CLOSE)+'" onchange="skSetClose(this.value)"></div>'
+    +'<div style="flex:1"><div class="flabel">支払期限</div><input type="date" class="finput" value="'+esc(SK_DUE)+'" onchange="SK_DUE=this.value"></div></div>';
+  h+='<div class="flabel">明細（品目・金額／税込）</div><div id="sk-items">'+skItemsHtml_()+'</div>';
+  h+='<div class="sk-additem" onclick="skAddItem()">＋ 明細を追加</div>';
+  h+='<div class="sk-breakdown" id="sk-bd">'+skBreakdownInner_()+'</div>';
+  h+='<div class="flabel">対象伝票の写真（複数可）</div><div class="sk-thumbs">'
+    +SK_SLIPS.map(function(s,i){return '<div class="sk-slipthumb"><img src="'+s.previewUrl+'" onclick="skViewLocal('+i+')"><span class="sk-rm" onclick="skRemoveSlip('+i+')">✕</span></div>';}).join('')
+    +'<label class="sk-addphoto"><span>📷</span><span>撮影／選択</span><input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])skAddSlip(this.files[0]);this.value=\'\'"></label></div>';
+  h+='<div class="flabel">その他 注意書き</div><textarea class="finput" rows="2" oninput="SK_NOTE=this.value;SK_NOTE_TOUCHED=true" placeholder="請求書の備考欄に記載されます">'+esc(SK_NOTE)+'</textarea>';
+  h+='<div class="act pri" style="margin-top:16px" onclick="skSubmit()">📄 この内容で請求を登録</div>';
+  h+='<div id="sk-status" style="text-align:center;font-size:12px;color:var(--dim);margin-top:8px"></div>';
+  return h;
+}
+function skBreakdownInner_(){
+  var total=skTotal_(), rate=skRate_(), pct=Math.round(rate*100), tax=Math.floor(total*pct/(100+pct)), excl=total-tax;
+  return '<div><span>ご請求金額（税込）</span><b>¥'+total.toLocaleString()+'</b></div>'
+    +'<div class="sub"><span>税抜</span><span>¥'+excl.toLocaleString()+'</span></div>'
+    +'<div class="sub"><span>消費税（'+Math.round(rate*100)+'%）</span><span>¥'+tax.toLocaleString()+'</span></div>';
+}
+function skItemsHtml_(){
+  return SK_ITEMS.map(function(it,i){
+    return '<div class="sk-item-row">'
+      +'<input class="finput sk-iname" placeholder="品目（例: '+esc(SK_CLOSE||'当月')+' ご利用分）" value="'+esc(it.name)+'" oninput="SK_ITEMS['+i+'].name=this.value">'
+      +'<input class="finput sk-iamt" type="number" inputmode="numeric" placeholder="金額" value="'+(it.amount||'')+'" oninput="SK_ITEMS['+i+'].amount=Number(this.value)||0;skRefreshTotal()">'
+      +(SK_ITEMS.length>1?'<button class="sk-irm" onclick="skRemoveItem('+i+')">✕</button>':'')
+      +'</div>';
+  }).join('');
+}
+function skRefreshTotal(){ var el=document.getElementById('sk-bd'); if(el)el.innerHTML=skBreakdownInner_(); }
+function skAddItem(){ SK_ITEMS.push({name:'',amount:0}); var el=document.getElementById('sk-items'); if(el)el.innerHTML=skItemsHtml_(); }
+function skRemoveItem(i){ SK_ITEMS.splice(i,1); if(!SK_ITEMS.length)SK_ITEMS=[{name:'',amount:0}]; var el=document.getElementById('sk-items'); if(el)el.innerHTML=skItemsHtml_(); skRefreshTotal(); }
+function skSetClose(v){ SK_CLOSE=v; SK_DUE=skDueFromClose_(v); if(menuView==='seikyu')renderMenu(); }
+function skPickSender(id){ SK_SEL=id; var s=skSenderById_(id); if(s&&!SK_NOTE_TOUCHED)SK_NOTE=s.note||''; if(menuView==='seikyu')renderMenu(); }
+
+function skImgResize_(file,cb){
+  var canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),img=new Image(),reader=new FileReader();
+  reader.onload=function(e){ img.onload=function(){ var MAX=1200,w=img.width,h=img.height; if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;} } canvas.width=w;canvas.height=h;ctx.drawImage(img,0,0,w,h); cb(canvas.toDataURL('image/jpeg',0.75)); }; img.src=e.target.result; };
+  reader.readAsDataURL(file);
+}
+function skAddSlip(file){ skImgResize_(file,function(du){ SK_SLIPS.push({previewUrl:du,base64:du.split(',')[1],mime:'image/jpeg'}); if(menuView==='seikyu')renderMenu(); }); }
+function skRemoveSlip(i){ SK_SLIPS.splice(i,1); if(menuView==='seikyu')renderMenu(); }
+function skViewLocal(i){ var s=SK_SLIPS[i]; if(s&&typeof showImgOverlay==='function')showImgOverlay(s.previewUrl,'対象伝票'); }
+function skViewImg(url){ if(!IS_GAS){ toast('（ローカルでは画像プレビュー不可）'); return; } gsr('kioskGetSeikyuImage',url).then(function(r){ if(!r||r.ok===false){ toast((r&&r.error)||'画像を取得できませんでした'); return; } if(typeof showImgOverlay==='function')showImgOverlay(r.dataUrl,r.name); }).catch(function(){ toast('画像の取得に失敗しました'); }); }
+
+function skNewSender(){ SK_MEISHI=null; SK_EDIT_ID=''; SK_VIEW='newsender'; renderMenu(); }
+function skEditSender(){ var s=skSenderById_(SK_SEL); if(!s)return; SK_MEISHI=null; SK_EDIT_ID=s.id; SK_VIEW='newsender'; renderMenu(); }
+function skNewSenderHtml_(){
+  var ed=SK_EDIT_ID?skSenderById_(SK_EDIT_ID):null;
+  function v(k){ return ed?esc(ed[k]||''):''; }
+  var h='<span class="menu-back" onclick="SK_VIEW=\'form\';renderMenu()">← 請求書に戻る</span>';
+  h+='<div style="font-size:13px;font-weight:800;margin:6px 2px 12px">'+(ed?'✎ 請求先を編集':'＋ 新しい請求先')+'</div>';
+  h+='<div class="flabel">請求先名（会社名・屋号など）<span style="color:#e88">*</span></div><input id="sk-name" class="finput" value="'+v('name')+'" placeholder="株式会社○○">';
+  h+='<div style="display:flex;gap:10px"><div style="flex:1"><div class="flabel">敬称</div><select id="sk-keisho" class="finput"><option'+(!ed||ed.keisho!=='様'?' selected':'')+'>御中</option><option'+(ed&&ed.keisho==='様'?' selected':'')+'>様</option></select></div>'
+    +'<div style="flex:1"><div class="flabel">郵便番号</div><input id="sk-zip" class="finput" value="'+v('zip')+'" placeholder="460-0000"></div></div>';
+  h+='<div class="flabel">住所</div><input id="sk-addr" class="finput" value="'+v('addr')+'" placeholder="名古屋市中区…">';
+  h+='<div style="display:flex;gap:10px"><div style="flex:1"><div class="flabel">ご担当者</div><input id="sk-contact" class="finput" value="'+v('contact')+'"></div>'
+    +'<div style="flex:1"><div class="flabel">電話</div><input id="sk-tel" class="finput" value="'+v('tel')+'"></div></div>';
+  h+='<div class="flabel">メール</div><input id="sk-email" class="finput" value="'+v('email')+'">';
+  h+='<div class="flabel">名刺の写真</div>';
+  h+='<label class="cc-photo">'+(SK_MEISHI?'<img src="'+SK_MEISHI.previewUrl+'">':((ed&&ed.meishiUrl)?'<span style="font-size:20px">🪪</span>':'<span style="font-size:22px">📷</span>'))
+    +'<span>'+(SK_MEISHI?'撮影済み（タップで変更）':((ed&&ed.meishiUrl)?'登録済み（タップで撮り直し）':'名刺を撮影／選択'))+'</span>'
+    +'<input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])skMeishiPhoto(this.files[0])"></label>';
+  h+='<div class="flabel">既定の注意書き（毎回の請求に初期値として入ります）</div><textarea id="sk-note" class="finput" rows="2">'+v('note')+'</textarea>';
+  h+='<div class="act pri" style="margin-top:16px" onclick="skSaveSender()">💾 '+(ed?'保存':'登録')+'</div>';
+  h+='<div id="sk-snstatus" style="text-align:center;font-size:12px;color:var(--dim);margin-top:8px"></div>';
+  return h;
+}
+function skMeishiPhoto(file){ skImgResize_(file,function(du){ SK_MEISHI={previewUrl:du,base64:du.split(',')[1],mime:'image/jpeg'}; renderMenu(); }); }
+function skSaveSender(){
+  var name=((document.getElementById('sk-name')||{}).value||'').trim();
+  if(!name){ toast('請求先名を入力してください'); return; }
+  var st=document.getElementById('sk-snstatus'); if(st)st.textContent='保存中…';
+  function val(id){ return (document.getElementById(id)||{}).value||''; }
+  var payload={ id:SK_EDIT_ID||'', name:name, keisho:val('sk-keisho'), zip:val('sk-zip'), addr:val('sk-addr'), contact:val('sk-contact'), tel:val('sk-tel'), email:val('sk-email'), note:val('sk-note'), by:(typeof LOGIN!=='undefined'?LOGIN:'') };
+  if(SK_MEISHI){ payload.meishiBase64=SK_MEISHI.base64; payload.meishiMime=SK_MEISHI.mime; }
+  if(!IS_GAS){ toast('（ローカルでは保存不可）'); return; }
+  gsr('saveSeikyusaki',payload).then(function(r){
+    if(!r||r.ok===false){ if(st)st.textContent='⚠️ '+((r&&r.error)||'保存に失敗'); return; }
+    toast('✅ 請求先を保存しました');
+    gsr('getSeikyuBootstrap').then(function(b){ if(b&&b.ok!==false){ SK_BOOT=b; if(!SK_CLOSE)SK_CLOSE=b.closeMonth; } SK_SEL=r.id; SK_NOTE_TOUCHED=false; SK_VIEW='form'; renderMenu(); });
+  }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
+}
+function skSubmit(){
+  if(!SK_SEL){ toast('請求先を選択してください'); return; }
+  var total=skTotal_();
+  var items=SK_ITEMS.filter(function(x){return (x.name||'').trim()||Number(x.amount)>0;}).map(function(x){return {name:x.name||'',amount:Number(x.amount)||0};});
+  if(!total && !items.length){ toast('金額を入力してください'); return; }
+  var st=document.getElementById('sk-status'); if(st)st.textContent='送信中…';
+  var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
+    slips:SK_SLIPS.map(function(s){return {base64:s.base64,mime:s.mime};}) };
+  if(!IS_GAS){ toast('（ローカルでは登録不可）'); return; }
+  gsr('submitSeikyu',payload).then(function(r){
+    if(!r||r.ok===false){ if(st)st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); return; }
+    toast('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）');
+    SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[]; SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_VIEW='list'; SK_LIST=null; renderMenu();
+  }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
+}
+function skListHtml_(){
+  var h='<span class="menu-back" onclick="SK_VIEW=\'form\';renderMenu()">← 請求書入力に戻る</span>';
+  h+='<div style="font-size:13px;font-weight:800;margin:6px 2px 10px">📋 最近の請求 <span style="color:var(--dim);font-weight:600;font-size:11px">管理コンソールで請求書を作成します</span></div>';
+  if(SK_LIST===null){ h+='<div class="empty-msg" style="padding:20px">読み込み中…</div>'; return h; }
+  if(!SK_LIST.length){ h+='<div class="empty-msg" style="padding:20px">まだ請求はありません</div>'; return h; }
+  h+=SK_LIST.map(function(r){
+    return '<div class="sk-listrow"><div class="sk-lr-top"><b>'+esc(r.senderName)+'</b>'+skStatusBadge_(r.status)+'</div>'
+      +'<div class="sk-lr-sub">'+esc(r.closeMonth)+'締め ・ ¥'+Number(r.amount).toLocaleString()+' ・ 期限 '+esc(r.due)+(r.no?(' ・ '+esc(r.no)):'')+(r.slipCount?(' ・ 📷'+r.slipCount):'')+'</div></div>';
+  }).join('');
+  return h;
+}
+function skStatusBadge_(s){ var c={'未請求':'#8a9ac0','請求済':'#5aa0e0','入金済':'#3fbf7f','取消':'#c07'}[s]||'#8a9ac0'; return '<span style="margin-left:8px;font-size:11px;font-weight:800;color:'+c+'">●'+esc(s)+'</span>'; }
+function skLoadListIfNeeded_(){ if(SK_LIST!==null)return; if(!IS_GAS){ SK_LIST=[]; renderMenu(); return; } gsr('getSeikyuListKiosk').then(function(r){ SK_LIST=(r&&r.list)?r.list:[]; if(menuView==='seikyu'&&SK_VIEW==='list')renderMenu(); }).catch(function(){ SK_LIST=[]; if(menuView==='seikyu'&&SK_VIEW==='list')renderMenu(); }); }
+function skEnsureCss_(){ if(document.getElementById('sk-css'))return; var s=document.createElement('style'); s.id='sk-css'; s.textContent=
+  '.sk-btn2{background:#0f2a1a;border:1px solid #2a6a44;color:#7fe0a3;font-weight:800;border-radius:9px;padding:0 14px;font-size:13px;cursor:pointer;white-space:nowrap;}'
+ +'.sk-listlink{font-size:12px;color:#7ac6ff;cursor:pointer;white-space:nowrap;}'
+ +'.sk-sender-card{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-top:8px;}'
+ +'.sk-sc-name{font-size:15px;font-weight:800;}.sk-sc-sub{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.5;}'
+ +'.sk-sc-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}'
+ +'.sk-chip{font-size:12px;color:#9dc8ff;background:var(--panel);border:1px solid var(--line2);border-radius:20px;padding:4px 12px;cursor:pointer;}.sk-chip.dim{color:var(--dim);cursor:default;}'
+ +'.sk-item-row{display:flex;gap:6px;margin-bottom:6px;}.sk-iname{flex:2;}.sk-iamt{flex:1;min-width:96px;}'
+ +'.sk-irm{background:#241014;border:1px solid #5a2430;color:#e0a0b0;border-radius:8px;padding:0 12px;cursor:pointer;}'
+ +'.sk-additem{text-align:center;color:#7ac6ff;font-size:13px;padding:8px;cursor:pointer;border:1px dashed var(--line2);border-radius:9px;margin-bottom:4px;}'
+ +'.sk-breakdown{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-top:12px;}'
+ +'.sk-breakdown>div{display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:800;}'
+ +'.sk-breakdown .sub{font-size:12px;font-weight:600;color:var(--dim);margin-top:4px;}.sk-breakdown b{color:#ffd479;font-size:18px;}'
+ +'.sk-thumbs{display:flex;flex-wrap:wrap;gap:8px;}'
+ +'.sk-slipthumb{position:relative;width:70px;height:70px;}.sk-slipthumb img{width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--line2);}'
+ +'.sk-rm{position:absolute;top:-6px;right:-6px;background:#241014;border:1px solid #5a2430;color:#e0a0b0;border-radius:50%;width:20px;height:20px;line-height:18px;text-align:center;font-size:12px;cursor:pointer;}'
+ +'.sk-addphoto{width:70px;height:70px;border:1px dashed var(--line2);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:#8fb8f0;cursor:pointer;}.sk-addphoto span:first-child{font-size:20px;}'
+ +'.sk-listrow{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-bottom:7px;}'
+ +'.sk-lr-top{display:flex;align-items:center;}.sk-lr-sub{font-size:12px;color:var(--dim);margin-top:3px;}';
+  document.head.appendChild(s);
+}
+
 function openDenpyoManager(dateStr){
   closeMenu();
   var d=dateStr||(denpyoState&&denpyoState.date)||TODAY;
