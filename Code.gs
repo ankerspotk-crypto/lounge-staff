@@ -11175,8 +11175,17 @@ function parseMasterDate_(raw) {
   }
   // 西暦（4桁年）
   const m = s.match(/(\d{4})\s*[\/\-\.年]\s*(\d{1,2})(?:\s*[\/\-\.月]\s*(\d{1,2}))?/);
-  if (!m) return { ym: 0, d: 0, str: s0 }; // 解析できなくても元文字列は保持
-  return mk(parseInt(m[1], 10), parseInt(m[2], 10), m[3] ? parseInt(m[3], 10) : 0);
+  if (m) return mk(parseInt(m[1], 10), parseInt(m[2], 10), m[3] ? parseInt(m[3], 10) : 0);
+  // 和暦の年を略記した更新日（例「8.7」「8/7」「8年7月」＝令和8年7月）を救出。
+  // ⚠️この関数は登録日／「◯更新」列にしか渡らない（parseMasterDate_ の全呼び出し元＝会費の登録/更新日のみ・月日だけの値は入らない）
+  //    ＝bareな1〜2桁の年を令和と解釈しても副作用なし。読めないと ym:0 で捨てられ→古い日付にフォールバック→
+  //    「更新済みなのに🔴会員切れ」の誤督促になる（既知の和暦テキスト混在の罠 [[reference_customer_master_y3]]）。安全側＝読めたら更新扱い。
+  const wa = s.match(/^\D*(\d{1,2})\s*[.\/年\-]\s*(\d{1,2})(?:\s*[.\/月\-]\s*(\d{1,2}))?\D*$/);
+  if (wa) {
+    const wy = parseInt(wa[1], 10), wmo = parseInt(wa[2], 10), wda = wa[3] ? parseInt(wa[3], 10) : 0;
+    if (wy >= 1 && wy <= 50 && wmo >= 1 && wmo <= 12) return mk(eraBase['令和'] + wy, wmo, wda); // 令和元年=2019
+  }
+  return { ym: 0, d: 0, str: s0 }; // 解析できなくても元文字列は保持
 }
 
 // 会員番号 → { annualFeeDate(直近更新), memberSince(入会=登録日) } のマップ。
