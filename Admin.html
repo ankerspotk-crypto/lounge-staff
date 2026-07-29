@@ -464,7 +464,7 @@ function pollAdminAuth(token){
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kintaireg','🗂 出勤簿'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
-  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
+  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
@@ -483,7 +483,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,rsv:renderRsv,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -3009,8 +3009,9 @@ function saveThresholds(){
 /* ===== 📅 予約（キャスト別の予約一覧・過去/未来）=====
    帰属＝予約キャスト優先／空なら担当キャストで補完（「本日の出勤」通知と同じ規則）＋同伴キャストも拾う（ボス指定 2026-07-16）。
    判定はサーバの castRolesInRsv_ が唯一の持ち主＝ここでは絶対に数え直さない（2箇所に規則があると必ず割れる）。 */
-var rsvCast='', rsvData=null, rsvShowPast=false;
+var rsvCast='', rsvData=null, rsvShowPast=false, rsvShowCxl=false;
 var rsvMx=null, rsvMxFrom='', rsvMxDays=14, rsvMxBusy=false;
+var rsvLog=null, rsvLogOp='', rsvLogQ='', rsvLogBusy=false; // 🕘 予約履歴（変更/削除ログ）
 function rsvCastList(){ return (ST.staff||[]).filter(function(s){ var r=String(s.role||''); return r.indexOf('キャスト')>=0||r.indexOf('体験')>=0; }); }
 function rsvBizToday(){ var n=new Date(); if(n.getHours()<6)n.setDate(n.getDate()-1); return hdFmt(n); } // 営業日(6時境界)＝シフト表と同じ基準
 function renderRsv(){
@@ -3114,12 +3115,15 @@ function rsvSaveCheckTime(rowIdx,v,el){
     .catch(function(){ if(stat){stat.textContent='✕ 通信エラー';stat.style.color='#e07a7a';} });
 }
 function rsvRowHtml(x,past){
-  var st=x.status&&x.status!=='確定'?'<span class="badge" style="background:#2a2210;color:#ddaa44">'+esc(x.status)+'</span>':'';
-  return '<div class="lrow"'+(past?' style="opacity:.55"':'')+'>'
-    +'<div class="main"><div class="nm">'+esc(x.date)+'（'+hdWeekday(x.date)+'）'+esc(x.time||'')+'　'+esc(x.customer)+'様</div>'
+  var cxl=x.status==='キャンセル';
+  var st=cxl?'<span class="badge" style="background:#2a1418;color:#d98a96;border:1px solid #5a2a34">🚫 削除済</span>'
+          :(x.status&&x.status!=='確定'?'<span class="badge" style="background:#2a2210;color:#ddaa44">'+esc(x.status)+'</span>':'');
+  var nmStyle=cxl?' style="text-decoration:line-through;color:#9a8f97"':'';
+  return '<div class="lrow"'+((past||cxl)?' style="opacity:.55"':'')+'>'
+    +'<div class="main"><div class="nm"'+nmStyle+'>'+esc(x.date)+'（'+hdWeekday(x.date)+'）'+esc(x.time||'')+'　'+esc(x.customer)+'様</div>'
     +'<div class="meta">'+esc(x.table||'席未定')+'　'+(x.pax||1)+'名'
     +(x.tantouCast?'　担当: '+esc(x.tantouCast):'')+(x.dohanCast?'　同伴: '+esc(x.dohanCast):'')+'</div>'
-    +'<div class="meta" style="margin-top:5px;display:flex;align-items:center;gap:6px">🕛 チェック予定 <input type="time" value="'+esc(x.checkTime||'')+'" onchange="rsvSaveCheckTime('+(x.rowIdx||0)+',this.value,this)"'+(x.rowIdx?'':' disabled')+' style="background:#0d1526;color:#cfe0f5;border:1px solid #33406a;border-radius:6px;padding:2px 6px;font-size:12px"><span class="rsv-ct-stat" style="font-size:11px;color:var(--dim)"></span></div></div>'
+    +(cxl?'':'<div class="meta" style="margin-top:5px;display:flex;align-items:center;gap:6px">🕛 チェック予定 <input type="time" value="'+esc(x.checkTime||'')+'" onchange="rsvSaveCheckTime('+(x.rowIdx||0)+',this.value,this)"'+(x.rowIdx?'':' disabled')+' style="background:#0d1526;color:#cfe0f5;border:1px solid #33406a;border-radius:6px;padding:2px 6px;font-size:12px"><span class="rsv-ct-stat" style="font-size:11px;color:var(--dim)"></span></div>')+'</div>'
     +'<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'+rsvRoleBadges(x.roles)+st+'</div></div>';
 }
 function drawRsv(){
@@ -3127,16 +3131,77 @@ function drawRsv(){
   if(!rsvData){ el.innerHTML='<div class="empty">読み込み中…</div>'; return; }
   if(rsvData.error){ el.innerHTML='<div class="empty">'+esc(rsvData.error)+'</div>'; return; }
   var list=rsvData.reservations||[];
-  var future=list.filter(function(x){return x.future;});
-  var past=list.filter(function(x){return !x.future;});
-  var head='<div class="toolbar"><span class="cnt">'+esc(rsvCast)+'　これから '+future.length+'件 / 過去 '+past.length+'件</span></div>';
+  var active=list.filter(function(x){return x.status!=='キャンセル';}); // 件数集計は有効な予約だけ
+  var cxl=list.filter(function(x){return x.status==='キャンセル';});     // 削除(キャンセル)済み＝グレーアウトのログ
+  var future=active.filter(function(x){return x.future;});
+  var past=active.filter(function(x){return !x.future;});
+  var head='<div class="toolbar"><span class="cnt">'+esc(rsvCast)+'　これから '+future.length+'件 / 過去 '+past.length+'件'+(cxl.length?'　/ 🚫削除済 '+cxl.length+'件':'')+'</span></div>';
   var futureHtml='<div class="sec compact"><div style="font-weight:800;color:var(--accent);margin-bottom:8px">これから（'+future.length+'件）</div>'
     +(future.length?future.map(function(x){return rsvRowHtml(x,false);}).join(''):'<div class="empty" style="padding:14px">これからの予約はありません</div>')+'</div>';
   // 過去は畳んでおく＝在籍が長い子ほど数百件になり、これからの予約が埋もれるため
   var pastHtml=past.length
     ? '<details class="sec compact"'+(rsvShowPast?' open':'')+' ontoggle="rsvShowPast=this.open"><summary style="cursor:pointer;font-weight:800;color:var(--dim)">🗄 過去（'+past.length+'件）</summary><div style="margin-top:10px">'+past.map(function(x){return rsvRowHtml(x,true);}).join('')+'</div></details>'
     : '<div class="sec compact"><div style="color:var(--dim);font-weight:800">過去の予約はありません</div></div>';
-  el.innerHTML=head+futureHtml+pastHtml;
+  // 削除(キャンセル)済みは畳んでおく＝ログとして残すが有効な予約に埋もれさせない
+  var cxlHtml=cxl.length
+    ? '<details class="sec compact"'+(rsvShowCxl?' open':'')+' ontoggle="rsvShowCxl=this.open"><summary style="cursor:pointer;font-weight:800;color:#c98a92">🚫 削除済み（キャンセル）（'+cxl.length+'件）</summary><div style="margin-top:10px">'+cxl.map(function(x){return rsvRowHtml(x,false);}).join('')+'</div></details>'
+    : '';
+  el.innerHTML=head+futureHtml+pastHtml+cxlHtml;
+}
+
+/* ===== 🕘 予約履歴（変更/削除ログ）＝すべての予約の登録・変更・削除を新しい順に。予約変更ログ(getReservationLog)を読む =====
+ * 予約管理シートは更新=上書き・削除=キャンセルなので、「いつ・誰が・何を・どう変えたか」はここでしか辿れない。 */
+function renderRsvLog(){
+  setBody('<div id="rsvlog-wrap"><div class="empty">読み込み中…</div></div>');
+  drawRsvLog();
+  loadRsvLog();
+}
+function loadRsvLog(){
+  // busyの早期returnはしない（管理者の読み取り専用＝止まるより取り直す方が安全。stale-guardの罠を避ける）
+  api('getReservationLog',{limit:400,op:rsvLogOp,q:rsvLogQ}).then(function(d){
+    rsvLog=d; drawRsvLog();
+  }).catch(function(){ rsvLog={ok:false,error:'通信エラー'}; drawRsvLog(); });
+}
+function rsvLogSetOp(op){ rsvLogOp=op; rsvLog=null; drawRsvLog(); loadRsvLog(); }
+function rsvLogSearch(v){ rsvLogQ=v; }
+function rsvLogSubmit(){ rsvLog=null; drawRsvLog(); loadRsvLog(); }
+function rsvLogOpBadge(op){
+  var c=op==='登録'?'background:#0d2418;color:#66cc88':op==='変更'?'background:#0e2440;color:#7ab0f0':op==='削除'?'background:#2a1418;color:#d98a96;border:1px solid #5a2a34':'background:#222;color:#aaa';
+  var ic=op==='登録'?'➕':op==='変更'?'✏️':op==='削除'?'🚫':'';
+  return '<span class="badge" style="'+c+'">'+ic+' '+esc(op)+'</span>';
+}
+function rsvLogRowHtml(e){
+  var meta=esc(e.date||'')+(e.time?' '+esc(e.time):'')+'　'+esc(e.table||'席未定')+(e.pax?'　'+e.pax+'名':'')
+    +(e.tantouCast?'　担当:'+esc(e.tantouCast):'')+(e.dohanCast?'　同伴:'+esc(e.dohanCast):'');
+  var detail=e.op==='変更'?(e.diff?'<div class="meta" style="margin-top:4px;color:#9fb8e8">✏️ '+esc(e.diff)+'</div>':'<div class="meta" style="margin-top:4px;color:var(--dim)">（内容変更なし）</div>')
+           :e.op==='削除'?'<div class="meta" style="margin-top:4px;color:#d98a96">🚫 この予約を削除しました</div>'
+           :'<div class="meta" style="margin-top:4px;color:#8fd0a8">➕ 新規登録</div>';
+  return '<div class="lrow">'
+    +'<div class="main"><div class="nm">'+esc(e.customer||'(名無し)')+'様'+(e.memberId?' <span style="color:var(--dim);font-weight:600;font-size:12px">'+esc(e.memberId)+'</span>':'')+'</div>'
+    +'<div class="meta">'+meta+'</div>'+detail+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;white-space:nowrap">'
+    +rsvLogOpBadge(e.op)
+    +'<span class="meta" style="color:var(--dim)">'+esc(e.at||'')+'</span>'
+    +(e.actor?'<span class="meta" style="color:var(--dim)">👤 '+esc(e.actor)+'</span>':'')
+    +'</div></div>';
+}
+function drawRsvLog(){
+  var el=document.getElementById('rsvlog-wrap'); if(!el) return;
+  var ops=['','登録','変更','削除'], opl={'':'すべて','登録':'➕ 登録','変更':'✏️ 変更','削除':'🚫 削除'};
+  var filt='<div class="toolbar" style="gap:6px;flex-wrap:wrap;align-items:center">'
+    +ops.map(function(o){return '<button class="chip'+(rsvLogOp===o?' on':'')+'" onclick="rsvLogSetOp(\''+o+'\')">'+opl[o]+'</button>';}).join('')
+    +'<span style="flex:1"></span>'
+    +'<input id="rsvlog-q" placeholder="客名・担当・操作者で絞込" value="'+esc(rsvLogQ)+'" oninput="rsvLogSearch(this.value)" onkeydown="if(event.key===\'Enter\')rsvLogSubmit()" style="background:#0d1526;color:#cfe0f5;border:1px solid #33406a;border-radius:6px;padding:6px 9px;font-size:12px;min-width:180px">'
+    +'<button class="chip" onclick="rsvLogSubmit()">🔍 検索</button></div>';
+  var bodyHtml;
+  if(!rsvLog){ bodyHtml='<div class="empty">読み込み中…</div>'; }
+  else if(rsvLog.ok===false){ bodyHtml='<div class="empty">'+esc(rsvLog.error||'読み込み失敗')+'</div>'; }
+  else{
+    var ent=rsvLog.entries||[];
+    var cnt='<div class="meta" style="margin:2px 2px 8px;color:var(--dim)">'+ent.length+'件'+((rsvLog.total&&rsvLog.total>ent.length)?' 表示 / 全'+rsvLog.total+'件':'')+'（新しい順）</div>';
+    bodyHtml=cnt+(ent.length?'<div class="sec compact">'+ent.map(rsvLogRowHtml).join('')+'</div>':'<div class="empty" style="padding:20px">該当する履歴はありません</div>');
+  }
+  el.innerHTML=filt+bodyHtml;
 }
 
 /* ===== 🏖 店休日（お盆休み・臨時休業など）===== */
@@ -3460,13 +3525,31 @@ function rsvMock(cast){
       {date:D(0), time:'21:00',customer:'鈴木',pax:1,table:'5F カウンター2',status:'確定',tantouCast:'まや',yoyakuCast:'',dohanCast:'',roles:['担当'],future:true},
       {date:D(-2),time:'20:30',customer:'高橋',pax:4,table:'2F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'まや',roles:['同伴'],future:false},
       {date:D(-9),time:'22:00',customer:'伊藤',pax:2,table:'2F ボックス3',status:'退店済み',tantouCast:'まや',yoyakuCast:'直接来店',dohanCast:'',roles:['担当'],future:false},
-      {date:D(-21),time:'20:00',customer:'渡辺',pax:3,table:'5F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'',roles:['同席'],future:false}
+      {date:D(-21),time:'20:00',customer:'渡辺',pax:3,table:'5F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'',roles:['同席'],future:false},
+      {date:D(2), time:'20:30',customer:'小林',pax:2,table:'2F ボックス3',status:'キャンセル',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',roles:['予約'],future:true,rowIdx:9}
     ],
     'ゆい':[
       {date:D(-2),time:'20:30',customer:'高橋',pax:4,table:'2F ボックス2',status:'退店済み',tantouCast:'ゆい',yoyakuCast:'ゆい',dohanCast:'まや',roles:['予約'],future:false}
     ]
   };
   return {ok:true,today:D(0),cast:cast,reservations:all[cast]||[]};
+}
+/* 🕘 予約履歴（変更/削除ログ）のローカルモック。登録→変更→削除の一連＝実データに出る流れを意図的に含める。 */
+function rsvLogMock(body){
+  var all=[
+    {at:'2026-07-29 18:40',op:'削除',rowIdx:9,actor:'5F端末',date:'2026-07-31',time:'20:30',customer:'小林',memberId:'No.077',pax:2,table:'2F ボックス3',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',status:'キャンセル',diff:''},
+    {at:'2026-07-29 17:12',op:'変更',rowIdx:2,actor:'2F端末',date:'2026-07-30',time:'21:00',customer:'田中',memberId:'No.128',pax:3,table:'2F ボックス1',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',status:'確定',diff:'時刻 20:00→21:00 / 人数 2→3 / テーブル 2F カウンター1→2F ボックス1'},
+    {at:'2026-07-29 16:03',op:'登録',rowIdx:2,actor:'2F端末',date:'2026-07-30',time:'20:00',customer:'田中',memberId:'No.128',pax:2,table:'2F カウンター1',tantouCast:'まや',yoyakuCast:'まや',dohanCast:'',status:'確定',diff:''},
+    {at:'2026-07-28 22:31',op:'変更',rowIdx:5,actor:'りく',date:'2026-07-29',time:'21:30',customer:'井上',memberId:'No.212',pax:4,table:'5F ボックス1',tantouCast:'のあ',yoyakuCast:'のあ',dohanCast:'',status:'来店済み',diff:'ステータス 確定→来店済み'},
+    {at:'2026-07-28 19:50',op:'登録',rowIdx:5,actor:'5F端末',date:'2026-07-29',time:'21:30',customer:'井上',memberId:'No.212',pax:4,table:'未定',tantouCast:'のあ',yoyakuCast:'のあ',dohanCast:'',status:'確定',diff:''}
+  ];
+  var op=String(body.op||''), q=String(body.q||'').toLowerCase();
+  var ent=all.filter(function(e){
+    if(op&&e.op!==op)return false;
+    if(q){var h=(e.customer+' '+e.tantouCast+' '+e.yoyakuCast+' '+e.dohanCast+' '+e.actor+' '+e.memberId).toLowerCase();if(h.indexOf(q)<0)return false;}
+    return true;
+  });
+  return {ok:true,entries:ent,total:all.length};
 }
 /* 📅 店全体マトリクスのモック。⚠️本番では帰属も合計もサーバ(getRsvMatrix_)が決める。
    ここでは「合計＝キャスト列の足し算ではない」形を意図的に作って、画面の注意書きが正しいかを目で見るために使う。 */
@@ -3669,6 +3752,7 @@ function MOCKAPI(action,body){
   if(action==='getRsvMatrix')return rsvMxMock(body.from,body.days);
   if(action==='getCastReservations')return rsvMock(body.cast);
   if(action==='setReservationCheckTime')return {ok:true,rowIdx:body.rowIdx,checkTime:body.checkTime||''};
+  if(action==='getReservationLog')return rsvLogMock(body);
   if(action==='getMenuBoard')return {ok:true,board:mnBoard()};
   if(action==='previewMenuBulk'){
     var pp=mnParse(body.text), ex={}, S3=mnMock();

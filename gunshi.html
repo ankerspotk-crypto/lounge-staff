@@ -289,6 +289,13 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .rcard.arrived .rtime{color:#7fe0a3;}
 .rcard.done{opacity:.5;}
 .rcard.done::before{background:#3a3a4a;}
+/* キャンセル(削除)済み＝グレーアウトの"ログ"。取消線＋非活性色で、有効な予約と一目で区別 */
+.rcard.cancelled{opacity:.5;background:#0f0d0f;border-color:#2a2026;cursor:default;filter:grayscale(.4);}
+.rcard.cancelled::before{background:#6a3a44;}
+.rcard.cancelled .rtime,.rcard.cancelled .rname{color:#8a8290;text-decoration:line-through;}
+.rcard.cancelled .rbadges,.rcard.cancelled .rnote,.rcard.cancelled .rbottle,.rcard.cancelled .rmemchip{opacity:.7;}
+.stpill.cxl{background:#2a1418;color:#d98a96;border:1px solid #5a2a34;}
+.rsv-cxl-sec{margin:12px 2px 5px;font-size:11px;font-weight:800;color:#b98088;letter-spacing:.03em;border-top:1px dashed #40303a;padding-top:8px;}
 .rcard.next{border-color:#245086;box-shadow:0 0 0 1px #1a3a66 inset;}
 .rtop{display:flex;align-items:center;gap:7px;}
 .rtime{font-size:14px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -2309,7 +2316,7 @@ function seatInfoLine(s){
 }
 /* 席の客名の横に出す「予約キャスト・担当キャスト」コンテキスト（実際の在席とは別） */
 function seatCustKey_(x){ return String(x||'').replace(/様/g,'').replace(/\s/g,''); }
-function seatRsvFor(s){ if(!s.cust)return null; var k=seatCustKey_(s.cust); return (RSV||[]).find(function(r){return r.cust&&seatCustKey_(r.cust)===k;})||null; }
+function seatRsvFor(s){ if(!s.cust)return null; var k=seatCustKey_(s.cust); return (RSV||[]).find(function(r){return r.cust&&r.status!=='キャンセル'&&seatCustKey_(r.cust)===k;})||null; }
 function seatCastCtx(s){
   var parts=[], r=seatRsvFor(s);
   var yoyaku=r&&r.yoyaku?r.yoyaku:'';
@@ -2569,11 +2576,18 @@ function rotateCast(ci,key){var c=ROT[ci];var cur=c.tables.find(function(t){retu
 
 /* ---- 予約リスト ---- */
 function renderRsv(){
-  var list=RSV.slice().sort(function(a,b){return rsvArrT(a).localeCompare(rsvArrT(b));});
+  var all=RSV.slice().sort(function(a,b){return rsvArrT(a).localeCompare(rsvArrT(b));});
+  var list=all.filter(function(r){return r.status!=='キャンセル';});      // 有効な予約（件数・ボトル集計はこちらだけ）
+  var cxl=all.filter(function(r){return r.status==='キャンセル';});        // 削除(キャンセル)済み＝グレーアウトのログ
   var nextId=(list.filter(function(r){return r.status==='確定';})[0]||{}).id;
   var btlN=list.filter(function(r){return r.bottle;}).length;
   var head='<div class="rsv-toolbar"><span class="rcnt">'+list.length+'組 '+list.reduce(function(a,r){return a+r.pax;},0)+'名（'+list.filter(function(r){return r.status==='来店済み';}).length+'組来店済）</span><span style="flex:1"></span>'+(btlN?'<button class="mini-btn" style="border-color:#356020;color:#8fd06a;background:#12240f" onclick="openBottlePrep()">🍶 ボトル '+btlN+'</button>':'')+'<button class="mini-btn" onclick="openSchedule()">🗓 予定表</button><button class="mini-btn add" onclick="openAdd()">＋ 予約を追加</button></div>';
-  setHtml('rsvArea',head+(list.length?'<div class="rlist">'+list.map(function(r){return rcardHtml(r,r.id===nextId);}).join('')+'</div>':'<div class="empty-msg">この日の予約はありません</div>'));
+  var body=list.length?'<div class="rlist">'+list.map(function(r){return rcardHtml(r,r.id===nextId);}).join('')+'</div>':(cxl.length?'':'<div class="empty-msg">この日の予約はありません</div>');
+  if(cxl.length){
+    body+='<div class="rsv-cxl-sec">🚫 キャンセル済み '+cxl.length+'件（削除ログ）</div>'
+        +'<div class="rlist">'+cxl.map(function(r){return rcardHtml(r,false);}).join('')+'</div>';
+  }
+  setHtml('rsvArea',head+body);
 }
 /* 🍶 本日の予約ボトル：会員ボトルがある予約を"位置順"で一覧化＝開店前に棚を回って一括で出せる。行タップで予約詳細へ */
 function openBottlePrep(){
@@ -2657,7 +2671,8 @@ function rcardHtml(r,isNext){
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
   var ms=membershipInfo(r.joined,r.feeDate);
   var mchip=ms.status==='expired'?'<span class="rmemchip exp">🔴更新切れ</span>':ms.status==='thismonth'?'<span class="rmemchip soon">🟡今月更新</span>':ms.status==='ok'?'<span class="rmemchip ok">🟢有効会員</span>':ms.status==='none'?'<span class="rmemchip none">未会員</span>':'';
-  return '<div class="rcard'+(done?' done':'')+(r.status==='来店済み'?' arrived':'')+(r.status==='確定'?' waiting':'')+(isNext?' next':'')+'" onclick="editRsv('+r.id+')">'
+  var cancelled=r.status==='キャンセル';
+  return '<div class="rcard'+(done?' done':'')+(r.status==='来店済み'?' arrived':'')+(r.status==='確定'?' waiting':'')+(cancelled?' cancelled':'')+(isNext?' next':'')+'"'+(cancelled?'':' onclick="editRsv('+r.id+')"')+'>'
     +'<div class="rtop"><span class="rtime">'+esc(rsvArrT(r))+'</span><span class="rname">'+esc(r.cust)+'様'+(r.mem?'<span class="mem">'+esc(r.mem)+'</span>':'')+'</span>'+mchip+statusBtns(r)+'</div>'
     +'<div class="rbadges">'+badges+'</div>'
     +(r.checkTime?'<div class="rnote" style="color:#ffc98a">🕛 チェック予定 '+esc(r.checkTime)+'</div>':'')
@@ -2677,6 +2692,8 @@ function statusBtns(r){
     h='<span class="stpill arr">🟢 来店中</span><button class="stact left" onclick="setStatus('+r.id+',\'退店済み\')">🚪 退店</button>'+undo;
   }else if(r.status==='退店済み'){
     h='<span class="stpill left">🚪 退店済</span><button class="stundo wide" onclick="setStatus('+r.id+',\'来店済み\')">↩ 来店中に戻す</button>';
+  }else if(r.status==='キャンセル'){
+    h='<span class="stpill cxl">🚫 キャンセル済</span>'; /* 削除ログ＝操作ボタンは出さない */
   }else{
     h='<span class="stpill wait">⏳ 来店前</span><button class="stact arr" onclick="setStatus('+r.id+',\'来店済み\')">✅ 来店</button>';
   }
@@ -3258,7 +3275,7 @@ function submitRsv(){
   if(!IS_GAS){ toast('（ローカル）予約を保存'); closeSheet(); return; }
   if(addSel._busy) return; addSel._busy=true;            // 二重送信ロック（連打で人数分入るのを防止）
   var btn=document.querySelector('#sheetBody .savebtn'); if(btn){ btn.textContent='保存中…'; btn.style.opacity='.55'; btn.style.pointerEvents='none'; }
-  var p=addSel.rowIdx?gsr('updateKioskReservation',addSel.rowIdx,payload):gsr('addKioskReservation',payload,TERM+'端末');
+  var p=addSel.rowIdx?gsr('updateKioskReservation',addSel.rowIdx,payload,TERM+'端末'):gsr('addKioskReservation',payload,TERM+'端末');
   p.then(function(d){ if(d&&d.ok===false){ addSel._busy=false; if(btn){btn.textContent='予約を確定する';btn.style.opacity='';btn.style.pointerEvents='';} alert('エラー: '+(d.error||''));return;} toast(d&&d.duplicate?'この予約は既に入っています':'✅ 予約を保存しました'); closeSheet(); loadAll(); }).catch(function(){ addSel._busy=false; if(btn){btn.textContent='予約を確定する';btn.style.opacity='';btn.style.pointerEvents='';} alert('通信エラー'); });
 }
 function cancelRsv(){
@@ -3270,7 +3287,7 @@ function cancelRsv(){
     : 'この予約をキャンセルしますか？';
   if(!confirm(msg))return;
   if(!IS_GAS){toast('（ローカル）キャンセル');closeSheet();return;}
-  gsr('cancelKioskReservation',addSel.rowIdx).then(function(){toast(seated?'キャンセル＆ホールをリセットしました':'予約をキャンセルしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');});
+  gsr('cancelKioskReservation',addSel.rowIdx,TERM+'端末').then(function(){toast(seated?'キャンセル＆ホールをリセットしました':'予約をキャンセルしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');});
 }
 
 function openSchedule(){
@@ -3284,7 +3301,7 @@ function openSchedule(){
     (fl==='2F'?TABLES_2F:TABLES_5F).forEach(function(tn){
       var full=fl+' '+tn,blk='';
       RSV.forEach(function(r){
-        if(r.table!==full)return;
+        if(r.table!==full||r.status==='キャンセル')return; /* キャンセル(削除)済みは予定表グリッドに幽霊ブロックを出さない */
         var p=rsvArrT(r).split(':'),hh=parseInt(p[0]);if(hh<6)hh+=24;var mm=hh*60+(parseInt(p[1])||0);
         var l=((mm-SH*60)/((EH-SH)*60))*100,w=(120/((EH-SH)*60))*100;if(l<0){w+=l;l=0;}
         var col=r.status==='退店済み'?'background:#181828;border:1px solid #2a2a44':r.status==='来店済み'?'background:#0d2618;border:1px solid #2a6a44':'background:#12233f;border:1px solid #2a5590';
@@ -5646,7 +5663,7 @@ function loadAll(){
   if(!IS_GAS) return;
   Promise.all([
     gsr('getKioskHall2'),
-    gsr('getKioskReservations',curDate),
+    gsr('getKioskReservations',curDate,true), /* 第2引数=キャンセル(削除)済みも含める＝予約一覧にグレーアウトのログとして残す */
     gsr('getKioskTsukemawashi'),
     gsr('getKioskShiftBoard'),
     gsr('getCastRequestsToday'),

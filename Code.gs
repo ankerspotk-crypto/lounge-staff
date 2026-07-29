@@ -20,6 +20,7 @@ const SHIFT_SHEET_ID = '1cHknHzOVcXzk391x2t0XEY6W4xilgqyP4Nrk6QYs2Ns';
 const MASTER_TAB      = 'お客様管理Y3';
 const LOG_TAB         = '予約ログ';
 const YOYAKU_RSRV_TAB = '予約管理';
+const RSV_LOG_TAB     = '予約変更ログ'; // 予約の登録/変更/削除の監査ログ（append-only）。予約管理シートは上書きで壊さず履歴をここに残す
 const YOYAKU_REQ_TAB  = '予約リクエスト';
 const STAFF_TAB  = 'スタッフマスタ';
 const OKURI_TAB  = '送迎ログ';
@@ -896,6 +897,12 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return setReservationCheckTime_(body.rowIdx, body.checkTime);
   }
+  // 管理コンソール「🕘 予約履歴」＝予約変更ログ（登録/変更/削除）を新しい順に
+  if (body.action === 'getReservationLog') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return getRsvChangeLog_({ limit: body.limit, op: body.op, q: body.q });
+  }
   if (body.action === 'submitShift') return submitShift(body);
   if (body.action === 'declineNextWeek') return declineNextWeek(body);
   if (body.action === 'getShiftSubmitStatus') {
@@ -1225,12 +1232,12 @@ function handleApiRequest_(body) {
   if (body.action === 'updateReservation') {
     const staffName = getStaffName(body.userId);
     if (!staffName) return { ok: false, error: '未登録のユーザーです' };
-    return updateReservation_(Number(body.rowIdx), body);
+    return updateReservation_(Number(body.rowIdx), body, staffName);
   }
   if (body.action === 'cancelReservation') {
     const staffName = getStaffName(body.userId);
     if (!staffName) return { ok: false, error: '未登録のユーザーです' };
-    return cancelReservation_(Number(body.rowIdx));
+    return cancelReservation_(Number(body.rowIdx), staffName);
   }
   if (body.action === 'checkInReservation') {
     const staffName = getStaffName(body.userId);
@@ -10867,6 +10874,79 @@ function ensureRsrvHeaders_(sh) {
   } catch (e) {}
 }
 
+// ============================================================
+// 予約変更ログ（監査ログ）：登録・変更・削除を1行ずつ追記して履歴を残す
+// ・予約管理シートは更新=上書き・削除=ステータス「キャンセル」なので、
+//   「いつ・誰が・何を・どう変えたか」はこのログにしか残らない。
+// ・append-only。読み取りは getRsvChangeLog_（管理コンソール専用）。
+// ============================================================
+function getRsvLogSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(RSV_LOG_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(RSV_LOG_TAB);
+    sh.appendRow(['日時', '操作', '予約行', '操作者', '予約日', '来店時刻', 'お客様名', '会員番号', '人数', 'テーブル', '担当キャスト', '予約キャスト', '同伴キャスト', 'ステータス', '変更点', '変更前', '変更後']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// 予約管理シートの生行(0-index配列)→スナップショット（監査ログの共通形）
+function rsvRowSnapshot_(row) {
+  const fmtD = v => v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '');
+  const fmtT = v => v instanceof Date ? Utilities.formatDate(v, TZ, 'HH:mm') : String(v || '').trim();
+  return {
+    date: fmtD(row[0]), time: fmtT(row[1]), customer: String(row[2] || ''),
+    memberId: String(row[3] || ''), pax: Number(row[4]) || 1, table: String(row[5] || ''),
+    tantouCast: String(row[6] || ''), status: String(row[8] || ''),
+    yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || '')
+  };
+}
+
+// 予約フォームのpayload→スナップショット（登録/変更の"変更後"用）
+function rsvPayloadSnapshot_(p, status) {
+  return {
+    date: String(p.date || ''), time: String(p.time || ''), customer: String(p.customer || ''),
+    memberId: String(p.memberId || ''), pax: Number(p.pax) || 1, table: String(p.table || '未定'),
+    tantouCast: String(p.tantouCast || ''), status: status || String(p.status || '確定'),
+    yoyakuCast: String(p.yoyakuCast || ''), dohanCast: String(p.dohanCast || '')
+  };
+}
+
+// 変更前後の差分を人が読める1行に（変更操作のみ。登録/削除は空）
+function rsvDiff_(before, after) {
+  if (!before || !after) return '';
+  const labels = { date: '予約日', time: '時刻', customer: 'お客様', memberId: '会員番号', pax: '人数', table: 'テーブル', tantouCast: '担当', yoyakuCast: '予約キャスト', dohanCast: '同伴', status: 'ステータス' };
+  const parts = [];
+  Object.keys(labels).forEach(k => {
+    const a = String(before[k] == null ? '' : before[k]);
+    const b = String(after[k] == null ? '' : after[k]);
+    if (a !== b) parts.push(labels[k] + ' ' + (a || '空') + '→' + (b || '空'));
+  });
+  return parts.join(' / ');
+}
+
+// 予約の登録/変更/削除を監査ログに1行追記。ログ失敗で本処理は止めない（try内）。
+// op='登録'|'変更'|'削除'。before/after はスナップショット（無い側はnull）。
+function logRsvChange_(op, rowIdx, actor, before, after) {
+  try {
+    const sh = getRsvLogSheet_();
+    const snap = after || before || {};
+    sh.appendRow([
+      nowStamp_(), op, rowIdx || '', String(actor || ''),
+      snap.date || '', snap.time || '', snap.customer || '', snap.memberId || '',
+      snap.pax || '', snap.table || '', snap.tantouCast || '', snap.yoyakuCast || '',
+      snap.dohanCast || '', snap.status || '',
+      rsvDiff_(before, after),
+      before ? JSON.stringify(before) : '', after ? JSON.stringify(after) : ''
+    ]);
+    // 肥大化ガード（監査ログは長期保持したいので上限は高め）。古い行を上から間引く。
+    const MAX = 20000;
+    const last = sh.getLastRow();
+    if (last > MAX + 1) sh.deleteRows(2, last - (MAX + 1));
+  } catch (e) { Logger.log('logRsvChange_ 失敗: ' + e); }
+}
+
 function getYoyakuReqSheet_() {
   const ss = getOrOpenSS_();
   let sh = ss.getSheetByName(YOYAKU_REQ_TAB);
@@ -11318,7 +11398,11 @@ function getYoyakuMonthSummary_(monthKey) {
   return summary;
 }
 
-function getYoyakuReservations_(dateKey) {
+// opts.includeCancelled=true のときだけキャンセル(削除)済みも返す。
+// ⚠️既定(未指定)は従来どおりキャンセル除外＝ホール/定員/在席など多数の呼び出し元の挙動を変えない。
+// キャンセルを混ぜてよいのは「予約一覧をグレーアウト表示する」画面だけ。
+function getYoyakuReservations_(dateKey, opts) {
+  const includeCancelled = !!(opts && opts.includeCancelled);
   const sh = getYoyakuRsrvSheet_();
   const rows = sh.getDataRange().getValues().slice(1);
   const _props = PropertiesService.getScriptProperties().getProperties(); // 来店時刻(KCHECKIN_)一括取得
@@ -11329,7 +11413,7 @@ function getYoyakuReservations_(dateKey) {
     const date = String(row[0] instanceof Date ? Utilities.formatDate(row[0], TZ, 'yyyy-MM-dd') : row[0]);
     if (date !== dateKey) continue;
     const status = String(row[8]);
-    if (status === 'キャンセル') continue;
+    if (status === 'キャンセル' && !includeCancelled) continue;
     const rowIdx = i + 2;
     result.push({
       rowIdx,
@@ -11392,7 +11476,8 @@ function rsvCastRoleMap_(row) {
 function castRolesInRsv_(row, key) { return rsvCastRoleMap_(row)[key] || []; }
 
 /* キャスト1人の予約を過去・未来まとめて返す（新しい順に整列。未来/過去の境目は営業日）。
- * キャンセルは除外（getYoyakuReservations_ と同じ）。
+ * ⚠️キャンセル(削除)済みも含めて返す＝管理コンソールでグレーアウト表示するため（唯一の呼び出し元）。
+ *   status で見分けられるので、件数集計などはフロント側でキャンセルを除いて数える。
  * 予約シートは履歴が積み上がるが、getDataRange は既存の日次取得でも毎回全件読んでいる＝新たな重さではない。 */
 function getCastReservations_(castName) {
   const key = rsvCastKey_(castName);
@@ -11402,7 +11487,6 @@ function getCastReservations_(castName) {
   const list = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (String(row[8]) === 'キャンセル') continue;
     const date = String(row[0] instanceof Date ? Utilities.formatDate(row[0], TZ, 'yyyy-MM-dd') : row[0]).trim();
     if (!date) continue;
     const roles = castRolesInRsv_(row, key);
@@ -11486,6 +11570,41 @@ function getRsvMatrix_(fromDate, days) {
   return { ok: true, from: start, days: n, today: bizDateStr_(), dates, casts, totals, pax, closedDays };
 }
 
+/* 管理コンソール「🕘 予約履歴」＝予約変更ログ（登録/変更/削除）を新しい順に返す。
+ * opts: { limit(既定300), op('登録'|'変更'|'削除'で絞る/空で全部), q(客名/担当/操作者の部分一致) }
+ * 監査ログは append-only なので、返すのは"起きた事実"の並び（予約1件が複数行に現れる＝それが履歴）。 */
+function getRsvChangeLog_(opts) {
+  opts = opts || {};
+  const limit = Math.min(Math.max(Number(opts.limit) || 300, 1), 2000);
+  const opFilter = String(opts.op || '').trim();
+  const q = String(opts.q || '').trim();
+  const sh = getRsvLogSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true, entries: [], total: 0 };
+  const rows = sh.getRange(2, 1, last - 1, 17).getValues();
+  const entries = [];
+  for (let i = rows.length - 1; i >= 0; i--) { // 新しい順（末尾=最新）
+    const r = rows[i];
+    const op = String(r[1] || '');
+    if (opFilter && op !== opFilter) continue;
+    const e = {
+      at: fmtStamp_(r[0]), op, rowIdx: r[2] === '' ? null : Number(r[2]), actor: String(r[3] || ''),
+      date: fmtStamp_(r[4]), time: (r[5] instanceof Date ? Utilities.formatDate(r[5], TZ, 'HH:mm') : String(r[5] || '')),
+      customer: String(r[6] || ''), memberId: String(r[7] || ''),
+      pax: r[8] === '' ? '' : Number(r[8]), table: String(r[9] || ''),
+      tantouCast: String(r[10] || ''), yoyakuCast: String(r[11] || ''), dohanCast: String(r[12] || ''),
+      status: String(r[13] || ''), diff: String(r[14] || '')
+    };
+    if (q) {
+      const hay = (e.customer + ' ' + e.tantouCast + ' ' + e.yoyakuCast + ' ' + e.dohanCast + ' ' + e.actor + ' ' + e.memberId).toLowerCase();
+      if (hay.indexOf(q.toLowerCase()) < 0) continue;
+    }
+    entries.push(e);
+    if (entries.length >= limit) break;
+  }
+  return { ok: true, entries, total: last - 1 };
+}
+
 // 席料・同伴料の保存（IEYAS POSの会計セクションから呼ぶ。N列=席料、O列=同伴料）
 function updateSeatCharges(rowIdx, seatFee, dohanFee) {
   getYoyakuRsrvSheet_().getRange(rowIdx, 14, 1, 2).setValues([[Number(seatFee) || 0, Number(dohanFee) || 0]]);
@@ -11499,8 +11618,9 @@ function updateSeatCharges(rowIdx, seatFee, dohanFee) {
 }
 
 // 端末キオスク用：指定日の予約一覧（時間順、省略時は本日）
-function getKioskReservations(dateKey) {
-  const list = getYoyakuReservations_(dateKey || bizDateStr_())
+// includeCancelled=true で削除(キャンセル)済みも含める＝軍師の予約一覧でグレーアウト表示する用。
+function getKioskReservations(dateKey, includeCancelled) {
+  const list = getYoyakuReservations_(dateKey || bizDateStr_(), { includeCancelled: !!includeCancelled })
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   // 会員ステータス表示用：会員番号で会費マップを突合し、入会日・前回更新日を付与
   // 予約は「139」、マスタは4桁「0139」など桁揃えの差があるため、先頭ゼロを無視した正規化キーで突合
@@ -11660,14 +11780,14 @@ function addKioskReservation(payload, term) {
   return addReservation_(payload, term || 'IEYAS軍師');
 }
 
-// 端末キオスク用：予約変更
-function updateKioskReservation(rowIdx, payload) {
-  return updateReservation_(rowIdx, payload);
+// 端末キオスク用：予約変更（操作者=端末名を監査ログに残す）
+function updateKioskReservation(rowIdx, payload, term) {
+  return updateReservation_(rowIdx, payload, term || 'IEYAS軍師');
 }
 
-// 端末キオスク用：予約キャンセル
-function cancelKioskReservation(rowIdx) {
-  return cancelReservation_(rowIdx);
+// 端末キオスク用：予約キャンセル（操作者=端末名を監査ログに残す）
+function cancelKioskReservation(rowIdx, term) {
+  return cancelReservation_(rowIdx, term || 'IEYAS軍師');
 }
 
 function addReservation_(payload, regBy) {
@@ -11699,14 +11819,16 @@ function addReservation_(payload, regBy) {
   sh.getRange(sh.getLastRow(), 17).setValue(payload.aggMode === 'split' ? 'split' : 'merge');
   sh.getRange(sh.getLastRow(), 18).setValue(String(payload.checkTime || '')); // 退店予定時刻（チェック予定）
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
+  logRsvChange_('登録', sh.getLastRow(), regBy, null, rsvPayloadSnapshot_(payload, '確定'));
   return { ok: true, dateKey, rowIdx: sh.getLastRow() };
  });
 }
 
-function updateReservation_(rowIdx, payload) {
+function updateReservation_(rowIdx, payload, actor) {
   if (payload && payload.date && isHoliday_(String(payload.date))) return { ok: false, error: 'この日は店休日のため予約を移動できません' };
   const sh = getYoyakuRsrvSheet_();
-  const oldRow = sh.getRange(rowIdx, 1, 1, 9).getValues()[0];
+  const oldRow = sh.getRange(rowIdx, 1, 1, 13).getValues()[0]; // 監査ログの"変更前"用に予約/同伴キャスト列(12,13)まで読む
+  const beforeSnap = rsvRowSnapshot_(oldRow);
   const oldTable = String(oldRow[5]);
   const oldStatus = String(oldRow[8]);
   const newTable = String(payload.table || '未定');
@@ -11733,12 +11855,14 @@ function updateReservation_(rowIdx, payload) {
   }
   // 予約変更でYRSRV_を即時更新
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
+  logRsvChange_('変更', rowIdx, actor, beforeSnap, rsvPayloadSnapshot_(payload, newStatus));
   return { ok: true };
 }
 
-function cancelReservation_(rowIdx) {
+function cancelReservation_(rowIdx, actor) {
   const sh = getYoyakuRsrvSheet_();
-  const row = sh.getRange(rowIdx, 1, 1, 9).getValues()[0];
+  const row = sh.getRange(rowIdx, 1, 1, 13).getValues()[0]; // 監査ログの"変更前"用にキャスト列(12,13)まで読む
+  const beforeSnap = rsvRowSnapshot_(row);
   const status = String(row[8]);
   const seatCodes = String(row[5]).split('、').map(s => tableNameToSeatCode_(s.trim())).filter(Boolean);
   sh.getRange(rowIdx, 9).setValue('キャンセル');
@@ -11762,6 +11886,7 @@ function cancelReservation_(rowIdx) {
     seatCodes.forEach(code => sp.deleteProperty('YRSRV_' + code));
   }
   sp.deleteProperty('RSRV_SYNC_AT');
+  logRsvChange_('削除', rowIdx, actor, beforeSnap, Object.assign({}, beforeSnap, { status: 'キャンセル' }));
   return { ok: true, wasSeated: status === '来店済み' };
 }
 
@@ -13079,7 +13204,7 @@ function setupTableSession(payload) {
     const old = sh.getRange(rowIdx, 1, 1, 2).getValues()[0];
     fields.date = String(old[0] instanceof Date ? Utilities.formatDate(old[0], TZ, 'yyyy-MM-dd') : old[0]);
     fields.time = String(old[1] instanceof Date ? Utilities.formatDate(old[1], TZ, 'HH:mm') : old[1]);
-    updateReservation_(rowIdx, fields);
+    updateReservation_(rowIdx, fields, 'IEYAS POS');
   } else {
     fields.date = bizDateStr_();
     fields.time = Utilities.formatDate(new Date(), TZ, 'HH:mm');
