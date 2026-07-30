@@ -5258,9 +5258,13 @@ function skFormHtml_(){
   h+='<div class="flabel">明細（品目・金額／税込）</div><div id="sk-items">'+skItemsHtml_()+'</div>';
   h+='<div class="sk-additem" onclick="skAddItem()">＋ 明細を追加</div>';
   h+='<div class="sk-breakdown" id="sk-bd">'+skBreakdownInner_()+'</div>';
-  h+='<div class="flabel">対象伝票の写真（複数可）</div><div class="sk-thumbs">'
-    +SK_SLIPS.map(function(s,i){return '<div class="sk-slipthumb"><img src="'+s.previewUrl+'" onclick="skViewLocal('+i+')"><span class="sk-rm" onclick="skRemoveSlip('+i+')">✕</span></div>';}).join('')
-    +'<label class="sk-addphoto"><span>📷</span><span>撮影／選択</span><input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])skAddSlip(this.files[0]);this.value=\'\'"></label></div>';
+  h+='<div class="flabel">対象伝票の写真（複数可）</div>'
+    +'<div style="font-size:11px;color:var(--dim);margin:-2px 0 6px">その場で撮影するか、黒服グループに上げた写真から選べます</div>'
+    +'<div class="sk-thumbs">'
+    +SK_SLIPS.map(function(s,i){ var t=s.previewUrl?('<img src="'+s.previewUrl+'" onclick="skViewLocal('+i+')">'):('<div class="sk-slip-ph" onclick="skViewLocal('+i+')">📄</div>'); return '<div class="sk-slipthumb">'+t+(s.group?'<span class="sk-gtag">G</span>':'')+'<span class="sk-rm" onclick="skRemoveSlip('+i+')">✕</span></div>';}).join('')
+    +'<label class="sk-addphoto"><span>📷</span><span>撮影／選択</span><input type="file" accept="image/*" style="display:none" onchange="if(this.files[0])skAddSlip(this.files[0]);this.value=\'\'"></label>'
+    +'<div class="sk-addphoto" onclick="skOpenGroupPicker()"><span>📁</span><span>グループ<br>から</span></div>'
+    +'</div>';
   h+='<div class="flabel">その他 注意書き</div><textarea class="finput" rows="2" oninput="SK_NOTE=this.value;SK_NOTE_TOUCHED=true" placeholder="請求書の備考欄に記載されます">'+esc(SK_NOTE)+'</textarea>';
   h+='<div class="act pri" style="margin-top:16px" onclick="skSubmit()">📄 この内容で請求を登録</div>';
   h+='<div id="sk-status" style="text-align:center;font-size:12px;color:var(--dim);margin-top:8px"></div>';
@@ -5294,8 +5298,56 @@ function skImgResize_(file,cb){
 }
 function skAddSlip(file){ skImgResize_(file,function(du){ SK_SLIPS.push({previewUrl:du,base64:du.split(',')[1],mime:'image/jpeg'}); if(menuView==='seikyu')renderMenu(); }); }
 function skRemoveSlip(i){ SK_SLIPS.splice(i,1); if(menuView==='seikyu')renderMenu(); }
-function skViewLocal(i){ var s=SK_SLIPS[i]; if(s&&typeof showImgOverlay==='function')showImgOverlay(s.previewUrl,'対象伝票'); }
+function skViewLocal(i){ var s=SK_SLIPS[i]; if(!s)return; if(s.previewUrl&&typeof showImgOverlay==='function'){ showImgOverlay(s.previewUrl,'対象伝票'); return; } if(s.copyFileId&&IS_GAS){ gsr('kioskGetGroupPhoto',s.copyFileId).then(function(r){ if(r&&r.dataUrl&&typeof showImgOverlay==='function')showImgOverlay(r.dataUrl,'対象伝票'); }).catch(function(){}); } }
 function skViewImg(url){ if(!IS_GAS){ toast('（ローカルでは画像プレビュー不可）'); return; } gsr('kioskGetSeikyuImage',url).then(function(r){ if(!r||r.ok===false){ toast((r&&r.error)||'画像を取得できませんでした'); return; } if(typeof showImgOverlay==='function')showImgOverlay(r.dataUrl,r.name); }).catch(function(){ toast('画像の取得に失敗しました'); }); }
+
+/* グループ写真ピッカー（黒服が上げた写真を対象伝票に流用） */
+var SK_GPICK=null;
+function skOpenGroupPicker(){
+  if(!IS_GAS){ toast('（ローカルではグループ写真は表示できません）'); return; }
+  SK_GPICK={photos:null, sel:{}, cache:{}};
+  skRenderGroupPicker_();
+  gsr('getSeikyuGroupPhotos',4).then(function(r){
+    if(!SK_GPICK)return;
+    SK_GPICK.photos=(r&&r.photos)?r.photos:[];
+    skRenderGroupPicker_();
+    SK_GPICK.photos.forEach(function(p){ skLoadThumb_(p.id); });
+  }).catch(function(){ if(SK_GPICK){ SK_GPICK.photos=[]; skRenderGroupPicker_(); } });
+}
+function skLoadThumb_(id){
+  if(!SK_GPICK||SK_GPICK.cache[id])return;
+  gsr('kioskGetGroupPhoto',id).then(function(r){ if(!SK_GPICK)return; if(r&&r.dataUrl){ SK_GPICK.cache[id]=r.dataUrl; var im=document.getElementById('gp-'+id); if(im){ im.style.backgroundImage='url('+r.dataUrl+')'; im.classList.add('loaded'); } } }).catch(function(){});
+}
+function skToggleGroupSel(id){ if(!SK_GPICK)return; if(SK_GPICK.sel[id])delete SK_GPICK.sel[id]; else SK_GPICK.sel[id]=true; skRenderGroupPicker_(); }
+function skRenderGroupPicker_(){
+  var ov=document.getElementById('skGpOv');
+  if(!ov){ ov=document.createElement('div'); ov.id='skGpOv'; ov.className='sk-ov'; ov.onclick=function(e){ if(e.target===ov)skCloseGroupPicker(); }; document.body.appendChild(ov); }
+  var g=SK_GPICK; if(!g)return; var body;
+  if(g.photos===null){ body='<div style="color:#ccd;padding:30px;text-align:center">読み込み中…</div>'; }
+  else if(!g.photos.length){ body='<div style="color:#ccd;padding:30px;text-align:center">直近のグループ写真がありません<br><span style="font-size:12px;color:#889">黒服グループに写真を上げると、ここに出ます</span></div>'; }
+  else {
+    body='<div class="gp-grid">'+g.photos.map(function(p){
+      var du=g.cache[p.id]; var sel=g.sel[p.id];
+      return '<div class="gp-cell'+(sel?' sel':'')+'" onclick="skToggleGroupSel(\''+p.id+'\')">'
+        +'<div class="gp-thumb'+(du?' loaded':'')+'" id="gp-'+p.id+'"'+(du?' style="background-image:url('+du+')"':'')+'></div>'
+        +'<div class="gp-meta">'+esc(p.when||'')+(p.pool==='売上伝票'?' 会計':'')+'</div>'
+        +(sel?'<div class="gp-check">✓</div>':'')+'</div>';
+    }).join('')+'</div>';
+  }
+  var selN=Object.keys(g.sel||{}).length;
+  ov.innerHTML='<div class="sk-ov-card" style="max-width:640px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><b>📁 グループの写真から選ぶ</b><span style="color:var(--dim);font-size:12px">直近4日・新しい順</span></div>'
+    +body
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="act pri" style="flex:1" onclick="skGroupAttach()">選んだ写真を追加'+(selN?'（'+selN+'）':'')+'</button><button class="act" onclick="skCloseGroupPicker()">閉じる</button></div></div>';
+  ov.style.display='flex';
+}
+function skCloseGroupPicker(){ var ov=document.getElementById('skGpOv'); if(ov){ov.style.display='none';ov.innerHTML='';} SK_GPICK=null; }
+function skGroupAttach(){
+  if(!SK_GPICK)return; var ids=Object.keys(SK_GPICK.sel||{});
+  if(!ids.length){ skCloseGroupPicker(); return; }
+  ids.forEach(function(id){ SK_SLIPS.push({copyFileId:id, previewUrl:SK_GPICK.cache[id]||'', group:true}); });
+  skCloseGroupPicker(); if(menuView==='seikyu')renderMenu();
+}
 
 function skNewSender(){ SK_MEISHI=null; SK_EDIT_ID=''; SK_VIEW='newsender'; renderMenu(); }
 function skEditSender(){ var s=skSenderById_(SK_SEL); if(!s)return; SK_MEISHI=null; SK_EDIT_ID=s.id; SK_VIEW='newsender'; renderMenu(); }
@@ -5342,11 +5394,12 @@ function skSubmit(){
   if(!total && !items.length){ toast('金額を入力してください'); return; }
   var st=document.getElementById('sk-status'); if(st)st.textContent='送信中…';
   var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
-    slips:SK_SLIPS.map(function(s){return {base64:s.base64,mime:s.mime};}) };
+    slips:SK_SLIPS.map(function(s){ return s.copyFileId?{copyFileId:s.copyFileId}:{base64:s.base64,mime:s.mime}; }) };
   if(!IS_GAS){ toast('（ローカルでは登録不可）'); return; }
   gsr('submitSeikyu',payload).then(function(r){
     if(!r||r.ok===false){ if(st)st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); return; }
-    toast('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）');
+    var extra=(r&&r.reclassified)?('／経費から'+r.reclassified+'件を対象伝票へ振替'):'';
+    toast('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）'+extra);
     SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[]; SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_VIEW='list'; SK_LIST=null; renderMenu();
   }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
 }
@@ -5381,7 +5434,18 @@ function skEnsureCss_(){ if(document.getElementById('sk-css'))return; var s=docu
  +'.sk-rm{position:absolute;top:-6px;right:-6px;background:#241014;border:1px solid #5a2430;color:#e0a0b0;border-radius:50%;width:20px;height:20px;line-height:18px;text-align:center;font-size:12px;cursor:pointer;}'
  +'.sk-addphoto{width:70px;height:70px;border:1px dashed var(--line2);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:#8fb8f0;cursor:pointer;}.sk-addphoto span:first-child{font-size:20px;}'
  +'.sk-listrow{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;margin-bottom:7px;}'
- +'.sk-lr-top{display:flex;align-items:center;}.sk-lr-sub{font-size:12px;color:var(--dim);margin-top:3px;}';
+ +'.sk-lr-top{display:flex;align-items:center;}.sk-lr-sub{font-size:12px;color:var(--dim);margin-top:3px;}'
+ +'.sk-ov{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.74);display:flex;align-items:center;justify-content:center;padding:16px;}'
+ +'.sk-ov-card{background:var(--panel,#12121f);border:1px solid var(--line2,#2a2f45);border-radius:12px;padding:18px;max-width:560px;width:100%;max-height:90vh;overflow:auto;color:var(--txt,#c9d3e6);}'
+ +'.sk-slip-ph{width:70px;height:70px;border-radius:8px;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:26px;background:var(--panel);cursor:pointer;}'
+ +'.sk-gtag{position:absolute;bottom:-4px;left:-4px;background:#123a2a;border:1px solid #2a6a44;color:#7fe0a3;border-radius:5px;font-size:9px;font-weight:800;padding:0 4px;line-height:14px;}'
+ +'.gp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;max-height:60vh;overflow:auto;}'
+ +'.gp-cell{position:relative;cursor:pointer;border:2px solid transparent;border-radius:8px;overflow:hidden;background:var(--panel2);}'
+ +'.gp-cell.sel{border-color:#3fbf7f;}'
+ +'.gp-thumb{width:100%;height:84px;background:#0b0b16 center/cover no-repeat;display:flex;align-items:center;justify-content:center;}'
+ +'.gp-thumb:not(.loaded)::after{content:"⏳";font-size:16px;opacity:.5;}'
+ +'.gp-meta{font-size:10px;color:var(--dim);padding:3px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+ +'.gp-check{position:absolute;top:4px;right:4px;background:#3fbf7f;color:#04140c;width:20px;height:20px;border-radius:50%;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;}';
   document.head.appendChild(s);
 }
 
