@@ -322,11 +322,15 @@ body{
   <!-- 6. 写真 -->
   <section class="step" data-name="写真" data-k="photo">
     <div class="shead"><div class="k">STEP 6</div><h1 class="mincho">写真の撮影</h1><p>年齢確認と本人確認のためにお願いしています。</p></div>
-    <div class="q"><div class="ql">身分証明書</div>
+    <div class="q"><div class="ql">身分証明書<span class="hint">表面と裏面の両方をお願いします</span></div>
       <div class="photo">
         <div class="pcard" id="pc_id">
-          <label id="lbl_id"><span class="ic">🪪</span><span class="pt2">身分証を撮る</span><span class="ph">免許証・保険証など<br>顔・生年月日が見えるように</span>
+          <label id="lbl_id"><span class="ic">🪪</span><span class="pt2">身分証（表）を撮る</span><span class="ph">免許証・保険証など<br>顔・生年月日が見えるように</span>
             <input type="file" accept="image/*" capture="environment" style="display:none" onchange="if(this.files[0])takePhoto('id',this.files[0])"></label>
+        </div>
+        <div class="pcard" id="pc_idback">
+          <label id="lbl_idback"><span class="ic">🪪</span><span class="pt2">身分証（裏）を撮る</span><span class="ph">裏面もお願いします<br>住所や記載事項が見えるように</span>
+            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="if(this.files[0])takePhoto('idback',this.files[0])"></label>
         </div>
       </div>
     </div>
@@ -423,7 +427,7 @@ var STATE = {
   needOkuri:'', okuriArea:[], okuriNote:'',
   drink:'', weakDrinks:[], dohan:'', customers:'',
   exp:'', prevSales:0, prevWage:0, holdCust:0, expCust:0, expSales:0, hostExp:'', fuzokuExp:'', other:'', otherNote:'',
-  idPhoto:'', facePhoto:''
+  idPhoto:'', idPhotoBack:'', facePhoto:''
 };
 var yen = function(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); };
 var man = function(n){ return (Math.round(n/1000)/10).toLocaleString('ja-JP'); };
@@ -535,7 +539,13 @@ function collect(i){
 }
 
 /* ---------- 写真（既存 canvas 縮小を流用：長辺1000px・JPEG0.75） ---------- */
+var PHOTO_META = {
+  id:     { st:'idPhoto',     pc:'pc_id',     cap:'environment', ic:'🪪', t1:'身分証（表）を撮る', t2:'免許証・保険証など<br>顔・生年月日が見えるように' },
+  idback: { st:'idPhotoBack', pc:'pc_idback', cap:'environment', ic:'🪪', t1:'身分証（裏）を撮る', t2:'裏面もお願いします<br>住所や記載事項が見えるように' },
+  face:   { st:'facePhoto',   pc:'pc_face',   cap:'user',        ic:'📷', t1:'お顔を撮る',        t2:'正面・明るいところで' }
+};
 function takePhoto(which, file){
+  var m = PHOTO_META[which]; if(!m) return;
   var reader = new FileReader();
   reader.onload = function(e){
     var img = new Image();
@@ -545,23 +555,18 @@ function takePhoto(which, file){
       var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
       cv.getContext('2d').drawImage(img,0,0,w,h);
       var du = cv.toDataURL('image/jpeg',0.75);
-      if(which==='id')   STATE.idPhoto=du;   else STATE.facePhoto=du;
-      var pc = document.getElementById(which==='id'?'pc_id':'pc_face');
-      pc.innerHTML = '<img src="'+du+'"><button class="redo" onclick="redo(\''+which+'\')">撮り直す</button>';
+      STATE[m.st]=du;
+      document.getElementById(m.pc).innerHTML = '<img src="'+du+'"><button class="redo" onclick="redo(\''+which+'\')">撮り直す</button>';
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 function redo(which){
-  if(which==='id') STATE.idPhoto=''; else STATE.facePhoto='';
-  var pc = document.getElementById(which==='id'?'pc_id':'pc_face');
-  var cap = which==='id' ? 'environment' : 'user';
-  var ic = which==='id' ? '🪪' : '📷';
-  var t1 = which==='id' ? '身分証を撮る' : 'お顔を撮る';
-  var t2 = which==='id' ? '免許証・保険証など<br>顔・生年月日が見えるように' : '正面・明るいところで';
-  pc.innerHTML = '<label><span class="ic">'+ic+'</span><span class="pt2">'+t1+'</span><span class="ph">'+t2+'</span>'
-    + '<input type="file" accept="image/*" capture="'+cap+'" style="display:none" onchange="if(this.files[0])takePhoto(\''+which+'\',this.files[0])"></label>';
+  var m = PHOTO_META[which]; if(!m) return;
+  STATE[m.st]='';
+  document.getElementById(m.pc).innerHTML = '<label><span class="ic">'+m.ic+'</span><span class="pt2">'+m.t1+'</span><span class="ph">'+m.t2+'</span>'
+    + '<input type="file" accept="image/*" capture="'+m.cap+'" style="display:none" onchange="if(this.files[0])takePhoto(\''+which+'\',this.files[0])"></label>';
 }
 
 /* ---------- シミュ描画 ---------- */

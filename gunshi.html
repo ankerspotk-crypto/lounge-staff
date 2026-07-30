@@ -5774,7 +5774,7 @@ function openMendanDetail(i){
     +((m.exp==='あり'||m.exp==='少し')?row('お客様','持ち'+(m.holdCust||'—')+'人 ／ 見込み'+(m.expCust||'—')+'人 ／ 見込み売上'+(m.expSales?Math.round(m.expSales/10000)+'万':'—')):'')
     +row('ホスト/風俗',(m.hostExp||'-')+' / '+(m.fuzokuExp||'-'))
     +row('他店予定',(m.other==='あり')?('⚠️あり '+(m.otherNote||'')):'なし')
-    +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証',m.idPhoto)+'</div>'
+    +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証(表)',m.idPhoto)+photo('🪪 身分証(裏)',m.idPhotoBack)+'</div>'
     +'</div>'
     +buildSimHtml_(m)
     +'<div style="margin-top:16px"><div style="font-size:13px;color:#a29a8e;margin-bottom:6px">補足事項（面談メモ）</div>'
