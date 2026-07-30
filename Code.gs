@@ -1412,7 +1412,12 @@ function handleApiRequest_(body) {
   if (body.action === 'writeShiftCellPortal') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
-    return writeShiftCell_(String(body.name), String(body.date), String(body.value));
+    const val = String(body.value);
+    const r = writeShiftCell_(String(body.name), String(body.date), val);
+    if (val.trim() === '' && r && r.ok) { // クリア＝承諾/申請中の申請も片付けて再生成を防ぐ（黒服が消せない罠の対策）
+      r.clearedRequests = clearShiftRequestsForCell_(String(body.name), String(body.date));
+    }
+    return r;
   }
   if (body.action === 'addShiftStaff') {
     const adminName = getStaffName(body.userId);
@@ -8670,10 +8675,13 @@ function approveShiftRequest_(rowIdx, name, date, time, decision, newTime) {
   if (decision === '承諾') {
     const nt = newTime ? String(newTime).trim() : '';
     const finalTime = (nt && !isKyukin) ? nt : time;
-    if (nt && !isKyukin && nt !== time) reqSh.getRange(rowIdx, 4).setValue(nt); // 時間変更で承諾：希望列も上書き
+    const writeVal = isKyukin ? '休み' : finalTime;
+    // 希望列(4)は本人の希望として保持し、確定は確定列(8)へ別に刻む＝希望と確定の両方を残す。
+    // （旧版は時間変更承諾で希望列を確定で上書きし、元の希望が失われていた）
+    ensureShiftReqConfirmedHeader_(reqSh);
+    reqSh.getRange(rowIdx, 8).setValue(writeVal);
     reqSh.getRange(rowIdx, 5).setValue(decision);
     reqSh.getRange(rowIdx, 6).setValue(new Date());
-    const writeVal = isKyukin ? '休み' : finalTime;
     // シフト表に行があるスタッフ(キャスト)は表にも反映。黒服はシフト申請の承諾行で管理するため行が無くてもOK(ベストエフォート)
     writeShiftCell_(name, date, writeVal);
     if (!isKyukin) addConfirmedShiftDate_(name, date, writeVal); // 黒服バイト等：承認＝確定
@@ -8684,6 +8692,48 @@ function approveShiftRequest_(rowIdx, name, date, time, decision, newTime) {
   // 却下：シフト申請のステータスを却下にするだけ。シフト表に行があれば消す(ベストエフォート)
   if (!isKyukin) writeShiftCell_(name, date, '');
   return { ok: true, decision, name, date };
+}
+
+// シフト申請シートに『確定シフト』列(8列目)の見出しを保証（非破壊・初回のみ）。
+// 希望列(4)＝本人の希望、確定列(8)＝承諾後の確定時刻。両方を残すための列。
+function ensureShiftReqConfirmedHeader_(sh) {
+  try {
+    const h = sh.getRange(1, 8).getValue();
+    if (!String(h == null ? '' : h).trim()) sh.getRange(1, 8).setValue('確定シフト');
+  } catch (e) {}
+}
+
+// 「クリア（消去）」で確定シフトを外すとき、その名前・日付の承諾/申請中の申請も「クリア」にする。
+// これをしないと承諾済み申請が再描画でセルを再生成し、シフト表から消せない（黒服で多発する罠）。
+// 却下ではなく「クリア」＝本人の希望自体は履歴に『—クリア』として残る（消したのは確定であって希望の記録ではない）。
+function clearShiftRequestsForCell_(name, date) {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(SHIFT_REQUEST_TAB);
+  const dTgt = String(date == null ? '' : date).trim();
+  let n = 0;
+  if (sh) {
+    const rows = sh.getDataRange().getValues();
+    const key = shiftNameKey_(name);
+    for (let i = 1; i < rows.length; i++) {
+      if (shiftNameKey_(rows[i][1]) !== key) continue;
+      const dc = rows[i][2];
+      const dStr = (dc instanceof Date) ? Utilities.formatDate(dc, TZ, 'M/d') : String(dc == null ? '' : dc).trim();
+      if (dStr !== dTgt) continue;
+      const st = String(rows[i][4] == null ? '' : rows[i][4]).trim();
+      if (st === '承諾' || st === 'pending' || st === '') {
+        sh.getRange(i + 1, 5).setValue('クリア');
+        sh.getRange(i + 1, 6).setValue(new Date());
+        n++;
+      }
+    }
+  }
+  // ポータルの確定カレンダーからも外す（半端な確定表示を残さない）
+  try {
+    const pk = 'SHIFT_CONFIRMED_' + name;
+    const map = JSON.parse(prop(pk) || '{}');
+    if (map[dTgt] != null) { delete map[dTgt]; setProp(pk, JSON.stringify(map)); }
+  } catch (e) {}
+  return n;
 }
 
 // 管理者：黒服全員に確定シフトを個別LINE通知（weekStart=その週の月曜日 'yyyy-MM-dd'。未指定時は本日以降の全期間）
@@ -17535,7 +17585,7 @@ function getShiftMgmtData_() {
       const s = (v instanceof Date) ? Utilities.formatDate(v, TZ, 'HH:mm') : String(v).trim();
       if (s) cells[headers[j]] = s;
     });
-    const row = { name, role, cells, pending: {}, pendingRow: {} };
+    const row = { name, role, cells, wish: {}, pending: {}, pendingRow: {} };
     rows.push(row);
     idx[nkeyOf(name)] = row;
   }
@@ -17554,16 +17604,18 @@ function getShiftMgmtData_() {
       const dc = rr[i][2];
       const date = (dc instanceof Date) ? Utilities.formatDate(dc, TZ, 'M/d') : String(dc).trim();
       if (!headerSet[date]) continue; // 表示範囲外/列なしはスキップ
-      const time = String(rr[i][3]).trim(); if (!time) continue;
+      const time = String(rr[i][3]).trim(); if (!time) continue;      // 本人がLINEで出した希望
+      const confirmed = String(rr[i][7] == null ? '' : rr[i][7]).trim() || time; // 確定（時間変更承諾なら確定列8。無ければ希望と同じ）
       const nkey = nkeyOf(nm);
       let row = idx[nkey];
       if (!row) {
         const role = String(rr[i][6]).trim() || getStaffRoleByName_(normalizeName_(nm));
-        row = { name: nm, role, cells: {}, pending: {}, pendingRow: {} };
+        row = { name: nm, role, cells: {}, wish: {}, pending: {}, pendingRow: {} };
         rows.push(row); idx[nkey] = row;
       }
       if (status === '承諾') {
-        row.cells[date] = (time === '欠勤') ? '休み' : time; // 確定/スケジュール
+        row.cells[date] = (confirmed === '欠勤') ? '休み' : confirmed; // 確定/スケジュール
+        if (time !== '欠勤') row.wish[date] = time;                    // 元の希望を確定と別に保持
         delete row.pending[date]; delete row.pendingRow[date];
       } else { // pending = 申請中（出勤申請のみ人数に数える）
         if (time === '欠勤') continue;
