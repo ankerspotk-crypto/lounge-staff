@@ -471,7 +471,7 @@ var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書']]},
-  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声']]},
+  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
 ];
 var GROUP='hr';
@@ -488,7 +488,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -3393,6 +3393,122 @@ function setVoiceStatus(row,status){
   }).catch(function(){toast('通信エラー',true);});
 }
 
+/* ===== 🙋 要望ジャッジ（黒服/スタッフ系グループLINEの発言を精査）=====
+   受動ログ（Code.gs hallLogCapture_）が溜めた発言を、要望/ノイズ/別種に仕分ける観察台。
+   ※軍師には未配信。ここでボスがパターンと拾い方を精査してから次を決める。 */
+var hallList=[], hallStat={}, hallGroupsBreak={}, hallCand='cand', hallGroup='', hallTrunc=false, hallPickerOpen=false, hallSeen=null;
+var HALL_JUDGES=['要望','ノイズ','別種'];
+function hallJudgeColor(j){ return {'要望':'#16a34a','ノイズ':'#6b7280','別種':'#7c3aed'}[j]||'#3b82f6'; }
+function qesc_(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function hallExChip(txt){ return '<span style="display:inline-block;font-size:11px;padding:2px 8px;border-radius:8px;background:var(--panel2,#242424);border:1px solid var(--line2);margin-right:6px;margin-top:4px">'+esc(txt)+'</span>'; }
+function renderHallReq(){
+  loading();
+  api('getHallLog',{cand:'all'}).then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    hallList=(r&&r.list)||[]; hallStat=(r&&r.stat)||{}; hallGroupsBreak=(r&&r.groups)||{}; hallTrunc=!!(r&&r.truncated);
+    drawHallReq();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function hallCandChip(v,label){ return '<div class="chip'+(hallCand===v?' on':'')+'" onclick="setHallCand(\''+v+'\')">'+label+'</div>'; }
+function drawHallReq(){
+  var st=hallStat||{};
+  var pickerBtn='<button class="btn sm" onclick="toggleHallPicker()">⚙️ 捕捉対象グループ</button>';
+  var trunc=hallTrunc?' <span class="meta" style="color:#d97706">※500件超は新しい500件のみ表示</span>':'';
+  var picker=hallPickerOpen?drawHallPicker():'';
+  var stats='<div class="chips" style="margin-bottom:10px;gap:6px">'
+    +'<span class="chip" style="cursor:default">総数 '+(st.total||0)+'</span>'
+    +'<span class="chip" style="cursor:default">候補 '+(st.cand||0)+'</span>'
+    +'<span class="chip" style="cursor:default">判定済 '+(st.judged||0)+'</span>'
+    +'<span class="chip" style="cursor:default;color:#22c55e">要望 '+(st.req||0)+'</span>'
+    +'<span class="chip" style="cursor:default;color:#9aa">ノイズ '+(st.noise||0)+'</span>'
+    +'<span class="chip" style="cursor:default;color:#a78bfa">別種 '+(st.other||0)+'</span>'
+    +'</div>';
+  var candChips='<div class="chips" style="margin-bottom:8px">'+hallCandChip('cand','候補のみ')+hallCandChip('unjudged','未判定')+hallCandChip('all','全部')+'</div>';
+  var gkeys=Object.keys(hallGroupsBreak||{});
+  var gChips='';
+  if(gkeys.length>0){
+    gChips='<div class="chips" style="margin-bottom:12px">'
+      +'<div class="chip'+(hallGroup===''?' on':'')+'" onclick="setHallGroup(\'\')">全グループ</div>'
+      +gkeys.map(function(g){ return '<div class="chip'+(hallGroup===g?' on':'')+'" onclick="setHallGroup(\''+qesc_(g)+'\')">'+esc(g)+' '+hallGroupsBreak[g]+'</div>'; }).join('')
+      +'</div>';
+  }
+  var list=hallList.filter(function(o){
+    if(hallGroup && o.group!==hallGroup) return false;
+    if(hallCand==='cand' && !o.cand) return false;
+    if(hallCand==='unjudged' && o.judge) return false;
+    return true;
+  });
+  var cards=list.map(function(o){
+    var candBadge=o.cand?'<span style="display:inline-block;font-size:11px;padding:3px 9px;border-radius:10px;color:#fff;white-space:nowrap;background:#1d4ed8">候補</span>':'<span style="display:inline-block;font-size:11px;padding:3px 9px;border-radius:10px;color:#9aa;white-space:nowrap;border:1px solid var(--line2)">対象外</span>';
+    var jBadge=o.judge?'<span style="display:inline-block;font-size:11px;padding:3px 9px;border-radius:10px;color:#fff;white-space:nowrap;background:'+hallJudgeColor(o.judge)+'">'+esc(o.judge)+'</span>':'';
+    var kindBadge=o.kind?'<span style="display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;background:var(--panel2,#2a2a2a);border:1px solid var(--line2);margin-right:6px">'+esc(o.kind)+'</span>':'';
+    var ex='';
+    if(o.seat) ex+=hallExChip('🪑 '+o.seat);
+    if(o.time) ex+=hallExChip('⏰ '+o.time);
+    if(o.name) ex+=hallExChip('👤 '+o.name);
+    if(o.kws) ex+=hallExChip('🔍 '+o.kws);
+    var btns=HALL_JUDGES.map(function(j){ return '<button class="btn sm'+(o.judge===j?' pri':'')+'" onclick="setHallJudge('+o.row+',\''+j+'\')"'+(o.judge===j?' disabled style="opacity:.6"':'')+'>'+j+'</button>'; }).join('');
+    var clearBtn=o.judge?'<button class="btn sm" onclick="setHallJudge('+o.row+',\'\')">未判定に戻す</button>':'';
+    return '<div class="sec" style="margin-bottom:10px'+(o.cand?'':';opacity:.68')+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+      +'<div class="nm" style="font-size:15px;font-weight:700;line-height:1.5">「'+esc(o.text)+'」</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">'+(jBadge||candBadge)+'</div></div>'
+      +'<div style="margin-top:8px">'+kindBadge+(o.judge?candBadge:'')+'</div>'
+      +(ex?'<div style="margin-top:4px">'+ex+'</div>':'')
+      +'<div class="meta" style="margin-top:8px;opacity:.75">'+esc(o.group)+' ・ '+esc(o.who)+' ・ '+esc(o.ts)+'</div>'
+      +'<div class="chips" style="margin-top:10px">'+btns+(clearBtn?' '+clearBtn:'')+'</div>'
+      +'</div>';
+  }).join('')||'<div class="empty" style="padding:30px">'+(hallCand==='cand'?'候補の発言はまだありません。<br><span style="font-size:13px;opacity:.7">対象グループで要望・確認っぽい発言が出ると、ここに溜まります。「全部」で対象外も確認できます。</span>':'該当なし')+'</div>';
+  setBody('<div class="sec-t" style="margin-bottom:8px">🙋 要望ジャッジ <span class="sub">黒服/スタッフ系グループLINEで拾った「要望・確認っぽい」発言。ノイズ/要望/別種を仕分けて、拾い方を精査する（軍師には未配信）</span></div>'
+    +'<div style="margin-bottom:10px">'+pickerBtn+trunc+'</div>'+picker+stats+candChips+gChips+cards);
+}
+function setHallCand(f){ hallCand=f; drawHallReq(); }
+function setHallGroup(g){ hallGroup=g; drawHallReq(); }
+function recomputeHallStat_(){
+  var s={total:hallList.length,cand:0,judged:0,req:0,noise:0,other:0};
+  hallList.forEach(function(o){ if(o.cand)s.cand++; if(o.judge){s.judged++; if(o.judge==='要望')s.req++; else if(o.judge==='ノイズ')s.noise++; else if(o.judge==='別種')s.other++;} });
+  if(hallStat && hallStat.total>hallList.length){ s.total=hallStat.total; s.cand=hallStat.cand; } // 500超で切れてる時は総数はサーバ値を尊重
+  hallStat=s;
+}
+function setHallJudge(row,judge){
+  api('setHallJudge',{row:row,judge:judge}).then(function(r){
+    if(res(r,judge?('「'+judge+'」に判定しました'):'判定を解除しました')){
+      for(var i=0;i<hallList.length;i++){ if(hallList[i].row===row){ hallList[i].judge=judge; break; } }
+      recomputeHallStat_(); drawHallReq();
+    }
+  }).catch(function(){ toast('通信エラー',true); });
+}
+function toggleHallPicker(){
+  hallPickerOpen=!hallPickerOpen;
+  if(hallPickerOpen && !hallSeen){ loadHallSeen_(); return; }
+  drawHallReq();
+}
+function loadHallSeen_(){
+  api('getHallGroups').then(function(r){ hallSeen=(r&&r.groups)||[]; drawHallReq(); }).catch(function(){ toast('グループ取得エラー',true); });
+}
+function drawHallPicker(){
+  if(!hallSeen) return '<div class="sec" style="margin-bottom:12px"><div class="meta">グループ読み込み中…</div></div>';
+  var rows=hallSeen.map(function(g){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">'
+      +'<input type="checkbox" class="hallgchk" value="'+esc(g.groupId)+'"'+(g.on?' checked':'')+' style="width:18px;height:18px">'
+      +'<span style="font-weight:600">'+esc(g.label)+'</span>'
+      +'<span class="meta" style="opacity:.6;font-size:12px">発言者 '+(g.members||0)+'人 ・ '+esc(g.groupId)+'</span>'
+      +'</label>';
+  }).join('')||'<div class="meta">botが認識しているグループがまだありません。</div>';
+  return '<div class="sec" style="margin-bottom:12px">'
+    +'<div class="sec-t" style="font-size:14px;margin-bottom:6px">⚙️ 捕捉対象グループ <span class="sub">チェックしたグループの発言だけログします。本日黒服/本日出勤が別グループならここで見つけて追加を。</span></div>'
+    +rows
+    +'<div style="margin-top:10px"><button class="btn pri sm" onclick="saveHallGroups()">保存</button> <button class="btn sm" onclick="toggleHallPicker()">閉じる</button></div>'
+    +'</div>';
+}
+function saveHallGroups(){
+  var chks=document.querySelectorAll('.hallgchk'); var arr=[];
+  [].forEach.call(chks,function(c){ if(c.checked) arr.push(c.value); });
+  api('setHallGroups',{groups:arr}).then(function(r){
+    if(res(r,'捕捉対象を保存しました（'+arr.length+'グループ）')){ if(hallSeen){ hallSeen.forEach(function(g){ g.on=arr.indexOf(g.groupId)>=0; }); } }
+  }).catch(function(){ toast('通信エラー',true); });
+}
+
 /* ===== 汎用カレンダー日付ピッカー =====
    GASの管理コンソールはクロスオリジンiframe内で動くため input[type=date] の showPicker() が
    SecurityErrorで使えない（タップしてもカレンダーが開かない）。そこで自前のカレンダーUIで代替。
@@ -4208,6 +4324,28 @@ function MOCKAPI(action,body){
   if(action==='createNotice')return {ok:true,id:'newid123',total:6,sent:5,failed:0,skipped:1,skippedNames:['田中']};
   if(action==='repushNotice')return {ok:true,sent:4,failed:0,target:4};
   if(action==='archiveNotice')return {ok:true};
+  if(action==='getHallLog')return {ok:true,truncated:false,
+    stat:{total:8,cand:6,judged:2,req:1,noise:1,other:0},
+    groups:{'黒服':4,'スタッフ全員':2,'スタッフ':2},
+    list:[
+      {row:8,ts:'7/30 21:05',group:'黒服',who:'りく',text:'あおいさん、5番テーブルに30分頃もどりたいそうです。押さえといてもらえますか？',cand:true,kind:'要望',kws:'もどりたい/押さえ',seat:'5番',time:'30分',name:'あおいさん',judge:'',memo:''},
+      {row:7,ts:'7/30 20:50',group:'スタッフ全員',who:'黒服',text:'山田様のキープボトル、まだ在庫ありますか？次ご来店で出したいので確認おねがいします',cand:true,kind:'確認',kws:'ありますか/確認/おねがい',seat:'',time:'',name:'山田様',judge:'',memo:''},
+      {row:6,ts:'7/30 20:30',group:'黒服',who:'まき',text:'8番のお客様そろそろお会計だと思います、伝票の準備おねがいします',cand:true,kind:'要望',kws:'準備/おねがい',seat:'8番',time:'そろそろ',name:'',judge:'要望',memo:''},
+      {row:5,ts:'7/30 20:10',group:'スタッフ',who:'ゆうた',text:'お疲れ様です！本日もよろしくお願いします',cand:true,kind:'要望',kws:'お願い/お願いします',seat:'',time:'',name:'',judge:'ノイズ',memo:''},
+      {row:4,ts:'7/30 19:55',group:'黒服',who:'たかし',text:'了解しました！',cand:false,kind:'',kws:'',seat:'',time:'',name:'',judge:'',memo:''},
+      {row:3,ts:'7/30 19:40',group:'黒服',who:'りく',text:'3番テーブルのお客様、飲み物のおかわり用意お願いします',cand:true,kind:'要望',kws:'用意/お願い/お願いします',seat:'3番',time:'',name:'',judge:'',memo:''},
+      {row:2,ts:'7/30 19:20',group:'スタッフ全員',who:'さくら',text:'今日の締めの時間って何時ですか？',cand:true,kind:'確認',kws:'ですか/?',seat:'',time:'',name:'',judge:'',memo:''},
+      {row:9,ts:'7/30 19:00',group:'スタッフ',who:'ひろき',text:'ありがとうございます',cand:false,kind:'',kws:'',seat:'',time:'',name:'',judge:'',memo:''}
+    ]};
+  if(action==='setHallJudge')return {ok:true,row:body.row,judge:body.judge};
+  if(action==='getHallGroups')return {ok:true,targets:['Ckurofuku01','Cstaffall01','Cstaff0001'],groups:[
+    {groupId:'Cstaffall01',label:'スタッフ全員',members:12,on:true},
+    {groupId:'Cstaff0001',label:'スタッフ',members:9,on:true},
+    {groupId:'Ckurofuku01',label:'黒服',members:5,on:true},
+    {groupId:'C7a1honjitsu_kuro',label:'C7a1honjitsu_kuro',members:6,on:false},
+    {groupId:'C9b2honjitsu_shukkin',label:'C9b2honjitsu_shukkin',members:11,on:false}
+  ]};
+  if(action==='setHallGroups')return {ok:true,groups:body.groups||[]};
   return {ok:true};
 }
 boot();

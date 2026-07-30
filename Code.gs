@@ -30,6 +30,7 @@ const SHIFT_TAB         = 'シフト表';
 const SHIFT_REQUEST_TAB = 'シフト申請';
 const INVENTORY_TAB     = '在庫管理';
 const CAST_REQUEST_TAB  = 'キャストリクエスト';
+const HALLLOG_TAB       = '発言ログ_要望キャッチ'; // 🙋要望キャッチv2: 対象グループLINEの受動ログ（観察・精査フェーズ／軍師未配信）
 const PAYROLL_RECEIPT_TAB = '給与受領一覧';
 const ORDER_MASTER_TAB = '発注品目マスタ';
 const ORDER_LOG_TAB    = '発注ログ';
@@ -1163,6 +1164,27 @@ function handleApiRequest_(body) {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return setIeyasuRequestStatus_(body.row, body.status);
+  }
+  // 🙋 要望キャッチ v2（観察・精査フェーズ・コンソール専用。GUNSHI_API_FNSには載せない）
+  if (body.action === 'getHallLog') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return hallLogList_({ group: body.group, cand: body.cand });
+  }
+  if (body.action === 'setHallJudge') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return hallLogSetJudge_(body.row, body.judge, body.memo);
+  }
+  if (body.action === 'getHallGroups') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return hallLogSeenGroups_();
+  }
+  if (body.action === 'setHallGroups') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return hallLogSetGroups_(body.groups);
   }
   // 軍師QRログイン: LIFF(本人のLINE)からトークンを認証（本人のuserIdで確認）
   if (body.action === 'kioskAuthConfirm') {
@@ -3814,6 +3836,10 @@ function handleEvent(event) {
       handleIeyasuAI_(event, text, _ieName, userId); return;
     }
   }
+
+  // ── 🙋 要望キャッチ v2: 対象グループの発言を受動ログ（返信なし・非干渉・観察用）。
+  //    例外は必ず握りつぶし、以降のグループ別dispatchを絶対に止めない（silent_death教訓）。
+  try { hallLogCapture_(event, text, groupId, userId); } catch (_hlErr) {}
 
   // グループ別ルーティング
   const KF = prop('GROUP_KUROFUKU');
@@ -10094,6 +10120,162 @@ function setIeyasuRequestStatus_(row, status) {
   if (IEYASU_STATUSES_.indexOf(status) < 0) return { ok: false, error: '不正な状態' };
   getIeyasuReqSheet_().getRange(row, 8).setValue(status);
   return { ok: true, row: row, status: status };
+}
+
+// ============================================================
+// 🙋 要望キャッチ v2（観察・精査フェーズ / 2026-07-30 ボス方針）
+//   黒服/スタッフ系グループLINEの「要望・確認っぽい」発言を受動ログ→管理コンソールでボスがジャッジ。
+//   ⚠️返信なし・既存処理に非干渉・破壊ゼロ（append専用シート）。軍師にはまだ出さない。
+//   捕捉対象は Script Property HALLLOG_GROUPS（JSON配列のgroupId）で制御。未設定時は内部3グループ既定。
+//   判定はキーワード/正規表現のみ（Gemini不使用＝doPost軽量維持）。当たったKWを残し「拾い方」を検証可能に。
+// ============================================================
+const HALLLOG_JUDGES_ = ['要望', 'ノイズ', '別種'];
+
+function getHallLogSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(HALLLOG_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(HALLLOG_TAB);
+    sh.appendRow(['日時', 'グループ', '発言者', '本文', '候補', '種別', '当たりKW', '席', '時刻', '名前', 'ジャッジ', 'メモ']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+// groupId → 見やすいラベル。登録GROUP_定数に一致すれば和名、なければ手動ラベル(HALLLOG_LABEL_<gid>)、最後は生ID。
+function hallLogGroupLabel_(groupId) {
+  if (!groupId) return '(不明)';
+  const map = [['GROUP_KUROFUKU', '黒服'], ['GROUP_STAFF', 'スタッフ'], ['GROUP_STAFF_ALL', 'スタッフ全員'],
+               ['GROUP_DRIVER', 'ドライバー'], ['GROUP_HAKEN', '派遣'], ['GROUP_YOYAKU', '予約']];
+  for (let i = 0; i < map.length; i++) { if (prop(map[i][0]) === groupId) return map[i][1]; }
+  const custom = prop('HALLLOG_LABEL_' + groupId);
+  return custom || groupId;
+}
+
+// 捕捉対象groupId配列。未設定なら黒服/スタッフ/スタッフ全員を既定（本日系はコンソールで追加）。
+function hallLogTargets_() {
+  const raw = prop('HALLLOG_GROUPS');
+  if (raw) { try { const a = JSON.parse(raw); if (Array.isArray(a)) return a; } catch (e) {} }
+  const def = [];
+  ['GROUP_KUROFUKU', 'GROUP_STAFF', 'GROUP_STAFF_ALL'].forEach(function (k) { const v = prop(k); if (v) def.push(v); });
+  return def;
+}
+
+function hallLogSetGroups_(groups) {
+  const arr = Array.isArray(groups) ? groups.filter(function (g) { return !!g; }) : [];
+  setProp('HALLLOG_GROUPS', JSON.stringify(arr));
+  return { ok: true, groups: arr };
+}
+
+// 軽量ヒューリスティック: 要望/確認候補か・種別・当たったKW・席/時刻/名前の抽出。
+function hallLogClassify_(text) {
+  const t = String(text || '');
+  const REQ = ['してください', 'して下さい', 'お願い', 'おねがい', 'ほしい', '欲しい', 'もどりたい', '戻りたい',
+               '入れて', '用意', '準備', '押さえ', 'おさえ', 'キープ', '変えて', '替えて', '移動', '通して',
+               '空けて', 'あけて', '頼み', 'たいです', '取っといて', 'とっといて', '回して', '手配', 'お願いします'];
+  const CFM = ['ますか', 'ありますか', 'ですか', 'でしょうか', '確認', '大丈夫', '可能', '教えて', 'どうなって',
+               'いけますか', 'できますか', 'いいですか', 'どうですか', 'どうですか'];
+  const kws = [];
+  REQ.forEach(function (k) { if (t.indexOf(k) >= 0) kws.push(k); });
+  CFM.forEach(function (k) { if (t.indexOf(k) >= 0) kws.push(k); });
+  const hasQ = /[?？]/.test(t); if (hasQ) kws.push('?');
+  let kind = '';
+  if (REQ.some(function (k) { return t.indexOf(k) >= 0; })) kind = '要望';
+  else if (hasQ || CFM.some(function (k) { return t.indexOf(k) >= 0; })) kind = '確認';
+  let seat = ''; const ms = t.match(/(\d{1,2})\s*(番テーブル|番卓|番|卓)/); if (ms) seat = ms[1] + '番';
+  let time = '';
+  const mt = t.match(/(\d{1,2})\s*時(?:\s*(\d{1,2})\s*分)?/);
+  if (mt) time = mt[1] + '時' + (mt[2] ? mt[2] + '分' : '');
+  if (!time) { const mr = t.match(/(\d{1,2})\s*分\s*(頃|後|くらい|ぐらい)?/); if (mr) time = mr[1] + '分' + (mr[2] || ''); }
+  if (!time) { ['今から', 'そろそろ', 'まもなく', '間もなく'].forEach(function (k) { if (!time && t.indexOf(k) >= 0) time = k; }); }
+  let name = ''; const mn = t.match(/([一-龥ぁ-んァ-ヶー]{2,10})\s*(様|さん)/);
+  if (mn) { let nm = mn[1]; if (nm.indexOf('の') >= 0) nm = nm.split('の').pop(); // 「8番のお客」→「お客」
+    const NG = ['お客', 'おきゃく', 'お疲れ', 'おつかれ', '皆', 'みな', '神', 'ご来店', '本日', '店長', 'お世話'];
+    if (nm && nm.indexOf('お客') < 0 && NG.indexOf(nm) < 0) name = nm + mn[2]; }
+  const isCandidate = (kws.length > 0) || (!!seat && !!time);
+  return { isCandidate: isCandidate, kind: kind, kws: kws.join('/'), seat: seat, time: time, name: name };
+}
+
+// 捕捉本体（handleEventのグループ別ルーティング直前から呼ぶ。returnしない＝非干渉）。
+function hallLogCapture_(event, text, groupId, userId) {
+  if (!groupId || !text) return;
+  const targets = hallLogTargets_();
+  if (targets.indexOf(groupId) < 0) return;
+  const c = hallLogClassify_(text);
+  const who = (userId && getStaffName(userId)) || '(未登録)';
+  getHallLogSheet_().appendRow([
+    nowStamp_(), hallLogGroupLabel_(groupId), who, text,
+    c.isCandidate ? '候補' : '', c.kind, c.kws, c.seat, c.time, c.name, '', ''
+  ]);
+}
+
+// コンソール読み取り: 一覧＋簡易統計＋グループ内訳。cand='cand'|'all'|'unjudged'、group=ラベル一致。
+function hallLogList_(opts) {
+  opts = opts || {};
+  const sh = getHallLogSheet_();
+  const rows = sh.getDataRange().getValues();
+  const all = [];
+  const stat = { total: 0, cand: 0, judged: 0, req: 0, noise: 0, other: 0 };
+  const groups = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] && !r[3]) continue;
+    const o = {
+      row: i + 1, ts: fmtStamp_(r[0]), group: String(r[1] || ''), who: String(r[2] || ''),
+      text: String(r[3] || ''), cand: String(r[4] || '') === '候補', kind: String(r[5] || ''),
+      kws: String(r[6] || ''), seat: String(r[7] || ''), time: String(r[8] || ''),
+      name: String(r[9] || ''), judge: String(r[10] || ''), memo: String(r[11] || '')
+    };
+    stat.total++;
+    if (o.cand) stat.cand++;
+    if (o.judge) stat.judged++;
+    if (o.judge === '要望') stat.req++; else if (o.judge === 'ノイズ') stat.noise++; else if (o.judge === '別種') stat.other++;
+    if (o.group) groups[o.group] = (groups[o.group] || 0) + 1;
+    all.push(o);
+  }
+  const fg = opts.group || '';
+  const fc = opts.cand || 'cand';
+  let filtered = all.filter(function (o) {
+    if (fg && o.group !== fg) return false;
+    if (fc === 'cand' && !o.cand) return false;
+    if (fc === 'unjudged' && o.judge) return false;
+    return true;
+  });
+  filtered.reverse();
+  const truncated = filtered.length > 500;
+  return { ok: true, list: filtered.slice(0, 500), stat: stat, groups: groups, truncated: truncated };
+}
+
+function hallLogSetJudge_(row, judge, memo) {
+  row = Number(row) || 0;
+  if (row < 2) return { ok: false, error: 'row不正' };
+  const sh = getHallLogSheet_();
+  if (judge != null) {
+    if (judge !== '' && HALLLOG_JUDGES_.indexOf(judge) < 0) return { ok: false, error: '不正な判定' };
+    sh.getRange(row, 11).setValue(judge);
+  }
+  if (memo != null) sh.getRange(row, 12).setValue(String(memo));
+  return { ok: true, row: row, judge: judge };
+}
+
+// SEEN_ 集計＝botがいる全グループ＋発言者数。コンソールの捕捉対象ピッカー用。
+function hallLogSeenGroups_() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  const counts = {};
+  for (const key in props) {
+    if (key.indexOf('SEEN_') !== 0) continue;
+    const rest = key.slice(5);
+    const us = rest.lastIndexOf('_');
+    if (us <= 0) continue;
+    const gid = rest.slice(0, us);
+    if (gid) counts[gid] = (counts[gid] || 0) + 1;
+  }
+  const targets = hallLogTargets_();
+  const list = [];
+  for (const g in counts) list.push({ groupId: g, label: hallLogGroupLabel_(g), members: counts[g], on: targets.indexOf(g) >= 0 });
+  targets.forEach(function (g) { if (!counts[g]) list.push({ groupId: g, label: hallLogGroupLabel_(g), members: 0, on: true }); });
+  list.sort(function (a, b) { return b.members - a.members; });
+  return { ok: true, groups: list, targets: targets };
 }
 
 // ── 会話メモリ（人ごとに直近の往復を保持し、文脈のある雑談を可能に）──
