@@ -81,8 +81,11 @@ table.mtx td.cell:hover{background:var(--accent-bg);}
 .mtx-scroll{overflow:auto;max-height:56vh;border:1px solid var(--line);border-radius:8px;}
 table.mtx td.cell.pending{background:#2a1f0a;color:#e0b84a;}
 table.mtx td.cell .pd{font-size:9px;background:#8a6d20;color:#fff;border-radius:3px;padding:0 3px;margin-right:2px;vertical-align:middle;}
-table.mtx td.cell .cf{display:block;line-height:1.2;}
-table.mtx td.cell .wi{display:block;font-size:9px;color:#7fb0e6;opacity:.92;margin-top:1px;white-space:nowrap;font-weight:600;}
+table.mtx td.cell .cf{display:block;line-height:1.25;}
+table.mtx td.cell .wi{display:block;font-size:9px;color:#7fb0e6;opacity:.9;margin-top:2px;white-space:nowrap;font-weight:600;}
+table.mtx td.cell .lb{display:inline-block;font-size:8px;font-weight:700;line-height:1.4;margin-right:3px;padding:0 3px;border-radius:3px;vertical-align:middle;opacity:.9;}
+table.mtx td.cell .cf .lb{background:#20406a;color:#a9cdf2;}
+table.mtx td.cell .wi .lb{background:#3a3320;color:#d8cf8a;}
 table.mtx tr.total-row td{background:#101a2e !important;color:#8fd0ff;font-weight:900;border-bottom:2px solid #2a5aaa;}
 table.mtx tr.total-row td .tp{color:#e0b84a;font-size:10px;font-weight:800;}
 #scm-wrap .scm-back{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:80;}
@@ -1086,7 +1089,10 @@ function drawShift(){
       var pr=(p&&row.pendingRow&&row.pendingRow[d])||0;
       var wish=(row.wish&&row.wish[d])||'';
       var disp;
-      if(v){ disp='<span class="cf">'+esc(v)+'</span>'+((wish&&wish!==v&&v!=='休み')?'<span class="wi">希望 '+esc(wish)+'</span>':''); }
+      if(v){
+        if(wish&&v!=='休み'){ disp='<span class="cf"><b class="lb">確定</b>'+esc(v)+'</span><span class="wi"><b class="lb">希望</b>'+esc(wish)+'</span>'; }
+        else { disp='<span class="cf">'+esc(v)+'</span>'; }
+      }
       else if(p){ disp='<span class="pd">申</span>'+esc(p); }
       else { disp=''; }
       var oc=p?('shiftCellMenu('+pr+',\''+jstr(row.name)+'\',\''+jstr(d)+'\',\''+jstr(p)+'\')'):('editCell(\''+jstr(row.name)+'\',\''+jstr(d)+'\')');
@@ -1104,7 +1110,7 @@ function drawShift(){
       '<div class="sec compact"><div class="sec-t">➕ 派遣/体験を追加</div><div class="addbar"><input class="finput" id="as-name" placeholder="氏名"><select class="finput" id="as-role"><option value="派遣">派遣</option><option value="体験">体験</option></select><select class="finput" id="as-date">'+dateOpts+'</select><input type="hidden" id="as-time"><button type="button" class="finput" id="as-time-btn" onclick="pickAddTime()" style="text-align:left;cursor:pointer;color:var(--sub)">時刻を選ぶ</button><button class="btn pri" onclick="addShiftStaff()">追加</button></div></div>'+
     '</div>'+
     admShiftHistoryHtml()+
-    '<div class="sec"><div class="sec-t">🗓 シフト表 <span class="sub">今日以降・セルをタップで編集</span></div><div class="chips shift-filter">'+rchips+'</div><div class="mtx-scroll"><table class="mtx sm">'+thead+tbody+'</table></div><div class="hint" style="margin-top:6px">セル下段の小さな<span style="color:#7fb0e6;font-weight:700">希望</span>＝本人がLINEで出した希望時刻（確定と違うときだけ表示）。「クリア（消去）」で確定を消すと、その日の承諾済み申請も自動で片付くので黒服のシフトも一発で消えます（希望の記録は履歴に残ります）。</div></div>'
+    '<div class="sec"><div class="sec-t">🗓 シフト表 <span class="sub">今日以降・セルをタップで編集</span></div><div class="chips shift-filter">'+rchips+'</div><div class="mtx-scroll"><table class="mtx sm">'+thead+tbody+'</table></div><div class="hint" style="margin-top:6px">各セルは上段＝<span style="color:#a9cdf2;font-weight:700">確定</span>・下段＝<span style="color:#7fb0e6;font-weight:700">希望</span>（本人がLINEで出した時刻）の2段。「クリア（消去）」で確定を消すと、その日の承諾済み申請も自動で片付くので黒服のシフトも一発で消えます（希望の記録は履歴に残ります）。</div></div>'
   );
 }
 function clearAllReq(n){ if(!confirm('承認待ちのシフトリクエスト '+n+'件を全てクリアします。（副作用・通知なし）よろしいですか？'))return; api('clearShiftRequests').then(function(r){ if(res(r,(r&&r.cleared!=null?r.cleared+'件':'')+'クリアしました'))renderShift(); }); }
@@ -4081,7 +4087,7 @@ function MOCKAPI(action,body){
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
   if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
-  if(action==='getShiftMgmt')return {ok:true,data:{closedDays:{'2026-07-07':'テスト店休'},headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},wish:{},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},wish:{},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},wish:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'19:00～25:00'},wish:{'7/7':'20:00～24:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
+  if(action==='getShiftMgmt')return {ok:true,data:{closedDays:{'2026-07-07':'テスト店休'},headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},wish:{},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},wish:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},wish:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'19:00～25:00'},wish:{'7/7':'20:00～24:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
   if(action==='getShiftSubmitStatus')return {ok:true,weekLabel:'7/14〜7/20',weekKey8:'20260714',total:5,submitted:['まや','たかし'],declined:['ゆうた'],missing:[{name:'鈴木海',registered:true},{name:'あや',registered:false}]};
   if(action==='runShiftOpenNow')return {ok:true,sent:4,total:5,label:'7/14〜7/20'};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
