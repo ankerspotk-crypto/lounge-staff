@@ -1471,6 +1471,9 @@ function handleApiRequest_(body) {
   if (body.action === 'castCancelBirthdayWeek')return castCancelBirthdayWeek(body.userId, body.targetName);
   if (body.action === 'adminApproveBirthdayWeek') return adminApproveBirthdayWeek(body.userId, body.name);
   if (body.action === 'adminSendbackBirthdayWeek') return adminSendbackBirthdayWeek(body.userId, body.name, body.reason);
+  // 💞 相性プロフィール（キャスト自己申告。付け回しの相性データ基盤・第一歩）
+  if (body.action === 'castGetProfile')  return castGetProfile(body.userId, body.targetName);
+  if (body.action === 'castSaveProfile') return castSaveProfile(body.userId, body.targetName, body.profile);
   // ---- 店舗メニュー（管理者専用。メニュー落ち→在庫の仕入れ区分へ伝播）----
   // メニューを落とせるのは管理者だけ＝黒服は軍師から発注時に警告を見るだけ、という分担
   if (body.action === 'getMenuBoard' || body.action === 'addMenuItem' || body.action === 'setMenuItemStatus' ||
@@ -3190,6 +3193,118 @@ function castSetBirthday(userId, targetName, mmdd) {
     if (String(rows[i][1]).trim() === name) { sh.getRange(i + 1, bcol + 1).setValue(md); return { ok: true, name: name, birthday: md }; }
   }
   return { ok: false, error: name + ' が見つかりません' };
+}
+
+// ── キャスト相性プロフィール（自己申告）─────────────────────────────
+// 付け回しの相性データ基盤・第一歩。本人がポータルで自分のタイプ/得意客/苦手な酒を申告。
+// 置き場＝スタッフマスタの JSON 列「相性プロフィール」（末尾追加・非破壊／入店チェック列と同じ流儀）。
+// 語彙は下記 aishoVocab_() が唯一の正本＝本人・黒服・管理者・顧客側すべてこの語彙を指す（辞書のシート化は管理者UI着手時）。
+var AISHO_PROFILE_HEADER = '相性プロフィール';
+
+// 共有タグ語彙（唯一の正本）。相性マッチ試作盤と同一体系＝そのまま噛み合う。
+function aishoVocab_() {
+  return {
+    look:  ['若い', '大人っぽい', '綺麗系', '可愛い系', '清楚系', 'ギャル系', 'グラマー', 'スレンダー', 'ぽっちゃり', '小柄'],
+    chara: ['おとなしい', '明るい', '聞き上手', 'トーク強め', 'ぐいぐい', '天然', '知的', '妹系', 'お姉さん系', '落ち着き'],
+    client:['静かに飲む', '盛り上げたい', 'トーク重視', 'お酒重視', '若い客', '年配', 'おとなしい客', 'ぐいぐい来る', '常連', '新規', '同伴好き', 'じっくり派'],
+    drink: ['ビール', '日本酒', '焼酎', 'ウイスキー', 'ワイン', 'シャンパン', 'カクテル・サワー', 'テキーラ', 'ハイボール']
+  };
+}
+
+// スタッフマスタに JSON 列「相性プロフィール」を末尾追加で確保（非破壊。createなしなら無ければ-1）
+function getCastProfileCol_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  var idx = headers.indexOf(AISHO_PROFILE_HEADER);
+  if (idx < 0 && create) { lastCol += 1; sh.getRange(1, lastCol).setValue(AISHO_PROFILE_HEADER); idx = lastCol - 1; }
+  return idx;
+}
+
+// セルJSON → 正規化したプロフィール形
+function parseCastProfile_(v) {
+  var o = {};
+  try { o = JSON.parse(String(v || '') || '{}'); } catch (e) { o = {}; }
+  if (!o || typeof o !== 'object') o = {};
+  var arr = function (x) { return Array.isArray(x) ? x.map(String) : []; };
+  return { look: arr(o.look), chara: arr(o.chara), good: arr(o.good), bad: arr(o.bad), weak: arr(o.weak),
+           memo: String(o.memo || ''), updatedBy: String(o.updatedBy || ''), updatedAt: String(o.updatedAt || '') };
+}
+function castProfileEmpty_(p) {
+  return !(p.look.length || p.chara.length || p.good.length || p.bad.length || p.weak.length || (p.memo && p.memo.trim()));
+}
+
+// 受信プロフィールを語彙で濾す（未知タグ・重複を落とす＝フロント改ざん耐性）。メモは1000字上限。
+function sanitizeCastProfile_(raw) {
+  raw = (raw && typeof raw === 'object') ? raw : {};
+  var V = aishoVocab_();
+  var pick = function (list, allow) {
+    var seen = {}, out = [];
+    (Array.isArray(list) ? list : []).forEach(function (x) { x = String(x); if (allow.indexOf(x) >= 0 && !seen[x]) { seen[x] = 1; out.push(x); } });
+    return out;
+  };
+  return { look: pick(raw.look, V.look), chara: pick(raw.chara, V.chara), good: pick(raw.good, V.client),
+           bad: pick(raw.bad, V.client), weak: pick(raw.weak, V.drink), memo: String(raw.memo || '').slice(0, 1000) };
+}
+
+// 面談表から苦手な酒を種として引く（源氏名一致・ベストエフォート・読み取り専用）。面談経由でないキャストは空。
+function castMendanWeakSeed_(ss, name) {
+  try {
+    var sh = ss.getSheetByName(MENDAN_TAB);
+    if (!sh) return [];
+    var c = mendanColMap_(sh);
+    if (c['源氏名'] == null || c['苦手な酒'] == null) return [];
+    var vals = sh.getDataRange().getValues();
+    var drinks = aishoVocab_().drink, hit = null;
+    for (var i = vals.length - 1; i >= 1; i--) { if (String(vals[i][c['源氏名']]).trim() === name) { hit = String(vals[i][c['苦手な酒']] || ''); break; } }
+    if (!hit) return [];
+    var seen = {}, out = [];
+    hit.split(/[・、,\/]/).forEach(function (t) { t = t.trim(); if (drinks.indexOf(t) >= 0 && !seen[t]) { seen[t] = 1; out.push(t); } });
+    return out;
+  } catch (e) { return []; }
+}
+
+// キャスト：自分の相性プロフィールを取得（未入力なら面談表の苦手な酒を種として仮表示）
+function castGetProfile(userId, targetName) {
+  try {
+    var ss = getOrOpenSS_();
+    var name = bbResolveName_(userId, targetName);
+    if (!name) return { ok: false, error: '本人を特定できません（LINE未登録の可能性）' };
+    var sh = ss.getSheetByName(STAFF_TAB);
+    if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+    var profile = parseCastProfile_(''), saved = false;
+    var col = getCastProfileCol_(sh, false);
+    if (col >= 0) {
+      var rows = sh.getDataRange().getValues();
+      for (var i = 1; i < rows.length; i++) { if (String(rows[i][1]).trim() === name) { profile = parseCastProfile_(rows[i][col]); saved = true; break; } }
+    }
+    var seededWeak = false;
+    if (castProfileEmpty_(profile)) { var seed = castMendanWeakSeed_(ss, name); if (seed.length) { profile.weak = seed; seededWeak = true; } }
+    return { ok: true, name: name, vocab: aishoVocab_(), profile: profile, seededWeak: seededWeak, saved: saved };
+  } catch (err) {
+    return { ok: false, error: '相性プロフィールの読込エラー: ' + String((err && err.message) || err) };
+  }
+}
+
+// キャスト：自分の相性プロフィールを保存（語彙で濾して本人の行のJSON列へ）
+function castSaveProfile(userId, targetName, profile) {
+  try {
+    var ss = getOrOpenSS_();
+    var name = bbResolveName_(userId, targetName);
+    if (!name) return { ok: false, error: '本人を特定できません' };
+    var sh = ss.getSheetByName(STAFF_TAB);
+    if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+    var clean = sanitizeCastProfile_(profile);
+    clean.updatedBy = 'self';
+    clean.updatedAt = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+    var col = getCastProfileCol_(sh, true);
+    var rows = sh.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][1]).trim() === name) { sh.getRange(i + 1, col + 1).setValue(JSON.stringify(clean)); return { ok: true, name: name, profile: clean }; }
+    }
+    return { ok: false, error: name + ' が見つかりません' };
+  } catch (err) {
+    return { ok: false, error: '相性プロフィールの保存エラー: ' + String((err && err.message) || err) };
+  }
 }
 
 // キャスト：誕生日週間の期間を申請（承認済みはロック。差戻/未申請から再申請可）。率は触らせない＝既定30%
