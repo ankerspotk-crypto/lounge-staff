@@ -677,7 +677,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -10689,7 +10689,8 @@ function deleteHairReceipt_(callerName, rowIdx, isAdmin) {
 var PHOTO_ROOTS_ = {
   receipt: /^ラウンジ家康_領収書_/,          // 月フォルダ ラウンジ家康_領収書_YYYY-MM 配下
   slip:    /^ラウンジ家康_現金チェック伝票$/, // 現金チェック伝票（直下に日付フォルダ）配下
-  seikyu:  /^ラウンジ家康_請求書$/            // 請求書（配下に 名刺／対象伝票/YYYY-MM フォルダ）
+  seikyu:  /^ラウンジ家康_請求書$/,           // 請求書（配下に 名刺／対象伝票/YYYY-MM フォルダ）
+  groupimg:/^(売上伝票|受領書・伝票・営業中画像)$/ // 黒服グループに上がった写真の溜まり場（会計伝票＝売上伝票／領収書等＝受領書・伝票・営業中画像）
 };
 var PHOTO_MAX_BYTES_ = 8 * 1024 * 1024;      // base64転送の暴発を防ぐ上限（8MB）
 
@@ -18858,13 +18859,19 @@ function submitSeikyu(payload) {
     if (!items.length) items = [{ name: close + ' ご利用分', amount: amount }];
     if (!amount) amount = items.reduce(function (a, b) { return a + b.amount; }, 0);
 
-    // 対象伝票写真を保存（複数）
+    // 対象伝票写真を保存（複数）。base64=その場撮影／copyFileId=黒服グループに上がった写真を複製。
     var slips = Array.isArray(payload.slips) ? payload.slips : [];
-    var folder = slips.some(function (s) { return s && s.base64; }) ? getSeikyuSlipFolder_(close) : null;
-    var urls = [];
+    var needFolder = slips.some(function (s) { return s && (s.base64 || s.copyFileId); });
+    var folder = needFolder ? getSeikyuSlipFolder_(close) : null;
+    var urls = [], reclassified = 0;
     slips.forEach(function (s, idx) {
-      if (s && s.base64 && folder) urls.push(saveSeikyuPhoto_(folder, s.base64, s.mime, sender.name + '_' + close + '_' + (idx + 1) + '.jpg'));
-      else if (s && s.url) urls.push(String(s.url));
+      if (!s) return;
+      if (s.base64 && folder) urls.push(saveSeikyuPhoto_(folder, s.base64, s.mime, sender.name + '_' + close + '_' + (idx + 1) + '.jpg'));
+      else if (s.copyFileId && folder) {
+        var cp = seikyuCopyGroupPhoto_(s.copyFileId, folder, sender.name + '_' + close + '_' + (idx + 1));
+        if (cp) { urls.push(cp.url); reclassified += (cp.reclassified || 0); }
+      }
+      else if (s.url) urls.push(String(s.url));
     });
 
     var settings = getSeikyuSettings_();
@@ -18878,9 +18885,69 @@ function submitSeikyu(payload) {
       '登録者': String(payload.by || ''), '登録日時': now, '更新日時': now
     };
     sh.appendRow(seikyuRowArr_(sh, cm, rowObj));
-    return { ok: true, id: id, closeMonth: close, due: due, amount: amount, slipCount: urls.length };
+    return { ok: true, id: id, closeMonth: close, due: due, amount: amount, slipCount: urls.length, reclassified: reclassified };
   } catch (e) { return { ok: false, error: String(e) }; }
 }
+
+// 軍師：黒服グループに上がった写真を対象伝票に複製する（請求書ツリーへコピー）。
+//   ⚠️セキュリティ＝コピー元は groupimg 溜まり場（売上伝票／受領書・伝票・営業中画像）の配下に限定。
+//   会計伝票（客の伝票）は経費に載らないが、万一OCRが領収書と誤読して経費計上していたら、対象伝票に振り替え（除外）する。
+function seikyuCopyGroupPhoto_(fileRef, folder, baseName) {
+  try {
+    var id = fileIdFromPhotoRef_(fileRef); if (!id) return null;
+    var file = DriveApp.getFileById(id);
+    if (!photoUnderAllowedRoot_(file, 'groupimg')) return null;   // 溜まり場以外はコピーしない
+    var ext = (String(file.getMimeType() || '').indexOf('png') >= 0) ? 'png' : 'jpg';
+    var copy = file.makeCopy((baseName || '伝票') + '.' + ext, folder);
+    var reclassified = seikyuReclassifyExpense_(id);   // 経費に自動記録されていた分を対象伝票へ振り替え（除外）
+    return { url: 'https://drive.google.com/uc?id=' + copy.getId(), reclassified: reclassified };
+  } catch (e) { return null; }
+}
+// 領収書記録（経費）に、この画像から自動作成された行があれば削除（＝二重計上の除外）。件数を返す。
+function seikyuReclassifyExpense_(fileId) {
+  try {
+    var ss = getOrOpenSS_(); var sh = ss.getSheetByName('領収書記録');
+    if (!sh || sh.getLastRow() < 2) return 0;
+    var hdr = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    var linkCol = hdr.indexOf('画像リンク'); if (linkCol < 0) return 0;
+    var vals = sh.getRange(2, linkCol + 1, sh.getLastRow() - 1, 1).getValues();
+    var rmRows = [];
+    for (var i = 0; i < vals.length; i++) if (String(vals[i][0] || '').indexOf(fileId) >= 0) rmRows.push(i + 2);
+    rmRows.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });   // 下（大きい行）から削除
+    return rmRows.length;
+  } catch (e) { return 0; }
+}
+
+// 軍師：黒服グループに上がった写真の一覧（直近days日・新しい順）。対象伝票の流用ピッカー用。
+function getSeikyuGroupPhotos(days) {
+  try {
+    days = Math.min(Math.max(Number(days) || 4, 1), 10);
+    var root = DriveApp.getRootFolder();
+    var pools = ['売上伝票', '受領書・伝票・営業中画像'];
+    var d = new Date(); if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+    var keys = [];
+    for (var i = 0; i < days; i++) { var dd = new Date(d.getTime()); dd.setDate(d.getDate() - i); keys.push(Utilities.formatDate(dd, TZ, 'yyyy-MM-dd')); }
+    var out = [];
+    pools.forEach(function (pn) {
+      var pit = root.getFoldersByName(pn); if (!pit.hasNext()) return; var parent = pit.next();
+      keys.forEach(function (k) {
+        var dit = parent.getFoldersByName(k); if (!dit.hasNext()) return; var day = dit.next();
+        var fit = day.getFiles();
+        while (fit.hasNext()) {
+          var f = fit.next();
+          if (String(f.getMimeType() || '').indexOf('image/') !== 0) continue;
+          out.push({ id: f.getId(), name: f.getName(), bizDate: k, pool: pn, when: Utilities.formatDate(f.getDateCreated(), TZ, 'MM/dd HH:mm'), _ts: f.getDateCreated().getTime() });
+        }
+      });
+    });
+    out.sort(function (a, b) { return b._ts - a._ts; });   // 新しい順
+    if (out.length > 60) out = out.slice(0, 60);
+    out.forEach(function (o) { delete o._ts; });
+    return { ok: true, photos: out };
+  } catch (e) { return { ok: false, error: String(e) }; }
+}
+// 軍師：グループ写真を base64 で返す（groupimg 溜まり場に限定）。ピッカーのサムネイル用。
+function kioskGetGroupPhoto(ref) { return drivePhotoAsDataUrl_(String(ref || ''), 'groupimg'); }
 
 // 軍師／コンソール共通：請求書系の写真を base64 で返す（seikyu 種別・所定フォルダ木に限定）
 function kioskGetSeikyuImage(ref) { return drivePhotoAsDataUrl_(String(ref || ''), 'seikyu'); }
