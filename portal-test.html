@@ -664,6 +664,15 @@ var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
 var viewYear, viewMonth, shiftSelections = {}, shiftRoles = {};
 var isAdmin = false, adminViewAs = '', adminCastList = [], adminCastRoles = {};
+// ── モード分離（2026-07-30）──────────────────────────────────────────────
+// 管理者(isAdmin)は「🛡管理者モード」と「👤キャスト表示(プレビュー)モード」を明示トグルで切り替える。
+//   previewMode=false … 管理者モード（従来どおり。adminPriv()===isAdmin ＝ 挙動不変）
+//   previewMode=true  … キャスト表示モード。選んだキャストが実際に見る画面を「忠実に」出す。
+//                       ＝管理者専用UI（公開バー・🔒解錠・全員シフト・同期リンク等）は一切出さない。
+// ⚠️サーバは代理閲覧(viewAs)でも isAdmin=true を返す（権限は依頼者=管理者基準）。だから
+//   「管理者に戻る」でも isAdmin は落ちない。管理系UIの出し分けは必ず adminPriv() を通すこと。
+var previewMode = false;
+function adminPriv() { return isAdmin && !previewMode; }   // 管理系UIを出してよいか（プレビュー中は常にfalse）
 var staffRole = 'キャスト';
 // 休職中（名簿の「休職中」フラグ列。属性は変わらない＝キャストのまま）。
 // true の間は シフト提出／お知らせ／給与明細 だけに絞る。予約・顧客・売上明細・伝票・空席・領収書は不可。
@@ -953,15 +962,68 @@ function initAdminUI(castList) {
     var bar = document.createElement('div');
     bar.id = 'admin-bar';
     bar.className = 'admin-bar';
-    bar.innerHTML = '<span class="admin-label">キャスト:</span>'
-      + '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
-      + '<option value="">-- 選択 --</option>'
-      + '</select>'
-      + '<span class="admin-badge">管理者</span>';
+    bar.style.flexDirection = 'column';
+    bar.style.alignItems = 'stretch';
+    bar.style.gap = '8px';
+    // 1段目＝モード切替トグル＋キャスト選択。2段目＝プレビュー中バナー（キャスト表示モードのみ）。
+    bar.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;width:100%">'
+      +   '<div style="display:inline-flex;border:1px solid #4a3a1e;border-radius:9px;overflow:hidden;flex-shrink:0">'
+      +     '<button id="mode-btn-admin" onclick="setPreviewMode(false)">🛡 管理者</button>'
+      +     '<button id="mode-btn-preview" onclick="setPreviewMode(true)">👤 キャスト表示</button>'
+      +   '</div>'
+      +   '<span class="admin-label" id="admin-pick-label" style="flex-shrink:0">代理:</span>'
+      +   '<select class="cast-select" id="admin-viewas-sel" onchange="adminChange(this.value)">'
+      +     '<option value="">-- 選択 --</option>'
+      +   '</select>'
+      + '</div>'
+      + '<div id="preview-banner" style="display:none;align-items:center;gap:8px;background:#241a0c;border:1px solid #6a5220;border-radius:9px;padding:8px 12px"></div>';
     document.querySelector('header').insertAdjacentElement('afterend', bar);
   }
   updateAdminBar(castList);
+  updateModeUI();
   // ホーム（管理者メニュー）を表示
+  currentTab = 'home';
+  switchTabActive('home');
+  renderHome();
+}
+
+// モード切替ボタンの見た目（active=選択中）。トグルとバナーの状態を一括で貼り直す。
+function modeBtnCss_(active) {
+  return 'padding:7px 13px;border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;'
+    + (active ? 'background:linear-gradient(135deg,#c9a459,#8d6f2e);color:#1a1409'
+              : 'background:transparent;color:#b09f74');
+}
+function updateModeUI() {
+  var ba = document.getElementById('mode-btn-admin');
+  var bp = document.getElementById('mode-btn-preview');
+  if (ba) ba.style.cssText = modeBtnCss_(!previewMode);
+  if (bp) bp.style.cssText = modeBtnCss_(previewMode);
+  var lbl = document.getElementById('admin-pick-label');
+  if (lbl) lbl.textContent = previewMode ? 'プレビュー:' : '代理:';
+  var banner = document.getElementById('preview-banner');
+  if (banner) {
+    if (previewMode && adminViewAs) {
+      banner.style.display = 'flex';
+      banner.innerHTML =
+          '<span style="flex:1;font-size:13px;color:#e8d9b4;line-height:1.4">👤 <b style="color:#fff">' + esc(adminViewAs) + '</b> のキャスト画面をプレビュー中<br><span style="font-size:11px;color:#b7a074">（管理機能は表示していません＝本人と同じ画面）</span></span>'
+        + '<button onclick="setPreviewMode(false)" style="flex-shrink:0;padding:7px 12px;background:#3a2c12;border:1px solid #7a5f28;color:#f0dfb0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">管理者に戻る</button>';
+    } else {
+      banner.style.display = 'none';
+      banner.innerHTML = '';
+    }
+  }
+}
+
+// 🛡管理者 ⇄ 👤キャスト表示 の切替。選択済みキャストは解除し、ホームへ戻す。
+function setPreviewMode(on) {
+  previewMode = !!on;
+  adminViewAs = '';
+  portalData = null;
+  currentMonth = '';
+  var sel = document.getElementById('admin-viewas-sel');
+  if (sel) sel.value = '';
+  updateModeUI();
   currentTab = 'home';
   switchTabActive('home');
   renderHome();
@@ -974,6 +1036,7 @@ function adminChange(name) {
   if (name) staffRole = adminCastRoles[name] || 'キャスト';
   currentTab = 'home';
   switchTabActive('home');
+  updateModeUI();
   if (!name) { renderHome(); return; }
   loadPortal();
 }
@@ -1054,10 +1117,11 @@ function homeMenu() {
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
-  if (!onLeave && (isAdmin || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === '黒服')) castKeys.push('skill');
+  //   ⚠️キャスト表示中は adminPriv()=false ＝ プレビュー対象が黒服のときだけ出る（本人と同じ挙動）
+  if (!onLeave && (adminPriv() || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === '黒服')) castKeys.push('skill');
   var html = '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:8px 2px 10px">メニュー</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + castKeys.map(menuBtn).join('') + '</div>';
-  if (isAdmin) {
+  if (adminPriv()) {
     // 管理者・りく専用：全員シフト（閲覧＋修正）をポータルからも使えるようにする（2026-07-27 ボス指示）。
     //   ゲートはサーバ側 isAdmin_（管理者ロール＋りく）＝ここに出るのは管理者/りくだけ。
     //   申請管理・通知設定・軍師設定は従来どおり管理コンソールに集約。
@@ -1685,7 +1749,15 @@ function ksPingOnce(){
 
 function renderHome(){
   contentTargetId = 'content';
-  // 管理者でキャスト未選択 → 呼び出し＋案内＋メニュー
+  // 👤キャスト表示モードでキャスト未選択 → プレビュー対象を選ばせる（管理者ホームは出さない）
+  if (previewMode && !adminViewAs) {
+    setContent('<div class="card" style="text-align:center;color:#b09f74;font-size:14px;line-height:1.9;padding:34px 18px">'
+      + '👤 <b style="color:#efe4cd">キャスト表示（プレビュー）</b><br>'
+      + '上の「プレビュー」からキャストを選ぶと、<br>そのキャストが実際に見る画面をそのまま確認できます。<br>'
+      + '<span style="font-size:12px;color:#8d7c56">管理機能は表示されません。</span></div>');
+    return;
+  }
+  // 管理者でキャスト未選択 → 呼び出し＋案内＋メニュー（previewMode時は上でreturn済み）
   if (isAdmin && !adminViewAs) {
     setContent(homeGreetHero() + homeCallCard()
       + '<div class="card" style="text-align:center;color:#b09f74;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>'
@@ -1863,7 +1935,7 @@ function renderHomeRsv(list){
 // 現在の席（軍師の付け回しデータとリンク）
 var homeMySeats = [], homeSelSeat = '', homeWorking = false;
 // 本日シフトに入っているか（todayArrivalは本日出勤予定があるときだけ入る）。管理者は常に可
-function homeOnShift(){ return !!(isAdmin || (portalData && portalData.todayArrival)); }
+function homeOnShift(){ return !!(adminPriv() || (portalData && portalData.todayArrival)); }
 function loadMySeat(){
   gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'getCastSeats', userId: userId }) })
     .then(function(r){ return r.json(); })
@@ -1883,13 +1955,13 @@ function applyWorkingGate(){
   var box = document.getElementById('home-callbtns');
   if (!box) return;
   var winOpen = isCallWindowOpen();
-  var enabled = homeWorking && (winOpen || isAdmin);   // 管理者は時間外も押せる
+  var enabled = homeWorking && (winOpen || adminPriv());   // 管理者は時間外も押せる（プレビュー中は本人と同じゲート）
   box.style.opacity = enabled ? '' : '.35';
   box.style.pointerEvents = enabled ? '' : 'none';
   box.style.filter = enabled ? '' : 'grayscale(1)';
   var seat = document.getElementById('home-myseat');
   if (!homeWorking && seat) seat.innerHTML = '<span style="color:#c8925a">🔒 本日シフトの方のみ呼び出しできます</span>';
-  else if (!winOpen && !isAdmin && seat) seat.innerHTML = '<span style="color:#c8925a">🕗 呼び出しは19:45〜1:00のみ利用できます</span>';
+  else if (!winOpen && !adminPriv() && seat) seat.innerHTML = '<span style="color:#c8925a">🕗 呼び出しは19:45〜1:00のみ利用できます</span>';
 }
 function renderMySeat(){
   var el = document.getElementById('home-myseat');
@@ -1917,7 +1989,7 @@ function homePickSeat(label){ homeSelSeat = label; renderMySeat(); }
 // キャストが黒服を呼ぶ（help=抜き / soda=炭酸 / ice=アイス / other=その他）
 function castCall(kind, btn){
   if (!homeWorking) { homeToast('本日シフトの方のみ利用できます', false); return; }
-  if (!isCallWindowOpen() && !isAdmin) { homeToast('呼び出しは19:45〜1:00のみ利用できます', false); return; }
+  if (!isCallWindowOpen() && !adminPriv()) { homeToast('呼び出しは19:45〜1:00のみ利用できます', false); return; }
   var seatMsg = homeSelSeat ? '（' + homeSelSeat + '）' : '（席不明）';
   if (kind === 'help' && !confirm('黒服にヘルプを送りますか？' + seatMsg + '\n（声をかけて一旦抜いてもらいます）')) return;
   if (btn){ btn.disabled = true; btn.style.opacity = '.5'; setTimeout(function(){ btn.disabled = false; btn.style.opacity = ''; }, 4000); }
@@ -2187,7 +2259,7 @@ function renderSales() {
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
   h += '<span style="font-size:10px;color:#94886a;letter-spacing:0.5px">' + sel + ' TRUSTデータ'
     + (asOf ? '　<span style="color:#e6cf95;font-weight:600">' + asOf + '時点</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>') + '</span>';
-  if (isAdmin) {
+  if (adminPriv()) {
     h += '<span style="font-size:10px;color:#b8a67c;cursor:pointer;text-decoration:underline" onclick="salesSetDate(\'' + sel + '\')">'
       + (asOf ? '変更' : '取込日を設定') + '</span>';
   }
@@ -2342,7 +2414,7 @@ function renderPay() {
     months.forEach(function(m) {
       var act = m === selectedM;
       var pub = payPublished[m];
-      var label = m + (isAdmin && !pub ? ' 🔒' : '');
+      var label = m + (adminPriv() && !pub ? ' 🔒' : '');
       t += '<button onclick="switchPayMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
         + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
         + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
@@ -2352,7 +2424,7 @@ function renderPay() {
   }
 
   var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
-  if (!isAdmin && !payPublished[sel] && !isHairOnlyMonth) {
+  if (!adminPriv() && !payPublished[sel] && !isHairOnlyMonth) {
     // ⚠️ 成績データは初回のみ取得（loadStatsDataのload-onceガード）。管理者が公開した後に
     //    アプリを開いたままだと payPublished が古いまま＝「公開したのにキャストはロックのまま」になる。
     //    ここで手動リロード導線を必ず出す＝webviewを閉じ直さずワンタップで最新の公開状態を取り直せる。
@@ -2389,7 +2461,7 @@ function renderPay() {
     var partsO = sel.split('/');
     if (partsO.length === 2) reiwaOnly = '令和' + (parseInt(partsO[0]) - 2018) + '年' + parseInt(partsO[1]) + '月分';
     var hOnly = '<div style="padding:14px">' + monthTabsHtml(sel);
-    if (isAdmin) {
+    if (adminPriv()) {
       var isPubO = !!payPublished[sel];
       hOnly += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
       hOnly += '<div><div style="font-size:10px;color:#b8a67c;margin-bottom:4px">給与明細 公開状態</div>';
@@ -2469,7 +2541,7 @@ function renderPay() {
   h += monthTabsHtml(sel);
 
   // 管理者用：公開管理バー
-  if (isAdmin) {
+  if (adminPriv()) {
     var isPub = !!payPublished[sel];
     h += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
     h += '<div>';
@@ -2765,7 +2837,7 @@ function renderRanking(d) {
     rankingMonths.forEach(function(m) {
       var act = m === selMonth;
       var pub = rankPublished[m];
-      var label = m + (isAdmin && !pub ? ' 🔒' : '');
+      var label = m + (adminPriv() && !pub ? ' 🔒' : '');
       h += '<button onclick="loadRanking(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
         + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
         + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + label + '</button>';
@@ -2774,7 +2846,7 @@ function renderRanking(d) {
   }
 
   // 管理者：公開管理バー
-  if (isAdmin) {
+  if (adminPriv()) {
     var isPub = !!rankPublished[selMonth];
     h += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between">';
     h += '<div><div style="font-size:10px;color:#b8a67c;margin-bottom:4px">ランキング 公開状態</div>';
@@ -2789,7 +2861,7 @@ function renderRanking(d) {
   }
 
   // 非管理者・未公開ならロック画面
-  if (!isAdmin && !rankPublished[selMonth]) {
+  if (!adminPriv() && !rankPublished[selMonth]) {
     h += '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
@@ -2830,7 +2902,7 @@ function renderRanking(d) {
   h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
 
   // 管理者：TRUST組数同期（ブックマークレット）
-  if (isAdmin) {
+  if (adminPriv()) {
     h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
     h += '<div style="font-size:11px;color:#b8a67c;font-weight:600;margin-bottom:8px">🔄 TRUST 組数を同期する</div>';
     h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
@@ -3222,7 +3294,8 @@ function renderCustomerShell_() {
     return '<button class="cust-filter-btn' + (custFilter === f.key ? ' active' : '') + '" onclick="loadCustomers(\'' + f.key + '\', custQuery)">' + f.label + '</button>';
   }).join('');
   // りく・管理者だけ：新規会員登録＋編集ができる（サーバ側 isAdmin_ で二重ゲート）
-  var adminBar = isAdmin
+  //   ⚠️キャスト表示中は adminPriv()=false ＝ 登録/編集バーは出さない（本人と同じ閲覧のみ）
+  var adminBar = adminPriv()
     ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
       + '<button onclick="openCustAddForm()" style="flex:1;padding:11px;background:#241d10;border:1px solid #8a6d3a;border-radius:10px;color:#e6cf95;font-size:14px;font-weight:700;cursor:pointer">＋ 新規会員を登録</button>'
       + '<span style="font-size:11px;color:#94886a">タップで編集</span>'
@@ -3303,7 +3376,8 @@ function fmtVisitDate(d) {
 function openPortalCustDetail(i) {
   var c = custList[i]; if (!c) return;
   // りく・管理者：詳細タップ＝編集フォーム（rowIdx がある＝サーバが編集可と判定した会員のみ）
-  if (isAdmin && c.rowIdx) { openCustEditForm(i); return; }
+  //   ⚠️キャスト表示中は adminPriv()=false ＝ 編集に入らず通常の詳細表示（本人と同じ）
+  if (adminPriv() && c.rowIdx) { openCustEditForm(i); return; }
   var head = '<div style="padding:14px">'
     + '<button onclick="backToCustList()" style="background:#16130d;border:1px solid #33291a;color:#b09f74;border-radius:8px;padding:7px 14px;font-size:13px;margin-bottom:14px;cursor:pointer">← 顧客一覧へ戻る</button>'
     + '<div style="font-size:20px;font-weight:800;color:#f2ead9;margin-bottom:2px">' + esc(c.name || c.card || '') + ' 様</div>'
@@ -3561,7 +3635,7 @@ function renderHairTab(d) {
       h += '<div>';
       h += '<div style="font-size:15px;font-weight:700;color:#efe4cd;margin-bottom:3px">¥' + r.amount.toLocaleString() + '</div>';
       h += '<div style="font-size:12px;color:#b8a67c">' + esc(r.date) + (r.month ? '  （' + esc(r.month) + '分）' : '') + '</div>';
-      if (isAdmin) h += '<div style="font-size:11px;color:#b8a67c;margin-top:2px">' + esc(r.name) + '</div>';
+      if (adminPriv()) h += '<div style="font-size:11px;color:#b8a67c;margin-top:2px">' + esc(r.name) + '</div>';
       h += '<div style="font-size:10px;color:#94886a;margin-top:4px">登録: ' + esc(r.registeredAt) + '</div>';
       h += '</div>';
       h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">';
@@ -4461,7 +4535,7 @@ function renderBirthday(d) {
   var lbl = 'font-size:12px;color:#b8a67c;display:block;margin-bottom:6px';
   var inp = 'width:100%;padding:11px;background:#0d1626;border:1px solid #2a2114;border-radius:9px;color:#f2ead9;font-size:15px;box-sizing:border-box';
   var h = '<div style="padding:14px">';
-  if (isAdmin && adminViewAs) h += '<div style="font-size:12px;color:#c9a0ff;margin-bottom:10px">代理設定中: <b>' + esc(adminViewAs) + '</b></div>';
+  if (adminPriv() && adminViewAs) h += '<div style="font-size:12px;color:#c9a0ff;margin-bottom:10px">代理設定中: <b>' + esc(adminViewAs) + '</b></div>';
 
   // ── 誕生日 ──
   h += '<div style="' + box + '">'
