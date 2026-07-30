@@ -821,6 +821,24 @@ function handleApiRequest_(body) {
     return { ok: true, month: month, admin: admin, list: list };
   }
 
+  // === 📋 面談表 一覧（管理者のみ・全件。軍師は提出済のみ／こちらは提出済＋面談済の全件） ===
+  if (body.action === 'adminGetMendanList') {
+    var mwho = getStaffName(body.userId);
+    if (!mwho || !isAdmin_(mwho)) return { ok: false, error: '権限がありません' };
+    var mss = getOrOpenSS_();
+    var msh = mss.getSheetByName(MENDAN_TAB);
+    if (!msh || msh.getLastRow() < 2) return { ok: true, list: [] };
+    var mvals = msh.getDataRange().getValues();
+    var mc = mendanColMap_(msh);
+    var mlist = [];
+    for (var mi = 1; mi < mvals.length; mi++) {
+      if (!String(mvals[mi][mc['状態']] || '').trim()) continue;
+      mlist.push(mendanRowToObj_(mvals[mi], mc));
+    }
+    mlist.reverse();
+    return { ok: true, list: mlist };
+  }
+
   // === 📄 請求書管理（管理者のみ／軍師で入力→コンソールで管理＆請求書生成） ===
   if (body.action === 'seikyuData') {
     const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
@@ -18131,7 +18149,7 @@ function resendNotices(ids) {
 var MENDAN_TAB  = '面談表';
 var MENDAN_HEAD = ['面談ID','面談日時','面談者','状態','氏名','フリガナ','生年月日','年齢','住所','電話',
   '週日数','曜日','希望時間','前週提出','昼職','送り','送り先','酒強さ','苦手な酒','同伴','客付き',
-  '経験','前店売上','前店時給','持ち客数','見込み客数','見込み売上','ホスト','風俗','他店予定','他店詳細','身分証','顔写真','シミュ',
+  '経験','前店売上','前店時給','持ち客数','見込み客数','見込み売上','ホスト','風俗','他店予定','他店詳細','身分証','身分証裏','顔写真','シミュ',
   '黒服所感','判定','源氏名','体験日','名簿登録','更新日時'];
 
 // シート取得（無ければ作成／既存に見出しが無い列は末尾に追補＝ci()の-1黙り0を防ぐ）
@@ -18292,6 +18310,7 @@ function mendanSubmit_(token, rec, data) {
     for (var i = 1; i < vals.length; i++) { if (String(vals[i][c['面談ID']]).trim() === rec.id) { r = i + 1; break; } }
     if (r < 0) return { ok: false, error: '面談レコードが見つかりません' };
     var idPhoto = data.idPhoto ? saveMendanPhoto_(rec.id, data.name, 'id', data.idPhoto) : '';
+    var idBack = data.idPhotoBack ? saveMendanPhoto_(rec.id, data.name, 'idback', data.idPhotoBack) : '';
     var facePhoto = data.facePhoto ? saveMendanPhoto_(rec.id, data.name, 'face', data.facePhoto) : '';
     var set = function (k, v) { if (c[k] != null) sh.getRange(r, c[k] + 1).setValue(v == null ? '' : v); };
     set('氏名', String(data.name || '')); set('フリガナ', String(data.kana || ''));
@@ -18308,6 +18327,7 @@ function mendanSubmit_(token, rec, data) {
     set('ホスト', data.hostExp); set('風俗', data.fuzokuExp);
     set('他店予定', data.other); set('他店詳細', data.otherNote);
     set('身分証', idPhoto ? ('https://drive.google.com/file/d/' + idPhoto + '/view') : '');
+    set('身分証裏', idBack ? ('https://drive.google.com/file/d/' + idBack + '/view') : '');
     set('顔写真', facePhoto ? ('https://drive.google.com/file/d/' + facePhoto + '/view') : '');
     set('状態', '提出済'); set('更新日時', new Date());
     PropertiesService.getScriptProperties().deleteProperty('MENDAN_TOK_' + token);   // 提出でトークン失効
@@ -18316,9 +18336,11 @@ function mendanSubmit_(token, rec, data) {
       pushAdmins_(mendanSummaryText_(rec.id, data));
       var faceUrl = facePhoto ? mendanDriveImageUrl_(facePhoto) : '';
       var idUrl   = idPhoto   ? mendanDriveImageUrl_(idPhoto)   : '';
+      var idBackUrl = idBack  ? mendanDriveImageUrl_(idBack)    : '';
       mendanAdminLineIds_().forEach(function (to) {
         if (faceUrl) pushImage_(to, faceUrl);
         if (idUrl)   pushImage_(to, idUrl);
+        if (idBackUrl) pushImage_(to, idBackUrl);
       });
     } catch (e) { console.error('mendan notify1', e); }
     return { ok: true, id: rec.id };
@@ -18355,7 +18377,7 @@ function mendanRowToObj_(row, c) {
     exp: String(g('経験')), prevSales: g('前店売上'), prevWage: g('前店時給'),
     holdCust: g('持ち客数'), expCust: g('見込み客数'), expSales: g('見込み売上'),
     hostExp: String(g('ホスト')), fuzokuExp: String(g('風俗')), other: String(g('他店予定')), otherNote: String(g('他店詳細')),
-    idPhoto: String(g('身分証')), facePhoto: String(g('顔写真')),
+    idPhoto: String(g('身分証')), idPhotoBack: String(g('身分証裏')), facePhoto: String(g('顔写真')),
     memo: String(g('黒服所感')), judge: String(g('判定'))
   };
 }
