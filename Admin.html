@@ -524,22 +524,49 @@ function drawMendan(){
   var pl=function(l,u){ return u?('<a href="'+esc(u)+'" target="_blank" style="color:#c9a45c;font-size:12px;margin-right:12px">'+l+'</a>'):''; };
   var rows=list.map(function(m){
     var age=(m.age!==''&&m.age!=null)?('満'+m.age+'歳'):'—';
-    var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?' <span style="color:#d98a8a">⚠️20歳未満</span>':'';
+    var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?' <span style="color:#ff9aa0">⚠️20歳未満</span>':'';
     var expLine=(m.exp==='あり'||m.exp==='少し')
       ?('経験'+esc(m.exp)+'／前店'+mendanYen_(m.prevSales)+'／持ち客'+(m.holdCust||'—')+'人・見込み客'+(m.expCust||'—')+'人・見込売上'+mendanYen_(m.expSales))
       :('経験：'+esc(m.exp||'—'));
-    var photos=pl('🪪表',m.idPhoto)+pl('🪪裏',m.idPhotoBack)+pl('📷顔',m.facePhoto);
-    var memo=m.memo?('<div class="meta" style="color:#a29a8e">📝 '+esc(m.memo)+'</div>'):'';
-    return '<div class="lrow"><div class="main">'
+    return '<div class="lrow" style="cursor:pointer" onclick="openMendanRow(\''+esc(String(m.id))+'\')"><div class="main" style="flex:1">'
       +'<div class="nm">'+esc(m.name||'（無名）')+' <span class="sub">'+age+'</span>'+warn+' '+stB(m.status)+jB(m.judge)+'</div>'
       +'<div class="meta">'+esc(m.at||'')+' ／ '+esc(m.tel||'—')+' ／ 週'+(m.days||'—')+' '+esc(m.weekdays||'')+'</div>'
       +'<div class="meta">'+expLine+'</div>'
-      +(m.addr?('<div class="meta">'+esc(m.addr)+'</div>'):'')
-      +memo
-      +(photos?('<div class="meta">'+photos+'</div>'):'')
-      +'</div></div>';
+      +'</div><div style="color:var(--dim);font-size:12px;flex:none;align-self:center">詳細 ▸</div></div>';
   }).join('');
   setBody(bar+rows);
+}
+function openMendanRow(id){
+  var m=null; for(var i=0;i<MENDAN_ALL.length;i++){ if(String(MENDAN_ALL[i].id)===String(id)){ m=MENDAN_ALL[i]; break; } }
+  if(!m){ drawMendan(); return; }
+  drawMendanDetail(m);
+}
+function drawMendanDetail(m){
+  var R=function(k,v){ return (v===''||v==null)?'':'<div style="display:flex;gap:12px;padding:8px 0;border-top:1px solid var(--line)"><div style="width:112px;flex:none;color:var(--dim);font-size:12.5px">'+k+'</div><div style="font-size:14px;flex:1;color:var(--txt)">'+esc(String(v))+'</div></div>'; };
+  var age=(m.age!==''&&m.age!=null)?('満'+m.age+'歳'):'—';
+  var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?' ⚠️20歳未満（深夜不可）':'';
+  var num=function(v,u){ return (v===''||v==null)?'—':(v+u); };
+  var pl=function(l,u){ return u?('<a href="'+esc(u)+'" target="_blank" style="color:var(--accent);font-size:13px;margin-right:18px">'+l+'</a>'):('<span style="color:var(--dim);font-size:13px;margin-right:18px">'+l+'なし</span>'); };
+  var expB=(m.exp==='あり'||m.exp==='少し')
+    ? R('経験',m.exp)+R('前店売上',mendanYen_(m.prevSales))+R('前店時給',m.prevWage?(m.prevWage+'円'):'—')
+      +R('持ち客数',num(m.holdCust,'人'))+R('見込み客数',num(m.expCust,'人'))+R('見込み売上',mendanYen_(m.expSales))
+      +R('ホスト経験',m.hostExp)+R('風俗経験',m.fuzokuExp)
+    : R('経験',m.exp||'なし');
+  var h='<div class="toolbar"><button class="btn" onclick="drawMendan()">← 一覧に戻る</button>'
+    +'<span class="cnt" style="margin-left:auto">'+esc(m.status||'')+(m.judge?(' ／ '+esc(m.judge)):'')+'</span></div>'
+    +'<div class="card" style="max-width:720px">'
+    +'<div style="font-size:18px;font-weight:800;padding:2px 0 8px;color:var(--txt)">'+esc(m.name||'（無名）')+' <span style="color:var(--sub);font-weight:400;font-size:14px">'+age+'</span>'+(warn?'<span style="color:#ff9aa0">'+warn+'</span>':'')+'</div>'
+    +R('フリガナ',m.kana)+R('生年月日',m.birth)+R('電話',m.tel)+R('住所',m.addr)
+    +R('面談日時',m.at)+R('面談者',m.by)
+    +R('希望シフト','週'+(m.days||'—')+' '+(m.weekdays||'')+(m.timeRange?('／'+m.timeRange):'')+(m.prevWeek?('／前週提出:'+m.prevWeek):''))
+    +R('昼職',m.dayJob)+R('送り',(m.okuri||'')+(m.okuriArea?('（'+m.okuriArea+'）'):''))
+    +R('お酒',m.drink)+R('苦手な酒',m.weak)+R('同伴',m.dohan)+R('客付き',m.customers)
+    +expB
+    +R('他店予定',(m.other==='あり')?('あり '+(m.otherNote||'')):(m.other||''))
+    +R('黒服所感',m.memo)
+    +'<div style="padding:12px 0 2px;border-top:1px solid var(--line);margin-top:6px">'+pl('🪪 身分証(表)',m.idPhoto)+pl('🪪 身分証(裏)',m.idPhotoBack)+pl('📷 顔写真',m.facePhoto)+'</div>'
+    +'</div>';
+  setBody(h);
 }
 
 /* 🎂 今月誕生日のお客様（お客様管理Y3の誕生日列より）。バックは getCustomerBirthdays（管理者=全件）。 */
