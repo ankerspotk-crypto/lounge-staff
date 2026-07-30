@@ -1049,6 +1049,7 @@ var SECTIONS = {
   seatreq:  { t:'席リクエスト', i:'💺' },
   customers:{ t:'顧客管理',     i:'👥' },
   bday:     { t:'誕生日設定',   i:'🎂' },
+  profile:  { t:'相性プロフィール', i:'💞' },
   custbday: { t:'今月誕生日の客', i:'🎂' },
   wine:     { t:'シャンパン・ワイン在庫', i:'🍾' },
   skill:    { t:'スキルテスト',   i:'📝' },
@@ -1108,7 +1109,7 @@ function versionFooter() {
 
 function homeMenu() {
   ksPingOnce();   // ⚔️合戦の「手番」バッジ用。ホーム描画をブロックしない（結果が来たら描き直す）
-  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','wine'];
+  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','profile','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
@@ -1161,6 +1162,7 @@ function switchTab(tab) {
   if (tab === 'wine') { loadWine(); return; }
   if (tab === 'customers') { loadCustomers(); return; }
   if (tab === 'bday') { loadBirthday(); return; }
+  if (tab === 'profile') { loadProfile(); return; }
   if (tab === 'custbday') { loadCustomerBirthdays(); return; }
   if (tab === 'skill') { loadSkill(); return; }
   if (isAdmin && !adminViewAs) {
@@ -4492,6 +4494,74 @@ function loadBirthday() {
       bdayData = d; renderBirthday(d);
     })
     .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+/* 💞 相性プロフィール（キャスト自己申告。付け回しの相性データ基盤・第一歩） */
+var profileData = null;
+function profTargetName() { return isAdmin ? adminViewAs : ''; }
+function loadProfile() {
+  if (isAdmin && !adminViewAs) {
+    setContent('<div style="padding:24px;color:#b09f74;font-size:14px;line-height:1.8">💞 相性プロフィールはキャスト本人の画面です。<br>上部の「キャストを選択」から対象キャストを選ぶと、代理で編集できます。</div>');
+    return;
+  }
+  setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">読み込み中...</div>');
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castGetProfile', userId: userId, targetName: profTargetName() }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      profileData = d; renderProfile(d);
+    })
+    .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+function profChips_(group, vocabList, selArr) {
+  selArr = selArr || [];
+  var chips = (vocabList || []).map(function(c){
+    return '<button type="button" class="tantou-chip' + (selArr.indexOf(c) >= 0 ? ' sel' : '') + '" data-val="' + esc(c) + '" onclick="toggleTantouChip(this)">' + esc(c) + '</button>';
+  }).join('');
+  return '<div class="prof-wrap" data-group="' + group + '" style="display:flex;flex-wrap:wrap;gap:6px">' + chips + '</div>';
+}
+function renderProfile(d) {
+  var v = d.vocab || {}, p = d.profile || {};
+  var box = 'background:#16130d;border:1px solid #33291a;border-radius:12px;padding:16px;margin-bottom:14px';
+  var lbl = 'font-size:14px;font-weight:700;color:#efe4cd;margin-bottom:3px';
+  var sub = 'font-size:11px;color:#b8a67c;margin-bottom:11px;line-height:1.6';
+  var h = '<div style="padding:14px" id="profRoot">';
+  if (adminPriv() && adminViewAs) h += '<div style="font-size:12px;color:#c9a0ff;margin-bottom:10px">代理編集中: <b>' + esc(adminViewAs) + '</b></div>';
+  h += '<div style="' + box + ';background:#1a1500;border-color:#3a2e00">'
+    + '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:6px">💞 相性プロフィール</div>'
+    + '<div style="font-size:12px;color:#cdbb8e;line-height:1.7">あなたのタイプを登録すると、黒服さん・家康くんが<b>あなたに合うお客様・お席</b>を選びやすくなります。指名や同伴につながる土台です。分かる範囲でOK、後からいつでも直せます。</div></div>';
+  h += '<div style="' + box + '"><div style="' + lbl + '">見た目・タイプ</div><div style="' + sub + '">自分に近いものを選ぶ</div>' + profChips_('look', v.look, p.look) + '</div>';
+  h += '<div style="' + box + '"><div style="' + lbl + '">性格・接客スタイル</div><div style="' + sub + '">接客の雰囲気</div>' + profChips_('chara', v.chara, p.chara) + '</div>';
+  h += '<div style="' + box + '"><div style="' + lbl + '">得意なお客様</div><div style="' + sub + '">こういう方が得意</div>' + profChips_('good', v.client, p.good) + '</div>';
+  h += '<div style="' + box + '"><div style="' + lbl + '">苦手なお客様</div><div style="' + sub + '">無理せず外したいタイプ（正直でOK）</div>' + profChips_('bad', v.client, p.bad) + '</div>';
+  var weakNote = d.seededWeak ? '<div style="font-size:11px;color:#88cc44;margin-bottom:8px">🌱 面談のときの回答から仮に入れています。違ったら外してください。</div>' : '';
+  h += '<div style="' + box + '"><div style="' + lbl + '">苦手なお酒</div><div style="' + sub + '">付き合うと潰れてしまうお酒</div>' + weakNote + profChips_('weak', v.drink, p.weak) + '</div>';
+  h += '<div style="' + box + '"><div style="' + lbl + '">自己PR・メモ</div><div style="' + sub + '">タグに入らない強み・注意点（黒服・家康くんが読みます）</div>'
+    + '<textarea id="profMemo" rows="4" style="width:100%;padding:11px;background:#0d1626;border:1px solid #2a2114;border-radius:9px;color:#f2ead9;font-size:14px;box-sizing:border-box;resize:vertical" placeholder="例：年上のお客様が得意です／お酒はゆっくりなら大丈夫">' + esc(p.memo || '') + '</textarea></div>';
+  h += '<div style="display:flex;align-items:center;gap:12px;margin:4px 0 34px">'
+    + '<button onclick="saveProfile()" style="padding:13px 26px;background:#8a6a2e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer">保存する</button>'
+    + '<span id="profStatus" style="font-size:13px;color:#88cc44"></span></div>';
+  h += '</div>';
+  setContent(h);
+}
+function saveProfile() {
+  var root = document.getElementById('profRoot');
+  if (!root) return;
+  var pick = function(group){
+    var sel = root.querySelectorAll('.prof-wrap[data-group="' + group + '"] .tantou-chip.sel');
+    return Array.prototype.map.call(sel, function(c){ return c.getAttribute('data-val'); });
+  };
+  var profile = { look: pick('look'), chara: pick('chara'), good: pick('good'), bad: pick('bad'), weak: pick('weak'),
+                  memo: (document.getElementById('profMemo') || {}).value || '' };
+  var st = document.getElementById('profStatus');
+  if (st) { st.style.color = '#b8a67c'; st.textContent = '保存中...'; }
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'castSaveProfile', userId: userId, targetName: profTargetName(), profile: profile }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { if (st) { st.style.color = '#f66'; st.textContent = (d.error || '保存に失敗しました'); } return; }
+      if (st) { st.style.color = '#88cc44'; st.textContent = '✓ 保存しました'; }
+    })
+    .catch(function(){ if (st) { st.style.color = '#f66'; st.textContent = '通信エラー'; } });
 }
 
 /* 🎂 今月誕生日のお客様（キャスト＝自分の担当客のみ／バックの getCustomerBirthdays が非管理者を自動で担当スコープに絞る） */
