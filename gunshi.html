@@ -3385,7 +3385,7 @@ var MENU_TILES=[
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🖨', t:'領収書・受領書',     act:"openReceipt()"},
-    {ic:'📄', t:'請求書',             act:"openSeikyu()"},
+    {ic:'📄', t:'対象伝票・名刺を登録', act:"openSeikyu()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
     {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
     {ic:'📢', t:'お知らせ配信',       act:"openBroadcast()"},
@@ -5220,7 +5220,7 @@ function openSeikyu(){
 }
 function seikyuRenderMenu_(el){
   skEnsureCss_();
-  document.getElementById('menuTitle').textContent='📄 請求書';
+  document.getElementById('menuTitle').textContent='📄 対象伝票・名刺を登録';
   if(!SK_BOOT){ el.innerHTML=skBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>'; return; }
   if(SK_VIEW==='newsender'){ el.innerHTML=skNewSenderHtml_(); return; }
   if(SK_VIEW==='list'){ el.innerHTML=skListHtml_(); skLoadListIfNeeded_(); return; }
