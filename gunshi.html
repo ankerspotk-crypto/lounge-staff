@@ -6099,6 +6099,41 @@ function showKeySetup(msg){
 window._gsSetF=function(t){window._gsTerm=t;var a=document.getElementById('gf5'),b=document.getElementById('gf2');if(a)a.style.background=t==='5f'?'#14335c':'#101d33';if(b)b.style.background=t==='2f'?'#14335c':'#101d33';};
 window._gsSave=function(){var k=(document.getElementById('gkey').value||'').trim();if(!k){alert('軍師キーを入力してください');return;}try{localStorage.setItem('gunshi_key',k);localStorage.setItem('gunshi_term',window._gsTerm||'5f');}catch(e){}location.href=location.pathname;};
 /* 初期化: キー確認 → bootstrap → 起動 */
+/* ===== 🛠 軍師メンテナンス（コンソールから停止/再開）ここから =====
+   コンソール(⚙️運営)で停止すると、全端末をこの全面表示にして入店を止める。
+   起動時に判定＋60秒ごとに見張り。再開(OFF)に戻したら自動で再読込して復帰する。 */
+window._maintOn=false; window._maintPoll=null;
+function _mEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function showMaintenance(m){
+  window._maintOn=true;
+  var msg=(m&&m.msg)?String(m.msg):'ただいまシステムメンテナンス中です。';
+  var at=(m&&m.at)?String(m.at):'';
+  var inner='<div style="max-width:520px;text-align:center;padding:32px 26px">'
+    +'<div style="font-size:54px;line-height:1;margin-bottom:18px">🛠️</div>'
+    +'<div style="font-size:24px;font-weight:900;letter-spacing:.04em;color:#dbe7fb;margin-bottom:14px">軍師 メンテナンス中</div>'
+    +'<div style="font-size:15px;line-height:1.8;color:#9ab4d8;white-space:pre-wrap">'+_mEsc(msg)+'</div>'
+    +(at?'<div style="font-size:12px;color:#5f7fa6;margin-top:16px">停止 '+_mEsc(at)+'</div>':'')
+    +'<div style="font-size:12px;color:#5f7fa6;margin-top:8px">再開されると自動で通常画面に戻ります。</div>'
+    +'<button onclick="location.reload()" style="margin-top:22px;padding:12px 26px;border-radius:12px;border:1px solid #21406e;background:#101d33;color:#cfe4ff;font-size:15px;font-weight:800">🔄 今すぐ再読込</button>'
+    +'</div>';
+  var el=document.getElementById('maintOverlay');
+  if(!el){
+    el=document.createElement('div'); el.id='maintOverlay';
+    el.style.cssText='position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#0a1730,#050a16 70%)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=inner; el.style.display='flex';
+}
+function startMaintPoll(){
+  if(window._maintPoll) return;
+  window._maintPoll=setInterval(function(){
+    gsr('getGunshiMaintenance').then(function(m){
+      if(m&&m.on){ if(!window._maintOn) showMaintenance(m); }
+      else { if(window._maintOn) location.reload(); }   /* 再開＝クリーンに復帰 */
+    }).catch(function(){});                              /* 通信不良時は現状維持 */
+  },60000);
+}
+/* ===== 🛠 軍師メンテナンス ここまで ===== */
 (function initGunshi(){
   var q=new URLSearchParams(location.search);
   KIOSK_KEY=q.get('key')||(function(){try{return localStorage.getItem('gunshi_key')||'';}catch(e){return '';}})();
@@ -6106,14 +6141,18 @@ window._gsSave=function(){var k=(document.getElementById('gkey').value||'').trim
   TERM = term==='2f'?'2F':'5F';
   try{ if(q.get('key'))localStorage.setItem('gunshi_key',KIOSK_KEY); localStorage.setItem('gunshi_term',term); }catch(e){}
   if(!KIOSK_KEY || q.get('setup')==='1'){ showKeySetup(); return; }
-  fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:'getKioskBootstrap',args:[]})})
-    .then(function(r){return r.json();})
-    .then(function(j){
-      if(j&&j.__ok===false){ showKeySetup('キーが正しくない可能性があります'); return; }
-      var d=(j&&j.data)||{}; KIOSK_USER_ID=d.kioskUserId||''; if(d.today){TODAY=d.today;curDate=d.today;}
-      bootGunshi();
-    })
-    .catch(function(){ bootGunshi(); }); /* 通信不可でもログイン画面までは出す */
+  /* 🛠 メンテ判定と bootstrap を同時に投げる（メンテON なら bootstrap を捨てて入店停止＝起動遅延ゼロ） */
+  var mReq=gsr('getGunshiMaintenance').catch(function(){return null;});
+  var bReq=fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:'getKioskBootstrap',args:[]})})
+    .then(function(r){return r.json();}).catch(function(){return null;});
+  Promise.all([mReq,bReq]).then(function(rs){
+    var m=rs[0], j=rs[1];
+    if(m&&m.on){ showMaintenance(m); startMaintPoll(); return; }        /* 停止中：ここで打ち止め */
+    if(j&&j.__ok===false){ showKeySetup('キーが正しくない可能性があります'); return; }
+    if(!j){ bootGunshi(); startMaintPoll(); return; }                   /* 通信不可でもログイン画面までは出す */
+    var d=(j&&j.data)||{}; KIOSK_USER_ID=d.kioskUserId||''; if(d.today){TODAY=d.today;curDate=d.today;}
+    bootGunshi(); startMaintPoll();
+  });
 })();
 </script>
 </body>
