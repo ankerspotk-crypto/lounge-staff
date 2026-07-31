@@ -657,7 +657,7 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
-var PORTAL_BUILD = '2026-07-29a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var PORTAL_BUILD = '2026-07-31a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
 
 var userId = '', userName = '', portalData = null;
@@ -814,6 +814,46 @@ function doKioskAuth(uid, kt) {
     .catch(function(e) { showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>'); });
 }
 
+/* ===== 🛠 ポータル メンテナンス（コンソールから停止/再開）ここから =====
+   コンソール(⚙️運営)で停止すると、キャスト向けポータルをこの全面表示にして止める。
+   起動と並列に判定＝通常起動は遅延ゼロ。停止中はオーバーレイで操作を全ブロック。
+   60秒ごとに見張り、再開(OFF)に戻ったら自動で再読込して復帰する。 */
+window._pMaintOn=false; window._pMaintPoll=null;
+function _pmEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function showPortalMaintenance(m){
+  window._pMaintOn=true;
+  var msg=(m&&m.msg)?String(m.msg):'ただいまメンテナンス中です。';
+  var at=(m&&m.at)?String(m.at):'';
+  var inner='<div style="max-width:520px;text-align:center;padding:34px 26px">'
+    +'<div style="font-size:52px;line-height:1;margin-bottom:18px">🛠️</div>'
+    +'<div style="font-family:serif;font-size:25px;font-weight:800;letter-spacing:.06em;color:#e6cf95;margin-bottom:14px">メンテナンス中</div>'
+    +'<div style="font-size:15px;line-height:1.9;color:#f2ead9;white-space:pre-wrap">'+_pmEsc(msg)+'</div>'
+    +(at?'<div style="font-size:12px;color:#b09f74;margin-top:16px">停止 '+_pmEsc(at)+'</div>':'')
+    +'<div style="font-size:12px;color:#b09f74;margin-top:8px">再開されると自動で通常画面に戻ります。</div>'
+    +'<button onclick="location.reload()" style="margin-top:22px;padding:12px 26px;border-radius:10px;border:1px solid #8a6d3a;background:#241d10;color:#e6cf95;font-size:15px;font-weight:800">🔄 今すぐ再読込</button>'
+    +'</div>';
+  var el=document.getElementById('portalMaintOverlay');
+  if(!el){
+    el=document.createElement('div'); el.id='portalMaintOverlay';
+    el.style.cssText='position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#16130d,#080604 72%)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML=inner; el.style.display='flex';
+}
+function checkPortalMaintenance_(){ return fetch(GAS_URL+'?action=portalMaintenance&cb='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).catch(function(){return null;}); }
+function startPortalMaintPoll(){
+  if(window._pMaintPoll) return;
+  window._pMaintPoll=setInterval(function(){
+    checkPortalMaintenance_().then(function(m){
+      if(m&&m.on){ if(!window._pMaintOn) showPortalMaintenance(m); }
+      else { if(window._pMaintOn) location.reload(); }   /* 再開＝クリーンに復帰 */
+    });
+  },60000);
+}
+/* 起動と並列にメンテ判定（通常起動は止めない・停止中だけ全面表示を被せる） */
+checkPortalMaintenance_().then(function(m){ if(m&&m.on) showPortalMaintenance(m); });
+startPortalMaintPoll();
+/* ===== 🛠 ポータル メンテナンス ここまで ===== */
 var initTimer = setTimeout(function() {
   showErr('タイムアウト<br><small>LIFFが応答しませんでした</small>' + retryBtn_('location.reload'));
 }, 15000);

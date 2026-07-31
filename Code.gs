@@ -552,6 +552,11 @@ function doGet(e) {
     if (e && e.parameter && e.parameter.action === 'portal') {
       return handlePortalApi_(e);
     }
+    if (e && e.parameter && e.parameter.action === 'portalMaintenance') {
+      // ポータル停止/再開フラグの公開読み取り（認証不要・{on,msg,at,by}のみ返す）
+      return ContentService.createTextOutput(JSON.stringify(getPortalMaintenance()))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     if (e && e.parameter && e.parameter.view === 'timeline') {
       return HtmlService.createHtmlOutputFromFile('Timeline')
         .setTitle('タイムテーブル')
@@ -716,6 +721,29 @@ function setGunshiMaintenance(on, msg, by) {
   p.setProperty('GUNSHI_MAINTENANCE_AT', on ? nowStamp_() : '');
   p.setProperty('GUNSHI_MAINTENANCE_BY', on ? String(by || '') : '');
   return getGunshiMaintenance();
+}
+
+// ── 🛠 ポータル メンテナンス（コンソールから停止/再開）────────────────────────
+// 軍師と対の独立フラグ PORTAL_MAINTENANCE='1' で、キャスト向けポータルを停止。
+// ポータル(LIFF)は公開GET action=portalMaintenance でこれを読む（doGetで分岐）。
+// 切替(setPortalMaintenance)はコンソール(管理者)専用＝google.script.run 経由。
+// KEEP非登録＝設定リセットで「稼働」に戻すのは軍師と同じ安全側の既定。
+function getPortalMaintenance() {
+  var p = PropertiesService.getScriptProperties();
+  return {
+    on:  p.getProperty('PORTAL_MAINTENANCE') === '1',
+    msg: p.getProperty('PORTAL_MAINTENANCE_MSG') || '',
+    at:  p.getProperty('PORTAL_MAINTENANCE_AT')  || '',
+    by:  p.getProperty('PORTAL_MAINTENANCE_BY')  || ''
+  };
+}
+function setPortalMaintenance(on, msg, by) {
+  var p = PropertiesService.getScriptProperties();
+  p.setProperty('PORTAL_MAINTENANCE', on ? '1' : '0');
+  p.setProperty('PORTAL_MAINTENANCE_MSG', on ? String(msg || '') : '');
+  p.setProperty('PORTAL_MAINTENANCE_AT', on ? nowStamp_() : '');
+  p.setProperty('PORTAL_MAINTENANCE_BY', on ? String(by || '') : '');
+  return getPortalMaintenance();
 }
 
 /* ===== 作戦盤（60インチ常時表示）用: 店の戦況スナップショットを1発で返す =====
