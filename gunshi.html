@@ -5684,12 +5684,80 @@ function okCancel(name){
 
 /* ============ 実データ接続層（GAS本番） ============ */
 /* google.script.run 代替: GAS の fetch API を叩き {__ok,data} を展開（成功で data / 失敗で reject） */
+/* ===== gsr: 中央APIラッパ（計装＋1回リトライ＋タイムアウト） =====
+   「通信エラー」の理由を4分類で記録：
+     net    … fetch自体が失敗（ネットワーク到達不可 / タイムアウト）
+     http   … r.ok=false（Googleが429/500/302等のHTTPステータス異常を返した）
+     parse  … r.json()失敗（JSONでなくHTMLエラーページが返った＝レート上限/デプロイ中/Google側障害の典型）
+     server … __ok:false（サーバ側の業務例外。実メッセージ付き＝アプリロジックの問題）
+   ⚠️リトライは冪等な読取り関数(GSR_RETRY_SAFE)だけ。書込みは二重送信を避けるため絶対に再送しない。
+   ⚠️serverはリトライしても同じ＝再送しない（安全側）。 */
+var GSR_TIMEOUT_MS = 20000;
+/* 高頻度ポーリングの読取り＝二重実行しても無害。ここに載る関数だけ1回リトライする。 */
+var GSR_RETRY_SAFE = {
+  getKioskHall2:1, getKioskReservations:1, getKioskTsukemawashi:1, getKioskShiftBoard:1,
+  getCastRequestsToday:1, getKioskCastNames:1, getKioskWorkingCasts:1, getKioskTasks:1,
+  getKioskCastKubun:1, getServerTime:1, getGunshiMaintenance:1, getKioskBootstrap:1,
+  kioskLogoutTs:1
+};
+var GSR_ERRLOG = [];
+function gsrLog_(fn, kind, status, ms, msg){
+  var rec = { t:new Date().toISOString(), fn:fn, kind:kind, status:status||0, ms:ms||0, msg:String(msg||'').slice(0,180) };
+  GSR_ERRLOG.push(rec); if(GSR_ERRLOG.length>120) GSR_ERRLOG.shift();
+  window.GSR_LAST_ERR = rec;
+  try{ localStorage.setItem('gunshi_gsr_errlog', JSON.stringify(GSR_ERRLOG.slice(-60))); }catch(_){}
+  try{ console.warn('[gsr]', kind, (status||''), fn, (ms||0)+'ms', rec.msg); }catch(_){}
+}
+/* 単発の1リクエスト。失敗時は err.__gsrKind に4分類を載せて投げる。 */
+function gsrOnce_(fn, args){
+  var t0 = Date.now();
+  var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(_){}}, GSR_TIMEOUT_MS) : null;
+  var opt = { method:'POST', body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:args}) };
+  if(ctrl) opt.signal = ctrl.signal;
+  return fetch(GAS_URL, opt).then(function(r){
+    if(to){ clearTimeout(to); to=null; }
+    if(!r.ok){ var eh=new Error('HTTP '+r.status); eh.__gsrKind='http'; eh.__gsrStatus=r.status; eh.__gsrMs=Date.now()-t0; throw eh; }
+    return r.text().then(function(txt){
+      var j;
+      try{ j=JSON.parse(txt); }
+      catch(pe){ var ep=new Error('JSONパース失敗（HTMLが返った可能性）'); ep.__gsrKind='parse'; ep.__gsrStatus=r.status; ep.__gsrMs=Date.now()-t0; ep.__gsrSnippet=String(txt||'').replace(/\s+/g,' ').slice(0,120); throw ep; }
+      if(j && j.__ok===false){ var es=new Error(j.error||'server error'); es.__gsrKind='server'; es.__gsrMs=Date.now()-t0; throw es; }
+      return j ? j.data : j;
+    });
+  }, function(netErr){
+    if(to){ clearTimeout(to); to=null; }
+    var aborted = netErr && netErr.name==='AbortError';
+    var en=new Error(aborted?'タイムアウト':'ネットワーク到達不可'); en.__gsrKind='net'; en.__gsrMs=Date.now()-t0; en.__gsrAbort=!!aborted; throw en;
+  });
+}
 function gsr(fn){
   var a=Array.prototype.slice.call(arguments,1);
-  return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a})})
-    .then(function(r){return r.json();})
-    .then(function(j){ if(j&&j.__ok===false) throw new Error(j.error||'server error'); return j?j.data:j; });
+  var safe = !!GSR_RETRY_SAFE[fn];
+  return gsrOnce_(fn,a).catch(function(err){
+    var kind = (err&&err.__gsrKind)||'net';
+    gsrLog_(fn, kind, err&&err.__gsrStatus, err&&err.__gsrMs, (err&&err.message||'')+(err&&err.__gsrSnippet?(' :: '+err.__gsrSnippet):''));
+    /* server(業務例外)は再送不可。書込み(safe外)も二重送信回避で再送しない。 */
+    if(!safe || kind==='server') throw err;
+    /* 300ms待って1回だけ再送（バーストの瞬間衝突を時間差でずらす） */
+    return new Promise(function(res){ setTimeout(res,300); }).then(function(){
+      return gsrOnce_(fn,a).catch(function(err2){
+        var kind2 = (err2&&err2.__gsrKind)||'net';
+        gsrLog_(fn, 'retry-'+kind2, err2&&err2.__gsrStatus, err2&&err2.__gsrMs, (err2&&err2.message)||'');
+        throw err2;
+      });
+    });
+  });
 }
+/* 🩺 通信診断：コンソール等から gsrDiag() で直近の失敗を種類別に集計して確認できる。 */
+function gsrDiag(){
+  var by={}; GSR_ERRLOG.forEach(function(r){ by[r.kind]=(by[r.kind]||0)+1; });
+  var out={ total:GSR_ERRLOG.length, byKind:by, last:GSR_ERRLOG.slice(-20) };
+  try{ console.table(out.last); }catch(_){}
+  try{ console.log('[gsrDiag]', JSON.stringify(by)); }catch(_){}
+  return out;
+}
+window.gsrDiag = gsrDiag;
 
 /* 📝 面談を開始：トークンを発行して応募者フロント(mendan.html)を開く。
    ⚠️封じ込め：iPadを応募者に渡す前に軍師セッションを破棄する（戻られてもPINログインで止まる）。 */
