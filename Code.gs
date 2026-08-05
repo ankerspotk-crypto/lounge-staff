@@ -683,7 +683,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -795,6 +795,34 @@ function getKioskBootstrap() {
   return { ok: true, kioskUserId: prop('KIOSK_USER_ID') || '', today: bizDateStr_() };
 }
 
+/* ===== 🚀 軍師ホームの周期ポーリングを1発に束ねる（loadAll の9本→1本） =====
+ * 目的: 軍師iPadが30秒ごとに9本の別fetch(=別GAS実行)を投げ、そのたびに
+ *   openById が本体最大8回＋シフト3回・スタッフマスタ全読み×4・シフト表全読み×3…と
+ *   重複読取り＋GAS床(約1.9秒)×9を払っていた「重さ」を、1実行に集約して解消する。
+ * 1実行に束ねることで getOrOpenSS_()/getShiftSS_() のブック・メモ化が全関数に効き、
+ *   openById 本体8→1・シフト3→1、HTTP往復9→1、GAS床×9→×1 になる。
+ * 読み取り専用・副作用なし（9関数はいずれも UrlFetch/LINE/LockService を持たない＝両監査で確認）。
+ * 各項目は個別 try/catch（getWarCouncil の pick と同型）＝1シートが欠けても他は返す（部分成功）。
+ * ⚠️GUNSHI_API_FNS 登録必須（漏れると「許可されていない関数」で失敗）。フロントは失敗時に従来9本へ自動フォールバックする。
+ */
+function getKioskLoadAll(dateStr) {
+  var pick = function (fn) { try { return fn(); } catch (e) { return null; } };
+  var d = dateStr || bizDateStr_();
+  return {
+    ok: true,
+    ts: (new Date()).toISOString(),
+    hall2:        pick(function () { return getKioskHall2(); }),
+    reservations: pick(function () { return getKioskReservations(d, true); }), // true=キャンセル済みも含める（グレーアウトのログ表示）
+    tsukemawashi: pick(function () { return getKioskTsukemawashi(); }),
+    shiftBoard:   pick(function () { return getKioskShiftBoard(); }),
+    castRequests: pick(function () { return getCastRequestsToday(); }),
+    castNames:    pick(function () { return getKioskCastNames(); }),
+    workingCasts: pick(function () { return getKioskWorkingCasts(); }),
+    tasks:        pick(function () { return getKioskTasks(); }),
+    castKubun:    pick(function () { return getKioskCastKubun(); })
+  };
+}
+
 /* ===== 端末時刻ズレ検知（軍師iPadの日付戻し忘れ対策） =====
  * 領収書発行で端末の日付を過去に戻す運用があり、戻し忘れると翌営業の伝票日付がズレる。
  * 軍師フロントが1分ごとに getServerTime を取り、端末時刻との差を算出。閾値超過で
@@ -892,6 +920,38 @@ function handleApiRequest_(body) {
     return { ok: true, list: mlist };
   }
 
+  // === 📋 面談表 選択削除（管理者のみ・面談IDで物理削除。通信詰まりで量産された「入力中」の仮行掃除など） ===
+  if (body.action === 'adminDeleteMendan') {
+    var ddwho = getStaffName(body.userId);
+    if (!ddwho || !isAdmin_(ddwho)) return { ok: false, error: '権限がありません' };
+    var dids = Array.isArray(body.ids) ? body.ids.map(function (x) { return String(x || '').trim(); }).filter(Boolean) : [];
+    if (!dids.length) return { ok: false, error: '削除対象がありません' };
+    var didset = {}; dids.forEach(function (x) { didset[x] = true; });
+    var dlock = LockService.getScriptLock();
+    try {
+      dlock.waitLock(10000);
+      var dss = getOrOpenSS_();
+      var dsh = dss.getSheetByName(MENDAN_TAB);
+      if (!dsh || dsh.getLastRow() < 2) return { ok: true, deleted: 0 };
+      var dcm = mendanColMap_(dsh);
+      var didcol = dcm['面談ID'];
+      if (didcol == null) return { ok: false, error: '面談ID列が見つかりません' };
+      var dvals = dsh.getRange(2, didcol + 1, dsh.getLastRow() - 1, 1).getValues(); // 面談ID列だけ読む（軽量）
+      var drows = [];
+      for (var dj = 0; dj < dvals.length; dj++) {
+        var drid = String(dvals[dj][0] || '').trim();
+        if (drid && didset[drid]) drows.push(dj + 2); // 実シート行番号（見出し1行+0始まりなので +2）
+      }
+      drows.sort(function (a, b) { return b - a; }); // 下から消す＝削除で行番号がズレるのを防ぐ
+      drows.forEach(function (rn) { dsh.deleteRow(rn); });
+      return { ok: true, deleted: drows.length };
+    } catch (e) {
+      return { ok: false, error: String((e && e.message) || e) };
+    } finally {
+      try { dlock.releaseLock(); } catch (e) {}
+    }
+  }
+
   // === 📄 請求書管理（管理者のみ／軍師で入力→コンソールで管理＆請求書生成） ===
   if (body.action === 'seikyuData') {
     const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
@@ -920,6 +980,20 @@ function handleApiRequest_(body) {
   if (body.action === 'seikyuImage') {
     const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
     return drivePhotoAsDataUrl_(String(body.ref || ''), 'seikyu');
+  }
+
+  // === 🖨 発行店マスタ（領収書・受領書の発行店／管理者のみ） ===
+  if (body.action === 'issuerList') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return issuerAdminList_();
+  }
+  if (body.action === 'issuerSave') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return issuerStoreSaveCore_(body.payload || {}, who);
+  }
+  if (body.action === 'issuerDelete') {
+    const who = getStaffName(body.userId); if (!who || !isAdmin_(who)) return { ok: false, error: '権限がありません' };
+    return issuerStoreDelete_(String(body.id || ''));
   }
 
   // === 🧾 売上伝票（TRUST取込の伝票を管理者が全体/個人で見る） ===
@@ -7556,7 +7630,21 @@ function checkEarlyTaikin_(hhmm, once) {
 
 // シフト表タブから今日の出勤詳細を取得
 // returns { cast: [{name, shift},...], kurofuku: [{name},...], haken: [{name},...] }
+// ⚡実行内メモ化：軍師バンドル(getKioskLoadAll)は1実行でこれを3回呼ぶ(shiftBoard/workingCasts/castKubun)。
+//   GASは1リクエスト=新しいグローバル＝実行を跨がない。同一実行で「書込→本関数を読み直す」箇所は無い(監査確認済)＝鮮度事故なし。
+var _tsdMemo_ = null;
 function getTodayShiftDetail_() {
+  if (_tsdMemo_) return _tsdMemo_;                          // 実行内メモ（最速）
+  var _k = 'TSD_v1_' + bizDateStr_(), _c = CacheService.getScriptCache();
+  var _hit = _c.get(_k);
+  if (_hit) { try { _tsdMemo_ = JSON.parse(_hit); return _tsdMemo_; } catch (e) {} }
+  _tsdMemo_ = getTodayShiftDetailRaw_();
+  try { _c.put(_k, JSON.stringify(_tsdMemo_), 20); } catch (e) {} // 20秒キャッシュ（跨いで効く＝ポーリング/コンソールのタブが軽く）
+  return _tsdMemo_;
+}
+// シフト詳細キャッシュ＋実行内メモを破棄。操作の即時反映が要る書込点(writeShiftCell_/kioskSetGenji)で呼ぶ。
+function tsdCacheClear_() { _tsdMemo_ = null; try { CacheService.getScriptCache().remove('TSD_v1_' + bizDateStr_()); } catch (e) {} }
+function getTodayShiftDetailRaw_() {
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { cast: [], kurofuku: [], haken: [] };
 
@@ -9807,7 +9895,15 @@ function isRetiredName_(name) {
   return false;
 }
 // 退職者の照合キー集合（空白除去の正規化名 → true）。退職列が無ければ空。isRetiredName_ の一括版（母集団フィルタ用）。
+// 短命キャッシュ(20s)。軍師のシフト詳細とコンソールのgetShiftMgmtData_が共有＝両方が軽くなる。退職/削除/改名は最大20秒で反映。
 function retiredNameKeys_() {
+  var _c = CacheService.getScriptCache(), _h = _c.get('RETKEYS_v1');
+  if (_h) { try { return JSON.parse(_h); } catch (e) {} }
+  var _r = retiredNameKeysRaw_();
+  try { _c.put('RETKEYS_v1', JSON.stringify(_r), 20); } catch (e) {}
+  return _r;
+}
+function retiredNameKeysRaw_() {
   var keys = {};
   var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return keys;
@@ -11555,6 +11651,14 @@ function syncRsrvWithReservations_() {
 
 // 顧客検索（予約システム用・NG関連を一切返さない）
 function getCastNamesForYoyaku_(ss, opts) {
+  var _wk = !!(opts && opts.withKurofuku), _key = _wk ? 'CASTNAMES_v1_k' : 'CASTNAMES_v1_n';
+  var _c = CacheService.getScriptCache(), _h = _c.get(_key);
+  if (_h) { try { return JSON.parse(_h); } catch (e) {} }
+  var _r = getCastNamesForYoyakuRaw_(ss, opts);
+  try { _c.put(_key, JSON.stringify(_r), 20); } catch (e) {}
+  return _r;
+}
+function getCastNamesForYoyakuRaw_(ss, opts) {
   const sh = (ss || getOrOpenSS_()).getSheetByName(STAFF_TAB);
   if (!sh) return [];
   // 管理者・ドライバーは常に除外（ドライバーは送り依頼の都合で登録しているだけで、
@@ -16308,6 +16412,9 @@ function getVendorOrderAlerts_() {
   const sh = getOrderPlanSheet_();
   const rows = sh.getDataRange().getValues();
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  // 未着を出す下限日＝max(品番タグ運用開始, 今日−N日)。これより前の納品希望日は突合不能 or 実行不能ノイズなので黙らせる。
+  const recentFloor = Utilities.formatDate(new Date(new Date().getTime() - ORDER_ALERT_WINDOW_D_ * 86400000), TZ, 'yyyy-MM-dd');
+  const alertFloor = (ORDER_ALERT_SINCE_ > recentFloor) ? ORDER_ALERT_SINCE_ : recentFloor;
   const overdue = [], shortage = [];
   for (let i = 1; i < rows.length; i++) {
     const st = String(rows[i][7]).trim();
@@ -16321,7 +16428,7 @@ function getVendorOrderAlerts_() {
     };
     if (st === ORDER_PLAN_ST_SHORT_) { shortage.push(base); continue; }
     if (st === ORDER_PLAN_ST_DONE_) continue;
-    if (got < qty && want && today > want) {          // 納品希望日を過ぎて未充足＝未着
+    if (got < qty && want && today > want && want >= alertFloor) {  // 納品希望日を過ぎて未充足＝未着（ただし窓の中だけ）
       base.overdueDays = orderDayDiff_(want, today);
       base.partial = got > 0;
       overdue.push(base);
@@ -16371,6 +16478,10 @@ const ORDER_PLAN_ST_DONE_ = '納品済み';
 const ORDER_PLAN_ST_PART_ = '一部納品';
 const ORDER_PLAN_ST_MISS_ = '未着';                   // 納品希望日を過ぎても品番が納品記録に無い
 const ORDER_PLAN_ST_SHORT_ = '欠品';                  // 「◯月◯日 欠品分」等で欠品と判明
+// 未着アラートの「窓」（2026-08-03 導入）。60日バックフィルの発注に対し品番突合は7/23以降の納品しか無い＝
+// 古い発注は届いていても品番が無く突合できず「未着」に化ける。窓で出口を絞る＝突合の書込は一切触らない。
+const ORDER_ALERT_SINCE_   = '2026-07-23';            // 品番タグ運用開始日。これより前の納品希望日は突合不能なので未着に出さない
+const ORDER_ALERT_WINDOW_D_ = 7;                      // 未着通知は納品希望日から この日数以内 だけ（古い＝来店済みで実行不能なノイズは黙らせる）
 
 function getOrderPlanSheet_() {
   const ss = getOrOpenSS_();
@@ -18087,6 +18198,7 @@ function rosterEntryByName_(name) {
 //   名前で当たった行にIDが空なら刻む(self-heal)＝以降はIDで一意に引ける。同名別人の取り違えを構造的に潰す。
 //   userId 未指定でも従来どおり名前キーで動く（後方互換）。
 function writeShiftCell_(name, date, value, userId) {
+  tsdCacheClear_(); // シフト表を書き換える＝シフト詳細キャッシュを破棄（全成功returnを1点でカバー・≤20s TTLが保険）
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
   const data = sh.getDataRange().getValues();
@@ -18911,6 +19023,28 @@ function logIssuedReceipt(payload) {
   }
 }
 
+// 軍師：発行済み領収書/受領書の履歴（新しい順・既定200件）。控え台帳「発行領収書」を読み取り専用でスキャン。GUNSHI_API_FNS 登録済み。
+function getIssuedReceipts(limit) {
+  try {
+    var sh = getOrOpenSS_().getSheetByName('発行領収書');
+    if (!sh || sh.getLastRow() < 2) return { ok: true, rows: [] };
+    var last = sh.getLastRow();
+    var n = Math.min(last - 1, Number(limit) || 200);
+    var vals = sh.getRange(last - n + 1, 1, n, 13).getValues();
+    var fmt = function (v, f) { return (v instanceof Date) ? Utilities.formatDate(v, TZ, f) : String(v == null ? '' : v); };
+    var rows = vals.map(function (r) {
+      return {
+        at: fmt(r[0], 'MM/dd HH:mm'), docType: String(r[1] || ''), issueDate: fmt(r[2], 'yyyy-MM-dd'),
+        serial: String(r[3] || ''), atena: String(r[4] || ''), memberNo: String(r[5] || ''),
+        amount: Number(r[6]) || 0, taxExcl: Number(r[7]) || 0, tax: Number(r[8]) || 0, inshi: Number(r[9]) || 0,
+        pay: String(r[10] || ''), tada: String(r[11] || ''), by: String(r[12] || '')
+      };
+    });
+    rows.reverse();   // 新しい順
+    return { ok: true, rows: rows };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e), rows: [] }; }
+}
+
 function getReceiptPayees() {
   try {
     var d = getTodayShiftDetail_() || {};
@@ -18923,6 +19057,123 @@ function getReceiptPayees() {
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e), rows: [] };
   }
+}
+
+/* =====================================================================================
+   🖨 発行店マスタ（領収書・受領書の発行店を複数登録し、軍師で選択）  2026-08-05 ボス依頼で新設
+   ─ コンソール（管理者）で追加/修正、軍師で選択。既定の1店が軍師の初期選択になる（既定は常に1つ）。
+   ─ シート「発行店マスタ」（本体ブック・無ければ自動生成・不足列は末尾に非破壊追加）。ensureSeikyuSheet_ 等の汎用ヘルパを流用。
+   ─ 空なら現行の RCPT_ISSUER 相当（ラウンジいえやす＋登録番号）を「既定」で1件シード＝初日から空にならない。
+   ===================================================================================== */
+var ISSUER_STORE_TAB_  = '発行店マスタ';
+var ISSUER_STORE_COLS_ = ['発行店ID', '表示名', '郵便番号', '住所', '電話', '登録番号', '表示順', '既定', '状態', '登録者', '登録日時', '更新日時'];
+function getIssuerStoreSheet_() { return ensureSeikyuSheet_(ISSUER_STORE_TAB_, ISSUER_STORE_COLS_); }
+function newIssuerStoreId_() { return 'IS' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + Math.floor(Math.random() * 90 + 10); }
+function issuerStoreDefaultSeed_() {
+  return { name: 'ラウンジいえやす', zip: '', addr: '愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel: '', invoiceNo: 'T4180302027983' };
+}
+function issuerStoreSeedIfEmpty_(sh) {
+  try {
+    if (sh.getLastRow() >= 2) return;
+    var cm = seikyuColMap_(sh); var seed = issuerStoreDefaultSeed_(); var now = nowStamp_();
+    sh.appendRow(seikyuRowArr_(sh, cm, {
+      '発行店ID': newIssuerStoreId_(), '表示名': seed.name, '郵便番号': seed.zip, '住所': seed.addr,
+      '電話': seed.tel, '登録番号': seed.invoiceNo, '表示順': 1, '既定': '既定', '状態': '有効',
+      '登録者': 'system(seed)', '登録日時': now, '更新日時': now
+    }));
+  } catch (e) {}
+}
+function issuerStoreFindRow_(sh, cm, id) {
+  var last = sh.getLastRow(); if (last < 2) return 0;
+  var vals = sh.getRange(2, cm['発行店ID'] + 1, last - 1, 1).getValues();
+  for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).trim() === String(id).trim()) return i + 2;
+  return 0;
+}
+function issuerStoresRead_(includeDeleted) {
+  var sh = getIssuerStoreSheet_();
+  if (sh.getLastRow() < 2) issuerStoreSeedIfEmpty_(sh);
+  var last = sh.getLastRow(); if (last < 2) return [];
+  var cm = seikyuColMap_(sh);
+  var vals = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var out = [];
+  vals.forEach(function (r, i) {
+    var id = String(r[cm['発行店ID']] || '').trim(); if (!id) return;
+    var state = String(r[cm['状態']] || '').trim() || '有効';
+    if (!includeDeleted && state === '削除') return;
+    out.push({
+      id: id, name: String(r[cm['表示名']] || ''), zip: String(r[cm['郵便番号']] || ''),
+      addr: String(r[cm['住所']] || ''), tel: String(r[cm['電話']] || ''), invoiceNo: String(r[cm['登録番号']] || ''),
+      order: Number(r[cm['表示順']]) || 0, isDefault: String(r[cm['既定']] || '').trim() !== '',
+      state: state, rowIdx: i + 2
+    });
+  });
+  out.sort(function (a, b) {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;   // 既定を先頭
+    if (a.order !== b.order) return a.order - b.order;
+    return a.rowIdx - b.rowIdx;
+  });
+  return out;
+}
+// 既定は常に1つ＝keepRow 以外の「既定」を空にする
+function issuerStoreClearOtherDefaults_(sh, cm, keepRow) {
+  var last = sh.getLastRow(); if (last < 2) return;
+  var col = cm['既定'] + 1;
+  var vals = sh.getRange(2, col, last - 1, 1).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    var row = i + 2; if (row === keepRow) continue;
+    if (String(vals[i][0] || '').trim() !== '') sh.getRange(row, col).setValue('');
+  }
+}
+function issuerStoreSaveCore_(payload, by) {
+  payload = payload || {};
+  if (!String(payload.name || '').trim()) return { ok: false, error: '発行店名（表示名）を入力してください' };
+  var sh = getIssuerStoreSheet_(); var cm = seikyuColMap_(sh);
+  var id = String(payload.id || '').trim(); var now = nowStamp_();
+  var rowIdx = id ? issuerStoreFindRow_(sh, cm, id) : 0;
+  if (!id) id = newIssuerStoreId_();
+  var makeDefault = !!payload.isDefault;
+  var rowObj = {
+    '発行店ID': id, '表示名': String(payload.name || ''), '郵便番号': String(payload.zip || ''),
+    '住所': String(payload.addr || ''), '電話': String(payload.tel || ''), '登録番号': String(payload.invoiceNo || ''),
+    '表示順': (payload.order === '' || payload.order == null) ? '' : (Number(payload.order) || 0),
+    '既定': makeDefault ? '既定' : '', '状態': String(payload.state || '有効'), '更新日時': now
+  };
+  if (rowIdx > 0) {
+    Object.keys(rowObj).forEach(function (k) { if (cm[k] !== undefined) sh.getRange(rowIdx, cm[k] + 1).setValue(rowObj[k]); });
+  } else {
+    rowObj['登録者'] = String(by || ''); rowObj['登録日時'] = now;
+    sh.appendRow(seikyuRowArr_(sh, cm, rowObj));
+    rowIdx = issuerStoreFindRow_(sh, cm, id);
+  }
+  if (makeDefault && rowIdx > 0) issuerStoreClearOtherDefaults_(sh, cm, rowIdx);
+  return { ok: true, id: id };
+}
+function issuerStoreDelete_(id) {
+  var sh = getIssuerStoreSheet_(); var cm = seikyuColMap_(sh);
+  var rowIdx = issuerStoreFindRow_(sh, cm, String(id || ''));
+  if (!rowIdx) return { ok: false, error: '発行店が見つかりません' };
+  var wasDefault = String(sh.getRange(rowIdx, cm['既定'] + 1).getValue() || '').trim() !== '';
+  sh.getRange(rowIdx, cm['状態'] + 1).setValue('削除');
+  sh.getRange(rowIdx, cm['既定'] + 1).setValue('');
+  sh.getRange(rowIdx, cm['更新日時'] + 1).setValue(nowStamp_());
+  if (wasDefault) {   // 既定を削除したら、残った有効行の先頭を既定へ寄せる
+    var actives = issuerStoresRead_(false);
+    if (actives.length) { var top = issuerStoreFindRow_(sh, cm, actives[0].id); if (top) sh.getRange(top, cm['既定'] + 1).setValue('既定'); }
+  }
+  return { ok: true };
+}
+// 軍師：発行店の選択肢（有効のみ・既定が先頭）。GUNSHI_API_FNS 登録済み。
+function getReceiptIssuers() {
+  try {
+    return { ok: true, rows: issuerStoresRead_(false).map(function (x) {
+      return { id: x.id, name: x.name, zip: x.zip, addr: x.addr, tel: x.tel, invoiceNo: x.invoiceNo, isDefault: x.isDefault };
+    }) };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e), rows: [] }; }
+}
+// コンソール：発行店マスタ一覧（削除済み含む・管理者のみ）
+function issuerAdminList_() {
+  try { return { ok: true, issuers: issuerStoresRead_(true) }; }
+  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
 }
 
 function getKioskCustomerRoster() {

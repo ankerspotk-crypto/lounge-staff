@@ -470,7 +470,7 @@ function pollAdminAuth(token){
 var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
-  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書']]},
+  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
 ];
@@ -488,13 +488,13 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,ref:renderRef}[TAB]||renderStaff)();
+  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
 
 /* 📋 面談表 一覧（全件・管理者のみ。バック=adminGetMendanList＝mendanRowToObj_で提出済＋面談済の全行）。 */
-var MENDAN_ALL=[], mendanQ='', mendanStatus='all';
+var MENDAN_ALL=[], mendanQ='', mendanStatus='all', mendanSel={};
 function renderMendan(){
   loading();
   api('adminGetMendanList',{}).then(function(r){
@@ -507,34 +507,65 @@ function onMendanStatus(v){ mendanStatus=v; drawMendan(); }
 function mendanYen_(n){ n=Number(n)||0; return n?(Math.round(n/10000)+'万'):'—'; }
 function drawMendan(){
   var q=mendanQ.replace(/\s/g,'').toLowerCase();
-  var list=MENDAN_ALL.filter(function(m){
+  var match=function(m){
     if(mendanStatus!=='all' && (m.status||'')!==mendanStatus) return false;
     if(!q) return true;
     return ((m.name||'')+(m.kana||'')+(m.tel||'')+(m.judge||'')).replace(/\s/g,'').toLowerCase().indexOf(q)>=0;
-  });
-  var cT=0,cM=0; MENDAN_ALL.forEach(function(m){ if(m.status==='提出済')cT++; else if(m.status==='面談済')cM++; });
+  };
+  var list=MENDAN_ALL.filter(match);
+  var cT=0,cM=0,cI=0; MENDAN_ALL.forEach(function(m){ if(m.status==='提出済')cT++; else if(m.status==='面談済')cM++; else if(m.status==='入力中')cI++; });
   var sel=function(v,l){ return '<option value="'+v+'"'+(mendanStatus===v?' selected':'')+'>'+l+'</option>'; };
+  var selCount=list.filter(function(m){return mendanSel[String(m.id)];}).length;
   var bar='<div class="toolbar" style="flex-wrap:wrap;gap:10px;align-items:center">'
     +'<input class="finput" style="flex:1;min-width:160px" placeholder="🔍 氏名・電話・判定で検索" oninput="onMendanSearch(this.value)" value="'+esc(mendanQ)+'">'
-    +'<select class="finput" onchange="onMendanStatus(this.value)">'+sel('all','すべて')+sel('提出済','提出済（未面談）')+sel('面談済','面談済')+'</select>'
-    +'<span class="cnt">全<b>'+MENDAN_ALL.length+'</b>件（提出済'+cT+'・面談済'+cM+'）</span></div>';
-  if(!list.length){ setBody(bar+'<div class="empty">該当なし</div>'); return; }
+    +'<select class="finput" onchange="onMendanStatus(this.value)">'+sel('all','すべて')+sel('入力中','入力中（未完了）')+sel('提出済','提出済（未面談）')+sel('面談済','面談済')+'</select>'
+    +'<span class="cnt">全<b>'+MENDAN_ALL.length+'</b>件（入力中'+cI+'・提出済'+cT+'・面談済'+cM+'）</span></div>';
+  var actbar='<div class="toolbar" style="gap:10px;align-items:center;flex-wrap:wrap">'
+    +'<button class="btn" onclick="mendanSelectAllShown()">☑ 表示中を全選択（'+list.length+'）</button>'
+    +'<button class="btn" onclick="mendanClearSel()">選択解除</button>'
+    +'<button class="btn" style="margin-left:auto;'+(selCount?'background:#7a2b2b;color:#fff;border-color:#7a2b2b':'opacity:.45;pointer-events:none')+'" onclick="mendanDeleteSel()">🗑 選択した '+selCount+' 件を削除</button>'
+    +'</div>';
+  if(!list.length){ setBody(bar+actbar+'<div class="empty">該当なし</div>'); return; }
   var stB=function(s){ var c=s==='提出済'?'#c9a45c':(s==='面談済'?'#7ba86f':'#888'); return '<span style="font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid '+c+';color:'+c+'">'+esc(s||'—')+'</span>'; };
   var jB=function(j){ if(!j)return ''; var c=j==='体験へ'?'#7bd0a8':(j==='不採用'?'#d98a8a':'#c9c0a8'); return ' <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:'+c+'22;color:'+c+'">'+esc(j)+'</span>'; };
-  var pl=function(l,u){ return u?('<a href="'+esc(u)+'" target="_blank" style="color:#c9a45c;font-size:12px;margin-right:12px">'+l+'</a>'):''; };
   var rows=list.map(function(m){
     var age=(m.age!==''&&m.age!=null)?('満'+m.age+'歳'):'—';
     var warn=(m.age!==''&&m.age!=null&&Number(m.age)<20)?' <span style="color:#ff9aa0">⚠️20歳未満</span>':'';
     var expLine=(m.exp==='あり'||m.exp==='少し')
       ?('経験'+esc(m.exp)+'／前店'+mendanYen_(m.prevSales)+'／持ち客'+(m.holdCust||'—')+'人・見込み客'+(m.expCust||'—')+'人・見込売上'+mendanYen_(m.expSales))
       :('経験：'+esc(m.exp||'—'));
-    return '<div class="lrow" style="cursor:pointer" onclick="openMendanRow(\''+esc(String(m.id))+'\')"><div class="main" style="flex:1">'
+    var idJ=esc(String(m.id)), checked=mendanSel[String(m.id)]?' checked':'';
+    return '<div class="lrow">'
+      +'<label style="flex:none;display:flex;align-items:center;padding:0 8px 0 2px" onclick="event.stopPropagation()"><input type="checkbox"'+checked+' onclick="mendanToggle(\''+idJ+'\',this.checked)" style="width:20px;height:20px"></label>'
+      +'<div class="main" style="flex:1;cursor:pointer" onclick="openMendanRow(\''+idJ+'\')">'
       +'<div class="nm">'+esc(m.name||'（無名）')+' <span class="sub">'+age+'</span>'+warn+' '+stB(m.status)+jB(m.judge)+'</div>'
       +'<div class="meta">'+esc(m.at||'')+' ／ '+esc(m.tel||'—')+' ／ 週'+(m.days||'—')+' '+esc(m.weekdays||'')+'</div>'
       +'<div class="meta">'+expLine+'</div>'
-      +'</div><div style="color:var(--dim);font-size:12px;flex:none;align-self:center">詳細 ▸</div></div>';
+      +'</div><div style="color:var(--dim);font-size:12px;flex:none;align-self:center;cursor:pointer;padding-right:6px" onclick="openMendanRow(\''+idJ+'\')">詳細 ▸</div></div>';
   }).join('');
-  setBody(bar+rows);
+  setBody(bar+actbar+rows);
+}
+function mendanToggle(id,ch){ if(ch) mendanSel[String(id)]=true; else delete mendanSel[String(id)]; drawMendan(); }
+function mendanSelectAllShown(){
+  var q=mendanQ.replace(/\s/g,'').toLowerCase();
+  MENDAN_ALL.forEach(function(m){
+    if(mendanStatus!=='all' && (m.status||'')!==mendanStatus) return;
+    if(q && ((m.name||'')+(m.kana||'')+(m.tel||'')+(m.judge||'')).replace(/\s/g,'').toLowerCase().indexOf(q)<0) return;
+    mendanSel[String(m.id)]=true;
+  });
+  drawMendan();
+}
+function mendanClearSel(){ mendanSel={}; drawMendan(); }
+function mendanDeleteSel(){
+  var ids=Object.keys(mendanSel).filter(function(k){return mendanSel[k];});
+  if(!ids.length) return;
+  if(!confirm(ids.length+' 件の面談表を削除します。\nこの操作は元に戻せません。よろしいですか？')) return;
+  loading();
+  api('adminDeleteMendan',{ids:ids}).then(function(r){
+    if(r&&r.ok===false){ alert(r.error||'削除に失敗しました'); renderMendan(); return; }
+    toast((r&&r.deleted!=null?r.deleted:ids.length)+' 件を削除しました');
+    mendanSel={}; renderMendan();
+  }).catch(function(){ alert('通信エラー'); renderMendan(); });
 }
 function openMendanRow(id){
   var m=null; for(var i=0;i<MENDAN_ALL.length;i++){ if(String(MENDAN_ALL[i].id)===String(id)){ m=MENDAN_ALL[i]; break; } }
@@ -4102,12 +4133,90 @@ function skSaveSettings(){
   api('seikyuSaveSettings',{patch:patch}).then(function(r){ if(!res(r,'設定を保存しました'))return; if(r.settings&&skData)skData.settings=r.settings; skSettingsOpen=false; renderSeikyu(); }).catch(function(){ toast('通信エラー',true); });
 }
 
+/* ===== 🖨 発行店マスタ（管理者・コンソール）：領収書/受領書の発行店を登録し、軍師で選択 =====
+   backend actions（handleApiRequest_・isAdmin_ゲート）: issuerList / issuerSave / issuerDelete
+   「既定」の1店が軍師の初期選択になる（既定は常に1つ＝サーバ側で他行を自動解除）。 */
+var issuerData_=[], issuerEditId_=null;   // issuerEditId_: null=フォーム非表示, ''=新規, 'IS..'=編集
+function renderIssuer(){
+  setBody('<div class="empty">読み込み中…</div>');
+  api('issuerList').then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    issuerData_=(r&&r.issuers)||[]; drawIssuer_();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function issuerFind_(id){ for(var i=0;i<issuerData_.length;i++) if(issuerData_[i].id===id) return issuerData_[i]; return null; }
+function issuerRow_(x){
+  var badge=x.isDefault?'<span style="background:#2a7d46;color:#fff;padding:1px 7px;border-radius:6px;font-size:11px;margin-left:8px;font-weight:700">既定</span>':'';
+  var meta=[]; if(x.invoiceNo)meta.push('登録番号 '+esc(x.invoiceNo)); if(x.addr)meta.push(esc(x.addr)); if(x.tel)meta.push('TEL '+esc(x.tel));
+  var del=(x.state==='削除');
+  var btns=del
+    ? '<button class="btn sm" onclick="issuerRestore(\''+esc(x.id)+'\')">復活</button>'
+    : '<button class="btn sm" onclick="issuerEdit(\''+esc(x.id)+'\')">編集</button> <button class="btn sm dng" onclick="issuerDelete(\''+esc(x.id)+'\')">削除</button>';
+  return '<div class="lrow"><div class="main"><div class="nm">'+esc(x.name||'（無名）')+badge+'</div><div class="meta">'+(meta.join(' ／ ')||'—')+'</div></div>'+btns+'</div>';
+}
+function drawIssuer_(){
+  var actives=issuerData_.filter(function(x){return x.state!=='削除';});
+  var deleted=issuerData_.filter(function(x){return x.state==='削除';});
+  var rows=actives.length?actives.map(issuerRow_).join(''):'<div class="hint">発行店が未登録です。「＋ 発行店を追加」から登録してください。</div>';
+  var h=(issuerEditId_!==null?issuerFormHtml_():'')
+    +'<div class="sec"><div class="sec-t">🖨 発行店マスタ <span class="sub">領収書・受領書に印字／軍師で選択。「既定」の1店が軍師の初期選択になります。</span></div>'
+    +'<div class="addbar" style="margin-bottom:10px"><button class="btn pri" onclick="issuerEdit(\'\')">＋ 発行店を追加</button></div>'
+    +rows+'</div>';
+  if(deleted.length) h+='<div class="sec"><div class="sec-t">🗑 削除済み</div>'+deleted.map(issuerRow_).join('')+'</div>';
+  setBody(h);
+}
+function issuerFormHtml_(){
+  var x=issuerEditId_?issuerFind_(issuerEditId_):null;
+  x=x||{id:'',name:'',zip:'',addr:'',tel:'',invoiceNo:'',order:'',isDefault:false,state:'有効'};
+  var isNew=!issuerEditId_;
+  function fld(id,label,val,ph,w){ return '<div style="flex:1;min-width:'+(w||200)+'px"><div class="sk-fl">'+label+'</div><input id="isf-'+id+'" class="finput" value="'+esc(val==null?'':val)+'" placeholder="'+esc(ph||'')+'"></div>'; }
+  return '<div class="sec" style="border:1px solid var(--accent,#7ab0f0)">'
+    +'<div class="sec-t">'+(isNew?'＋ 発行店を追加':'✎ 発行店を編集')+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px">'
+      +fld('name','表示名（店名）※',x.name,'ラウンジいえやす',240)
+      +fld('invoiceNo','登録番号（インボイス）',x.invoiceNo,'T4180302027983',220)
+      +fld('order','表示順',x.order,'1',90)
+    +'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">'
+      +fld('zip','郵便番号',x.zip,'460-0003',140)
+      +fld('addr','住所',x.addr,'愛知県名古屋市中区錦3-9-15 …',320)
+      +fld('tel','電話',x.tel,'052-…',160)
+    +'</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px"><input type="checkbox" id="isf-default"'+(x.isDefault?' checked':'')+'> この発行店を<b>既定</b>にする（軍師の初期選択）</label>'
+    +'<div class="addbar" style="margin-top:12px;gap:8px"><button class="btn pri" onclick="issuerSaveForm_()">保存</button><button class="btn" onclick="issuerCancel_()">キャンセル</button></div>'
+    +'</div>';
+}
+function issuerEdit(id){ issuerEditId_=id||''; drawIssuer_(); try{window.scrollTo(0,0);}catch(_){}}
+function issuerCancel_(){ issuerEditId_=null; drawIssuer_(); }
+function issuerSaveForm_(){
+  function v(id){ return (document.getElementById('isf-'+id)||{}).value||''; }
+  var name=v('name').trim();
+  if(!name){ toast('表示名（店名）を入力してください',true); return; }
+  var payload={ id:issuerEditId_||'', name:name, invoiceNo:v('invoiceNo').trim(), order:v('order').trim(),
+    zip:v('zip').trim(), addr:v('addr').trim(), tel:v('tel').trim(),
+    isDefault:!!(document.getElementById('isf-default')||{}).checked, state:'有効' };
+  api('issuerSave',{payload:payload}).then(function(r){ if(!res(r,'発行店を保存しました'))return; issuerEditId_=null; renderIssuer(); }).catch(function(){ toast('通信エラー',true); });
+}
+function issuerDelete(id){
+  var x=issuerFind_(id); if(!x)return;
+  if(!confirm('発行店「'+(x.name||'')+'」を削除しますか？\n（削除済みに移動し、あとで復活できます）'))return;
+  api('issuerDelete',{id:id}).then(function(r){ if(!res(r,'発行店を削除しました'))return; renderIssuer(); }).catch(function(){ toast('通信エラー',true); });
+}
+function issuerRestore(id){
+  var x=issuerFind_(id); if(!x)return;
+  api('issuerSave',{payload:{id:x.id,name:x.name,zip:x.zip,addr:x.addr,tel:x.tel,invoiceNo:x.invoiceNo,order:x.order,isDefault:x.isDefault,state:'有効'}})
+    .then(function(r){ if(!res(r,'発行店を復活しました'))return; renderIssuer(); }).catch(function(){ toast('通信エラー',true); });
+}
+
 function MOCKAPI(action,body){
   if(action==='adminGetMendanList'){ return {ok:true,list:[
     {id:'M1',at:'7/22 19:30',status:'提出済',name:'山田 花子',kana:'ヤマダハナコ',age:26,tel:'09012345678',addr:'名古屋市中区栄3-1-1 いえやすマンション101',days:4,weekdays:'月火金',exp:'あり',prevSales:800000,prevWage:2500,holdCust:15,expCust:10,expSales:500000,idPhoto:'https://example.com/id',idPhotoBack:'https://example.com/idb',facePhoto:'https://example.com/face',memo:'',judge:''},
     {id:'M2',at:'7/20 20:10',status:'面談済',name:'鈴木 みか',kana:'スズキミカ',age:22,tel:'08099998888',addr:'名古屋市千種区今池1-2-3',days:3,weekdays:'水木土',exp:'なし',prevSales:0,prevWage:0,holdCust:0,expCust:0,expSales:0,idPhoto:'',idPhotoBack:'',facePhoto:'',memo:'明るい子。体験へ進める',judge:'体験へ'},
-    {id:'M3',at:'7/19 21:00',status:'面談済',name:'佐藤 リナ',kana:'サトウリナ',age:19,tel:'07011112222',addr:'名古屋市中村区',days:2,weekdays:'金土',exp:'少し',prevSales:400000,prevWage:2200,holdCust:5,expCust:4,expSales:250000,idPhoto:'https://example.com/id3',idPhotoBack:'',facePhoto:'https://example.com/face3',memo:'',judge:'不採用'}
+    {id:'M3',at:'7/19 21:00',status:'面談済',name:'佐藤 リナ',kana:'サトウリナ',age:19,tel:'07011112222',addr:'名古屋市中村区',days:2,weekdays:'金土',exp:'少し',prevSales:400000,prevWage:2200,holdCust:5,expCust:4,expSales:250000,idPhoto:'https://example.com/id3',idPhotoBack:'',facePhoto:'https://example.com/face3',memo:'',judge:'不採用'},
+    {id:'M4',at:'8/5 21:15',status:'入力中',name:'',kana:'',age:'',tel:'',addr:'',days:'',weekdays:'',exp:'',prevSales:0,prevWage:0,holdCust:0,expCust:0,expSales:0,idPhoto:'',idPhotoBack:'',facePhoto:'',memo:'',judge:''},
+    {id:'M5',at:'8/5 21:16',status:'入力中',name:'',kana:'',age:'',tel:'',addr:'',days:'',weekdays:'',exp:'',prevSales:0,prevWage:0,holdCust:0,expCust:0,expSales:0,idPhoto:'',idPhotoBack:'',facePhoto:'',memo:'',judge:''}
   ]}; }
+  if(action==='adminDeleteMendan'){ return {ok:true,deleted:(body.ids||[]).length}; }
   if(action==='seikyuData'){ return {ok:true,today:'2026-07-30',statuses:['未請求','請求済','入金済','取消'],
     settings:{issuerName:'ラウンジいえやす',issuerZip:'460-0003',issuerAddr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル',issuerTel:'',invoiceNo:'T4180302027983',bankName:'',bankBranch:'',accountType:'普通',accountNo:'',accountHolder:'',taxRate:0.10,footerNote:'お振込手数料は御社にてご負担くださいますようお願い申し上げます。'},
     senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込',state:'有効',rowIdx:2}],
@@ -4118,6 +4227,12 @@ function MOCKAPI(action,body){
   if(action==='seikyuGenerate') return {ok:true,no:'202607-001',issueDate:'2026-07-30'};
   if(action==='seikyuSetStatus'||action==='seikyuUpdate'||action==='seikyuSaveSettings'||action==='seikyuSaveSender') return {ok:true};
   if(action==='seikyuImage') return {ok:false,error:'ローカルでは画像不可'};
+  if(action==='issuerList') return {ok:true,issuers:[
+    {id:'IS-a',name:'ラウンジいえやす',zip:'460-0003',addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル',tel:'',invoiceNo:'T4180302027983',order:1,isDefault:true,state:'有効',rowIdx:2},
+    {id:'IS-b',name:'ラウンジいえやす 5F',zip:'460-0003',addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル 5F',tel:'',invoiceNo:'T4180302027983',order:2,isDefault:false,state:'有効',rowIdx:3},
+    {id:'IS-c',name:'（削除済みデモ）旧店名',zip:'',addr:'',tel:'',invoiceNo:'',order:9,isDefault:false,state:'削除',rowIdx:4}
+  ]};
+  if(action==='issuerSave'||action==='issuerDelete') return {ok:true};
 
   if(action==='adminGetCustomers'){
     return {ok:true, editHas:{card:true,no:true,tantou:true,yomigana:true,company:true,pos:true,neck:false,ng:false,ngStaff:false,bottle:true,drink:true,tabaco:true,note:true,bday:true,memberSince:true,lastFeeDate:true},
