@@ -3615,11 +3615,62 @@ function rcptDenListHtml_(){
       +'<div class="rcpt-den-amt" style="font-size:12px;color:var(--sub)">選ぶ ▸</div></div>';
   }).join('');
 }
+/* ===== 📜 発行履歴（発行済み領収書/受領書の控え一覧・軍師） ===== */
+var RCPT_TAB='form';       // 'form'=発行 | 'history'=発行履歴
+var RCPT_HIST=null;        // 履歴データ（null=未取得）
+var RCPT_HIST_F='';        // 種別フィルタ（''=全部 / '領収書' / '日払い受領書' / '月払い受領書'）
+var RCPT_HIST_Q='';        // 検索語（宛名・通し番号）
+function rcptHistMock_(){ return [
+  {at:'08/05 21:30',docType:'領収書',issueDate:'2026-08-05',serial:'20260805-003',atena:'いえやす 様',memberNo:'0451',amount:15600,taxExcl:14182,tax:1418,inshi:0,pay:'現金',tada:'ご飲食代として',by:'りく'},
+  {at:'08/05 20:10',docType:'日払い受領書',issueDate:'2026-08-05',serial:'20260805-002',atena:'佐藤 美咲',memberNo:'',amount:12000,taxExcl:0,tax:0,inshi:0,pay:'現金',tada:'日払い報酬として',by:'黒服A'},
+  {at:'08/04 23:50',docType:'月払い受領書',issueDate:'2026-07-31',serial:'20260731-001',atena:'鈴木 レイ',memberNo:'',amount:182459,taxExcl:0,tax:0,inshi:0,pay:'現金',tada:'2026年7月分 給与として',by:'りく'}
+]; }
+function rcptShowForm(){ RCPT_TAB='form'; var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+function rcptShowHistory(){ RCPT_TAB='history'; if(RCPT_HIST===null)rcptLoadHistory_(); var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+function rcptLoadHistory_(){
+  var done=function(){ if(menuView==='receipt'&&RCPT_TAB==='history'){ var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); } };
+  if(!IS_GAS){ RCPT_HIST=rcptHistMock_(); done(); return; }
+  gsr('getIssuedReceipts',200).then(function(r){ RCPT_HIST=(r&&r.rows)?r.rows:[]; done(); }).catch(function(){ RCPT_HIST=[]; done(); });
+}
+function rcptHistFilter(f){ RCPT_HIST_F=f; var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+function rcptHistSearch_(){ RCPT_HIST_Q=((document.getElementById('rcpt-hist-q')||{}).value)||''; var el=document.getElementById('rcpt-hist-list'); if(el)el.innerHTML=rcptHistListHtml_(); }
+function rcptHistBadgeColor_(t){ return t==='領収書'?'#3b6fb0':(t==='月払い受領書'?'#8a5bb0':'#3f8a5a'); }
+function rcptHistListHtml_(){
+  if(RCPT_HIST===null) return '<div class="rcpt-den-loading">読み込み中…</div>';
+  var q=RCPT_HIST_Q.trim();
+  var rows=RCPT_HIST.filter(function(x){
+    if(RCPT_HIST_F && x.docType!==RCPT_HIST_F) return false;
+    if(q && String(x.atena||'').indexOf(q)<0 && String(x.serial||'').indexOf(q)<0) return false;
+    return true;
+  });
+  if(!rows.length) return '<div class="rcpt-den-empty">該当する発行履歴はありません</div>';
+  var head='<div class="small" style="color:var(--sub);margin:2px 0 8px">'+rows.length+' 件（新しい順）</div>';
+  return head+rows.map(function(x){
+    return '<div style="border:1px solid var(--line,#2a3550);border-radius:10px;padding:9px 12px;margin-bottom:8px;background:var(--card,#0e1626)">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'
+        +'<span style="font-weight:800;font-size:13px">'+esc(x.serial||'')+'</span>'
+        +'<span style="background:'+rcptHistBadgeColor_(x.docType)+';color:#fff;font-size:11px;padding:1px 7px;border-radius:6px;font-weight:700">'+esc(x.docType||'')+'</span>'
+        +'<span style="margin-left:auto;font-weight:800;font-size:15px">'+rcptYen_(x.amount)+'</span></div>'
+      +'<div style="font-size:13px;margin-bottom:2px">'+esc(x.atena||'（宛名なし）')+(x.tada?'　<span style="color:var(--sub)">'+esc(x.tada)+'</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--sub)">発行日 '+esc(x.issueDate||'')+'　'+esc(x.pay||'')+(Number(x.inshi)>0?'　印紙'+rcptYen_(x.inshi):'')+'　発行者 '+esc(x.by||'?')+'　'+esc(x.at||'')+'</div>'
+      +'</div>';
+  }).join('');
+}
 function rcptRenderMenu_(el){
   rcptCss_();
   document.getElementById('menuTitle').textContent='🖨 領収書・受領書';
   var R=RCPT_MODE==='R', J=RCPT_MODE==='J', M=RCPT_MODE==='M';
   var h='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
+  h+='<div class="rcpt-seg" style="margin-bottom:10px">'
+    +'<button class="'+(RCPT_TAB==='form'?'on':'')+'" onclick="rcptShowForm()">🖨 発行</button>'
+    +'<button class="'+(RCPT_TAB==='history'?'on':'')+'" onclick="rcptShowHistory()">📜 発行履歴</button></div>';
+  if(RCPT_TAB==='history'){
+    h+='<div class="rcpt-seg" style="margin-bottom:8px">'
+      +[['','全部'],['領収書','領収書'],['日払い受領書','日払い'],['月払い受領書','月払い']].map(function(f){ return '<button class="'+(RCPT_HIST_F===f[0]?'on':'')+'" onclick="rcptHistFilter(\''+f[0]+'\')">'+esc(f[1])+'</button>'; }).join('')+'</div>';
+    h+='<input id="rcpt-hist-q" class="finput" autocapitalize="off" placeholder="宛名・通し番号で検索" value="'+esc(RCPT_HIST_Q)+'" oninput="rcptHistSearch_()" style="margin-bottom:8px">';
+    h+='<div id="rcpt-hist-list">'+rcptHistListHtml_()+'</div>';
+    el.innerHTML=h; return;
+  }
   h+='<div class="rcpt-seg" style="margin-bottom:10px">'
     +'<button class="'+(R?'on':'')+'" onclick="rcptSetMode(\'R\')">領収書</button>'
     +'<button class="'+(J?'on':'')+'" onclick="rcptSetMode(\'J\')">日払い受領書</button>'
@@ -3914,6 +3965,7 @@ function openReceipt(){
   menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
   RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
+  RCPT_TAB='form'; RCPT_HIST=null; RCPT_HIST_F=''; RCPT_HIST_Q='';
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
   rcptLoadIssuers_();   // 発行店マスタを取得→既定を初期選択（!IS_GAS はモック）
   if(!IS_GAS){ RCPT_DENPYO=rcptDenpyoMock_(); RCPT_PAYEES=rcptPayeeMock_(); var dl0=document.getElementById('rcpt-denlist'); if(dl0)dl0.innerHTML=rcptDenListHtml_(); return; }
