@@ -5816,7 +5816,7 @@ var GSR_RETRY_SAFE = {
   getKioskHall2:1, getKioskReservations:1, getKioskTsukemawashi:1, getKioskShiftBoard:1,
   getCastRequestsToday:1, getKioskCastNames:1, getKioskWorkingCasts:1, getKioskTasks:1,
   getKioskCastKubun:1, getServerTime:1, getGunshiMaintenance:1, getKioskBootstrap:1,
-  kioskLogoutTs:1
+  getKioskLoadAll:1, kioskLogoutTs:1
 };
 var GSR_ERRLOG = [];
 function gsrLog_(fn, kind, status, ms, msg){
@@ -6096,25 +6096,51 @@ function adaptReq(list){return (list||[]).map(function(r){
   return {id:r.rowIdx, time:r.time, cast:r.name, type:r.type, targetStore:store, targetCusts:cs, targetCust:cs[0]||'', targetLabel:store?'':String(r.target||''), comment:r.comment||'', handled:!!r.handled};
 });}
 
-function loadAll(){
-  if(!IS_GAS) return;
-  Promise.all([
-    gsr('getKioskHall2'),
-    gsr('getKioskReservations',curDate,true), /* 第2引数=キャンセル(削除)済みも含める＝予約一覧にグレーアウトのログとして残す */
-    gsr('getKioskTsukemawashi'),
-    gsr('getKioskShiftBoard'),
-    gsr('getCastRequestsToday'),
-    gsr('getKioskCastNames'),
+/* 取得結果[9]を画面へ反映。各要素はnull許容＝失敗した項目だけ前回値を保持し、他は描画する（部分描画）。
+   順序: [hall2, reservations, tsukemawashi, shiftBoard, castRequests, castNames, workingCasts, tasks, castKubun] */
+function applyLoadAll_(r){
+  if(r[0]!=null) SEATS=adaptHall(r[0]);
+  if(r[1]!=null) RSV=adaptRsv(r[1]);
+  if(r[2]!=null) ROT=adaptRot(r[2]);
+  if(r[3]!=null) SHIFT=adaptShift(r[3]);
+  if(r[4]!=null) REQUESTS=adaptReq(r[4]);
+  if(r[5]!=null) CASTS=r[5]||CASTS;
+  if(r[6]!=null) WORKCASTS=r[6];
+  if(r[7]!=null) TASKS=(r[7]&&r[7].tasks)||[];
+  if(r[8]&&typeof r[8]==='object') CASTKUBUN=r[8];
+  applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
+  annotateLeavePlan(); // 占有席に「空く予定」(=在席組の退店予定時刻)を付与
+  BOOTED=true; renderAll();
+  if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
+}
+/* 従来の9本バラ撃ち（フォールバック）。1本失敗でも他を描画するため各fetchに .catch(null) を付与。 */
+function loadAllLegacy_(){
+  return Promise.all([
+    gsr('getKioskHall2').catch(function(){return null;}),
+    gsr('getKioskReservations',curDate,true).catch(function(){return null;}), /* 第2引数=キャンセル(削除)済みも含める＝予約一覧にグレーアウトのログとして残す */
+    gsr('getKioskTsukemawashi').catch(function(){return null;}),
+    gsr('getKioskShiftBoard').catch(function(){return null;}),
+    gsr('getCastRequestsToday').catch(function(){return null;}),
+    gsr('getKioskCastNames').catch(function(){return null;}),
     gsr('getKioskWorkingCasts').catch(function(){return null;}),
     gsr('getKioskTasks').catch(function(){return null;}),
     gsr('getKioskCastKubun').catch(function(){return null;})
-  ]).then(function(r){
-    SEATS=adaptHall(r[0]); RSV=adaptRsv(r[1]); ROT=adaptRot(r[2]); SHIFT=adaptShift(r[3]); REQUESTS=adaptReq(r[4]); CASTS=r[5]||CASTS; WORKCASTS=(r[6]!=null?r[6]:WORKCASTS); TASKS=(r[7]&&r[7].tasks)||[]; CASTKUBUN=(r[8]&&typeof r[8]==='object')?r[8]:CASTKUBUN;
-    applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
-    annotateLeavePlan(); // 占有席に「空く予定」(=在席組の退店予定時刻)を付与
-    BOOTED=true; renderAll();
-    if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
-  }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); });
+  ]).then(applyLoadAll_);
+}
+var _loadingAll=false, _loadAllPend=false;
+function loadAll(){
+  if(!IS_GAS) return;
+  if(document.hidden) return;              /* タブ非表示中はポーリングしない（放置端末の空撃ち防止・復帰時にvisibilitychangeで即取得） */
+  if(_loadingAll){ _loadAllPend=true; return; } /* in-flightガード：前回未完なら次を畳む（重複スタック→遅化スパイラルの停止） */
+  _loadingAll=true;
+  /* まず1発バンドル getKioskLoadAll を試す→未デプロイ/失敗なら従来9本へ自動フォールバック（＝backend未反映でも壊れない） */
+  gsr('getKioskLoadAll',curDate).then(function(b){
+    if(!b || b.ok!==true) throw new Error('nobundle');
+    applyLoadAll_([b.hall2,b.reservations,b.tsukemawashi,b.shiftBoard,b.castRequests,b.castNames,b.workingCasts,b.tasks,b.castKubun]);
+  }).catch(function(){
+    return loadAllLegacy_();
+  }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); })
+  .then(function(){ _loadingAll=false; if(_loadAllPend){ _loadAllPend=false; setTimeout(loadAll,0); } });
 }
 
 /* ============ ログイン（GAS本番のみ） ============ */
@@ -6203,7 +6229,7 @@ function submitPin(){
     else { loginPin=''; renderPin(); var e=document.getElementById('klErr'); if(e)e.textContent=(r&&r.error)||'PINが違います'; }
   }).catch(function(){ loginPin=''; renderPin(); var e=document.getElementById('klErr'); if(e)e.textContent='通信エラー'; });
 }
-function afterLogin(){ window._k2loginAt=Date.now(); renderAll(); loadAll(); if(!window._k2i) window._k2i=setInterval(loadAll,30000); if(!window._k2sw) window._k2sw=setInterval(checkForceLogout,30000); checkClockDrift(); if(!window._k2clk) window._k2clk=setInterval(checkClockDrift,60000); }
+function afterLogin(){ window._k2loginAt=Date.now(); renderAll(); loadAll(); if(!window._k2i) window._k2i=setInterval(loadAll,30000); if(!window._k2sw) window._k2sw=setInterval(checkForceLogout,30000); checkClockDrift(); if(!window._k2clk) window._k2clk=setInterval(checkClockDrift,60000); if(!window._k2vis){ window._k2vis=1; document.addEventListener('visibilitychange',function(){ if(!document.hidden) loadAll(); }); } }
 /* ===== 端末時刻ズレ検知（iPadの日付戻し忘れ対策・1分ごと） =====
  * 領収書発行で端末の日付を過去に戻したまま戻し忘れると翌営業の伝票日付がズレる。
  * サーバー時刻(getServerTime)と端末時刻を毎分突合し、閾値超過で：①最上部に赤バナー②reportClockDriftで黒服LINE＋要対応チケット。解消でclearClockDrift。 */
