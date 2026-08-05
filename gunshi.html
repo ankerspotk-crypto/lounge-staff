@@ -3451,7 +3451,29 @@ function custBrowseHeader_(n){
    ・現金は税抜で収入印紙を自動判定（カードは印紙不要）
    ・印刷はePOS-Print XMLを生成しTM Print Assistant(iOS)へ渡してBT印字
    ★発行者情報(登録番号/住所)はボス確定待ち＝RCPT_ISSUERを差し替え。将来はバックエンド供給に。 */
-var RCPT_ISSUER={ name:'ラウンジいえやす', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel:'', invoiceNo:'T4180302027983' }; // 表示名＋住所＋適格請求書発行事業者 登録番号
+var RCPT_ISSUER={ name:'ラウンジいえやす', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel:'', invoiceNo:'T4180302027983' }; // 選択中の発行店（バックエンド未取得時の既定フォールバック）
+var RCPT_ISSUERS=null;   // 発行店の選択肢（null=未取得）＝コンソール発行店マスタから getReceiptIssuers で取得
+var RCPT_ISSUER_ID='';   // 選択中の発行店ID
+function rcptIssuerMock_(){ return [
+  {id:'IS-a', name:'ラウンジいえやす', zip:'', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel:'', invoiceNo:'T4180302027983', isDefault:true},
+  {id:'IS-b', name:'ラウンジいえやす 5F', zip:'', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル 5F', tel:'', invoiceNo:'T4180302027983', isDefault:false}
+]; }
+function rcptApplyIssuer_(it){ if(!it)return; RCPT_ISSUER={ name:it.name||'', addr:it.addr||'', tel:it.tel||'', invoiceNo:it.invoiceNo||'' }; RCPT_ISSUER_ID=it.id||''; }
+function rcptIssuerDefault_(list){ var d=(list&&list.length)?list[0]:null; (list||[]).forEach(function(x){ if(x.isDefault)d=x; }); return d; }
+function rcptIssuerOpts_(){
+  if(RCPT_ISSUERS===null) return '<option value="">読み込み中…</option>';
+  if(!RCPT_ISSUERS.length) return '<option value="">（発行店が未登録）</option>';
+  return RCPT_ISSUERS.map(function(it){ return '<option value="'+esc(it.id)+'"'+(it.id===RCPT_ISSUER_ID?' selected':'')+'>'+esc(it.name)+(it.isDefault?'（既定）':'')+'</option>'; }).join(''); }
+function rcptPickIssuer(id){ var it=null; (RCPT_ISSUERS||[]).forEach(function(x){ if(x.id===id)it=x; }); if(it){ rcptApplyIssuer_(it); rcptCalc(); } }
+function rcptLoadIssuers_(){
+  var done=function(){ if(menuView==='receipt'){ var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); } };
+  if(!IS_GAS){ RCPT_ISSUERS=rcptIssuerMock_(); rcptApplyIssuer_(rcptIssuerDefault_(RCPT_ISSUERS)); done(); return; }
+  gsr('getReceiptIssuers').then(function(r){
+    RCPT_ISSUERS=(r&&r.rows)?r.rows:[];
+    if(RCPT_ISSUERS.length) rcptApplyIssuer_(rcptIssuerDefault_(RCPT_ISSUERS));
+    done();
+  }).catch(function(){ RCPT_ISSUERS=[]; done(); });
+}
 var RCPT_TAX=0.10;              // 店内飲食＝10%
 var RCPT_DENPYO=null;           // 予約伝票（null=未取得, []=取得済み空）
 var RCPT_MODE='R';              // 'R'=領収書 'J'=日払い受領書
@@ -3599,6 +3621,8 @@ function rcptRenderMenu_(el){
     +'<button class="'+(R?'on':'')+'" onclick="rcptSetMode(\'R\')">領収書</button>'
     +'<button class="'+(J?'on':'')+'" onclick="rcptSetMode(\'J\')">日払い受領書</button>'
     +'<button class="'+(M?'on':'')+'" onclick="rcptSetMode(\'M\')">月払い受領書</button></div>';
+  h+='<div class="flabel">発行店</div>'
+    +'<select id="rcpt-issuer" class="finput" onchange="rcptPickIssuer(this.value)" style="margin-bottom:10px">'+rcptIssuerOpts_()+'</select>';
   if(R){
     h+='<div class="rcpt-h">予約伝票を選ぶ（領収書名を自動で呼び出し）</div>';
     h+='<div id="rcpt-denlist" class="rcpt-denlist">'+rcptDenListHtml_()+'</div>';
@@ -3781,27 +3805,50 @@ function rcptBuildXml_(o){
 }
 /* ===== 横向き領収書＝画像印字（プリンターが回転命令を無視するため、横長に組んだ画像を刷る） ===== */
 function rcptLandscapeCanvas_(o){
-  var W=1000, H=340;                     // 横幅1.5倍・余白詰め。H=紙幅方向→回転後の印字幅(≤512)。URLは約60KB
+  var W=1000, H=340;                     // H=紙幅方向→回転後の印字幅(≤512)。URLは約57KB
   var c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d');
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
-  g.fillStyle='#000'; g.strokeStyle='#000'; g.lineWidth=1.5; g.textBaseline='alphabetic';
+  g.fillStyle='#000'; g.strokeStyle='#000'; g.textBaseline='alphabetic';
   var yen=function(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); };
-  g.font='bold 42px "Hiragino Mincho ProN","YuMincho",serif'; g.fillText('領 収 証', 30, 62);
-  g.font='26px sans-serif'; g.fillText(String(o.atena||''), 280, 56);
-  g.beginPath(); g.moveTo(275,64); g.lineTo(760,64); g.stroke();
-  g.font='14px sans-serif'; g.textAlign='right'; g.fillText('No. '+rcptNo_(o.iso), 988, 28); g.fillText(rcptJp_(o.iso), 988, 48); g.textAlign='left';
-  g.font='bold 44px sans-serif'; g.fillText('￥ '+(Number(o.amount)||0).toLocaleString('ja-JP')+' -', 56, 140);
-  g.font='14px sans-serif'; g.fillText('税抜額   '+yen(o.taxExcl), 770, 118); g.fillText('消費税等 '+yen(o.tax), 770, 142);
-  g.font='17px sans-serif'; g.fillText('但  '+String(o.tada||''), 30, 196);
-  g.fillText(rcptJp_(o.iso)+'　上記正に領収いたしました', 30, 228);
-  g.strokeRect(850, 102, 122, 58); g.textAlign='center'; g.font='13px sans-serif';
-  if(RCPT_CASH && Number(o.inshi)>0){ g.fillText('収入印紙', 911, 128); g.fillText(yen(o.inshi), 911, 148); } else { g.fillText('印紙不要', 911, 136); }
+  var MR=952;                                                 // 右揃えの基準線
+  g.lineWidth=1.8; g.strokeRect(14,14,W-28,H-28); g.lineWidth=1.3;   // 外枠で全体を締める
+  // ── ヘッダー：タイトル ／ No.・発行日 ──
+  g.textAlign='left'; g.font='bold 40px "Hiragino Mincho ProN","YuMincho",serif';
+  g.fillText('領 収 証', 44, 66);
+  g.textAlign='right'; g.font='14px sans-serif';
+  g.fillText('No. '+rcptNo_(o.iso), MR, 42); g.fillText(rcptJp_(o.iso), MR, 62);
+  // ── 宛名（下線つき）──
+  g.textAlign='left'; g.font='26px sans-serif';
+  g.fillText(String(o.atena||''), 58, 116);
+  g.lineWidth=1.1; g.beginPath(); g.moveTo(44,124); g.lineTo(600,124); g.stroke();
+  // ── 金額（大）＋下線で重心 ──
+  g.font='bold 46px sans-serif';
+  g.fillText('￥ '+(Number(o.amount)||0).toLocaleString('ja-JP')+' -', 50, 190);
+  g.beginPath(); g.moveTo(44,202); g.lineTo(600,202); g.stroke(); g.lineWidth=1.3;
+  // ── 但し／領収文 ──
+  g.font='17px sans-serif'; g.fillText('但  '+String(o.tada||''), 50, 226);
+  g.font='14px sans-serif'; g.fillText(rcptJp_(o.iso)+'　上記正に領収いたしました', 50, 247);
+  // ── 右上：収入印紙枠 ──
+  var sx=790, sy=80, sw=162, sh=74;
+  g.strokeRect(sx, sy, sw, sh);
+  g.textAlign='center'; g.font='14px sans-serif'; g.fillText('収入印紙', sx+sw/2, sy+28);
+  if(RCPT_CASH && Number(o.inshi)>0){ g.font='bold 18px sans-serif'; g.fillText(yen(o.inshi), sx+sw/2, sy+56); }
+  else { g.font='13px sans-serif'; g.fillText(RCPT_CASH?'不要（非課税）':'不要（カード）', sx+sw/2, sy+56); }
+  // ── 右：税抜／消費税（右揃え・印紙枠の下に分離）──
+  g.textAlign='right'; g.font='15px sans-serif';
+  g.fillText('税抜額　'+yen(o.taxExcl), MR, 186);
+  g.fillText('消費税(10%)　'+yen(o.tax), MR, 210);
+  // ── 下段：発行者枠（左・縦パディング確保）──
+  g.strokeRect(44, 256, 592, 66);
+  g.textAlign='left'; g.font='bold 19px "Hiragino Mincho ProN",serif';
+  g.fillText(String(RCPT_ISSUER.name||''), 60, 282);
+  g.font='13px sans-serif';
+  g.fillText(String(RCPT_ISSUER.addr||''), 60, 302);
+  g.fillText('登録番号 '+String(RCPT_ISSUER.invoiceNo||''), 60, 319);
+  // ── 下段：印（右下に整列）──
+  g.strokeRect(884, 256, 66, 66); g.textAlign='center'; g.font='13px sans-serif'; g.fillText('印', 917, 296);
   g.textAlign='left';
-  g.strokeRect(30, 258, 580, 72);
-  g.font='bold 20px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 46, 288);
-  g.font='14px sans-serif'; g.fillText(String(RCPT_ISSUER.addr||''), 46, 310); g.fillText('登録番号 '+String(RCPT_ISSUER.invoiceNo||''), 46, 330);
-  g.strokeRect(880, 258, 68, 68); g.textAlign='center'; g.font='12px sans-serif'; g.fillText('印', 914, 298); g.textAlign='left';
   return c;
 }
 function rcptCanvasToEposXml_(c){
@@ -3849,7 +3896,9 @@ function rcptLogIssue_(){
 function openReceipt(){
   menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
+  RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
+  rcptLoadIssuers_();   // 発行店マスタを取得→既定を初期選択（!IS_GAS はモック）
   if(!IS_GAS){ RCPT_DENPYO=rcptDenpyoMock_(); RCPT_PAYEES=rcptPayeeMock_(); var dl0=document.getElementById('rcpt-denlist'); if(dl0)dl0.innerHTML=rcptDenListHtml_(); return; }
   gsr('getReceiptPayees').then(function(r){ RCPT_PAYEES=(r&&r.rows)?r.rows:[]; if(menuView==='receipt'&&RCPT_MODE==='J'){ var el2=document.getElementById('menu-body'); if(el2)rcptRenderMenu_(el2); } }).catch(function(){ RCPT_PAYEES=[]; });
   gsr('getReceiptReservationsToday').then(function(r){
