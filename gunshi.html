@@ -3795,7 +3795,7 @@ function rcptBuildXmlLandscape_(o){
   else add(1,false,'収入印紙 '+rcptYen_(o.inshi)+' 貼付');
   add(1,false,'税抜 '+rcptYen_(o.taxExcl)+'   消費税(10%) '+rcptYen_(o.tax));
   add(1,false,RCPT_ISSUER.name+'   '+(RCPT_ISSUER.addr||''));
-  add(1,false,'登録番号 '+RCPT_ISSUER.invoiceNo);
+  if(RCPT_ISSUER.invoiceNo) add(1,false,'登録番号 '+RCPT_ISSUER.invoiceNo);
   var L=[];
   L.push('<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">');
   L.push('<text lang="ja"/>');
@@ -3840,7 +3840,7 @@ function rcptBuildXml_(o){
     L.push(t(RCPT_ISSUER.name));
     if(RCPT_ISSUER.addr) L.push(t(RCPT_ISSUER.addr));
     if(RCPT_ISSUER.tel) L.push(t('TEL '+RCPT_ISSUER.tel));
-    L.push(t('登録番号 '+RCPT_ISSUER.invoiceNo));
+    if(RCPT_ISSUER.invoiceNo) L.push(t('登録番号 '+RCPT_ISSUER.invoiceNo));
   } else {
     L.push('<text width="2" height="2" em="true"/>'); L.push(t('受領書'));
     L.push('<text width="1" height="1" em="false"/>');
@@ -3911,7 +3911,7 @@ function rcptLandscapeCanvas_(o){
   g.fillText(addr, 560, 386);
   g.font='bold 16px sans-serif';
   if(RCPT_ISSUER.tel) g.fillText('電話番号 ：'+String(RCPT_ISSUER.tel), 560, 434);
-  g.fillText('登録番号 ：'+String(RCPT_ISSUER.invoiceNo||''), 560, 460);
+  if(RCPT_ISSUER.invoiceNo) g.fillText('登録番号 ：'+String(RCPT_ISSUER.invoiceNo), 560, 460);   // 登録番号が無い発行店は行を出さない
   return c;
 }
 function rcptCanvasToEposXml_(c){
