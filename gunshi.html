@@ -3828,42 +3828,50 @@ function rcptLandscapeCanvas_(o){
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
   g.fillStyle='#000'; g.strokeStyle='#000'; g.textBaseline='alphabetic';
   var yen=function(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); };
-  var line=function(x1,y1,x2,y2,w){ g.lineWidth=w||1.2; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
+  var line=function(x1,y1,x2,y2,w){ g.lineWidth=w||1.4; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
   // ── 4隅の装飾 ──
   rcptCorner_(g, 22, 22, 1, 1); rcptCorner_(g, W-22, 22, -1, 1);
   rcptCorner_(g, 22, H-22, 1, -1); rcptCorner_(g, W-22, H-22, -1, -1);
-  // ── 1段目：領収書 ／ 宛名＋様 ／ No. ──
-  g.textAlign='left'; g.font='bold 42px "Hiragino Mincho ProN","YuMincho",serif';
-  g.fillText('領収書', 100, 96);
-  g.font='30px sans-serif'; g.fillText(String(o.atena||''), 300, 92); line(296,102,720,102,1.2);
-  g.font='22px sans-serif'; g.fillText('様', 732, 92);
-  g.font='20px "Hiragino Mincho ProN",serif'; g.fillText('No.', 806, 84); line(852,90,952,90,1.2);
+  // ── 1段目：領収書 ／ 宛名＋様 ／ No.（文字は大きめ・太めでサーマルのかすれ対策）──
+  g.textAlign='left'; g.font='bold 48px "Hiragino Mincho ProN","YuMincho",serif';
+  g.fillText('領収書', 96, 98);
+  g.font='bold 32px sans-serif'; g.fillText(String(o.atena||''), 300, 94); line(296,104,716,104,1.6);
+  g.font='bold 24px sans-serif'; g.fillText('様', 728, 94);
+  g.font='bold 22px "Hiragino Mincho ProN",serif'; g.fillText('No.', 806, 86); line(852,92,952,92,1.6);
   // ── 2段目：金額 ──
-  g.font='bold 30px serif'; g.fillText('¥', 104, 198);
-  g.font='bold 52px sans-serif'; g.fillText((Number(o.amount)||0).toLocaleString('ja-JP')+'.-', 152, 204); line(152,214,720,214,1.5);
+  g.font='bold 34px serif'; g.fillText('¥', 100, 202);
+  g.font='bold 58px sans-serif'; g.fillText((Number(o.amount)||0).toLocaleString('ja-JP')+'.-', 150, 208); line(150,220,716,220,2.0);
   // ── 3段目：但し ──
-  g.font='22px sans-serif'; g.fillText('但、'+String(o.tada||'')+' として', 112, 252); line(112,262,720,262,1.0);
+  g.font='bold 24px sans-serif'; g.fillText('但、'+String(o.tada||'')+' として', 108, 258); line(108,268,716,268,1.4);
   // ── 4段目：日付 ──
-  g.font='18px sans-serif'; g.fillText(rcptDateStr_(o.iso)+' に上記正に領収いたしました', 204, 298);
+  g.font='bold 20px sans-serif'; g.fillText(rcptDateStr_(o.iso)+' に上記正に領収いたしました', 200, 306);
   // ── 収入印紙枠（右上・破線・スタンプ欄）──
-  g.setLineDash([5,4]); g.lineWidth=1.2; g.strokeRect(792,152,150,116); g.setLineDash([]);
-  g.textAlign='center'; g.font='19px "Hiragino Mincho ProN",serif'; g.fillText('収　入',867,198); g.fillText('印　紙',867,232); g.textAlign='left';
+  g.setLineDash([5,4]); g.lineWidth=1.8; g.strokeRect(792,150,150,120); g.setLineDash([]);
+  g.textAlign='center'; g.font='bold 21px "Hiragino Mincho ProN",serif'; g.fillText('収　入',867,198); g.fillText('印　紙',867,236); g.textAlign='left';
   // ── 左下：消費税・支払種別 ──
-  g.font='18px sans-serif'; g.fillText('内、消費税額(10%)：　'+yen(o.tax), 100, 350);
-  g.fillText('支払い種別', 100, 396);
+  g.font='bold 21px sans-serif'; g.fillText('内、消費税額(10%)：　'+yen(o.tax), 96, 356);
+  g.fillText('支払い種別', 96, 402);
   var pay=[['現　金', RCPT_CASH?yen(o.amount):''],['カード', RCPT_CASH?'':yen(o.amount)],['その他','']];
-  var py=424; pay.forEach(function(p){ g.fillText(p[0]+' ：'+p[1], 124, py); line(214,py+8,472,py+8,0.8); py+=28; });
+  var py=432; g.font='bold 20px sans-serif'; pay.forEach(function(p){ g.fillText(p[0]+' ：'+p[1], 122, py); line(214,py+8,472,py+8,1.2); py+=28; });
   // ── 右：発行者（枠なし・プレーン）──
-  g.font='bold 24px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 560, 356);
-  g.font='15px sans-serif'; g.fillText(String(RCPT_ISSUER.addr||''), 560, 382);
-  if(RCPT_ISSUER.tel) g.fillText('電話番号 ：'+String(RCPT_ISSUER.tel), 560, 430);
-  g.fillText('登録番号 ：'+String(RCPT_ISSUER.invoiceNo||''), 560, 456);
+  g.font='bold 26px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 560, 356);
+  var addr=String(RCPT_ISSUER.addr||''), afs=17; g.font='bold '+afs+'px sans-serif';
+  while(afs>11 && g.measureText(addr).width>430){ afs--; g.font='bold '+afs+'px sans-serif'; }
+  g.fillText(addr, 560, 386);
+  g.font='bold 16px sans-serif';
+  if(RCPT_ISSUER.tel) g.fillText('電話番号 ：'+String(RCPT_ISSUER.tel), 560, 434);
+  g.fillText('登録番号 ：'+String(RCPT_ISSUER.invoiceNo||''), 560, 460);
   return c;
 }
 function rcptCanvasToEposXml_(c){
   var w=c.width, h=c.height, d=c.getContext('2d').getImageData(0,0,w,h).data;
   var bpr=Math.ceil(w/8), R=new Uint8Array(bpr*h);
-  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>128 && (d[i]+d[i+1]+d[i+2])/3<128) R[y*bpr+(x>>3)] |= (0x80>>(x&7)); } }
+  // サーマルのかすれ対策：①閾値を上げてアンチエイリアスの縁も黒に拾う（濃く）②右・下へ1px太らせる（細り防止）
+  var ink=new Uint8Array(w*h);
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>96 && (d[i]+d[i+1]+d[i+2])/3<184) ink[y*w+x]=1; } }
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){
+    if(ink[y*w+x] || (x>0&&ink[y*w+x-1]) || (y>0&&ink[(y-1)*w+x])) R[y*bpr+(x>>3)] |= (0x80>>(x&7));
+  } }
   var s=''; for(var k=0;k<R.length;k++) s+=String.fromCharCode(R[k]);
   return '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'
     +'<image width="'+w+'" height="'+h+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
