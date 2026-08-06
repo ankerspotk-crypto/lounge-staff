@@ -57,6 +57,11 @@ body{
   padding:14px 15px;font-size:16px;font-family:var(--gothic)}
 .tin:focus{outline:none;border-color:var(--gold)}
 .tin.bad{border-color:var(--shu)}
+.tsel{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 22px,calc(100% - 12px) 22px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
+.bdrow{display:flex;gap:8px;align-items:center}
+.bdrow .tsel{flex:1;min-width:0}
+.bdrow .tsel.y{flex:1.45}
 .err{color:var(--shu-lt);font-size:12px;margin-top:7px;display:none}
 .err.on{display:block}
 .age{margin-top:10px;font-size:13px;color:var(--muted)}
@@ -205,7 +210,11 @@ body{
     <div class="q"><div class="ql">お名前<span class="req">必須</span></div><input class="tin" id="f_name" placeholder="山田 花子" autocomplete="off"></div>
     <div class="q"><div class="ql">フリガナ</div><input class="tin" id="f_kana" placeholder="ヤマダ ハナコ" autocomplete="off"></div>
     <div class="q"><div class="ql">生年月日<span class="req">必須</span></div>
-      <input class="tin" id="f_birth" type="date" onchange="onBirth()">
+      <div class="bdrow">
+        <select class="tin tsel y" id="f_by" onchange="onBirth()"></select>
+        <select class="tin tsel" id="f_bm" onchange="onBirth()"></select>
+        <select class="tin tsel" id="f_bd" onchange="onBirth()"></select>
+      </div>
       <div class="age" id="ageOut"></div>
     </div>
     <div class="q"><div class="ql">ご住所<span class="req">必須</span><span class="hint">番地・建物名・部屋番号まで（送りに使います）</span></div>
@@ -517,8 +526,32 @@ function calcAge(birth){
   if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
   return a;
 }
+/* 年は「今日時点で満18歳以上」になる年から（今年-18）を先頭に降順。18歳未満の年はそもそも出さない */
+var BD_MIN_AGE = 18, BD_MAX_AGE = 60;
+function bdFill_(el, from, to, label){
+  var h = '<option value="">' + label + '</option>';
+  if(from <= to){ for(var v=from; v<=to; v++) h += '<option value="'+v+'">'+v+label+'</option>'; }
+  else          { for(var v=from; v>=to; v--) h += '<option value="'+v+'">'+v+label+'</option>'; }
+  var keep = el.value; el.innerHTML = h;
+  if(keep && el.querySelector('option[value="'+keep+'"]')) el.value = keep;
+}
+function bdDaysIn_(y, m){
+  if(!y || !m) return 31;
+  return new Date(Number(y), Number(m), 0).getDate(); // 0日=前月末日＝うるう年も正しい
+}
+function initBirth(){
+  var t = new Date(), ty = t.getFullYear();
+  bdFill_(document.getElementById('f_by'), ty - BD_MIN_AGE, ty - BD_MAX_AGE, '年');
+  bdFill_(document.getElementById('f_bm'), 1, 12, '月');
+  bdFill_(document.getElementById('f_bd'), 1, 31, '日');
+}
 function onBirth(){
-  var v = document.getElementById('f_birth').value;
+  var ey = document.getElementById('f_by'), em = document.getElementById('f_bm'), ed = document.getElementById('f_bd');
+  var dim = bdDaysIn_(ey.value, em.value);
+  if(Number(ed.value) > dim) ed.value = String(dim);       // 3/31→2月に変更 等は末日へ丸める
+  if(ed.options.length - 1 !== dim) bdFill_(ed, 1, dim, '日');
+  var v = (ey.value && em.value && ed.value)
+    ? (ey.value + '-' + ('0'+em.value).slice(-2) + '-' + ('0'+ed.value).slice(-2)) : '';
   STATE.birth = v; STATE.age = calcAge(v);
   var el = document.getElementById('ageOut');
   if(STATE.age==null){ el.innerHTML=''; return; }
@@ -534,10 +567,11 @@ function validate(i){
   var k = steps[i].dataset.k;
   if(k==='basic'){
     var name = document.getElementById('f_name').value.trim();
-    var birth = document.getElementById('f_birth').value;
+    var birth = STATE.birth;
     var tel = document.getElementById('f_tel').value.replace(/[^0-9]/g,'');
     if(!name){ alert('お名前をご入力ください'); document.getElementById('f_name').focus(); return false; }
-    if(!birth){ alert('生年月日をご入力ください'); return false; }
+    if(!birth){ alert('生年月日をご入力ください（年・月・日）'); return false; }
+    if(STATE.age != null && STATE.age < 18){ alert('18歳未満の方はお勤めいただけません。'); return false; }
     var addr = document.getElementById('f_addr').value.trim();
     if(!addr){
       document.getElementById('e_addr').classList.add('on');
@@ -556,7 +590,7 @@ function validate(i){
 }
 function collect(i){
   var k = steps[i].dataset.k, g = function(id){ return (document.getElementById(id)||{}).value; };
-  if(k==='basic'){ STATE.name=g('f_name').trim(); STATE.kana=g('f_kana').trim(); STATE.birth=g('f_birth'); STATE.age=calcAge(g('f_birth')); STATE.addr=g('f_addr').trim(); STATE.tel=g('f_tel').replace(/[^0-9]/g,''); }
+  if(k==='basic'){ STATE.name=g('f_name').trim(); STATE.kana=g('f_kana').trim(); STATE.addr=g('f_addr').trim(); STATE.tel=g('f_tel').replace(/[^0-9]/g,''); } /* birth/ageはonBirth()が確定済み */
   if(k==='shift'){ STATE.timeFrom=g('f_from'); STATE.timeTo=g('f_to'); }
   if(k==='okuri'){ STATE.okuriNote=(g('f_okuriNote')||'').trim(); }
   if(k==='exp'){ STATE.prevSales=(parseFloat(g('f_prevSales'))||0)*10000; STATE.prevWage=parseFloat(g('f_prevWage'))||0; STATE.holdCust=parseFloat(g('f_holdCust'))||0; STATE.expCust=parseFloat(g('f_expCust'))||0; STATE.expSales=(parseFloat(g('f_expSales'))||0)*10000; STATE.otherNote=(g('f_otherNote')||'').trim(); }
@@ -666,6 +700,7 @@ function backToGunshi(){
 /* node からの検証用（純ロジックのみ） */
 if (typeof module !== 'undefined' && module.exports){ module.exports = { simulate:simulate, calcOne:calcOne, backRatePct:backRatePct }; }
 
+initBirth();
 go(0);
 </script>
 </body>
