@@ -319,9 +319,31 @@ body{
     </div>
   </section>
 
-  <!-- 6. 写真 -->
+  <!-- 6. ご家庭・プライベート -->
+  <section class="step" data-name="ご家庭" data-k="family">
+    <div class="shead"><div class="k">STEP 6</div><h1 class="mincho">これからのこと</h1><p>安心して長く働いていただくために、うかがっています。差し支えなければお答えください。</p></div>
+    <div class="q"><div class="ql">お子さまはいらっしゃいますか？</div>
+      <div class="opts" data-k="kids"><button data-v="いない">いない</button><button data-v="いる">いる</button></div>
+    </div>
+    <div class="q"><div class="ql">ご結婚は？</div>
+      <div class="opts" data-k="married"><button data-v="未婚">未婚</button><button data-v="既婚">既婚</button></div>
+    </div>
+    <div class="q"><div class="ql">お付き合いされている方はいますか？</div>
+      <div class="opts" data-k="partner"><button data-v="いない">いない</button><button data-v="いる">いる</button></div>
+    </div>
+    <div class="cond" id="cond_partner">
+      <div class="q subq"><div class="ql">お相手は、このお仕事のことをご存じですか？</div>
+        <div class="opts" data-k="partnerKnows"><button data-v="知っている">知っている</button><button data-v="知らない">知らない</button></div>
+      </div>
+      <div class="q subq"><div class="ql">お相手の了承は得ていますか？</div>
+        <div class="opts" data-k="partnerOk"><button data-v="得ている">得ている</button><button data-v="これから">これから話す</button><button data-v="得ていない">得ていない</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. 写真 -->
   <section class="step" data-name="写真" data-k="photo">
-    <div class="shead"><div class="k">STEP 6</div><h1 class="mincho">写真の撮影</h1><p>年齢確認と本人確認のためにお願いしています。</p></div>
+    <div class="shead"><div class="k">STEP 7</div><h1 class="mincho">写真の撮影</h1><p>年齢確認と本人確認のためにお願いしています。</p></div>
     <div class="q"><div class="ql">身分証明書<span class="hint">表面と裏面の両方をお願いします</span></div>
       <div class="photo">
         <div class="pcard" id="pc_id">
@@ -427,6 +449,7 @@ var STATE = {
   needOkuri:'', okuriArea:[], okuriNote:'',
   drink:'', weakDrinks:[], dohan:'', customers:'',
   exp:'', prevSales:0, prevWage:0, holdCust:0, expCust:0, expSales:0, hostExp:'', fuzokuExp:'', other:'', otherNote:'',
+  kids:'', married:'', partner:'', partnerKnows:'', partnerOk:'',
   idPhoto:'', idPhotoBack:'', facePhoto:''
 };
 var yen = function(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); };
@@ -483,6 +506,7 @@ function onSelect(k,v){
   if(k==='needOkuri') document.getElementById('cond_okuri').classList.toggle('on', v==='はい');
   if(k==='exp')       document.getElementById('cond_exp').classList.toggle('on', v!=='なし');
   if(k==='other')     document.getElementById('cond_other').classList.toggle('on', v==='あり');
+  if(k==='married' || k==='partner') document.getElementById('cond_partner').classList.toggle('on', STATE.married==='既婚' || STATE.partner==='いる');
 }
 
 /* ---------- 生年月日→年齢 ---------- */

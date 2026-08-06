@@ -5960,6 +5960,8 @@ function openMendanDetail(i){
     +((m.exp==='あり'||m.exp==='少し')?row('お客様','持ち'+(m.holdCust||'—')+'人 ／ 見込み'+(m.expCust||'—')+'人 ／ 見込み売上'+(m.expSales?Math.round(m.expSales/10000)+'万':'—')):'')
     +row('ホスト/風俗',(m.hostExp||'-')+' / '+(m.fuzokuExp||'-'))
     +row('他店予定',(m.other==='あり')?('⚠️あり '+(m.otherNote||'')):'なし')
+    +row('家庭','子ども:'+(m.kids||'—')+' ／ '+(m.married||'—')+' ／ 交際:'+(m.partner||'—'))
+    +(((m.partner==='いる')||(m.married==='既婚'))?row('お相手','この仕事を'+(m.partnerKnows||'—')+' ／ 了承'+(m.partnerOk||'—')):'')
     +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証(表)',m.idPhoto)+photo('🪪 身分証(裏)',m.idPhotoBack)+'</div>'
     +'</div>'
     +buildSimHtml_(m)
