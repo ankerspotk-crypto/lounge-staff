@@ -6152,7 +6152,7 @@ var loginName='', loginPin='';
 var _authToken=null,_authTimer=null;
 function stopAuthPoll(){ if(_authTimer){clearInterval(_authTimer);_authTimer=null;} }
 var _booted=false;
-function startLogin(){ if(_booted){ startQrLogin(); return; } _booted=true; runBoot(startQrLogin); }   // 既定＝QRログイン（初回だけブート演出）
+function startLogin(){ if(IS_GAS && !window._authStartP) window._authStartP = gsr('kioskAuthStart').catch(function(){return null;}); /* ⚡QRトークンを起動演出/表示と並行して先撃ち＝GAS往復1.9秒を演出時間に重ねる */ if(_booted){ startQrLogin(); return; } _booted=true; runBoot(startQrLogin); }   // 既定＝QRログイン（初回だけブート演出）
 /* 起動シーケンス（タイプライター）。初回ログイン表示時のみ。タップで即スキップ */
 function runBoot(done){
   try{ document.getElementById('klTerm').textContent=TERM+' 端末'; }catch(_){}
@@ -6163,13 +6163,13 @@ function runBoot(done){
   var box=document.getElementById('klBoot'), li=0, ci=0, fin=false;
   function finish(){ if(fin)return; fin=true; try{clearInterval(t);}catch(_){}; if(host)host.onclick=null; done(); }
   var t=setInterval(function(){
-    if(li>=lines.length){ clearInterval(t); setTimeout(finish,300); return; }
+    if(li>=lines.length){ clearInterval(t); setTimeout(finish,150); return; }
     var line=lines[li]; ci++;
     var html=''; for(var k=0;k<li;k++)html+='<div class="bl">'+esc(lines[k])+'</div>';
     html+='<div class="bl">'+esc(line.slice(0,ci))+'<span class="car">█</span></div>';
     if(box)box.innerHTML=html;
     if(ci>=line.length){ li++; ci=0; }
-  },26);
+  },14);
   host.onclick=function(){ finish(); };
 }
 /* 認証成功：緑フラッシュ＋AUTHORIZED を一瞬見せてから本編へ */
@@ -6184,7 +6184,7 @@ function loginSuccess(name){
     if(lo){ lo.style.display='none'; lo.classList.remove('flash'); var f=lo.querySelector('.kl-grantflash'); if(f)f.remove(); }
     if(auth){ auth.textContent='▲ Authorization Required'; auth.style.color=''; auth.style.animation=''; }
     afterLogin();
-  }, 950);
+  }, 500);
 }
 function startQrLogin(){
   stopAuthPoll();
@@ -6192,7 +6192,11 @@ function startQrLogin(){
   document.getElementById('loginOverlay').style.display='flex';
   document.getElementById('loginContent').innerHTML='<div class="kl-qrwrap"><div class="kl-qrtitle">📱 LINEでQRを読み取ってログイン</div><div class="kl-qrbox" id="klQr"><div class="kl-qrload">QRを生成中…</div></div><div class="kl-qrhint">スマホのLINEでスキャン → 本人確認 → 自動でログインします</div><div class="kl-pinlink" onclick="startPinLogin()">スマホがない場合は PINでログイン →</div></div>';
   if(!IS_GAS){ document.getElementById('klQr').innerHTML='<div class="kl-qrload">（ローカル）QRログインは本番のみ</div>'; return; }
-  gsr('kioskAuthStart').then(function(r){
+  var _ap=window._authStartP; window._authStartP=null; /* 起動時に先撃ちしたトークン取得を消費 */
+  (_ap || gsr('kioskAuthStart')).then(function(r){
+    if(r&&r.ok) return r;
+    return gsr('kioskAuthStart'); /* 先撃ちが不発なら本発注（1回だけ） */
+  }).then(function(r){
     if(!r||!r.ok){ var e=document.getElementById('klQr'); if(e)e.innerHTML='<div class="kl-err">QR生成エラー</div>'; return; }
     _authToken=r.token;
     var q='https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data='+encodeURIComponent(r.url);
