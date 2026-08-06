@@ -18745,25 +18745,78 @@ function mendanSummaryText_(id, data) {
   var custInfo = (data.exp === 'あり' || data.exp === '少し')
     ? ('お客様: 持ち' + (data.holdCust || '—') + '人 / 見込み' + (data.expCust || '—') + '人 / 見込み売上' + (data.expSales ? Math.round(data.expSales / 10000) + '万' : '—')) : '';
   var other = (data.other === 'あり') ? ('⚠️他店の予定あり' + (data.otherNote ? '（' + data.otherNote + '）' : '')) : '他店の予定なし';
-  var famParts = [data.kids ? ('子ども:' + data.kids) : '', data.married || '', data.partner ? ('交際:' + data.partner) : ''].filter(Boolean);
   var famRel = (data.partner === 'いる' || data.married === '既婚')
-    ? ('（相手はこの仕事を' + (data.partnerKnows || '—') + '・了承' + (data.partnerOk || '—') + '）') : '';
-  var family = famParts.length ? ('家庭: ' + famParts.join(' / ') + famRel) : '';
-  var wd = (data.weekdays && data.weekdays.length) ? data.weekdays.join('') : '';
+    ? ('　┗ この仕事を' + (data.partnerKnows || '—') + '／了承' + (data.partnerOk || '—')) : '';
+  var wd = (data.weekdays && data.weekdays.length) ? data.weekdays.join('・') : '—';
+  var d_ = function(v){ return (v === 0 || v) ? String(v) : '—'; };            // 0は有効値として残す
+  var a_ = function(v){ return (v && v.length) ? v.join('・') : '—'; };
+  var okuriLine = '送り: ' + (data.needOkuri || '—')
+    + (data.okuriArea && data.okuriArea.length ? '（' + data.okuriArea.join('・') + '）' : '')
+    + (data.okuriNote ? ' ※' + data.okuriNote : '');
+  var photos = [data.idPhoto ? '身分証(表)' : '', data.idPhotoBack ? '身分証(裏)' : '', data.facePhoto ? 'お顔' : ''].filter(Boolean);
   return [
     '📝 面談表（入力完了）',
+    '',
+    '【基本】',
     '氏名: ' + (data.name || '—') + (data.kana ? '（' + data.kana + '）' : ''),
-    '年齢: ' + age + ageWarn,
+    '生年月日: ' + (data.birth || '—') + '（' + age + '）' + ageWarn,
+    '住所: ' + (data.addr || '—'),
     '電話: ' + (data.tel || '—'),
-    '希望: 週' + (data.daysPerWeek || '—') + ' ' + wd + ' ' + (data.timeFrom || '') + '-' + (data.timeTo || '') + ' / 前週提出:' + (data.prevWeek || '—'),
-    '昼職:' + (data.dayJob || '—') + ' / 送り:' + (data.needOkuri || '—') + (data.okuriArea && data.okuriArea.length ? '（' + data.okuriArea.join('・') + '）' : ''),
-    'お酒:' + (data.drink || '—') + ' / 同伴:' + (data.dohan || '—') + ' / 客付き:' + (data.customers || '—'),
-    '経験: ' + (data.exp || '—') + expDetail,
-    custInfo,
+    '',
+    '【希望シフト】',
+    '週' + d_(data.daysPerWeek) + '日 ／ ' + wd,
+    '時間: ' + (data.timeFrom || '—') + '-' + (data.timeTo || '—'),
+    '前の週までに提出: ' + (data.prevWeek || '—'),
+    '昼職: ' + (data.dayJob || '—'),
+    okuriLine,
+    '',
+    '【お酒・接客】',
+    'お酒: ' + (data.drink || '—'),
+    '苦手なお酒: ' + a_(data.weakDrinks),
+    '同伴: ' + (data.dohan || '—'),
+    'お客様: ' + (data.customers || '—'),
+    '',
+    '【ご経験】',
+    '業界経験: ' + (data.exp || '—') + expDetail,
+    custInfo || null,
+    'ホスト経験: ' + (data.hostExp || '—') + ' ／ 風俗経験: ' + (data.fuzokuExp || '—'),
     other,
-    family,
+    '',
+    '【ご家庭】',
+    'お子さま: ' + (data.kids || '—') + ' ／ ご結婚: ' + (data.married || '—'),
+    'お付き合い: ' + (data.partner || '—'),
+    famRel || null,
+    '',
+    '【写真】' + (photos.length ? photos.join('・') + ' あり' : 'なし'),
     '（写真は続けて送ります）この後、黒服が軍師で面談します。'
-  ].filter(Boolean).join('\n');
+  ].filter(function(s){ return s !== null; }).join('\n');   // 空行''はセクション区切りとして残す
+}
+
+/* 面談表のLINE通知フォーマット確認用（手動実行専用・宛先1人に限定＝管理者全員には飛ばさない） */
+function testMendanSummaryLine(toName) {
+  var name = String(toName || '管理者').trim();
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return 'NG: 名簿シートが見つかりません';
+  var rows = sh.getDataRange().getValues(), lineId = '', hit = [];
+  for (var i = 1; i < rows.length; i++) {
+    var id = String(rows[i][0]).trim(), nm = String(rows[i][1]).trim();
+    if (!id || !nm) continue;
+    if (isAdmin_(nm)) hit.push(nm);
+    if (nm === name) { lineId = id; break; }
+  }
+  if (!lineId) return 'NG: 名簿に「' + name + '」のLINE IDがありません。管理者候補=' + hit.join('/');
+  var sample = { name:'テスト 花子', kana:'テスト ハナコ', birth:'2000-05-20', age:26,
+    addr:'名古屋市中区栄3-1-1 テストマンション101', tel:'09000000000',
+    daysPerWeek:4, weekdays:['月','水','金','土'], timeFrom:'20:00', timeTo:'01:00',
+    prevWeek:'出せる', dayJob:'あり（事務）', needOkuri:'必要', okuriArea:['中区','千種区'], okuriNote:'22時以降のみ',
+    drink:'強い', weakDrinks:['焼酎','日本酒'], dohan:'できる', customers:'いる',
+    exp:'あり', prevSales:800000, prevWage:2500, holdCust:10, expCust:5, expSales:300000,
+    hostExp:'なし', fuzokuExp:'なし', other:'あり', otherNote:'錦の他店・8/10',
+    kids:'いる', married:'既婚', partner:'いる', partnerKnows:'知っている', partnerOk:'得ている',
+    idPhoto:'x', idPhotoBack:'x', facePhoto:'x' };
+  push_(lineId, '🧪【テスト送信】面談表の通知フォーマット確認です。実際の応募ではありません。\n\n'
+    + mendanSummaryText_('TEST', sample));
+  return 'OK: ' + name + ' に送信しました';
 }
 
 function mendanSubmit_(token, rec, data) {
