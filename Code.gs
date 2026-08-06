@@ -18610,7 +18610,7 @@ function resendNotices(ids) {
 var MENDAN_TAB  = '面談表';
 var MENDAN_HEAD = ['面談ID','面談日時','面談者','状態','氏名','フリガナ','生年月日','年齢','住所','電話',
   '週日数','曜日','希望時間','前週提出','昼職','送り','送り先','酒強さ','苦手な酒','同伴','客付き',
-  '経験','前店売上','前店時給','持ち客数','見込み客数','見込み売上','ホスト','風俗','他店予定','他店詳細','身分証','身分証裏','顔写真','シミュ',
+  '経験','前店売上','前店時給','持ち客数','見込み客数','見込み売上','ホスト','風俗','他店予定','他店詳細','子ども','婚姻','交際相手','相手の理解','相手の了承','身分証','身分証裏','顔写真','シミュ',
   '黒服所感','判定','源氏名','体験日','名簿登録','更新日時'];
 
 // シート取得（無ければ作成／既存に見出しが無い列は末尾に追補＝ci()の-1黙り0を防ぐ）
@@ -18745,6 +18745,10 @@ function mendanSummaryText_(id, data) {
   var custInfo = (data.exp === 'あり' || data.exp === '少し')
     ? ('お客様: 持ち' + (data.holdCust || '—') + '人 / 見込み' + (data.expCust || '—') + '人 / 見込み売上' + (data.expSales ? Math.round(data.expSales / 10000) + '万' : '—')) : '';
   var other = (data.other === 'あり') ? ('⚠️他店の予定あり' + (data.otherNote ? '（' + data.otherNote + '）' : '')) : '他店の予定なし';
+  var famParts = [data.kids ? ('子ども:' + data.kids) : '', data.married || '', data.partner ? ('交際:' + data.partner) : ''].filter(Boolean);
+  var famRel = (data.partner === 'いる' || data.married === '既婚')
+    ? ('（相手はこの仕事を' + (data.partnerKnows || '—') + '・了承' + (data.partnerOk || '—') + '）') : '';
+  var family = famParts.length ? ('家庭: ' + famParts.join(' / ') + famRel) : '';
   var wd = (data.weekdays && data.weekdays.length) ? data.weekdays.join('') : '';
   return [
     '📝 面談表（入力完了）',
@@ -18757,6 +18761,7 @@ function mendanSummaryText_(id, data) {
     '経験: ' + (data.exp || '—') + expDetail,
     custInfo,
     other,
+    family,
     '（写真は続けて送ります）この後、黒服が軍師で面談します。'
   ].filter(Boolean).join('\n');
 }
@@ -18787,6 +18792,8 @@ function mendanSubmit_(token, rec, data) {
     set('持ち客数', data.holdCust); set('見込み客数', data.expCust); set('見込み売上', data.expSales);
     set('ホスト', data.hostExp); set('風俗', data.fuzokuExp);
     set('他店予定', data.other); set('他店詳細', data.otherNote);
+    set('子ども', data.kids); set('婚姻', data.married); set('交際相手', data.partner);
+    set('相手の理解', data.partnerKnows); set('相手の了承', data.partnerOk);
     set('身分証', idPhoto ? ('https://drive.google.com/file/d/' + idPhoto + '/view') : '');
     set('身分証裏', idBack ? ('https://drive.google.com/file/d/' + idBack + '/view') : '');
     set('顔写真', facePhoto ? ('https://drive.google.com/file/d/' + facePhoto + '/view') : '');
@@ -18838,6 +18845,7 @@ function mendanRowToObj_(row, c) {
     exp: String(g('経験')), prevSales: g('前店売上'), prevWage: g('前店時給'),
     holdCust: g('持ち客数'), expCust: g('見込み客数'), expSales: g('見込み売上'),
     hostExp: String(g('ホスト')), fuzokuExp: String(g('風俗')), other: String(g('他店予定')), otherNote: String(g('他店詳細')),
+    kids: String(g('子ども')), married: String(g('婚姻')), partner: String(g('交際相手')), partnerKnows: String(g('相手の理解')), partnerOk: String(g('相手の了承')),
     idPhoto: String(g('身分証')), idPhotoBack: String(g('身分証裏')), facePhoto: String(g('顔写真')),
     memo: String(g('黒服所感')), judge: String(g('判定'))
   };

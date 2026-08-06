@@ -534,6 +534,8 @@ function drawMendan(){
     var expLine=(m.exp==='あり'||m.exp==='少し')
       ?('経験'+esc(m.exp)+'／前店'+mendanYen_(m.prevSales)+'／持ち客'+(m.holdCust||'—')+'人・見込み客'+(m.expCust||'—')+'人・見込売上'+mendanYen_(m.expSales))
       :('経験：'+esc(m.exp||'—'));
+    var famBits=[]; if(m.kids==='いる')famBits.push('子あり'); if(m.married==='既婚')famBits.push('既婚'); if(m.partner==='いる')famBits.push('交際相手あり');
+    var famLine=famBits.length?('👪 '+famBits.join('・')+(((m.partner==='いる')||(m.married==='既婚'))?('（相手'+(m.partnerKnows||'—')+'・了承'+(m.partnerOk||'—')+'）'):'')):'';
     var idJ=esc(String(m.id)), checked=mendanSel[String(m.id)]?' checked':'';
     return '<div class="lrow">'
       +'<label style="flex:none;display:flex;align-items:center;padding:0 8px 0 2px" onclick="event.stopPropagation()"><input type="checkbox"'+checked+' onclick="mendanToggle(\''+idJ+'\',this.checked)" style="width:20px;height:20px"></label>'
@@ -541,6 +543,7 @@ function drawMendan(){
       +'<div class="nm">'+esc(m.name||'（無名）')+' <span class="sub">'+age+'</span>'+warn+' '+stB(m.status)+jB(m.judge)+'</div>'
       +'<div class="meta">'+esc(m.at||'')+' ／ '+esc(m.tel||'—')+' ／ 週'+(m.days||'—')+' '+esc(m.weekdays||'')+'</div>'
       +'<div class="meta">'+expLine+'</div>'
+      +(famLine?('<div class="meta">'+famLine+'</div>'):'')
       +'</div><div style="color:var(--dim);font-size:12px;flex:none;align-self:center;cursor:pointer;padding-right:6px" onclick="openMendanRow(\''+idJ+'\')">詳細 ▸</div></div>';
   }).join('');
   setBody(bar+actbar+rows);
@@ -594,6 +597,8 @@ function drawMendanDetail(m){
     +R('お酒',m.drink)+R('苦手な酒',m.weak)+R('同伴',m.dohan)+R('客付き',m.customers)
     +expB
     +R('他店予定',(m.other==='あり')?('あり '+(m.otherNote||'')):(m.other||''))
+    +R('子ども',m.kids)+R('婚姻',m.married)+R('交際相手',m.partner)
+    +(((m.partner==='いる')||(m.married==='既婚'))?R('相手はこの仕事を',m.partnerKnows)+R('相手の了承',m.partnerOk):'')
     +R('黒服所感',m.memo)
     +'<div style="padding:12px 0 2px;border-top:1px solid var(--line);margin-top:6px">'+pl('🪪 身分証(表)',m.idPhoto)+pl('🪪 身分証(裏)',m.idPhotoBack)+pl('📷 顔写真',m.facePhoto)+'</div>'
     +'</div>';
