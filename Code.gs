@@ -18792,19 +18792,24 @@ function mendanSummaryText_(id, data) {
   ].filter(function(s){ return s !== null; }).join('\n');   // 空行''はセクション区切りとして残す
 }
 
-/* 面談表のLINE通知フォーマット確認用（手動実行専用・宛先1人に限定＝管理者全員には飛ばさない） */
+/* 面談表のLINE通知フォーマット確認用（手動実行専用）
+   引数なし＝管理者（りく・ひろき・管理者／退職者は除く）へ。名前を渡せばその1人だけ。 */
 function testMendanSummaryLine(toName) {
-  var name = String(toName || '管理者').trim();
+  var only = String(toName || '').trim();
   var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
   if (!sh) return 'NG: 名簿シートが見つかりません';
-  var rows = sh.getDataRange().getValues(), lineId = '', hit = [];
+  var rows = sh.getDataRange().getValues();
+  var retiredK = retiredNameKeys_();                                            // 退職者には送らない
+  var normK = function (s) { return normalizeName_(String(s || '')).replace(/[\s　]/g, ''); };
+  var targets = [], seen = {};
   for (var i = 1; i < rows.length; i++) {
     var id = String(rows[i][0]).trim(), nm = String(rows[i][1]).trim();
-    if (!id || !nm) continue;
-    if (isAdmin_(nm)) hit.push(nm);
-    if (nm === name) { lineId = id; break; }
+    if (!id || !nm || seen[nm]) continue;
+    if (only ? (nm !== only) : !isAdmin_(nm)) continue;
+    if (!only && retiredK[normK(nm)]) continue;
+    seen[nm] = 1; targets.push({ id: id, name: nm });
   }
-  if (!lineId) return 'NG: 名簿に「' + name + '」のLINE IDがありません。管理者候補=' + hit.join('/');
+  if (!targets.length) return 'NG: 送信先が見つかりません（' + (only || '管理者') + '）';
   var sample = { name:'テスト 花子', kana:'テスト ハナコ', birth:'2000-05-20', age:26,
     addr:'名古屋市中区栄3-1-1 テストマンション101', tel:'09000000000',
     daysPerWeek:4, weekdays:['月','水','金','土'], timeFrom:'20:00', timeTo:'01:00',
@@ -18814,9 +18819,11 @@ function testMendanSummaryLine(toName) {
     hostExp:'なし', fuzokuExp:'なし', other:'あり', otherNote:'錦の他店・8/10',
     kids:'いる', married:'既婚', partner:'いる', partnerKnows:'知っている', partnerOk:'得ている',
     idPhoto:'x', idPhotoBack:'x', facePhoto:'x' };
-  push_(lineId, '🧪【テスト送信】面談表の通知フォーマット確認です。実際の応募ではありません。\n\n'
-    + mendanSummaryText_('TEST', sample));
-  return 'OK: ' + name + ' に送信しました';
+  var msg = '🧪【テスト送信】面談表の通知フォーマット確認です。実際の応募ではありません。\n\n'
+    + mendanSummaryText_('TEST', sample);
+  var sent = [];
+  for (var j = 0; j < targets.length; j++) { push_(targets[j].id, msg); sent.push(targets[j].name); }
+  return 'OK: ' + sent.join('・') + ' に送信しました（' + sent.length + '通）';
 }
 
 function mendanSubmit_(token, rec, data) {
