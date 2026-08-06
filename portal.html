@@ -839,12 +839,19 @@ function checkPortalMaintenance_(){ return fetch(GAS_URL+'?action=portalMaintena
 function startPortalMaintPoll(){
   if(window._pMaintPoll) return;
   window._pMaintPoll=setInterval(function(){
+    if(document.hidden) return; /* タブ非表示中は撃たない（放置端末の空撃ち防止・復帰時に再取得） */
     checkPortalMaintenance_().then(function(m){
       if(m&&m.on){ if(!window._pMaintOn) showPortalMaintenance(m); }
       else { if(window._pMaintOn) location.reload(); }   /* 再開＝クリーンに復帰 */
     });
   },60000);
 }
+/* タブ復帰時：メンテ状態と空席を即再取得（非表示中に間引いた分を埋める）。軍師の visibilitychange と同型 */
+if(!window._portalVis){ window._portalVis=1; document.addEventListener('visibilitychange',function(){
+  if(document.hidden) return;
+  try{ checkPortalMaintenance_().then(function(m){ if(m&&m.on){ if(!window._pMaintOn) showPortalMaintenance(m); } else if(window._pMaintOn){ location.reload(); } }); }catch(e){}
+  try{ if(document.getElementById('home-vac-list')) fetchVacancy(); }catch(e){}
+}); }
 /* 起動と並列にメンテ判定（通常起動は止めない・停止中だけ全面表示を被せる） */
 checkPortalMaintenance_().then(function(m){ if(m&&m.on) showPortalMaintenance(m); });
 startPortalMaintPoll();
@@ -1899,7 +1906,7 @@ function renderHome(){
   if (portalData && portalData.vacancy) renderHomeVacancy(portalData.vacancy);
   else if (!homeRestPending) fetchVacancy();   // rest待ち中は個別取得せず、届くのを待つ
   if(window._vacTimer) clearInterval(window._vacTimer);
-  window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } fetchVacancy(); }, 60000);
+  window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } if(document.hidden) return; fetchVacancy(); }, 60000);
 
   // 呼び出しの有効時間帯(19:45〜1:00)は時計で変わるため、席表示とボタンゲートを定期的に貼り直して自己修復する
   // （例: 19:40にホームを開いた人も、19:45になれば再読込せずボタンが有効化される）
