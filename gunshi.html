@@ -1588,7 +1588,9 @@ function renderHome(){
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
   var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderHomeChecklist(phase));
-  w.innerHTML=punchCardHtml()+orderAlertCardHtml()+handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection();
+  /* setHtml経由＝生成HTMLが前回と同一ならDOM張替えを飛ばす（30秒ポーリング毎の無駄な全再構築＝チラつき/スクロール飛び/入力ロストを防ぐ）。
+     待ち分/超過など時刻で変わる値はHTMLが変わる→ちゃんと更新される。hvWrapはrenderHomeだけが書く＝キャッシュ整合。 */
+  setHtml('hvWrap', punchCardHtml()+orderAlertCardHtml()+handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection());
 }
 
 /* ===== ⚠️ 発注したのに届いていない（未着アラート）＝ホーム最上段（申し送りの上）に強調表示 =====
