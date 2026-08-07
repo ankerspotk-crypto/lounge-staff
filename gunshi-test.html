@@ -3336,6 +3336,8 @@ function bmGet(key){
 /* ホール状況の組（occupants）＝いま席にいる伝票。席ではなく組で並べる（相席は2件出る） */
 function bmBills(){
   var out=[];
+  // 🧪お試し伝票＝席に紐づかない検算用。**GASの応答を1回も待たずに**金額テストを始められる
+  if(BM.draft&&BM.draft['demo']) out.push({rowIdx:'demo',table:'お試し',floor:'🧪',cust:'テスト伝票',pax:1,tantou:'',demo:true});
   (typeof SEATS!=='undefined'?SEATS:[]).forEach(function(s){
     if(!s||s.type==='W'||s.type==='K'||s.mergedTo!=null) return;
     (s.occupants||[]).forEach(function(o){
@@ -3376,7 +3378,11 @@ function bmRender(){
           +'<div class="s">'+(b.tantou?'担当 '+esc(b.tantou):'担当なし')+'</div>'
           +'<div class="a">'+bmYen(c.total)+'</div></div>';
       }).join('')
-      :'<div class="empty-msg" style="padding:20px 0;font-size:12px">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:6px">ホール状況で席にお客様を設定すると、ここに伝票が出ます</div></div>')
+      :(!BOOTED
+          ? '<div class="empty-msg" style="padding:18px 0;font-size:12px">⏳ ホール状況を読み込み中…<div style="font-size:11px;color:var(--sub);margin-top:6px">席のデータが届き次第、ここに伝票が出ます（自動で更新）</div></div>'
+          : '<div class="empty-msg" style="padding:18px 0;font-size:12px">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:6px">ホール状況で席にお客様を設定すると、ここに伝票が出ます</div></div>'))
+    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmDemo()">🧪 お試し伝票で今すぐ試す</button></div>'
+    +'<div class="bm-note">席のデータを待たずに金額だけ検算できる伝票。TRUSTとの突き合わせはこれで足ります。</div>'
     +'<div class="bm-warn">⚠️ いまは<b>端末内の下書き</b>です（backend未デプロイ）。目的は<b>TRUSTと金額が合うか</b>の確認。</div>'
     +'</div></div>';
   if(!BM.key){
@@ -3389,6 +3395,16 @@ function bmRender(){
   document.getElementById('bmWrap').innerHTML=html;
 }
 function bmOpen(rowIdx){ BM.key=String(rowIdx); bmRender(); }
+/* 🧪お試し伝票（席に紐づかない）。GASの応答を待たずに金額テストを始めるための逃げ道 */
+function bmDemo(){ bmLoad(); bmGet('demo'); bmSave(); BM.key='demo'; bmRender(); }
+/* loadAll(30秒ごと)からの再描画。⚠️入力中(値引・TRUST合計など)は触らない＝打っている途中で
+   DOMを張り替えるとフォーカスが飛んで入力が中断する（[[reference_async_stale_guard_trap]]と同種の事故）。 */
+function bmRenderIfIdle(){
+  if(viewMode!=='bill') return;
+  var ae=document.activeElement, wrap=document.getElementById('bmWrap');
+  if(ae&&wrap&&wrap.contains(ae)&&/INPUT|TEXTAREA/.test(ae.tagName)) return;
+  bmRender();
+}
 
 /* ---- 中央：入力（セット・キャスト・注文） ---- */
 function bmEditorHtml(){
@@ -6692,7 +6708,7 @@ function renderAll(){
   document.getElementById('termBadge').textContent=TERM+' 端末 · v'+BUILD;
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
-  renderAlerts();renderHall();renderRight();renderHome();
+  renderAlerts();renderHall();renderRight();renderHome();bmRenderIfIdle();
 }
 /* 表示がおかしい時のハード再読み込み（キャッシュ回避・現在のパラメータは維持） */
 function hardReload(){ try{ var u=new URL(location.href); u.searchParams.set('cb',Date.now()); location.replace(u.toString()); }catch(e){ location.reload(); } }
