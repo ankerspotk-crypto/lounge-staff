@@ -110,7 +110,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;}
   <h1>🍽 IEYAS POS プロト</h1>
   <span class="badge">TRUST並行テスト用</span>
   <span class="badge">計算＝サービス料20%（消費税内包）／100円切上</span>
-  <span class="badge" id="buildBadge">v2026-08-07b</span>
+  <span class="badge" id="buildBadge">v2026-08-07d</span>
   <button class="sm dng" onclick="resetAll()">卓をクリア</button>
 </header>
 
@@ -236,7 +236,8 @@ var CASTS = ['りく','なな','かい','ゆき','あゆみ'];
 /* ============ 状態 ============ */
 var S = {
   pax:1,
-  sets:[{label:'初回', minutes:120, price:13000}],   // セット履歴（1セット目・2セット目…）
+  setPax:1,                                          // お客様の人数（セットを掛ける数）
+  setUnit:13000,                                     // セット単価（既定¥13,000・画面で変更可）
   casts:{},                                          // {name:{tanto:n, yoyaku:n, dohan:n}}
   orders:[],                                         // [{name, category, price, qty, attr}]
   cat:'焼酎',
@@ -262,7 +263,7 @@ function cfg(){
 */
 function calc(){
   var c = cfg();
-  var setSum = S.sets.reduce(function(a,s){ return a+(Number(s.price)||0); },0);
+  var setSum = (Number(S.setPax)||0) * (Number(S.setUnit)||0);   // セット＝単価×人数
   var tantoCnt=0, yoyakuCnt=0, dohanCnt=0;
   Object.keys(S.casts).forEach(function(n){
     tantoCnt += S.casts[n].tanto; yoyakuCnt += S.casts[n].yoyaku; dohanCnt += S.casts[n].dohan;
@@ -288,18 +289,17 @@ function calc(){
 /* ============ 描画 ============ */
 function render(){
   var c = cfg(), r = calc();
-  document.getElementById('paxV').textContent = S.pax+'名';
+  document.getElementById('paxV').textContent = S.setPax+'名';
   document.getElementById('feeT').textContent = c.tanto.toLocaleString();
   document.getElementById('feeY').textContent = c.yoyaku.toLocaleString();
   document.getElementById('feeD').textContent = c.dohan.toLocaleString();
 
   // セット履歴
-  document.getElementById('setList').innerHTML = '<table><tr><th>セット</th><th>時間</th><th class="n">金額</th><th></th></tr>'
-    + S.sets.map(function(s,i){
-        return '<tr><td>'+(i+1)+'セット目 <span style="color:var(--sub);font-size:11px">'+s.label+'</span></td>'
-          +'<td>'+s.minutes+'分</td><td class="n">'+yen(s.price)+'</td>'
-          +'<td class="n">'+(i>0?'<button class="sm dng" onclick="delSet('+i+')">×</button>':'')+'</td></tr>';
-      }).join('') + '</table>';
+  document.getElementById('setList').innerHTML =
+    '<div class="row"><label class="lb">単価</label>'
+    +'<input type="number" id="setUnitIn" value="'+S.setUnit+'" oninput="setUnit(this.value)">'
+    +'<button class="sm" onclick="setUnit('+c.set+')">既定 '+yen(c.set)+'に戻す</button></div>'
+    +'<div class="sum" style="margin-top:4px"><div class="r"><span>'+c.min+'分 × '+S.setPax+'名</span><b>'+yen(setSumOf())+'</b></div></div>';
 
 
   // キャスト
@@ -344,9 +344,8 @@ function render(){
     if(v.dohan) aH += '<div class="li"><span>同伴 '+n+'</span><span class="amt">'+yen(c.dohan*v.dohan)+' ×'+v.dohan+'</span></div>';
   });
   document.getElementById('detA').innerHTML = aH || '<div class="note">—</div>';
-  document.getElementById('detB').innerHTML = S.sets.map(function(s){
-    return '<div class="li"><span>'+s.minutes+'分</span><span class="amt">'+yen(s.price)+' ×1</span></div>';
-  }).join('');
+  document.getElementById('detB').innerHTML =
+    '<div class="li"><span>'+c.min+'分 ×'+S.setPax+'名</span><span class="amt">'+yen(setSumOf())+'</span></div>';
   // 注文は「商品名を見出し＋帰属ごとの内訳」＝TRUSTの明細と同じ形
   var byName = {}, order = [];
   S.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
@@ -395,15 +394,14 @@ function cntHtml(n,key,label,cls,val){
 }
 
 /* ============ 操作 ============ */
+function setSumOf(){ return (Number(S.setPax)||0)*(Number(S.setUnit)||0); }
 function addPax(d){
-  var next = S.pax+d;
+  var next = S.setPax+d;
   if(next<1){ alert('1名の場合、数を減らすことは出来ません。\n（TRUSTと同じ挙動＝伝票ごと削除してください）'); return; }
-  S.pax = next;
-  if(d>0) S.sets.push({label:'初回',minutes:cfg().min,price:cfg().set});
-  render();
+  S.setPax = next; render();
 }
+function setUnit(v){ S.setUnit = Math.max(0, Number(v)||0); render(); }
 /* ⚠️延長はボス判断で作らない（TRUSTには在るが、いえやすの運用に無い） */
-function delSet(i){ S.sets.splice(i,1); render(); }
 function bump(n,key,d){ S.casts[n][key]=Math.max(0,S.casts[n][key]+d); render(); }
 function setCat(k){ S.cat=k; render(); }
 function setAttr(a){ S.attr=a; render(); }
@@ -422,7 +420,7 @@ function qty(i,d){ S.orders[i].qty+=d; if(S.orders[i].qty<=0) S.orders.splice(i,
 function fillCash(){ document.getElementById('payCash').value = calc().total; render(); }
 function resetAll(){
   if(!confirm('この卓をクリアします。よろしいですか？')) return;
-  S.pax=1; S.sets=[{label:'初回',minutes:cfg().min,price:cfg().set}]; S.orders=[];
+  S.setPax=1; S.setUnit=cfg().set; S.orders=[];
   CASTS.forEach(function(c){ S.casts[c]={tanto:0,yoyaku:0,dohan:0}; });
   ['discount','surcharge','payCash','payCard','payCredit','trustTotal','trustTax'].forEach(function(id){ document.getElementById(id).value = (id==='trustTotal'||id==='trustTax')?'':0; });
   render();

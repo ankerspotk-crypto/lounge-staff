@@ -1272,7 +1272,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-07c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-07d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3236,10 +3236,14 @@ function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&
 function bmLoad(){ try{ BM.draft=JSON.parse(localStorage.getItem(bmStoreKey())||'{}'); }catch(e){ BM.draft={}; } }
 function bmSave(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draft)); }catch(e){} }
 /* 伝票の下書きを取り出す（無ければ初期セット1本＝TRUSTが卓を開いた時に既定を自動投入するのと同じ） */
-function bmGet(key){
-  if(!BM.draft[key]) BM.draft[key]={sets:[{label:'初回',minutes:BM_FEE.setMinutes,price:BM_FEE.set}],casts:{},orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0},trust:''};
+function bmGet(key,defPax){
+  if(!BM.draft[key]) BM.draft[key]={setPax:Math.max(1,Number(defPax)||1),setUnit:BM_FEE.set,casts:{},orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0},trust:''};
   var d=BM.draft[key];
-  if(!d.sets)d.sets=[]; if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
+  // 旧形式(sets配列＝延長があった頃の下書き)からの移行。端末に残った下書きを壊さない
+  if(d.sets){ d.setPax=d.sets.length||1; d.setUnit=(d.sets[0]&&Number(d.sets[0].price))||BM_FEE.set; delete d.sets; }
+  if(d.setPax==null||d.setPax<1) d.setPax=Math.max(1,Number(defPax)||1);
+  if(d.setUnit==null) d.setUnit=BM_FEE.set;
+  if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
   return d;
 }
 /* ホール状況の組（occupants）＝いま席にいる伝票。席ではなく組で並べる（相席は2件出る） */
@@ -3262,7 +3266,7 @@ function bmCastPool(){
 }
 /* 🔥 計算エンジン。⚠️backendの posCalcTotal_ と**同じ式**であること（片方だけ直すと必ず割れる） */
 function bmCalc(d){
-  var setSum=d.sets.reduce(function(a,s){return a+(Number(s.price)||0);},0);
+  var setSum=(Number(d.setPax)||0)*(Number(d.setUnit)||0);   // セット＝単価×お客様の人数
   var tc=0,yc=0,dc=0;
   Object.keys(d.casts).forEach(function(n){ var v=d.casts[n]||{}; tc+=v.tanto||0; yc+=v.yoyaku||0; dc+=v.dohan||0; });
   var ordSum=d.orders.reduce(function(a,o){return a+o.price*o.qty;},0);
@@ -3280,7 +3284,7 @@ function bmRender(){
   if(BM.key&&!bills.some(function(b){return String(b.rowIdx)===String(BM.key);})) BM.key=null;
   var html='<div><div class="bm-card"><h3><span class="n">1</span> 伝票（いま席にいる組）</h3>'
     +(bills.length?bills.map(function(b){
-        var d=bmGet(b.rowIdx),c=bmCalc(d);
+        var d=bmGet(b.rowIdx,b.pax),c=bmCalc(d);
         return '<div class="bm-bill'+(String(BM.key)===String(b.rowIdx)?' sel':'')+'" onclick="bmOpen('+b.rowIdx+')">'
           +'<div class="t">'+esc(b.floor+' '+b.table)+'</div>'
           +'<div class="c">'+esc(b.cust)+'<span style="font-size:11px;color:var(--sub);font-weight:600"> '+b.pax+'名</span></div>'
@@ -3318,15 +3322,16 @@ function bmRenderIfIdle(){
 /* ---- 中央：入力（セット・キャスト・注文） ---- */
 function bmEditorHtml(){
   var d=bmGet(BM.key),pool=bmCastPool();
-  var h='<div><div class="bm-card"><h3><span class="n">2</span> セット</h3>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
-    +d.sets.map(function(s,i){
-       return '<tr><td style="padding:5px 0;border-bottom:1px solid var(--line)">'+(i+1)+'セット目 <span style="color:var(--sub);font-size:10.5px">'+esc(s.label)+'</span></td>'
-        +'<td style="text-align:right;border-bottom:1px solid var(--line)">'+s.minutes+'分</td>'
-        +'<td style="text-align:right;border-bottom:1px solid var(--line);color:var(--gold);font-weight:800">'+bmYen(s.price)+'</td>'
-        +'</tr>';
-     }).join('')+'</table>'
-    +'<div class="bm-note">⚠️延長は使わない運用（ボス確定）。セットは1本のみ。</div>'
+  var h='<div><div class="bm-card"><h3><span class="n">2</span> セット（お客様の人数 × 単価）</h3>'
+    +'<div class="bm-row"><span class="lb">お客様の人数</span>'
+    +'<button class="bm-btn" onclick="bmPax(-1)">−</button>'
+    +'<span style="font-weight:800;min-width:44px;text-align:center;font-size:15px">'+d.setPax+'名</span>'
+    +'<button class="bm-btn" onclick="bmPax(1)">＋</button></div>'
+    +'<div class="bm-row"><span class="lb">単価</span>'
+    +'<input type="number" class="bm-in" value="'+(d.setUnit)+'" oninput="bmSetUnit(this.value)">'
+    +'<button class="bm-btn sm" onclick="bmSetUnit('+BM_FEE.set+')">既定 '+bmYen(BM_FEE.set)+'に戻す</button></div>'
+    +'<div class="bm-sum" style="border-top:1px solid var(--line);margin-top:4px;padding-top:7px">'
+    +bmRow(BM_FEE.setMinutes+'分 × '+d.setPax+'名', (Number(d.setPax)||0)*(Number(d.setUnit)||0))+'</div>'
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">3</span> キャスト（担当／予約／同伴の回数）</h3>'
     +(pool.length?pool.map(function(n){
@@ -3391,7 +3396,7 @@ function bmDetailHtml(){
     +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||''))+'</span></h3>'
     +'<div class="bm-det">'
     +'<div class="col"><h4>担当・予約 / 同伴</h4>'+(aH||'<div class="bm-note">—</div>')+'</div>'
-    +'<div class="col"><h4>セット</h4>'+d.sets.map(function(s){return '<div class="li"><span>'+s.minutes+'分</span><span class="a">'+bmYen(s.price)+' ×1</span></div>';}).join('')+'</div>'
+    +'<div class="col"><h4>セット</h4><div class="li"><span>'+BM_FEE.setMinutes+'分 ×'+d.setPax+'名</span><span class="a">'+bmYen((Number(d.setPax)||0)*(Number(d.setUnit)||0))+'</span></div></div>'
     +'<div class="col"><h4>注文</h4>'+(order.length?order.map(function(nm){
         return '<div class="grp">'+esc(nm)+'</div>'+byName[nm].map(function(o){
           return '<div class="sb"><span>'+esc(o.attr)+'</span><span class="a">'+bmYen(o.price)+' ×'+o.qty+'</span></div>';
@@ -3430,6 +3435,13 @@ function bmRow(k,v){ return '<div class="r"><span>'+k+'</span><b>'+bmYen(v)+'</b
 
 /* ---- 操作 ---- */
 /* ⚠️延長（フル/ハーフ）はボス判断で作らない＝いえやすの運用に無い。TRUSTには在るが踏襲しない。 */
+/* お客様の人数。⚠️TRUSTと同じで1名未満にはできない（＝伝票ごと消すのが正しい畳み方） */
+function bmPax(delta){
+  var d=bmGet(BM.key), next=(Number(d.setPax)||1)+delta;
+  if(next<1){ alert('1名より少なくはできません。\n（TRUSTと同じ＝伝票ごと消してください）'); return; }
+  d.setPax=next; bmSave(); bmRender();
+}
+function bmSetUnit(v){ var d=bmGet(BM.key); d.setUnit=Math.max(0,Number(v)||0); bmSave(); bmRender(); }
 function bmBump(n,key,delta){
   var d=bmGet(BM.key);
   if(!d.casts[n]) d.casts[n]={tanto:0,yoyaku:0,dohan:0};
