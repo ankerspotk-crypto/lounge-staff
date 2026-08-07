@@ -4286,6 +4286,8 @@ function reqStatusInfo_(s) {
   if (s === '承諾') return { cls: 'ok',  txt: '✓ 承諾済み（出勤）' };
   if (s === '休み' || s === '却下') return { cls: 'off', txt: '✗ 休み決定' };
   if (s === 'クリア') return { cls: 'off', txt: '— クリア済み' };
+  // 『重複』＝同じ申請の二度押しを承認時にまとめて閉じた行（2026-08-07・closeDupRequests_）。未処理と誤読させない
+  if (s === '重複') return { cls: 'off', txt: '— 重複（同じ申請）' };
   return { cls: '', txt: '⏳ 未処理' };
 }
 
