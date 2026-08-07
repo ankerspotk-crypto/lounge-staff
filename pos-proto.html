@@ -13,7 +13,9 @@
   計算仕様の出典＝repo `TRUST仕様書.md`（2026-08-07にTRUST-REGI-2の実機から採取）
    ・サービス料 20%、消費税はサービス料に含まれる（＝消費税を別途上乗せしない）
    ・合計は 100円単位で切り上げ
-   ・セット＝初回120分 ¥13,000 / フル延長・ハーフ延長 ¥13,000 / 同伴 ¥3,000 / 担当・予約 ¥0
+   ・セット＝初回120分 ¥13,000 / 同伴 ¥3,000 / 担当・予約 ¥0
+   ⚠️延長（フル/ハーフ）はTRUSTには在るが**自社POSでは作らない**（2026-08-07ボス判断＝運用に無い）。
+     下の検算に残る「+13,000」はTRUST実機で採った事実の記録であって、こちらの機能ではない。
   実機で確認済みの検算（この4件が合えばエンジンは正しい）
    ・13,000                              → 税サ 2,600 / 合計 15,600
    ・13,000 + 3,000(同伴)                → 合計 19,200
@@ -108,7 +110,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;}
   <h1>🍽 IEYAS POS プロト</h1>
   <span class="badge">TRUST並行テスト用</span>
   <span class="badge">計算＝サービス料20%（消費税内包）／100円切上</span>
-  <span class="badge" id="buildBadge">v2026-08-07a</span>
+  <span class="badge" id="buildBadge">v2026-08-07b</span>
   <button class="sm dng" onclick="resetAll()">卓をクリア</button>
 </header>
 
@@ -126,11 +128,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;}
         <span class="note" style="margin:0 0 0 10px">※TRUSTは客ごとにセットを持つ</span>
       </div>
       <div id="setList"></div>
-      <div class="row" style="margin-top:8px">
-        <button class="acc sm" onclick="addSet('フル延長')">＋ フル延長 ¥13,000</button>
-        <button class="acc sm" onclick="addSet('ハーフ延長')">＋ ハーフ延長 ¥13,000</button>
-      </div>
-      <div class="note">TRUSTの延長ボタンは「押した後の合計」を先に見せる → <b id="extPreview">—</b></div>
+      <div class="note">⚠️延長（フル/ハーフ）はボス判断で作らない＝いえやすの運用に無い。セットは1本のみ。</div>
     </div>
 
     <div class="card">
@@ -303,13 +301,6 @@ function render(){
           +'<td class="n">'+(i>0?'<button class="sm dng" onclick="delSet('+i+')">×</button>':'')+'</td></tr>';
       }).join('') + '</table>';
 
-  // 延長プレビュー（TRUSTは押す前に合計が見える）
-  var pv = (function(){
-    var snap = JSON.parse(JSON.stringify(S.sets));
-    S.sets.push({label:'フル延長',minutes:0,price:c.set});
-    var t = calc().total; S.sets = snap; return t;
-  })();
-  document.getElementById('extPreview').textContent = '延長すると 合計 '+yen(pv);
 
   // キャスト
   document.getElementById('castList').innerHTML = CASTS.map(function(n){
@@ -411,7 +402,7 @@ function addPax(d){
   if(d>0) S.sets.push({label:'初回',minutes:cfg().min,price:cfg().set});
   render();
 }
-function addSet(label){ S.sets.push({label:label, minutes:0, price:cfg().set}); render(); }
+/* ⚠️延長はボス判断で作らない（TRUSTには在るが、いえやすの運用に無い） */
 function delSet(i){ S.sets.splice(i,1); render(); }
 function bump(n,key,d){ S.casts[n][key]=Math.max(0,S.casts[n][key]+d); render(); }
 function setCat(k){ S.cat=k; render(); }
@@ -462,7 +453,6 @@ function renderLog(){
 var CASES = [
   {nm:'セット13,000のみ',                       base:13000, tax:2600, total:15600},
   {nm:'セット13,000＋同伴3,000',                 base:16000, tax:3200, total:19200},
-  {nm:'セット13,000＋延長13,000',                base:26000, tax:5200, total:31200},
   {nm:'セット13,000＋炭酸1,500＋CD1,000×2',      base:16500, tax:3300, total:19800},
   {nm:'※8,330（税サ込10,000の逆算）＝切上の傍証', base:8330,  tax:1666, total:10000}
 ];

@@ -1272,7 +1272,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-07a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-07b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3302,19 +3302,15 @@ function bmOpen(rowIdx){ BM.key=String(rowIdx); bmRender(); }
 /* ---- 中央：入力（セット・キャスト・注文） ---- */
 function bmEditorHtml(){
   var d=bmGet(BM.key),pool=bmCastPool();
-  var pv=(function(){ var snap=d.sets.slice(); d.sets=snap.concat([{label:'フル延長',minutes:0,price:BM_FEE.set}]); var t=bmCalc(d).total; d.sets=snap; return t; })();
   var h='<div><div class="bm-card"><h3><span class="n">2</span> セット</h3>'
     +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
     +d.sets.map(function(s,i){
        return '<tr><td style="padding:5px 0;border-bottom:1px solid var(--line)">'+(i+1)+'セット目 <span style="color:var(--sub);font-size:10.5px">'+esc(s.label)+'</span></td>'
         +'<td style="text-align:right;border-bottom:1px solid var(--line)">'+s.minutes+'分</td>'
         +'<td style="text-align:right;border-bottom:1px solid var(--line);color:var(--gold);font-weight:800">'+bmYen(s.price)+'</td>'
-        +'<td style="text-align:right;border-bottom:1px solid var(--line)">'+(i>0?'<button class="bm-btn sm dng" onclick="bmDelSet('+i+')">×</button>':'')+'</td></tr>';
+        +'</tr>';
      }).join('')+'</table>'
-    +'<div class="bm-row" style="margin-top:8px">'
-    +'<button class="bm-btn acc" onclick="bmAddSet(\'フル延長\')">＋ フル延長 '+bmYen(BM_FEE.set)+'</button>'
-    +'<button class="bm-btn acc" onclick="bmAddSet(\'ハーフ延長\')">＋ ハーフ延長 '+bmYen(BM_FEE.set)+'</button></div>'
-    +'<div class="bm-note">TRUSTと同じで<b>押した後の合計</b>を先に出す → <b style="color:var(--gold)">延長すると '+bmYen(pv)+'</b></div>'
+    +'<div class="bm-note">⚠️延長は使わない運用（ボス確定）。セットは1本のみ。</div>'
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">3</span> キャスト（担当／予約／同伴の回数）</h3>'
     +(pool.length?pool.map(function(n){
@@ -3417,8 +3413,7 @@ function bmDetailHtml(){
 function bmRow(k,v){ return '<div class="r"><span>'+k+'</span><b>'+bmYen(v)+'</b></div>'; }
 
 /* ---- 操作 ---- */
-function bmAddSet(label){ var d=bmGet(BM.key); d.sets.push({label:label,minutes:0,price:BM_FEE.set}); bmSave(); bmRender(); }
-function bmDelSet(i){ var d=bmGet(BM.key); d.sets.splice(i,1); bmSave(); bmRender(); }
+/* ⚠️延長（フル/ハーフ）はボス判断で作らない＝いえやすの運用に無い。TRUSTには在るが踏襲しない。 */
 function bmBump(n,key,delta){
   var d=bmGet(BM.key);
   if(!d.casts[n]) d.casts[n]={tanto:0,yoyaku:0,dohan:0};
