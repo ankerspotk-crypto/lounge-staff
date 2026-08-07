@@ -420,7 +420,10 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 /* ===== 🧾 伝票管理（ホール状況の右・黒服が会計を組み立てる画面）===== */
 body.bill-on #billView{display:block;}
 body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
-#billView{display:none;padding:12px;}
+/* ⚠️bodyは flex column + overflow:hidden の全画面アプリ構成。子ビューは
+   flex:1 / overflow-y:auto / min-height:0 の3点セットが無いと**画面外にはみ出して触れなくなる**
+   （⑥会計・⑦照合が「動かない」の正体だった）。#homeView と同じ作りに揃えてある。 */
+#billView{flex:1;overflow-y:auto;min-height:0;padding:12px 12px 44px;display:none;-webkit-overflow-scrolling:touch;}
 .bm-wrap{display:grid;grid-template-columns:300px 1fr 1fr;gap:12px;align-items:start;}
 @media(max-width:1200px){.bm-wrap{grid-template-columns:1fr 1fr;}}
 @media(max-width:820px){.bm-wrap{grid-template-columns:1fr;}}
