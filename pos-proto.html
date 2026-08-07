@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>IEYAS POS プロト｜TRUST並行テスト</title>
+<!--
+  自社POS プロト（TRUST並行テスト用）
+  ─────────────────────────────────────────────────────────────
+  目的＝TRUSTと「同じ入力→同じ金額」になるかを1円単位で突き合わせること。
+  backend・シート・GASを一切挟まない単体HTML＝計算エンジンだけを裸で検証する。
+
+  計算仕様の出典＝repo `TRUST仕様書.md`（2026-08-07にTRUST-REGI-2の実機から採取）
+   ・サービス料 20%、消費税はサービス料に含まれる（＝消費税を別途上乗せしない）
+   ・合計は 100円単位で切り上げ
+   ・セット＝初回120分 ¥13,000 / フル延長・ハーフ延長 ¥13,000 / 同伴 ¥3,000 / 担当・予約 ¥0
+  実機で確認済みの検算（この4件が合えばエンジンは正しい）
+   ・13,000                              → 税サ 2,600 / 合計 15,600
+   ・13,000 + 3,000(同伴)                → 合計 19,200
+   ・13,000 + 13,000(延長)               → 合計 31,200
+   ・13,000 + 1,500 + 1,000 + 1,000      → 税サ 3,300 / 合計 19,800
+  ⚠️「8,330」「16,666」「20,833」という半端なセット料金が実機に存在するのは、
+     税サ込の丸い額(10,000/20,000/25,000)から逆算した税サ別価格だから。
+     8,330 × 1.2 = 9,996 → 100円切り上げ → 10,000 で辻褄が合う＝切り上げ仕様の傍証。
+-->
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --bg:#0b0e14; --panel:#121722; --panel2:#1a2130; --line:#232c3d; --line2:#33405a;
+  --txt:#e8f0ff; --sub:#8a9ac0; --accent:#ff8a2b; --accent-bg:#2a1606; --accent-line:#7a3f10;
+  --green:#4dcc84; --gold:#e6d2a8; --red:#ee5a5a; --blue:#7ab0f0;
+}
+body{font-family:-apple-system,'Hiragino Sans','Helvetica Neue',sans-serif;background:var(--bg);color:var(--txt);font-size:14px;line-height:1.5;padding-bottom:40px;}
+header{background:linear-gradient(180deg,#1a1206,#12161f);border-bottom:2px solid var(--accent-line);padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:20;}
+header h1{font-size:16px;font-weight:800;letter-spacing:.5px;color:var(--accent);}
+header .badge{font-size:10.5px;font-weight:700;color:var(--sub);border:1px solid var(--line2);border-radius:6px;padding:3px 8px;}
+.wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px;max-width:1500px;margin:0 auto;}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr;}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px;}
+.card h2{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.card h2 .n{background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:5px;padding:1px 6px;font-size:10px;}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+label.lb{font-size:11.5px;color:var(--sub);font-weight:700;min-width:96px;}
+input[type=number],input[type=text],select{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:14px;outline:none;font-family:inherit;}
+input[type=number]{text-align:right;width:110px;}
+button{font-family:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);padding:8px 12px;font-size:13px;font-weight:700;}
+button:active{opacity:.65;}
+button.pri{background:#0d2618;border-color:#2a6a44;color:#79e0a8;}
+button.acc{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+button.dng{background:#240e0e;border-color:#7a2828;color:#f08080;}
+button.sm{padding:5px 9px;font-size:12px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{padding:7px 11px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:12.5px;font-weight:700;cursor:pointer;}
+.chip.sel{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.chip.cast.sel{background:#0d2618;border-color:#2a6a44;color:#79e0a8;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;}
+th{font-size:10.5px;color:var(--sub);font-weight:700;letter-spacing:.3px;}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;}
+.cast-row{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);}
+.cnt{display:flex;align-items:center;gap:3px;}
+.cnt .lbl{font-size:9.5px;font-weight:800;padding:2px 5px;border-radius:4px;min-width:34px;text-align:center;}
+.cnt .lbl.t{background:#3a1414;color:#ff9a9a;}
+.cnt .lbl.y{background:#122a44;color:#8fc0f0;}
+.cnt .lbl.d{background:#241800;color:#ffbf6a;}
+.cnt button{width:26px;height:26px;padding:0;font-size:14px;line-height:1;}
+.cnt span{min-width:18px;text-align:center;font-weight:800;font-size:13px;}
+.menugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:8px;max-height:230px;overflow-y:auto;}
+.mitem{border:1px solid var(--line2);background:var(--panel2);border-radius:9px;padding:8px;cursor:pointer;}
+.mitem:active{opacity:.6;}
+.mitem .nm{font-size:12.5px;font-weight:700;line-height:1.2;}
+.mitem .pr{font-size:11.5px;color:var(--gold);font-weight:800;margin-top:3px;}
+.sum{border-top:1px solid var(--line2);margin-top:10px;padding-top:8px;}
+.sum .r{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;color:var(--sub);}
+.sum .r b{color:var(--txt);font-variant-numeric:tabular-nums;}
+.sum .r.big{font-size:20px;font-weight:800;color:var(--gold);border-top:1px solid var(--line2);margin-top:6px;padding-top:8px;}
+.sum .r.big b{color:var(--gold);}
+.sum .r.mut{font-size:11.5px;color:#5f6b85;}
+.det3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.det3 .col{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px;min-height:96px;}
+.det3 .col h3{font-size:10.5px;font-weight:800;color:var(--accent);text-align:center;padding-bottom:5px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+.det3 .li{font-size:11.5px;padding:3px 0;display:flex;justify-content:space-between;gap:4px;}
+.det3 .li .amt{font-variant-numeric:tabular-nums;color:var(--gold);}
+.det3 .grp{font-size:11.5px;font-weight:800;margin-top:4px;}
+.det3 .sub{font-size:11px;color:var(--sub);padding-left:8px;display:flex;justify-content:space-between;}
+.verdict{border-radius:10px;padding:12px;text-align:center;font-weight:800;font-size:15px;margin-top:10px;}
+.verdict.ok{background:#0d2618;border:1px solid #2a6a44;color:#79e0a8;}
+.verdict.ng{background:#2a0e0e;border:1px solid #7a2828;color:#ff8a8a;}
+.verdict.idle{background:var(--panel2);border:1px solid var(--line2);color:var(--sub);font-weight:700;font-size:13px;}
+.log{font-size:11.5px;max-height:180px;overflow-y:auto;}
+.log .e{padding:5px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:6px;}
+.log .e .ok{color:var(--green);font-weight:800;}
+.log .e .ng{color:var(--red);font-weight:800;}
+.note{font-size:11px;color:var(--sub);margin-top:6px;line-height:1.45;}
+.warn{font-size:11.5px;color:#ffbf6a;background:#241800;border:1px solid #7a5010;border-radius:8px;padding:8px 10px;margin-top:8px;}
+.selftest{font-size:11.5px;}
+.selftest .t{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line);}
+.ord{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+.ord .nm{flex:1;}
+.ord .at{font-size:10.5px;font-weight:800;padding:1px 6px;border-radius:5px;background:#122a44;color:#8fc0f0;}
+.ord .at.staff{background:#241800;color:#ffbf6a;}
+.ord .at.cast{background:#0d2618;color:#79e0a8;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍽 IEYAS POS プロト</h1>
+  <span class="badge">TRUST並行テスト用</span>
+  <span class="badge">計算＝サービス料20%（消費税内包）／100円切上</span>
+  <span class="badge" id="buildBadge">v2026-08-07a</span>
+  <button class="sm dng" onclick="resetAll()">卓をクリア</button>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ 左：入力 ============ -->
+  <div>
+    <div class="card">
+      <h2><span class="n">1</span> 卓を開く</h2>
+      <div class="row">
+        <label class="lb">人数</label>
+        <button class="sm" onclick="addPax(-1)">−</button>
+        <span id="paxV" style="font-weight:800;min-width:34px;text-align:center">1名</span>
+        <button class="sm" onclick="addPax(1)">＋</button>
+        <span class="note" style="margin:0 0 0 10px">※TRUSTは客ごとにセットを持つ</span>
+      </div>
+      <div id="setList"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="acc sm" onclick="addSet('フル延長')">＋ フル延長 ¥13,000</button>
+        <button class="acc sm" onclick="addSet('ハーフ延長')">＋ ハーフ延長 ¥13,000</button>
+      </div>
+      <div class="note">TRUSTの延長ボタンは「押した後の合計」を先に見せる → <b id="extPreview">—</b></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">2</span> キャスト（担当／予約／同伴の回数）</h2>
+      <div id="castList"></div>
+      <div class="note">担当＝本指名（¥<span id="feeT">0</span>）／予約＝場内指名（¥<span id="feeY">0</span>）／同伴（¥<span id="feeD">3,000</span>）。<b>回数×単価</b>で積む。</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">3</span> 注文</h2>
+      <div class="chips" id="catChips"></div>
+      <div class="menugrid" id="menuGrid"></div>
+      <div class="row" style="margin-top:10px">
+        <label class="lb">臨時商品</label>
+        <input type="text" id="adhocNm" placeholder="品名" style="width:130px">
+        <input type="number" id="adhocPr" placeholder="単価" value="0">
+        <button class="sm" onclick="pickAdhoc()">追加</button>
+      </div>
+      <div style="margin-top:10px">
+        <div class="note" style="margin-bottom:4px">この注文を誰に付けるか（TRUSTの「選択」）</div>
+        <div class="chips" id="attrChips"></div>
+      </div>
+      <div id="ordList" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <!-- ============ 右：明細・会計・照合 ============ -->
+  <div>
+    <div class="card">
+      <h2><span class="n">4</span> ご利用明細</h2>
+      <div class="det3">
+        <div class="col"><h3>担当・予約 / 同伴</h3><div id="detA"></div></div>
+        <div class="col"><h3>セット</h3><div id="detB"></div></div>
+        <div class="col"><h3>注文</h3><div id="detC"></div></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="lb">値引</label><input type="number" id="discount" value="0" oninput="render()">
+        <label class="lb" style="min-width:auto">値増</label><input type="number" id="surcharge" value="0" oninput="render()">
+      </div>
+      <div class="sum" id="sumBox"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">5</span> 会計（支払）</h2>
+      <div class="row"><label class="lb">現金</label><input type="number" id="payCash" value="0" oninput="render()"></div>
+      <div class="row"><label class="lb">カード</label><input type="number" id="payCard" value="0" oninput="render()"></div>
+      <div class="row"><label class="lb">売掛</label><input type="number" id="payCredit" value="0" oninput="render()"></div>
+      <div class="row"><button class="sm" onclick="fillCash()">現金に全額</button></div>
+      <div class="sum" id="payBox"></div>
+    </div>
+
+    <div class="card" style="border-color:var(--accent-line)">
+      <h2><span class="n">6</span> 🔍 TRUSTとの照合（並行テスト）</h2>
+      <div class="row">
+        <label class="lb">TRUSTの合計</label>
+        <input type="number" id="trustTotal" placeholder="実機の金額" oninput="render()" style="width:130px">
+        <label class="lb" style="min-width:auto">TRUSTの税サ</label>
+        <input type="number" id="trustTax" placeholder="任意" oninput="render()" style="width:110px">
+      </div>
+      <div id="verdict" class="verdict idle">TRUSTの合計を入れると差分を判定します</div>
+      <div class="row" style="margin-top:10px">
+        <input type="text" id="caseNm" placeholder="ケース名（例: 8/7 5F予備 セット+同伴）" style="flex:1;min-width:160px">
+        <button class="pri sm" onclick="saveCase()">この結果を記録</button>
+        <button class="sm" onclick="clearLog()">記録を消す</button>
+      </div>
+      <div class="log" id="logBox" style="margin-top:8px"></div>
+      <div class="warn">⚠️ 値引・値増の適用順（税サの前か後か）は実機で未確認。既定は<b>税サの前</b>。ズレたらここを疑う。</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">7</span> ⚙️ 料金設定（TRUSTの設定と揃える）</h2>
+      <div class="row"><label class="lb">サービス料率</label><input type="number" id="cfgSvc" value="20" oninput="render()" style="width:80px"><span class="note" style="margin:0">%（消費税を含む）</span></div>
+      <div class="row"><label class="lb">端数</label>
+        <select id="cfgRound" onchange="render()">
+          <option value="100u">100円単位で切り上げ</option>
+          <option value="1u">1円単位で切り上げ</option>
+          <option value="none">丸めない</option>
+        </select>
+      </div>
+      <div class="row"><label class="lb">セット料金</label><input type="number" id="cfgSet" value="13000" oninput="render()"></div>
+      <div class="row"><label class="lb">セット時間</label><input type="number" id="cfgMin" value="120" oninput="render()"><span class="note" style="margin:0">分</span></div>
+      <div class="row"><label class="lb">同伴料</label><input type="number" id="cfgDohan" value="3000" oninput="render()"></div>
+      <div class="row"><label class="lb">担当料金</label><input type="number" id="cfgTanto" value="0" oninput="render()"></div>
+      <div class="row"><label class="lb">予約料金</label><input type="number" id="cfgYoyaku" value="0" oninput="render()"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">8</span> ✅ 実機の実測値との自己検算</h2>
+      <div class="selftest" id="selftest"></div>
+      <div class="note">2026-08-07にTRUST-REGI-2の実機で採取した4件。ここが全部✅なら計算エンジンはTRUSTと同じ。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ マスタ（TRUSTの実機から採取した実価格） ============ */
+var MENU = {
+  '焼酎':[['吉四六',15000],['鳥飼',12000],['しろ',10000],['魔王',28000],['赤兎馬',13000],['黒霧島',12000],['赤霧島',15000],['JAPAN',10000],['3650',13000]],
+  '割り物':[['炭酸2本',1500],['ウーロン茶P',2000],['緑茶P',2000],['ジャスミン茶P',2000],['コーヒーP',2000],['オレンジP',2000],['紅茶P',2000],['ジャワティーP',2000],['ネクターP',2000]],
+  'キャストドリンク':[['キャストドリンク',1000]],
+  'ウィスキー':[], 'シャンパン':[], 'ワイン':[], 'ビール':[], 'ソフトドリンク':[], 'ツマミ':[], 'その他':[]
+};
+var CASTS = ['りく','なな','かい','ゆき','あゆみ'];
+
+/* ============ 状態 ============ */
+var S = {
+  pax:1,
+  sets:[{label:'初回', minutes:120, price:13000}],   // セット履歴（1セット目・2セット目…）
+  casts:{},                                          // {name:{tanto:n, yoyaku:n, dohan:n}}
+  orders:[],                                         // [{name, category, price, qty, attr}]
+  cat:'焼酎',
+  attr:'お客様'                                      // 次に打つ注文の帰属
+};
+CASTS.forEach(function(c){ S.casts[c]={tanto:0,yoyaku:0,dohan:0}; });
+
+function yen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
+function num(id){ return Number(document.getElementById(id).value)||0; }
+function cfg(){
+  return {
+    svc:num('cfgSvc')/100, round:document.getElementById('cfgRound').value,
+    set:num('cfgSet'), min:num('cfgMin'), dohan:num('cfgDohan'),
+    tanto:num('cfgTanto'), yoyaku:num('cfgYoyaku')
+  };
+}
+
+/* ============ 🔥 計算エンジン（ここがTRUSTと一致すべき本体） ============
+   小計 = セット合計 + 担当料金×回数 + 予約料金×回数 + 同伴料×回数 + 注文合計
+   （値引・値増は既定で税サの前に適用＝実機未確認・切替可）
+   税サ = 小計 × サービス料率        ← 消費税はこの中に含まれる（別途上乗せしない）
+   合計 = 100円単位で切り上げ
+*/
+function calc(){
+  var c = cfg();
+  var setSum = S.sets.reduce(function(a,s){ return a+(Number(s.price)||0); },0);
+  var tantoCnt=0, yoyakuCnt=0, dohanCnt=0;
+  Object.keys(S.casts).forEach(function(n){
+    tantoCnt += S.casts[n].tanto; yoyakuCnt += S.casts[n].yoyaku; dohanCnt += S.casts[n].dohan;
+  });
+  var tantoSum = tantoCnt*c.tanto, yoyakuSum = yoyakuCnt*c.yoyaku, dohanSum = dohanCnt*c.dohan;
+  var ordSum = S.orders.reduce(function(a,o){ return a+o.price*o.qty; },0);
+
+  var discount = num('discount'), surcharge = num('surcharge');
+  var base = setSum + tantoSum + yoyakuSum + dohanSum + ordSum - discount + surcharge;
+  var tax = Math.floor(base * c.svc);          // 税サ（実機表示と同じ位置づけ）
+  var raw = base + tax;
+  var total = raw;
+  if(c.round==='100u') total = Math.ceil(raw/100)*100;
+  else if(c.round==='1u') total = Math.ceil(raw);
+
+  var paid = num('payCash')+num('payCard')+num('payCredit');
+  return {
+    setSum, tantoCnt, yoyakuCnt, dohanCnt, tantoSum, yoyakuSum, dohanSum, ordSum,
+    discount, surcharge, base, tax, raw, total, paid, unpaid: total-paid, svcPct: c.svc*100
+  };
+}
+
+/* ============ 描画 ============ */
+function render(){
+  var c = cfg(), r = calc();
+  document.getElementById('paxV').textContent = S.pax+'名';
+  document.getElementById('feeT').textContent = c.tanto.toLocaleString();
+  document.getElementById('feeY').textContent = c.yoyaku.toLocaleString();
+  document.getElementById('feeD').textContent = c.dohan.toLocaleString();
+
+  // セット履歴
+  document.getElementById('setList').innerHTML = '<table><tr><th>セット</th><th>時間</th><th class="n">金額</th><th></th></tr>'
+    + S.sets.map(function(s,i){
+        return '<tr><td>'+(i+1)+'セット目 <span style="color:var(--sub);font-size:11px">'+s.label+'</span></td>'
+          +'<td>'+s.minutes+'分</td><td class="n">'+yen(s.price)+'</td>'
+          +'<td class="n">'+(i>0?'<button class="sm dng" onclick="delSet('+i+')">×</button>':'')+'</td></tr>';
+      }).join('') + '</table>';
+
+  // 延長プレビュー（TRUSTは押す前に合計が見える）
+  var pv = (function(){
+    var snap = JSON.parse(JSON.stringify(S.sets));
+    S.sets.push({label:'フル延長',minutes:0,price:c.set});
+    var t = calc().total; S.sets = snap; return t;
+  })();
+  document.getElementById('extPreview').textContent = '延長すると 合計 '+yen(pv);
+
+  // キャスト
+  document.getElementById('castList').innerHTML = CASTS.map(function(n){
+    var v = S.casts[n];
+    return '<div class="cast-row"><div style="font-weight:700">'+n+'</div>'
+      + cntHtml(n,'tanto','担当','t',v.tanto) + cntHtml(n,'yoyaku','予約','y',v.yoyaku) + cntHtml(n,'dohan','同伴','d',v.dohan)
+      + '</div>';
+  }).join('');
+
+  // カテゴリ・メニュー
+  document.getElementById('catChips').innerHTML = Object.keys(MENU).map(function(k){
+    return '<div class="chip'+(k===S.cat?' sel':'')+'" onclick="setCat(\''+k+'\')">'+k+'</div>';
+  }).join('');
+  var items = MENU[S.cat]||[];
+  document.getElementById('menuGrid').innerHTML = items.length ? items.map(function(m){
+      return '<div class="mitem" onclick="pick(\''+m[0].replace(/'/g,"\\'")+'\','+m[1]+')"><div class="nm">'+m[0]+'</div><div class="pr">'+yen(m[1])+'</div></div>';
+    }).join('') : '<div class="note" style="grid-column:1/-1">このカテゴリは未登録（臨時商品で打てます）</div>';
+
+  // 帰属チップ
+  var attrs = ['お客様','スタッフ'].concat(CASTS);
+  document.getElementById('attrChips').innerHTML = attrs.map(function(a){
+    var cls = (a===S.attr)?' sel':''; var kind = (a==='お客様'||a==='スタッフ')?'':' cast';
+    return '<div class="chip'+kind+cls+'" onclick="setAttr(\''+a+'\')">'+a+'</div>';
+  }).join('');
+
+  // 注文一覧
+  document.getElementById('ordList').innerHTML = S.orders.length ? S.orders.map(function(o,i){
+    var k = o.attr==='お客様'?'':(o.attr==='スタッフ'?'staff':'cast');
+    return '<div class="ord"><span class="at '+k+'">'+o.attr+'</span><span class="nm">'+o.name+'</span>'
+      +'<button class="sm" onclick="qty('+i+',-1)">−</button><span style="min-width:18px;text-align:center;font-weight:800">'+o.qty+'</span>'
+      +'<button class="sm" onclick="qty('+i+',1)">＋</button>'
+      +'<span style="min-width:74px;text-align:right;color:var(--gold);font-weight:800">'+yen(o.price*o.qty)+'</span></div>';
+  }).join('') : '<div class="note">まだ注文がありません</div>';
+
+  // 明細3カラム（TRUSTのご利用明細と同じ並び）
+  var aH = '';
+  Object.keys(S.casts).forEach(function(n){
+    var v=S.casts[n];
+    if(v.tanto) aH += '<div class="li"><span>担当 '+n+'</span><span class="amt">'+yen(c.tanto*v.tanto)+' ×'+v.tanto+'</span></div>';
+    if(v.yoyaku)aH += '<div class="li"><span>予約 '+n+'</span><span class="amt">'+yen(c.yoyaku*v.yoyaku)+' ×'+v.yoyaku+'</span></div>';
+    if(v.dohan) aH += '<div class="li"><span>同伴 '+n+'</span><span class="amt">'+yen(c.dohan*v.dohan)+' ×'+v.dohan+'</span></div>';
+  });
+  document.getElementById('detA').innerHTML = aH || '<div class="note">—</div>';
+  document.getElementById('detB').innerHTML = S.sets.map(function(s){
+    return '<div class="li"><span>'+s.minutes+'分</span><span class="amt">'+yen(s.price)+' ×1</span></div>';
+  }).join('');
+  // 注文は「商品名を見出し＋帰属ごとの内訳」＝TRUSTの明細と同じ形
+  var byName = {}, order = [];
+  S.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
+  document.getElementById('detC').innerHTML = order.length ? order.map(function(nm){
+    return '<div class="grp">'+nm+'</div>' + byName[nm].map(function(o){
+      return '<div class="sub"><span>'+o.attr+'</span><span class="amt">'+yen(o.price)+' ×'+o.qty+'</span></div>';
+    }).join('');
+  }).join('') : '<div class="note">—</div>';
+
+  // 合計
+  document.getElementById('sumBox').innerHTML =
+     row('セット', r.setSum)
+    +(r.tantoSum?row('担当（本指名）×'+r.tantoCnt, r.tantoSum):'')
+    +(r.yoyakuSum?row('予約（場内指名）×'+r.yoyakuCnt, r.yoyakuSum):'')
+    +(r.dohanSum?row('同伴 ×'+r.dohanCnt, r.dohanSum):'')
+    +row('注文', r.ordSum)
+    +(r.discount?row('値引', -r.discount):'')+(r.surcharge?row('値増', r.surcharge):'')
+    +row('小計', r.base)
+    +row('税サ別商品の税サ等（'+r.svcPct+'%）', r.tax)
+    +(r.total!==r.raw?'<div class="r mut"><span>丸め前</span><b>'+yen(r.raw)+'</b></div>':'')
+    +'<div class="r big"><span>合計</span><b>'+yen(r.total)+'</b></div>';
+
+  document.getElementById('payBox').innerHTML =
+     row('お預り合計', r.paid)
+    +'<div class="r big"><span>未領収金</span><b style="color:'+(r.unpaid===0?'var(--green)':'var(--red)')+'">'+yen(r.unpaid)+'</b></div>';
+
+  // 照合
+  var tt = document.getElementById('trustTotal').value, tx = document.getElementById('trustTax').value;
+  var v = document.getElementById('verdict');
+  if(tt===''){ v.className='verdict idle'; v.textContent='TRUSTの合計を入れると差分を判定します'; }
+  else{
+    var dT = r.total - Number(tt), dX = (tx==='')?0:(r.tax - Number(tx));
+    var ok = (dT===0) && (tx===''||dX===0);
+    v.className = 'verdict '+(ok?'ok':'ng');
+    v.innerHTML = ok ? '✅ 一致（合計 '+yen(r.total)+(tx!==''?' ／ 税サ '+yen(r.tax):'')+'）'
+      : '❌ 不一致<div style="font-size:12.5px;font-weight:700;margin-top:5px">合計 こちら '+yen(r.total)+' − TRUST '+yen(tt)+' = <b>'+(dT>0?'+':'')+yen(dT)+'</b>'
+        +(tx!==''?'<br>税サ こちら '+yen(r.tax)+' − TRUST '+yen(tx)+' = <b>'+(dX>0?'+':'')+yen(dX)+'</b>':'')+'</div>';
+  }
+  renderLog(); selftest();
+}
+function row(k,v){ return '<div class="r"><span>'+k+'</span><b>'+yen(v)+'</b></div>'; }
+function cntHtml(n,key,label,cls,val){
+  return '<div class="cnt"><span class="lbl '+cls+'">'+label+'</span>'
+    +'<button onclick="bump(\''+n+'\',\''+key+'\',-1)">−</button><span>'+val+'</span>'
+    +'<button onclick="bump(\''+n+'\',\''+key+'\',1)">＋</button></div>';
+}
+
+/* ============ 操作 ============ */
+function addPax(d){
+  var next = S.pax+d;
+  if(next<1){ alert('1名の場合、数を減らすことは出来ません。\n（TRUSTと同じ挙動＝伝票ごと削除してください）'); return; }
+  S.pax = next;
+  if(d>0) S.sets.push({label:'初回',minutes:cfg().min,price:cfg().set});
+  render();
+}
+function addSet(label){ S.sets.push({label:label, minutes:0, price:cfg().set}); render(); }
+function delSet(i){ S.sets.splice(i,1); render(); }
+function bump(n,key,d){ S.casts[n][key]=Math.max(0,S.casts[n][key]+d); render(); }
+function setCat(k){ S.cat=k; render(); }
+function setAttr(a){ S.attr=a; render(); }
+function pick(nm,pr){
+  var hit=-1; S.orders.forEach(function(o,i){ if(o.name===nm&&o.attr===S.attr&&o.price===pr) hit=i; });
+  if(hit>=0) S.orders[hit].qty++;
+  else S.orders.push({name:nm, category:S.cat, price:pr, qty:1, attr:S.attr});
+  render();
+}
+function pickAdhoc(){
+  var nm=document.getElementById('adhocNm').value.trim(), pr=Number(document.getElementById('adhocPr').value)||0;
+  if(!nm){ alert('品名を入れてください'); return; }
+  pick(nm,pr); document.getElementById('adhocNm').value='';
+}
+function qty(i,d){ S.orders[i].qty+=d; if(S.orders[i].qty<=0) S.orders.splice(i,1); render(); }
+function fillCash(){ document.getElementById('payCash').value = calc().total; render(); }
+function resetAll(){
+  if(!confirm('この卓をクリアします。よろしいですか？')) return;
+  S.pax=1; S.sets=[{label:'初回',minutes:cfg().min,price:cfg().set}]; S.orders=[];
+  CASTS.forEach(function(c){ S.casts[c]={tanto:0,yoyaku:0,dohan:0}; });
+  ['discount','surcharge','payCash','payCard','payCredit','trustTotal','trustTax'].forEach(function(id){ document.getElementById(id).value = (id==='trustTotal'||id==='trustTax')?'':0; });
+  render();
+}
+
+/* ============ 照合ログ（localStorage） ============ */
+function loadLog(){ try{ return JSON.parse(localStorage.getItem('posProtoLog')||'[]'); }catch(e){ return []; } }
+function saveCase(){
+  var tt=document.getElementById('trustTotal').value;
+  if(tt===''){ alert('TRUSTの合計を入れてください'); return; }
+  var r=calc(), L=loadLog();
+  L.unshift({ nm:document.getElementById('caseNm').value||'(無題)', mine:r.total, trust:Number(tt), tax:r.tax,
+              trustTax:document.getElementById('trustTax').value, at:new Date().toLocaleString('ja-JP') });
+  localStorage.setItem('posProtoLog', JSON.stringify(L.slice(0,50)));
+  document.getElementById('caseNm').value=''; render();
+}
+function clearLog(){ if(confirm('記録を全部消しますか？')){ localStorage.removeItem('posProtoLog'); render(); } }
+function renderLog(){
+  var L=loadLog();
+  document.getElementById('logBox').innerHTML = L.length ? L.map(function(e){
+    var ok = (e.mine===e.trust);
+    return '<div class="e"><span>'+e.nm+' <span style="color:var(--sub);font-size:10.5px">'+e.at+'</span></span>'
+      +'<span class="'+(ok?'ok':'ng')+'">'+(ok?'✅ '+yen(e.mine):'❌ '+yen(e.mine)+' vs '+yen(e.trust))+'</span></div>';
+  }).join('') : '<div class="note">まだ記録がありません</div>';
+}
+
+/* ============ 自己検算（実機で採取した実測値） ============ */
+var CASES = [
+  {nm:'セット13,000のみ',                       base:13000, tax:2600, total:15600},
+  {nm:'セット13,000＋同伴3,000',                 base:16000, tax:3200, total:19200},
+  {nm:'セット13,000＋延長13,000',                base:26000, tax:5200, total:31200},
+  {nm:'セット13,000＋炭酸1,500＋CD1,000×2',      base:16500, tax:3300, total:19800},
+  {nm:'※8,330（税サ込10,000の逆算）＝切上の傍証', base:8330,  tax:1666, total:10000}
+];
+function selftest(){
+  var c=cfg();
+  document.getElementById('selftest').innerHTML = CASES.map(function(t){
+    var tax=Math.floor(t.base*c.svc), raw=t.base+tax;
+    var total = (c.round==='100u')?Math.ceil(raw/100)*100:(c.round==='1u'?Math.ceil(raw):raw);
+    var ok = (total===t.total) && (tax===t.tax);
+    return '<div class="t"><span>'+t.nm+'</span><span style="color:'+(ok?'var(--green)':'var(--red)')+';font-weight:800">'
+      +(ok?'✅ ':'❌ ')+yen(total)+'（税サ '+yen(tax)+'）</span></div>';
+  }).join('');
+}
+
+render();
+</script>
+</body>
+</html>

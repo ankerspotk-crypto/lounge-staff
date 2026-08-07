@@ -384,6 +384,98 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .rploc.free{color:#c0a0e0;background:#1e1430;}
 .chip.dohan.sel{background:#241800;border-color:#7a5010;color:#ffbf5a;}
 .chip.yoyaku.sel{background:#0a1e2e;border-color:#2a5aaa;color:#7ab0f0;}
+/* 🍽 POS（オーダー入力〜伝票）。iPad前提＝指で押せる大きさを最優先（最小44px） */
+.pos-bills{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}
+.pos-bill{border:1px solid var(--line2);background:var(--panel2);border-radius:12px;padding:12px 14px;cursor:pointer;}
+.pos-bill:active{opacity:.7;}
+.pos-bill .pb-tbl{font-size:12px;color:var(--accent);font-weight:800;letter-spacing:.4px;}
+.pos-bill .pb-cust{font-size:16px;font-weight:800;margin-top:3px;}
+.pos-bill .pb-sub{font-size:11px;color:var(--sub);margin-top:3px;}
+.pos-bill .pb-amt{font-size:19px;font-weight:800;color:#e6d2a8;text-align:right;margin-top:6px;}
+.pos-cats{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;}
+.pos-cats .chip{white-space:nowrap;}
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:8px;}
+.pos-item{border:1px solid var(--line2);background:var(--panel2);border-radius:11px;padding:11px 10px;cursor:pointer;min-height:64px;display:flex;flex-direction:column;justify-content:center;}
+.pos-item:active{opacity:.65;}
+.pos-item .pi-nm{font-size:13.5px;font-weight:700;line-height:1.25;}
+.pos-item .pi-pr{font-size:12px;color:#e6d2a8;font-weight:800;margin-top:4px;}
+.pos-item .pi-pr.zero{color:#ff8a5a;}
+.pos-item.incart{border-color:#2a6a44;background:#0d2618;}
+.pos-item .pi-qty{position:absolute;}
+.pos-cart{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;}
+.pos-line{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);}
+.pos-line .pl-nm{flex:1;font-size:15px;font-weight:700;}
+/* ⚠️キャスト表示は「誰の売上か」＝金額に直結する情報。小さくしない・タップ域も確保する */
+.pos-line .pl-cast{display:block;width:fit-content;font-size:12px;color:#79e0a8;font-weight:700;margin-top:3px;padding:3px 0;cursor:pointer;}
+.pos-line .pl-cast.none{color:#ff9a5a;}
+.pos-line .pl-amt{font-size:14px;font-weight:800;color:#e6d2a8;min-width:76px;text-align:right;}
+.pos-qty{display:flex;align-items:center;gap:4px;}
+.pos-qty button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);font-size:17px;font-weight:800;cursor:pointer;}
+.pos-qty span{min-width:26px;text-align:center;font-size:14px;font-weight:800;}
+.pos-sum{border-top:1px solid var(--line);margin-top:10px;padding-top:8px;}
+.pos-sum .ps-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;color:var(--sub);}
+.pos-sum .ps-row.total{font-size:19px;font-weight:800;color:#e6d2a8;border-top:1px solid var(--line);margin-top:6px;padding-top:8px;}
+.pos-ord{display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.pos-ord.void{opacity:.42;text-decoration:line-through;}
+/* ===== 🧾 伝票管理（ホール状況の右・黒服が会計を組み立てる画面）===== */
+body.bill-on #billView{display:block;}
+body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
+#billView{display:none;padding:12px;}
+.bm-wrap{display:grid;grid-template-columns:300px 1fr 1fr;gap:12px;align-items:start;}
+@media(max-width:1200px){.bm-wrap{grid-template-columns:1fr 1fr;}}
+@media(max-width:820px){.bm-wrap{grid-template-columns:1fr;}}
+.bm-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;}
+.bm-card h3{font-size:11.5px;font-weight:800;color:var(--accent);letter-spacing:.4px;margin-bottom:9px;display:flex;align-items:center;gap:7px;}
+.bm-card h3 .n{background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:5px;padding:1px 6px;font-size:10px;}
+.bm-bill{border:1px solid var(--line2);background:var(--panel2);border-radius:10px;padding:10px 11px;cursor:pointer;margin-bottom:7px;}
+.bm-bill.sel{border-color:var(--accent-line);background:var(--accent-bg);}
+.bm-bill .t{font-size:11px;color:var(--accent);font-weight:800;}
+.bm-bill .c{font-size:15px;font-weight:800;margin-top:2px;}
+.bm-bill .s{font-size:11px;color:var(--sub);margin-top:2px;}
+.bm-bill .a{font-size:16px;font-weight:800;color:var(--gold);text-align:right;margin-top:4px;}
+.bm-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:7px;}
+.bm-row .lb{font-size:11px;color:var(--sub);font-weight:700;min-width:74px;}
+.bm-in{background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:7px 9px;font-size:14px;outline:none;font-family:inherit;text-align:right;width:104px;}
+.bm-btn{border:1px solid var(--line2);background:var(--panel2);color:var(--txt);border-radius:8px;padding:7px 11px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;}
+.bm-btn.acc{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);}
+.bm-btn.pri{background:#0d2618;border-color:#2a6a44;color:#79e0a8;}
+.bm-btn.dng{background:#240e0e;border-color:#7a2828;color:#f08080;}
+.bm-btn.sm{padding:4px 8px;font-size:11.5px;}
+.bm-cast{display:grid;grid-template-columns:1fr auto auto auto;gap:5px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);}
+.bm-cnt{display:flex;align-items:center;gap:2px;}
+.bm-cnt .k{font-size:9px;font-weight:800;padding:2px 4px;border-radius:4px;min-width:30px;text-align:center;}
+.bm-cnt .k.t{background:#3a1414;color:#ff9a9a;}
+.bm-cnt .k.y{background:#122a44;color:#8fc0f0;}
+.bm-cnt .k.d{background:#241800;color:#ffbf6a;}
+.bm-cnt button{width:25px;height:25px;padding:0;font-size:14px;line-height:1;border-radius:6px;border:1px solid var(--line2);background:var(--panel2);color:var(--txt);cursor:pointer;}
+.bm-cnt span{min-width:16px;text-align:center;font-weight:800;font-size:12.5px;}
+.bm-mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;margin-top:7px;max-height:214px;overflow-y:auto;}
+.bm-mi{border:1px solid var(--line2);background:var(--panel2);border-radius:9px;padding:8px;cursor:pointer;}
+.bm-mi:active{opacity:.6;}
+.bm-mi .nm{font-size:12.5px;font-weight:700;line-height:1.2;}
+.bm-mi .pr{font-size:11.5px;color:var(--gold);font-weight:800;margin-top:3px;}
+.bm-ord{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+.bm-ord .at{font-size:10px;font-weight:800;padding:1px 5px;border-radius:5px;background:#122a44;color:#8fc0f0;white-space:nowrap;}
+.bm-ord .at.staff{background:#241800;color:#ffbf6a;}
+.bm-ord .at.cast{background:#0d2618;color:#79e0a8;}
+.bm-det{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+.bm-det .col{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px;min-height:88px;}
+.bm-det .col h4{font-size:10px;font-weight:800;color:var(--accent);text-align:center;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:5px;}
+.bm-det .li{font-size:11px;padding:2px 0;display:flex;justify-content:space-between;gap:4px;}
+.bm-det .li .a{color:var(--gold);font-variant-numeric:tabular-nums;}
+.bm-det .grp{font-size:11.5px;font-weight:800;margin-top:3px;}
+.bm-det .sb{font-size:10.5px;color:var(--sub);padding-left:7px;display:flex;justify-content:space-between;}
+.bm-sum .r{display:flex;justify-content:space-between;padding:3px 0;font-size:12.5px;color:var(--sub);}
+.bm-sum .r b{color:var(--txt);font-variant-numeric:tabular-nums;}
+.bm-sum .r.mut{font-size:11px;color:#5f6b85;}
+.bm-sum .r.big{font-size:21px;font-weight:800;color:var(--gold);border-top:1px solid var(--line2);margin-top:6px;padding-top:8px;}
+.bm-sum .r.big b{color:var(--gold);}
+.bm-vd{border-radius:9px;padding:10px;text-align:center;font-weight:800;font-size:14px;margin-top:8px;}
+.bm-vd.ok{background:#0d2618;border:1px solid #2a6a44;color:#79e0a8;}
+.bm-vd.ng{background:#2a0e0e;border:1px solid #7a2828;color:#ff8a8a;}
+.bm-vd.idle{background:var(--panel2);border:1px solid var(--line2);color:var(--sub);font-weight:700;font-size:12px;}
+.bm-note{font-size:10.5px;color:var(--sub);margin-top:5px;line-height:1.45;}
+.bm-warn{font-size:11px;color:#ffbf6a;background:#241800;border:1px solid #7a5010;border-radius:8px;padding:7px 9px;margin-top:7px;}
 .custpick{display:flex;gap:8px;margin-bottom:6px;}
 .custpick>div{flex:1;text-align:center;padding:13px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;}
 .cp-exist{background:#0a1428;border:1px solid #1e3a6a;color:var(--accent);}
@@ -1133,6 +1225,7 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
   <div class="vtoggle" id="vtoggle">
     <button id="vt-home" onclick="setViewMode('home')">👔 黒服業務</button>
     <button id="vt-dash" class="on" onclick="setViewMode('dash')">🪑 ホール状況</button>
+    <button id="vt-bill" onclick="setViewMode('bill')">🧾 伝票管理</button>
   </div>
   <div class="spacer"></div>
   <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
@@ -1146,6 +1239,9 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 
 <!-- 今やることホーム（landing・時間帯で「今やること」を提示） -->
 <div id="homeView"><div class="hv-wrap" id="hvWrap"></div></div>
+
+<!-- 🧾 伝票管理（自社POS）。ホール状況の組（occupants）を伝票として開き、会計を組み立てる -->
+<div id="billView"><div class="bm-wrap" id="bmWrap"></div></div>
 
 <!-- 上部 横長アラート帯 -->
 <div class="alertbar" id="alertbar"></div>
@@ -1474,8 +1570,10 @@ function homeItemDone(it){return !!((it.status&&HOME_STATUS[it.status])||homeChe
 function setViewMode(m){
   viewMode=m;
   document.body.classList.toggle('home-on',m==='home');
-  var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash');
-  if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash');
+  document.body.classList.toggle('bill-on',m==='bill');
+  var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash'),b=document.getElementById('vt-bill');
+  if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash'); if(b)b.classList.toggle('on',m==='bill');
+  if(m==='bill'){ bmRender(); return; }   // 伝票管理は独自描画（renderAllはホール/予約の再描画なので走らせない）
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
   // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
@@ -2851,7 +2949,7 @@ function openSeat(idx){
       +(s.nextRsv?'<div class="kv"><span class="k">次席予約</span><span class="v" style="color:#ffc98a">🔜 '+esc(rsvArrT(s.nextRsv))+' '+esc(s.nextRsv.cust)+'様'+(s.nextRsv.tantou?'・担当 '+esc(s.nextRsv.tantou):'')+'</span></div>':'')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
-      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#2a5a8a;color:#8fc0f0" onclick="openSeatSession('+idx+',\'rsv\')">👤 お客様を変更</div><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions">'+posSeatBtnHtml(s)+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#2a5a8a;color:#8fc0f0" onclick="openSeatSession('+idx+',\'rsv\')">👤 お客様を変更</div><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
     showSheet(title,body,false); return;
   }
   if(!s.casts||!s.casts.length){
@@ -2879,7 +2977,7 @@ function openSeat(idx){
       +s.casts.map(function(c){var col=c.status==='over'?'#ee5a5a':c.status==='warn'?'#e6b23a':'#4dcc84';return '<div class="detcast" onclick="castAction('+idx+',\''+jsStr(c.n)+'\')" style="cursor:pointer"><span style="font-weight:700">'+esc(c.n)+'</span><span><span style="color:'+col+';font-weight:800">'+(c.mins<0?'超過 '+(-c.mins)+'分':'残り '+c.mins+'分')+'</span><span style="color:#5a6a8a;font-size:15px;margin-left:8px">›</span></span></div>';}).join('')
       +coSeatDetailHtml(s)
       +rotPickerHtml(idx)
-      +'<div class="actions">'+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#2a5a8a;color:#8fc0f0" onclick="openSeatSession('+idx+',\'rsv\')">👤 お客様を変更</div><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
+      +'<div class="actions">'+posSeatBtnHtml(s)+seatCheckoutBtnHtml(s)+'<div class="act" style="border-color:#2a5a8a;color:#8fc0f0" onclick="openSeatSession('+idx+',\'rsv\')">👤 お客様を変更</div><div class="act" style="border-color:#7a5a2a;color:#e0b070" onclick="startTableMove('+idx+')">🔀 テーブル移動</div><div class="act" style="border-color:#2a6a5a;color:#8fe0c0" onclick="startCoSeat('+idx+')">👥 他の席と合わせる</div>'+combBtn+'<div class="act" onclick="closeSheet()">閉じる</div></div>';
   }
   showSheet(title,body,false);
 }
@@ -2895,6 +2993,14 @@ function seatCustRowHtml(s,idx){
   var hint=unknown?'<div style="font-size:11px;color:#ffbf6a;font-weight:700;margin-top:3px">お客様が未設定です・タップして設定</div>':'';
   return '<div class="kv" onclick="openSeatSession('+idx+',\'rsv\')" style="cursor:pointer">'
     +'<span class="k">お客様</span><span class="v" style="text-align:right">'+nm+hint+'</span></div>';
+}
+/* 席詳細の「🍽 オーダー」ボタン（単一組のみ。相席=複数組は coSeatDetailHtml が組別に出す）。
+ * ⚠️退店ボタンと同じで、予約行(rowIdx)が特定できない席では出さない＝別の組の伝票に打ち込む事故を防ぐ。 */
+function posSeatBtnHtml(s){
+  var occ=s.occupants||[];
+  if(occ.length!==1) return '';
+  var o=occ[0]; if(!o||!o.rowIdx) return '';
+  return '<div class="act" style="border-color:#7a5a2a;color:#e6d2a8" onclick="posOpenBill('+o.rowIdx+')">🍽 オーダー・伝票</div>';
 }
 // 席詳細の「🚪退店」ボタン（単一組のみ。相席=複数組は coSeatDetailHtml が組別に出す）。
 // 予約行(rowIdx)が特定できない席では出さない＝誤って別の客を退店させる事故を防ぐ。
@@ -2912,6 +3018,7 @@ function coSeatDetailHtml(s){
   return '<div style="font-size:11px;color:#8a9ac0;margin:12px 0 4px;font-weight:700">👥 相席（'+occ.length+'組）</div>'
     + occ.map(function(o){
         return '<div class="kv" style="align-items:center"><span class="v">'+esc(o.cust)+'様 <span style="font-size:11px;color:#8aa8c8">'+(o.pax||1)+'名'+(o.tantou?'・'+esc(o.tantou):'')+(o.mem?'・会員'+esc(o.mem):'')+'</span></span>'
+          + (o.rowIdx?'<button class="af-change" style="border-color:#7a5a2a;color:#e6d2a8;margin-right:6px" onclick="posOpenBill('+o.rowIdx+')">🍽 伝票</button>':'')
           + (o.rowIdx?'<button class="af-change" style="border-color:#7a2a2a;color:#e08080" onclick="seatGroupCheckout('+o.rowIdx+',\''+jsStr(o.cust)+'\')">🚪 退店</button>':'')
           + '</div>';
       }).join('');
@@ -3192,6 +3299,475 @@ function quickRotate(toIdx,castName){
   else toast('🔄 '+castName+' を付けました');
 }
 
+/* ============================================================================
+   🧾 伝票管理（自社POS本体・ホール状況の右）
+   ----------------------------------------------------------------------------
+   ■ 目的＝**TRUSTと同じ入力で同じ金額が出るか**を現場で並行テストできること。
+   ■ 計算はTRUST-REGI-2の実機設定に一致（詳細は repo `TRUST仕様書.md`）:
+       小計 = セット + 担当×回数 + 予約×回数 + 同伴×回数 + 注文 − 値引 + 値増
+       税サ = 小計 × 20%（**消費税はサービス料に含まれる＝別途上乗せしない**）
+       合計 = (小計+税サ) を **100円単位で切り上げ**
+     実測4件で一致確認済（15,600 / 19,200 / 31,200 / 19,800）。
+   ■ ⚠️**いまは端末内の下書き（localStorage）**。backend(`posAddOrders`等)は実装済みだが
+     未デプロイのため保存されない。デプロイ後に `bmPush()` を差し替えれば本番保存になる。
+     ＝この段階の目的は「金額がTRUSTと合うか」を確かめること。
+   ■ 伝票の単位＝**予約行 rowIdx**（席ではない）。相席でも組ごとに割れる。
+============================================================================ */
+var BM_MENU={  /* TRUSTの実機から採取した実価格。backendのgetPosMenuが来たらそちらで上書きする */
+  '焼酎':[['吉四六',15000],['鳥飼',12000],['しろ',10000],['魔王',28000],['赤兎馬',13000],['黒霧島',12000],['赤霧島',15000],['JAPAN',10000],['3650',13000]],
+  '割り物':[['炭酸2本',1500],['ウーロン茶P',2000],['緑茶P',2000],['ジャスミン茶P',2000],['コーヒーP',2000],['オレンジP',2000],['紅茶P',2000],['ジャワティーP',2000],['ネクターP',2000]],
+  'キャストドリンク':[['キャストドリンク',1000]],
+  'ウィスキー':[],'シャンパン':[],'ワイン':[],'ビール':[],'ソフトドリンク':[],'ツマミ':[],'その他':[]
+};
+var BM_FEE={service:0.20,roundUnit:100,set:13000,setMinutes:120,dohan:3000,tanto:0,yoyaku:0};
+var BM={key:null,cat:'焼酎',attr:'お客様',draft:{}};
+
+function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
+function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&curDate?curDate:'today'); }
+function bmLoad(){ try{ BM.draft=JSON.parse(localStorage.getItem(bmStoreKey())||'{}'); }catch(e){ BM.draft={}; } }
+function bmSave(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draft)); }catch(e){} }
+/* 伝票の下書きを取り出す（無ければ初期セット1本＝TRUSTが卓を開いた時に既定を自動投入するのと同じ） */
+function bmGet(key){
+  if(!BM.draft[key]) BM.draft[key]={sets:[{label:'初回',minutes:BM_FEE.setMinutes,price:BM_FEE.set}],casts:{},orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0},trust:''};
+  var d=BM.draft[key];
+  if(!d.sets)d.sets=[]; if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
+  return d;
+}
+/* ホール状況の組（occupants）＝いま席にいる伝票。席ではなく組で並べる（相席は2件出る） */
+function bmBills(){
+  var out=[];
+  (typeof SEATS!=='undefined'?SEATS:[]).forEach(function(s){
+    if(!s||s.type==='W'||s.type==='K'||s.mergedTo!=null) return;
+    (s.occupants||[]).forEach(function(o){
+      if(!o||!o.rowIdx) return;
+      out.push({rowIdx:o.rowIdx,table:shortNm(s.name),floor:s.floor,cust:o.cust||s.cust||'ご来店',pax:o.pax||s.pax||1,tantou:o.tantou||s.tantou||''});
+    });
+  });
+  return out;
+}
+function bmCastPool(){
+  var pool=(typeof WORKCASTS!=='undefined'&&WORKCASTS&&WORKCASTS.length)?WORKCASTS:(typeof CASTS!=='undefined'?CASTS:[]);
+  return pool.slice(0,14);
+}
+/* 🔥 計算エンジン。⚠️backendの posCalcTotal_ と**同じ式**であること（片方だけ直すと必ず割れる） */
+function bmCalc(d){
+  var setSum=d.sets.reduce(function(a,s){return a+(Number(s.price)||0);},0);
+  var tc=0,yc=0,dc=0;
+  Object.keys(d.casts).forEach(function(n){ var v=d.casts[n]||{}; tc+=v.tanto||0; yc+=v.yoyaku||0; dc+=v.dohan||0; });
+  var ordSum=d.orders.reduce(function(a,o){return a+o.price*o.qty;},0);
+  var base=setSum+tc*BM_FEE.tanto+yc*BM_FEE.yoyaku+dc*BM_FEE.dohan+ordSum-(Number(d.discount)||0)+(Number(d.surcharge)||0);
+  var tax=Math.floor(base*BM_FEE.service);
+  var raw=base+tax;
+  var total=BM_FEE.roundUnit>0?Math.ceil(raw/BM_FEE.roundUnit)*BM_FEE.roundUnit:raw;
+  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0);
+  return {setSum:setSum,tc:tc,yc:yc,dc:dc,ordSum:ordSum,base:base,tax:tax,raw:raw,total:total,paid:paid,unpaid:total-paid};
+}
+
+function bmRender(){
+  bmLoad();
+  var bills=bmBills();
+  if(BM.key&&!bills.some(function(b){return String(b.rowIdx)===String(BM.key);})) BM.key=null;
+  var html='<div><div class="bm-card"><h3><span class="n">1</span> 伝票（いま席にいる組）</h3>'
+    +(bills.length?bills.map(function(b){
+        var d=bmGet(b.rowIdx),c=bmCalc(d);
+        return '<div class="bm-bill'+(String(BM.key)===String(b.rowIdx)?' sel':'')+'" onclick="bmOpen('+b.rowIdx+')">'
+          +'<div class="t">'+esc(b.floor+' '+b.table)+'</div>'
+          +'<div class="c">'+esc(b.cust)+'<span style="font-size:11px;color:var(--sub);font-weight:600"> '+b.pax+'名</span></div>'
+          +'<div class="s">'+(b.tantou?'担当 '+esc(b.tantou):'担当なし')+'</div>'
+          +'<div class="a">'+bmYen(c.total)+'</div></div>';
+      }).join('')
+      :'<div class="empty-msg" style="padding:20px 0;font-size:12px">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:6px">ホール状況で席にお客様を設定すると、ここに伝票が出ます</div></div>')
+    +'<div class="bm-warn">⚠️ いまは<b>端末内の下書き</b>です（backend未デプロイ）。目的は<b>TRUSTと金額が合うか</b>の確認。</div>'
+    +'</div></div>';
+  if(!BM.key){
+    html+='<div><div class="bm-card"><h3>使い方</h3><div class="bm-note" style="font-size:12px;line-height:1.7">'
+      +'① 左で伝票を選ぶ<br>② セット／キャストの担当・予約・同伴の<b>回数</b>を入れる<br>③ 注文をカテゴリ→商品→<b>誰に付けるか</b>の順で打つ<br>④ 右下に<b>TRUSTの合計</b>を入れて突き合わせる'
+      +'<br><br>計算＝<b>サービス料20%（消費税を含む）／合計は100円単位で切り上げ</b>。TRUSTの実機設定と同じです。</div></div></div>';
+  }else{
+    html+=bmEditorHtml()+bmDetailHtml();
+  }
+  document.getElementById('bmWrap').innerHTML=html;
+}
+function bmOpen(rowIdx){ BM.key=String(rowIdx); bmRender(); }
+
+/* ---- 中央：入力（セット・キャスト・注文） ---- */
+function bmEditorHtml(){
+  var d=bmGet(BM.key),pool=bmCastPool();
+  var pv=(function(){ var snap=d.sets.slice(); d.sets=snap.concat([{label:'フル延長',minutes:0,price:BM_FEE.set}]); var t=bmCalc(d).total; d.sets=snap; return t; })();
+  var h='<div><div class="bm-card"><h3><span class="n">2</span> セット</h3>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12.5px">'
+    +d.sets.map(function(s,i){
+       return '<tr><td style="padding:5px 0;border-bottom:1px solid var(--line)">'+(i+1)+'セット目 <span style="color:var(--sub);font-size:10.5px">'+esc(s.label)+'</span></td>'
+        +'<td style="text-align:right;border-bottom:1px solid var(--line)">'+s.minutes+'分</td>'
+        +'<td style="text-align:right;border-bottom:1px solid var(--line);color:var(--gold);font-weight:800">'+bmYen(s.price)+'</td>'
+        +'<td style="text-align:right;border-bottom:1px solid var(--line)">'+(i>0?'<button class="bm-btn sm dng" onclick="bmDelSet('+i+')">×</button>':'')+'</td></tr>';
+     }).join('')+'</table>'
+    +'<div class="bm-row" style="margin-top:8px">'
+    +'<button class="bm-btn acc" onclick="bmAddSet(\'フル延長\')">＋ フル延長 '+bmYen(BM_FEE.set)+'</button>'
+    +'<button class="bm-btn acc" onclick="bmAddSet(\'ハーフ延長\')">＋ ハーフ延長 '+bmYen(BM_FEE.set)+'</button></div>'
+    +'<div class="bm-note">TRUSTと同じで<b>押した後の合計</b>を先に出す → <b style="color:var(--gold)">延長すると '+bmYen(pv)+'</b></div>'
+    +'</div>'
+    +'<div class="bm-card"><h3><span class="n">3</span> キャスト（担当／予約／同伴の回数）</h3>'
+    +(pool.length?pool.map(function(n){
+        var v=d.casts[n]||{tanto:0,yoyaku:0,dohan:0};
+        return '<div class="bm-cast"><div style="font-weight:700;font-size:12.5px">'+esc(n)+'</div>'
+          +bmCnt(n,'tanto','担当','t',v.tanto||0)+bmCnt(n,'yoyaku','予約','y',v.yoyaku||0)+bmCnt(n,'dohan','同伴','d',v.dohan||0)+'</div>';
+      }).join(''):'<div class="bm-note">出勤キャストが取得できていません</div>')
+    +'<div class="bm-note">担当＝本指名'+bmYen(BM_FEE.tanto)+'／予約＝場内指名'+bmYen(BM_FEE.yoyaku)+'／同伴'+bmYen(BM_FEE.dohan)+'。<b>回数×単価</b>で積む（TRUSTと同じ）。</div>'
+    +'</div>'
+    +'<div class="bm-card"><h3><span class="n">4</span> 注文</h3>'
+    +'<div class="chips">'+Object.keys(BM_MENU).map(function(k){
+        return '<div class="chip'+(k===BM.cat?' sel':'')+'" onclick="bmSetCat(\''+jsStr(k)+'\')">'+esc(k)+'</div>';
+      }).join('')+'</div>'
+    +'<div class="bm-mgrid">'+((BM_MENU[BM.cat]||[]).length?BM_MENU[BM.cat].map(function(m){
+        return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+esc(m[0])+'</div><div class="pr">'+bmYen(m[1])+'</div></div>';
+      }).join(''):'<div class="bm-note" style="grid-column:1/-1">このカテゴリは未登録（下の臨時商品で打てます）</div>')+'</div>'
+    +'<div class="bm-note" style="margin-top:9px">この注文を誰に付けるか（TRUSTの「選択」）</div>'
+    +'<div class="chips" style="margin-top:4px">'+['お客様','スタッフ'].concat(pool).map(function(a){
+        return '<div class="chip'+((a==='お客様'||a==='スタッフ')?'':' cast')+(a===BM.attr?' sel':'')+'" onclick="bmSetAttr(\''+jsStr(a)+'\')">'+esc(a)+'</div>';
+      }).join('')+'</div>'
+    +'<div class="bm-row" style="margin-top:9px"><span class="lb">臨時商品</span>'
+    +'<input type="text" id="bmAdNm" placeholder="品名" class="bm-in" style="text-align:left;width:106px">'
+    +'<input type="number" id="bmAdPr" placeholder="単価" class="bm-in" style="width:88px" value="0">'
+    +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
+    +'<div style="margin-top:8px">'+(d.orders.length?d.orders.map(function(o,i){
+        var k=(o.attr==='お客様')?'':(o.attr==='スタッフ'?'staff':'cast');
+        return '<div class="bm-ord"><span class="at '+k+'">'+esc(o.attr)+'</span><span style="flex:1">'+esc(o.name)+'</span>'
+          +'<button class="bm-btn sm" onclick="bmQty('+i+',-1)">−</button><span style="min-width:16px;text-align:center;font-weight:800">'+o.qty+'</span>'
+          +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
+          +'<span style="min-width:70px;text-align:right;color:var(--gold);font-weight:800">'+bmYen(o.price*o.qty)+'</span></div>';
+      }).join(''):'<div class="bm-note">まだ注文がありません</div>')+'</div>'
+    +'</div></div>';
+  return h;
+}
+function bmCnt(n,key,label,cls,val){
+  return '<div class="bm-cnt"><span class="k '+cls+'">'+label+'</span>'
+    +'<button onclick="bmBump(\''+jsStr(n)+'\',\''+key+'\',-1)">−</button><span>'+val+'</span>'
+    +'<button onclick="bmBump(\''+jsStr(n)+'\',\''+key+'\',1)">＋</button></div>';
+}
+
+/* ---- 右：明細・会計・照合 ---- */
+function bmDetailHtml(){
+  var d=bmGet(BM.key),c=bmCalc(d);
+  var bill=bmBills().filter(function(b){return String(b.rowIdx)===String(BM.key);})[0]||{};
+  var aH='';
+  Object.keys(d.casts).forEach(function(n){
+    var v=d.casts[n]||{};
+    if(v.tanto) aH+='<div class="li"><span>担当 '+esc(n)+'</span><span class="a">'+bmYen(BM_FEE.tanto*v.tanto)+' ×'+v.tanto+'</span></div>';
+    if(v.yoyaku)aH+='<div class="li"><span>予約 '+esc(n)+'</span><span class="a">'+bmYen(BM_FEE.yoyaku*v.yoyaku)+' ×'+v.yoyaku+'</span></div>';
+    if(v.dohan) aH+='<div class="li"><span>同伴 '+esc(n)+'</span><span class="a">'+bmYen(BM_FEE.dohan*v.dohan)+' ×'+v.dohan+'</span></div>';
+  });
+  var byName={},order=[];
+  d.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
+  var tv='',tt=String(d.trust||'');
+  if(tt===''){ tv='<div class="bm-vd idle">TRUSTの合計を入れると差分を判定します</div>'; }
+  else{
+    var diff=c.total-Number(tt);
+    tv=diff===0?'<div class="bm-vd ok">✅ 一致（'+bmYen(c.total)+'）</div>'
+      :'<div class="bm-vd ng">❌ 不一致<div style="font-size:12px;margin-top:4px">こちら '+bmYen(c.total)+' − TRUST '+bmYen(tt)+' = <b>'+(diff>0?'+':'')+bmYen(diff)+'</b></div></div>';
+  }
+  return '<div><div class="bm-card"><h3><span class="n">5</span> ご利用明細 '
+    +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||''))+'</span></h3>'
+    +'<div class="bm-det">'
+    +'<div class="col"><h4>担当・予約 / 同伴</h4>'+(aH||'<div class="bm-note">—</div>')+'</div>'
+    +'<div class="col"><h4>セット</h4>'+d.sets.map(function(s){return '<div class="li"><span>'+s.minutes+'分</span><span class="a">'+bmYen(s.price)+' ×1</span></div>';}).join('')+'</div>'
+    +'<div class="col"><h4>注文</h4>'+(order.length?order.map(function(nm){
+        return '<div class="grp">'+esc(nm)+'</div>'+byName[nm].map(function(o){
+          return '<div class="sb"><span>'+esc(o.attr)+'</span><span class="a">'+bmYen(o.price)+' ×'+o.qty+'</span></div>';
+        }).join('');
+      }).join(''):'<div class="bm-note">—</div>')+'</div></div>'
+    +'<div class="bm-row" style="margin-top:9px"><span class="lb">値引</span><input type="number" class="bm-in" value="'+(d.discount||0)+'" oninput="bmField(\'discount\',this.value)">'
+    +'<span class="lb" style="min-width:auto">値増</span><input type="number" class="bm-in" value="'+(d.surcharge||0)+'" oninput="bmField(\'surcharge\',this.value)"></div>'
+    +'<div class="bm-sum" style="margin-top:8px">'
+    +bmRow('セット',c.setSum)
+    +(c.tc?bmRow('担当（本指名）×'+c.tc,c.tc*BM_FEE.tanto):'')
+    +(c.yc?bmRow('予約（場内指名）×'+c.yc,c.yc*BM_FEE.yoyaku):'')
+    +(c.dc?bmRow('同伴 ×'+c.dc,c.dc*BM_FEE.dohan):'')
+    +bmRow('注文',c.ordSum)
+    +((d.discount||0)?bmRow('値引',-(d.discount||0)):'')+((d.surcharge||0)?bmRow('値増',d.surcharge||0):'')
+    +bmRow('小計',c.base)
+    +bmRow('税サ別商品の税サ等（'+Math.round(BM_FEE.service*100)+'%）',c.tax)
+    +(c.total!==c.raw?'<div class="r mut"><span>丸め前</span><b>'+bmYen(c.raw)+'</b></div>':'')
+    +'<div class="r big"><span>合計</span><b>'+bmYen(c.total)+'</b></div></div>'
+    +'</div>'
+    +'<div class="bm-card"><h3><span class="n">6</span> 会計（支払）</h3>'
+    +'<div class="bm-row"><span class="lb">現金</span><input type="number" class="bm-in" value="'+(d.pay.cash||0)+'" oninput="bmPay(\'cash\',this.value)"></div>'
+    +'<div class="bm-row"><span class="lb">カード</span><input type="number" class="bm-in" value="'+(d.pay.card||0)+'" oninput="bmPay(\'card\',this.value)"></div>'
+    +'<div class="bm-row"><span class="lb">売掛</span><input type="number" class="bm-in" value="'+(d.pay.credit||0)+'" oninput="bmPay(\'credit\',this.value)"></div>'
+    +'<div class="bm-row"><button class="bm-btn sm" onclick="bmFillCash()">現金に全額</button></div>'
+    +'<div class="bm-sum">'+bmRow('お預り合計',c.paid)
+    +'<div class="r big"><span>未領収金</span><b style="color:'+(c.unpaid===0?'var(--green)':'var(--red)')+'">'+bmYen(c.unpaid)+'</b></div></div>'
+    +'</div>'
+    +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">7</span> 🔍 TRUSTとの照合</h3>'
+    +'<div class="bm-row"><span class="lb">TRUSTの合計</span><input type="number" class="bm-in" value="'+esc(tt)+'" placeholder="実機の金額" oninput="bmField(\'trust\',this.value)"></div>'
+    +tv
+    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn dng sm" onclick="bmClear()">この伝票の下書きを消す</button></div>'
+    +'<div class="bm-warn">⚠️ 値引・値増を税サの前に掛けるか後かは実機未確認。既定は<b>税サの前</b>。ズレたらまずここ。</div>'
+    +'</div></div>';
+}
+function bmRow(k,v){ return '<div class="r"><span>'+k+'</span><b>'+bmYen(v)+'</b></div>'; }
+
+/* ---- 操作 ---- */
+function bmAddSet(label){ var d=bmGet(BM.key); d.sets.push({label:label,minutes:0,price:BM_FEE.set}); bmSave(); bmRender(); }
+function bmDelSet(i){ var d=bmGet(BM.key); d.sets.splice(i,1); bmSave(); bmRender(); }
+function bmBump(n,key,delta){
+  var d=bmGet(BM.key);
+  if(!d.casts[n]) d.casts[n]={tanto:0,yoyaku:0,dohan:0};
+  d.casts[n][key]=Math.max(0,(d.casts[n][key]||0)+delta);
+  bmSave(); bmRender();
+}
+function bmSetCat(k){ BM.cat=k; bmRender(); }
+function bmSetAttr(a){ BM.attr=a; bmRender(); }
+function bmPick(nm,pr){
+  var d=bmGet(BM.key),hit=-1;
+  d.orders.forEach(function(o,i){ if(o.name===nm&&o.attr===BM.attr&&o.price===pr) hit=i; });
+  if(hit>=0) d.orders[hit].qty++; else d.orders.push({name:nm,category:BM.cat,price:pr,qty:1,attr:BM.attr});
+  bmSave(); bmRender();
+}
+function bmAdhoc(){
+  var nm=(document.getElementById('bmAdNm').value||'').trim(),pr=Number(document.getElementById('bmAdPr').value)||0;
+  if(!nm){ alert('品名を入れてください'); return; }
+  bmPick(nm,pr);
+}
+function bmQty(i,delta){
+  var d=bmGet(BM.key); d.orders[i].qty+=delta;
+  if(d.orders[i].qty<=0) d.orders.splice(i,1);
+  bmSave(); bmRender();
+}
+function bmField(k,v){ var d=bmGet(BM.key); d[k]=(k==='trust')?v:(Number(v)||0); bmSave(); bmRender(); }
+function bmPay(k,v){ var d=bmGet(BM.key); d.pay[k]=Number(v)||0; bmSave(); bmRender(); }
+function bmFillCash(){ var d=bmGet(BM.key); d.pay.cash=bmCalc(d).total; d.pay.card=0; d.pay.credit=0; bmSave(); bmRender(); }
+function bmClear(){
+  if(!confirm('この伝票の下書きを消します。よろしいですか？')) return;
+  delete BM.draft[BM.key]; bmSave(); bmRender();
+}
+
+/* ============ 🍽 自社POS（Phase1: オーダー入力〜伝票明細〜会計サマリ）============
+ * backend: getPosOpenBills / getPosBill / getPosMenu / posAddOrders / posVoidOrder
+ *          （すべて GUNSHI_API_FNS 登録必須）
+ * ■ 伝票の単位＝予約行 rowIdx。席ではない＝相席でも組ごとに伝票が割れる／テーブル移動でも迷子にならない。
+ * ■ キャストは注文1行に複数（ボス確定）。既定は席の担当キャスト、行ごとに上書き可。
+ *   ⚠️後から遡って足せないデータ＝「誰の売上か」は打った瞬間に確定させる。
+ * ■ 画面遷移: 伝票一覧 → 伝票 → ➕注文（カート）→ 確定 → 伝票へ戻る
+ */
+var POS={menu:null,cats:[],cat:'',tax:null,bill:null,cart:[],defCasts:[],busy:false};
+function posYen(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); }
+/* この伝票でキャストとして選べる顔ぶれ＝席の担当/同伴 ＋ 本日出勤。重複は落として担当を先頭に。 */
+function posCastPool(){
+  var out=[],seen={};
+  var add=function(n){ n=String(n||'').trim(); if(!n||seen[n])return; seen[n]=1; out.push(n); };
+  var r=(POS.bill&&POS.bill.rsv)||{};
+  String(r.tantou||'').split(/[、,]/).forEach(add);
+  String(r.dohanCast||'').split(/[、,]/).forEach(add);
+  ((WORKCASTS!=null&&WORKCASTS.length)?WORKCASTS:CASTS).forEach(add);
+  return out;
+}
+/* ---- ① 伝票一覧（POSのトップ） ---- */
+function openPos(){
+  closeMenu();
+  showSheet('🍽 POS｜伝票一覧','<div class="empty-msg">読み込み中...</div>','full');
+  gsr('getPosOpenBills').then(function(d){
+    if(!d||!d.ok){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">'+esc((d&&d.error)||'取得できませんでした')+'</div>'; return; }
+    document.getElementById('sheetBody').innerHTML=posBillsHtml(d);
+  }).catch(function(){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">通信エラー</div>'; });
+}
+function posBillsHtml(d){
+  if(!d.bills.length) return '<div class="empty-msg" style="padding:30px 0">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:8px">席にお客様を設定すると、ここに伝票が出ます</div></div>';
+  return '<div class="flabel">'+esc(d.date)+'（'+d.bills.length+'組）</div><div class="pos-bills">'
+    + d.bills.map(function(b){
+        return '<div class="pos-bill" onclick="posOpenBill('+b.rowIdx+')">'
+          +'<div class="pb-tbl">'+esc(b.table)+'</div>'
+          +'<div class="pb-cust">'+esc(b.cust||'ご来店')+'<span style="font-size:11px;color:var(--sub);font-weight:600"> '+(b.pax||1)+'名</span></div>'
+          +'<div class="pb-sub">'+(b.tantou?'担当 '+esc(b.tantou):'担当なし')+(b.time?'・'+esc(b.time)+'〜':'')+'</div>'
+          +'<div class="pb-amt">'+posYen(b.sub)+'</div>'
+          +'<div class="pb-sub" style="text-align:right">注文'+posYen(b.orderSum)+' / 席料'+posYen(b.seatFee)+'</div>'
+          +'</div>';
+      }).join('')+'</div>';
+}
+/* ---- ② 伝票（明細＋会計サマリ） ---- */
+function posOpenBill(rowIdx){
+  showSheet('🧾 伝票','<div class="empty-msg">読み込み中...</div>','full');
+  gsr('getPosBill',rowIdx).then(function(b){
+    if(!b||!b.ok){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">'+esc((b&&b.error)||'伝票を開けませんでした')+'</div>'; return; }
+    POS.bill=b; posRenderBill();
+  }).catch(function(){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">通信エラー</div>'; });
+}
+function posRenderBill(){
+  var b=POS.bill,r=b.rsv||{};
+  document.getElementById('sheetTitle').textContent='🧾 '+(r.table||'')+' '+(r.cust||'ご来店')+'様';
+  document.getElementById('sheetBody').innerHTML=posBillHtml(b);
+}
+function posBillHtml(b){
+  var c=b.calc,r=b.rsv||{},live=b.orders.filter(function(o){return o.status!=='取消';});
+  var h='<div class="kv"><span class="k">お客様</span><span class="v">'+esc(r.cust||'ご来店')+'（'+(r.pax||1)+'名）'+(r.member?' <span style="font-size:11px;color:var(--sub)">会員'+esc(r.member)+'</span>':'')+'</span></div>'
+    +'<div class="kv"><span class="k">席 / 担当</span><span class="v">'+esc(r.table||'—')+(r.tantou?' / 👤 '+esc(r.tantou):'')+'</span></div>'
+    +'<div class="flabel">🍽 注文明細（'+live.length+'件）</div>';
+  if(!b.orders.length){
+    h+='<div class="empty-msg" style="padding:16px 0;font-size:12px">まだ注文がありません</div>';
+  }else{
+    h+=b.orders.map(function(o){
+      var voided=(o.status==='取消');
+      return '<div class="pos-ord'+(voided?' void':'')+'">'
+        +'<span style="color:var(--sub);font-size:11px;min-width:38px">'+esc(o.time)+'</span>'
+        +'<span style="flex:1"><b>'+esc(o.name)+'</b> <span style="color:var(--sub)">×'+o.qty+'</span>'
+        +(o.casts.length?'<div style="font-size:10.5px;color:#79e0a8;font-weight:700;margin-top:2px">👤 '+o.casts.map(esc).join('・')+(o.casts.length>1?'（折半）':'')+'</div>'
+                        :'<div style="font-size:10.5px;color:#ff9a5a;font-weight:700;margin-top:2px">👤 キャスト未設定</div>')
+        +'</span>'
+        +'<span style="min-width:70px;text-align:right;font-weight:800;color:#e6d2a8">'+posYen(o.amount)+'</span>'
+        +(voided?'<span style="font-size:10px;color:var(--sub);min-width:40px;text-align:right">取消</span>'
+                :'<span style="font-size:11px;color:#f08080;min-width:40px;text-align:right;cursor:pointer" onclick="posVoid(\''+jsStr(o.id)+'\',\''+jsStr(o.name)+'\')">取消</span>')
+        +'</div>';
+    }).join('');
+  }
+  h+='<div class="pos-sum">'
+    +'<div class="ps-row"><span>注文小計</span><span>'+posYen(c.orderSum)+'</span></div>'
+    +'<div class="ps-row"><span>席料</span><span>'+posYen(c.seatFee)+'</span></div>'
+    +'<div class="ps-row"><span>同伴料</span><span>'+posYen(c.dohanFee)+'</span></div>'
+    +(c.service?'<div class="ps-row"><span>サービス料</span><span>'+posYen(c.service)+'</span></div>':'')
+    +'<div class="ps-row"><span>小計</span><span>'+posYen(c.sub+c.service)+'</span></div>'
+    +'<div class="ps-row"><span>消費税（'+Math.round(c.taxRate*100)+'%'+(c.taxInclusive?'・内税':'')+'）</span><span>'+posYen(c.tax)+'</span></div>'
+    +'<div class="ps-row total"><span>合計</span><span>'+posYen(c.total)+'</span></div>'
+    +'</div>'
+    +'<div class="actions">'
+    +'<div class="act pri" onclick="posOrderStart('+b.rowIdx+')">➕ 注文を追加</div>'
+    +'<div class="act" onclick="openPos()">← 伝票一覧へ</div>'
+    +'<div class="act" onclick="closeSheet()">閉じる</div>'
+    +'</div>';
+  return h;
+}
+function posVoid(id,name){
+  if(!confirm('「'+name+'」の注文を取り消しますか？\n（明細には取消として残ります）')) return;
+  gsr('posVoidOrder',id,LOGIN).then(function(r){
+    if(!r||!r.ok){ alert((r&&r.error)||'取り消せませんでした'); return; }
+    if(r.bill){ POS.bill=r.bill; posRenderBill(); toast('🗑 取り消しました'); }
+    else posOpenBill(POS.bill.rowIdx);
+  }).catch(function(){ alert('通信エラー'); });
+}
+/* ---- ③ 注文パネル（メニュー→カート→確定） ---- */
+function posOrderStart(rowIdx){
+  POS.cart=[];
+  POS.defCasts=String(((POS.bill&&POS.bill.rsv)||{}).tantou||'').split(/[、,]/).map(function(s){return s.trim();}).filter(Boolean);
+  if(POS.menu){ POS.cat=POS.cats[0]||''; posRenderOrder(); return; }
+  showSheet('🍽 注文','<div class="empty-msg">メニュー読み込み中...</div>','full');
+  gsr('getPosMenu').then(function(d){
+    if(!d||!d.ok){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">'+esc((d&&d.error)||'メニューを取得できませんでした')+'</div>'; return; }
+    POS.menu=d.items; POS.cats=d.cats; POS.tax=d.tax; POS.cat=d.cats[0]||'';
+    posRenderOrder();
+  }).catch(function(){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">通信エラー</div>'; });
+}
+function posRenderOrder(){
+  var r=(POS.bill&&POS.bill.rsv)||{};
+  document.getElementById('sheetTitle').textContent='🍽 注文｜'+(r.table||'')+' '+(r.cust||'')+'様';
+  document.getElementById('sheetBody').innerHTML='<div id="posPanel">'+posOrderHtml()+'</div>';
+}
+function posPanelUpdate(){ var el=document.getElementById('posPanel'); if(el) el.innerHTML=posOrderHtml(); }
+function posOrderHtml(){
+  if(!POS.menu||!POS.menu.length) return '<div class="empty-msg" style="padding:24px 0">メニューが登録されていません<div style="font-size:11px;color:var(--sub);margin-top:8px">管理コンソールの「店舗メニュー」に品名と価格を登録してください</div></div>';
+  var items=POS.menu.filter(function(m){return m.category===POS.cat;});
+  var inCart={}; POS.cart.forEach(function(l){ inCart[l.name]=l.qty; });
+  var h='<div class="pos-cats">'+POS.cats.map(function(c){
+      return '<div class="chip'+(c===POS.cat?' sel':'')+'" onclick="posSetCat(\''+jsStr(c)+'\')">'+esc(c||'その他')+'</div>';
+    }).join('')+'</div>'
+    +'<div class="pos-grid">'+items.map(function(m){
+      var q=inCart[m.name]||0;
+      return '<div class="pos-item'+(q?' incart':'')+'" onclick="posPick(\''+jsStr(m.name)+'\')">'
+        +'<div class="pi-nm">'+esc(m.name)+(q?' <span style="color:#79e0a8">×'+q+'</span>':'')+'</div>'
+        +'<div class="pi-pr'+(m.price?'':' zero')+'">'+(m.price?posYen(m.price):'要価格')+'</div>'
+        +'</div>';
+    }).join('')+'</div>';
+  // カート
+  h+='<div class="pos-cart">';
+  if(!POS.cart.length){
+    h+='<div class="empty-msg" style="padding:14px 0;font-size:12px">品をタップしてカートに入れてください</div>';
+  }else{
+    var pool=posCastPool();
+    h+='<div class="flabel">👤 キャスト（この注文の売上を付ける相手・複数可＝折半）</div>'
+      +'<div class="chips">'+pool.map(function(c){
+          return '<div class="chip cast'+(POS.defCasts.indexOf(c)>=0?' sel':'')+'" onclick="posToggleDefCast(\''+jsStr(c)+'\')">'+esc(c)+'</div>';
+        }).join('')+'</div>'
+      +'<div style="font-size:10.5px;color:var(--sub);margin-top:5px">※ 品ごとに変えたい時は、下の行のキャスト名をタップ</div>';
+    h+=POS.cart.map(function(l,i){
+      var casts=posLineCasts(l);
+      return '<div class="pos-line">'
+        +'<div class="pl-nm">'+esc(l.name)
+        +'<div class="pl-cast'+(casts.length?'':' none')+'" onclick="posLineEdit('+i+')">👤 '+(casts.length?casts.map(esc).join('・')+(casts.length>1?'（折半）':''):'未設定')+(l.custom?'（個別）':'')+' ✎</div>'
+        +'</div>'
+        +'<div class="pos-qty"><button onclick="posQty('+i+',-1)">−</button><span>'+l.qty+'</span><button onclick="posQty('+i+',1)">＋</button></div>'
+        +'<div class="pl-amt">'+posYen(l.price*l.qty)+'</div>'
+        +'</div>'
+        +(l.editing?'<div class="chips" style="padding:6px 0 10px">'+posCastPool().map(function(c){
+            return '<div class="chip cast'+(casts.indexOf(c)>=0?' sel':'')+'" onclick="posToggleLineCast('+i+',\''+jsStr(c)+'\')">'+esc(c)+'</div>';
+          }).join('')+'<div class="chip" onclick="posLineReset('+i+')">↩ 全体と同じに</div></div>':'');
+    }).join('');
+    var sum=POS.cart.reduce(function(a,l){return a+l.price*l.qty;},0);
+    h+='<div class="pos-sum"><div class="ps-row total"><span>この注文</span><span>'+posYen(sum)+'</span></div></div>';
+  }
+  h+='</div>'
+    +'<div class="actions">'
+    +'<div class="act pri" style="'+(POS.cart.length?'':'opacity:.4;pointer-events:none')+'" onclick="posSubmit()">✅ この内容で注文を通す</div>'
+    +'<div class="act" onclick="posRenderBill()">← 伝票へ戻る</div>'
+    +'</div>';
+  return h;
+}
+function posSetCat(c){ POS.cat=c; posPanelUpdate(); }
+function posPick(name){
+  var m=null; POS.menu.forEach(function(x){ if(x.name===name) m=x; });
+  if(!m) return;
+  var hit=-1; POS.cart.forEach(function(l,i){ if(l.name===name&&!l.custom) hit=i; });
+  if(hit>=0) POS.cart[hit].qty++;
+  else POS.cart.push({name:m.name,category:m.category,price:m.price,qty:1,casts:[],custom:false,editing:false});
+  posPanelUpdate();
+}
+function posQty(i,d){
+  var l=POS.cart[i]; if(!l) return;
+  l.qty+=d;
+  if(l.qty<=0) POS.cart.splice(i,1);
+  posPanelUpdate();
+}
+function posLineCasts(l){ return l.custom?l.casts:POS.defCasts; }
+function posToggleDefCast(c){
+  var i=POS.defCasts.indexOf(c);
+  if(i>=0) POS.defCasts.splice(i,1); else POS.defCasts.push(c);
+  posPanelUpdate();
+}
+function posLineEdit(i){
+  var l=POS.cart[i]; if(!l) return;
+  if(!l.custom){ l.casts=POS.defCasts.slice(); l.custom=true; }   // 個別編集に入った時点で全体から切り離す
+  l.editing=!l.editing;
+  posPanelUpdate();
+}
+function posToggleLineCast(i,c){
+  var l=POS.cart[i]; if(!l) return;
+  l.custom=true;
+  var j=l.casts.indexOf(c);
+  if(j>=0) l.casts.splice(j,1); else l.casts.push(c);
+  posPanelUpdate();
+}
+function posLineReset(i){
+  var l=POS.cart[i]; if(!l) return;
+  l.custom=false; l.casts=[]; l.editing=false;
+  posPanelUpdate();
+}
+function posSubmit(){
+  if(POS.busy) return;                                  // 連打ガード＝二重に注文を通さない
+  if(!POS.cart.length) return;
+  var items=POS.cart.map(function(l){ return {name:l.name,category:l.category,price:l.price,qty:l.qty,casts:posLineCasts(l)}; });
+  var noCast=items.filter(function(it){ return !it.casts.length; }).length;
+  var sum=POS.cart.reduce(function(a,l){return a+l.price*l.qty;},0);
+  var msg='この内容で注文を通しますか？\n\n'+POS.cart.map(function(l){return '・'+l.name+' ×'+l.qty;}).join('\n')+'\n\n計 '+posYen(sum);
+  if(noCast) msg+='\n\n⚠️ キャスト未設定が '+noCast+' 件あります（後から誰の売上か分からなくなります）';
+  if(!confirm(msg)) return;
+  POS.busy=true;
+  var rowIdx=POS.bill.rowIdx;
+  gsr('posAddOrders',rowIdx,items,LOGIN).then(function(r){
+    POS.busy=false;
+    if(!r||!r.ok){ alert((r&&r.error)||'注文を通せませんでした'); return; }
+    POS.cart=[];
+    if(r.bill){ POS.bill=r.bill; posRenderBill(); } else posOpenBill(rowIdx);
+    toast('🍽 注文を通しました');
+  }).catch(function(){ POS.busy=false; alert('通信エラー'); });
+}
+
 var addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1};
 function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false,subs:[],subMode:null,aggMode:'merge',checkTime:''};showSheet('➕ 予約を追加',addFormHtml(),false);}
 function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false,subs:(r.subCustomers||[]).filter(function(s){return s&&String(s.name||'').trim();}).map(function(s){return {name:s.name||'',memberId:s.memberId||'',pax:Number(s.pax)||1,tantouCast:s.tantouCast||'',splitSales:!!s.splitSales};}),subMode:null,aggMode:(r.aggMode==='split'?'split':'merge'),checkTime:(r.checkTime||'')};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
@@ -3443,7 +4019,7 @@ var MENU_TILES=[
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
     {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
     {ic:'📢', t:'お知らせ配信',       act:"openBroadcast()"},
-    {ic:'🍽', t:'POS',               act:"alert('（プロト）POSへ')"}
+    {ic:'🍽', t:'POS（会計）',        act:"openPos()"}
   ]}
 ];
 var menuView='grid', custFromTop=false, custTantou='';
