@@ -3613,7 +3613,7 @@ var BM_SET_PRICES_DEFAULT=[13000,20833,20000,16666,10000,8330,7500,3000,100000,0
 function bmPrices(){ try{ var a=JSON.parse(localStorage.getItem('gunshiSetPrices')||'null'); if(Array.isArray(a)&&a.length) return a; }catch(e){} return BM_SET_PRICES_DEFAULT.slice(); }
 function bmSavePrices(a){ try{ localStorage.setItem('gunshiSetPrices',JSON.stringify(a)); }catch(e){} }
 var BM_FEE={service:0.20,roundUnit:100,set:13000,setMinutes:120,dohan:3000,tanto:0,yoyaku:0};
-var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,tantouOpen:false,draft:{}};
+var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,tantouOpen:false,slip:null,draft:{}};
 
 function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
 function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&curDate?curDate:'today'); }
@@ -3823,7 +3823,7 @@ function bmRender(){
   }else{
     html+=bmEditorHtml()+bmDetailHtml();
   }
-  document.getElementById('bmWrap').innerHTML=html+bmPickHtml();
+  document.getElementById('bmWrap').innerHTML=html+bmPickHtml()+bmSlipHtml();
 }
 /* 品名からマスタ行を引く。⚠️臨時商品はマスタに無いのでnull＝ボトル判定しない */
 /* 📦在庫との連携（**読み取り専用**）。ボス指示＝実際の在庫はいじらない状態で連携する。
@@ -4023,6 +4023,157 @@ function bmEditorHtml(){
   return h;
 }
 /* ============================================================================
+   🖨 お会計伝票（お客様に見せる紙）＝TRUSTが刷っていた「会計伝票」の置き換え。
+   ----------------------------------------------------------------------------
+   ■ **会計の前**に刷ってお客様に確認してもらう紙。領収書とは別物＝「領収いたしました」は書かない。
+   ■ 実物（TRUST出力）の並び：店名/住所/TEL → 会計伝票 → テーブル・人数 →
+     [同伴/担当・予約] → [セット] → [注文] → 小計・税サ → 合計（お一人様）→ 未領収金 → 登録番号。
+   ■ ⚠️**キャストへの帰属（誰に付けたか）は刷らない**。お客様に見せる紙に内部の売上配分は出さない。
+     ウェルカムは「無料」と出す＝出した事実は見せるが金額は立てない。
+   ■ 桁組みは**半角48桁**（TM-M30の80mm・フォントA）。日本語は2桁で数える（bmW_）。
+     ⚠️実機で折り返すようなら BM_SLIP_COLS を下げる。ここだけ直せば全体が揃う。
+============================================================================ */
+var BM_SLIP_COLS=48;
+var BM_SLIP_TEL='052-228-1544';
+function bmW_(s){ var n=0; s=String(s||''); for(var i=0;i<s.length;i++) n+=(s.charCodeAt(i)>0x7f?2:1); return n; }
+function bmCut_(s,max){ var o='',n=0; s=String(s||''); for(var i=0;i<s.length;i++){ var w=(s.charCodeAt(i)>0x7f?2:1); if(n+w>max) break; o+=s[i]; n+=w; } return o; }
+function bmPadR_(s,w){ s=bmCut_(s,w); var d=w-bmW_(s); return s+(d>0?new Array(d+1).join(' '):''); }
+function bmPadL_(s,w){ s=bmCut_(s,w); var d=w-bmW_(s); return (d>0?new Array(d+1).join(' '):'')+s; }
+/* 明細1行＝品名 / 単価 / 点数 / 金額。名前が長いときは名前だけ先に1行出す（実物と同じ挙動） */
+function bmSlipItem_(name,unit,qty,amt){
+  var C=BM_SLIP_COLS, nameW=C-30;                                  // 単価10 / 点数8 / 金額12
+  var right=bmPadL_(unit,10)+bmPadL_(qty,8)+bmPadL_(amt,12);
+  var nm=' '+String(name||'');
+  if(bmW_(nm)<=nameW) return bmPadR_(nm,nameW)+right;
+  return [nm, bmPadR_('',nameW)+right];
+}
+function bmSlipSep_(ch){ return new Array(BM_SLIP_COLS+1).join(ch||'-'); }
+/* 伝票の中身を行の配列で返す。{t:本文, a:'l'|'c', big:1} */
+function bmSlipLines_(d,c,bill){
+  var L=[], pax=(d.guests||[]).length||1;
+  L.push({t:RCPT_ISSUER.name,a:'c',big:1});
+  if(RCPT_ISSUER.addr) L.push({t:RCPT_ISSUER.addr,a:'c'});
+  L.push({t:'TEL '+(RCPT_ISSUER.tel||BM_SLIP_TEL),a:'c'});
+  L.push({t:'',a:'l'});
+  L.push({t:'会 計 伝 票',a:'c',big:1});
+  L.push({t:bmSlipSep_('='),a:'l'});
+  /* ⚠️席名にフロアが入っていることがある（"5F A1"）＝そのまま連結すると「5F 5F A1」になる */
+  var _tbl=String(bill.table||''), _fl=String(bill.floor||'');
+  var _lbl=(_fl&&_tbl.indexOf(_fl)!==0)?(_fl+' '+_tbl):_tbl;
+  L.push({t:bmPadR_('テーブル： '+_lbl,BM_SLIP_COLS-14)+bmPadL_('人数： '+pax+'名',14),a:'l'});
+  L.push({t:(typeof fmtNow_==='function'?fmtNow_():bmNowStr_()),a:'l'});
+  // 担当・予約・同伴（金額が立つのは同伴だけだが、点数は実物どおり全部出す）
+  var aH=[];
+  Object.keys(d.casts||{}).forEach(function(n){
+    var v=d.casts[n]||{};
+    if(v.tanto)  aH.push(['担当',n,BM_FEE.tanto,v.tanto]);
+    if(v.yoyaku) aH.push(['予約',n,BM_FEE.yoyaku,v.yoyaku]);
+    if(v.dohan)  aH.push(['同伴',n,BM_FEE.dohan,v.dohan]);
+  });
+  if(aH.length){
+    L.push({t:'',a:'l'}); L.push({t:'[ 同伴 / 担当・予約 ]',a:'l'});
+    aH.forEach(function(x){
+      L.push({t:' '+x[0],a:'l'});
+      var r=bmSlipItem_(' '+x[1],bmYen(x[2]),x[3]+'点',bmYen(x[2]*x[3]));
+      (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
+    });
+  }
+  // セット＝同額はまとめる（実物が「120分 ¥13,000 2点 ¥26,000」と出しているのと同じ）
+  var byPrice={},order=[];
+  (d.guests||[]).forEach(function(g){ var p=Number(g.price)||0; if(!byPrice[p]){byPrice[p]=0;order.push(p);} byPrice[p]++; });
+  if(order.length){
+    L.push({t:'',a:'l'}); L.push({t:'[ セット ]',a:'l'});
+    order.forEach(function(p){
+      var r=bmSlipItem_(BM_FEE.setMinutes+'分',bmYen(p),byPrice[p]+'点',bmYen(p*byPrice[p]));
+      (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
+    });
+  }
+  if((d.orders||[]).length){
+    L.push({t:'',a:'l'}); L.push({t:'[ 注文 ]',a:'l'});
+    d.orders.forEach(function(o){
+      var r=bmSlipItem_(o.name,bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
+      (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
+    });
+  }
+  if((d.welcome||[]).length){
+    L.push({t:'',a:'l'}); L.push({t:'[ ウェルカムドリンク ]',a:'l'});
+    d.welcome.forEach(function(w){
+      var r=bmSlipItem_(w.name,'',w.qty+'点','無料');
+      (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
+    });
+  }
+  L.push({t:'',a:'l'}); L.push({t:bmSlipSep_('-'),a:'l'});
+  L.push({t:bmPadR_('小計',BM_SLIP_COLS-14)+bmPadL_(bmYen(c.base),14),a:'l'});
+  L.push({t:bmPadR_('税サ別商品の税サ等',BM_SLIP_COLS-14)+bmPadL_(bmYen(c.tax),14),a:'l'});
+  if(Number(d.discount)) L.push({t:bmPadR_('値引',BM_SLIP_COLS-14)+bmPadL_('-'+bmYen(d.discount),14),a:'l'});
+  if(Number(d.surcharge)) L.push({t:bmPadR_('値増',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.surcharge),14),a:'l'});
+  L.push({t:bmSlipSep_('-'),a:'l'});
+  L.push({t:bmPadR_('合計',10)+bmPadL_(bmYen(c.total),14),a:'l',big:1});
+  L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
+  L.push({t:'',a:'l'});
+  L.push({t:bmPadR_('未領収金',10)+bmPadL_(bmYen(c.unpaid),14),a:'l',big:1});
+  if(c.paid>0){
+    if(d.pay.cash)   L.push({t:bmPadR_('　お預り（現金）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.cash),14),a:'l'});
+    if(d.pay.card)   L.push({t:bmPadR_('　お預り（カード）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
+    if(d.pay.credit) L.push({t:bmPadR_('　売掛',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
+  }
+  L.push({t:'',a:'l'});
+  if(RCPT_ISSUER.invoiceNo) L.push({t:'登録番号：'+RCPT_ISSUER.invoiceNo,a:'l'});
+  return L;
+}
+function bmNowStr_(){
+  var n=new Date(), p=function(x){return (x<10?'0':'')+x;};
+  return n.getFullYear()+'/'+p(n.getMonth()+1)+'/'+p(n.getDate())+' '+p(n.getHours())+':'+p(n.getMinutes());
+}
+/* 画面プレビュー＝刷る前に見せる。⚠️等幅で出す（桁組みが崩れたら実機でも崩れる） */
+function bmSlipPreview(){
+  var d=bmGet(BM.key),c=bmCalc(d);
+  var bill=bmBills().filter(function(b){return String(b.rowIdx)===String(BM.key);})[0]||{};
+  BM.slip=bmSlipLines_(d,c,bill);
+  bmRender();
+}
+function bmSlipClose(){ BM.slip=null; bmRender(); }
+function bmSlipHtml(){
+  if(!BM.slip) return '';
+  var body=BM.slip.map(function(l){
+    var st='white-space:pre;font-family:ui-monospace,Menlo,monospace;line-height:1.45;';
+    if(l.big) st+='font-size:15px;font-weight:800;';
+    else st+='font-size:11.5px;';
+    if(l.a==='c') st+='text-align:center;';
+    return '<div style="'+st+'">'+esc(l.t||' ')+'</div>';
+  }).join('');
+  return '<div class="bm-modal-bg" onclick="bmSlipClose()"></div>'
+    +'<div class="bm-modal" style="max-width:420px">'
+    +'<div style="font-size:15px;font-weight:800;margin-bottom:8px">🖨 お会計伝票（お客様確認用）</div>'
+    +'<div style="background:#fff;color:#111;border-radius:6px;padding:12px 10px;max-height:56vh;overflow:auto">'+body+'</div>'
+    +'<div class="bm-row" style="margin-top:12px">'
+    +'<a class="bm-btn pri" style="flex:1;padding:12px;text-align:center;text-decoration:none" id="bmSlipLink" href="#" onclick="return bmSlipPrint()">🖨 印刷する（TM-M30）</a>'
+    +'<button class="bm-btn" onclick="bmSlipClose()">閉じる</button></div>'
+    +'<div class="bm-note">会計の前に刷ってお客様に確認してもらう紙です。何度でも刷れます。</div>'
+    +'</div>';
+}
+/* ePOS-Print XML＝既存の領収書と同じ経路（TM Print Assistant経由でBT印字） */
+function bmSlipXml_(){
+  var NL='&#10;', L=[];
+  L.push('<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">');
+  L.push('<text lang="ja"/>');
+  (BM.slip||[]).forEach(function(l){
+    L.push('<text align="'+(l.a==='c'?'center':'left')+'"/>');
+    L.push('<text width="'+(l.big?2:1)+'" height="'+(l.big?2:1)+'" em="'+(l.big?'true':'false')+'"/>');
+    L.push('<text>'+esc(l.t||' ')+NL+'</text>');
+  });
+  L.push('<text width="1" height="1" em="false"/>');
+  L.push('<feed unit="40"/><cut type="feed"/></epos-print>');
+  return L.join('');
+}
+function bmSlipPrint(){
+  var xml=bmSlipXml_();
+  var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
+  var a=document.getElementById('bmSlipLink'); if(a) a.href=url;
+  location.href=url;
+  return false;
+}
+/* ============================================================================
    💰 会計（伝票を締める）。ボス確定＝**席は空けない**（退店はホール状況で従来通り）。
    ⚠️締めたら伝票は**編集ロック**。直すには「会計を取り消す」＝取消の証跡が残る。
    ⚠️売上は`POS_会計`にだけ書く。既存の来店売上/TRUST取込には触らない。
@@ -4041,11 +4192,13 @@ function bmCloseHtml(d,c){
     return '<div class="bm-sum" style="border-top:1px solid var(--line);margin-top:9px;padding-top:9px">'
       +'<div class="r big" style="color:var(--green)"><span>✅ 会計済み</span><b>'+bmYen(cl.total||c.total)+'</b></div>'
       +'<div class="bm-note">'+esc(cl.ts||'')+(cl.by?'　'+esc(cl.by):'')+'</div>'
-      +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn dng sm" onclick="bmReopen()">会計を取り消す</button></div>'
+      +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn acc sm" onclick="bmSlipPreview()">🖨 伝票を刷り直す</button>'
+      +'<button class="bm-btn dng sm" onclick="bmReopen()">会計を取り消す</button></div>'
       +'<div class="bm-note">⚠️席は空きません。退店はこれまで通りホール状況で行ってください。</div></div>';
   }
   var ok=(c.unpaid===0&&c.total>0);
-  return '<div class="bm-row" style="margin-top:10px">'
+  return '<div class="bm-row" style="margin-top:10px"><button class="bm-btn acc" style="flex:1;padding:11px" onclick="bmSlipPreview()">🖨 お会計伝票を印刷（お客様確認用）</button></div>'
+    +'<div class="bm-row" style="margin-top:8px">'
     +'<button class="bm-btn pri" style="flex:1;padding:13px;font-size:15px'+(ok?'':';opacity:.5')+'" onclick="bmClose()">💰 会計する</button></div>'
     +'<div class="bm-note">'+(ok?'締めると編集できなくなります（取り消しは可能）。<b>席は空きません</b>。'
       :(c.total<=0?'金額が0円です。':'未領収金が残っています。現金／カード／売掛で'+bmYen(c.total)+'を埋めてください。'))+'</div>';
