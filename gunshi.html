@@ -200,6 +200,14 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .seat .snm{font-size:11px;font-weight:800;color:#c8d4ee;}
 .seat .pax{font-size:10px;color:var(--dim);}
 .seat .cust{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 🧾 席カードから伝票へ飛ぶボタン。客名行の**右の余白**に置く（ボス依頼）。
+   金額が出ていれば入力済み＝どの卓が打ててどの卓が空かが一目で分かる */
+.seat .custrow{display:flex;align-items:center;gap:6px;}
+.seat .custrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.seat .bill-btn{flex:0 0 auto;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:7px;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;white-space:nowrap;}
+.seat .bill-btn.on{border-color:#6b5a24;background:#2a2210;color:var(--gold);}
+.seat .bill-btn:active{opacity:.6;}
 .seat .seat-info{font-size:10px;color:#9ab0d0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
 /* 客名の下の「予約キャスト・担当キャスト」ラベル（在席とは別の情報） */
 .seat .sctx-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;}
@@ -1281,7 +1289,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08s';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08t';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2468,11 +2476,34 @@ function seatHtml(s){
 // 席カードの客名表示（相席=複数組なら各組を縦積み、単一なら従来通り）
 function occupantsHtml(s){
   var occ=s.occupants||[];
-  if(occ.length<=1) return '<div class="cust">'+esc(s.cust)+'</div>';
+  if(occ.length<=1){
+    return '<div class="cust custrow"><span class="nm">'+esc(s.cust)+'</span>'+seatBillBtn_(occ[0]||s)+'</div>';
+  }
   return '<div class="cust" style="line-height:1.45">'+occ.map(function(o){
-    return '<div>'+esc(o.cust)+'様 <span style="font-size:10px;color:#8aa8c8">'+(o.pax||1)+'名'+(o.tantou?'・'+esc(o.tantou):'')+'</span></div>';
+    return '<div class="custrow"><span class="nm">'+esc(o.cust)+'様 <span style="font-size:10px;color:#8aa8c8">'+(o.pax||1)+'名'+(o.tantou?'・'+esc(o.tantou):'')+'</span></span>'
+      +seatBillBtn_(o)+'</div>';
   }).join('')+'</div>';
 }
+/* 🧾 伝票ボタン。⚠️伝票は**組(rowIdx)単位**なので相席は組ごとに1つ出す（席単位にすると混ざる）。
+   金額が出ていれば入力済み＝「伝票入力の確認」がホール状況のまま済む（ボス依頼）。
+   ⚠️席カード自体のonclick(onSeatClick)を巻き込まないようstopPropagationする。 */
+function seatBillBtn_(o){
+  var rid=o&&o.rowIdx; if(!rid) return '';
+  var t=bmPeekTotal_(rid);
+  return '<button class="bill-btn'+(t?' on':'')+'" onclick="event.stopPropagation();openBillFor('+rid+')">'
+    +'🧾 '+(t?bmYen(t):'伝票')+'</button>';
+}
+/* 保存済みの下書きから合計だけ覗く。⚠️BM.draftを触らない＝ホール描画で伝票の状態を変えない */
+function bmPeekTotal_(rowIdx){
+  try{
+    var raw=localStorage.getItem(bmStoreKey()); if(!raw) return 0;
+    var d=(JSON.parse(raw)||{})[String(rowIdx)]; if(!d) return 0;
+    if(!d.casts) d.casts={}; if(!d.orders) d.orders=[]; if(!d.pay) d.pay={};
+    if(!d.guests||!d.guests.length) return 0;
+    return bmCalc(d).total;
+  }catch(e){ return 0; }
+}
+function openBillFor(rowIdx){ BM.key=String(rowIdx); setViewMode('bill'); }
 // 来店中の席に「次席予約(=後半に入った別の確定予約)」があれば予告する1行。席一覧の接客中/担当不在で共用（マップはmapFlags_の🔜）。
 function nextRsvLine_(s){
   if(!s) return '';
