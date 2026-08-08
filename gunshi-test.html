@@ -3319,8 +3319,9 @@ function quickRotate(toIdx,castName){
 /* 🍽 TRUSTの商品マスタ全210品（2026-08-08にボスがTRUST管理画面から出力したPDFを転記）。
    形式＝[品名, 価格, 種類]。種類はTRUSTの「Web集計用分類」＝ボトル系/単品系/つまみ系。
    ⚠️店舗用カテゴリー（ウィスキー/焼酎/シャンパン…）はこの一覧に含まれない＝**検索で引く**のが正。
-   ⚠️同名で価格違いが実在する（出前代が1,000〜23,000で7件、白州18年/山崎18年が160,000と200,000など）。
-      名寄せして1件にまとめてはいけない。TRUSTの実データそのままを持つ。 */
+   ⚠️同名で価格違いが実在する（出前代が1,000〜23,000で7件）。名寄せせずTRUSTの実データのまま持つ。
+   ⚠️例外＝**山崎18年はボス確定で200,000に一本化**（160,000は削除・2026-08-08）。
+      併せて全角の「山崎１８年/白州１８年」は半角に直した（全角だと「18年」の検索で引けないため）。 */
 var BM_ITEMS=[
 ["吉四六",15000,"ボトル系"],["鳥飼",12000,"ボトル系"],["しろ",10000,"ボトル系"],["魔王",28000,"ボトル系"],["赤兎馬",13000,"ボトル系"],
 ["黒霧島",12000,"ボトル系"],["赤霧島",15000,"ボトル系"],["JAPAN",10000,"ボトル系"],["3650",13000,"ボトル系"],
@@ -3331,7 +3332,7 @@ var BM_ITEMS=[
 ["クリュッググランド・キュヴェ",100000,"ボトル系"],["クリュッグロゼ",150000,"ボトル系"],["ルイ・ロデレール クリスタル",120000,"ボトル系"],["サロン(SALON)",500000,"ボトル系"],
 ["ラボストール",15000,"ボトル系"],["ニュートン ザバズル",40000,"ボトル系"],["オーバーチュア",100000,"ボトル系"],["オーパスワン",170000,"ボトル系"],
 ["コノ マールボロ ソーヴィニヨン ブラン2022~2023",12000,"ボトル系"],["メゾン ウィリアム・フェーブル シャブリ",15000,"ボトル系"],
-["山崎",35000,"ボトル系"],["山崎12年",60000,"ボトル系"],["山崎18年",160000,"ボトル系"],["白州",35000,"ボトル系"],["白州12年",60000,"ボトル系"],
+["山崎",35000,"ボトル系"],["山崎12年",60000,"ボトル系"],["白州",35000,"ボトル系"],["白州12年",60000,"ボトル系"],
 ["響",40000,"ボトル系"],["響 ブレンダーズチョイス",60000,"ボトル系"],["響21年",200000,"ボトル系"],["知多",35000,"ボトル系"],
 ["シーバスリーガル12年",20000,"ボトル系"],["シーバスリーガル ミズナラ",20000,"ボトル系"],["シーバスリーガルアルティス20年",45000,"ボトル系"],
 ["バランタイン17年",30000,"ボトル系"],["ロイヤルハウスホールド",100000,"ボトル系"],["マッカラン ダブルカスク12年",45000,"ボトル系"],["マッカラン18年",185000,"ボトル系"],
@@ -3352,7 +3353,7 @@ var BM_ITEMS=[
 ["カティーサーク",14000,"ボトル系"],["レモン1個",2000,"つまみ系"],["鏡月",10000,"ボトル系"],["出前代",7000,"つまみ系"],["カシス",1500,"単品系"],
 ["ヘネシーVSOP",36000,"ボトル系"],["チャーム",1000,"つまみ系"],["中々",13000,"ボトル系"],["梅昆布茶",1000,"単品系"],["ジャックダニエル グラス",1000,"単品系"],
 ["キャストドリンク",1000,"単品系"],["Wビール",0,"単品系"],["Wコーラ",0,"単品系"],["Wジンジャーエール",0,"単品系"],["Wレッドブル",0,"単品系"],
-["ボンベイサファイア",12000,"ボトル系"],["ジャックダニエル",13000,"ボトル系"],["同伴",3000,"単品系"],["白州１８年",200000,"ボトル系"],["山崎１８年",200000,"ボトル系"],
+["ボンベイサファイア",12000,"ボトル系"],["ジャックダニエル",13000,"ボトル系"],["同伴",3000,"単品系"],["白州18年",200000,"ボトル系"],["山崎18年",200000,"ボトル系"],
 ["ぶどうジュース",1000,"単品系"],["トマーティン12年",30000,"ボトル系"],["ゴルフシュミレーション",20000,"単品系"],["ウォーラ",2000,"単品系"],["オレンジP",2000,"単品系"],
 ["プルシア",15000,"ボトル系"],["ムルソープルミエクリュクロデペリエール",170000,"ボトル系"],["ルイナールブランドブラン",50000,"ボトル系"],["クエルボ魚10個",15000,"単品系"],
 ["ルイナールロゼ",70000,"ボトル系"],["ジェントルマンジャック",15000,"ボトル系"],["紅茶P",2000,"単品系"],["丸氷",500,"単品系"],["出前代",4000,"つまみ系"],
@@ -3451,7 +3452,7 @@ function bmRender(){
     +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmDemo()">🧪 お試し伝票で今すぐ試す</button></div>'
     +'<div class="bm-note">席のデータを待たずに金額だけ検算できる伝票。TRUSTとの突き合わせはこれで足ります。</div>'
     +'<div class="bm-warn">⚠️ いまは<b>端末内の下書き</b>です（backend未デプロイ）。目的は<b>TRUSTと金額が合うか</b>の確認。</div>'
-    +'</div></div>';
+    +'</div>'+bmBottlesHtml()+'</div>';
   if(!BM.key){
     html+='<div><div class="bm-card"><h3>使い方</h3><div class="bm-note" style="font-size:12px;line-height:1.7">'
       +'① 左で伝票を選ぶ<br>② セット／キャストの担当・予約・同伴の<b>回数</b>を入れる<br>③ 注文をカテゴリ→商品→<b>誰に付けるか</b>の順で打つ<br>④ 右下に<b>TRUSTの合計</b>を入れて突き合わせる'
@@ -3461,7 +3462,45 @@ function bmRender(){
   }
   document.getElementById('bmWrap').innerHTML=html;
 }
+/* 品名からマスタ行を引く。⚠️臨時商品はマスタに無いのでnull＝ボトル判定しない */
+function bmItem_(name){ for(var i=0;i<BM_ITEMS.length;i++) if(BM_ITEMS[i][0]===name) return BM_ITEMS[i]; return null; }
+/* 🍾今日出たボトル＝端末の全伝票の下書きを横断して「ボトル系」だけ集計する。
+   ⚠️在庫の自動マイナスと発注はbackend（GAS）が要る＝ここは**本数の可視化まで**。
+      在庫へ流すには POS品名 → 在庫品名 の紐づけが必要（既存の`店舗メニュー`シートの仕組みを使う）。 */
+function bmBottlesToday(){
+  bmLoad();
+  var bills=bmBills(), map={}, order=[], total=0, amount=0;
+  Object.keys(BM.draft).forEach(function(key){
+    var d=BM.draft[key]; if(!d||!d.orders) return;
+    var b=null; bills.forEach(function(x){ if(String(x.rowIdx)===String(key)) b=x; });
+    var where=b?((b.floor||'')+' '+(b.table||'')):(key==='demo'?'🧪お試し':'伝票'+key);
+    d.orders.forEach(function(o){
+      var it=bmItem_(o.name);
+      if(!it||it[2]!=='ボトル系') return;
+      if(!map[o.name]){ map[o.name]={name:o.name,qty:0,amount:0,where:[]}; order.push(o.name); }
+      map[o.name].qty+=o.qty; map[o.name].amount+=o.price*o.qty; map[o.name].where.push(where);
+      total+=o.qty; amount+=o.price*o.qty;
+    });
+  });
+  return { list:order.map(function(nm){return map[nm];}), total:total, amount:amount };
+}
 function bmOpen(rowIdx){ BM.key=String(rowIdx); bmRender(); }
+/* 締め作業で見る「今日出たボトル」。在庫マイナス／発注はbackend実装後にここから流す */
+function bmBottlesHtml(){
+  var b=bmBottlesToday();
+  return '<div class="bm-card"><h3>🍾 今日出たボトル <span style="color:var(--gold);font-weight:800">'+b.total+'本</span>'
+    +(b.amount?'<span style="color:var(--sub);font-weight:600;font-size:10px">'+bmYen(b.amount)+'</span>':'')+'</h3>'
+    +(b.list.length
+      ? b.list.map(function(x){
+          return '<div class="bm-ord"><span style="flex:1;font-weight:700">'+esc(x.name)+'</span>'
+            +'<span style="color:var(--sub);font-size:10.5px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.where.join('・'))+'</span>'
+            +'<span style="min-width:34px;text-align:right;font-weight:800;color:#79e0a8">×'+x.qty+'</span>'
+            +'<span style="min-width:66px;text-align:right;color:var(--gold);font-weight:800">'+bmYen(x.amount)+'</span></div>';
+        }).join('')
+      : '<div class="bm-note">まだボトルは出ていません</div>')
+    +'<div class="bm-warn">⛔ <b>在庫の自動マイナスと発注はまだ</b>（backend未実装）。いまは本数の集計だけ。'
+    +'在庫へ流すには「POSの品名 → 在庫の品名」の紐づけが要ります。</div></div>';
+}
 /* 🧪お試し伝票（席に紐づかない）。GASの応答を待たずに金額テストを始めるための逃げ道 */
 function bmDemo(){ bmLoad(); bmGet('demo'); bmSave(); BM.key='demo'; bmRender(); }
 /* loadAll(30秒ごと)からの再描画。⚠️入力中(値引・TRUST合計など)は触らない＝打っている途中で
@@ -3521,7 +3560,9 @@ function bmEditorHtml(){
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
     +'<div style="margin-top:8px">'+(d.orders.length?d.orders.map(function(o,i){
         var k=(o.attr==='お客様')?'':(o.attr==='スタッフ'?'staff':'cast');
-        return '<div class="bm-ord"><span class="at '+k+'">'+esc(o.attr)+'</span><span style="flex:1">'+esc(o.name)+'</span>'
+        return '<div class="bm-ord"><span class="at '+k+'">'+esc(o.attr)+'</span><span style="flex:1;min-width:70px">'+esc(o.name)+'</span>'
+          +'<input type="number" class="bm-in" style="width:84px;padding:5px 7px;font-size:12.5px" value="'+o.price+'" title="単価（都度変更できる）"'
+          +' oninput="bmOrdPrice('+i+',this.value)" onchange="bmOrdPrice('+i+',this.value,1)">'
           +'<button class="bm-btn sm" onclick="bmQty('+i+',-1)">−</button><span style="min-width:16px;text-align:center;font-weight:800">'+o.qty+'</span>'
           +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
           +'<span style="min-width:70px;text-align:right;color:var(--gold);font-weight:800">'+bmYen(o.price*o.qty)+'</span></div>';
@@ -3653,6 +3694,13 @@ function bmAdhoc(){
   var nm=(document.getElementById('bmAdNm').value||'').trim(),pr=Number(document.getElementById('bmAdPr').value)||0;
   if(!nm){ alert('品名を入れてください'); return; }
   bmPick(nm,pr);
+}
+/* 注文1行の単価を都度変更（ボス依頼＝ボトルは値付けがその場で変わる）。
+   既定はマスタの登録価格のまま。⚠️打っている最中に全描画するとカーソルが飛ぶので確定(onchange)で整える。 */
+function bmOrdPrice(i,v,full){
+  var d=bmGet(BM.key); if(!d.orders[i]) return;
+  d.orders[i].price=Math.max(0,Number(v)||0); bmSave();
+  if(full) bmRender(); else bmTouch();
 }
 function bmQty(i,delta){
   var d=bmGet(BM.key); d.orders[i].qty+=delta;
