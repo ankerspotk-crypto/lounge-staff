@@ -1582,7 +1582,8 @@ function setViewMode(m){
   document.body.classList.toggle('bill-on',m==='bill');
   var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash'),b=document.getElementById('vt-bill');
   if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash'); if(b)b.classList.toggle('on',m==='bill');
-  if(m==='bill'){ bmRender(); if(typeof IS_GAS==='undefined'||IS_GAS!==false) bmLoadStock(); return; }   // 伝票管理は独自描画（renderAllはホール/予約の再描画なので走らせない）
+  if(m==='bill'){ bmRender(); if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmPullStart(); } return; }   // 伝票管理は独自描画
+  bmPullStop();   // 伝票管理から離れたら共有ポーリングを止める
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
   // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
@@ -3586,7 +3587,81 @@ var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:fal
 function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
 function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&curDate?curDate:'today'); }
 function bmLoad(){ try{ BM.draft=JSON.parse(localStorage.getItem(bmStoreKey())||'{}'); }catch(e){ BM.draft={}; } }
-function bmSave(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draft)); }catch(e){} }
+function bmStash_(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draft)); }catch(e){} }
+/* ============================================================================
+   ☁️ 端末間の共有（2026-08-08）。それまでは端末のlocalStorageだけ＝5Fで打った伝票が2Fから見えなかった。
+   ■ 端末内保存は**残す**＝通信が落ちても打ち続けられる（GASは1.9秒の床があり、毎打鍵は送れない）。
+   ■ サーバーへは**1.2秒まとめて**送る（打鍵ごとに送らない）。
+   ■ 取り込みは**新しい方が勝ち**（各下書きが自分の更新時刻`_t`を持つ）。
+     ⚠️同じ卓を2端末で同時に打つと片方が消える＝5Fと2Fは別の卓を見る運用が前提。
+   ■ 🧪お試し伝票('demo')は**共有しない**＝検算用の落書きを店の記録に混ぜない。
+============================================================================ */
+var BM_MODE=null;            // 'test' | 'live' | null(未取得)
+var BM_SYNC_ERR='';
+var BM_PUSH_T=null, BM_PUSH_Q={}, BM_PULL_T=null;
+function bmSave(){
+  if(BM.key&&BM.draft[BM.key]){ BM.draft[BM.key]._t=Date.now(); BM_PUSH_Q[BM.key]=1; }
+  bmStash_();
+  bmPushSoon();
+}
+function bmPushSoon(){ if(BM_PUSH_T) clearTimeout(BM_PUSH_T); BM_PUSH_T=setTimeout(bmPushNow,1200); }
+function bmPushNow(){
+  BM_PUSH_T=null;
+  var keys=Object.keys(BM_PUSH_Q); BM_PUSH_Q={};
+  if(typeof gsr!=='function') return;
+  keys.forEach(function(k){
+    if(k==='demo') return;                                   // お試しは共有しない
+    var d=BM.draft[k]; if(!d) return;
+    gsr('posSaveBill',(typeof curDate!=='undefined'?curDate:''),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
+      .then(function(r){ if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); } })
+      .catch(function(e){ BM_SYNC_ERR='共有できていません（この端末には残っています）'; bmRenderIfIdle(); });
+  });
+}
+/* 他端末の伝票を取り込む。⚠️入力中でも下書き自体は差し替わる（描画はbmRenderIfIdleが守る） */
+function bmPull(){
+  if(typeof gsr!=='function') return;
+  gsr('getPosBills',(typeof curDate!=='undefined'?curDate:'')).then(function(r){
+    if(r&&r.mode) BM_MODE=r.mode;
+    BM_SYNC_ERR='';
+    bmLoad();
+    var changed=false;
+    ((r&&r.bills)||[]).forEach(function(b){
+      if(!b||!b.data) return;
+      var loc=BM.draft[b.rowIdx];
+      var st=Number(b.data._t)||0, lt=Number(loc&&loc._t)||0;
+      if(!loc||st>lt){ BM.draft[b.rowIdx]=b.data; changed=true; }
+    });
+    if(changed) bmStash_();
+    bmRenderIfIdle();
+  }).catch(function(e){ BM_SYNC_ERR='他の端末の伝票を取得できていません'; bmRenderIfIdle(); });
+}
+function bmPullStart(){ bmPull(); if(BM_PULL_T) clearInterval(BM_PULL_T); BM_PULL_T=setInterval(bmPull,20000); }
+function bmPullStop(){ if(BM_PULL_T){ clearInterval(BM_PULL_T); BM_PULL_T=null; } }
+/* モード表示＋切替。⚠️テスト=別シート(_TEST)に書く＝本番に上げた時に練習データが混ざらない */
+function bmModeHtml(){
+  var m=BM_MODE, live=(m==='live');
+  var label=(m===null)?'☁️ 共有の状態を確認中…':(live?'🔴 本番モード':'🧪 テストモード');
+  var body=(m===null)?'':(live
+    ?'この端末の入力が<b>本番の記録</b>として全端末に共有されます。'
+    :'入力は<b>テスト用のシート</b>に入ります。全端末で共有されますが、売上の集計には混ざりません。');
+  return '<div class="bm-warn" style="'+(live?'border-color:#7a2a2a;background:#2a1212':'')+'">'+label
+    +(body?'<div style="margin-top:3px;font-weight:600">'+body+'</div>':'')
+    +(BM_SYNC_ERR?'<div style="margin-top:4px;color:#ff9a5a;font-weight:700">⚠️ '+esc(BM_SYNC_ERR)+'</div>':'')
+    +(m===null?'':'<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm'+(live?'':' dng')+'" onclick="bmModeSwitch()">'
+      +(live?'🧪 テストモードに戻す':'🔴 本番モードにする')+'</button></div>')
+    +'</div>';
+}
+function bmModeSwitch(){
+  var live=(BM_MODE==='live'), next=live?'test':'live';
+  var word=live?'テスト':'本番';
+  var t=prompt('POSを【'+word+'モード】に切り替えます。\n'
+    +(next==='live'?'ここからの入力が本番の記録になります。\n':'記録はテスト用シートに戻ります。\n')
+    +'よければ「'+word+'」と入力してください。');
+  if(String(t||'').trim()!==word) return;
+  gsr('setPosMode',next,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
+    BM_MODE=(r&&r.mode)||next; bmLoad(); bmPull(); bmRender();
+  }).catch(function(e){ alert('切り替えできませんでした：'+(e&&e.message||'通信エラー')); });
+}
 /* 伝票の下書きを取り出す（無ければ初期セット1本＝TRUSTが卓を開いた時に既定を自動投入するのと同じ） */
 /* お客様n人ぶんのセット行を作る。⚠️単価は**客ごと**に持つ＝同じ席でも女性が混ざると単価が変わるため（ボス談） */
 function bmNewGuests_(n){ var a=[],k=Math.max(1,Number(n)||1); for(var i=0;i<k;i++) a.push({price:BM_FEE.set}); return a; }
@@ -3708,7 +3783,7 @@ function bmRender(){
           : '<div class="empty-msg" style="padding:18px 0;font-size:12px">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:6px">ホール状況で席にお客様を設定すると、ここに伝票が出ます</div></div>'))
     +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmDemo()">🧪 お試し伝票で今すぐ試す</button></div>'
     +'<div class="bm-note">席のデータを待たずに金額だけ検算できる伝票。TRUSTとの突き合わせはこれで足ります。</div>'
-    +'<div class="bm-warn">⚠️ いまは<b>端末内の下書き</b>です（backend未デプロイ）。目的は<b>TRUSTと金額が合うか</b>の確認。</div>'
+    +bmModeHtml()
     +'</div>'+bmBottlesHtml()+'</div>';
   if(!BM.key){
     html+='<div><div class="bm-card"><h3>使い方</h3><div class="bm-note" style="font-size:12px;line-height:1.7">'
