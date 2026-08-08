@@ -683,7 +683,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -808,12 +808,13 @@ function getKioskBootstrap() {
 function getKioskLoadAll(dateStr) {
   var pick = function (fn) { try { return fn(); } catch (e) { return null; } };
   var d = dateStr || bizDateStr_();
+  var seatsSnap = pick(function () { return getSekiJokyouData(); }); // 席状態は1回だけ計算し hall2/付け回し で共有（props読み+同期の二度手間を排除）
   return {
     ok: true,
     ts: (new Date()).toISOString(),
-    hall2:        pick(function () { return getKioskHall2(); }),
+    hall2:        pick(function () { return getKioskHall2(seatsSnap); }),
     reservations: pick(function () { return getKioskReservations(d, true); }), // true=キャンセル済みも含める（グレーアウトのログ表示）
-    tsukemawashi: pick(function () { return getKioskTsukemawashi(); }),
+    tsukemawashi: pick(function () { return getKioskTsukemawashi(seatsSnap); }),
     shiftBoard:   pick(function () { return getKioskShiftBoard(); }),
     castRequests: pick(function () { return getCastRequestsToday(); }),
     castNames:    pick(function () { return getKioskCastNames(); }),
@@ -1334,6 +1335,13 @@ function handleApiRequest_(body) {
     return { ok: true, requests: getShiftRequests_() };
   }
 
+  // 📉 当日欠勤の集計（コンソール「当欠一覧」＋黒服ブリーフのフラグが同じ集計を使う）
+  if (body.action === 'kyukinStats') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return kyukinStatsView_(Number(body.days) || 0);
+  }
+
   // ⏱ 勤怠（黒服の勤怠手当制度・2026-08-01施行）
   if (body.action === 'kintaiDay') {
     const adminName = getStaffName(body.userId);
@@ -1690,6 +1698,10 @@ function getNotifSettings_() {
     kurofuku_tasks_1800:{ label: '📋 黒服タスクまとめ送信（18時）', type: 'auto', enabled: true, group: '黒服', desc: '18時に当日追加の黒服タスクをまとめて送信' },
     bdayremind:         { label: '🎂 誕生日バック未設定リマインド', type: 'auto', enabled: true, group: '軍師', desc: '月初、誕生日バック未設定のキャストを軍師の要対応へ（LINE送信なし）' },
     kuro_handover:      { label: '📝 黒服 申し送りDM（17時）',  type: 'auto', enabled: true, group: '黒服', desc: '17時に当日出勤の黒服へ申し送りを個別DM（中身が空ならスキップ）' },
+    kuro_brief:         { label: '🗒 黒服ブリーフ（当欠フラグ＋予約）', type: 'auto', enabled: true, group: '黒服', desc: '「本日出勤ラインナップ」と同時刻に、黒服グループへ本日のシフト（当欠多めフラグ付き）と本日の予約一覧・合計人数を送る。⚠️当欠フラグはキャストグループには流さない' },
+    rsv_new:            { label: '🆕 新規予約の都度通知', type: 'auto', enabled: true, group: '黒服', desc: '予約が1件入るたびに内容（日時・客名・人数・卓・担当/同伴・要望・登録者）とその日の累計を黒服グループへ。⚠️軍師/コンソールからの登録が対象。POSの来店時登録と二度押しの重複では流さない' },
+    rsv_update:         { label: '✏️ 予約変更の都度通知', type: 'auto', enabled: true, group: '黒服', desc: '予約の内容が変わるたびに「何が何に変わったか」と当日の累計を黒服グループへ。⚠️来店・席移動・POS由来の更新、中身が変わっていない保存では流さない' },
+    rsv_cancel:         { label: '❌ 予約キャンセルの都度通知', type: 'auto', enabled: true, group: '黒服', desc: 'キャンセルのたびに内容と当日の残り累計を黒服グループへ。来店済みからのキャンセル（席を空けた）は明示する' },
     req20_candidates:   { label: '🕗 20時出勤候補の送信（12時）', type: 'auto', enabled: true, group: '黒服', desc: '12時に本日20:00シフト・同伴なしの候補を黒服へ' },
     check_proposal:     { label: '🗒 送りチェック割当の提案（23:40）', type: 'auto', enabled: true, group: '黒服', desc: '23:40頃にチェック割当の提案を黒服へ' },
     aten_alert:         { label: '⏱ アテンド延長アラート',     type: 'auto', enabled: true, group: '黒服', desc: '接客が設定時間を超えたら黒服へ（20:00〜00:30・毎分監視）' },
@@ -1701,6 +1713,8 @@ function getNotifSettings_() {
     seat_share_alert:   { label: '👥 相席・席未設定の通知',    type: 'auto', enabled: true, group: '黒服',       desc: '相席検知や席未設定を黒服へ（運用信号＝停止不可）' },
     shift_confirmed_dm: { label: '📅 シフト確定の通知',        type: 'auto', enabled: true, group: '黒服',       desc: '管理者がシフトを確定したら黒服各人へ個別DM（運用信号＝停止不可）' },
     shift_consult:      { label: '💬 当日相談（家康くん）',    type: 'auto', enabled: true, group: '黒服・本人', desc: '当日の休み/時間相談を黒服へ報告・承認/却下を本人へ（運用信号＝停止不可）' },
+    kyukin_decision_dm: { label: '🙅 欠勤申請の結果DM',        type: 'auto', enabled: true, group: '本人',       desc: '欠勤申請の承認/却下を申請した本人へDM（黒服のLINE一言承認・コンソール承認の両方）' },
+    kyukin_shift_recap: { label: '📋 欠勤承認後の本日シフト',  type: 'auto', enabled: true, group: '黒服',       desc: '当日欠勤を承認したら、その人が抜けた後の本日シフト一覧を自動で送る' },
     payroll_receipt:    { label: '🧾 給与受領の報告',          type: 'auto', enabled: true, group: '黒服',       desc: '本人の給与受領報告を黒服へ（運用信号＝停止不可）' },
     notice_post_dm:     { label: '📢 お知らせ投稿のDM',        type: 'auto', enabled: true, group: '名簿',       desc: 'お知らせ掲示板に投稿すると対象者へ個別DM（運用信号＝停止不可）' },
     staff_reg_done:     { label: '🎉 スタッフ登録完了の通知',  type: 'auto', enabled: true, group: '本人',       desc: 'スタッフ登録が完了したら本人へDM（運用信号＝停止不可）' },
@@ -1789,6 +1803,7 @@ function notifMetaDefs_() {
     kurofuku_tasks_1800:{ category:'watch',     targetKind:'group',  target:'kurofuku' },     // 送信は関数内＝宛先は読取専用
     bdayremind:         { category:'watch',     targetKind:'kiosk',  target:null },
     kuro_handover:      { category:'watch',     targetKind:'roster', target:null },
+    kuro_brief:         { category:'watch',     targetKind:'group',  target:'kurofuku', wired:true },  // 送信時刻は lineup に相乗り＝ここでは宛先とON/OFFのみ
     req20_candidates:   { category:'watch',     targetKind:'group',  target:'kurofuku' },     // 送信は関数内＝宛先は読取専用
     check_proposal:     { category:'watch',     targetKind:'group',  target:'kurofuku' },     // 送信は関数内＝宛先は読取専用
     aten_alert:         { category:'watch',     targetKind:'group',  target:'kurofuku', wired:true },
@@ -1800,6 +1815,11 @@ function notifMetaDefs_() {
     seat_share_alert:   { category:'event',     targetKind:'group',  target:'kurofuku', lockOn:true },
     shift_confirmed_dm: { category:'event',     targetKind:'person', target:null, lockOn:true },
     shift_consult:      { category:'event',     targetKind:'multi',  target:null, lockOn:true },
+    kyukin_decision_dm: { category:'event',     targetKind:'person', target:null },           // 本人へ個別DM（OFFにできる＝黒服が口頭で伝える運用も可）
+    kyukin_shift_recap: { category:'event',     targetKind:'group',  target:'kurofuku', wired:true }, // 欠勤承認後の本日シフト（宛先切替可）
+    rsv_new:            { category:'event',     targetKind:'group',  target:'kurofuku', wired:true }, // 予約が入るたびに1通（宛先切替可）
+    rsv_update:         { category:'event',     targetKind:'group',  target:'kurofuku', wired:true }, // 予約が変わるたびに1通
+    rsv_cancel:         { category:'event',     targetKind:'group',  target:'kurofuku', wired:true }, // キャンセルのたびに1通
     payroll_receipt:    { category:'event',     targetKind:'group',  target:'kurofuku', lockOn:true },
     notice_post_dm:     { category:'event',     targetKind:'roster', target:null, lockOn:true },
     staff_reg_done:     { category:'event',     targetKind:'person', target:null, lockOn:true },
@@ -4333,10 +4353,12 @@ function handleKurofuku(event, text, userId) {
       '退勤しました　→ 退勤を記録',
       '送り確認　　　→ 送りリストを確認',
       'シフト確認　　→ 本日のシフトを確認',
-      '#休み承認 12　→ 当日欠勤申請(12行目)を承認',
-      '#休み却下 12　→ 当日欠勤申請(12行目)を却下',
-      '#相談承認 まや　→ AI家康くん経由の当日相談を承認',
-      '#相談却下 まや　→ AI家康くん経由の当日相談を却下',
+      '承認 / 却下　　→ 直近の当日欠勤申請・当日相談をその一言で確定',
+      '　　（複数ある時は「承認 まや」・申請メッセージへの引用返信でもOK）',
+      '#休み承認 12　→ 当日欠勤申請(12行目)を承認（予備）',
+      '#休み却下 12　→ 当日欠勤申請(12行目)を却下（予備）',
+      '#相談承認 まや　→ AI家康くん経由の当日相談を承認（予備）',
+      '#相談却下 まや　→ AI家康くん経由の当日相談を却下（予備）',
       '#給与確認 12　→ 給与受領報告(12行目)を確認済みに',
       '',
       '【共通】',
@@ -4401,6 +4423,15 @@ function handleKurofuku(event, text, userId) {
       : '⚠️ ' + r.error);
     return;
   }
+
+  // ⚡一言承認: 「承認」「却下」だけで直近の当日欠勤申請／当日相談を確定（行番号・名前のコピペ不要）
+  //   承認待ちが0件なら false が返る＝以降の通常処理へそのまま落ちる（普通の会話を飲み込まない）。
+  var qm = text.match(/^(承認|却下)(?:します|する|しました|です)?[\s　!！。、．・:：]*(.*)$/);
+  if (!qm) {
+    var qm2 = text.match(/^(.+?)[\s　]+(承認|却下)(?:します|する|しました|です)?[\s　!！。、．・:：]*$/); // 「まや 承認」の順も可
+    if (qm2) qm = [text, qm2[2], qm2[1]];
+  }
+  if (qm && handleQuickDecision_(event, userId, qm[1], qm[2])) return;
 
   // 給与受領確認: #給与確認 12
   const payrollConfirmM = text.match(/^[#＃]給与確認[\s　]+(\d+)/);
@@ -4541,30 +4572,7 @@ function handleKurofuku(event, text, userId) {
 
   // シフト確認
   if (text === 'シフト確認') {
-    const detail = getTodayShiftDetail_();
-    const d   = new Date();
-    const mm  = (d.getMonth() + 1) + '月' + d.getDate() + '日';
-    const dow = ['日','月','火','水','木','金','土'][d.getDay()];
-    const lines = ['【' + mm + '(' + dow + ') シフト】', ''];
-    if (detail.cast.length > 0) {
-      lines.push('キャスト（' + detail.cast.length + '名）');
-      detail.cast.forEach(s => lines.push('  ' + (s.role === '体験' ? '体' : '') + s.name + '　' + s.shift));
-      lines.push('');
-    }
-    if (detail.kurofuku.length > 0) {
-      lines.push('黒服（' + detail.kurofuku.length + '名）');
-      detail.kurofuku.forEach(s => lines.push('  ' + s.name + '　' + s.shift));
-      lines.push('');
-    }
-    if (detail.haken.length > 0) {
-      lines.push('派遣（' + detail.haken.length + '名）');
-      detail.haken.forEach(s => lines.push('  ' + s.name + '　' + s.shift));
-      lines.push('');
-    }
-    if (detail.cast.length === 0 && detail.kurofuku.length === 0 && detail.haken.length === 0) {
-      lines.push('本日のシフトがありません');
-    }
-    reply(event.replyToken, lines.join('\n').trim());
+    reply(event.replyToken, todayShiftText_());
     return;
   }
 
@@ -5913,14 +5921,21 @@ function kintaiNowBizMin_() {
 function kintaiPunchMap_(bizDate) {
   var out = {};
   var sh = getOrOpenSS_().getSheetByName(KINTAI_TAB);
-  if (!sh || sh.getLastRow() < 2) return out;
-  var vals = sh.getDataRange().getValues();
-  var heads = vals[0].map(function (h) { return String(h).trim(); });
+  if (!sh) return out;
+  var lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2) return out;
+  var heads = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
   var iDate = heads.indexOf('日付'), iTime = heads.indexOf('時刻');
   var iName = heads.indexOf('名前'), iType = heads.indexOf('種別'), iBiz = heads.indexOf('営業日');
   if (iName < 0 || iType < 0) return out;
+  // 勤怠は追記型＝当日分は必ず末尾。今日を読む時だけ直近500行に絞る（getActiveAtendou同型）。
+  // 過去日の再計算(kintaiJudgeDay_の月次等)は末尾N行では取りこぼす＝正確性優先で全読み。
+  var startRow = 2;
+  if (String(bizDate) === bizDateStr_()) startRow = Math.max(2, lastRow - 499);
+  var numRows = lastRow - startRow + 1;
+  var vals = sh.getRange(startRow, 1, numRows, lastCol).getValues();
   var dstr = function (v) { return (v instanceof Date && !isNaN(v)) ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); };
-  for (var i = 1; i < vals.length; i++) {
+  for (var i = 0; i < vals.length; i++) {
     var r = vals[i];
     var biz = iBiz >= 0 ? dstr(r[iBiz]) : '';
     if (!biz) biz = iDate >= 0 ? dstr(r[iDate]) : '';
@@ -5931,8 +5946,8 @@ function kintaiPunchMap_(bizDate) {
     if (!out[key]) out[key] = { name: nm, in: '', out: '', inRow: 0, outRow: 0 };
     var tm = iTime >= 0 ? fmtStamp_(r[iTime]) : '';
     var ty = String(r[iType] || '').trim();
-    if (ty === '出勤') { if (!out[key].in) { out[key].in = tm; out[key].inRow = i + 1; } }
-    else if (ty === '退勤') { out[key].out = tm; out[key].outRow = i + 1; }
+    if (ty === '出勤') { if (!out[key].in) { out[key].in = tm; out[key].inRow = startRow + i; } }
+    else if (ty === '退勤') { out[key].out = tm; out[key].outRow = startRow + i; }
   }
   return out;
 }
@@ -6242,7 +6257,7 @@ function kintaiAbsenceMap_(bizDate) {
     var want = String(rows[i][3] || '').trim();
     if (want !== '欠勤' && want !== '休み') continue;
     var st = String(rows[i][4] || '').trim();
-    if (st === 'クリア') continue;
+    if (st === 'クリア' || st === '重複') continue;   // 『重複』＝二度押しで閉じた同一申請（2026-08-07・closeDupRequests_）
     var nm = String(rows[i][1] || '').trim();
     if (!nm) continue;
     var sub = rows[i][0];
@@ -7011,7 +7026,12 @@ function scheduledJobs() {
     push_(notifTarget_('kaiten_check', ns_, 'GROUP_KUROFUKU'), ns_['kaiten_check'].message || ns_['kaiten_check'].defaultMsg);
   });
 
-  notif_('lineup', sendDailyLineup);
+  // キャストグループへ「本日の出勤」、同時に黒服グループへブリーフ（当欠フラグ＋本日の予約）。
+  // ⚠️ブリーフの失敗でラインナップを巻き戻さない＝try/catchで隔離（once()が立たず翌分に二重送信されるのを防ぐ）
+  notif_('lineup', () => {
+    sendDailyLineup();
+    try { sendKurofukuDailyBrief_(ns_); } catch (e) { console.error('kuro_brief', e); }
+  });
 
   // 12:00 20時出勤の候補を黒服へ（14:00のシフト連絡までに前倒し依頼→シフト変更を反映できるよう）
   if (hhmm >= '12:00' && hhmm <= '12:09' && notifEnabled_('req20_candidates', ns_)) once('REQ20_1200', sendReq20Candidates);
@@ -7220,8 +7240,10 @@ function fmtStamp_(v) {
   return String(v == null ? '' : v);
 }
 
+// 戻り値＝送信したメッセージのID（取れなければ ''）。⚡一言承認の「引用返信でその申請を特定する」に使う。
+// 既存の呼び出しは戻り値を見ていない＝非破壊。
 function push_(groupId, message) {
-  if (!groupId || !message) return;
+  if (!groupId || !message) return '';
   const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
     method: 'post',
     contentType: 'application/json',
@@ -7231,7 +7253,12 @@ function push_(groupId, message) {
   });
   if (res.getResponseCode() !== 200) {
     console.error('push error:', res.getResponseCode(), res.getContentText());
+    return '';
   }
+  try {
+    const j = JSON.parse(res.getContentText());
+    return (j && j.sentMessages && j.sentMessages[0] && j.sentMessages[0].id) ? String(j.sentMessages[0].id) : '';
+  } catch (e) { return ''; }
 }
 
 // ── 通知管理センター: 宛先リゾルバ & ON/OFFゲート ─────────────────────────
@@ -7331,12 +7358,17 @@ function isWorkingToday_(name) {
     const sh = getOrOpenSS_().getSheetByName(KINTAI_TAB);
     if (sh) {
       const today = todayStr();
-      const rows = sh.getDataRange().getValues().slice(1).filter(r =>
-        (r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0])) === today
-        && normalizeName_(String(r[2])) === nm);
-      const inCnt  = rows.filter(r => String(r[3]) === '出勤').length;
-      const outCnt = rows.filter(r => String(r[3]) === '退勤').length;
-      if (inCnt > 0 && inCnt > outCnt) return true;
+      const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+      if (lastRow >= 2) {
+        // 追記型＝当日分は末尾。直近500行だけ読む（全履歴スキャン回避・getActiveAtendou同型）。
+        const startRow = Math.max(2, lastRow - 499), numRows = lastRow - startRow + 1;
+        const rows = sh.getRange(startRow, 1, numRows, lastCol).getValues().filter(r =>
+          (r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0])) === today
+          && normalizeName_(String(r[2])) === nm);
+        const inCnt  = rows.filter(r => String(r[3]) === '出勤').length;
+        const outCnt = rows.filter(r => String(r[3]) === '退勤').length;
+        if (inCnt > 0 && inCnt > outCnt) return true;
+      }
     }
   } catch (e) {}
   return false;
@@ -7644,6 +7676,37 @@ function getTodayShiftDetail_() {
 }
 // シフト詳細キャッシュ＋実行内メモを破棄。操作の即時反映が要る書込点(writeShiftCell_/kioskSetGenji)で呼ぶ。
 function tsdCacheClear_() { _tsdMemo_ = null; try { CacheService.getScriptCache().remove('TSD_v1_' + bizDateStr_()); } catch (e) {} }
+
+// 本日のシフト一覧の文面。黒服LINEの「シフト確認」と、欠勤承認後の自動一覧が共有する唯一の正。
+// 休み/欠勤・退職者は getTodayShiftDetail_ の時点で落ちる＝承認直後に呼べば「その人が抜けた後」の一覧になる。
+// 見出しの日付は bizShiftColKey_ と同じ営業日基準（0〜6時に暦日で出すと中身と1日ズレるため）。
+function todayShiftText_() {
+  const detail = getTodayShiftDetail_();
+  const d = new Date();
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+  const mm  = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  const lines = ['【' + mm + '(' + dow + ') シフト】', ''];
+  if (detail.cast.length > 0) {
+    lines.push('キャスト（' + detail.cast.length + '名）');
+    detail.cast.forEach(s => lines.push('  ' + (s.role === '体験' ? '体' : '') + s.name + '　' + s.shift));
+    lines.push('');
+  }
+  if (detail.kurofuku.length > 0) {
+    lines.push('黒服（' + detail.kurofuku.length + '名）');
+    detail.kurofuku.forEach(s => lines.push('  ' + s.name + '　' + s.shift));
+    lines.push('');
+  }
+  if (detail.haken.length > 0) {
+    lines.push('派遣（' + detail.haken.length + '名）');
+    detail.haken.forEach(s => lines.push('  ' + s.name + '　' + s.shift));
+    lines.push('');
+  }
+  if (detail.cast.length === 0 && detail.kurofuku.length === 0 && detail.haken.length === 0) {
+    lines.push('本日のシフトがありません');
+  }
+  return lines.join('\n').trim();
+}
 function getTodayShiftDetailRaw_() {
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { cast: [], kurofuku: [], haken: [] };
@@ -8499,8 +8562,12 @@ function submitShift(payload) {
   }
 
   const now  = new Date();
-  const written = [], autoApproved = [], errors = [];
+  const written = [], autoApproved = [], errors = [], duplicated = [];
   const todayMD = Utilities.formatDate(new Date(), TZ, 'M/d');
+  // ⚠️2026-08-07 二重申請ガード: 旧版は同じ申請を何度出しても pending 行を増やし、そのたびに黒服グループへ
+  //   push していた（きさきの当日欠勤が3行×3通たまり、一言承認が名前で特定できず永久ループした事故）。
+  //   POST自体は再送しない作りなので原因は「通信エラー表示→本人が再提出」。＝入口で同じキーを弾く。
+  const pendKeys = pendingReqKeySet_(sh);
   // 役割はスタッフマスタから確定（クライアント申告に依存しない）
   const staffRole = getStaffRoleByName_(normalizeName_(name)) || payload.role || 'キャスト';
   const allNeedApproval = staffRole === '黒服バイト'; // 黒服バイトは全シフト管理者承認制
@@ -8516,6 +8583,10 @@ function submitShift(payload) {
     const needsApproval = allNeedApproval || isSameDayKyukin;
 
     if (needsApproval) {
+      // 同一人物×同一日付×同一希望が既に承認待ちで残っている＝同じ申請の二度押し。行も通知も増やさない。
+      const dupKey = shConNorm_(name) + '|' + String(s.date == null ? '' : s.date).trim() + '|' + String(s.time == null ? '' : s.time).trim();
+      if (pendKeys[dupKey]) { duplicated.push(s.date); written.push(s.date); return; }
+      pendKeys[dupKey] = true;
       const newRow = sh.getLastRow() + 1;
       sh.getRange(newRow, 3).setNumberFormat('@');
       sh.getRange(newRow, 1, 1, 7).setValues([[now, name, s.date, s.time, 'pending', '', role]]);
@@ -8523,7 +8594,10 @@ function submitShift(payload) {
         const rowIdx = newRow;
         const KF = prop('GROUP_KUROFUKU');
         if (KF) {
-          push_(KF, '⚠️【当日欠勤申請】\n' + name + 'さんが本日(' + s.date + ')の出勤について欠勤を申請しました。\n\n承認: #休み承認 ' + rowIdx + '\n却下: #休み却下 ' + rowIdx);
+          // ⚡一言承認: このメッセージのあとに「承認」/「却下」と送るだけで確定する（→ handleQuickDecision_）。
+          //   送信したメッセージIDを控えておくと、引用返信されたときに この申請 だと一意に分かる。
+          const mid = push_(KF, '⚠️【当日欠勤申請】\n' + name + 'さんが本日(' + s.date + ')の出勤について欠勤を申請しました。\n\n▼このまま「承認」または「却下」と送信してください\n（他にも承認待ちがある時は「承認 ' + name + '」）');
+          quickDecideRemember_(mid, { t: 'kyukin', row: rowIdx });
         }
       }
     } else {
@@ -8550,7 +8624,26 @@ function submitShift(payload) {
     written.push(s.date);
   });
 
-  return { ok: true, name, written, autoApproved, pending: written.length - autoApproved.length, errors };
+  return { ok: true, name, written, autoApproved, pending: written.length - autoApproved.length, errors, duplicated };
+}
+
+// 承認待ちで残っている申請のキー集合（名前|日付|希望）。submitShift の二度押しガード用（2026-08-07）。
+// ⚠️日付セルは書式'@'の文字列だが、古い行はDate値のことがあるので両方を M/d に揃えてから鍵にする。
+function pendingReqKeySet_(sh) {
+  const set = {};
+  try {
+    const last = sh.getLastRow();
+    if (last < 2) return set;
+    const start = Math.max(2, last - 299);          // 申請は追記型＝直近だけ見る（pendingKyukinList_ と同じ窓）
+    const vals = sh.getRange(start, 1, last - start + 1, 5).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      if (String(vals[i][4] == null ? '' : vals[i][4]).trim() !== 'pending') continue;
+      const d = vals[i][2];
+      const ds = (d instanceof Date && !isNaN(d)) ? Utilities.formatDate(d, TZ, 'M/d') : String(d == null ? '' : d).trim();
+      set[shConNorm_(String(vals[i][1] == null ? '' : vals[i][1])) + '|' + ds + '|' + String(vals[i][3] == null ? '' : vals[i][3]).trim()] = true;
+    }
+  } catch (e) { console.error('pendingReqKeySet_', e); }
+  return set;
 }
 
 // ============================================================
@@ -8732,17 +8825,21 @@ function sendCastSeatRequest_(payload) {
 // IEYAS軍師：本日分のキャストリクエスト一覧を取得（対応済みチェック用）
 function getCastRequestsToday() {
   const sh = getCastRequestSheet_();
-  const rows = sh.getDataRange().getValues();
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2) return [];
   const today = bizDateStr_();
+  // 追記型＝当日分は末尾。直近500行だけ読む（全履歴スキャン回避）。行番号は startRow 起点で採る。
+  const startRow = Math.max(2, lastRow - 499), numRows = lastRow - startRow + 1;
+  const rows = sh.getRange(startRow, 1, numRows, lastCol).getValues();
   const list = [];
-  for (let i = 1; i < rows.length; i++) {
+  for (let i = 0; i < rows.length; i++) {
     const cell = rows[i][0];
     const cellDateStr = (cell instanceof Date) ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd') : String(cell);
     if (cellDateStr !== today) continue;
     const timeCell = rows[i][1];
     const timeStr = (timeCell instanceof Date) ? Utilities.formatDate(timeCell, TZ, 'HH:mm') : String(timeCell);
     list.push({
-      rowIdx: i + 1,
+      rowIdx: startRow + i,
       time: timeStr,
       name: String(rows[i][2]),
       type: String(rows[i][3]),
@@ -8984,13 +9081,18 @@ function approveShiftRequest_(rowIdx, name, date, time, decision, newTime) {
     // シフト表に行があるスタッフ(キャスト)は表にも反映。黒服はシフト申請の承諾行で管理するため行が無くてもOK(ベストエフォート)
     writeShiftCell_(name, date, writeVal);
     if (!isKyukin) addConfirmedShiftDate_(name, date, writeVal); // 黒服バイト等：承認＝確定
-    return { ok: true, decision, name, date, written: writeVal };
+    else { notifyKyukinDecision_(name, date, decision); pushShiftAfterKyukin_(name, date); } // 欠勤の承認＝本人へDM＋抜けた後の本日シフトを黒服へ
+    // 二度押しで残った同一申請はコンソール承認でも道連れで閉じる＝LINE側の承認待ちに幽霊を残さない（2026-08-07）
+    const dups = closeDupRequests_(reqSh, rowIdx, name, date, time);
+    return { ok: true, decision, name, date, written: writeVal, dups };
   }
   reqSh.getRange(rowIdx, 5).setValue(decision);
   reqSh.getRange(rowIdx, 6).setValue(new Date());
   // 却下：シフト申請のステータスを却下にするだけ。シフト表に行があれば消す(ベストエフォート)
   if (!isKyukin) writeShiftCell_(name, date, '');
-  return { ok: true, decision, name, date };
+  else notifyKyukinDecision_(name, date, decision);
+  const dupsR = closeDupRequests_(reqSh, rowIdx, name, date, time);
+  return { ok: true, decision, name, date, dups: dupsR };
 }
 
 // シフト申請シートに『確定シフト』列(8列目)の見出しを保証（非破壊・初回のみ）。
@@ -9128,7 +9230,431 @@ function decideKyukinRequest_(rowIdx, decision) {
 
   reqSh.getRange(rowIdx, 5).setValue(decision);
   reqSh.getRange(rowIdx, 6).setValue(new Date());
-  return { ok: true, name, date, decision };
+  // 同じ申請の二度押しで残っている行を道連れで閉じる＝1回の承認で承認待ちが空になる（2026-08-07）。
+  const dups = closeDupRequests_(reqSh, rowIdx, name, date, String(row[3] == null ? '' : row[3]).trim());
+  notifyKyukinDecision_(name, date, decision);
+  if (decision === '承諾') pushShiftAfterKyukin_(name, date); // 欠勤者が抜けた後の本日シフトを黒服へ
+  return { ok: true, name, date, decision, dups };
+}
+
+// 「同一人物×同一日付×同一希望」で承認待ちのまま残っている重複行を『重複』で閉じる。返り値＝閉じた件数。
+// ⚠️2026-08-07 追加。これが無いと、二度押しで増えた pending が1件承認しても残り続け、
+//   一言承認の一覧が延々と出続ける（現場で実際に無限ループした）。行は消さずステータスだけ変える＝履歴は残す。
+// ⚠️『重複』は pending 以外なので pendingKyukinList_ / pendingReqKeySet_ / 申請管理から自然に外れる。
+function closeDupRequests_(sh, keepRow, name, dateStr, want) {
+  let n = 0;
+  try {
+    const last = sh.getLastRow();
+    if (last < 2) return 0;
+    const start = Math.max(2, last - 299);
+    const vals = sh.getRange(start, 1, last - start + 1, 5).getValues();
+    const key = shConNorm_(String(name || '')) + '|' + String(dateStr || '').trim() + '|' + String(want || '').trim();
+    const stamp = new Date();
+    for (let i = 0; i < vals.length; i++) {
+      const rowIdx = start + i;
+      if (rowIdx === keepRow) continue;
+      if (String(vals[i][4] == null ? '' : vals[i][4]).trim() !== 'pending') continue;
+      const d = vals[i][2];
+      const ds = (d instanceof Date && !isNaN(d)) ? Utilities.formatDate(d, TZ, 'M/d') : String(d == null ? '' : d).trim();
+      const k = shConNorm_(String(vals[i][1] == null ? '' : vals[i][1])) + '|' + ds + '|' + String(vals[i][3] == null ? '' : vals[i][3]).trim();
+      if (k !== key) continue;
+      sh.getRange(rowIdx, 5).setValue('重複');
+      sh.getRange(rowIdx, 6).setValue(stamp);
+      n++;
+    }
+  } catch (e) { console.error('closeDupRequests_', e); }
+  return n;
+}
+
+// 欠勤申請の結果を申請した本人へDM（2026-08-06 ボス依頼）。
+// 呼ぶのは decideKyukinRequest_（黒服LINEの承認）と approveShiftRequest_（コンソールの承認・欠勤のみ）の2経路＝
+// どちらで承認しても本人に必ず届く。⚠️通知管理センターの kyukin_decision_dm でOFFにできる（既定ON）。
+// 送らないケース（黙って false を返す・承認処理そのものは絶対に止めない）:
+//   ・通知OFF ・名簿にLINE userIdが無い ・退職者（[[退職者への通知監査]]と同じ扱い）
+function notifyKyukinDecision_(name, dateStr, decision) {
+  try {
+    if (decision !== '承諾' && decision !== '却下') return false; // クリア等は結果通知の対象外
+    if (!notifEnabled_('kyukin_decision_dm')) return false;
+    var ent = rosterEntryByName_(name);
+    if (!ent || !ent.userId || ent.retired) return false;
+    var d = String(dateStr || '').trim();
+    var msg = (decision === '承諾')
+      ? '✅【欠勤 承認】\n' + d + ' のお休みが承認されました。\nシフト表も「休み」に更新しています。ゆっくり休んでください。'
+      : '❌【欠勤 却下】\n' + d + ' の欠勤申請は、今回は見送りとなりました。\nお手数ですが黒服へご連絡のうえ、出勤の調整をお願いします。';
+    push_(ent.userId, msg);
+    return true;
+  } catch (e) { console.error('notifyKyukinDecision_', e); return false; } // DMの失敗で承認を巻き戻さない
+}
+
+// 欠勤の「承認」直後に、その人が抜けた後の本日シフト一覧を黒服グループへ自動で流す（2026-08-06 ボス依頼）。
+// 呼ぶのは notifyKyukinDecision_ と同じ2経路（黒服LINEの一言承認／コンソール承認）。却下では流さない。
+// ⚠️本日（営業日）の欠勤だけが対象＝将来日の欠勤を承認しても本日の顔ぶれは変わらないので流さない。
+// ⚠️通知管理センターの kyukin_shift_recap でOFF・宛先変更ができる。
+function pushShiftAfterKyukin_(name, dateStr) {
+  try {
+    if (String(dateStr || '').trim() !== bizShiftColKey_()) return false;
+    if (!notifEnabled_('kyukin_shift_recap')) return false;
+    tsdCacheClear_();   // 直前の書込（休み化）を必ず反映させる＝20秒キャッシュを跨がない
+    push_(notifTarget_('kyukin_shift_recap', null, 'GROUP_KUROFUKU'),
+      '🙅 ' + name + 'さん 欠勤（本日は休み）\n▼この後の本日シフトです\n\n' + todayShiftText_());
+    return true;
+  } catch (e) { console.error('pushShiftAfterKyukin_', e); return false; } // 一覧の失敗で承認を巻き戻さない
+}
+
+// ============================================================
+// 📉 当日欠勤の実績集計と「当欠多め」フラグ（2026-08-07 ボス依頼）
+// ------------------------------------------------------------
+// 目的＝当日欠勤が重なる子を、その日のシフト連絡の時点で黒服が把握できるようにする。
+// データ源＝シフト申請タブ（過去分もそのまま遡れる）。当日欠勤の定義は制度と同じ「申請日＝対象日」。
+// ⚠️成立した欠勤だけを数える: ステータス 承諾／休み＝本人は来ていない。
+//   却下＝出勤してもらった／pending＝未処理／クリア・重複＝集計対象外。
+// ⚠️同じ日の複数行は1回に畳む（[[reference_kyukin_dup_deadlock]]の二度押し・過去の重複承認で水増ししないため）。
+// ⚠️しきい値は ScriptProperty で変更可。KEEP_PREFIX に 'KYUKIN_' 登録済＝軍師設定リセットで消えない。
+// ============================================================
+function kyukinStatDays_()   { return Number(prop('KYUKIN_STAT_DAYS')   || 90) || 90; }
+function kyukinWarnCount_()  { return Number(prop('KYUKIN_WARN_COUNT')  || 2)  || 2; }
+function kyukinAlertCount_() { return Number(prop('KYUKIN_ALERT_COUNT') || 3)  || 3; }
+
+// 直近N日の当日欠勤を名前別に集計 → { 正規化名: { name, count, dates:[古い順] } }
+function kyukinStatsMap_(days) {
+  const out = {};
+  try {
+    const sh = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+    if (!sh || sh.getLastRow() < 2) return out;
+    const limit = Date.now() - (Number(days) || kyukinStatDays_()) * 86400000;
+    const rows = sh.getDataRange().getValues();
+    const seen = {};
+    for (let i = 1; i < rows.length; i++) {
+      const sub = rows[i][0];
+      if (!(sub instanceof Date) || isNaN(sub) || sub.getTime() < limit) continue;
+      if (String(rows[i][3] == null ? '' : rows[i][3]).trim() !== '欠勤') continue;
+      const st = String(rows[i][4] == null ? '' : rows[i][4]).trim();
+      if (st !== '承諾' && st !== '休み') continue;
+      const dc = rows[i][2];
+      const ds = (dc instanceof Date && !isNaN(dc)) ? Utilities.formatDate(dc, TZ, 'M/d') : String(dc == null ? '' : dc).trim();
+      if (ds !== Utilities.formatDate(sub, TZ, 'M/d')) continue;   // 当日欠勤だけ＝事前申請の休みは数えない
+      const nm = String(rows[i][1] == null ? '' : rows[i][1]).trim();
+      if (!nm) continue;
+      const k = shConNorm_(nm);
+      const dedupe = k + '|' + ds;
+      if (seen[dedupe]) continue;                                   // 1日1回まで＝重複行で水増ししない
+      seen[dedupe] = true;
+      if (!out[k]) out[k] = { name: nm, count: 0, dates: [], items: [] };
+      out[k].name = nm;                                             // 表示は最新の表記に寄せる
+      out[k].count++;
+      out[k].items.push({ d: ds, t: sub.getTime() });
+    }
+    // ⚠️並べ替えは提出日時（実時刻）で行う。'M/d'文字列で並べると年をまたいだ時に 12/28 と 1/5 が逆転する。
+    Object.keys(out).forEach(function (k) {
+      out[k].items.sort(function (a, b) { return b.t - a.t; });     // 新しい順
+      out[k].dates = out[k].items.map(function (x) { return x.d; });
+      delete out[k].items;
+    });
+  } catch (e) { console.error('kyukinStatsMap_', e); }
+  return out;
+}
+
+// 回数 → フラグ。level 0=なし / 1=注意 / 2=多め
+function kyukinFlag_(count) {
+  const n = Number(count) || 0;
+  if (n >= kyukinAlertCount_()) return { level: 2, label: '🚨当欠多め' };
+  if (n >= kyukinWarnCount_())  return { level: 1, label: '⚠️当欠注意' };
+  return { level: 0, label: '' };
+}
+
+// シフト行(1人)の当欠回数。源氏名と元名の両方で引く（リネーム前の申請を落とさない）
+function kyukinCountForStaff_(s, stats) {
+  const keys = [];
+  [s && s.name, s && s.origName].forEach(function (n) {
+    const k = shConNorm_(String(n || ''));
+    if (k && keys.indexOf(k) < 0) keys.push(k);
+  });
+  return keys.reduce(function (n, k) { return n + ((stats[k] || {}).count || 0); }, 0);
+}
+
+// 黒服グループ向けの本日ブリーフ本文。本日のシフト（当欠フラグ付き）＋本日の予約。
+// ⚠️キャストグループには絶対に流さない（当欠フラグは黒服の判断材料であって本人向けの評価ではない）。
+function buildKurofukuBriefText_() {
+  const detail = getTodayShiftDetail_();
+  const d = new Date();
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);              // 0〜6時は前営業日の続き
+  const md  = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  const dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  const days  = kyukinStatDays_();
+  const stats = kyukinStatsMap_(days);
+
+  const flagOf = function (s) {
+    const c = kyukinCountForStaff_(s, stats);
+    const f = kyukinFlag_(c);
+    return f.level ? '　' + f.label + c + '回' : '';
+  };
+
+  const lines = ['【' + md + '(' + dow + ') 黒服ブリーフ】', '', '▼本日のシフト'];
+  const total = detail.cast.length + detail.kurofuku.length + detail.haken.length;
+  if (total === 0) {
+    lines.push('  本日のシフトがありません');
+  } else {
+    if (detail.cast.length) {
+      lines.push('キャスト（' + detail.cast.length + '名）');
+      detail.cast.forEach(function (s) {
+        lines.push('  ' + (s.role === '体験' ? '体' : '') + s.name + '　' + s.shift + flagOf(s));
+      });
+    }
+    if (detail.kurofuku.length) {
+      lines.push('黒服（' + detail.kurofuku.length + '名）');
+      detail.kurofuku.forEach(function (s) { lines.push('  ' + s.name + '　' + s.shift + flagOf(s)); });
+    }
+    if (detail.haken.length) {
+      lines.push('派遣（' + detail.haken.length + '名）');
+      detail.haken.forEach(function (s) { lines.push('  ' + s.name + '　' + s.shift); });
+    }
+  }
+
+  // 本日の予約（キャンセルは除外）。人数は代表＋同席会員の合計。
+  lines.push('');
+  try {
+    const rsv = (getYoyakuReservations_(bizDateStr_()) || []).filter(function (r) { return r.status !== 'キャンセル'; });
+    const paxOf = rsvPaxOf_;   // 人数の数え方は新規予約通知と共通＝2箇所で食い違わない
+    const pax = rsv.reduce(function (n, r) { return n + paxOf(r); }, 0);
+    lines.push('▼本日の予約　' + rsv.length + '件／合計' + pax + '名');
+    if (!rsv.length) {
+      lines.push('  予約なし');
+    } else {
+      rsv.slice().sort(function (a, b) { return String(a.time).localeCompare(String(b.time)); })
+        .forEach(function (r) {
+          const parts = [r.time || '時間未定', (r.customer || '（名前なし）') + '様', paxOf(r) + '名', r.table || '未定'];
+          const cast = r.tantouCast || r.yoyakuCast;
+          if (cast) parts.push('担当:' + cast);
+          if (r.dohanCast) parts.push('同伴:' + r.dohanCast);
+          if (r.status && r.status !== '確定' && r.status !== '来店済み') parts.push('※' + r.status);
+          lines.push('  ' + parts.join('　'));
+        });
+    }
+  } catch (e) {
+    console.error('buildKurofukuBriefText_ 予約', e);
+    lines.push('▼本日の予約　（取得できませんでした）');
+  }
+
+  lines.push('');
+  lines.push('※当欠は直近' + days + '日の実績（' + kyukinWarnCount_() + '回で⚠️／' + kyukinAlertCount_() + '回以上で🚨）');
+  return lines.join('\n');
+}
+
+// 黒服ブリーフを送信。キャスト向け「本日出勤ラインナップ」と同時刻に走る（scheduledJobs の notif_('lineup')）。
+function sendKurofukuDailyBrief_(ns_) {
+  if (!notifEnabled_('kuro_brief', ns_)) return false;
+  const txt = buildKurofukuBriefText_();
+  if (!txt) return false;
+  push_(notifTarget_('kuro_brief', ns_, 'GROUP_KUROFUKU'), txt);
+  return true;
+}
+
+// LINEに飛ばさず本文だけ確認する（GASエディタから実行）
+function testKurofukuBrief() { Logger.log('=== 黒服ブリーフ プレビュー ===\n' + buildKurofukuBriefText_()); }
+
+// コンソール用: 当日欠勤の集計一覧（多い順）。名簿から役割・在籍を相乗りさせる。
+function kyukinStatsView_(days) {
+  const dd = Number(days) || kyukinStatDays_();
+  const stats = kyukinStatsMap_(dd);
+  // ⚠️名簿は1回だけ読む。rosterEntryByName_ を人数分呼ぶと名簿の全読みがその回数だけ走って重くなる。
+  const roster = {};
+  try {
+    const stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (stf) {
+      let rc = -1;
+      try { const c = getStaffRetireCols_(stf, false)['退職']; if (c != null && c >= 0) rc = c; } catch (e) {}
+      const rr = stf.getDataRange().getValues();
+      for (let i = 1; i < rr.length; i++) {
+        const k = shConNorm_(String(rr[i][1] || ''));
+        if (!k) continue;
+        roster[k] = { role: String(rr[i][2] || '').trim(), retired: (rc >= 0) ? (String(rr[i][rc]).trim() === '退職') : false };
+      }
+    }
+  } catch (e) { console.error('kyukinStatsView_ roster', e); }
+  const rows = Object.keys(stats).map(function (k) {
+    const s = stats[k];
+    const f = kyukinFlag_(s.count);
+    const ent = roster[k] || {};
+    return {
+      name: s.name,
+      role: ent.role || '',
+      retired: !!ent.retired,
+      count: s.count,
+      level: f.level,
+      flag: f.label,
+      dates: (s.dates || []).slice()            // 既に新しい順（kyukinStatsMap_ が提出日時で並べ替え済み）
+    };
+  });
+  rows.sort(function (a, b) { return (b.count - a.count) || String(a.name).localeCompare(String(b.name)); });
+  return { ok: true, days: dd, warn: kyukinWarnCount_(), alert: kyukinAlertCount_(), rows: rows };
+}
+
+// ============================================================
+// ⚡ 一言承認（黒服グループで「承認」「却下」の一言だけで確定させる）
+//   きっかけ＝黒服が申請メッセージから「#休み承認 12」の行番号をコピペするのが手間（2026-08-06 ボス依頼）。
+//   対象は黒服グループへ流れてくる「承認待ち」2種類:
+//     ① 当日欠勤申請（シフト申請タブ status=pending × 希望=欠勤 × 申請日=対象日）→ decideKyukinRequest_
+//     ② 当日相談（AI家康くん経由・当日相談タブ 状態=相談中）                    → handleShiftConsultDecision_
+//   対象の決め方（上から優先）:
+//     (1) 申請メッセージへの引用返信 → そのIDで一意に確定（複数保留でも迷わない）
+//     (2) 本文の名前指定「承認 まや」→ 保留者と一致した1人
+//     (3) 保留が1件だけ → それ
+//     (4) 複数あって特定できない → 一覧を返して名前指定を促す（勝手に決めない）
+//     (5) 保留0件 → 何もせず通常処理へ返す（ただの会話を飲み込まない＝誤爆防止）
+//   ⚠️保留の実体はシート（＝正本）を毎回読む。コンソール等で先に処理されていれば自然に対象から消える。
+// ============================================================
+var QUICK_DECIDE_WINDOW_H_ = 24;  // 「一言」で効く猶予（提出からの時間）。これを過ぎた取り残しは #休み承認 12 で処理する
+
+function quickDecideRemember_(messageId, ptr) {
+  if (!messageId) return;
+  try { CacheService.getScriptCache().put('QDEC_' + messageId, JSON.stringify(ptr), 21600); } catch (e) {} // 6時間=Cacheの上限
+}
+function quickDecideLookup_(messageId) {
+  try { var v = CacheService.getScriptCache().get('QDEC_' + messageId); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+}
+
+// 承認待ちの当日欠勤申請（新しい順）
+function pendingKyukinList_() {
+  var out = [];
+  try {
+    var sh = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+    if (!sh) return out;
+    var last = sh.getLastRow();
+    if (last < 2) return out;
+    var start = Math.max(2, last - 299);           // 申請は追記型＝直近だけ見る
+    var vals = sh.getRange(start, 1, last - start + 1, 7).getValues();
+    var limit = Date.now() - QUICK_DECIDE_WINDOW_H_ * 3600 * 1000;
+    for (var i = 0; i < vals.length; i++) {
+      var r = vals[i];
+      if (String(r[4] == null ? '' : r[4]).trim() !== 'pending') continue;
+      if (String(r[3] == null ? '' : r[3]).trim() !== '欠勤') continue;
+      if (!(r[0] instanceof Date) || isNaN(r[0]) || r[0].getTime() < limit) continue;
+      var dstr = (r[2] instanceof Date) ? Utilities.formatDate(r[2], TZ, 'M/d') : String(r[2] == null ? '' : r[2]).trim();
+      // ⚠️黒服バイトは将来日の欠勤申請もpendingになるがLINEには流れない。
+      //   submitShift の isSameDayKyukin と同じ条件（申請日=対象日）だけ通す＝流れていない申請を一言で処理しない。
+      if (dstr !== Utilities.formatDate(r[0], TZ, 'M/d')) continue;
+      out.push({ kind: 'kyukin', row: start + i, name: String(r[1] == null ? '' : r[1]).trim(), date: dstr, at: r[0].getTime() });
+    }
+  } catch (e) { console.error('pendingKyukinList_', e); }
+  return out.sort(function (a, b) { return b.at - a.at; });
+}
+
+// 承認待ちの当日相談（新しい順）。propが消えていれば処理済み＝出さない
+function pendingConsultList_() {
+  var out = [];
+  try {
+    var sh = getOrOpenSS_().getSheetByName(SHIFT_CONSULT_TAB);
+    if (!sh) return out;
+    var last = sh.getLastRow();
+    if (last < 2) return out;
+    var start = Math.max(2, last - 199);
+    var vals = sh.getRange(start, 1, last - start + 1, 10).getValues();
+    var biz = bizDateStr_();
+    for (var i = 0; i < vals.length; i++) {
+      var r = vals[i];
+      if (String(r[1] == null ? '' : r[1]).trim() !== biz) continue;
+      if (String(r[7] == null ? '' : r[7]).trim() !== '相談中') continue;
+      var nm = String(r[2] == null ? '' : r[2]).trim();
+      if (!nm || !prop(shiftConsultKey_(nm))) continue;
+      out.push({ kind: 'consult', name: nm, date: String(r[3] == null ? '' : r[3]).trim() || '相談',
+                 detail: String(r[4] == null ? '' : r[4]).trim(),
+                 at: (r[0] instanceof Date && !isNaN(r[0])) ? r[0].getTime() : 0 });
+    }
+  } catch (e) { console.error('pendingConsultList_', e); }
+  return out.sort(function (a, b) { return b.at - a.at; });
+}
+
+// 「承認」「却下」の一言を処理。処理した(=返信した)なら true、対象なしで通常処理へ返すなら false。
+function handleQuickDecision_(event, userId, decision, rest) {
+  var list = pendingKyukinList_().concat(pendingConsultList_());
+  if (!list.length) return false;                                  // 承認待ちゼロ＝ただの会話。触らない
+
+  var tail = String(rest || '').trim();
+  var isBare = tail.replace(/[\s　!！。、．・…ー〜~✅❌👍🙏]/g, '') === '';
+  // 「承認お願いします」「却下ですか？」「承認済み」等の“依頼・疑問・状態の言及”は決定ではない＝一言承認に食わせない
+  if (!isBare && /お願い|ねがい|でしょうか|ですか|してくれ|して下さい|してください|\?|？|済み|ずみ|待ち|まち/.test(tail)) return false;
+
+  var target = null, note = '';
+
+  // (1) 申請メッセージへの引用返信 → 一意に確定
+  var qid = event.message && event.message.quotedMessageId;
+  if (qid) {
+    var ptr = quickDecideLookup_(qid);
+    if (ptr) {
+      target = list.filter(function (x) {
+        return (ptr.t === 'kyukin') ? (x.kind === 'kyukin' && x.row === ptr.row)
+                                    : (x.kind === 'consult' && shConNorm_(x.name) === shConNorm_(String(ptr.name || '')));
+      })[0] || null;
+      if (!target) { reply(event.replyToken, '⚠️ その申請は既に処理済みです（または期限切れです）'); return true; }
+      if (!isBare) note = tail;
+    }
+  }
+
+  // ⚠️2026-08-07 ここから下は「重複を畳んでから」数える。
+  //   旧版は list（生の行）をそのまま数え、(2)で hit.length===1 を要求していた＝同じ人の申請が2件以上あると
+  //   永久に確定できず「承認 きさき」→また一覧→…の無限ループになった（現場で発生）。
+  //   同一種別×同一名×同一日付は"同じ申請の二度押し"なので1件として扱い、確定時に残りも閉じる（closeDupRequests_）。
+  var uniq = quickDecideCollapse_(list);
+
+  // (2) 名前指定「承認 まや」「却下 まや 人手が足りず」
+  if (!target && !isBare) {
+    var parts = tail.split(/[\s　]+/);
+    var cand = shConNorm_(parts[0].replace(/(さん|ちゃん|様)$/, ''));
+    var hit = uniq.filter(function (x) { var k = shConNorm_(x.name); return k === cand || (cand.length >= 2 && k.indexOf(cand) === 0); });
+    if (hit.length === 1) { target = hit[0]; note = parts.slice(1).join(' ').trim(); }
+  }
+
+  // (3) 保留が1件だけ → それ（名前が付いていなくても迷わない）
+  if (!target && uniq.length === 1) { target = uniq[0]; if (!isBare && !note) note = tail; }
+
+  // (4) 複数あって特定できない → 一覧を出して名前指定を促す
+  if (!target) {
+    // ⚠️名前が衝突している行に「承認 <名前>」を案内すると、その指示自体が絶対に成立しない（旧版の罠）。
+    //   同名が並ぶときだけ行番号指定の #休み承認 に切り替える＝案内どおり打てば必ず抜けられる。
+    var nameCnt = {};
+    uniq.forEach(function (x) { var k = shConNorm_(x.name); nameCnt[k] = (nameCnt[k] || 0) + 1; });
+    var dupCnt = list.length - uniq.length;
+    var lines = uniq.map(function (x) {
+      var label = (x.kind === 'kyukin' ? '当日欠勤 ' : '当日相談 ') + x.name + (x.date ? '（' + x.date + '）' : '');
+      var how = (x.kind === 'kyukin' && nameCnt[shConNorm_(x.name)] > 1)
+        ? '「#休み' + decision + ' ' + x.row + '」'
+        : '「' + decision + ' ' + x.name + '」';
+      return '・' + label + '　→' + how;
+    });
+    reply(event.replyToken, '⚠️ 承認待ちが' + uniq.length + '件あります。お名前を付けて送ってください。\n' + lines.join('\n') +
+      (dupCnt ? '\n\n（同じ内容の重複申請が' + dupCnt + '件あります。上のとおり1回操作すればまとめて閉じます）' : ''));
+    return true;
+  }
+
+  if (target.kind === 'consult') {
+    handleShiftConsultDecision_(event, userId, decision, target.name + (note ? ' ' + note : ''));
+    return true;
+  }
+  var r = decideKyukinRequest_(target.row, decision === '承認' ? '承諾' : '却下');
+  var dupNote = (r.ok && r.dups) ? '\n（同じ内容の重複申請' + r.dups + '件も一緒に閉じました）' : '';
+  reply(event.replyToken, r.ok
+    ? ((decision === '承認'
+        ? '✅【承認】' + r.name + 'さん（' + r.date + '）の欠勤を承認しました'
+        : '❌【却下】' + r.name + 'さん（' + r.date + '）の欠勤申請を却下しました') + dupNote)
+    : '⚠️ ' + r.error);
+  return true;
+}
+
+// 承認待ちの重複を1件に畳む（同一種別×同一名×同一日付＝同じ申請の二度押し）。
+// ⚠️2026-08-07 追加。ここが無いと同名2件以上で「名前を付けて送ってください」の無限ループになる。
+// ⚠️代表に残すのは「一番古い行＝最初の申し出」。理由＝ kintaiAbsenceMap_ は当日欠勤の判定根拠に
+//   "最も早い申し出"の行を採る（本人に有利な側）ので、生き残る行（承諾/却下）を古い側に寄せないと
+//   判定がステータス『重複』の行を見てしまう。list は新しい順なので、後から来たものほど古い。
+function quickDecideCollapse_(list) {
+  var idx = {}, out = [];
+  for (var i = 0; i < list.length; i++) {
+    var x = list[i];
+    var k = x.kind + '|' + shConNorm_(String(x.name || '')) + '|' + String(x.date == null ? '' : x.date).trim();
+    if (k in idx) { out[idx[k]] = x; continue; }   // 表示順は最初の出現位置のまま、中身だけ古い行に差し替える
+    idx[k] = out.length;
+    out.push(x);
+  }
+  return out;
 }
 
 function getStaffList() {
@@ -9330,7 +9856,10 @@ function handlePortalApi_(e) {
   //   home分岐に入る前に走るため、home分岐内の _portalHomeMemo では救えない＝ここで前倒しして立てる。
   //   解除は home分岐の finally（他tabでは null のまま＝従来どおり毎回フル読みで挙動不変）。
   const tab = e.parameter.tab || '';
-  if (tab === 'home') _staffValuesMemo = {};
+  // ⚡本番フロントは home を homelite/homerest に分割して投げる（tab=home単体は旧端末互換の遺物）。
+  //   3値すべてでメモを立てないと、ゲート5関数が名簿を毎回6回フル読み(約2.4〜3.6秒)＝初回描画律速のhomeliteに直撃していた。
+  //   解除は home分岐の finally（9614付近・3値ブロック内で _staffValuesMemo も null 化済み）＝挙動不変・漏らさない。
+  if (tab === 'home' || tab === 'homelite' || tab === 'homerest') _staffValuesMemo = {};
 
   const name = getStaffName(userId);
   if (!name) return out({ ok: false, error: 'unregistered' });
@@ -10700,12 +11229,14 @@ function createShiftConsult_(name, lineId, c) {
   try { getShiftConsultSheet_().appendRow([new Date(), bizDateStr_(), name, SHIFT_CONSULT_KIND_JP_[kind], rec.detail, rec.reason, rec.applyValue, '相談中', '', '']); } catch (e) { console.error('consult sheet', e); }
   var KF = prop('GROUP_KUROFUKU');
   if (KF) {
-    push_(KF,
+    // ⚡一言承認: このメッセージのあとに「承認」/「却下」と送るだけで確定する（→ handleQuickDecision_）
+    var mid = push_(KF,
       '🗣【当日の相談】' + name + ' さんより\n' +
       '■' + SHIFT_CONSULT_KIND_JP_[kind] + '：' + rec.detail +
       (rec.reason ? '\n■理由：' + rec.reason : '') + '\n\n' +
-      '承認 → #相談承認 ' + name + '\n' +
-      '却下 → #相談却下 ' + name + '（続けて理由を書けます）');
+      '▼このまま「承認」または「却下」と送信してください\n' +
+      '（理由を添えるときは「却下 ' + name + ' 人手が足りず…」／他にも承認待ちがある時は「承認 ' + name + '」）');
+    quickDecideRemember_(mid, { t: 'consult', name: name });
   }
   return { ok: true };
 }
@@ -11508,8 +12039,8 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS'];
-  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE'];
+  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_','KYUKIN_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
     if (KEEP_PREFIX.some(p => k.startsWith(p))) return;
@@ -12343,8 +12874,130 @@ function cancelKioskReservation(rowIdx, term) {
   return cancelReservation_(rowIdx, term || 'IEYAS軍師');
 }
 
+// 予約1件の人数＝代表＋同席会員（[[project_lounge_coseating]]）。黒服ブリーフと新規予約通知で同じ数え方をする。
+// ⚠️代表の人数が空/0なら1名扱い。addReservation_ の書込(`Number(payload.pax)||1`)と
+//   getYoyakuReservations_ の読取(`Number(row[4])||1`)がどちらも1に倒すので、ここだけ0にすると
+//   「通知は0名なのに台帳と累計は1名」という食い違いが出る（実際にテストで出た）。
+function rsvPaxOf_(r) {
+  return (Number(r && r.pax) || 1) + (((r && r.subCustomers) || []).reduce(function (m, s) { return m + (Number(s && s.pax) || 1); }, 0));
+}
+
+// 'yyyy-MM-dd' → '8/9(土)'。本日/明日なら添える（黒服が日付を読み違えないため）
+function rsvDateLabel_(dateKey) {
+  const p = String(dateKey || '').split('-');
+  if (p.length < 3) return String(dateKey || '');
+  const d = new Date(+p[0], (+p[1]) - 1, +p[2]);
+  const lbl = (d.getMonth() + 1) + '/' + d.getDate() + '(' + ['日','月','火','水','木','金','土'][d.getDay()] + ')';
+  const biz = bizDateStr_();
+  if (dateKey === biz) return lbl + '＝本日';
+  const bp = String(biz).split('-');
+  if (bp.length === 3) {
+    const t = new Date(+bp[0], (+bp[1]) - 1, +bp[2] + 1);
+    if (d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate()) return lbl + '＝明日';
+  }
+  return lbl;
+}
+
+// 新規予約が入るたびに黒服グループへ内容を流す（2026-08-07 ボス依頼）。
+// ⚠️POS(来店時の飛び込み登録)は現場が既に見ているので流さない＝「予約が入った」の通知に絞る。
+// ⚠️通知管理センターの rsv_new でOFF・宛先変更ができる。⚠️呼び出しは必ず withPropLock_ の外
+//   （LINE送信でロックを握ったまま待つと、他端末の予約登録がその間ブロックされる）。
+// ⚠️失敗しても予約登録は絶対に巻き戻さない（呼び出し側で try/catch）。
+function notifyNewReservation_(rowIdx, payload, regBy) {
+  if (String(regBy || '') === 'IEYAS POS') return false;
+  if (!notifEnabled_('rsv_new')) return false;
+  const dateKey = String((payload && payload.date) || todayStr());
+  const pax = rsvPaxOf_(payload);
+  const lines = ['🆕【新規予約】' + rsvDateLabel_(dateKey)];
+  lines.push('　' + (String((payload && payload.time) || '').trim() || '時間未定') + '　'
+    + (String((payload && payload.customer) || '').trim() || '（名前なし）') + '様（' + pax + '名）');
+  lines.push('　卓 ' + (String((payload && payload.table) || '').trim() || '未定'));
+  const cast = [];
+  if (payload && payload.tantouCast) cast.push('担当:' + payload.tantouCast);
+  if (payload && payload.yoyakuCast) cast.push('予約:' + payload.yoyakuCast);
+  if (payload && payload.dohanCast)  cast.push('同伴:' + payload.dohanCast);
+  if (cast.length) lines.push('　' + cast.join('　'));
+  const subs = ((payload && payload.subCustomers) || []).filter(function (s) { return s && String(s.name || '').trim(); });
+  if (subs.length) lines.push('　同席: ' + subs.map(function (s) { return String(s.name).trim() + '様'; }).join('、'));
+  if (payload && String(payload.youbou || '').trim()) lines.push('　要望: ' + String(payload.youbou).trim());
+  if (regBy) lines.push('　登録: ' + regBy);
+  // その日の積み上がりも添える（1件だけ見ても全体が分からないため）。変更/キャンセル通知と同じ1行。
+  const tot = rsvDayTotalLine_(dateKey);
+  if (tot) { lines.push(''); lines.push(tot); }
+  push_(notifTarget_('rsv_new', null, 'GROUP_KUROFUKU'), lines.join('\n'));
+  return true;
+}
+
+// その日の予約の積み上がり（キャンセル除く）を1行にする。新規/変更/キャンセルの各通知の末尾に共通で付ける。
+function rsvDayTotalLine_(dateKey) {
+  try {
+    const all = (getYoyakuReservations_(dateKey) || []).filter(function (r) { return r.status !== 'キャンセル'; });
+    return '▼' + rsvDateLabel_(dateKey).replace('＝本日', '').replace('＝明日', '') + ' は ' + all.length + '件／合計'
+      + all.reduce(function (n, r) { return n + rsvPaxOf_(r); }, 0) + '名';
+  } catch (e) { console.error('rsvDayTotalLine_', e); return ''; }
+}
+
+// 予約の「変更」を黒服へ（2026-08-07 ボス依頼）。
+// ⚠️流すのは"予約そのものが動いた"時だけ。来店/席移動/POS由来の更新は現場が目の前で見ているので流さない
+//   （ここを絞らないと、来店・卓移動のたびにグループが鳴って誰も読まなくなる）。
+// ⚠️通知管理センターの rsv_update でOFF・宛先変更ができる。失敗しても予約変更は巻き戻さない。
+function notifyRsvUpdate_(rowIdx, before, after, actor, payload) {
+  if (String(actor || '') === 'IEYAS POS') return false;
+  if (!before || !after) return false;
+  if (before.status === '来店済み' || after.status === '来店済み') return false; // 現場オペレーション
+  if (after.status === 'キャンセル') {
+    // 現状の入口は cancelReservation_ だが、update経由でキャンセルにされた時も取りこぼさない
+    // （キャンセルの見落としが黒服には一番痛い）。⚠️席の後片付けはしていない経路なので wasSeated は立てない。
+    if (before.status !== 'キャンセル') {
+      try { notifyRsvCancel_(rowIdx, before, actor, false); } catch (e) { console.error('notifyRsvCancel_(update)', e); }
+    }
+    return false;
+  }
+  const diff = rsvDiff_(before, after);
+  if (!diff) return false;                                                         // 中身が変わっていない保存では鳴らさない
+  if (!notifEnabled_('rsv_update')) return false;
+  const dateKey = String(after.date || before.date || '');
+  const lines = ['✏️【予約変更】' + rsvDateLabel_(dateKey)];
+  lines.push('　' + (String(after.time || '').trim() || '時間未定') + '　'
+    + (String(after.customer || '').trim() || '（名前なし）') + '様（' + rsvPaxOf_(payload) + '名）　卓 '
+    + (String(after.table || '').trim() || '未定'));
+  lines.push('　変更: ' + diff);
+  if (actor) lines.push('　操作: ' + actor);
+  const tot = rsvDayTotalLine_(dateKey);
+  if (tot) { lines.push(''); lines.push(tot); }
+  push_(notifTarget_('rsv_update', null, 'GROUP_KUROFUKU'), lines.join('\n'));
+  return true;
+}
+
+// 予約の「キャンセル」を黒服へ（2026-08-07 ボス依頼）。席が空くので当日分は特に重要。
+// ⚠️通知管理センターの rsv_cancel でOFF・宛先変更ができる。失敗してもキャンセル処理は巻き戻さない。
+function notifyRsvCancel_(rowIdx, snap, actor, wasSeated) {
+  if (String(actor || '') === 'IEYAS POS') return false;
+  if (!notifEnabled_('rsv_cancel')) return false;
+  const dateKey = String((snap && snap.date) || '');
+  // 同席会員は13列目までのスナップショットに入っていないので、必要な時だけ16列目を読む
+  let pax = Number(snap && snap.pax) || 1;
+  try {
+    const raw = getYoyakuRsrvSheet_().getRange(rowIdx, 16).getValue();
+    const subs = raw ? JSON.parse(raw) : [];
+    pax += (subs || []).reduce(function (m, s) { return m + (Number(s && s.pax) || 1); }, 0);
+  } catch (e) {}
+  const lines = ['❌【予約キャンセル】' + rsvDateLabel_(dateKey)];
+  const head = ['　' + (String((snap && snap.time) || '').trim() || '時間未定'),
+    (String((snap && snap.customer) || '').trim() || '（名前なし）') + '様（' + pax + '名）',
+    '卓 ' + (String((snap && snap.table) || '').trim() || '未定')];
+  if (snap && snap.tantouCast) head.push('担当:' + snap.tantouCast);
+  lines.push(head.join('　'));
+  if (actor) lines.push('　操作: ' + actor);
+  if (wasSeated) lines.push('　※来店済みからのキャンセル＝席を空けました');
+  const tot = rsvDayTotalLine_(dateKey);
+  if (tot) { lines.push(''); lines.push(tot); }
+  push_(notifTarget_('rsv_cancel', null, 'GROUP_KUROFUKU'), lines.join('\n'));
+  return true;
+}
+
 function addReservation_(payload, regBy) {
- return withPropLock_(function () {
+ const _res = withPropLock_(function () {
   const sh = getYoyakuRsrvSheet_();
   const dateKey = String(payload.date || todayStr());
   if (isHoliday_(dateKey)) return { ok: false, error: 'この日は店休日のため予約を登録できません' };
@@ -12375,6 +13028,11 @@ function addReservation_(payload, regBy) {
   logRsvChange_('登録', sh.getLastRow(), regBy, null, rsvPayloadSnapshot_(payload, '確定'));
   return { ok: true, dateKey, rowIdx: sh.getLastRow() };
  });
+ // 🆕 新規に1行できた時だけ黒服へ通知。二度押し(duplicate)では流さない＝同じ予約で2通出さない。
+ try {
+   if (_res && _res.ok && !_res.duplicate) notifyNewReservation_(_res.rowIdx, payload, regBy);
+ } catch (e) { console.error('notifyNewReservation_', e); }
+ return _res;
 }
 
 function updateReservation_(rowIdx, payload, actor) {
@@ -12408,7 +13066,10 @@ function updateReservation_(rowIdx, payload, actor) {
   }
   // 予約変更でYRSRV_を即時更新
   PropertiesService.getScriptProperties().deleteProperty('RSRV_SYNC_AT');
-  logRsvChange_('変更', rowIdx, actor, beforeSnap, rsvPayloadSnapshot_(payload, newStatus));
+  const afterSnap = rsvPayloadSnapshot_(payload, newStatus);
+  logRsvChange_('変更', rowIdx, actor, beforeSnap, afterSnap);
+  // ✏️ 予約が動いたことを黒服へ。通知の失敗で変更を巻き戻さない。
+  try { notifyRsvUpdate_(rowIdx, beforeSnap, afterSnap, actor, payload); } catch (e) { console.error('notifyRsvUpdate_', e); }
   return { ok: true };
 }
 
@@ -12440,6 +13101,8 @@ function cancelReservation_(rowIdx, actor) {
   }
   sp.deleteProperty('RSRV_SYNC_AT');
   logRsvChange_('削除', rowIdx, actor, beforeSnap, Object.assign({}, beforeSnap, { status: 'キャンセル' }));
+  // ❌ 席が空くので黒服へ。通知の失敗でキャンセル処理を巻き戻さない。
+  try { notifyRsvCancel_(rowIdx, beforeSnap, actor, status === '来店済み'); } catch (e) { console.error('notifyRsvCancel_', e); }
   return { ok: true, wasSeated: status === '来店済み' };
 }
 
@@ -17401,6 +18064,373 @@ function importMenuBulk(text) {
   const sh = getMenuMasterSheet_();
   sh.getRange(sh.getLastRow() + 1, 1, vals.length, 6).setValues(vals);
   return { ok: true, created: vals.length, skipped: pv.skip.length, autoLinked: pv.autoLink };
+}
+
+/* ============================================================================
+   🍽 自社POS（TRUST代替）Phase1 ＝ オーダー入力〜伝票明細〜会計サマリ
+   ----------------------------------------------------------------------------
+   ■ 伝票の単位 ＝ 予約行 rowIdx（予約表の行番号）。
+     既存の席料/同伴料 `updateSeatCharges(rowIdx,…)` と**同じキー**を使う。
+     ⚠️席(テーブル)を伝票キーにしてはいけない＝相席(1テーブルに別々の組)で
+       伝票が混ざる／テーブル移動で伝票が迷子になる（[[project_lounge_coseating]]）。
+       組＝rowIdx なら移動しても相席でも伝票は組に付いて回る。
+   ■ 商品マスタ ＝ 既存の「店舗メニュー」(MENU_MASTER_TAB)。POS専用マスタは作らない。
+     状態=SUPPLY_STOP_('メニュー落ち') の品は**POSに出さない**（＝出せない物を打たせない）。
+   ■ キャスト ＝ 注文1行に複数（「、」区切り）。ボス確定＝TRUSTの「選択」列と同じ思想で、
+     1本のボトルを複数キャストで折半できる形にデータを取る。分配計算は後段(Phase2)。
+     ⚠️ここを「席の担当キャスト」で代用すると後から遡って直せない＝最初から複数で持つ。
+   ■ 取消 ＝ 行を消さずに状態を'取消'にする forward-only（[[project_rsv_change_log]]と同じ流儀）。
+     打ち間違いの証跡が残る＝現金と同じで「消えた」が一番怖い。
+============================================================================ */
+const POS_ORDER_TAB       = 'POS_注文';
+const POS_ORDER_HEAD_     = ['注文ID', '営業日', '伝票行', 'テーブル', 'お客様名', '注文時刻',
+                             'カテゴリ', '品名', '単価', '数量', '金額', 'キャスト',
+                             '打ち手', '状態', '登録日時', '取消日時', '取消者'];
+const POS_ORDER_LIVE_     = '有効';
+const POS_ORDER_VOID_     = '取消';
+/* 🔥 会計の計算仕様＝TRUST-REGI-2の実機設定から採取（2026-08-07・詳細は repo `TRUST仕様書.md`）
+   ⚠️初版は要件定義の「消費税10%」を素直に読んで**外税10%**で組んだが、**実機は違った**。
+      実物＝「サービス料20%」＋「**消費税はサービス料に含まれる**」（＝消費税を別途上乗せしない）。
+      合計は **100円単位で切り上げ**。実測4件で検証済み：
+        13,000 → 税サ2,600 / 合計15,600 ｜ 16,000 → 19,200
+        26,000 → 31,200      ｜ 16,500 → 税サ3,300 / 合計19,800
+      傍証＝実機のセット料金に残る半端な「8,330」は 8,330×1.2=9,996→切上→10,000 の逆算値。 */
+const POS_SERVICE_RATE_   = 0.20;   // サービス料率（消費税を内包）
+const POS_ROUND_UNIT_     = 100;    // 合計の丸め単位。切り上げ（0=丸めない）
+/* 料金マスタの既定値（実機の設定値）。⚠️将来コンソールから変えられるようにする時はここを外出しする */
+const POS_SET_PRICE_      = 13000;  // セット料金（初回・フル延長・ハーフ延長すべて同額）
+const POS_SET_MINUTES_    = 120;    // 初回セットの時間（延長は実機で0分＝手動運用）
+const POS_DOHAN_FEE_      = 3000;   // 同伴料
+const POS_TANTO_FEE_      = 0;      // 担当料金（＝本指名料）。いえやすは0
+const POS_YOYAKU_FEE_     = 0;      // 予約料金（＝場内指名料）。いえやすは0
+
+/* ============================================================================
+   🧪 POSのモード（テスト／本番）＝ボス指示「本番だけどテストってフラグで出す」
+   ----------------------------------------------------------------------------
+   ⚠️**書き込み先のシートをモードで分ける**（テスト = 末尾に _TEST）。
+     同じシートに混ぜて「テスト行」列で区別する作りにしない＝本番に切り替えた時に
+     テストの練習データが売上集計に混ざる事故が必ず起きる。分けておけば切替＝白紙から。
+   ⚠️既定は 'test'。本番運用に上げるのは `setPosMode('live')` を明示的に叩いた時だけ。
+   ⚠️`POS_MODE` は resetGunshiSettings_ の KEEP に入れてある（入れ忘れると設定リセットで
+     黙ってテストに戻る＝[[reference_script_property_reset_trap]]）。
+============================================================================ */
+const POS_MODE_PROP_ = 'POS_MODE';
+function posMode_() {
+  return (PropertiesService.getScriptProperties().getProperty(POS_MODE_PROP_) === 'live') ? 'live' : 'test';
+}
+function posTab_(base) { return posMode_() === 'live' ? base : (base + '_TEST'); }
+function getPosMode() { return { mode: posMode_(), isTest: posMode_() !== 'live' }; }
+/* モード切替。⚠️本番へ上げる／テストへ戻すのは運用上の大きな分岐なので黒服LINEに必ず流す */
+function setPosMode(mode, by) {
+  const next = (String(mode || '') === 'live') ? 'live' : 'test';
+  const prev = posMode_();
+  PropertiesService.getScriptProperties().setProperty(POS_MODE_PROP_, next);
+  if (prev !== next) {
+    try {
+      push_(prop('GROUP_KUROFUKU'),
+        '【POS】モードを切り替えました\n' + (prev === 'live' ? '本番' : 'テスト') + ' → ' +
+        (next === 'live' ? '本番' : 'テスト') + '\n操作　' + (by || '不明') +
+        (next === 'live' ? '\n※ここからの入力が本番の記録になります' : '\n※記録はテスト用シートに入ります'));
+    } catch (e) {}
+  }
+  return { ok: true, mode: next };
+}
+
+function getPosOrderSheet_() {
+  const ss = getOrOpenSS_();
+  const tab = posTab_(POS_ORDER_TAB);
+  let sh = ss.getSheetByName(tab);
+  if (!sh) {
+    sh = ss.insertSheet(tab);
+    sh.appendRow(POS_ORDER_HEAD_);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/* ============================================================================
+   🧾 伝票そのものの共有（端末間）＝ボス指摘「いま各端末のローカルだけ」への回答
+   ----------------------------------------------------------------------------
+   ■ 1伝票 = 1行。中身は**下書きJSONまるごと**（セット/担当/売半/キャスト/ウェルカム/注文/
+     値引/支払/TRUST照合）。⚠️列に割らない理由＝画面の仕様がまだ動いている段階で列を切ると、
+     項目を足すたびにシート改修とデータ移行が要る。JSONなら前方互換で足せる。
+     在庫・バック計算に使う正規化（1注文=1行）は `POS_注文` 側の役目＝そちらは別で持つ。
+   ■ 競合＝**後勝ち**。ただし更新日時と更新者を必ず持ち、画面側は
+     「サーバーの方が新しければサーバーを採る」。⚠️同じ卓を2端末で同時に開いて
+     両方で打つと片方が消える＝運用で分ける前提（5Fと2Fは別の卓を見る）。
+============================================================================ */
+const POS_BILL_TAB   = 'POS_伝票';
+const POS_BILL_HEAD_ = ['営業日', '伝票行', '更新日時', '更新者', '合計', 'データ'];
+
+function getPosBillSheet_() {
+  const ss = getOrOpenSS_();
+  const tab = posTab_(POS_BILL_TAB);
+  let sh = ss.getSheetByName(tab);
+  if (!sh) {
+    sh = ss.insertSheet(tab);
+    sh.appendRow(POS_BILL_HEAD_);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/* その営業日の伝票を全部返す（端末はこれで他端末の入力を拾う） */
+function getPosBills(dateKey) {
+  const key = String(dateKey || bizDateStr_());
+  const sh = getPosBillSheet_();
+  const last = sh.getLastRow();
+  const out = [];
+  if (last < 2) return { mode: posMode_(), dateKey: key, bills: out };
+  const vals = sh.getRange(2, 1, last - 1, POS_BILL_HEAD_.length).getValues();
+  vals.forEach(r => {
+    if (String(r[0]) !== key) return;
+    let data = null;
+    try { data = JSON.parse(String(r[5] || 'null')); } catch (e) { data = null; }
+    if (!data) return;
+    out.push({ rowIdx: String(r[1]), ts: fmtStamp_(r[2]), by: String(r[3] || ''), total: Number(r[4]) || 0, data: data });
+  });
+  return { mode: posMode_(), dateKey: key, bills: out };
+}
+
+/* 伝票を保存（上書き）。⚠️同じ(営業日,伝票行)は1行だけ＝行を増やさない */
+function posSaveBill(dateKey, rowIdx, total, data, by) {
+  const key = String(dateKey || bizDateStr_());
+  const rid = String(rowIdx || '');
+  if (!rid) return { ok: false, error: '伝票行がありません' };
+  const json = (typeof data === 'string') ? data : JSON.stringify(data || {});
+  if (json.length > 45000) return { ok: false, error: '伝票データが大きすぎます' };  // セル上限50000字の手前で止める
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(8000); } catch (e) { return { ok: false, error: '混み合っています。もう一度' }; }
+  try {
+    const sh = getPosBillSheet_();
+    const last = sh.getLastRow();
+    let hit = -1;
+    if (last >= 2) {
+      const idx = sh.getRange(2, 1, last - 1, 2).getValues();
+      for (let i = 0; i < idx.length; i++) {
+        if (String(idx[i][0]) === key && String(idx[i][1]) === rid) { hit = i + 2; break; }
+      }
+    }
+    const row = [key, rid, nowStamp_(), String(by || ''), Number(total) || 0, json];
+    if (hit > 0) sh.getRange(hit, 1, 1, POS_BILL_HEAD_.length).setValues([row]);
+    else sh.appendRow(row);
+    return { ok: true, mode: posMode_(), ts: row[2] };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+// 「、」区切りのキャスト文字列 ⇄ 配列。空要素は落とす（全角/半角読点・カンマを許容）
+function posCastsToArr_(v) {
+  return String(v || '').split(/[、,，]/).map(s => s.trim()).filter(s => s);
+}
+function posCastsToStr_(arr) {
+  return (Array.isArray(arr) ? arr : posCastsToArr_(arr)).map(s => String(s || '').trim()).filter(s => s).join('、');
+}
+
+/* POSに出すメニュー。掲載中のみ・カテゴリ順。
+   ⚠️価格0の品も返す（＝価格未入力に気づかせる。画面側で「要価格」と出す）。 */
+function getPosMenu() {
+  const all = getMenuList();
+  const live = all.filter(m => m.status !== SUPPLY_STOP_);
+  const cats = [], byCat = {};
+  live.forEach(m => {
+    if (!byCat[m.category]) { byCat[m.category] = []; cats.push(m.category); }
+    byCat[m.category].push({ name: m.name, category: m.category, price: m.price, rowIdx: m.rowIdx });
+  });
+  return {
+    ok: true,
+    cats: cats,
+    items: live.map(m => ({ name: m.name, category: m.category, price: m.price, rowIdx: m.rowIdx })),
+    dropped: all.length - live.length,          // メニュー落ちで隠した数（画面の注記用）
+    fees: posFeeConfig_()
+  };
+}
+
+/* 会計の料金設定を1か所から配る（フロントと計算式を割らせないため） */
+function posFeeConfig_() {
+  return {
+    service: POS_SERVICE_RATE_, roundUnit: POS_ROUND_UNIT_,
+    set: POS_SET_PRICE_, setMinutes: POS_SET_MINUTES_,
+    dohan: POS_DOHAN_FEE_, tanto: POS_TANTO_FEE_, yoyaku: POS_YOYAKU_FEE_
+  };
+}
+
+/* 🔥 会計計算の本体。フロント（軍師の伝票管理 bmCalc）と**同じ式**であること。
+   小計 = 注文 + セット(席料) + 同伴料
+   税サ = 小計 × サービス料率（消費税を内包＝別途上乗せしない）
+   合計 = (小計 + 税サ − 値引 + 値増) を100円単位で切り上げ
+   ⚠️値引・値増は**税サの後**（2026-08-08ボス確定）。税サは値引前の小計に掛ける。
+     ここを前掛けに戻すと全伝票の金額が変わる。片方だけ直すと必ず割れる */
+function posCalcTotal_(orderSum, seatFee, dohanFee, discount, surcharge) {
+  const base = (Number(orderSum) || 0) + (Number(seatFee) || 0) + (Number(dohanFee) || 0);
+  const tax = Math.floor(base * POS_SERVICE_RATE_);
+  const raw = base + tax - (Number(discount) || 0) + (Number(surcharge) || 0);
+  const total = POS_ROUND_UNIT_ > 0 ? Math.ceil(raw / POS_ROUND_UNIT_) * POS_ROUND_UNIT_ : raw;
+  return { base, tax, raw, total, serviceRate: POS_SERVICE_RATE_, roundUnit: POS_ROUND_UNIT_ };
+}
+
+// 伝票行(rowIdx)の注文明細を返す（取消も含めて返し、画面側で薄く出す）
+function posReadOrders_(rowIdx) {
+  const sh = getPosOrderSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return [];
+  const rows = sh.getRange(2, 1, last - 1, POS_ORDER_HEAD_.length).getValues();
+  const out = [];
+  const key = Number(rowIdx) || 0;
+  for (let i = 0; i < rows.length; i++) {
+    if ((Number(rows[i][2]) || 0) !== key) continue;
+    out.push({
+      id: String(rows[i][0] || ''), sheetRow: i + 2,
+      bizDate: fmtStamp_(rows[i][1]), rowIdx: key,
+      table: String(rows[i][3] || ''), cust: String(rows[i][4] || ''),
+      time: fmtStamp_(rows[i][5]),
+      category: String(rows[i][6] || ''), name: String(rows[i][7] || ''),
+      price: Number(rows[i][8]) || 0, qty: Number(rows[i][9]) || 0, amount: Number(rows[i][10]) || 0,
+      casts: posCastsToArr_(rows[i][11]), by: String(rows[i][12] || ''),
+      status: String(rows[i][13] || POS_ORDER_LIVE_),
+      voidedAt: fmtStamp_(rows[i][15]), voidedBy: String(rows[i][16] || '')
+    });
+  }
+  return out;
+}
+
+/* 会計サマリ。注文明細＋席料/同伴料(予約行N/O列)を合算する。
+   ⚠️席料/同伴料は既存の updateSeatCharges が唯一の持ち主＝POSで二重に持たない。 */
+function getPosBill(rowIdx) {
+  const key = Number(rowIdx) || 0;
+  if (!key) return { ok: false, error: '伝票が特定できません' };
+  const sh = getYoyakuRsrvSheet_();
+  if (key < 2 || key > sh.getLastRow()) return { ok: false, error: '伝票行が範囲外です: ' + key };
+  const r = sh.getRange(key, 1, 1, 18).getValues()[0];
+  const seatFee = Number(r[13]) || 0, dohanFee = Number(r[14]) || 0;
+  const orders = posReadOrders_(key);
+  const live = orders.filter(o => o.status !== POS_ORDER_VOID_);
+  const orderSum = live.reduce((a, o) => a + o.amount, 0);
+  const c = posCalcTotal_(orderSum, seatFee, dohanFee, 0, 0);
+  return {
+    ok: true, rowIdx: key,
+    rsv: {
+      date: fmtStamp_(r[0]), time: fmtStamp_(r[1]), cust: String(r[2] || ''), member: String(r[3] || ''),
+      pax: Number(r[4]) || 0, table: String(r[5] || ''), tantou: String(r[6] || ''),
+      status: String(r[8] || ''), dohanCast: String(r[12] || '')
+    },
+    orders: orders,
+    calc: {
+      orderSum, seatFee, dohanFee,
+      sub: c.base, tax: c.tax, raw: c.raw, total: c.total,
+      serviceRate: c.serviceRate, roundUnit: c.roundUnit
+    },
+    fees: posFeeConfig_()
+  };
+}
+
+/* 注文を追加（複数品まとめて1回で書く＝GASの往復を増やさない）。
+   items = [{name, category, price, qty, casts:[…]}, …]
+   ⚠️価格はフロントから来た値を信用せず、店舗メニューの現在価格で上書きする
+     （画面が古いキャッシュを掴んでいても、実売価格はマスタが正）。
+     メニューに無い品（手打ち）は price をそのまま採用＝臨時商品を打てる逃げ道を残す。 */
+function posAddOrders(rowIdx, items, by) {
+  const key = Number(rowIdx) || 0;
+  if (!key) return { ok: false, error: '伝票が特定できません' };
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return { ok: false, error: '注文がありません' };
+  const rsv = getYoyakuRsrvSheet_();
+  if (key < 2 || key > rsv.getLastRow()) return { ok: false, error: '伝票行が範囲外です: ' + key };
+  const r = rsv.getRange(key, 1, 1, 6).getValues()[0];
+  const cust = String(r[2] || ''), table = String(r[5] || '');
+  const menuByName = {};
+  getMenuList().forEach(m => { menuByName[m.name] = m; });
+
+  const biz = bizDateStr_();
+  const hhmm = Utilities.formatDate(new Date(), TZ, 'HH:mm');
+  const stamp = nowStamp_();
+  const vals = [], added = [];
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i] || {};
+    const name = String(it.name || '').trim();
+    if (!name) continue;
+    const qty = Math.max(1, Math.floor(Number(it.qty) || 1));
+    const m = menuByName[name];
+    const price = m ? (Number(m.price) || 0) : (Number(it.price) || 0);
+    const cat = m ? m.category : String(it.category || '');
+    const amount = price * qty;
+    const casts = posCastsToStr_(it.casts);
+    // 注文ID＝時刻＋連番＋乱数。行番号に依存させない（行は挿入で動く）
+    const id = 'O' + Utilities.formatDate(new Date(), TZ, 'yyyyMMddHHmmss') + '-' + (i + 1) + '-' +
+               Math.random().toString(36).slice(2, 6);
+    vals.push([id, biz, key, table, cust, hhmm, cat, name, price, qty, amount, casts,
+               String(by || ''), POS_ORDER_LIVE_, stamp, '', '']);
+    added.push({ id, name, category: cat, price, qty, amount, casts: posCastsToArr_(casts), time: hhmm });
+  }
+  if (!vals.length) return { ok: false, error: '有効な注文がありません' };
+  const sh = getPosOrderSheet_();
+  sh.getRange(sh.getLastRow() + 1, 1, vals.length, POS_ORDER_HEAD_.length).setValues(vals);
+  const bill = getPosBill(key);
+  return { ok: true, added, bill: bill.ok ? bill : null };
+}
+
+/* 注文の取消（forward-only＝行は消さず状態を'取消'に）。
+   ⚠️既に取消済みの行を再取消しても壊れない（冪等）。 */
+function posVoidOrder(orderId, by) {
+  const id = String(orderId || '').trim();
+  if (!id) return { ok: false, error: '注文IDがありません' };
+  const sh = getPosOrderSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: false, error: '注文が見つかりません: ' + id };
+  const ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '').trim() !== id) continue;
+    const row = i + 2;
+    const cur = String(sh.getRange(row, 14).getValue() || '');
+    const key = Number(sh.getRange(row, 3).getValue()) || 0;
+    if (cur === POS_ORDER_VOID_) { const b0 = getPosBill(key); return { ok: true, already: true, bill: b0.ok ? b0 : null }; }
+    sh.getRange(row, 14, 1, 4).setValues([[POS_ORDER_VOID_, sh.getRange(row, 15).getValue(), nowStamp_(), String(by || '')]]);
+    const b = getPosBill(key);
+    return { ok: true, bill: b.ok ? b : null };
+  }
+  return { ok: false, error: '注文が見つかりません: ' + id };
+}
+
+/* POSトップ用＝本日の営業中の伝票一覧（席にいる組）。
+   来店中(=ステータスが退店済み以外)で、テーブルが決まっている予約行を伝票として並べる。 */
+function getPosOpenBills(dateKey) {
+  const biz = String(dateKey || bizDateStr_());
+  const sh = getYoyakuRsrvSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true, date: biz, bills: [] };
+  const rows = sh.getRange(2, 1, last - 1, 18).getValues();
+  // 注文合計を伝票行ごとに1回で集計（伝票ごとにシートを舐めない＝行数が増えても重くならない）
+  const osh = getPosOrderSheet_();
+  const osum = {};
+  const olast = osh.getLastRow();
+  if (olast >= 2) {
+    const orows = osh.getRange(2, 3, olast - 1, 12).getValues(); // C:伝票行 〜 N:状態
+    orows.forEach(o => {
+      if (String(o[11] || POS_ORDER_LIVE_) === POS_ORDER_VOID_) return;
+      const k = Number(o[0]) || 0; if (!k) return;
+      osum[k] = (osum[k] || 0) + (Number(o[8]) || 0);
+    });
+  }
+  const bills = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (visitDateStr_(r[0]) !== biz) continue;
+    const st = String(r[8] || '');
+    if (/退店|キャンセル|削除/.test(st)) continue;
+    const table = String(r[5] || '').trim();
+    if (!table) continue;                       // 席未定＝まだ伝票にしない
+    const rowIdx = i + 2;
+    const seatFee = Number(r[13]) || 0, dohanFee = Number(r[14]) || 0;
+    bills.push({
+      rowIdx, table, cust: String(r[2] || ''), pax: Number(r[4]) || 0,
+      tantou: String(r[6] || ''), time: fmtStamp_(r[1]), status: st,
+      orderSum: osum[rowIdx] || 0, seatFee, dohanFee,
+      sub: (osum[rowIdx] || 0) + seatFee + dohanFee
+    });
+  }
+  bills.sort((a, b) => String(a.table).localeCompare(String(b.table)));
+  return { ok: true, date: biz, bills };
 }
 
 /* ===== 納品書→在庫反映（Phase2：確認画面付き突き合わせ） ===== */
