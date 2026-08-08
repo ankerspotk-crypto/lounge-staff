@@ -1278,7 +1278,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3494,6 +3494,25 @@ function bmBills(){
   });
   return out;
 }
+/* 注文の帰属候補（ボス指示）＝**お客様／今日出勤のキャスト／黒服名／派遣**。
+   ⚠️「スタッフ」という総称は廃止（誰の売上か分からない行を作らせない）。
+   ⚠️派遣キャストは**個別名を出さず「派遣」1つに集約**する（castKubun()で判別）。 */
+function bmAttrPool(){
+  var casts=[],kuro=[],seen={};
+  var pool=(typeof WORKCASTS!=='undefined'&&WORKCASTS&&WORKCASTS.length)?WORKCASTS:(typeof CASTS!=='undefined'?CASTS:[]);
+  pool.forEach(function(nm){
+    nm=String(nm||'').trim(); if(!nm||seen[nm]) return;
+    if(typeof castKubun==='function'&&castKubun(nm)==='派遣') return;   // 個別名は出さない
+    seen[nm]=1; casts.push(nm);
+  });
+  // 在席の黒服（黒服席）＋いま軍師にログインしている本人
+  (typeof SEATS!=='undefined'?SEATS:[]).forEach(function(s2){
+    if(!s2||s2.type!=='K') return;
+    (s2.casts||[]).forEach(function(c){ var nm=String(c.n||'').trim(); if(nm&&!seen[nm]){ seen[nm]=1; kuro.push(nm); } });
+  });
+  if(typeof LOGIN!=='undefined'&&LOGIN&&!seen[LOGIN]){ seen[LOGIN]=1; kuro.push(LOGIN); }
+  return { casts:casts, kuro:kuro };
+}
 function bmCastPool(){
   var pool=(typeof WORKCASTS!=='undefined'&&WORKCASTS&&WORKCASTS.length)?WORKCASTS:(typeof CASTS!=='undefined'?CASTS:[]);
   return pool.slice(0,14);
@@ -3829,7 +3848,7 @@ function bmAttrOf(o){ return (o.attrs&&o.attrs.length)?o.attrs.join('・'):Strin
 /* 「誰に付けるか」ポップアップ本体 */
 function bmPickHtml(){
   var pk=BM.pick; if(!pk) return '';
-  var pool=bmCastPool();
+  var ap=bmAttrPool();
   return '<div class="bm-modal-bg" onclick="bmPickCancel()"></div>'
     +'<div class="bm-modal">'
     +'<div style="font-size:16px;font-weight:800">'+esc(pk.name)+(pk.genre?' <span style="font-size:10.5px;color:var(--sub);font-weight:600">'+esc(pk.genre)+'</span>':'')+'</div>'
@@ -3841,10 +3860,14 @@ function bmPickHtml(){
     +'<button class="bm-btn" onclick="bmPickQty(1)">＋</button>'
     +'<span style="margin-left:auto;color:var(--gold);font-weight:800;font-size:16px">'+bmYen(pk.price*pk.qty)+'</span></div>'
     +'<div class="bm-note" style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:700">誰に付けますか？（複数選ぶと折半）</div>'
-    +'<div class="chips" style="margin-top:5px">'+['お客様','スタッフ'].concat(pool).map(function(a){
-        var isCast=(a!=='お客様'&&a!=='スタッフ');
-        return '<div class="chip'+(isCast?' cast':'')+(pk.attrs.indexOf(a)>=0?' sel':'')+'" onclick="bmPickAttr(\''+jsStr(a)+'\')">'+esc(a)+'</div>';
-      }).join('')+'</div>'
+    +'<div class="chips" style="margin-top:5px">'
+    +'<div class="chip'+(pk.attrs.indexOf('お客様')>=0?' sel':'')+'" onclick="bmPickAttr(\'お客様\')">お客様</div>'
+    +'<div class="chip cast'+(pk.attrs.indexOf('派遣')>=0?' sel':'')+'" onclick="bmPickAttr(\'派遣\')">派遣</div>'
+    +'</div>'
+    +(ap.casts.length?'<div class="bm-note" style="margin-top:7px">キャスト</div><div class="chips" style="margin-top:3px">'
+       +ap.casts.map(function(a){ return '<div class="chip cast'+(pk.attrs.indexOf(a)>=0?' sel':'')+'" onclick="bmPickAttr(\''+jsStr(a)+'\')">'+esc(a)+'</div>'; }).join('')+'</div>':'')
+    +(ap.kuro.length?'<div class="bm-note" style="margin-top:7px">黒服</div><div class="chips" style="margin-top:3px">'
+       +ap.kuro.map(function(a){ return '<div class="chip'+(pk.attrs.indexOf(a)>=0?' sel':'')+'" onclick="bmPickAttr(\''+jsStr(a)+'\')">'+esc(a)+'</div>'; }).join('')+'</div>':'')
     +'<div class="bm-row" style="margin-top:14px">'
     +'<button class="bm-btn pri" style="flex:1;padding:12px" onclick="bmPickConfirm()">✅ この内容で入れる</button>'
     +'<button class="bm-btn" onclick="bmPickCancel()">キャンセル</button></div>'
