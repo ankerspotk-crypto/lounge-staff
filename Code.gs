@@ -683,7 +683,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -18172,6 +18172,101 @@ function getPosBillSheet_() {
     sh.setFrozenRows(1);
   }
   return sh;
+}
+
+/* ============================================================================
+   💰 会計（伝票を締める）＝ボス確定「伝票を締めるだけ」（2026-08-08）
+   ----------------------------------------------------------------------------
+   ■ **席は空けない**。退店はこれまで通りホール状況で行う＝既存の退店/送り/来店売上の
+     導線に手を入れない（影響範囲を広げない）。
+   ■ **売上はこのシートだけに書く**。既存の「来店売上」列やTRUST取込には**一切触らない**
+     （[[reference_visit_sales_two_pipelines]]＝2本の配管を混ぜると原因追跡ができなくなる）。
+     給与・バックへ流すのは、この記録が現場で正しいと確認できてから。
+   ■ 取消は**行を消さない**forward-only。同じ伝票を締め直したら前の行は'取消'にする。
+============================================================================ */
+const POS_CLOSE_TAB   = 'POS_会計';
+const POS_CLOSE_HEAD_ = ['営業日', '伝票行', '会計時刻', '担当黒服', 'フロア', 'テーブル', 'お客様名', '人数',
+                         '担当キャスト', '売半', 'セット', '担当料', '予約料', '同伴料', '注文計', 'ウェルカム杯数',
+                         '値引', '値増', '小計', '税サ', '合計', '現金', 'カード', '売掛',
+                         '状態', '取消時刻', '取消者'];
+const POS_CLOSE_LIVE_ = '会計済み';
+const POS_CLOSE_VOID_ = '取消';
+
+function getPosCloseSheet_() {
+  const ss = getOrOpenSS_();
+  const tab = posTab_(POS_CLOSE_TAB);
+  let sh = ss.getSheetByName(tab);
+  if (!sh) {
+    sh = ss.insertSheet(tab);
+    sh.appendRow(POS_CLOSE_HEAD_);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/* その営業日の会計済み伝票行を返す（画面のロック判定に使う） */
+function getPosClosed(dateKey) {
+  const key = String(dateKey || bizDateStr_());
+  const sh = getPosCloseSheet_();
+  const last = sh.getLastRow();
+  const out = [];
+  if (last < 2) return { mode: posMode_(), dateKey: key, closed: out };
+  const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
+  vals.forEach(r => {
+    if (String(r[0]) !== key) return;
+    if (String(r[24]) !== POS_CLOSE_LIVE_) return;
+    out.push({ rowIdx: String(r[1]), ts: fmtStamp_(r[2]), by: String(r[3] || ''), total: Number(r[20]) || 0 });
+  });
+  return { mode: posMode_(), dateKey: key, closed: out };
+}
+
+/* 会計する。rec = 画面が計算済みの内訳（金額の正はフロントのbmCalcと同じ式のposCalcTotal_） */
+function posCloseBill(dateKey, rowIdx, rec, by) {
+  const key = String(dateKey || bizDateStr_());
+  const rid = String(rowIdx || '');
+  if (!rid) return { ok: false, error: '伝票行がありません' };
+  const r = rec || {};
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(8000); } catch (e) { return { ok: false, error: '混み合っています。もう一度' }; }
+  try {
+    const sh = getPosCloseSheet_();
+    const last = sh.getLastRow();
+    // 二重会計の防止＝同じ伝票の'会計済み'が既にあれば拒否（取消してから締め直す）
+    if (last >= 2) {
+      const idx = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
+      for (let i = 0; i < idx.length; i++) {
+        if (String(idx[i][0]) === key && String(idx[i][1]) === rid && String(idx[i][24]) === POS_CLOSE_LIVE_) {
+          return { ok: false, error: 'この伝票はすでに会計済みです（' + fmtStamp_(idx[i][2]) + '）' };
+        }
+      }
+    }
+    const ts = nowStamp_();
+    sh.appendRow([key, rid, ts, String(by || ''), String(r.floor || ''), String(r.table || ''), String(r.cust || ''),
+      Number(r.pax) || 0, String(r.tantou || ''), r.uriban ? '売半' : '', Number(r.setSum) || 0,
+      Number(r.tanto) || 0, Number(r.yoyaku) || 0, Number(r.dohan) || 0, Number(r.ordSum) || 0, Number(r.welCount) || 0,
+      Number(r.discount) || 0, Number(r.surcharge) || 0, Number(r.base) || 0, Number(r.tax) || 0, Number(r.total) || 0,
+      Number(r.cash) || 0, Number(r.card) || 0, Number(r.credit) || 0, POS_CLOSE_LIVE_, '', '']);
+    return { ok: true, mode: posMode_(), ts: ts };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/* 会計を取り消して伝票を編集できる状態に戻す。⚠️行は消さず状態だけ変える */
+function posReopenBill(dateKey, rowIdx, by) {
+  const key = String(dateKey || bizDateStr_());
+  const rid = String(rowIdx || '');
+  const sh = getPosCloseSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: false, error: '会計の記録がありません' };
+  const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
+  let hit = -1;
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) === key && String(vals[i][1]) === rid && String(vals[i][24]) === POS_CLOSE_LIVE_) { hit = i + 2; break; }
+  }
+  if (hit < 0) return { ok: false, error: '会計済みの記録が見つかりません' };
+  sh.getRange(hit, 25, 1, 3).setValues([[POS_CLOSE_VOID_, nowStamp_(), String(by || '')]]);
+  return { ok: true, mode: posMode_() };
 }
 
 /* その営業日の伝票を全部返す（端末はこれで他端末の入力を拾う） */
