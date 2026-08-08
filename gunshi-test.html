@@ -3578,7 +3578,7 @@ var BM_SET_PRICES_DEFAULT=[13000,20833,20000,16666,10000,8330,7500,3000,100000,0
 function bmPrices(){ try{ var a=JSON.parse(localStorage.getItem('gunshiSetPrices')||'null'); if(Array.isArray(a)&&a.length) return a; }catch(e){} return BM_SET_PRICES_DEFAULT.slice(); }
 function bmSavePrices(a){ try{ localStorage.setItem('gunshiSetPrices',JSON.stringify(a)); }catch(e){} }
 var BM_FEE={service:0.20,roundUnit:100,set:13000,setMinutes:120,dohan:3000,tanto:0,yoyaku:0};
-var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,draft:{}};
+var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,tantouOpen:false,draft:{}};
 
 function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
 function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&curDate?curDate:'today'); }
@@ -3614,6 +3614,7 @@ function bmSeedTantou_(key,d){
   d.tantouSeeded=1;
   var nm=String(b.tantou||'').trim();
   if(!nm) return;
+  if(!d.tantou) d.tantou=nm;           // ③担当カードの既定値
   if(!d.casts[nm]) d.casts[nm]={tanto:0,yoyaku:0,dohan:0};
   if(!(d.casts[nm].tanto>0)) d.casts[nm].tanto=1;
   if(!Array.isArray(d.castSel)) d.castSel=[];
@@ -3835,8 +3836,10 @@ function bmEditorHtml(){
     +'<div class="bm-sum" style="border-top:1px solid var(--line);margin-top:6px;padding-top:7px">'
     +'<div class="r"><span>'+BM_FEE.setMinutes+'分 × '+d.guests.length+'名</span><b id="bmSetSum">'+bmYen(setSum)+'</b></div></div>'
     +'</div>'
+    /* ③担当＝ボス指示でセットの直後に常時表示。お客様に紐づく担当が既定で入る */
+    +bmTantouCardHtml(d,pool)
     /* ⚠️ボス指示＝出勤キャスト全員を常時並べない。**選んだ人だけ**出し、追加は開いて選ぶ */
-    +'<div class="bm-card"><h3><span class="n">3</span> キャスト '
+    +'<div class="bm-card"><h3><span class="n">4</span> キャスト '
     +'<span style="color:var(--sub);font-weight:600;font-size:10px">担当／予約／同伴</span></h3>'
     +(bmCastShown(d).length?bmCastShown(d).map(function(n){
         var v=d.casts[n]||{tanto:0,yoyaku:0,dohan:0};
@@ -3851,7 +3854,7 @@ function bmEditorHtml(){
     +'<div class="bm-note">担当'+bmYen(BM_FEE.tanto)+'／予約'+bmYen(BM_FEE.yoyaku)+'／同伴'+bmYen(BM_FEE.dohan)+'。<b>回数×単価</b>で積む。</div>'
     +'</div>'
     /* 🥂ウェルカムドリンク＝ボス指示で**④（注文の前）**。無料なので金額は出さない */
-    +'<div class="bm-card"><h3><span class="n">4</span> 🥂 ウェルカムドリンク '
+    +'<div class="bm-card"><h3><span class="n">5</span> 🥂 ウェルカムドリンク '
     +'<span style="color:var(--sub);font-weight:600;font-size:10px">無料・出したものの記録</span>'
     +(d.welcome.length?'<span style="color:var(--gold);font-weight:800;font-size:12px">'
         +d.welcome.reduce(function(a,w){return a+w.qty;},0)+'杯</span>':'')+'</h3>'
@@ -3865,7 +3868,7 @@ function bmEditorHtml(){
       }).join('')+'</div>':'<div class="bm-note" style="margin-bottom:6px">まだ出していません</div>')
     +bmWelPickHtml(d)
     +'</div>'
-    +'<div class="bm-card"><h3><span class="n">5</span> 注文 '
+    +'<div class="bm-card"><h3><span class="n">6</span> 注文 '
     +'<span style="color:var(--gold);font-weight:800;font-size:12px">'+d.orders.length+'点 '
     +bmYen(d.orders.reduce(function(a,o){return a+o.price*o.qty;},0))+'</span></h3>'
     /* ⚠️入った注文を**最上段・大きめ**に。メニュー選択より読む回数が多い（ボス指示） */
@@ -3908,6 +3911,51 @@ function bmEditorHtml(){
     +'</div></div>';
   return h;
 }
+/* ③担当カード＝ボス指示「セットの次に担当をデフォルト表示」＋「売半かどうかを選べる」。
+   ⚠️既定はお客様に紐づく担当（予約行のtantou）。この伝票だけ差し替えられる。
+   ⚠️**売半は会計金額を変えない**＝お客様の請求は同じ。売上を誰に付けるかの区分（バック計算で使う）。 */
+function bmTantouCardHtml(d,pool){
+  var nm=String(d.tantou||'').trim();
+  return '<div class="bm-card"><h3><span class="n">3</span> 担当 '
+    +'<span style="color:var(--sub);font-weight:600;font-size:10px">お客様の担当キャスト</span></h3>'
+    +'<div class="bm-row"><span class="lb">担当</span>'
+    +'<span style="flex:1;font-weight:800;font-size:15px'+(nm?'':';color:var(--dim)')+'">'+esc(nm||'担当なし')+'</span>'
+    +'<button class="bm-btn sm acc" onclick="bmTantouOpen()">'+(BM.tantouOpen?'✕ 閉じる':'▼ 変更')+'</button>'
+    +(nm?'<button class="bm-btn sm dng" onclick="bmTantouSet(\'\')">×</button>':'')+'</div>'
+    +(BM.tantouOpen?bmTantouChips_(nm,pool):'')
+    +'<div class="bm-row" style="margin-top:8px"><span class="lb">売上</span>'
+    +'<div class="chips" style="margin:0">'
+    +'<div class="chip'+(d.uriban?'':' sel')+'" onclick="bmUriban(0)">通常</div>'
+    +'<div class="chip'+(d.uriban?' sel':'')+'" onclick="bmUriban(1)">売半</div>'
+    +'</div></div>'
+    +'<div class="bm-note">売半＝この伝票の売上を半分で付ける区分。<b>お客様の請求額は変わりません</b>（バック計算で使う）。</div>'
+    +'</div>';
+}
+function bmTantouChips_(nm,pool){
+  function chips(list){
+    return '<div class="chips" style="margin-top:3px">'+list.map(function(n){
+      return '<div class="chip cast'+(n===nm?' sel':'')+'" onclick="bmTantouSet(\''+jsStr(n)+'\')">'+esc(n)+'</div>';
+    }).join('')+'</div>';
+  }
+  return (pool.work.length?'<div class="bm-note" style="margin-top:5px">本日出勤</div>'+chips(pool.work):'')
+    +(pool.rest.length?'<div class="bm-note" style="margin-top:6px">出勤外</div>'+chips(pool.rest):'');
+}
+function bmTantouOpen(){ BM.tantouOpen=!BM.tantouOpen; bmRender(); }
+/* 担当を差し替える。⚠️④キャストの「担当」回数も一緒に動かす＝2箇所で食い違わせない */
+function bmTantouSet(n){
+  var d=bmGet(BM.key), old=String(d.tantou||'').trim();
+  n=String(n||'').trim();
+  if(old&&d.casts[old]) d.casts[old].tanto=0;
+  d.tantou=n;
+  if(n){
+    if(!d.casts[n]) d.casts[n]={tanto:0,yoyaku:0,dohan:0};
+    d.casts[n].tanto=Math.max(1,d.casts[n].tanto||0);
+    if(!Array.isArray(d.castSel)) d.castSel=[];
+    if(d.castSel.indexOf(n)<0) d.castSel.unshift(n);
+  }
+  BM.tantouOpen=false; bmSave(); bmRender();
+}
+function bmUriban(v){ var d=bmGet(BM.key); d.uriban=v?1:0; bmSave(); bmRender(); }
 /* 🥂ウェルカムの選択パネル。ジャンルごとに畳んで出す（46品を一度に並べると④注文が押し出される） */
 function bmWelPickHtml(d){
   var on={}; (d.welcome||[]).forEach(function(w){ on[w.name]=w.qty; });
@@ -3984,14 +4032,15 @@ function bmDetailHtml(){
   var aH='';
   Object.keys(d.casts).forEach(function(n){
     var v=d.casts[n]||{};
-    if(v.tanto) aH+='<div class="li"><span>担当 '+esc(n)+'</span><span class="a">'+bmYen(BM_FEE.tanto*v.tanto)+' ×'+v.tanto+'</span></div>';
+    /* 売半は金額を変えないので、担当行に区分として出すだけ（見落とすとバック計算で分からなくなる） */
+    if(v.tanto) aH+='<div class="li"><span>担当 '+esc(n)+(d.uriban&&n===String(d.tantou||'')?' <b style="color:var(--accent)">売半</b>':'')+'</span><span class="a">'+bmYen(BM_FEE.tanto*v.tanto)+' ×'+v.tanto+'</span></div>';
     if(v.yoyaku)aH+='<div class="li"><span>予約 '+esc(n)+'</span><span class="a">'+bmYen(BM_FEE.yoyaku*v.yoyaku)+' ×'+v.yoyaku+'</span></div>';
     if(v.dohan) aH+='<div class="li"><span>同伴 '+esc(n)+'</span><span class="a">'+bmYen(BM_FEE.dohan*v.dohan)+' ×'+v.dohan+'</span></div>';
   });
   var byName={},order=[];
   d.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
   var tv=bmVerdictHtml(d,c);
-  return '<div><div class="bm-card"><h3><span class="n">6</span> ご利用明細 '
+  return '<div><div class="bm-card"><h3><span class="n">7</span> ご利用明細 '
     +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||''))+'</span></h3>'
     +'<div class="bm-det">'
     +'<div class="col"><h4>担当・予約 / 同伴</h4>'+(aH||'<div class="bm-note">—</div>')+'</div>'
@@ -4022,7 +4071,7 @@ function bmDetailHtml(){
     +(c.total!==c.raw?'<div class="r mut"><span>丸め前</span><b>'+bmYen(c.raw)+'</b></div>':'')
     +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div></div>'
     +'</div>'
-    +'<div class="bm-card"><h3><span class="n">7</span> 会計（支払）</h3>'
+    +'<div class="bm-card"><h3><span class="n">8</span> 会計（支払）</h3>'
     +'<div class="bm-row"><span class="lb">現金</span><input type="number" class="bm-in" value="'+(d.pay.cash||0)+'" oninput="bmPay(\'cash\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">カード</span><input type="number" class="bm-in" value="'+(d.pay.card||0)+'" oninput="bmPay(\'card\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">売掛</span><input type="number" class="bm-in" value="'+(d.pay.credit||0)+'" oninput="bmPay(\'credit\',this.value)"></div>'
@@ -4030,7 +4079,7 @@ function bmDetailHtml(){
     +'<div class="bm-sum">'+bmRow('お預り合計',c.paid,'bmPaid')
     +'<div class="r big"><span>未領収金</span><b id="bmUnpaid" style="color:'+(c.unpaid===0?'var(--green)':'var(--red)')+'">'+bmYen(c.unpaid)+'</b></div></div>'
     +'</div>'
-    +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">8</span> 🔍 TRUSTとの照合</h3>'
+    +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">9</span> 🔍 TRUSTとの照合</h3>'
     +'<div class="bm-row"><span class="lb">TRUSTの合計</span><input type="number" class="bm-in" value="'+esc(String(d.trust||''))+'" placeholder="実機の金額" oninput="bmField(\'trust\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">TRUSTの税サ</span><input type="number" class="bm-in" value="'+esc(String(d.trustTax||''))+'" placeholder="任意" oninput="bmField(\'trustTax\',this.value)">'
     +'<span class="bm-note" style="margin:0">※入れるとズレ位置の切り分けが早い</span></div>'
