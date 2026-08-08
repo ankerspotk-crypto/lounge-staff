@@ -3571,6 +3571,12 @@ var BM_WELCOME=[
   ['オレンジジュース','ソフトドリンク',0],['レモンティー','ソフトドリンク',0]
 ];
 var BM_WELCOME_GENRES=['ウィスキー','ブランデー','ワイン','ビール','スピリッツ','焼酎','ソフトドリンク'];
+/* 🔥有料メニュー(BM_ITEMS)側で「ソフトドリンク」に分類されているが**都度開封する**品。
+   ⚠️これが無いと在庫に載らない＝実際にボスが「Wビール」を入れて今日出たボトルに出なかった原因。
+   W○○＝TRUSTのウェルカム用0円品（⑤ウェルカムカードとは別ルートで同じ物が出る）。
+   ボス確定＝コーラ／レッドブル／ジンジャーエール／ビールが都度開封、他はパック。 */
+var BM_OPEN_ALWAYS={ 'Wビール':1,'Wコーラ':1,'Wジンジャーエール':1,'Wレッドブル':1,
+                     'コーラ':1,'レッドブル':1,'ジンジャーエール':1 };
 function bmWelItem_(name){ for(var i=0;i<BM_WELCOME.length;i++) if(BM_WELCOME[i][0]===name) return BM_WELCOME[i]; return null; }
 
 /* セット単価の候補（既定＝TRUSTの「セット料金」マスタ10件）。⚠️ボスが画面から追加/削除できる＝localStorageに保存 */
@@ -3752,7 +3758,9 @@ function bmBottlesToday(){
     var where=b?((b.floor||'')+' '+(b.table||'')):(key==='demo'?'🧪お試し':'伝票'+key);
     d.orders.forEach(function(o){
       var it=bmItem_(o.name);
-      if(!it||BM_GENRE_STOCK[it[3]]!=='ボトル') return;   // 在庫上「ボトル」に丸まる物だけ＝グラスは入らない
+      // 在庫上「ボトル」に丸まる物＋**都度開封の単品**（Wビール等）。グラスは入らない
+      if(!it) return;
+      if(BM_GENRE_STOCK[it[3]]!=='ボトル'&&!BM_OPEN_ALWAYS[o.name]) return;
       if(!map[o.name]){ map[o.name]={name:o.name,qty:0,amount:0,where:[]}; order.push(o.name); }
       map[o.name].qty+=o.qty; map[o.name].amount+=o.price*o.qty; map[o.name].where.push(where);
       total+=o.qty; amount+=o.price*o.qty;
