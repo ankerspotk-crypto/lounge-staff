@@ -1289,7 +1289,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08x';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08y';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3964,17 +3964,18 @@ function bmSlipLines_(d,c,bill){
     if(v.yoyaku) yoy.push(n);
     if(v.dohan)  doh.push([n,v.dohan]);
   });
-  if(tan.length||yoy.length){
-    L.push({t:'',a:'l'}); L.push({t:'[ 担当 / 予約 ]',a:'l'});
-    tan.forEach(function(n){ L.push({t:' 担当　'+n,a:'l'}); });
-    yoy.forEach(function(n){ L.push({t:' 予約　'+n,a:'l'}); });
-  }
+  /* ⚠️実物（店舗控え）は**同伴が先・担当が後**。順番を合わせる＝金額が立つ物から見せる */
   if(doh.length){
     L.push({t:'',a:'l'}); L.push({t:'[ 同伴 ]',a:'l'});
     doh.forEach(function(x){
       var r=bmSlipItem_(x[0],bmYen(BM_FEE.dohan),x[1]+'点',bmYen(BM_FEE.dohan*x[1]));
       (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
     });
+  }
+  if(tan.length||yoy.length){
+    L.push({t:'',a:'l'}); L.push({t:'[ 担当 / 予約 ]',a:'l'});
+    tan.forEach(function(n){ L.push({t:' 担当　'+n,a:'l'}); });
+    yoy.forEach(function(n){ L.push({t:' 予約　'+n,a:'l'}); });
   }
   // セット＝同額はまとめる（実物が「120分 ¥13,000 2点 ¥26,000」と出しているのと同じ）
   var byPrice={},order=[];
@@ -4009,12 +4010,14 @@ function bmSlipLines_(d,c,bill){
   L.push({t:bmPadR_('合計',10)+bmPadL_(bmYen(c.total),14),a:'l',big:1});
   L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
   L.push({t:'',a:'l'});
-  L.push({t:bmPadR_('未領収金',10)+bmPadL_(bmYen(c.unpaid),14),a:'l',big:1});
+  /* ⚠️お預りが合計を超えたら**お釣り**として出す。「未領収金 -¥7,200」はお客様に見せる紙として成立しない */
   if(c.paid>0){
-    if(d.pay.cash)   L.push({t:bmPadR_('　お預り（現金）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.cash),14),a:'l'});
-    if(d.pay.card)   L.push({t:bmPadR_('　お預り（カード）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
-    if(d.pay.credit) L.push({t:bmPadR_('　売掛',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
+    if(d.pay.cash)   L.push({t:bmPadR_('お預り（現金）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.cash),14),a:'l'});
+    if(d.pay.card)   L.push({t:bmPadR_('お預り（カード）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
+    if(d.pay.credit) L.push({t:bmPadR_('売掛',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
   }
+  if(c.unpaid<0) L.push({t:bmPadR_('お釣り',10)+bmPadL_(bmYen(-c.unpaid),14),a:'l',big:1});
+  else           L.push({t:bmPadR_('未領収金',10)+bmPadL_(bmYen(c.unpaid),14),a:'l',big:1});
   L.push({t:'',a:'l'});
   if(RCPT_ISSUER.invoiceNo) L.push({t:'登録番号：'+RCPT_ISSUER.invoiceNo,a:'l'});
   return L;
