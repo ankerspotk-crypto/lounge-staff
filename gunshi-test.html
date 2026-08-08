@@ -3310,7 +3310,7 @@ function quickRotate(toIdx,castName){
    ----------------------------------------------------------------------------
    ■ 目的＝**TRUSTと同じ入力で同じ金額が出るか**を現場で並行テストできること。
    ■ 計算はTRUST-REGI-2の実機設定に一致（詳細は repo `TRUST仕様書.md`）:
-       小計 = セット + 担当×回数 + 予約×回数 + 同伴×回数 + 注文 − 値引 + 値増
+       小計 = セット + 担当×回数 + 予約×回数 + 同伴×回数 + 注文（⚠️値引・値増は税サの**後**）
        税サ = 小計 × 20%（**消費税はサービス料に含まれる＝別途上乗せしない**）
        合計 = (小計+税サ) を **100円単位で切り上げ**
      実測4件で一致確認済（15,600 / 19,200 / 31,200 / 19,800）。
@@ -3614,9 +3614,10 @@ function bmCalc(d){
   var tc=0,yc=0,dc=0;
   Object.keys(d.casts).forEach(function(n){ var v=d.casts[n]||{}; tc+=v.tanto||0; yc+=v.yoyaku||0; dc+=v.dohan||0; });
   var ordSum=d.orders.reduce(function(a,o){return a+o.price*o.qty;},0);
-  var base=setSum+tc*BM_FEE.tanto+yc*BM_FEE.yoyaku+dc*BM_FEE.dohan+ordSum-(Number(d.discount)||0)+(Number(d.surcharge)||0);
+  var base=setSum+tc*BM_FEE.tanto+yc*BM_FEE.yoyaku+dc*BM_FEE.dohan+ordSum;
   var tax=Math.floor(base*BM_FEE.service);
-  var raw=base+tax;
+  /* ⚠️ボス確定(2026-08-08)＝**値引・値増は税サの後**。税サは値引前の小計に掛ける */
+  var raw=base+tax-(Number(d.discount)||0)+(Number(d.surcharge)||0);
   var total=BM_FEE.roundUnit>0?Math.ceil(raw/BM_FEE.roundUnit)*BM_FEE.roundUnit:raw;
   var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0);
   return {setSum:setSum,tc:tc,yc:yc,dc:dc,ordSum:ordSum,base:base,tax:tax,raw:raw,total:total,paid:paid,unpaid:total-paid};
@@ -3830,9 +3831,10 @@ function bmDetailHtml(){
     +(c.yc?bmRow('予約 ×'+c.yc,c.yc*BM_FEE.yoyaku):'')
     +(c.dc?bmRow('同伴 ×'+c.dc,c.dc*BM_FEE.dohan):'')
     +bmRow('注文',c.ordSum)
-    +((d.discount||0)?bmRow('値引',-(d.discount||0)):'')+((d.surcharge||0)?bmRow('値増',d.surcharge||0):'')
     +bmRow('小計',c.base,'bmSub')
     +bmRow('税サ別商品の税サ等（'+Math.round(BM_FEE.service*100)+'%）',c.tax,'bmTax')
+    /* 値引・値増は税サの**後**（ボス確定）。行の並びも計算順どおりに置く */
+    +((d.discount||0)?bmRow('値引',-(d.discount||0)):'')+((d.surcharge||0)?bmRow('値増',d.surcharge||0):'')
     +(c.total!==c.raw?'<div class="r mut"><span>丸め前</span><b>'+bmYen(c.raw)+'</b></div>':'')
     +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div></div>'
     +'</div>'
@@ -3852,7 +3854,7 @@ function bmDetailHtml(){
     +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmLogAdd()">✔ この結果を記録</button>'
     +'<button class="bm-btn dng sm" onclick="bmClear()">下書きを消す</button></div>'
     +bmLogHtml()
-    +'<div class="bm-warn">⚠️ 値引・値増を税サの前に掛けるか後かは実機未確認。既定は<b>税サの前</b>。ズレたらまずここ。</div>'
+    +'<div class="bm-note">値引・値増は<b>税サの後</b>に差引（ボス確定）。税サは値引前の小計に掛かる。</div>'
     +'</div></div>';
 }
 function bmRow(k,v,id){ return '<div class="r"><span>'+k+'</span><b'+(id?' id="'+id+'"':'')+'>'+bmYen(v)+'</b></div>'; }
@@ -4000,7 +4002,7 @@ function bmVerdictHtml(d,c){
 function bmHint_(diff,dtax,c){
   if(dtax!==0) return '税サがズレている＝サービス料率(20%)か、税サを掛ける対象が違う可能性';
   if(diff%100===0&&Math.abs(diff)<1000) return '100円単位のズレ＝端数の丸め方（切り上げ/切り捨て）を疑う';
-  if(c.discount||c.surcharge) return '値引・値増あり＝税サの前に掛けるか後かを疑う（既定は前）';
+  if(c.discount||c.surcharge) return '値引・値増あり＝税サの後に差引く実装。TRUST側が前掛けでないか確認';
   return 'セット単価・注文の単価/数量・同伴の回数のどれかが違う可能性';
 }
 /* 照合の記録（端末に保存）。何件試して何件合ったかが残らないと検証にならない */
