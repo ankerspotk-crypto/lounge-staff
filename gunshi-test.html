@@ -2521,7 +2521,7 @@ function seatBillBtn_(o){
   var rid=o&&o.rowIdx; if(!rid) return '';
   var t=bmPeekTotal_(rid);
   return '<button class="bill-btn'+(t?' on':'')+'" onclick="event.stopPropagation();openBillFor('+rid+')">'
-    +'🧾 '+(t?bmYen(t):'伝票')+'</button>';
+    +'🧾 伝票'+(t?' <b>'+bmYen(t)+'</b>':'')+'</button>';
 }
 /* 保存済みの下書きから合計だけ覗く。⚠️BM.draftを触らない＝ホール描画で伝票の状態を変えない */
 function bmPeekTotal_(rowIdx){
