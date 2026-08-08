@@ -431,7 +431,7 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 .bm-ord .at{font-size:10.5px;font-weight:800;padding:2px 6px;border-radius:5px;background:#122a44;color:#8fc0f0;white-space:nowrap;}
 .bm-ord .at.staff{background:#241800;color:#ffbf6a;}
 .bm-ord .at.cast{background:#0d2618;color:#79e0a8;}
-.bm-det{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+.bm-det{display:grid;grid-template-columns:1fr 1.5fr;gap:7px;}   /* セット欄を廃止＝2列。注文を広く */
 .bm-det .col{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px;min-height:88px;}
 .bm-det .col h4{font-size:10px;font-weight:800;color:var(--accent);text-align:center;padding-bottom:4px;border-bottom:1px solid var(--line);margin-bottom:5px;}
 .bm-det .li{font-size:11px;padding:2px 0;display:flex;justify-content:space-between;gap:4px;}
@@ -1281,7 +1281,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08i';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08j';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3766,9 +3766,7 @@ function bmDetailHtml(){
     +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||''))+'</span></h3>'
     +'<div class="bm-det">'
     +'<div class="col"><h4>担当・予約 / 同伴</h4>'+(aH||'<div class="bm-note">—</div>')+'</div>'
-    +'<div class="col"><h4>セット</h4>'+d.guests.map(function(g,i){
-        return '<div class="li"><span>お客様'+(i+1)+' '+BM_FEE.setMinutes+'分</span><span class="a">'+bmYen(g.price)+'</span></div>';
-      }).join('')+'</div>'
+    /* ⚠️セット欄はボス指示で削除（下の合計欄に「セット ¥○」が出るので二重） */
     +'<div class="col"><h4>注文</h4>'+(order.length?order.map(function(nm){
         return '<div class="grp">'+esc(nm)+'</div>'+byName[nm].map(function(o){
           return '<div class="sb"><span>'+esc(bmAttrOf(o))+(o.attrs&&o.attrs.length>1?'（折半）':'')+'</span><span class="a">'+bmYen(o.price)+' ×'+o.qty+'</span></div>';
