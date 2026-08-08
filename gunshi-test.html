@@ -3738,7 +3738,8 @@ function bmBills(){
     if(!s||s.type==='W'||s.type==='K'||s.mergedTo!=null) return;
     (s.occupants||[]).forEach(function(o){
       if(!o||!o.rowIdx) return;
-      out.push({rowIdx:o.rowIdx,table:shortNm(s.name),floor:s.floor,cust:o.cust||s.cust||'ご来店',pax:o.pax||s.pax||1,tantou:o.tantou||s.tantou||''});
+      out.push({rowIdx:o.rowIdx,table:shortNm(s.name),floor:s.floor,cust:o.cust||s.cust||'ご来店',pax:o.pax||s.pax||1,tantou:o.tantou||s.tantou||'',
+                member:o.member||s.member||'',inT:o.inT||o.inTime||s.inT||s.inTime||''});   /* 店舗控え用。無ければ出さない */
     });
   });
   return out;
@@ -4049,19 +4050,32 @@ function bmSlipItem_(name,unit,qty,amt){
 }
 function bmSlipSep_(ch){ return new Array(BM_SLIP_COLS+1).join(ch||'-'); }
 /* 伝票の中身を行の配列で返す。{t:本文, a:'l'|'c', big:1} */
-function bmSlipLines_(d,c,bill){
+/* mode: 'check'=会計伝票（会計前にお客様へ）/ 'guest'=お客様控え / 'store'=店舗控え
+   ⚠️**店舗控えだけ**が内部情報（会員番号・注文の帰属）を載せる。お客様に渡す2枚には出さない。 */
+function bmSlipLines_(d,c,bill,mode){
+  mode=mode||'check';
+  var store=(mode==='store'), guest=(mode==='guest');
   var L=[], pax=(d.guests||[]).length||1;
   L.push({t:RCPT_ISSUER.name,a:'c',big:1});
-  if(RCPT_ISSUER.addr) L.push({t:RCPT_ISSUER.addr,a:'c'});
-  L.push({t:'TEL '+(RCPT_ISSUER.tel||BM_SLIP_TEL),a:'c'});
+  if(!store){
+    if(RCPT_ISSUER.addr) L.push({t:RCPT_ISSUER.addr,a:'c'});
+    L.push({t:'TEL '+(RCPT_ISSUER.tel||BM_SLIP_TEL),a:'c'});
+  }
   L.push({t:'',a:'l'});
-  L.push({t:'会 計 伝 票',a:'c',big:1});
+  L.push({t:(store?'店 舗 控 え':(guest?'お 客 様 控 え':'会 計 伝 票')),a:'c',big:1});
   L.push({t:bmSlipSep_('='),a:'l'});
+  if(store){
+    L.push({t:'印字　　：'+bmNowStr_(),a:'l'});
+    L.push({t:'登録番号：'+RCPT_ISSUER.invoiceNo,a:'l'});
+    if(bill.inT)    L.push({t:'来店　　：'+bill.inT,a:'l'});
+    if(bill.member) L.push({t:'会員番号：'+bill.member,a:'l'});
+    L.push({t:'お客様　：'+(bill.cust||''),a:'l'});
+  }
   /* ⚠️席名にフロアが入っていることがある（"5F A1"）＝そのまま連結すると「5F 5F A1」になる */
   var _tbl=String(bill.table||''), _fl=String(bill.floor||'');
   var _lbl=(_fl&&_tbl.indexOf(_fl)!==0)?(_fl+' '+_tbl):_tbl;
   L.push({t:bmPadR_('テーブル： '+_lbl,BM_SLIP_COLS-14)+bmPadL_('人数： '+pax+'名',14),a:'l'});
-  L.push({t:(typeof fmtNow_==='function'?fmtNow_():bmNowStr_()),a:'l'});
+  if(!store) L.push({t:bmNowStr_(),a:'l'});   /* 店舗控えは冒頭の「印字」が同じ役目＝2回出さない */
   /* ⚠️ボス指示＝**担当・予約は名前だけ**（金額も点数も出さない）。いえやすは担当¥0・予約¥0＝
      ¥0と0点を並べても紙が読みにくくなるだけ。金額が立つ同伴は別ブロックで明細として出す。 */
   var tan=[],yoy=[],doh=[];
@@ -4097,8 +4111,15 @@ function bmSlipLines_(d,c,bill){
   if((d.orders||[]).length){
     L.push({t:'',a:'l'}); L.push({t:'[ 注文 ]',a:'l'});
     d.orders.forEach(function(o){
-      var r=bmSlipItem_(o.name,bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
-      (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
+      /* ⚠️帰属（誰に付けたか）は**店舗控えだけ**。お客様に渡す紙に内部の売上配分は出さない */
+      if(store){
+        L.push({t:' '+o.name,a:'l'});
+        var r2=bmSlipItem_('  '+bmAttrOf(o),bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
+        (r2 instanceof Array?r2:[r2]).forEach(function(t){ L.push({t:t,a:'l'}); });
+      }else{
+        var r=bmSlipItem_(o.name,bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
+        (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
+      }
     });
   }
   if((d.welcome||[]).length){
@@ -4119,13 +4140,17 @@ function bmSlipLines_(d,c,bill){
   L.push({t:bmPadR_('合計',6)+bmPadL_(bmYen(c.total),10),a:'l',big:2});
   L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
   L.push({t:'',a:'l'});
-  /* ⚠️ボス指示＝**未領収金は出さない**（合計が分かれば足りる）。会計前に見せる紙なので
-     「未領収金＝合計」と同じ数字が2回並ぶだけになる。お預り/お釣りは実際に入れた時だけ出す。 */
+  /* ⚠️ボス指示＝**未領収金は出さない**（合計が分かれば足りる）。
+     会計伝票（会計前）は支払欄も出さない＝まだ払っていないため。控え2枚には出す。 */
   if(c.paid>0){
     if(d.pay.cash)   L.push({t:bmPadR_('お預り（現金）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.cash),14),a:'l'});
-    if(d.pay.card)   L.push({t:bmPadR_('お預り（カード）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
-    if(d.pay.credit) L.push({t:bmPadR_('売掛',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
+    if(d.pay.card)   L.push({t:bmPadR_('カード',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
+    if(d.pay.credit) L.push({t:bmPadR_('請求書払い',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
     if(c.unpaid<0) L.push({t:bmPadR_('お釣り',10)+bmPadL_(bmYen(-c.unpaid),14),a:'l',big:1});
+  }
+  if(guest||store){
+    L.push({t:'',a:'l'});
+    L.push({t:(store?'（店舗控え）':'ありがとうございました'),a:'c'});
   }
   L.push({t:'',a:'l'});
   if(RCPT_ISSUER.invoiceNo) L.push({t:'登録番号：'+RCPT_ISSUER.invoiceNo,a:'l'});
@@ -4136,10 +4161,11 @@ function bmNowStr_(){
   return n.getFullYear()+'/'+p(n.getMonth()+1)+'/'+p(n.getDate())+' '+p(n.getHours())+':'+p(n.getMinutes());
 }
 /* 画面プレビュー＝刷る前に見せる。⚠️等幅で出す（桁組みが崩れたら実機でも崩れる） */
-function bmSlipPreview(){
+function bmSlipPreview(mode){
   var d=bmGet(BM.key),c=bmCalc(d);
   var bill=bmBills().filter(function(b){return String(b.rowIdx)===String(BM.key);})[0]||{};
-  BM.slip=bmSlipLines_(d,c,bill);
+  BM.slipMode=mode||'check';
+  BM.slip=bmSlipLines_(d,c,bill,BM.slipMode);
   bmRender();
 }
 function bmSlipClose(){ BM.slip=null; bmRender(); }
@@ -4155,12 +4181,14 @@ function bmSlipHtml(){
   }).join('');
   return '<div class="bm-modal-bg" onclick="bmSlipClose()"></div>'
     +'<div class="bm-modal" style="max-width:420px">'
-    +'<div style="font-size:15px;font-weight:800;margin-bottom:8px">🖨 お会計伝票（お客様確認用）</div>'
+    +'<div style="font-size:15px;font-weight:800;margin-bottom:8px">🖨 '
+    +(BM.slipMode==='store'?'店舗控え':(BM.slipMode==='guest'?'お客様控え':'お会計伝票（お客様確認用）'))+'</div>'
     +'<div style="background:#fff;color:#111;border-radius:6px;padding:12px 10px;max-height:56vh;overflow:auto">'+body+'</div>'
     +'<div class="bm-row" style="margin-top:12px">'
     +'<a class="bm-btn pri" style="flex:1;padding:12px;text-align:center;text-decoration:none" id="bmSlipLink" href="#" onclick="return bmSlipPrint()">🖨 印刷する（TM-M30）</a>'
     +'<button class="bm-btn" onclick="bmSlipClose()">閉じる</button></div>'
-    +'<div class="bm-note">会計の前に刷ってお客様に確認してもらう紙です。何度でも刷れます。</div>'
+    +'<div class="bm-note">'+(BM.slipMode==='check'?'会計の前に刷ってお客様に確認してもらう紙です。何度でも刷れます。'
+      :(BM.slipMode==='store'?'店舗保管用。会員番号と注文の帰属が入っています。':'お客様にお渡しする控えです。'))+'</div>'
     +'</div>';
 }
 /* ePOS-Print XML＝既存の領収書と同じ経路（TM Print Assistant経由でBT印字） */
@@ -4185,6 +4213,33 @@ function bmSlipPrint(){
   location.href=url;
   return false;
 }
+/* 支払方法を選ぶ＝合計をその方法に丸ごと入れる。⚠️分割払いは下の欄で手入力（方法は代表を残す） */
+function bmPayMethod(k){
+  if(bmLockedAlert_()) return;
+  var d=bmGet(BM.key), c=bmCalc(d);
+  d.payMethod=k;
+  d.pay={cash:0,card:0,credit:0};
+  if(k==='cash') d.pay.cash=c.total;
+  else if(k==='card') d.pay.card=c.total;
+  else d.pay.credit=c.total;          // 請求書払い＝売掛
+  bmSave(); bmRender();
+}
+/* 領収書＝既存の発行画面を開いて、宛名と金額を入れておく。
+   ⚠️カード払いは印紙不要の判定が変わるのでRCPT_CASHも合わせる */
+function bmOpenReceipt(){
+  var d=bmGet(BM.key), c=bmCalc(d);
+  var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
+  if(typeof openReceipt!=='function'){ alert('領収書の画面が見つかりません'); return; }
+  openReceipt();
+  if(typeof RCPT_CASH!=='undefined') RCPT_CASH=(d.payMethod!=='card');
+  var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
+  setTimeout(function(){
+    var a=document.getElementById('rcpt-atena'), m=document.getElementById('rcpt-amt');
+    if(a&&nm) a.value=nm+' 様';
+    if(m) m.value=c.total;
+    if(typeof rcptCalc==='function') rcptCalc();
+  },350);
+}
 /* ============================================================================
    💰 会計（伝票を締める）。ボス確定＝**席は空けない**（退店はホール状況で従来通り）。
    ⚠️締めたら伝票は**編集ロック**。直すには「会計を取り消す」＝取消の証跡が残る。
@@ -4204,7 +4259,13 @@ function bmCloseHtml(d,c){
     return '<div class="bm-sum" style="border-top:1px solid var(--line);margin-top:9px;padding-top:9px">'
       +'<div class="r big" style="color:var(--green)"><span>✅ 会計済み</span><b>'+bmYen(cl.total||c.total)+'</b></div>'
       +'<div class="bm-note">'+esc(cl.ts||'')+(cl.by?'　'+esc(cl.by):'')+'</div>'
-      +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn acc sm" onclick="bmSlipPreview()">🖨 伝票を刷り直す</button>'
+      +'<div class="bm-note" style="margin-top:8px;color:var(--accent);font-weight:700">発行</div>'
+      +'<div class="bm-row" style="margin-top:4px">'
+      +'<button class="bm-btn pri sm" onclick="bmSlipPreview(\'guest\')">🖨 お客様控え</button>'
+      +'<button class="bm-btn pri sm" onclick="bmSlipPreview(\'store\')">🖨 店舗控え</button>'
+      +'<button class="bm-btn acc sm" onclick="bmOpenReceipt()">🧾 領収書</button></div>'
+      +'<div class="bm-note">領収書は必要なお客様にだけ。宛名と金額は入れた状態で開きます。</div>'
+      +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn sm" onclick="bmSlipPreview(\'check\')">会計伝票を刷り直す</button>'
       +'<button class="bm-btn dng sm" onclick="bmReopen()">会計を取り消す</button></div>'
       +'<div class="bm-note">⚠️席は空きません。退店はこれまで通りホール状況で行ってください。</div></div>';
   }
@@ -4235,6 +4296,7 @@ function bmClose(){
       if(!r||!r.ok){ alert('会計できませんでした：'+((r&&r.error)||'不明')); return; }
       d.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
       bmSave(); bmRender();
+      bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
     })
     .catch(function(e){ alert('会計できませんでした：'+((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
 }
@@ -4409,6 +4471,14 @@ function bmDetailHtml(){
     +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div></div>'
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">8</span> 会計（支払）</h3>'
+    /* ⚠️まず**支払方法**を選ばせる（ボスの流れ＝伝票を見せる→方法→決済）。
+       タップで合計を丸ごとその方法に入れる＝打ち間違いが減る。分割は下の欄で手入力 */
+    +'<div class="bm-row"><span class="lb">方法</span><div class="chips" style="margin:0">'
+    +['cash','card','invoice'].map(function(k){
+        var lb={cash:'💴 現金',card:'💳 カード',invoice:'🧾 請求書払い'}[k];
+        return '<div class="chip'+(d.payMethod===k?' sel':'')+'" onclick="bmPayMethod(\''+k+'\')">'+lb+'</div>';
+      }).join('')+'</div></div>'
+    +(d.payMethod==='invoice'?'<div class="bm-note">請求書払い＝売掛として記録します。請求書の発行はコンソールの請求書管理から。</div>':'')
     +'<div class="bm-row"><span class="lb">現金</span><input type="number" class="bm-in" value="'+(d.pay.cash||0)+'" oninput="bmPay(\'cash\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">カード</span><input type="number" class="bm-in" value="'+(d.pay.card||0)+'" oninput="bmPay(\'card\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">売掛</span><input type="number" class="bm-in" value="'+(d.pay.credit||0)+'" oninput="bmPay(\'credit\',this.value)"></div>'
