@@ -478,6 +478,9 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 .bm-vd.ng{background:#2a0e0e;border:1px solid #7a2828;color:#ff8a8a;}
 .bm-vd.idle{background:var(--panel2);border:1px solid var(--line2);color:var(--sub);font-weight:700;font-size:12px;}
 .bm-note{font-size:10.5px;color:var(--sub);margin-top:5px;line-height:1.45;}
+.bm-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:80;}
+.bm-modal{position:fixed;z-index:81;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,92vw);max-height:86vh;overflow-y:auto;
+  background:var(--panel);border:1px solid var(--accent-line);border-radius:14px;padding:16px 18px;box-shadow:0 18px 60px rgba(0,0,0,.6);}
 .bm-warn{font-size:11px;color:#ffbf6a;background:#241800;border:1px solid #7a5010;border-radius:8px;padding:7px 9px;margin-top:7px;}
 .custpick{display:flex;gap:8px;margin-bottom:6px;}
 .custpick>div{flex:1;text-align:center;padding:13px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;}
@@ -3627,7 +3630,7 @@ function bmRender(){
   }else{
     html+=bmEditorHtml()+bmDetailHtml();
   }
-  document.getElementById('bmWrap').innerHTML=html;
+  document.getElementById('bmWrap').innerHTML=html+bmPickHtml();
 }
 /* 品名からマスタ行を引く。⚠️臨時商品はマスタに無いのでnull＝ボトル判定しない */
 /* 📦在庫との連携（**読み取り専用**）。ボス指示＝実際の在庫はいじらない状態で連携する。
@@ -3751,17 +3754,14 @@ function bmEditorHtml(){
         return '<div class="chip'+(k===BM.kind?' sel':'')+'" onclick="bmSetKind(\''+jsStr(k)+'\')">'+esc(k)+'</div>';
       }).join('')+'</div>'
     +'<div class="bm-mgrid" id="bmGrid">'+bmGridHtml()+'</div>'
-    +'<div class="bm-note" style="margin-top:9px">この注文を誰に付けるか（TRUSTの「選択」）</div>'
-    +'<div class="chips" style="margin-top:4px">'+['お客様','スタッフ'].concat(pool).map(function(a){
-        return '<div class="chip'+((a==='お客様'||a==='スタッフ')?'':' cast')+(a===BM.attr?' sel':'')+'" onclick="bmSetAttr(\''+jsStr(a)+'\')">'+esc(a)+'</div>';
-      }).join('')+'</div>'
+    +'<div class="bm-note" style="margin-top:8px">品をタップ →「誰に付けるか」を選んでから入ります</div>'
     +'<div class="bm-row" style="margin-top:9px"><span class="lb">臨時商品</span>'
     +'<input type="text" id="bmAdNm" placeholder="品名" class="bm-in" style="text-align:left;width:106px">'
     +'<input type="number" id="bmAdPr" placeholder="単価" class="bm-in" style="width:88px" value="0">'
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
     +'<div style="margin-top:8px">'+(d.orders.length?d.orders.map(function(o,i){
-        var k=(o.attr==='お客様')?'':(o.attr==='スタッフ'?'staff':'cast');
-        return '<div class="bm-ord"><span class="at '+k+'">'+esc(o.attr)+'</span><span style="flex:1;min-width:70px">'+esc(o.name)+'</span>'
+        var at=bmAttrOf(o), k=(at==='お客様')?'':(at==='スタッフ'?'staff':'cast');
+        return '<div class="bm-ord"><span class="at '+k+'">'+esc(at)+(o.attrs&&o.attrs.length>1?' 折半':'')+'</span><span style="flex:1;min-width:70px">'+esc(o.name)+'</span>'
           +'<input type="number" class="bm-in" style="width:84px;padding:5px 7px;font-size:12.5px" value="'+o.price+'" title="単価（都度変更できる）"'
           +' oninput="bmOrdPrice('+i+',this.value)" onchange="bmOrdPrice('+i+',this.value,1)">'
           +'<button class="bm-btn sm" onclick="bmQty('+i+',-1)">−</button><span style="min-width:16px;text-align:center;font-weight:800">'+o.qty+'</span>'
@@ -3800,7 +3800,7 @@ function bmDetailHtml(){
       }).join('')+'</div>'
     +'<div class="col"><h4>注文</h4>'+(order.length?order.map(function(nm){
         return '<div class="grp">'+esc(nm)+'</div>'+byName[nm].map(function(o){
-          return '<div class="sb"><span>'+esc(o.attr)+'</span><span class="a">'+bmYen(o.price)+' ×'+o.qty+'</span></div>';
+          return '<div class="sb"><span>'+esc(bmAttrOf(o))+(o.attrs&&o.attrs.length>1?'（折半）':'')+'</span><span class="a">'+bmYen(o.price)+' ×'+o.qty+'</span></div>';
         }).join('');
       }).join(''):'<div class="bm-note">—</div>')+'</div></div>'
     +'<div class="bm-row" style="margin-top:9px"><span class="lb">値引</span><input type="number" class="bm-in" value="'+(d.discount||0)+'" oninput="bmField(\'discount\',this.value)" onchange="bmRender()">'
@@ -3889,16 +3889,62 @@ function bmGridHtml(){
 function bmSearch(v){ BM.q=v; var g=document.getElementById('bmGrid'); if(g) g.innerHTML=bmGridHtml(); }
 function bmSetKind(k){ BM.kind=k; bmRender(); }
 function bmSetAttr(a){ BM.attr=a; bmRender(); }
+/* 🔥品をタップ→**すぐカートに入れず**「誰に付けるか」を選ばせる（ボス依頼）。
+   帰属を先に選ぶ方式だと、切り替え忘れで**別のキャストの売上に付く事故**が起きるため。
+   ⚠️複数選べる＝1本を複数キャストで折半できる（TRUSTは1行1帰属なのでこれができない）。 */
 function bmPick(nm,pr){
-  var d=bmGet(BM.key),hit=-1;
-  d.orders.forEach(function(o,i){ if(o.name===nm&&o.attr===BM.attr&&o.price===pr) hit=i; });
-  if(hit>=0) d.orders[hit].qty++; else d.orders.push({name:nm,category:BM.cat,price:pr,qty:1,attr:BM.attr});
-  bmSave(); bmRender();
+  var it=bmItem_(nm);
+  BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:'') };
+  bmRender();
+}
+function bmPickCancel(){ BM.pick=null; bmRender(); }
+function bmPickQty(delta){ if(!BM.pick)return; BM.pick.qty=Math.max(1,BM.pick.qty+delta); bmRender(); }
+function bmPickPrice(v,full){ if(!BM.pick)return; BM.pick.price=Math.max(0,Number(v)||0); if(full) bmRender(); }
+function bmPickAttr(a){
+  if(!BM.pick)return;
+  var i=BM.pick.attrs.indexOf(a);
+  if(i>=0) BM.pick.attrs.splice(i,1); else BM.pick.attrs.push(a);
+  bmRender();
+}
+function bmPickConfirm(){
+  var pk=BM.pick; if(!pk) return;
+  if(!pk.attrs.length){ alert('誰に付けるかを選んでください。\n（お客様／スタッフ／キャスト名）'); return; }
+  var d=bmGet(BM.key), key=pk.attrs.join('・'), hit=-1;
+  d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
+  if(hit>=0) d.orders[hit].qty+=pk.qty;
+  else d.orders.push({name:pk.name,genre:pk.genre,price:pk.price,qty:pk.qty,attrs:pk.attrs.slice()});
+  BM.pick=null; bmSave(); bmRender();
+}
+/* 旧形式(attr単一文字列)の下書きとの互換。表示・突合はこの関数を通す */
+function bmAttrOf(o){ return (o.attrs&&o.attrs.length)?o.attrs.join('・'):String(o.attr||''); }
+/* 「誰に付けるか」ポップアップ本体 */
+function bmPickHtml(){
+  var pk=BM.pick; if(!pk) return '';
+  var pool=bmCastPool();
+  return '<div class="bm-modal-bg" onclick="bmPickCancel()"></div>'
+    +'<div class="bm-modal">'
+    +'<div style="font-size:16px;font-weight:800">'+esc(pk.name)+(pk.genre?' <span style="font-size:10.5px;color:var(--sub);font-weight:600">'+esc(pk.genre)+'</span>':'')+'</div>'
+    +'<div class="bm-row" style="margin-top:10px"><span class="lb">単価</span>'
+    +'<input type="number" class="bm-in" value="'+pk.price+'" oninput="bmPickPrice(this.value)" onchange="bmPickPrice(this.value,1)">'
+    +'<span class="lb" style="min-width:auto">数量</span>'
+    +'<button class="bm-btn" onclick="bmPickQty(-1)">−</button>'
+    +'<span style="font-weight:800;min-width:26px;text-align:center;font-size:15px">'+pk.qty+'</span>'
+    +'<button class="bm-btn" onclick="bmPickQty(1)">＋</button>'
+    +'<span style="margin-left:auto;color:var(--gold);font-weight:800;font-size:16px">'+bmYen(pk.price*pk.qty)+'</span></div>'
+    +'<div class="bm-note" style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:700">誰に付けますか？（複数選ぶと折半）</div>'
+    +'<div class="chips" style="margin-top:5px">'+['お客様','スタッフ'].concat(pool).map(function(a){
+        var isCast=(a!=='お客様'&&a!=='スタッフ');
+        return '<div class="chip'+(isCast?' cast':'')+(pk.attrs.indexOf(a)>=0?' sel':'')+'" onclick="bmPickAttr(\''+jsStr(a)+'\')">'+esc(a)+'</div>';
+      }).join('')+'</div>'
+    +'<div class="bm-row" style="margin-top:14px">'
+    +'<button class="bm-btn pri" style="flex:1;padding:12px" onclick="bmPickConfirm()">✅ この内容で入れる</button>'
+    +'<button class="bm-btn" onclick="bmPickCancel()">キャンセル</button></div>'
+    +'</div>';
 }
 function bmAdhoc(){
   var nm=(document.getElementById('bmAdNm').value||'').trim(),pr=Number(document.getElementById('bmAdPr').value)||0;
   if(!nm){ alert('品名を入れてください'); return; }
-  bmPick(nm,pr);
+  bmPick(nm,pr);   // 臨時商品も同じポップアップを通す
 }
 /* 注文1行の単価を都度変更（ボス依頼＝ボトルは値付けがその場で変わる）。
    既定はマスタの登録価格のまま。⚠️打っている最中に全描画するとカーソルが飛ぶので確定(onchange)で整える。 */
