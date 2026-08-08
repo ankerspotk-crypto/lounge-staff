@@ -1275,7 +1275,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3535,8 +3535,12 @@ function bmDetailHtml(){
     +'</div>'
     +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">7</span> 🔍 TRUSTとの照合</h3>'
     +'<div class="bm-row"><span class="lb">TRUSTの合計</span><input type="number" class="bm-in" value="'+esc(String(d.trust||''))+'" placeholder="実機の金額" oninput="bmField(\'trust\',this.value)"></div>'
+    +'<div class="bm-row"><span class="lb">TRUSTの税サ</span><input type="number" class="bm-in" value="'+esc(String(d.trustTax||''))+'" placeholder="任意" oninput="bmField(\'trustTax\',this.value)">'
+    +'<span class="bm-note" style="margin:0">※入れるとズレ位置の切り分けが早い</span></div>'
     +tv
-    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn dng sm" onclick="bmClear()">この伝票の下書きを消す</button></div>'
+    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmLogAdd()">✔ この結果を記録</button>'
+    +'<button class="bm-btn dng sm" onclick="bmClear()">下書きを消す</button></div>'
+    +bmLogHtml()
     +'<div class="bm-warn">⚠️ 値引・値増を税サの前に掛けるか後かは実機未確認。既定は<b>税サの前</b>。ズレたらまずここ。</div>'
     +'</div></div>';
 }
@@ -3618,12 +3622,50 @@ function bmQty(i,delta){
 }
 /* 照合の判定（一致/不一致と差額）。⚠️部分更新で差し替えるのでHTMLを1か所で作る */
 function bmVerdictHtml(d,c){
-  var tt=String(d.trust||'');
+  var tt=String(d.trust||''), tx=String(d.trustTax||'');
   if(tt==='') return '<div class="bm-vd idle" id="bmVerdict">TRUSTの合計を入れると差分を判定します</div>';
-  var diff=c.total-Number(tt);
-  return diff===0
-    ? '<div class="bm-vd ok" id="bmVerdict">✅ 一致（'+bmYen(c.total)+'）</div>'
-    : '<div class="bm-vd ng" id="bmVerdict">❌ 不一致<div style="font-size:12px;margin-top:4px">こちら '+bmYen(c.total)+' − TRUST '+bmYen(tt)+' = <b>'+(diff>0?'+':'')+bmYen(diff)+'</b></div></div>';
+  var diff=c.total-Number(tt), dtax=(tx===''?0:c.tax-Number(tx));
+  var ok=(diff===0)&&(tx===''||dtax===0);
+  if(ok) return '<div class="bm-vd ok" id="bmVerdict">✅ 一致（'+bmYen(c.total)+(tx!==''?' ／ 税サ '+bmYen(c.tax):'')+'）</div>';
+  return '<div class="bm-vd ng" id="bmVerdict">❌ 不一致'
+    +'<div style="font-size:12px;margin-top:4px">合計 こちら '+bmYen(c.total)+' − TRUST '+bmYen(tt)+' = <b>'+(diff>0?'+':'')+bmYen(diff)+'</b></div>'
+    +(tx!==''?'<div style="font-size:12px;margin-top:2px">税サ こちら '+bmYen(c.tax)+' − TRUST '+bmYen(tx)+' = <b>'+(dtax>0?'+':'')+bmYen(dtax)+'</b></div>':'')
+    +'<div style="font-size:11px;margin-top:5px;color:#ffbf6a">'+bmHint_(diff,dtax,c)+'</div></div>';
+}
+/* ズレたとき「どこを疑うか」を出す。原因の当たりが付かないと並行テストが止まるため */
+function bmHint_(diff,dtax,c){
+  if(dtax!==0) return '税サがズレている＝サービス料率(20%)か、税サを掛ける対象が違う可能性';
+  if(diff%100===0&&Math.abs(diff)<1000) return '100円単位のズレ＝端数の丸め方（切り上げ/切り捨て）を疑う';
+  if(c.discount||c.surcharge) return '値引・値増あり＝税サの前に掛けるか後かを疑う（既定は前）';
+  return 'セット単価・注文の単価/数量・同伴の回数のどれかが違う可能性';
+}
+/* 照合の記録（端末に保存）。何件試して何件合ったかが残らないと検証にならない */
+function bmLogLoad(){ try{ var a=JSON.parse(localStorage.getItem('gunshiTrustLog')||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function bmLogSave(a){ try{ localStorage.setItem('gunshiTrustLog',JSON.stringify(a.slice(0,60))); }catch(e){} }
+function bmLogAdd(){
+  var d=bmGet(BM.key), c=bmCalc(d);
+  if(String(d.trust||'')===''){ alert('先にTRUSTの合計を入れてください'); return; }
+  var bill=null; bmBills().forEach(function(x){ if(String(x.rowIdx)===String(BM.key)) bill=x; });
+  var a=bmLogLoad();
+  a.unshift({ at:new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),
+    where: bill?((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||'')):(BM.key==='demo'?'🧪お試し':'伝票'+BM.key),
+    mine:c.total, trust:Number(d.trust), mineTax:c.tax, trustTax:(String(d.trustTax||'')===''?null:Number(d.trustTax)) });
+  bmLogSave(a); bmRender();
+}
+function bmLogClear(){ if(confirm('照合の記録を全部消しますか？')){ try{ localStorage.removeItem('gunshiTrustLog'); }catch(e){} bmRender(); } }
+function bmLogHtml(){
+  var a=bmLogLoad();
+  if(!a.length) return '<div class="bm-note">まだ記録がありません。TRUSTの合計を入れて「✔ この結果を記録」。</div>';
+  var ok=a.filter(function(x){ return x.mine===x.trust && (x.trustTax==null||x.mineTax===x.trustTax); }).length;
+  return '<div class="bm-note" style="margin-top:8px"><b style="color:'+(ok===a.length?'var(--green)':'#ffbf6a')+'">'+ok+' / '+a.length+' 件が一致</b>'
+    +' <span onclick="bmLogClear()" style="color:#f08080;cursor:pointer">［記録を消す］</span></div>'
+    +'<div style="max-height:150px;overflow-y:auto">'+a.map(function(x){
+        var hit=(x.mine===x.trust)&&(x.trustTax==null||x.mineTax===x.trustTax);
+        return '<div class="bm-ord" style="font-size:11.5px"><span style="flex:1">'+esc(x.where)
+          +' <span style="color:var(--sub);font-size:10px">'+esc(x.at)+'</span></span>'
+          +'<span style="font-weight:800;color:'+(hit?'var(--green)':'var(--red)')+'">'
+          +(hit?'✅ '+bmYen(x.mine):'❌ '+bmYen(x.mine)+' vs '+bmYen(x.trust))+'</span></div>';
+      }).join('')+'</div>';
 }
 /* 🔧金額表示だけを差し替える部分更新。⚠️入力欄を打っている最中にinnerHTMLを作り直すと
    カーソル位置とフォーカスが飛んで数字が打てない＝並行テストが成立しない。 */
