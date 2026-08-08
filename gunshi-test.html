@@ -4114,7 +4114,9 @@ function bmSlipLines_(d,c,bill){
   if(Number(d.discount)) L.push({t:bmPadR_('値引',BM_SLIP_COLS-14)+bmPadL_('-'+bmYen(d.discount),14),a:'l'});
   if(Number(d.surcharge)) L.push({t:bmPadR_('値増',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.surcharge),14),a:'l'});
   L.push({t:bmSlipSep_('-'),a:'l'});
-  L.push({t:bmPadR_('合計',10)+bmPadL_(bmYen(c.total),14),a:'l',big:1});
+  /* ⚠️合計は**3倍角**（ボス指示で大きく）。3倍角は半角16桁しか入らない＝この行だけ桁組みが別物。
+     ここを48桁のまま組むと実機で折り返す。 */
+  L.push({t:bmPadR_('合計',6)+bmPadL_(bmYen(c.total),10),a:'l',big:2});
   L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
   L.push({t:'',a:'l'});
   /* ⚠️ボス指示＝**未領収金は出さない**（合計が分かれば足りる）。会計前に見せる紙なので
@@ -4145,7 +4147,8 @@ function bmSlipHtml(){
   if(!BM.slip) return '';
   var body=BM.slip.map(function(l){
     var st='white-space:pre;font-family:ui-monospace,Menlo,monospace;line-height:1.45;';
-    if(l.big) st+='font-size:15px;font-weight:800;';
+    if(l.big===2) st+='font-size:21px;font-weight:900;letter-spacing:.5px;';
+    else if(l.big) st+='font-size:15px;font-weight:800;';
     else st+='font-size:11.5px;';
     if(l.a==='c') st+='text-align:center;';
     return '<div style="'+st+'">'+esc(l.t||' ')+'</div>';
@@ -4167,7 +4170,8 @@ function bmSlipXml_(){
   L.push('<text lang="ja"/>');
   (BM.slip||[]).forEach(function(l){
     L.push('<text align="'+(l.a==='c'?'center':'left')+'"/>');
-    L.push('<text width="'+(l.big?2:1)+'" height="'+(l.big?2:1)+'" em="'+(l.big?'true':'false')+'"/>');
+    var _sz=(l.big===2?3:(l.big?2:1));
+    L.push('<text width="'+_sz+'" height="'+_sz+'" em="'+(l.big?'true':'false')+'"/>');
     L.push('<text>'+esc(l.t||' ')+NL+'</text>');
   });
   L.push('<text width="1" height="1" em="false"/>');
