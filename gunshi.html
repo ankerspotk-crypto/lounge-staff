@@ -1281,7 +1281,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08j';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08k';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3482,7 +3482,24 @@ function bmGet(key,defPax){
   }
   if(!d.guests||!d.guests.length) d.guests=bmNewGuests_(defPax);
   if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
+  bmSeedTantou_(key,d);
   return d;
+}
+/* お客様に紐づく担当キャストを**伝票の担当に既定で乗せる**（ボス指示）。
+   ⚠️1回だけ＝黒服が外したら戻ってこない（毎回入れ直すと消せない担当になる）。
+   ⚠️席がまだ読めていない間はフラグを立てない＝次の描画で必ず入る。
+   ⚠️担当は出勤していない場合もある＝候補が出勤者に限られていてはいけない（bmCastPool参照）。 */
+function bmSeedTantou_(key,d){
+  if(d.tantouSeeded) return;
+  var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(key); })[0];
+  if(!b) return;                       // SEATS未取得＝まだ判断できない
+  d.tantouSeeded=1;
+  var nm=String(b.tantou||'').trim();
+  if(!nm) return;
+  if(!d.casts[nm]) d.casts[nm]={tanto:0,yoyaku:0,dohan:0};
+  if(!(d.casts[nm].tanto>0)) d.casts[nm].tanto=1;
+  if(!Array.isArray(d.castSel)) d.castSel=[];
+  if(d.castSel.indexOf(nm)<0) d.castSel.unshift(nm);
 }
 /* ホール状況の組（occupants）＝いま席にいる伝票。席ではなく組で並べる（相席は2件出る） */
 function bmBills(){
@@ -3503,6 +3520,13 @@ function bmBills(){
    ⚠️派遣キャストは**個別名を出さず「派遣」1つに集約**する（castKubun()で判別）。 */
 function bmAttrPool(){
   var casts=[],kuro=[],seen={};
+  /* ⚠️まず**この伝票で選ばれているキャスト**を先頭に。出勤していない担当が付いた伝票でも
+     その担当に注文を付けられるようにするため（出勤者だけの候補だと付けられない） */
+  if(BM.key){
+    bmCastShown(bmGet(BM.key)).forEach(function(nm){
+      nm=String(nm||'').trim(); if(nm&&!seen[nm]){ seen[nm]=1; casts.push(nm); }
+    });
+  }
   var pool=(typeof WORKCASTS!=='undefined'&&WORKCASTS&&WORKCASTS.length)?WORKCASTS:(typeof CASTS!=='undefined'?CASTS:[]);
   pool.forEach(function(nm){
     nm=String(nm||'').trim(); if(!nm||seen[nm]) return;
@@ -3517,9 +3541,17 @@ function bmAttrPool(){
   if(typeof LOGIN!=='undefined'&&LOGIN&&!seen[LOGIN]){ seen[LOGIN]=1; kuro.push(LOGIN); }
   return { casts:casts, kuro:kuro };
 }
+/* ③キャストの候補。⚠️**出勤者だけに絞らない**＝出勤していない担当のお客様が来店することがある（ボス談）。
+   出勤を先頭、それ以外を「出勤外」として後ろに出す（普段の選びやすさは落とさない）。 */
 function bmCastPool(){
-  var pool=(typeof WORKCASTS!=='undefined'&&WORKCASTS&&WORKCASTS.length)?WORKCASTS:(typeof CASTS!=='undefined'?CASTS:[]);
-  return pool.slice(0,14);
+  var work=[],rest=[],seen={};
+  ((typeof WORKCASTS!=='undefined'&&WORKCASTS)?WORKCASTS:[]).forEach(function(n){
+    n=String(n||'').trim(); if(n&&!seen[n]){ seen[n]=1; work.push(n); }
+  });
+  (typeof CASTS!=='undefined'?CASTS:[]).forEach(function(n){
+    n=String(n||'').trim(); if(n&&!seen[n]){ seen[n]=1; rest.push(n); }
+  });
+  return { work:work, rest:rest, all:work.concat(rest) };
 }
 /* 🔥 計算エンジン。⚠️backendの posCalcTotal_ と**同じ式**であること（片方だけ直すと必ず割れる） */
 function bmCalc(d){
@@ -3651,7 +3683,10 @@ function bmRenderIfIdle(){
 
 /* ---- 中央：入力（セット・キャスト・注文） ---- */
 function bmEditorHtml(){
-  var d=bmGet(BM.key),pool=bmCastPool();
+  /* ⚠️人数(pax)を渡してから下書きを作る。編集欄は伝票一覧より先に組み立てられるので、
+     ここで渡さないと**2名の卓でもセットが1名で始まる**（実際に踏んだ） */
+  var b0=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
+  var d=bmGet(BM.key,b0.pax),pool=bmCastPool();
   var setSum=(d.guests||[]).reduce(function(a,g){return a+(Number(g.price)||0);},0);
   var h='<div><div class="bm-card"><h3><span class="n">2</span> セット（お客様ごとに単価）</h3>'
     +d.guests.map(function(g,i){
@@ -3684,12 +3719,8 @@ function bmEditorHtml(){
       }).join(''):'<div class="bm-note">まだ誰も選んでいません</div>')
     +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn acc" onclick="bmCastOpen()">'
     +(BM.castOpen?'✕ 閉じる':'＋ キャストを選ぶ')+'</button></div>'
-    +(BM.castOpen?'<div class="chips" style="margin-top:5px">'
-       +(pool.length?pool.map(function(n){
-           var on=bmCastShown(d).indexOf(n)>=0;
-           return '<div class="chip cast'+(on?' sel':'')+'" onclick="bmCastPick(\''+jsStr(n)+'\')">'+esc(n)+'</div>';
-         }).join(''):'<div class="bm-note">出勤キャストが取得できていません</div>')
-       +'</div>':'')
+    +(BM.castOpen?(pool.all.length?bmCastChips_(d,pool)
+       :'<div class="bm-note">キャストが取得できていません</div>'):'')
     +'<div class="bm-note">担当'+bmYen(BM_FEE.tanto)+'／予約'+bmYen(BM_FEE.yoyaku)+'／同伴'+bmYen(BM_FEE.dohan)+'。<b>回数×単価</b>で積む。</div>'
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">4</span> 注文 '
@@ -3719,6 +3750,17 @@ function bmEditorHtml(){
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
     +'</div></div>';
   return h;
+}
+/* 候補チップ。出勤／出勤外を分けて出す（出勤外＝担当だけ来店するケース用） */
+function bmCastChips_(d,pool){
+  function chips(list){
+    return '<div class="chips" style="margin-top:3px">'+list.map(function(n){
+      var on=bmCastShown(d).indexOf(n)>=0;
+      return '<div class="chip cast'+(on?' sel':'')+'" onclick="bmCastPick(\''+jsStr(n)+'\')">'+esc(n)+'</div>';
+    }).join('')+'</div>';
+  }
+  return (pool.work.length?'<div class="bm-note" style="margin-top:5px">本日出勤</div>'+chips(pool.work):'')
+    +(pool.rest.length?'<div class="bm-note" style="margin-top:6px">出勤外（担当だけ来店する場合はここから）</div>'+chips(pool.rest):'');
 }
 /* 画面に出すキャスト＝**選んだ人だけ**。⚠️回数が入っている人は選び忘れでも必ず出す
    （出さないと金額だけ生きて見えない伝票になる） */
