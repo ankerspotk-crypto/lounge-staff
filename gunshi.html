@@ -1281,7 +1281,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08k';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08m';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3456,12 +3456,37 @@ var BM_GENRES=['ウィスキー','焼酎','シャンパン','ワイン','ブラ�
 var BM_GENRE_STOCK={ 'ウィスキー':'ボトル','焼酎':'ボトル','シャンパン':'ボトル','ワイン':'ボトル','ブランデー':'ボトル','スピリッツ':'ボトル','ビール':'ボトル',
                      '割り物':'割り物','ソフトドリンク':'割り物','つまみ':'チャーム','グラス':'','その他':'' };
 var BM_KINDS=['ボトル系','単品系','つまみ系'];
+/* 🥂ウェルカムドリンク（ボスのPDF「ウェルカム用メニュー最新」全46品）
+   ■ **お金は取らない**＝単価0。会計には1円も乗らないが「何が出たか」は記録する（ファーストオーダーは別に④で取る）。
+   ■ ⚠️**BM_ITEMS(有料メニュー)とは別の配列**にする。山崎・魔王・コーラなど**同名が有料側に実在**し、
+     同じ配列に入れると`bmItem_()`が0円の方を拾って**有料の単価が壊れる**。下書きも`d.welcome`と別に持つ。
+   ■ 3列目=1 は**開封がある＝🍾今日出たボトルに計上**（ボス指示「ジュース類は開封がある」）。
+     ウィスキー等はグラス提供＝ボトルを開けないので0。⚠️ここの1/0がそのまま在庫の判断になる。 */
+var BM_WELCOME=[
+  ['ロイヤルハウスホールド','ウィスキー',0],['ラフロイグ10年','ウィスキー',0],['ブラントン','ウィスキー',0],['ジャックダニエル','ウィスキー',0],
+  ['山崎','ウィスキー',0],['山崎12年','ウィスキー',0],['響','ウィスキー',0],['響 ブレンダーズチョイス','ウィスキー',0],['響21年','ウィスキー',0],
+  ['白州','ウィスキー',0],['白州12','ウィスキー',0],['知多','ウィスキー',0],
+  ['マッカラン12年','ウィスキー',0],['マッカラン18年','ウィスキー',0],
+  ['バランタイン17年','ウィスキー',0],['バランタイン21年','ウィスキー',0],['バランタイン30年','ウィスキー',0],
+  ['シーバスリーガル12年','ウィスキー',0],['シーバスリーガル18年','ウィスキー',0],['シーバスミズナラ12年','ウィスキー',0],
+  ['ヘネシーVSOP','ブランデー',0],['ヘネシーXO','ブランデー',0],
+  ['グラス 白ワイン','ワイン',0],['グラス 赤ワイン','ワイン',0],
+  ['瓶ビール','ビール',0],['テキーラ《1800》','スピリッツ',0],
+  ['黒霧島','焼酎',0],['赤霧島','焼酎',0],['赤兎馬','焼酎',0],['村尾','焼酎',0],['魔王','焼酎',0],['森伊蔵','焼酎',0],
+  ['吉四六','焼酎',0],['百年の孤独','焼酎',0],['鳥飼','焼酎',0],['しろ','焼酎',0],
+  ['緑茶','ソフトドリンク',1],['ウーロン茶','ソフトドリンク',1],['ジャスミン茶','ソフトドリンク',1],
+  ['センブリ茶《ショット》','ソフトドリンク',0],['コーヒー《HOT,ICE》','ソフトドリンク',0],
+  ['コーラ','ソフトドリンク',1],['レッドブル','ソフトドリンク',1],['ジンジャーエール','ソフトドリンク',1],
+  ['オレンジジュース','ソフトドリンク',1],['レモンティー','ソフトドリンク',1]
+];
+var BM_WELCOME_GENRES=['ウィスキー','ブランデー','ワイン','ビール','スピリッツ','焼酎','ソフトドリンク'];
+function bmWelItem_(name){ for(var i=0;i<BM_WELCOME.length;i++) if(BM_WELCOME[i][0]===name) return BM_WELCOME[i]; return null; }
 /* セット単価の候補（既定＝TRUSTの「セット料金」マスタ10件）。⚠️ボスが画面から追加/削除できる＝localStorageに保存 */
 var BM_SET_PRICES_DEFAULT=[13000,20833,20000,16666,10000,8330,7500,3000,100000,0];
 function bmPrices(){ try{ var a=JSON.parse(localStorage.getItem('gunshiSetPrices')||'null'); if(Array.isArray(a)&&a.length) return a; }catch(e){} return BM_SET_PRICES_DEFAULT.slice(); }
 function bmSavePrices(a){ try{ localStorage.setItem('gunshiSetPrices',JSON.stringify(a)); }catch(e){} }
 var BM_FEE={service:0.20,roundUnit:100,set:13000,setMinutes:120,dohan:3000,tanto:0,yoyaku:0};
-var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,draft:{}};
+var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,draft:{}};
 
 function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
 function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&curDate?curDate:'today'); }
@@ -3471,7 +3496,7 @@ function bmSave(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draf
 /* お客様n人ぶんのセット行を作る。⚠️単価は**客ごと**に持つ＝同じ席でも女性が混ざると単価が変わるため（ボス談） */
 function bmNewGuests_(n){ var a=[],k=Math.max(1,Number(n)||1); for(var i=0;i<k;i++) a.push({price:BM_FEE.set}); return a; }
 function bmGet(key,defPax){
-  if(!BM.draft[key]) BM.draft[key]={guests:bmNewGuests_(defPax),casts:{},castSel:[],orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0},trust:''};
+  if(!BM.draft[key]) BM.draft[key]={guests:bmNewGuests_(defPax),casts:{},castSel:[],welcome:[],orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0},trust:''};
   var d=BM.draft[key];
   // 端末に残った下書きを壊さないための移行：①sets配列(延長があった頃) → ②setPax/setUnit → ③guests(現行)
   if(d.sets){ d.setPax=d.sets.length||1; d.setUnit=(d.sets[0]&&Number(d.sets[0].price))||BM_FEE.set; delete d.sets; }
@@ -3482,6 +3507,7 @@ function bmGet(key,defPax){
   }
   if(!d.guests||!d.guests.length) d.guests=bmNewGuests_(defPax);
   if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
+  if(!d.welcome)d.welcome=[];   // 🥂ウェルカム（無料）。古い下書きにも足す
   bmSeedTantou_(key,d);
   return d;
 }
@@ -3638,6 +3664,14 @@ function bmBottlesToday(){
       map[o.name].qty+=o.qty; map[o.name].amount+=o.price*o.qty; map[o.name].where.push(where);
       total+=o.qty; amount+=o.price*o.qty;
     });
+    /* 🥂ウェルカムの「開封あり」も同じ表に混ぜる＝在庫から見れば有料も無料も同じ1本。
+       ⚠️金額は0（無料）なので合計金額は動かない。品名は有料側と同名で合算＝在庫照合の名前を壊さない */
+    (d.welcome||[]).forEach(function(w){
+      if(!w||!w.stock||!(w.qty>0)) return;
+      if(!map[w.name]){ map[w.name]={name:w.name,qty:0,amount:0,where:[]}; order.push(w.name); }
+      map[w.name].qty+=w.qty; map[w.name].where.push(where+'(🥂)');
+      total+=w.qty;
+    });
   });
   return { list:order.map(function(nm){return map[nm];}), total:total, amount:amount };
 }
@@ -3723,7 +3757,22 @@ function bmEditorHtml(){
        :'<div class="bm-note">キャストが取得できていません</div>'):'')
     +'<div class="bm-note">担当'+bmYen(BM_FEE.tanto)+'／予約'+bmYen(BM_FEE.yoyaku)+'／同伴'+bmYen(BM_FEE.dohan)+'。<b>回数×単価</b>で積む。</div>'
     +'</div>'
-    +'<div class="bm-card"><h3><span class="n">4</span> 注文 '
+    /* 🥂ウェルカムドリンク＝ボス指示で**④（注文の前）**。無料なので金額は出さない */
+    +'<div class="bm-card"><h3><span class="n">4</span> 🥂 ウェルカムドリンク '
+    +'<span style="color:var(--sub);font-weight:600;font-size:10px">無料・出したものの記録</span>'
+    +(d.welcome.length?'<span style="color:var(--gold);font-weight:800;font-size:12px">'
+        +d.welcome.reduce(function(a,w){return a+w.qty;},0)+'杯</span>':'')+'</h3>'
+    +(d.welcome.length?'<div style="margin-bottom:9px">'+d.welcome.map(function(w,i){
+        return '<div class="bm-ord"><span class="at cast">🥂</span>'
+          +'<span class="nm">'+esc(w.name)+(w.stock?' <span style="font-size:10px;color:#79e0a8">🍾在庫</span>':'')+'</span>'
+          +'<button class="bm-btn sm" onclick="bmWelQty('+i+',-1)">−</button>'
+          +'<span style="min-width:18px;text-align:center;font-weight:900;font-size:15px">'+w.qty+'</span>'
+          +'<button class="bm-btn sm" onclick="bmWelQty('+i+',1)">＋</button>'
+          +'<span class="amt" style="color:var(--sub);font-size:12px">無料</span></div>';
+      }).join('')+'</div>':'<div class="bm-note" style="margin-bottom:6px">まだ出していません</div>')
+    +bmWelPickHtml(d)
+    +'</div>'
+    +'<div class="bm-card"><h3><span class="n">5</span> 注文 '
     +'<span style="color:var(--gold);font-weight:800;font-size:12px">'+d.orders.length+'点 '
     +bmYen(d.orders.reduce(function(a,o){return a+o.price*o.qty;},0))+'</span></h3>'
     /* ⚠️入った注文を**最上段・大きめ**に。メニュー選択より読む回数が多い（ボス指示） */
@@ -3750,6 +3799,36 @@ function bmEditorHtml(){
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
     +'</div></div>';
   return h;
+}
+/* 🥂ウェルカムの選択パネル。ジャンルごとに畳んで出す（46品を一度に並べると④注文が押し出される） */
+function bmWelPickHtml(d){
+  var on={}; (d.welcome||[]).forEach(function(w){ on[w.name]=w.qty; });
+  return '<div class="bm-row"><button class="bm-btn acc" onclick="bmWelOpen()">'
+    +(BM.welOpen?'✕ 閉じる':'＋ ウェルカムを選ぶ')+'</button></div>'
+    +(BM.welOpen?BM_WELCOME_GENRES.map(function(g){
+        var list=BM_WELCOME.filter(function(x){ return x[1]===g; });
+        if(!list.length) return '';
+        return '<div class="bm-note" style="margin-top:6px">'+esc(g)+'</div><div class="chips" style="margin-top:3px">'
+          +list.map(function(x){
+              return '<div class="chip'+(on[x[0]]?' sel':'')+'" onclick="bmWelAdd(\''+jsStr(x[0])+'\')">'
+                +esc(x[0])+(x[2]?' 🍾':'')+(on[x[0]]?' ×'+on[x[0]]:'')+'</div>';
+            }).join('')+'</div>';
+      }).join('')
+      +'<div class="bm-note" style="margin-top:7px">🍾＝開封があるので「今日出たボトル」に載ります。お金は取りません。</div>':'');
+}
+function bmWelOpen(){ BM.welOpen=!BM.welOpen; bmRender(); }
+function bmWelAdd(nm){
+  var d=bmGet(BM.key),it=bmWelItem_(nm),hit=-1;
+  d.welcome.forEach(function(w,i){ if(w.name===nm) hit=i; });
+  if(hit>=0) d.welcome[hit].qty+=1;
+  else d.welcome.push({name:nm,genre:it?it[1]:'',stock:it?(it[2]?1:0):0,qty:1});
+  bmSave(); bmRender();
+}
+function bmWelQty(i,delta){
+  var d=bmGet(BM.key); if(!d.welcome[i]) return;
+  d.welcome[i].qty+=delta;
+  if(d.welcome[i].qty<=0) d.welcome.splice(i,1);
+  bmSave(); bmRender();
 }
 /* 候補チップ。出勤／出勤外を分けて出す（出勤外＝担当だけ来店するケース用） */
 function bmCastChips_(d,pool){
@@ -3804,7 +3883,7 @@ function bmDetailHtml(){
   var byName={},order=[];
   d.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
   var tv=bmVerdictHtml(d,c);
-  return '<div><div class="bm-card"><h3><span class="n">5</span> ご利用明細 '
+  return '<div><div class="bm-card"><h3><span class="n">6</span> ご利用明細 '
     +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||''))+'</span></h3>'
     +'<div class="bm-det">'
     +'<div class="col"><h4>担当・予約 / 同伴</h4>'+(aH||'<div class="bm-note">—</div>')+'</div>'
@@ -3813,7 +3892,12 @@ function bmDetailHtml(){
         return '<div class="grp">'+esc(nm)+'</div>'+byName[nm].map(function(o){
           return '<div class="sb"><span>'+esc(bmAttrOf(o))+(o.attrs&&o.attrs.length>1?'（折半）':'')+'</span><span class="a">'+bmYen(o.price)+' ×'+o.qty+'</span></div>';
         }).join('');
-      }).join(''):'<div class="bm-note">—</div>')+'</div></div>'
+      }).join(''):'<div class="bm-note">—</div>')
+    /* 🥂ウェルカムも明細に残す（無料でも「何を出したか」は記録） */
+    +((d.welcome&&d.welcome.length)?'<div class="grp">🥂 ウェルカム</div>'+d.welcome.map(function(w){
+        return '<div class="sb"><span>'+esc(w.name)+'</span><span class="a">無料 ×'+w.qty+'</span></div>';
+      }).join(''):'')
+    +'</div></div>'
     +'<div class="bm-row" style="margin-top:9px"><span class="lb">値引</span><input type="number" class="bm-in" value="'+(d.discount||0)+'" oninput="bmField(\'discount\',this.value)" onchange="bmRender()">'
     +'<span class="lb" style="min-width:auto">値増</span><input type="number" class="bm-in" value="'+(d.surcharge||0)+'" oninput="bmField(\'surcharge\',this.value)" onchange="bmRender()"></div>'
     +'<div class="bm-sum" style="margin-top:8px">'
@@ -3829,7 +3913,7 @@ function bmDetailHtml(){
     +(c.total!==c.raw?'<div class="r mut"><span>丸め前</span><b>'+bmYen(c.raw)+'</b></div>':'')
     +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div></div>'
     +'</div>'
-    +'<div class="bm-card"><h3><span class="n">6</span> 会計（支払）</h3>'
+    +'<div class="bm-card"><h3><span class="n">7</span> 会計（支払）</h3>'
     +'<div class="bm-row"><span class="lb">現金</span><input type="number" class="bm-in" value="'+(d.pay.cash||0)+'" oninput="bmPay(\'cash\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">カード</span><input type="number" class="bm-in" value="'+(d.pay.card||0)+'" oninput="bmPay(\'card\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">売掛</span><input type="number" class="bm-in" value="'+(d.pay.credit||0)+'" oninput="bmPay(\'credit\',this.value)"></div>'
@@ -3837,7 +3921,7 @@ function bmDetailHtml(){
     +'<div class="bm-sum">'+bmRow('お預り合計',c.paid,'bmPaid')
     +'<div class="r big"><span>未領収金</span><b id="bmUnpaid" style="color:'+(c.unpaid===0?'var(--green)':'var(--red)')+'">'+bmYen(c.unpaid)+'</b></div></div>'
     +'</div>'
-    +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">7</span> 🔍 TRUSTとの照合</h3>'
+    +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">8</span> 🔍 TRUSTとの照合</h3>'
     +'<div class="bm-row"><span class="lb">TRUSTの合計</span><input type="number" class="bm-in" value="'+esc(String(d.trust||''))+'" placeholder="実機の金額" oninput="bmField(\'trust\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">TRUSTの税サ</span><input type="number" class="bm-in" value="'+esc(String(d.trustTax||''))+'" placeholder="任意" oninput="bmField(\'trustTax\',this.value)">'
     +'<span class="bm-note" style="margin:0">※入れるとズレ位置の切り分けが早い</span></div>'
