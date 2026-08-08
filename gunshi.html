@@ -1289,7 +1289,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-08w';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-08x';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3955,19 +3955,24 @@ function bmSlipLines_(d,c,bill){
   var _lbl=(_fl&&_tbl.indexOf(_fl)!==0)?(_fl+' '+_tbl):_tbl;
   L.push({t:bmPadR_('テーブル： '+_lbl,BM_SLIP_COLS-14)+bmPadL_('人数： '+pax+'名',14),a:'l'});
   L.push({t:(typeof fmtNow_==='function'?fmtNow_():bmNowStr_()),a:'l'});
-  // 担当・予約・同伴（金額が立つのは同伴だけだが、点数は実物どおり全部出す）
-  var aH=[];
+  /* ⚠️ボス指示＝**担当・予約は名前だけ**（金額も点数も出さない）。いえやすは担当¥0・予約¥0＝
+     ¥0と0点を並べても紙が読みにくくなるだけ。金額が立つ同伴は別ブロックで明細として出す。 */
+  var tan=[],yoy=[],doh=[];
   Object.keys(d.casts||{}).forEach(function(n){
     var v=d.casts[n]||{};
-    if(v.tanto)  aH.push(['担当',n,BM_FEE.tanto,v.tanto]);
-    if(v.yoyaku) aH.push(['予約',n,BM_FEE.yoyaku,v.yoyaku]);
-    if(v.dohan)  aH.push(['同伴',n,BM_FEE.dohan,v.dohan]);
+    if(v.tanto)  tan.push(n);
+    if(v.yoyaku) yoy.push(n);
+    if(v.dohan)  doh.push([n,v.dohan]);
   });
-  if(aH.length){
-    L.push({t:'',a:'l'}); L.push({t:'[ 同伴 / 担当・予約 ]',a:'l'});
-    aH.forEach(function(x){
-      L.push({t:' '+x[0],a:'l'});
-      var r=bmSlipItem_(' '+x[1],bmYen(x[2]),x[3]+'点',bmYen(x[2]*x[3]));
+  if(tan.length||yoy.length){
+    L.push({t:'',a:'l'}); L.push({t:'[ 担当 / 予約 ]',a:'l'});
+    tan.forEach(function(n){ L.push({t:' 担当　'+n,a:'l'}); });
+    yoy.forEach(function(n){ L.push({t:' 予約　'+n,a:'l'}); });
+  }
+  if(doh.length){
+    L.push({t:'',a:'l'}); L.push({t:'[ 同伴 ]',a:'l'});
+    doh.forEach(function(x){
+      var r=bmSlipItem_(x[0],bmYen(BM_FEE.dohan),x[1]+'点',bmYen(BM_FEE.dohan*x[1]));
       (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
     });
   }
