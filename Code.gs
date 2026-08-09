@@ -683,7 +683,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -18250,6 +18250,42 @@ function posCloseBill(dateKey, rowIdx, rec, by) {
   } finally {
     try { lock.releaseLock(); } catch (e) {}
   }
+}
+
+/* ============================================================================
+   🔒 その日のPOSが「終わっているか」＝閉店報告の前提条件（ボス確定の設計ベース）
+   ----------------------------------------------------------------------------
+   ■ **閉店報告までに全部のタスクが終わっていること**が完了の定義。終わっていない状態で
+     現金の閉店チェックを送らせない＝翌日に持ち越した仕事は必ず消える、という現場の事実に合わせる。
+   ■ ここで見るのは2つ：
+       ① **未会計の伝票**（打ったのに締めていない）
+       ② **請求書払いなのに請求書の発行依頼を出していない伝票**
+     どちらも「その日のうちにやらないと誰も気づけない」種類の抜け。
+   ■ ⚠️**テストモードでは止めない**（`enforce`）。練習データで本物の閉店報告を止めるのは事故。
+     本番モードに切り替えた瞬間から効く。
+============================================================================ */
+function getPosDayStatus(dateKey) {
+  const key = String(dateKey || bizDateStr_());
+  const bills = getPosBills(key).bills;
+  const closedMap = {};
+  getPosClosed(key).closed.forEach(c => { closedMap[String(c.rowIdx)] = c; });
+  const open = [], invoice = [];
+  bills.forEach(b => {
+    const rid = String(b.rowIdx);
+    if (rid === 'demo') return;                    // お試し伝票は対象外
+    const d = b.data || {};
+    const used = (d.orders && d.orders.length) || (d.welcome && d.welcome.length) ||
+                 (d.pay && ((d.pay.cash || 0) + (d.pay.card || 0) + (d.pay.credit || 0) > 0));
+    if (!used) return;                             // 開いただけの伝票は「タスク」に数えない
+    const label = String((d._table || '') + ' ' + (d._cust || '')).trim();
+    if (!closedMap[rid]) open.push({ rowIdx: rid, label: label, total: Number(b.total) || 0 });
+    else if (d.payMethod === 'invoice' && !d.seikyuRequested) {
+      invoice.push({ rowIdx: rid, label: label, total: Number(b.total) || 0 });
+    }
+  });
+  const mode = posMode_();
+  return { ok: true, mode: mode, enforce: (mode === 'live'), dateKey: key,
+           open: open, invoice: invoice, ready: (open.length === 0 && invoice.length === 0) };
 }
 
 /* 会計を取り消して伝票を編集できる状態に戻す。⚠️行は消さず状態だけ変える */

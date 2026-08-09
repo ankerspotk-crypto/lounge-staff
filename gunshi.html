@@ -1289,7 +1289,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-09b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-09c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3630,6 +3630,10 @@ function bmSeedTantou_(key,d){
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(key); })[0];
   if(!b) return;                       // SEATS未取得＝まだ判断できない
   d.tantouSeeded=1;
+  /* ⚠️席名にフロアが入っていることがある（"2F BOX1"）＝そのまま連結すると「2F 2F BOX1」 */
+  var _t=String(b.table||''), _f=String(b.floor||'');
+  d._table=((_f&&_t.indexOf(_f)!==0)?(_f+' '+_t):_t).trim();   // 閉店ゲートの一覧で「どの卓か」を出すため
+  d._cust=String(b.cust||'');
   var nm=String(b.tantou||'').trim();
   if(!nm) return;
   if(!d.tantou) d.tantou=nm;           // ③担当カードの既定値
@@ -3917,6 +3921,51 @@ function bmEditorHtml(){
   return h;
 }
 /* ============================================================================
+   🧾 請求書払い＝**発行依頼まで出して初めて終わり**（ボス確定）。
+   ⚠️請求書は「請求先」を選ばないと出せない（会社名/宛先が要る）＝POSだけでは完結しない。
+     そこで**既存の請求書入力画面を、この伝票の金額を載せた状態で開く**。送信が通ったら
+     この伝票に「依頼済み」を刻む＝閉店ゲートがそれを見る。
+   ⚠️刻まないと閉店報告が止まる＝出し忘れが構造的に検知される（それが狙い）。
+============================================================================ */
+var SK_FROM_POS=null;      // {key} 請求書画面をPOSから開いた印
+function bmSeikyuHtml(d,c){
+  if(d.payMethod!=='invoice') return '';
+  if(d.seikyuRequested){
+    return '<div class="bm-sum" style="margin-top:8px"><div class="r"><span style="color:var(--green)">✅ 請求書の発行依頼 済み</span>'
+      +'<b style="font-size:11px;color:var(--sub)">'+esc(d.seikyuRequested.ts||'')+'</b></div></div>';
+  }
+  return '<div class="bm-warn" style="margin-top:8px">🧾 <b>請求書払い</b>です。<b>発行依頼がまだ</b>です。'
+    +'<div style="margin-top:3px">閉店報告までに出してください（残っていると閉店チェックを送れません）。</div>'
+    +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn pri sm" onclick="bmSeikyuRequest()">🧾 請求書の発行を依頼する</button></div></div>';
+}
+function bmSeikyuRequest(){
+  var d=bmGet(BM.key), c=bmCalc(d);
+  var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
+  if(typeof openSeikyu!=='function'){ alert('請求書の画面が見つかりません'); return; }
+  SK_FROM_POS={ key:String(BM.key) };
+  openSeikyu();
+  /* 金額と摘要を入れておく。⚠️請求先はボス/黒服が選ぶ＝ここでは決められない */
+  setTimeout(function(){
+    try{
+      var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
+      SK_ITEMS=[{name:(nm?nm+' 様　':'')+'ご利用分（'+((typeof curDate!=='undefined'?curDate:'')||'')+'）',amount:c.total}];
+      SK_NOTE=(b.floor||'')+' '+(b.table||'')+'　'+nm+' 様　'+bmYen(c.total);
+      SK_NOTE_TOUCHED=true;
+      if(typeof renderMenu==='function') renderMenu();
+    }catch(e){}
+  },350);
+}
+/* 請求書の送信が通ったらPOS側に刻む。⚠️skSubmitの成功時から呼ばれる */
+function bmSeikyuDone_(){
+  if(!SK_FROM_POS) return;
+  var k=SK_FROM_POS.key; SK_FROM_POS=null;
+  bmLoad();
+  var d=BM.draft[k]; if(!d) return;
+  d.seikyuRequested={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:'') };
+  var keep=BM.key; BM.key=k; bmSave(); BM.key=keep;
+  if(typeof POS_DAY!=='undefined'&&document.getElementById('cc-pos-gate')) ccPosLoad();
+}
+/* ============================================================================
    🖨 お会計伝票（お客様に見せる紙）＝TRUSTが刷っていた「会計伝票」の置き換え。
    ----------------------------------------------------------------------------
    ■ **会計の前**に刷ってお客様に確認してもらう紙。領収書とは別物＝「領収いたしました」は書かない。
@@ -4152,6 +4201,7 @@ function bmCloseHtml(d,c){
     return '<div class="bm-sum" style="border-top:1px solid var(--line);margin-top:9px;padding-top:9px">'
       +'<div class="r big" style="color:var(--green)"><span>✅ 会計済み</span><b>'+bmYen(cl.total||c.total)+'</b></div>'
       +'<div class="bm-note">'+esc(cl.ts||'')+(cl.by?'　'+esc(cl.by):'')+'</div>'
+      +bmSeikyuHtml(d,c)
       +'<div class="bm-note" style="margin-top:8px;color:var(--accent);font-weight:700">発行</div>'
       +'<div class="bm-row" style="margin-top:4px">'
       +'<button class="bm-btn pri sm" onclick="bmSlipPreview(\'guest\')">🖨 お客様控え</button>'
@@ -6055,6 +6105,7 @@ function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
   cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:false};
   renderCashCheck();
+  ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
 }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
 function ccRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.reporterName=n; }
@@ -6093,6 +6144,68 @@ function ccDiagHtml(){
     +['運転手さんの日払い、入れた?','キャストの日払い、全員分ある?','経費レシート、撮り忘れてない?','もう一度数えてみる'].map(function(t){return '<label style="display:flex;gap:7px;align-items:center;font-size:13px;color:var(--txt);padding:3px 0"><input type="checkbox"> '+esc(t)+'</label>';}).join('')
     +'</div>';
 }
+
+/* ============================================================================
+   🔒 閉店報告の前提条件（POS）＝**その日のタスクが全部終わっていないと閉店報告を出せない**
+   ----------------------------------------------------------------------------
+   ■ これは設計のベース（ボス確定）。「明日やる」が効かない仕事＝閉店で締めないと誰も気づけない。
+     ①未会計の伝票が残っている ②請求書払いなのに請求書の発行依頼を出していない
+   ■ ⚠️**テストモードでは止めない**（backendの`enforce`）。練習データで本物の閉店報告を止めるのは事故。
+   ■ ⚠️判定はサーバー（POS_伝票×POS_会計）＝**他の端末で打った伝票も含める**。
+     端末内のlocalStorageで判定すると5Fの未会計を2Fが見落とす。
+============================================================================ */
+var POS_DAY=null;          // getPosDayStatusの結果（null=未取得）
+var POS_DAY_ERR='';
+function ccPosLoad(){
+  POS_DAY=null; POS_DAY_ERR='';
+  if(typeof gsr!=='function'){ POS_DAY_ERR='取得できません'; return; }
+  gsr('getPosDayStatus',(typeof curDate!=='undefined'?curDate:'')).then(function(r){
+    POS_DAY=(r&&r.ok!==false)?r:null;
+    if(!POS_DAY) POS_DAY_ERR='POSの状態を取得できませんでした';
+    ccPosRefresh();
+  }).catch(function(){ POS_DAY_ERR='POSの状態を取得できませんでした'; ccPosRefresh(); });
+}
+/* ⚠️取得できていない時は**止めない**（通信不良で閉店報告ができなくなる方が現場は困る）。
+   ただし画面には「確認できていません」と出す＝黙って通さない。 */
+function ccPosReady_(){
+  if(!POS_DAY) return true;
+  if(!POS_DAY.enforce) return true;      // テストモード
+  return !!POS_DAY.ready;
+}
+function ccPosBlockMsg_(){
+  if(!POS_DAY) return 'POSの状態を確認できていません。';
+  var m=[];
+  if((POS_DAY.open||[]).length)    m.push('未会計の伝票が'+POS_DAY.open.length+'件あります。会計を済ませてください。');
+  if((POS_DAY.invoice||[]).length) m.push('請求書払いの伝票で、請求書の発行依頼がまだのものが'+POS_DAY.invoice.length+'件あります。');
+  return m.join('\n')||'POSのタスクが残っています。';
+}
+function ccPosRefresh(){ var w=document.getElementById('cc-pos-gate'); if(w) w.outerHTML=ccPosGateHtml(); ccTrustRefresh(); }
+function ccPosGateHtml(){
+  var d=POS_DAY, wrap=function(color,bg,inner){
+    return '<div id="cc-pos-gate" style="border:2px solid '+color+';background:'+bg+';border-radius:12px;padding:12px 14px;margin-top:16px">'+inner+'</div>';
+  };
+  if(!d) return wrap('#7a6a3a','rgba(160,140,60,.10)',
+    '<div style="font-size:14px;font-weight:800">🧾 POSの締め状況</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-top:4px">'+(POS_DAY_ERR?esc(POS_DAY_ERR)+'（確認できないため送信は止めません）':'確認中…')+'</div>');
+  var rows=function(list,label){
+    if(!list||!list.length) return '';
+    return '<div style="margin-top:7px"><div style="font-size:12px;font-weight:800;color:#ffcf7a">'+label+' '+list.length+'件</div>'
+      +list.map(function(x){
+          return '<div style="display:flex;gap:8px;font-size:12.5px;margin-top:3px"><span style="flex:1">'+esc(x.label||('伝票'+x.rowIdx))+'</span>'
+            +'<span style="color:var(--gold);font-weight:800">'+bmYen(x.total)+'</span>'
+            +'<button class="bm-btn sm" onclick="openBillFor('+x.rowIdx+')">開く</button></div>';
+        }).join('')+'</div>';
+  };
+  if(d.ready) return wrap('#3ea06a','rgba(62,160,106,.12)',
+    '<div style="font-size:15px;font-weight:800">✅ POSはすべて締まっています</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-top:3px">未会計の伝票・請求書の依頼漏れはありません'+(d.enforce?'':'（🧪テストモード）')+'</div>');
+  return wrap('#e05050','rgba(224,80,80,.10)',
+    '<div style="font-size:15px;font-weight:800;color:#ff9a9a">🔒 POSのタスクが残っています</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-top:3px">'
+    +(d.enforce?'これが片付くまで閉店チェックは送信できません。':'🧪テストモード中は送信を止めません（本番では止まります）。')+'</div>'
+    +rows(d.open,'未会計の伝票')
+    +rows(d.invoice,'請求書の発行依頼がまだ'));
+}
 /* --- TRUST入力の確認ゲート（閉店送信の最終関門・完全ブロック） ---
    狙い＝黒服がTRUSTへの日払い/経費入力を忘れて帰るのを止める。TRUSTは外部システムで
    GASから入力有無を検知できない（403）ため、送信前に黒服自身へ必須チェックを突きつける方式。
@@ -6112,7 +6225,7 @@ function ccTrustGateHtml(){
 }
 function ccTrustRefresh(){
   var w=document.getElementById('cc-trust-gate'); if(w) w.outerHTML=ccTrustGateHtml();
-  var b=document.getElementById('cc-submit-btn'); if(b){ var on=!!(cashState&&cashState.trustConfirmed); b.style.opacity=on?'1':'.45'; b.textContent=(on?'':'🔒 ')+'閉店チェックを送信'; }
+  var b=document.getElementById('cc-submit-btn'); if(b){ var on=!!(cashState&&cashState.trustConfirmed)&&ccPosReady_(); b.style.opacity=on?'1':'.45'; b.textContent=(on?'':'🔒 ')+'閉店チェックを送信'; }
 }
 function ccFlowRow(l,v,c){ return '<div class="cc-flow-row"><span style="color:#889">'+l+'</span><span style="color:'+(c||'#ccc')+'">'+v+'</span></div>'; }
 function ccFlowHtml(v,withDiag){
@@ -6144,6 +6257,7 @@ function renderCashCheck(){
   h+='<div id="cc-slips"></div>';
   h+='<div class="flabel">閉店時の現金を数える（4袋・紙幣の枚数）</div><div id="cc-bags">'+CASH_BAGS.map(ccBagCard).join('')+'</div>';
   h+='<div class="flabel">現金の流れ（自動照合）</div><div id="cc-recon"></div>';
+  h+=ccPosGateHtml();
   h+=ccTrustGateHtml();
   h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" id="cc-submit-btn" onclick="submitCash()" style="opacity:'+(st.trustConfirmed?'1':'.45')+'">'+(st.trustConfirmed?'':'🔒 ')+'閉店チェックを送信</div>';
   b.innerHTML=h; ccRenderSlips(); ccRefresh();
@@ -6186,6 +6300,12 @@ function ccPhoto(idx,file){
 function submitCash(){
   var st=cashState; if(!st.reporterName){ alert('報告者を選択してください'); return; }
   if(!st.trustConfirmed){ alert('日払い・経費を TRUST に入力してから、チェックを入れて送信してください。'); var g=document.getElementById('cc-trust-gate'); if(g&&g.scrollIntoView)g.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  /* 🔒 設計ベース＝**閉店報告までに全部終わっていること**。未会計/請求書依頼漏れは翌日には誰も気づけない */
+  if(!ccPosReady_()){
+    alert(ccPosBlockMsg_());
+    var g2=document.getElementById('cc-pos-gate'); if(g2&&g2.scrollIntoView)g2.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
   var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
   var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto'};
@@ -6968,6 +7088,7 @@ function skSubmit(){
     if(!r||r.ok===false){ if(st)st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); return; }
     var extra=(r&&r.reclassified)?('／経費から'+r.reclassified+'件を対象伝票へ振替'):'';
     toast('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）'+extra);
+    if(typeof bmSeikyuDone_==='function') bmSeikyuDone_();   // POSから来ていたら伝票に「依頼済み」を刻む
     SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[]; SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_VIEW='list'; SK_LIST=null; renderMenu();
   }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
 }
