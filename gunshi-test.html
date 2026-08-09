@@ -2533,7 +2533,9 @@ function bmPeek_(rowIdx){
     return { total:bmCalc(d).total, closed:!!(d.closed&&d.closed.ts) };
   }catch(e){ return {total:0,closed:false}; }
 }
-function openBillFor(rowIdx){ BM.key=String(rowIdx); setViewMode('bill'); }
+/* ⚠️他端末で打った伝票は、この端末にまだ届いていないことがある（取り込みは非同期）。
+   BM.wantに覚えておき、届いた時点で自動的に開く＝「開くを押したのに何も出ない」を防ぐ */
+function openBillFor(rowIdx){ BM.key=String(rowIdx); BM.want=String(rowIdx); setViewMode('bill'); }
 // 来店中の席に「次席予約(=後半に入った別の確定予約)」があれば予告する1行。席一覧の接客中/担当不在で共用（マップはmapFlags_の🔜）。
 function nextRsvLine_(s){
   if(!s) return '';
@@ -3613,10 +3615,14 @@ var BM_SET_PRICES_DEFAULT=[13000,20833,20000,16666,10000,8330,7500,3000,100000,0
 function bmPrices(){ try{ var a=JSON.parse(localStorage.getItem('gunshiSetPrices')||'null'); if(Array.isArray(a)&&a.length) return a; }catch(e){} return BM_SET_PRICES_DEFAULT.slice(); }
 function bmSavePrices(a){ try{ localStorage.setItem('gunshiSetPrices',JSON.stringify(a)); }catch(e){} }
 var BM_FEE={service:0.20,roundUnit:100,set:13000,setMinutes:120,dohan:3000,tanto:0,yoyaku:0};
-var BM={key:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,tantouOpen:false,slip:null,draft:{}};
+var BM={key:null,want:null,kind:'全部',q:'',attr:'お客様',openGuest:-1,editPrices:false,castOpen:false,welOpen:false,tantouOpen:false,slip:null,draft:{}};
 
 function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'); }
-function bmStoreKey(){ return 'gunshiBillDraft_'+(typeof curDate!=='undefined'&&curDate?curDate:'today'); }
+/* ⚠️POSは**営業日**で動く。`curDate`（画面で見ている日付）を使ってはいけない＝
+   黒服が前日を開いたまま打つと、伝票が前日に保存され、閉店ゲートも前日を見に行って
+   「タスクなし」と誤判定する。TODAY＝bootstrapが返す営業日（深夜6時前は前日）。 */
+function bmDateKey(){ return (typeof TODAY!=='undefined'&&TODAY)?TODAY:(typeof curDate!=='undefined'?curDate:''); }
+function bmStoreKey(){ return 'gunshiBillDraft_'+(bmDateKey()||'today'); }
 function bmLoad(){ try{ BM.draft=JSON.parse(localStorage.getItem(bmStoreKey())||'{}'); }catch(e){ BM.draft={}; } }
 function bmStash_(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draft)); }catch(e){} }
 /* ============================================================================
@@ -3643,7 +3649,7 @@ function bmPushNow(){
   keys.forEach(function(k){
     if(k==='demo') return;                                   // お試しは共有しない
     var d=BM.draft[k]; if(!d) return;
-    gsr('posSaveBill',(typeof curDate!=='undefined'?curDate:''),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
+    gsr('posSaveBill',bmDateKey(),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
       .then(function(r){ if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); } })
       .catch(function(e){ BM_SYNC_ERR='共有できていません（この端末には残っています）'; bmRenderIfIdle(); });
   });
@@ -3651,7 +3657,7 @@ function bmPushNow(){
 /* 他端末の伝票を取り込む。⚠️入力中でも下書き自体は差し替わる（描画はbmRenderIfIdleが守る） */
 function bmPull(){
   if(typeof gsr!=='function') return;
-  gsr('getPosBills',(typeof curDate!=='undefined'?curDate:'')).then(function(r){
+  gsr('getPosBills',bmDateKey()).then(function(r){
     if(r&&r.mode) BM_MODE=r.mode;
     BM_SYNC_ERR='';
     bmLoad();
@@ -3719,11 +3725,9 @@ function bmGet(key,defPax){
 function bmSeedTantou_(key,d){
   if(d.tantouSeeded) return;
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(key); })[0];
-  if(!b) return;                       // SEATS未取得＝まだ判断できない
+  if(!b||b.gone) return;               // SEATS未取得／退店済み＝ここで上書きしない
   d.tantouSeeded=1;
-  /* ⚠️席名にフロアが入っていることがある（"2F BOX1"）＝そのまま連結すると「2F 2F BOX1」 */
-  var _t=String(b.table||''), _f=String(b.floor||'');
-  d._table=((_f&&_t.indexOf(_f)!==0)?(_f+' '+_t):_t).trim();   // 閉店ゲートの一覧で「どの卓か」を出すため
+  d._table=bmTblLabel_(b.floor,b.table);   // 閉店ゲートの一覧で「どの卓か」を出すため
   d._cust=String(b.cust||'');
   var nm=String(b.tantou||'').trim();
   if(!nm) return;
@@ -3732,6 +3736,12 @@ function bmSeedTantou_(key,d){
   if(!(d.casts[nm].tanto>0)) d.casts[nm].tanto=1;
   if(!Array.isArray(d.castSel)) d.castSel=[];
   if(d.castSel.indexOf(nm)<0) d.castSel.unshift(nm);
+}
+/* ⚠️席名にフロアが入っていることがある（"2F BOX1"）＝素直に連結すると「2F 2F BOX1」になる。
+   伝票一覧・伝票の印字・閉店ゲートで同じ崩れを3回踏んだので**1箇所に寄せる**。 */
+function bmTblLabel_(floor,table){
+  var t=String(table||''), f=String(floor||'');
+  return ((f&&t.indexOf(f)!==0)?(f+' '+t):t).trim();
 }
 /* ホール状況の組（occupants）＝いま席にいる伝票。席ではなく組で並べる（相席は2件出る） */
 function bmBills(){
@@ -3745,6 +3755,16 @@ function bmBills(){
       out.push({rowIdx:o.rowIdx,table:shortNm(s.name),floor:s.floor,cust:o.cust||s.cust||'ご来店',pax:o.pax||s.pax||1,tantou:o.tantou||s.tantou||'',
                 member:o.member||s.member||'',inT:o.inT||o.inTime||s.inT||s.inTime||''});   /* 店舗控え用。無ければ出さない */
     });
+  });
+  /* ⚠️**退店して席から消えた組の伝票**も出す。席(SEATS)だけを見ていると、未会計のまま
+     お客様が帰った瞬間にその伝票へ二度と触れなくなる＝閉店ゲートが「開く」と言っても開けない。 */
+  var seen={}; out.forEach(function(x){ seen[String(x.rowIdx)]=1; });
+  Object.keys(BM.draft||{}).forEach(function(k){
+    if(k==='demo'||seen[k]) return;
+    var d=BM.draft[k]||{};
+    if(!d.guests||!d.guests.length) return;
+    out.push({rowIdx:k,table:(d._table||'伝票'+k),floor:'🚪',cust:(d._cust||'退店済み'),
+              pax:(d.guests||[]).length,tantou:d.tantou||'',member:'',inT:'',gone:true});
   });
   return out;
 }
@@ -3805,11 +3825,12 @@ function bmRender(){
   bmLoad();
   var bills=bmBills();
   if(BM.key&&!bills.some(function(b){return String(b.rowIdx)===String(BM.key);})) BM.key=null;
+  if(!BM.key&&BM.want&&bills.some(function(b){return String(b.rowIdx)===String(BM.want);})){ BM.key=BM.want; BM.want=null; }
   var html='<div><div class="bm-card"><h3><span class="n">1</span> 伝票（いま席にいる組）</h3>'
     +(bills.length?bills.map(function(b){
         var d=bmGet(b.rowIdx,b.pax),c=bmCalc(d);
         return '<div class="bm-bill'+(String(BM.key)===String(b.rowIdx)?' sel':'')+'" onclick="bmOpen('+b.rowIdx+')">'
-          +'<div class="t">'+esc(b.floor+' '+b.table)+'</div>'
+          +'<div class="t">'+esc(bmTblLabel_(b.floor,b.table))+'</div>'
           +'<div class="c">'+esc(b.cust)+'<span style="font-size:11px;color:var(--sub);font-weight:600"> '+b.pax+'名</span></div>'
           +'<div class="s">'+(b.tantou?'担当 '+esc(b.tantou):'担当なし')+'</div>'
           +'<div class="a">'+bmYen(c.total)+'</div></div>';
@@ -4055,7 +4076,7 @@ function bmSeikyuRequest(){
   setTimeout(function(){
     try{
       var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
-      SK_ITEMS=[{name:(nm?nm+' 様　':'')+'ご利用分（'+((typeof curDate!=='undefined'?curDate:'')||'')+'）',amount:c.total}];
+      SK_ITEMS=[{name:(nm?nm+' 様　':'')+'ご利用分（'+(bmDateKey()||'')+'）',amount:c.total}];
       SK_NOTE=(b.floor||'')+' '+(b.table||'')+'　'+nm+' 様　'+bmYen(c.total);
       SK_NOTE_TOUCHED=true;
       if(typeof renderMenu==='function') renderMenu();
@@ -4120,10 +4141,7 @@ function bmSlipLines_(d,c,bill,mode){
     if(bill.member) L.push({t:'会員番号：'+bill.member,a:'l'});
     L.push({t:'お客様　：'+(bill.cust||''),a:'l'});
   }
-  /* ⚠️席名にフロアが入っていることがある（"5F A1"）＝そのまま連結すると「5F 5F A1」になる */
-  var _tbl=String(bill.table||''), _fl=String(bill.floor||'');
-  var _lbl=(_fl&&_tbl.indexOf(_fl)!==0)?(_fl+' '+_tbl):_tbl;
-  L.push({t:bmPadR_('テーブル： '+_lbl,BM_SLIP_COLS-14)+bmPadL_('人数： '+pax+'名',14),a:'l'});
+  L.push({t:bmPadR_('テーブル： '+bmTblLabel_(bill.floor,bill.table),BM_SLIP_COLS-14)+bmPadL_('人数： '+pax+'名',14),a:'l'});
   if(!store) L.push({t:bmNowStr_(),a:'l'});   /* 店舗控えは冒頭の「印字」が同じ役目＝2回出さない */
   /* ⚠️ボス指示＝**担当・予約は名前だけ**（金額も点数も出さない）。いえやすは担当¥0・予約¥0＝
      ¥0と0点を並べても紙が読みにくくなるだけ。金額が立つ同伴は別ブロックで明細として出す。 */
@@ -4319,46 +4337,69 @@ function bmCloseHtml(d,c){
       +'<button class="bm-btn dng sm" onclick="bmReopen()">会計を取り消す</button></div>'
       +'<div class="bm-note">⚠️席は空きません。退店はこれまで通りホール状況で行ってください。</div></div>';
   }
-  var ok=(c.unpaid===0&&c.total>0);
+  /* ⚠️**お預り超過（お釣りが出る）は正常**＝現金で多めに出すのが普通。止めるのは不足のときだけ。
+     ここを `unpaid!==0` にすると4万円お預りの会計が通らない（実際に踏んだ） */
+  var ok=(c.unpaid<=0&&c.total>0);
   return '<div class="bm-row" style="margin-top:10px"><button class="bm-btn acc" style="flex:1;padding:11px" onclick="bmSlipPreview()">🖨 お会計伝票を印刷（お客様確認用）</button></div>'
     +'<div class="bm-row" style="margin-top:8px">'
-    +'<button class="bm-btn pri" style="flex:1;padding:13px;font-size:15px'+(ok?'':';opacity:.5')+'" onclick="bmClose()">💰 会計する</button></div>'
+    +'<button class="bm-btn pri" style="flex:1;padding:13px;font-size:15px'+((ok&&!BM_CLOSING)?'':';opacity:.5')+'" onclick="bmClose()">'
+    +(BM_CLOSING?'⏳ 会計中…':'💰 会計する')+'</button></div>'
     +'<div class="bm-note">'+(ok?'締めると編集できなくなります（取り消しは可能）。<b>席は空きません</b>。'
-      :(c.total<=0?'金額が0円です。':'未領収金が残っています。現金／カード／売掛で'+bmYen(c.total)+'を埋めてください。'))+'</div>';
+      :(c.total<=0?'金額が0円です。':'お預りが'+bmYen(c.unpaid)+'不足しています。現金／カード／売掛で'+bmYen(c.total)+'を埋めてください。'))+'</div>';
 }
+/* ⚠️送信中フラグ。会計ボタンは**必ず連打される**（反応が無いともう一度押す）。
+   backendは二重会計を弾くが、弾いたエラーが客前で出るのは事故に見える＝手前で止める。 */
+var BM_CLOSING=false;
 function bmClose(){
+  if(BM_CLOSING) return;
   var d=bmGet(BM.key),c=bmCalc(d);
   if(bmClosed_(d)) return;
   if(c.total<=0){ alert('金額が0円です。'); return; }
-  if(c.unpaid!==0){ alert('未領収金が'+bmYen(c.unpaid)+'残っています。\n現金／カード／売掛で合計'+bmYen(c.total)+'を埋めてください。'); return; }
+  if(c.unpaid>0){ alert('お預りが'+bmYen(c.unpaid)+'不足しています。\n現金／カード／売掛で合計'+bmYen(c.total)+'を埋めてください。'); return; }
   if(BM.key==='demo'){ alert('🧪お試し伝票は会計できません（検算用）。'); return; }
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
-  if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\n現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)+'\n\nよろしいですか？')) return;
+  if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
+      +(c.unpaid<0?('\nお釣り '+bmYen(-c.unpaid)):'')+'\n\nよろしいですか？')) return;
   var rec={ floor:b.floor||'', table:b.table||'', cust:b.cust||'', pax:(d.guests||[]).length,
             tantou:d.tantou||'', uriban:d.uriban?1:0,
             setSum:c.setSum, tanto:c.tc*BM_FEE.tanto, yoyaku:c.yc*BM_FEE.yoyaku, dohan:c.dc*BM_FEE.dohan,
             ordSum:c.ordSum, welCount:(d.welcome||[]).reduce(function(a,w){return a+(w.qty||0);},0),
             discount:Number(d.discount)||0, surcharge:Number(d.surcharge)||0,
             base:c.base, tax:c.tax, total:c.total,
-            cash:Number(d.pay.cash)||0, card:Number(d.pay.card)||0, credit:Number(d.pay.credit)||0 };
-  gsr('posCloseBill',(typeof curDate!=='undefined'?curDate:''),BM.key,rec,(typeof LOGIN!=='undefined'?LOGIN:''))
+            /* ⚠️現金は**お預り**と**売上に充当した額**を分けて渡す。混ぜると現金売上の集計が釣り銭ぶん過大になる */
+            cash:Number(d.pay.cash)||0, card:Number(d.pay.card)||0, credit:Number(d.pay.credit)||0,
+            cashApplied:Math.max(0,c.total-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)),
+            change:Math.max(0,-c.unpaid) };
+  /* ⚠️`bmRender()`を挟むと`bmLoad()`が下書きを**作り直す**＝ここで掴んでいる`d`は死ぬ。
+     成功後は必ずキーから取り直すこと（これで一度「会計済みが記録されない」を踏んだ） */
+  var key=String(BM.key);
+  BM_CLOSING=true; bmRender();
+  gsr('posCloseBill',bmDateKey(),key,rec,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
-      if(!r||!r.ok){ alert('会計できませんでした：'+((r&&r.error)||'不明')); return; }
-      d.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
-      bmSave(); bmRender();
+      BM_CLOSING=false;
+      if(!r||!r.ok){ alert('会計できませんでした：'+((r&&r.error)||'不明')); bmRender(); return; }
+      bmLoad();
+      var dd=BM.draft[key]; if(!dd){ bmRender(); return; }
+      dd.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
+      BM.key=key; bmSave(); bmRender();
       bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
     })
-    .catch(function(e){ alert('会計できませんでした：'+((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
+    .catch(function(e){ BM_CLOSING=false; bmRender(); alert('会計できませんでした：'+((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
 }
 function bmReopen(){
-  var d=bmGet(BM.key); if(!bmClosed_(d)) return;
+  if(BM_CLOSING) return;
+  var d=bmGet(BM.key), rkey=String(BM.key); if(!bmClosed_(d)) return;
   if(!confirm('会計を取り消して、伝票を直せる状態に戻します。\n（取り消した記録は残ります）')) return;
-  gsr('posReopenBill',(typeof curDate!=='undefined'?curDate:''),BM.key,(typeof LOGIN!=='undefined'?LOGIN:''))
+  BM_CLOSING=true;
+  gsr('posReopenBill',bmDateKey(),BM.key,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
-      if(!r||!r.ok){ alert('取り消せませんでした：'+((r&&r.error)||'不明')); return; }
-      delete d.closed; bmSave(); bmRender();
+      BM_CLOSING=false;
+      if(!r||!r.ok){ alert('取り消せませんでした：'+((r&&r.error)||'不明')); bmRender(); return; }
+      bmLoad();
+      var dd=BM.draft[rkey]; if(dd) delete dd.closed;
+      BM.key=rkey; bmSave(); bmRender();
     })
-    .catch(function(e){ alert('取り消せませんでした：'+((e&&e.message)||'通信エラー')); });
+    .catch(function(e){ BM_CLOSING=false; bmRender(); alert('取り消せませんでした：'+((e&&e.message)||'通信エラー')); });
 }
 /* ③担当カード＝ボス指示「セットの次に担当をデフォルト表示」＋「売半かどうかを選べる」。
    ⚠️既定はお客様に紐づく担当（予約行のtantou）。この伝票だけ差し替えられる。
@@ -4490,7 +4531,7 @@ function bmDetailHtml(){
   d.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
   var tv=bmVerdictHtml(d,c);
   return '<div><div class="bm-card"><h3><span class="n">7</span> ご利用明細 '
-    +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||''))+'</span></h3>'
+    +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc(bmTblLabel_(bill.floor,bill.table)+' '+(bill.cust||''))+'</span></h3>'
     +'<div class="bm-det">'
     +'<div class="col"><h4>担当・予約 / 同伴</h4>'+(aH||'<div class="bm-note">—</div>')+'</div>'
     /* ⚠️セット欄はボス指示で削除（下の合計欄に「セット ¥○」が出るので二重） */
@@ -4742,9 +4783,16 @@ function bmTouch(){
 function bmField(k,v){ if(k!=='trust'&&k!=='trustTax'&&bmLockedAlert_()) return;   /* TRUST照合は会計後も打てる */ var d=bmGet(BM.key); d[k]=(k==='trust')?v:(Number(v)||0); bmSave(); bmTouch(); }
 function bmPay(k,v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay[k]=Number(v)||0; bmSave(); bmTouch(); }
 function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.cash=bmCalc(d).total; d.pay.card=0; d.pay.credit=0; bmSave(); bmRender(); }
+/* ⚠️サーバーからも消さないと、間違えて作った伝票が閉店ゲートに永久に残る */
+function bmClearServer_(k){
+  if(typeof gsr!=='function'||k==='demo') return;
+  gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+    .catch(function(){ BM_SYNC_ERR='下書きの取り下げが共有できていません'; bmRenderIfIdle(); });
+}
 function bmClear(){ if(bmLockedAlert_()) return;
   if(!confirm('この伝票の下書きを消します。よろしいですか？')) return;
-  delete BM.draft[BM.key]; bmSave(); bmRender();
+  var k=String(BM.key);
+  delete BM.draft[k]; bmStash_(); bmClearServer_(k); BM.key=null; bmRender();
 }
 
 /* ============ 🍽 自社POS（Phase1: オーダー入力〜伝票明細〜会計サマリ）============
@@ -6376,7 +6424,9 @@ var POS_DAY_ERR='';
 function ccPosLoad(){
   POS_DAY=null; POS_DAY_ERR='';
   if(typeof gsr!=='function'){ POS_DAY_ERR='取得できません'; return; }
-  gsr('getPosDayStatus',(typeof curDate!=='undefined'?curDate:'')).then(function(r){
+  /* ⚠️閉店チェックの対象日はサーバーが決めた営業日（init.dateKey）が正。そちらを優先する */
+  var dk=(typeof cashState!=='undefined'&&cashState&&cashState.dateKey)?cashState.dateKey:bmDateKey();
+  gsr('getPosDayStatus',dk).then(function(r){
     POS_DAY=(r&&r.ok!==false)?r:null;
     if(!POS_DAY) POS_DAY_ERR='POSの状態を取得できませんでした';
     ccPosRefresh();
