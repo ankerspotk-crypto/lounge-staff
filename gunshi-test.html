@@ -5268,6 +5268,7 @@ var MENU_TILES=[
     {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
     {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
     {ic:'🖨', t:'領収書・受領書',     act:"openReceipt()"},
+    {ic:'🖊', t:'テーブル伝票',       act:"openTableSlip()"},
     {ic:'📄', t:'対象伝票・名刺を登録', act:"openSeikyu()"},
     {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
     {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
@@ -5740,6 +5741,149 @@ function openReceipt(){
     if(menuView==='receipt'){ var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML=rcptDenListHtml_(); }
   }).catch(function(){ RCPT_DENPYO=[]; if(menuView==='receipt'){ var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML='<div class="rcpt-den-empty">予約伝票の取得に失敗（宛名は手入力で発行できます）</div>'; } });
 }
+/* ══════ 🖊 テーブル伝票（手書き用の白紙伝票を TM-M30 で刷る） ══════
+   紙の「お会計伝票」を軍師から印字する。front-only＝バックエンド変更なし。
+   ⚠️縦長フォーム＝回転しない（領収書Rの横長は90度回転していた。ここは素直に縦）。
+   ⚠️80mm紙の印字幅＝576dot。canvas幅は576固定（8の倍数＝1bitラスタの都合）。
+   ⚠️ラスタ化（閾値184＋1px太らせ）は"この中に自前で持つ"＝rcptCanvasToEposXml_ に依存しない。
+      理由＝test/prod でこのヘルパの版が違う（testは旧・閾値128）。自前で持てば本番昇格が
+      この1ブロック＋MENU_TILES 1行＋renderMenu 1行の外科注入で済む。 */
+var TSLIP_DATE='today';   // 'today'=日付欄に今日を刷る / 'blank'=空欄（手書き）
+var TSLIP_W=576;          // 印字ドット幅（80mm紙）
+/* 伝票の品名行。sub があると備考欄が sub.length 行に分かれ、品名セルはその行数ぶん縦に結合される */
+var TSLIP_ROWS=[
+  {t:'炭酸（2本）'},
+  {t:'チャーム'},
+  {t:'丸氷'},
+  {t:'割物ピッチャー', sub:['ウーロン茶','緑茶','ジャスミン']},
+  {t:'キャストドリンク'},{t:'キャストドリンク'},{t:'キャストドリンク'},{t:'キャストドリンク'},{t:'キャストドリンク'},
+  {t:'POSタグ付け'},
+  {t:'公式ライン登録'},
+  {t:'来店ポイント登録'},
+  {t:'年会費更新'},
+  {t:'ネック作成'}
+];
+function tslipCss_(){ if(document.getElementById('tslip-css'))return; var s=document.createElement('style'); s.id='tslip-css';
+  s.textContent=[
+  '.ts-seg{display:flex;border:1px solid var(--accent-line);border-radius:8px;overflow:hidden;margin-bottom:10px}',
+  '.ts-seg button{flex:1;background:#0f0d09;color:var(--sub);border:0;padding:11px;font-weight:700;font-size:15px;cursor:pointer}',
+  '.ts-seg button.on{background:var(--accent);color:#1a1000}',
+  '.ts-preview{background:#0a0906;border-radius:10px;padding:14px;display:flex;justify-content:center;margin:12px 0}',
+  '.ts-preview img{width:300px;max-width:100%;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.5)}',
+  '.ts-note{font-size:11px;color:#e6c14a;line-height:1.6;margin:6px 2px}',
+  '.ts-print{display:block;box-sizing:border-box;width:100%;margin-top:12px;background:var(--accent);color:#1a1000;border:0;border-radius:10px;padding:15px;font-size:16px;font-weight:800;text-align:center;text-decoration:none;cursor:pointer}'
+  ].join('');
+  document.head.appendChild(s);
+}
+/* 白紙伝票を canvas に描く。返り値＝canvas（幅576・高さは行数から自動算出） */
+function tslipCanvas_(){
+  var W=TSLIP_W, ML=20, MR=20, CW=W-ML-MR;          // 内容の左右マージン
+  var C1=296, C2=76, C3=CW-C1-C2;                    // 列幅：品名 / 数量 / 備考
+  var RH=44, HH=38;                                  // 行の高さ / 見出し行の高さ
+  var nRow=0; TSLIP_ROWS.forEach(function(r){ nRow+=(r.sub?r.sub.length:1); });
+  // ── 縦位置を先に決める（canvasは高さを先に確定させる必要がある）──
+  var yTitle=52, yDate=92, yTbl1=134, yTbl2=162, yPax=200, yCust=240, gridTop=262;
+  var H=Math.ceil((gridTop+HH+RH*nRow+26)/8)*8;
+  var c=document.createElement('canvas'); c.width=W; c.height=H;
+  var g=c.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  g.fillStyle='#000'; g.strokeStyle='#000'; g.textBaseline='alphabetic'; g.textAlign='left';
+  var line=function(x1,y1,x2,y2,w){ g.lineWidth=w||1.6; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
+  var dot=function(y){ g.setLineDash([4,4]); line(ML,y,W-MR,y,1.4); g.setLineDash([]); };
+  // ── 見出し「お会計伝票」（左に伝票アイコンを線画で）──
+  g.lineWidth=2.2; g.strokeRect(ML+2,yTitle-27,26,32);
+  for(var i=0;i<3;i++) line(ML+8,yTitle-19+i*8,ML+24,yTitle-19+i*8,1.6);
+  g.font='bold 30px "Hiragino Mincho ProN","YuMincho",serif';
+  g.fillText('お会計伝票', ML+42, yTitle);
+  // ── 日付 ──
+  g.font='bold 21px sans-serif'; g.fillText('日付', ML+4, yDate);
+  g.fillText('年', 300, yDate); g.fillText('月', 396, yDate); g.fillText('日', 492, yDate);
+  if(TSLIP_DATE==='today'){
+    var d=new Date();
+    g.textAlign='right'; g.font='bold 23px sans-serif';
+    g.fillText(String(d.getFullYear()), 296, yDate);
+    g.fillText(String(d.getMonth()+1), 392, yDate);
+    g.fillText(String(d.getDate()), 488, yDate);
+    g.textAlign='left'; g.font='bold 21px sans-serif';
+  }
+  dot(yDate+14);
+  // ── テーブル番号（紙の並びをそのまま：2F / 離れ / カウンター / BOX ＋ その下に 1 2 3 4）──
+  g.font='bold 19px sans-serif'; g.fillText('テーブル番号', ML+4, yTbl1);
+  g.font='bold 21px sans-serif';
+  g.fillText('2F', 176, yTbl1); g.fillText('離れ', 238, yTbl1); g.fillText('カウンター', 316, yTbl1); g.fillText('BOX', 462, yTbl1);
+  g.font='bold 20px sans-serif';
+  ['1','2','3','4'].forEach(function(n,i){ g.fillText(n, 240+i*30, yTbl2); });
+  dot(yTbl2+14);
+  // ── 人数 ──
+  g.font='bold 19px sans-serif'; g.fillText('人数', ML+4, yPax);
+  g.font='bold 21px sans-serif';
+  g.fillText('男性', 176, yPax); g.fillText('名', 300, yPax);
+  g.fillText('女性', 360, yPax); g.fillText('名', 486, yPax);
+  dot(yPax+14);
+  // ── お客様 / 担当 / 同伴 ──
+  g.font='bold 19px sans-serif'; g.fillText('お客様', ML+4, yCust);
+  g.fillText('担当', 250, yCust); g.fillText('同伴', 400, yCust);
+  dot(yCust+14);
+  // ── 明細グリッド ──
+  var x1=ML, x2=ML+C1, x3=ML+C1+C2, x4=ML+CW;
+  var top=gridTop, bottom=gridTop+HH+RH*nRow;
+  g.lineWidth=2.0; g.strokeRect(x1,top,CW,bottom-top);
+  line(x1,top+HH,x4,top+HH,2.0);                       // 見出し行の下
+  [x2,x3].forEach(function(x){ line(x,top,x,bottom,1.6); });   // 縦の仕切り
+  g.textAlign='center'; g.font='bold 21px sans-serif';
+  g.fillText('品名', x1+C1/2, top+HH-12); g.fillText('数量', x2+C2/2, top+HH-12); g.fillText('備考', x3+C3/2, top+HH-12);
+  g.textAlign='left';
+  var y=top+HH;
+  TSLIP_ROWS.forEach(function(r){
+    var span=r.sub?r.sub.length:1, hgt=RH*span;
+    // 品名（結合セルは縦中央）
+    g.font='bold 22px sans-serif'; g.fillText(r.t, x1+14, y+hgt/2+8);
+    for(var k=0;k<span;k++){
+      var ry=y+RH*k;
+      if(k>0) line(x2,ry,x4,ry,1.4);                   // 結合中は数量・備考だけ区切る（品名は割らない）
+      if(r.sub){ g.font='bold 20px sans-serif'; g.fillText(r.sub[k], x3+12, ry+RH/2+7); }
+    }
+    y+=hgt;
+    if(y<bottom) line(x1,y,x4,y,1.4);                  // 品名行の区切り
+  });
+  return c;
+}
+/* canvas → ePOS-Print XML（1bitラスタ）。サーマルのかすれ対策＝閾値184＋右下1px太らせ */
+function tslipXml_(){
+  var c=tslipCanvas_(), w=c.width, h=c.height;
+  var d=c.getContext('2d').getImageData(0,0,w,h).data;
+  var bpr=Math.ceil(w/8), R=new Uint8Array(bpr*h), ink=new Uint8Array(w*h);
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>96 && (d[i]+d[i+1]+d[i+2])/3<184) ink[y*w+x]=1; } }
+  for(var y2=0;y2<h;y2++){ for(var x2=0;x2<w;x2++){
+    if(ink[y2*w+x2] || (x2>0&&ink[y2*w+x2-1]) || (y2>0&&ink[(y2-1)*w+x2])) R[y2*bpr+(x2>>3)] |= (0x80>>(x2&7));
+  } }
+  var s=''; for(var k=0;k<R.length;k++) s+=String.fromCharCode(R[k]);
+  return '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'
+    +'<image width="'+w+'" height="'+h+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
+    +'<feed unit="24"/><cut type="feed"/></epos-print>';
+}
+function tslipSetDate(v){ TSLIP_DATE=v; renderMenu(); }
+function tslipPrint(){
+  var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(tslipXml_());
+  var a=document.getElementById('ts-printlink'); if(a)a.href=url;
+  var hint=document.getElementById('ts-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）';
+  return true;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
+}
+function openTableSlip(){ menuView='tslip'; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
+function tslipRenderMenu_(el){
+  tslipCss_();
+  document.getElementById('menuTitle').textContent='🖊 テーブル伝票';
+  var h='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
+  h+='<div class="rcpt-h" style="margin-top:8px">日付欄</div>';
+  h+='<div class="ts-seg">'
+    +'<button class="'+(TSLIP_DATE==='today'?'on':'')+'" onclick="tslipSetDate(\'today\')">今日を刷る</button>'
+    +'<button class="'+(TSLIP_DATE==='blank'?'on':'')+'" onclick="tslipSetDate(\'blank\')">空欄（手書き）</button></div>';
+  var src=''; try{ src=tslipCanvas_().toDataURL('image/png'); }catch(e){ src=''; }
+  h+='<div class="ts-preview">'+(src?'<img alt="伝票プレビュー" src="'+src+'">':'<div class="rcpt-den-empty">プレビューを描画できませんでした</div>')+'</div>';
+  h+='<a class="ts-print" id="ts-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return tslipPrint()">🖨 この伝票を1枚 刷る（TM-M30 / Bluetooth）</a>';
+  h+='<div class="ts-note" id="ts-hint">1回押すと1枚。まとめて欲しいときは続けて押す（iOSは印字後に軍師へ自動で戻らないので、Safariに戻ってからもう一度押す）。</div>';
+  el.innerHTML=h;
+}
 /* 💳 会費更新（軍師）：今月〜先の月ごとに更新期限が来る会員を一覧・検索（閲覧専用）。バックは getMemberRenewals */
 var GFR_DATA=null, GFR_SEL=null, GFR_Q='', GFR_MODE='due'; // 'due'=会費の期限の人(未更新) / 'done'=すでに更新済み
 function openFeeRenew(){
@@ -5834,6 +5978,7 @@ function renderMenu(){
     return;
   }
   if(menuView==='receipt'){ rcptRenderMenu_(el); return; }
+  if(menuView==='tslip'){ tslipRenderMenu_(el); return; }
   if(menuView==='seikyu'){ seikyuRenderMenu_(el); return; }
   el.innerHTML=MENU_TILES.map(function(g){
     return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
