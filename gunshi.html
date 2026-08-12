@@ -28,6 +28,9 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .brand{font-size:15px;font-weight:800;letter-spacing:.5px;white-space:nowrap;}
 .brand .z{color:var(--accent);}
 .term-badge{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);padding:3px 9px;border-radius:20px;white-space:nowrap;}
+/* 🖊テーブル伝票が未印刷の予約が残っている時だけ出る警告チップ（0件なら消える＝残っている時だけ目に入る） */
+.slip-chip{display:none;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#ffd7dd;background:#5a1220;border:1px solid #a33b32;padding:5px 11px;border-radius:20px;white-space:nowrap;cursor:pointer;}
+.slip-chip.on{display:inline-flex;}
 .datenav{display:flex;align-items:center;gap:6px;margin-left:2px;}
 .dbtn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--accent);font-size:16px;cursor:pointer;line-height:1;}
 .dtoday{padding:5px 11px;border-radius:9px;border:1px solid var(--accent-line);background:var(--accent-bg);color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;}
@@ -1211,6 +1214,7 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
     <button id="vt-dash" class="on" onclick="setViewMode('dash')">🪑 ホール状況</button>
     <button id="vt-bill" onclick="setViewMode('bill')">🧾 伝票管理</button>
   </div>
+  <button class="slip-chip" id="slipChip" onclick="openTableSlip()" title="タップでテーブル伝票へ"></button>
   <div class="spacer"></div>
   <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
   <button class="menu-btn reload" onclick="hardReload()" title="表示がおかしい時はここ">🔄 再読込</button>
@@ -1289,7 +1293,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-13b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-13c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -5537,6 +5541,50 @@ var TSLIP_MODE='rsv';     // 'rsv'=予約から刷る（既定） / 'blank'=白�
 var TSLIP_SEL=-1;         // tslipList_() の index（-1＝未選択＝白紙で刷る）
 var TSLIP_DATE='today';   // 'today'=日付欄に今日を刷る / 'blank'=空欄（手書き）
 var TSLIP_W=576;          // 印字ドット幅（80mm紙）
+/* ===== 印刷済みの管理（全端末で共有：backend getSlipPrinted / markSlipPrinted） =====
+ * 運用は2本＝①来店前に事前印刷して席に置く ②突発来店はその場で予約入力→印刷。どちらも漏らさないため、
+ * 「まだ刷っていない予約」を全端末で同じように見せる（ボス確定 2026-08-13）。
+ * ⚠️⚠️「印刷ボタンを押した」では印刷済みにしない。TM Print Assistantへ飛ばすだけでは成否が分からず、
+ *   楽観的に記録すると失敗した1枚が黙って漏れる＝この機能の目的と真逆になる。押した時は端末ローカルに
+ *   「確認待ち」を置き、戻ってきた黒服の「✓刷れた」で初めてサーバへ記録する。
+ * ⚠️確認待ちは localStorage＝印字アプリへ切り替わってSafariがページを捨てても残る（消えると確認が出せない）。 */
+var TSLIP_DONE={};        // {rowIdx:1} 印刷済み（全端末共有・loadAllで取り込む）
+var TSLIP_ONLYNEW=true;   // 一覧を「未印刷だけ」に絞る（既定ON＝刷り漏れを最後まで見せ続ける）
+var TSLIP_PEND_KEY='tslipPending';
+function tslipApplyPrinted_(res){
+  var rows=(res&&res.rows)?res.rows:((res&&res.length)?res:[]);   // {rows:[..]} でも [..] でも受ける（バンドル／単独ゲッターの両対応）
+  var m={}; (rows||[]).forEach(function(x){ m[String(Number(x))]=1; }); TSLIP_DONE=m;
+}
+function tslipKey_(r){ return String(Number(r.rowIdx||r.id||0)); }
+function tslipIsDone_(r){ return !!TSLIP_DONE[tslipKey_(r)]; }
+function tslipUnprinted_(){ return tslipList_().filter(function(r){ return !tslipIsDone_(r); }); }
+/* ホール状況ヘッダの警告チップ。0件なら消える＝残っている時だけ目に入る */
+function tslipUpdateChip_(){
+  var el=document.getElementById('slipChip'); if(!el)return;
+  var n=tslipUnprinted_().length;
+  el.textContent='🖊 伝票 未印刷 '+n;
+  el.className='slip-chip'+(n?' on':'');
+}
+function tslipPend_(){ try{ return JSON.parse(localStorage.getItem(TSLIP_PEND_KEY)||'null'); }catch(e){ return null; } }
+function tslipSetPend_(v){ try{ if(v)localStorage.setItem(TSLIP_PEND_KEY,JSON.stringify(v)); else localStorage.removeItem(TSLIP_PEND_KEY); }catch(e){} }
+/* 「✓刷れた」＝ここで初めてサーバへ記録。失敗しても画面は進める（次のloadAllで正が来る） */
+function tslipConfirm(ok){
+  var p=tslipPend_(); tslipSetPend_(null);
+  if(ok&&p&&p.rowIdx){
+    TSLIP_DONE[String(p.rowIdx)]=1;
+    if(IS_GAS) gsr('markSlipPrinted',p.rowIdx).catch(function(){ toast('印刷済みの記録に失敗。もう一度確認してください'); });
+  }
+  tslipUpdateChip_(); renderMenu();
+}
+/* 誤って印刷済みにした／刷り直したい時に未印刷へ戻す */
+function tslipUndo(i,ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  var r=tslipList_()[i]; if(!r)return;
+  var k=tslipKey_(r); delete TSLIP_DONE[k];
+  if(IS_GAS) gsr('markSlipPrinted',Number(k),true).catch(function(){ toast('取消の記録に失敗'); });
+  tslipUpdateChip_(); renderMenu();
+}
+function tslipToggleOnlyNew(){ TSLIP_ONLYNEW=!TSLIP_ONLYNEW; renderMenu(); }
 /* 伝票の品名行。sub があると備考欄が sub.length 行に分かれ、品名セルはその行数ぶん縦に結合される */
 var TSLIP_ROWS=[
   {t:'炭酸（2本）'},
@@ -5566,6 +5614,16 @@ function tslipCss_(){ if(document.getElementById('tslip-css'))return; var s=docu
   '.ts-badge.ng{background:#3a1518;color:#ff9aa0}',
   '.ts-badge.warn{background:#3a2f10;color:#e6c14a}',
   '.ts-badge.new{background:#12233a;color:#8fc4ff}',
+  '.ts-badge.done{background:#12301f;color:#7fdca0;margin:0}',
+  '.ts-rsv.done{opacity:.62}',
+  '.ts-undo{font-size:11px;color:var(--sub);margin-top:4px;text-decoration:underline}',
+  '.ts-filter{font-size:12px;color:var(--sub);margin:0 2px 8px}',
+  '.ts-filter input{vertical-align:-1px;margin-right:4px}',
+  '.ts-confirm{background:#2a1606;border:1px solid var(--accent-line);border-radius:10px;padding:12px;margin:10px 0}',
+  '.ts-confirm-t{font-size:14px;font-weight:800;color:var(--accent);margin-bottom:9px}',
+  '.ts-confirm-b{display:flex;gap:8px}',
+  '.ts-confirm-b button{flex:1;background:#0f0d09;color:var(--sub);border:1px solid var(--line);border-radius:8px;padding:11px;font-size:14px;font-weight:700;cursor:pointer}',
+  '.ts-confirm-b button.ok{background:var(--accent);color:#1a1000;border-color:var(--accent)}',
   '.ts-empty{font-size:12px;color:var(--sub);padding:12px;text-align:center}',
   '.ts-preview{background:#0a0906;border-radius:10px;padding:14px;display:flex;justify-content:center;margin:12px 0}',
   '.ts-preview img{width:300px;max-width:100%;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.5)}',
@@ -5757,27 +5815,38 @@ function tslipSetMode(m){ TSLIP_MODE=m; if(m==='blank')TSLIP_SEL=-1; renderMenu(
 function tslipSetDate(v){ TSLIP_DATE=v; renderMenu(); }
 function tslipPick(i){ TSLIP_SEL=(TSLIP_SEL===i?-1:i); renderMenu(); }
 function tslipPrint(){
+  var o=tslipSel_();
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(tslipXml_());
   var a=document.getElementById('ts-printlink'); if(a)a.href=url;
   var hint=document.getElementById('ts-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）';
+  // ⚠️ここでは印刷済みにしない＝「確認待ち」を置くだけ。戻ってきて「✓刷れた」を押した時に記録する
+  if(o) tslipSetPend_({rowIdx:Number(tslipKey_(o)), cust:String(o.cust||''), at:(new Date()).getTime()});
   return true;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
 }
 function openTableSlip(){ menuView='tslip'; TSLIP_MODE='rsv'; TSLIP_SEL=-1; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
 function tslipListHtml_(){
   var L=tslipList_();
   if(!L.length) return '<div class="ts-empty">本日の予約がありません（このまま白紙で刷れます）</div>';
-  return L.map(function(r,i){
+  // ⚠️indexは常に tslipList_() の通し番号（絞り込んでもズレないように、非表示の行だけ飛ばす）
+  var html=L.map(function(r,i){
+    var done=tslipIsDone_(r);
+    if(TSLIP_ONLYNEW && done && i!==TSLIP_SEL) return '';
     var mi=membershipInfo(r.joined,r.feeDate);
     var b = mi.status==='expired'   ? '<span class="ts-badge ng">更新切れ</span>'
           : mi.status==='thismonth' ? '<span class="ts-badge warn">今月更新</span>'
           : (!String(r.mem||'').trim() ? '<span class="ts-badge new">ご新規</span>' : '');
     var sub=[]; if(r.tantou)sub.push('担当 '+r.tantou); if(r.dohan)sub.push('同伴 '+r.dohan); if(r.yoyaku)sub.push('予約 '+r.yoyaku);
-    return '<div class="ts-rsv'+(i===TSLIP_SEL?' on':'')+'" onclick="tslipPick('+i+')">'
+    var rightCol = done
+      ? '<div style="text-align:right"><div class="ts-badge done">✓ 印刷済</div><div class="ts-undo" onclick="tslipUndo('+i+',event)">↺ 未印刷に戻す</div></div>'
+      : '<div class="ts-dim">'+(i===TSLIP_SEL?'選択中':'選ぶ ▸')+'</div>';
+    return '<div class="ts-rsv'+(i===TSLIP_SEL?' on':'')+(done?' done':'')+'" onclick="tslipPick('+i+')">'
       +'<div><div class="ts-rsv-nm"><span class="ts-dim">'+esc(r.time||'')+'</span>　'+esc(r.cust||'')+' 様'
       +(String(r.mem||'').trim()?' <span class="ts-dim">'+esc(r.mem)+'</span>':'')+b+'</div>'
       +'<div class="ts-rsv-sub">'+esc(r.table||'未定')+'　'+esc(sub.join('／'))+'</div></div>'
-      +'<div class="ts-dim">'+(i===TSLIP_SEL?'選択中':'選ぶ ▸')+'</div></div>';
+      +rightCol+'</div>';
   }).join('');
+  if(!html) return '<div class="ts-empty">✅ 本日の予約はすべて印刷済みです</div>';
+  return html;
 }
 function tslipRenderMenu_(el){
   tslipCss_();
@@ -5787,8 +5856,18 @@ function tslipRenderMenu_(el){
   h+='<div class="ts-seg" style="margin-top:8px">'
     +'<button class="'+(TSLIP_MODE==='rsv'?'on':'')+'" onclick="tslipSetMode(\'rsv\')">予約から刷る</button>'
     +'<button class="'+(TSLIP_MODE==='blank'?'on':'')+'" onclick="tslipSetMode(\'blank\')">白紙で刷る</button></div>';
+  // 印刷アプリから戻ってきた直後の確認バー。ここを通らないと「印刷済み」にならない＝刷り漏れが残り続ける
+  var p=tslipPend_();
+  if(p&&p.rowIdx){
+    h+='<div class="ts-confirm"><div class="ts-confirm-t">🖊 '+esc(p.cust||'')+' 様の伝票、刷れましたか？</div>'
+      +'<div class="ts-confirm-b"><button class="ok" onclick="tslipConfirm(true)">✓ 刷れた</button>'
+      +'<button onclick="tslipConfirm(false)">まだ／やり直す</button></div></div>';
+  }
   if(TSLIP_MODE==='rsv'){
-    h+='<div class="ts-h">本日の予約を選ぶ（お客様・会員番号・担当・年会費が伝票に入ります）</div>';
+    var un=tslipUnprinted_().length;
+    h+='<div class="ts-h">本日の予約を選ぶ（お客様・会員番号・担当・年会費が伝票に入ります）'
+      +(un?'　<span style="color:#ff9aa0">未印刷 '+un+'件</span>':'　<span style="color:#7fdca0">未印刷なし</span>')+'</div>';
+    h+='<div class="ts-filter"><label><input type="checkbox" '+(TSLIP_ONLYNEW?'checked':'')+' onchange="tslipToggleOnlyNew()"> 未印刷だけ表示</label></div>';
     h+='<div class="ts-list">'+tslipListHtml_()+'</div>';
   }
   h+='<div class="ts-h">日付欄</div>';
@@ -8011,6 +8090,7 @@ function applyLoadAll_(r){
   if(r[6]!=null) WORKCASTS=r[6];
   if(r[7]!=null) TASKS=(r[7]&&r[7].tasks)||[];
   if(r[8]&&typeof r[8]==='object') CASTKUBUN=r[8];
+  if(r[9]!=null) tslipApplyPrinted_(r[9]);   // 🖊 印刷済みrowIdx（null=取得失敗→前回値を保持）
   applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
   annotateLeavePlan(); // 占有席に「空く予定」(=在席組の退店予定時刻)を付与
   BOOTED=true; renderAll();
@@ -8027,7 +8107,8 @@ function loadAllLegacy_(){
     gsr('getKioskCastNames').catch(function(){return null;}),
     gsr('getKioskWorkingCasts').catch(function(){return null;}),
     gsr('getKioskTasks').catch(function(){return null;}),
-    gsr('getKioskCastKubun').catch(function(){return null;})
+    gsr('getKioskCastKubun').catch(function(){return null;}),
+    gsr('getSlipPrinted').catch(function(){return null;})   /* 🖊テーブル伝票の印刷済みrowIdx（バンドル未対応版の保険） */
   ]).then(applyLoadAll_);
 }
 var _loadingAll=false, _loadAllPend=false;
@@ -8039,7 +8120,7 @@ function loadAll(){
   /* まず1発バンドル getKioskLoadAll を試す→未デプロイ/失敗なら従来9本へ自動フォールバック（＝backend未反映でも壊れない） */
   gsr('getKioskLoadAll',curDate).then(function(b){
     if(!b || b.ok!==true) throw new Error('nobundle');
-    applyLoadAll_([b.hall2,b.reservations,b.tsukemawashi,b.shiftBoard,b.castRequests,b.castNames,b.workingCasts,b.tasks,b.castKubun]);
+    applyLoadAll_([b.hall2,b.reservations,b.tsukemawashi,b.shiftBoard,b.castRequests,b.castNames,b.workingCasts,b.tasks,b.castKubun,b.slipPrinted]);
   }).catch(function(){
     return loadAllLegacy_();
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); })
@@ -8187,6 +8268,7 @@ function renderAll(){
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
   renderAlerts();renderHall();renderRight();renderHome();bmRenderIfIdle();
+  tslipUpdateChip_();   // 🖊 未印刷の伝票が残っていればヘッダに出す（0件なら消える）
 }
 /* 表示がおかしい時のハード再読み込み（キャッシュ回避・現在のパラメータは維持） */
 function hardReload(){ try{ var u=new URL(location.href); u.searchParams.set('cb',Date.now()); location.replace(u.toString()); }catch(e){ location.reload(); } }

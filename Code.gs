@@ -683,7 +683,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill'];
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -805,6 +805,38 @@ function getKioskBootstrap() {
  * 各項目は個別 try/catch（getWarCouncil の pick と同型）＝1シートが欠けても他は返す（部分成功）。
  * ⚠️GUNSHI_API_FNS 登録必須（漏れると「許可されていない関数」で失敗）。フロントは失敗時に従来9本へ自動フォールバックする。
  */
+/* ===== 🖊 テーブル伝票の「印刷済み」記録（営業日ごと・全端末で共有） =====
+ * ボス依頼 2026-08-13＝運用は①来店前に事前印刷して席に置く ②突発来店はその場で予約入力→印刷、の2本。
+ * どちらも漏らさないために「まだ刷っていない予約」を全端末で同じように見せる必要がある。
+ * 実体＝ScriptProperty `TSLIP_<営業日>` に予約行(rowIdx)の配列をJSONで持つ。
+ * ⚠️日次の一時プロパティ＝0:30の席リセットのprefix列挙に 'TSLIP_' を足してある（足し忘れると永久に溜まる）。
+ * ⚠️read-modify-write なので同時押しは LockService で直列化する。
+ *   仮に取りこぼしても「印刷済みが未印刷に見える」＝二重に刷るだけで、刷り忘れ側には倒れない（安全側）。
+ * ⚠️フロントは「印刷ボタンを押した」では記録しない＝TM Print Assistantへ飛ばすだけでは成否が分からず、
+ *   楽観的に印刷済みにすると失敗した1枚が黙って漏れる。戻ってきた黒服の「刷れた」確認で初めてここを呼ぶ。 */
+function slipPrintedKey_() { return 'TSLIP_' + bizDateStr_(); }
+function getSlipPrintedRows_() {
+  try { const v = prop(slipPrintedKey_()); const a = v ? JSON.parse(v) : []; return Array.isArray(a) ? a : []; }
+  catch (e) { return []; }
+}
+/* バンドル(getKioskLoadAll)に相乗りできない端末＝旧版フロント用の単独ゲッター。
+   ⚠️軍師の版によって loadAll がバンドル型／9本バラ撃ち型のどちらもあり得る（test側は長くバラ撃ちのまま）。
+     両方で同じフロントコードが動くように、バンドルの slipPrinted とこの関数の2経路を用意してある。 */
+function getSlipPrinted() { return { ok: true, date: bizDateStr_(), rows: getSlipPrintedRows_() }; }
+function markSlipPrinted(rowIdx, undo) {
+  const n = Number(rowIdx);
+  if (!n) return { ok: false, error: 'rowIdxが不正です' };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(8000); } catch (e) { return { ok: false, error: '混み合っています。少し待って押してください' }; }
+  try {
+    let rows = getSlipPrintedRows_();
+    if (undo) rows = rows.filter(x => Number(x) !== n);
+    else if (rows.map(Number).indexOf(n) < 0) rows.push(n);
+    PropertiesService.getScriptProperties().setProperty(slipPrintedKey_(), JSON.stringify(rows));
+    return { ok: true, rows: rows };
+  } finally { try { lock.releaseLock(); } catch (e) {} }
+}
+
 function getKioskLoadAll(dateStr) {
   var pick = function (fn) { try { return fn(); } catch (e) { return null; } };
   var d = dateStr || bizDateStr_();
@@ -820,7 +852,8 @@ function getKioskLoadAll(dateStr) {
     castNames:    pick(function () { return getKioskCastNames(); }),
     workingCasts: pick(function () { return getKioskWorkingCasts(); }),
     tasks:        pick(function () { return getKioskTasks(); }),
-    castKubun:    pick(function () { return getKioskCastKubun(); })
+    castKubun:    pick(function () { return getKioskCastKubun(); }),
+    slipPrinted:  pick(function () { return getSlipPrintedRows_(); })   // 🖊テーブル伝票の印刷済みrowIdx。プロパティ1本読むだけ＝バンドルに相乗り(ポーリング増やさない)
   };
 }
 
@@ -8360,7 +8393,7 @@ function resetAllAtendou_() {
   // ENCHO_LAST・席タグ もクリア
   const props = PropertiesService.getScriptProperties().getProperties();
   Object.keys(props).forEach(k => {
-    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('PLANCAST_') || k.startsWith('RSRV_') || k.startsWith('YRSRV_') || k.startsWith('KLATE_') || k.startsWith('KCHECKIN_') || k.startsWith('KREQ20_') || k.startsWith('KFEE_')) {
+    if (k.startsWith('ENCHO_LAST_') || k.startsWith('ACTIVE_' + today) || k.startsWith('STAG_') || k.startsWith('NGCAST_') || k.startsWith('PLANCAST_') || k.startsWith('RSRV_') || k.startsWith('YRSRV_') || k.startsWith('KLATE_') || k.startsWith('KCHECKIN_') || k.startsWith('KREQ20_') || k.startsWith('KFEE_') || k.startsWith('TSLIP_')) {
       PropertiesService.getScriptProperties().deleteProperty(k);
     }
   });
