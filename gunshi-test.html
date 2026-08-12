@@ -330,6 +330,10 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .stundo.wide{padding:6px 12px;}
 .rbadges{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;}
 .rb{font-size:9px;padding:1px 6px;border-radius:6px;background:#191930;color:#a9bce0;border:1px solid var(--line2);}
+/* 🖊 予約カードの伝票チップ。未印刷は赤で目に付かせ、印刷済みは緑で沈める（タップでその予約の伝票へ） */
+.rslip{font-size:9px;font-weight:800;padding:1px 7px;border-radius:6px;cursor:pointer;border:1px solid;}
+.rslip.ng{background:#3a1518;color:#ffb3b8;border-color:#a33b32;}
+.rslip.ok{background:#12301f;color:#7fdca0;border-color:#2a6a44;}
 .rb.t{color:#8fd06a;border-color:#2f5020;background:#101d0c;}
 .rb.d{color:#ffbf6a;border-color:#5a4010;background:#1c1300;}
 .rb.undef{color:#ff9a6a;border-color:#7a3a1a;background:#241000;}
@@ -2815,6 +2819,9 @@ function rcardHtml(r,isNext){
   if(r.tantou) badges+='<span class="rb t">担当 '+esc(r.tantou)+'</span>';
   if(r.dohan) badges+='<span class="rb d">同伴 '+esc(r.dohan)+'</span>';
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
+  // 🖊 伝票の印刷状態。ボス指示 2026-08-13「伝票はかなり重要なので予約一覧に入れる」＝黒服が一番見る場所に出す。
+  //    ⚠️キャンセルと退店済みには出さない（済んだ組に「未印刷」を出し続けると警告が読まれなくなる）。
+  if(tslipNeedsSlip_(r)) badges+='<span class="rslip '+(tslipIsDone_(r)?'ok':'ng')+'" onclick="event.stopPropagation();openTableSlipFor('+r.id+')">🖊 伝票 '+(tslipIsDone_(r)?'済':'未印刷')+'</span>';
   var ms=membershipInfo(r.joined,r.feeDate);
   var mchip=ms.status==='expired'?'<span class="rmemchip exp">🔴更新切れ</span>':ms.status==='thismonth'?'<span class="rmemchip soon">🟡今月更新</span>':ms.status==='ok'?'<span class="rmemchip ok">🟢有効会員</span>':ms.status==='none'?'<span class="rmemchip none">未会員</span>':'';
   var cancelled=r.status==='キャンセル';
@@ -5774,7 +5781,20 @@ function tslipApplyPrinted_(res){
 }
 function tslipKey_(r){ return String(Number(r.rowIdx||r.id||0)); }
 function tslipIsDone_(r){ return !!TSLIP_DONE[tslipKey_(r)]; }
-function tslipUnprinted_(){ return tslipList_().filter(function(r){ return !tslipIsDone_(r); }); }
+/* 伝票が要る予約＝キャンセルと退店済みを除く。
+   ⚠️退店済みを未印刷に数えると、刷らずに帰った組がその日ずっと残ってヘッダの警告が二度と0にならない
+     ＝「読まれない警告」になる。一覧（絞り込みOFF）では見えるので後から刷り直すことはできる。 */
+function tslipNeedsSlip_(r){ var st=String(r.status||''); return st.indexOf('キャンセル')<0 && st!=='退店済み'; }
+function tslipUnprinted_(){ return tslipList_().filter(function(r){ return tslipNeedsSlip_(r) && !tslipIsDone_(r); }); }
+/* 予約カードの🖊から直接その予約の伝票を開く（一覧から探し直さない） */
+function openTableSlipFor(id){
+  menuView='tslip'; TSLIP_MODE='rsv';
+  var L=tslipList_(), k=String(Number(id)), idx=-1;
+  for(var i=0;i<L.length;i++){ if(tslipKey_(L[i])===k){ idx=i; break; } }
+  TSLIP_SEL=idx;
+  if(idx>=0 && tslipIsDone_(L[idx])) TSLIP_ONLYNEW=false;   // 印刷済みを開いた時に絞り込みで消えないように
+  document.getElementById('menuOverlay').classList.add('show'); renderMenu();
+}
 /* ホール状況ヘッダの警告チップ。0件なら消える＝残っている時だけ目に入る */
 function tslipUpdateChip_(){
   var el=document.getElementById('slipChip'); if(!el)return;
@@ -6047,7 +6067,7 @@ function tslipListHtml_(){
   // ⚠️indexは常に tslipList_() の通し番号（絞り込んでもズレないように、非表示の行だけ飛ばす）
   var html=L.map(function(r,i){
     var done=tslipIsDone_(r);
-    if(TSLIP_ONLYNEW && done && i!==TSLIP_SEL) return '';
+    if(TSLIP_ONLYNEW && (done || !tslipNeedsSlip_(r)) && i!==TSLIP_SEL) return '';
     var mi=membershipInfo(r.joined,r.feeDate);
     var b = mi.status==='expired'   ? '<span class="ts-badge ng">更新切れ</span>'
           : mi.status==='thismonth' ? '<span class="ts-badge warn">今月更新</span>'
