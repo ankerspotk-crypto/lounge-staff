@@ -1289,7 +1289,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-13a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-13b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -5524,13 +5524,17 @@ function openReceipt(){
     if(menuView==='receipt'){ var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML=rcptDenListHtml_(); }
   }).catch(function(){ RCPT_DENPYO=[]; if(menuView==='receipt'){ var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML='<div class="rcpt-den-empty">予約伝票の取得に失敗（宛名は手入力で発行できます）</div>'; } });
 }
-/* ══════ 🖊 テーブル伝票（手書き用の白紙伝票を TM-M30 で刷る） ══════
+/* ══════ 🖊 テーブル伝票（予約データから会計伝票を刷る／白紙も可） ══════
    紙の「お会計伝票」を軍師から印字する。front-only＝バックエンド変更なし。
+   ⚠️データ源は軍師が起動時に持っている RSV（adaptRsv 済み＝会員登録日 joined／年会費更新日 feeDate 込み）。
+      新しいAPIは足していない＝GAS版を消費しない。
    ⚠️縦長フォーム＝回転しない（領収書Rの横長は90度回転していた。ここは素直に縦）。
    ⚠️80mm紙の印字幅＝576dot。canvas幅は576固定（8の倍数＝1bitラスタの都合）。
    ⚠️ラスタ化（閾値184＋1px太らせ）は"この中に自前で持つ"＝rcptCanvasToEposXml_ に依存しない。
       理由＝test/prod でこのヘルパの版が違う（testは旧・閾値128）。自前で持てば本番昇格が
       この1ブロック＋MENU_TILES 1行＋renderMenu 1行の外科注入で済む。 */
+var TSLIP_MODE='rsv';     // 'rsv'=予約から刷る（既定） / 'blank'=白紙
+var TSLIP_SEL=-1;         // tslipList_() の index（-1＝未選択＝白紙で刷る）
 var TSLIP_DATE='today';   // 'today'=日付欄に今日を刷る / 'blank'=空欄（手書き）
 var TSLIP_W=576;          // 印字ドット幅（80mm紙）
 /* 伝票の品名行。sub があると備考欄が sub.length 行に分かれ、品名セルはその行数ぶん縦に結合される */
@@ -5551,6 +5555,18 @@ function tslipCss_(){ if(document.getElementById('tslip-css'))return; var s=docu
   '.ts-seg{display:flex;border:1px solid var(--accent-line);border-radius:8px;overflow:hidden;margin-bottom:10px}',
   '.ts-seg button{flex:1;background:#0f0d09;color:var(--sub);border:0;padding:11px;font-weight:700;font-size:15px;cursor:pointer}',
   '.ts-seg button.on{background:var(--accent);color:#1a1000}',
+  '.ts-h{font-size:12px;color:var(--accent);font-weight:800;margin:4px 2px 6px}',
+  '.ts-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}',
+  '.ts-rsv{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#0e1626;border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer}',
+  '.ts-rsv.on{border-color:var(--accent);background:var(--accent-bg)}',
+  '.ts-rsv-nm{font-weight:700}',
+  '.ts-rsv-sub{font-size:11px;color:var(--sub);margin-top:2px}',
+  '.ts-dim{color:var(--sub);font-size:12px}',
+  '.ts-badge{display:inline-block;font-size:11px;font-weight:800;padding:1px 8px;border-radius:999px;margin-left:6px}',
+  '.ts-badge.ng{background:#3a1518;color:#ff9aa0}',
+  '.ts-badge.warn{background:#3a2f10;color:#e6c14a}',
+  '.ts-badge.new{background:#12233a;color:#8fc4ff}',
+  '.ts-empty{font-size:12px;color:var(--sub);padding:12px;text-align:center}',
   '.ts-preview{background:#0a0906;border-radius:10px;padding:14px;display:flex;justify-content:center;margin:12px 0}',
   '.ts-preview img{width:300px;max-width:100%;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.5)}',
   '.ts-note{font-size:11px;color:#e6c14a;line-height:1.6;margin:6px 2px}',
@@ -5558,14 +5574,49 @@ function tslipCss_(){ if(document.getElementById('tslip-css'))return; var s=docu
   ].join('');
   document.head.appendChild(s);
 }
-/* 白紙伝票を canvas に描く。返り値＝canvas（幅576・高さは行数から自動算出） */
+/* 本日の予約（キャンセルは出さない・時刻順）。RSV は起動時に読み込み済み＝追加のGAS呼び出し無し */
+function tslipList_(){
+  return (RSV||[]).filter(function(r){ return String(r.status||'').indexOf('キャンセル')<0; })
+    .slice().sort(function(a,b){ return String(a.time||'').localeCompare(String(b.time||'')); });
+}
+function tslipSel_(){ var L=tslipList_(); return (TSLIP_MODE==='rsv'&&TSLIP_SEL>=0&&L[TSLIP_SEL])?L[TSLIP_SEL]:null; }
+/* 卓名 → {f,t,n}。バックエンド normTable_/tableNameToSeatCode_ と同じ規則の写し
+   （スペース有無・全角・BOX/カウ略称・「離れ」=5F を吸収）。⚠️置換の並び順に意味あり＝長い語が先。
+   ⛔「、」区切りの複数卓は必ず先に split してから渡す（正規化で「、」を落とすため）。→ reference_table_naming */
+function tslipSeat_(name){
+  var s=String(name||'').toLowerCase()
+    .replace(/[０-９]/g,function(d){return String.fromCharCode(d.charCodeAt(0)-0xFEE0);})
+    .replace(/[\s　,、・]/g,'')
+    .replace(/ボックス|ぼっくす/g,'box')
+    .replace(/カウンター|かうんたー|カウ|かう/g,'counter')
+    .replace(/離れ|はなれ|ハナレ/g,'5f');
+  var m=s.match(/^([25])f(counter|box)(\d+)$/);
+  return m?{f:m[1]+'F', t:(m[2]==='counter'?'C':'B'), n:Number(m[3])}:null;
+}
+function tslipSeats_(tableStr){
+  return String(tableStr||'').split(/[、,]/).map(function(t){return tslipSeat_(t);}).filter(Boolean);
+}
+/* 年会費まわりの注意書き。判定は membershipInfo に一任＝判定式を増やさない
+   （軍師の各画面と必ず同じ結論になる。→ reference_customer_master_y3 の「全員会員切れ誤表示」の轍） */
+function tslipWarn_(o){
+  if(!o) return null;
+  var mi=membershipInfo(o.joined,o.feeDate);
+  if(mi.status==='expired')   return {inv:true, t:'年会費の更新が切れています', s:'更新期限 '+mi.renewalStr+'　お客様にご案内をお願いします', mark:true};
+  if(mi.status==='thismonth') return {inv:true, t:'今月が年会費の更新月です',   s:'更新期限 '+mi.renewalStr+'　更新の確認をお願いします',   mark:true};
+  if(!String(o.mem||'').trim())return {inv:false,t:'ご新規（会員登録なし）',     s:'公式ライン登録・来店ポイント・ネック作成をご確認ください', mark:false};
+  return null;
+}
+/* 白紙伝票／予約を差し込んだ伝票を canvas に描く。返り値＝canvas（幅576・高さは中身から自動算出） */
 function tslipCanvas_(){
-  var W=TSLIP_W, ML=20, MR=20, CW=W-ML-MR;          // 内容の左右マージン
+  var o=tslipSel_(), warn=tslipWarn_(o), mi=o?membershipInfo(o.joined,o.feeDate):null;
+  var W=TSLIP_W, ML=20, MR=20, CW=W-ML-MR;
   var C1=296, C2=76, C3=CW-C1-C2;                    // 列幅：品名 / 数量 / 備考
-  var RH=44, HH=38;                                  // 行の高さ / 見出し行の高さ
+  var RH=42, HH=36;                                  // 行の高さ / 見出し行の高さ
   var nRow=0; TSLIP_ROWS.forEach(function(r){ nRow+=(r.sub?r.sub.length:1); });
   // ── 縦位置を先に決める（canvasは高さを先に確定させる必要がある）──
-  var yTitle=52, yDate=92, yTbl1=134, yTbl2=166, yPax=214, yCust=254, gridTop=276;
+  var yTitle=52,yDate=92,yTbl1=134,yTbl2=166,yPax=214,yCust=254,yCast=294,yMem=334;
+  var warnTop=352, warnH=warn?62:0;
+  var gridTop=warn?(warnTop+warnH+14):366;
   var H=Math.ceil((gridTop+HH+RH*nRow+26)/8)*8;
   var c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d');
@@ -5573,64 +5624,115 @@ function tslipCanvas_(){
   g.fillStyle='#000'; g.strokeStyle='#000'; g.textBaseline='alphabetic'; g.textAlign='left';
   var line=function(x1,y1,x2,y2,w){ g.lineWidth=w||1.6; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
   var dot=function(y){ g.setLineDash([4,4]); line(ML,y,W-MR,y,1.4); g.setLineDash([]); };
-  // ── 見出し「お会計伝票」（左に伝票アイコンを線画で）──
+  var right=function(t,x,y,f){ g.textAlign='right'; g.font=f; g.fillText(t,x,y); g.textAlign='left'; };
+  // 該当テーブルを丸で囲む（サーマルは白黒のみ＝色分けが使えないので囲みが一番強い）
+  var ring=function(cx,cy,rx,ry){ g.lineWidth=2.4; g.beginPath();
+    if(g.ellipse) g.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+    else { g.save(); g.translate(cx,cy); g.scale(rx/ry,1); g.arc(0,0,ry,0,Math.PI*2); g.restore(); }
+    g.stroke(); g.lineWidth=1.6; };
+  // ⚠️の三角。絵文字はサーマルのmono変換で消えることがあるので線で描く
+  var bang=function(x,y,s,col){ g.strokeStyle=col; g.fillStyle=col; g.lineWidth=2.6;
+    g.beginPath(); g.moveTo(x,y-s); g.lineTo(x+s*0.92,y+s*0.62); g.lineTo(x-s*0.92,y+s*0.62); g.closePath(); g.stroke();
+    g.fillRect(x-1.6,y-s*0.42,3.2,s*0.66); g.fillRect(x-1.8,y+s*0.36,3.6,3.6);
+    g.strokeStyle='#000'; g.fillStyle='#000'; g.lineWidth=1.6; };
+  // ── 見出し「お会計伝票」（左に伝票アイコンを線画で）＋ 右に予約時刻 ──
   g.lineWidth=2.2; g.strokeRect(ML+2,yTitle-27,26,32);
-  for(var i=0;i<3;i++) line(ML+8,yTitle-19+i*8,ML+24,yTitle-19+i*8,1.6);
+  for(var i0=0;i0<3;i0++) line(ML+8,yTitle-19+i0*8,ML+24,yTitle-19+i0*8,1.6);
   g.font='bold 30px "Hiragino Mincho ProN","YuMincho",serif';
   g.fillText('お会計伝票', ML+42, yTitle);
+  if(o&&o.time) right(String(o.time), W-MR-4, yTitle, 'bold 27px sans-serif');
   // ── 日付 ──
   g.font='bold 21px sans-serif'; g.fillText('日付', ML+4, yDate);
   g.fillText('年', 300, yDate); g.fillText('月', 396, yDate); g.fillText('日', 492, yDate);
   if(TSLIP_DATE==='today'){
     var d=new Date();
-    g.textAlign='right'; g.font='bold 23px sans-serif';
-    g.fillText(String(d.getFullYear()), 296, yDate);
-    g.fillText(String(d.getMonth()+1), 392, yDate);
-    g.fillText(String(d.getDate()), 488, yDate);
-    g.textAlign='left'; g.font='bold 21px sans-serif';
+    right(String(d.getFullYear()), 296, yDate, 'bold 23px sans-serif');
+    right(String(d.getMonth()+1),  392, yDate, 'bold 23px sans-serif');
+    right(String(d.getDate()),     488, yDate, 'bold 23px sans-serif');
   }
   dot(yDate+14);
   // ── テーブル番号（席マスタ ALL_SEATS のとおり。⚠️「離れ」は使わない＝5Fに統一〔ボス確定 2026-08-13〕。
   //    呼び名は軍師の見取り図と同じ略称「カウ / BOX」で揃える）──
+  var seats = o?tslipSeats_(o.table):[];
+  var hit=function(f,t,n){ return seats.some(function(s){ return s.f===f&&s.t===t&&s.n===n; }); };
   g.font='bold 19px sans-serif'; g.fillText('テーブル番号', ML+4, yTbl1);
   [ {f:'2F', y:yTbl1, c:4, b:3, bx:390, bnx:440},
     {f:'5F', y:yTbl2, c:6, b:2, bx:440, bnx:490} ].forEach(function(r){
-    var i;
+    var i,x;
     g.font='bold 21px sans-serif'; g.fillText(r.f, 160, r.y);
     g.font='bold 19px sans-serif'; g.fillText('カウ', 200, r.y); g.fillText('BOX', r.bx, r.y);
     g.font='bold 20px sans-serif';
-    for(i=0;i<r.c;i++) g.fillText(String(i+1), 252+i*30, r.y);
-    for(i=0;i<r.b;i++) g.fillText(String(i+1), r.bnx+i*30, r.y);
+    for(i=0;i<r.c;i++){ x=252+i*30; g.fillText(String(i+1), x, r.y); if(hit(r.f,'C',i+1)) ring(x+6,r.y-7,17,15); }
+    for(i=0;i<r.b;i++){ x=r.bnx+i*30; g.fillText(String(i+1), x, r.y); if(hit(r.f,'B',i+1)) ring(x+6,r.y-7,17,15); }
   });
+  // ⚠️右寄せにすると5FのBOX番号(x=490,520)に被る＝ラベル下の空きに置く（実測で被りを確認して移した）
+  if(o && !seats.length){ g.font='bold 18px sans-serif'; g.fillText('（席 未定）', ML+4, yTbl2); }
   dot(yTbl2+14);
-  // ── 人数 ──
+  // ── 人数（男女の内訳は手書き。予約人数は参考として右に）──
   g.font='bold 19px sans-serif'; g.fillText('人数', ML+4, yPax);
   g.font='bold 21px sans-serif';
-  g.fillText('男性', 176, yPax); g.fillText('名', 300, yPax);
-  g.fillText('女性', 360, yPax); g.fillText('名', 486, yPax);
+  g.fillText('男性', 150, yPax); g.fillText('名', 262, yPax);
+  g.fillText('女性', 310, yPax); g.fillText('名', 422, yPax);   // ⚠️右の「予約N名」と重ならない位置（実測で詰めた）
+  if(o) right('予約 '+(o.pax||'')+'名', W-MR-4, yPax, 'bold 18px sans-serif');
   dot(yPax+14);
-  // ── お客様 / 担当 / 同伴 ──
+  // ── お客様（＋会員番号）──
   g.font='bold 19px sans-serif'; g.fillText('お客様', ML+4, yCust);
-  g.fillText('担当', 250, yCust); g.fillText('同伴', 400, yCust);
+  if(o){
+    g.font='bold 25px sans-serif'; g.fillText(String(o.cust||'')+' 様', 120, yCust);
+    if(String(o.mem||'').trim()) right(String(o.mem), W-MR-4, yCust, 'bold 20px sans-serif');
+  }
   dot(yCust+14);
+  // ── 担当 / 同伴 / 予約者 ──
+  g.font='bold 19px sans-serif';
+  g.fillText('担当', ML+4, yCast);   if(o) { g.font='bold 21px sans-serif'; g.fillText(String(o.tantou||''), 80, yCast); g.font='bold 19px sans-serif'; }
+  g.fillText('同伴', 220, yCast);    if(o) { g.font='bold 21px sans-serif'; g.fillText(String(o.dohan||''), 288, yCast); g.font='bold 19px sans-serif'; }
+  g.fillText('予約', 400, yCast);    if(o) { g.font='bold 21px sans-serif'; g.fillText(String(o.yoyaku||''), 462, yCast); }
+  dot(yCast+14);
+  // ── 会員（在籍年数・更新期限・状態）──
+  g.font='bold 19px sans-serif'; g.fillText('会員', ML+4, yMem);
+  if(o){
+    var mtxt=[];
+    if(mi.yearLabel) mtxt.push(mi.yearLabel);
+    if(mi.renewalStr) mtxt.push('更新期限 '+mi.renewalStr);
+    g.font='bold 20px sans-serif'; g.fillText(mtxt.join('　／　')||'—', 120, yMem);
+    right(mi.shortLabel||'', W-MR-4, yMem, 'bold 20px sans-serif');
+  }
+  dot(yMem+14);
+  // ── 注意帯（年会費・ご新規）。反転（黒地に白抜き）＝サーマルで一番強い ──
+  if(warn){
+    if(warn.inv){
+      g.fillStyle='#000'; g.fillRect(ML,warnTop,CW,warnH); g.fillStyle='#fff';
+      bang(ML+34, warnTop+26, 15, '#fff');
+      g.fillStyle='#fff';   // ⚠️bang() は最後に塗り色を黒へ戻す＝ここで白に戻さないと黒地に黒文字で消える
+      g.font='bold 25px sans-serif'; g.fillText(warn.t, ML+60, warnTop+31);
+      g.font='bold 16px sans-serif'; g.fillText(warn.s, ML+60, warnTop+53);
+      g.fillStyle='#000';
+    }else{
+      g.setLineDash([6,4]); g.lineWidth=2.2; g.strokeRect(ML,warnTop,CW,warnH); g.setLineDash([]); g.lineWidth=1.6;
+      bang(ML+34, warnTop+26, 15, '#000');
+      g.font='bold 23px sans-serif'; g.fillText(warn.t, ML+60, warnTop+30);
+      g.font='bold 15px sans-serif'; g.fillText(warn.s, ML+60, warnTop+52);
+    }
+  }
   // ── 明細グリッド ──
   var x1=ML, x2=ML+C1, x3=ML+C1+C2, x4=ML+CW;
   var top=gridTop, bottom=gridTop+HH+RH*nRow;
   g.lineWidth=2.0; g.strokeRect(x1,top,CW,bottom-top);
   line(x1,top+HH,x4,top+HH,2.0);                       // 見出し行の下
   [x2,x3].forEach(function(x){ line(x,top,x,bottom,1.6); });   // 縦の仕切り
-  g.textAlign='center'; g.font='bold 21px sans-serif';
-  g.fillText('品名', x1+C1/2, top+HH-12); g.fillText('数量', x2+C2/2, top+HH-12); g.fillText('備考', x3+C3/2, top+HH-12);
+  g.textAlign='center'; g.font='bold 20px sans-serif';
+  g.fillText('品名', x1+C1/2, top+HH-11); g.fillText('数量', x2+C2/2, top+HH-11); g.fillText('備考', x3+C3/2, top+HH-11);
   g.textAlign='left';
   var y=top+HH;
   TSLIP_ROWS.forEach(function(r){
     var span=r.sub?r.sub.length:1, hgt=RH*span;
-    // 品名（結合セルは縦中央）
-    g.font='bold 22px sans-serif'; g.fillText(r.t, x1+14, y+hgt/2+8);
+    g.font='bold 21px sans-serif'; g.fillText(r.t, x1+14, y+hgt/2+8);
+    // 年会費が要る予約は「年会費更新」行の備考にも印を落とす（帯を見落としても手元で気づける）
+    if(warn&&warn.mark&&r.t==='年会費更新'){ g.font='bold 20px sans-serif'; g.fillText('要 更新', x3+12, y+hgt/2+8); }
     for(var k=0;k<span;k++){
       var ry=y+RH*k;
       if(k>0) line(x2,ry,x4,ry,1.4);                   // 結合中は数量・備考だけ区切る（品名は割らない）
-      if(r.sub){ g.font='bold 20px sans-serif'; g.fillText(r.sub[k], x3+12, ry+RH/2+7); }
+      if(r.sub){ g.font='bold 19px sans-serif'; g.fillText(r.sub[k], x3+12, ry+RH/2+7); }
     }
     y+=hgt;
     if(y<bottom) line(x1,y,x4,y,1.4);                  // 品名行の区切り
@@ -5651,26 +5753,53 @@ function tslipXml_(){
     +'<image width="'+w+'" height="'+h+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
     +'<feed unit="24"/><cut type="feed"/></epos-print>';
 }
+function tslipSetMode(m){ TSLIP_MODE=m; if(m==='blank')TSLIP_SEL=-1; renderMenu(); }
 function tslipSetDate(v){ TSLIP_DATE=v; renderMenu(); }
+function tslipPick(i){ TSLIP_SEL=(TSLIP_SEL===i?-1:i); renderMenu(); }
 function tslipPrint(){
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(tslipXml_());
   var a=document.getElementById('ts-printlink'); if(a)a.href=url;
   var hint=document.getElementById('ts-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）';
   return true;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
 }
-function openTableSlip(){ menuView='tslip'; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
+function openTableSlip(){ menuView='tslip'; TSLIP_MODE='rsv'; TSLIP_SEL=-1; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
+function tslipListHtml_(){
+  var L=tslipList_();
+  if(!L.length) return '<div class="ts-empty">本日の予約がありません（このまま白紙で刷れます）</div>';
+  return L.map(function(r,i){
+    var mi=membershipInfo(r.joined,r.feeDate);
+    var b = mi.status==='expired'   ? '<span class="ts-badge ng">更新切れ</span>'
+          : mi.status==='thismonth' ? '<span class="ts-badge warn">今月更新</span>'
+          : (!String(r.mem||'').trim() ? '<span class="ts-badge new">ご新規</span>' : '');
+    var sub=[]; if(r.tantou)sub.push('担当 '+r.tantou); if(r.dohan)sub.push('同伴 '+r.dohan); if(r.yoyaku)sub.push('予約 '+r.yoyaku);
+    return '<div class="ts-rsv'+(i===TSLIP_SEL?' on':'')+'" onclick="tslipPick('+i+')">'
+      +'<div><div class="ts-rsv-nm"><span class="ts-dim">'+esc(r.time||'')+'</span>　'+esc(r.cust||'')+' 様'
+      +(String(r.mem||'').trim()?' <span class="ts-dim">'+esc(r.mem)+'</span>':'')+b+'</div>'
+      +'<div class="ts-rsv-sub">'+esc(r.table||'未定')+'　'+esc(sub.join('／'))+'</div></div>'
+      +'<div class="ts-dim">'+(i===TSLIP_SEL?'選択中':'選ぶ ▸')+'</div></div>';
+  }).join('');
+}
 function tslipRenderMenu_(el){
   tslipCss_();
   document.getElementById('menuTitle').textContent='🖊 テーブル伝票';
+  var o=tslipSel_();
   var h='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
-  h+='<div class="rcpt-h" style="margin-top:8px">日付欄</div>';
+  h+='<div class="ts-seg" style="margin-top:8px">'
+    +'<button class="'+(TSLIP_MODE==='rsv'?'on':'')+'" onclick="tslipSetMode(\'rsv\')">予約から刷る</button>'
+    +'<button class="'+(TSLIP_MODE==='blank'?'on':'')+'" onclick="tslipSetMode(\'blank\')">白紙で刷る</button></div>';
+  if(TSLIP_MODE==='rsv'){
+    h+='<div class="ts-h">本日の予約を選ぶ（お客様・会員番号・担当・年会費が伝票に入ります）</div>';
+    h+='<div class="ts-list">'+tslipListHtml_()+'</div>';
+  }
+  h+='<div class="ts-h">日付欄</div>';
   h+='<div class="ts-seg">'
     +'<button class="'+(TSLIP_DATE==='today'?'on':'')+'" onclick="tslipSetDate(\'today\')">今日を刷る</button>'
     +'<button class="'+(TSLIP_DATE==='blank'?'on':'')+'" onclick="tslipSetDate(\'blank\')">空欄（手書き）</button></div>';
   var src=''; try{ src=tslipCanvas_().toDataURL('image/png'); }catch(e){ src=''; }
-  h+='<div class="ts-preview">'+(src?'<img alt="伝票プレビュー" src="'+src+'">':'<div class="rcpt-den-empty">プレビューを描画できませんでした</div>')+'</div>';
+  h+='<div class="ts-preview">'+(src?'<img alt="伝票プレビュー" src="'+src+'">':'<div class="ts-empty">プレビューを描画できませんでした</div>')+'</div>';
   h+='<a class="ts-print" id="ts-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return tslipPrint()">🖨 この伝票を1枚 刷る（TM-M30 / Bluetooth）</a>';
-  h+='<div class="ts-note" id="ts-hint">1回押すと1枚。まとめて欲しいときは続けて押す（iOSは印字後に軍師へ自動で戻らないので、Safariに戻ってからもう一度押す）。</div>';
+  h+='<div class="ts-note" id="ts-hint">'+(o?'選んだ予約の内容で刷ります。':'予約を選ばずに刷ると白紙です。')
+    +'1回押すと1枚（iOSは印字後に軍師へ自動で戻らないので、Safariに戻ってからもう一度押す）。</div>';
   el.innerHTML=h;
 }
 /* 💳 会費更新（軍師）：今月〜先の月ごとに更新期限が来る会員を一覧・検索（閲覧専用）。バックは getMemberRenewals */
