@@ -5782,7 +5782,7 @@ function tslipCanvas_(){
   var RH=44, HH=38;                                  // 行の高さ / 見出し行の高さ
   var nRow=0; TSLIP_ROWS.forEach(function(r){ nRow+=(r.sub?r.sub.length:1); });
   // ── 縦位置を先に決める（canvasは高さを先に確定させる必要がある）──
-  var yTitle=52, yDate=92, yTbl1=134, yTbl2=162, yPax=200, yCust=240, gridTop=262;
+  var yTitle=52, yDate=92, yTbl1=134, yTbl2=166, yPax=214, yCust=254, gridTop=276;
   var H=Math.ceil((gridTop+HH+RH*nRow+26)/8)*8;
   var c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d');
@@ -5807,12 +5807,18 @@ function tslipCanvas_(){
     g.textAlign='left'; g.font='bold 21px sans-serif';
   }
   dot(yDate+14);
-  // ── テーブル番号（紙の並びをそのまま：2F / 離れ / カウンター / BOX ＋ その下に 1 2 3 4）──
+  // ── テーブル番号（席マスタ ALL_SEATS のとおり。⚠️「離れ」は使わない＝5Fに統一〔ボス確定 2026-08-13〕。
+  //    呼び名は軍師の見取り図と同じ略称「カウ / BOX」で揃える）──
   g.font='bold 19px sans-serif'; g.fillText('テーブル番号', ML+4, yTbl1);
-  g.font='bold 21px sans-serif';
-  g.fillText('2F', 176, yTbl1); g.fillText('離れ', 238, yTbl1); g.fillText('カウンター', 316, yTbl1); g.fillText('BOX', 462, yTbl1);
-  g.font='bold 20px sans-serif';
-  ['1','2','3','4'].forEach(function(n,i){ g.fillText(n, 240+i*30, yTbl2); });
+  [ {f:'2F', y:yTbl1, c:4, b:3, bx:390, bnx:440},
+    {f:'5F', y:yTbl2, c:6, b:2, bx:440, bnx:490} ].forEach(function(r){
+    var i;
+    g.font='bold 21px sans-serif'; g.fillText(r.f, 160, r.y);
+    g.font='bold 19px sans-serif'; g.fillText('カウ', 200, r.y); g.fillText('BOX', r.bx, r.y);
+    g.font='bold 20px sans-serif';
+    for(i=0;i<r.c;i++) g.fillText(String(i+1), 252+i*30, r.y);
+    for(i=0;i<r.b;i++) g.fillText(String(i+1), r.bnx+i*30, r.y);
+  });
   dot(yTbl2+14);
   // ── 人数 ──
   g.font='bold 19px sans-serif'; g.fillText('人数', ML+4, yPax);
