@@ -1912,13 +1912,19 @@ function getSalesDenpyoDayFolder_(bizDate) {
 }
 
 // テーブル名を正規化して照合（POS「2FBOX1」と予約「5F ボックス2」等の表記ゆれを吸収）
+// ⚠️⚠️テーブル表記の正規化はここが唯一の口。新しい照合を書くときは自前で正規表現を組まず必ずこれを通す。
+// ⚠️「離れ」は5Fの別名＝5Fへ寄せる（ボス確定 2026-08-13「5Fに統一」）。TRUSTのPOS印字は「離れBOX1」と
+//   出ることがあり、旧実装は 離れ を 離れ のまま残していたので予約「5F ボックス1」(→5fbox1)と一致せず、
+//   会計伝票の突合が離れの卓だけ黙って空振りしていた。
+// ⚠️「カウ」「BOX」＝軍師の見取り図の略称も吸収する（紙のお会計伝票もこの略称で刷っている）。
+//   ⛔並び順に意味がある＝長い語を先に置く（カウンターがカウより先。逆にすると "counterンター" になる）。
 function normTable_(s) {
   return String(s || '').toLowerCase()
     .replace(/[０-９]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0xFEE0); })
     .replace(/[\s　,、・]/g, '')
     .replace(/ボックス|ぼっくす/g, 'box')
-    .replace(/カウンター|かうんたー/g, 'counter')
-    .replace(/はなれ/g, '離れ');
+    .replace(/カウンター|かうんたー|カウ|かう/g, 'counter')
+    .replace(/離れ|はなれ|ハナレ/g, '5f');
 }
 
 // 会計伝票の突合メッセージを組み立てる（純関数：Drive保存やLINE送信はしない。テスト可能）
@@ -3972,7 +3978,7 @@ function extractReceiptWithGemini_(blob) {
     'それ以外で「会計伝票」「お会計伝票」の見出しがあり、テーブル・人数・注文明細・合計が並ぶお客様の会計なら doc_type を "会計伝票" にする（写真に印字伝票と手書き伝票の両方が写っていることが多い）。\n\n' +
     '「払込受領証」「請求書兼コンビニエンスストア等専用払込受領証」の見出し、または「お客さま番号」「ご請求年月」＋電気・ガス・水道の事業者名（東邦ガス／中部電力／上下水道 等）がそろう書類は、必ず doc_type を "公共料金" にすること（"領収書"にしない）。\n\n' +
     '■会計伝票（お客様の会計。POSレジ印字の「会計伝票」＋手書きの「お会計伝票」）:\n' +
-    '{"doc_type":"会計伝票","customer":"お客様名（手書きの「お客様」欄。会員番号・担当/同伴キャスト名・「様」は含めず、お客様の姓のみ 例:新美。お客様欄が空欄ならnull）","table":"POS印字伝票のテーブル 例:2FBOX1、離れBOX1","pos_count":POS印字伝票の人数（整数）,"pos_total":POS印字の合計金額（整数）,"hand_count":手書き伝票の人数（整数。無ければnull）,"cast_drink_pos":POS印字のキャストドリンク合計本数（整数。無ければnull）,"cast_drink_hand":手書き伝票のキャストドリンク本数＝指名キャストの数（整数。無ければnull）,"soda_pos":POS印字の炭酸の点数（整数。無ければnull）,"soda_hand":手書き伝票の炭酸の本数（数量欄の正の字を数える。無ければnull）,"check_issues":["手書きにあってPOS注文に反映されていない品目を短い日本語で列挙。無ければ空配列"]}\n' +
+    '{"doc_type":"会計伝票","customer":"お客様名（手書きの「お客様」欄。会員番号・担当/同伴キャスト名・「様」は含めず、お客様の姓のみ 例:新美。お客様欄が空欄ならnull）","table":"POS印字伝票のテーブル 例:2FBOX1、5FBOX1。★印字が「離れ」なら必ず「5F」に置き換えて返す（離れ＝5Fの別名。店の表記は5Fに統一）","pos_count":POS印字伝票の人数（整数）,"pos_total":POS印字の合計金額（整数）,"hand_count":手書き伝票の人数（整数。無ければnull）,"cast_drink_pos":POS印字のキャストドリンク合計本数（整数。無ければnull）,"cast_drink_hand":手書き伝票のキャストドリンク本数＝指名キャストの数（整数。無ければnull）,"soda_pos":POS印字の炭酸の点数（整数。無ければnull）,"soda_hand":手書き伝票の炭酸の本数（数量欄の正の字を数える。無ければnull）,"check_issues":["手書きにあってPOS注文に反映されていない品目を短い日本語で列挙。無ければ空配列"]}\n' +
     '【正の字（画線法）の数え方】手書きの数量欄が「正」の字なら、正1つ＝5、書きかけの正はその画数で数える（一=1, 丅=2, 下=3, 疋=4, 正=5）。例:「正 一」＝5+1＝6、「正 正 三」＝5+5+3＝13。炭酸などの本数はこの方法で正確に数える。\n' +
     '【check_issues の重要ルール】無料・サービス項目とチェック欄は絶対に差異に含めない：\n' +
     '目的は「手書き伝票に書かれた注文が、POS印字の【注文】欄に反映されているか」の差異検出。手書きにあってPOS注文に無い品目だけを check_issues に列挙する。\n' +
@@ -5286,6 +5292,7 @@ function proposeCheckSchedule_() {
 function parseSeatFromStart(input) {
   let t = input.replace(/[０-９]/g, d => String('０１２３４５６７８９'.indexOf(d)));
   t = t.replace(/[Ｆｆ]/g, 'F').trim();
+  t = t.replace(/^(離れ|はなれ|ハナレ)/, '5F');   // 「離れ」＝5Fの別名（ボス確定 2026-08-13「5Fに統一」）
   let m;
   m = t.match(/^2[Ff]?\s*[カか][ウう]?(?:ンター)?\s*([1-4])(.*)/);
   if (m) return { code: '2F-C' + m[1], label: '2Fカウンター' + m[1], rest: m[2].trim() };
@@ -8779,9 +8786,10 @@ function sendCastSeatRequest_(payload) {
     labels.push((time ? time + ' ' : '') + customer + '様' + (table && table !== '未定' ? '（' + table + '）' : ''));
     if (type === 'NG' && table && table !== '未定') {
       table.split(/[、,]/).forEach(tn => {
-        const tnTrim = tn.trim();
-        const seat = ALL_SEATS.find(s => s.label === tnTrim);
-        if (seat && ngSeatCodes.indexOf(seat.code) < 0) ngSeatCodes.push(seat.code);
+        // ⚠️旧実装は ALL_SEATS.label と完全一致で照合していた＝予約の "2F カウンター1"(スペース有り)が
+        //   label "2Fカウンター1"(スペース無し)と一致せず、NG席が1件も登録されていなかった（2026-08-13修正）。
+        const code = tableNameToSeatCode_(tn.trim());
+        if (code && ngSeatCodes.indexOf(code) < 0) ngSeatCodes.push(code);
       });
     }
   });
@@ -9315,6 +9323,60 @@ function kyukinStatDays_()   { return Number(prop('KYUKIN_STAT_DAYS')   || 90) |
 function kyukinWarnCount_()  { return Number(prop('KYUKIN_WARN_COUNT')  || 2)  || 2; }
 function kyukinAlertCount_() { return Number(prop('KYUKIN_ALERT_COUNT') || 3)  || 3; }
 
+/* ===== 当欠注意表示のON/OFF（スタッフ個別・2026-08-10 ボス依頼）=====
+ * 「⚠️当欠注意 / 🚨当欠多め」の表示を人ごとに止められるようにする。設定面＝コンソール👥人事→👥スタッフのカード。
+ * 保存先＝スタッフマスタの動的列「当欠注意表示」（退職/お知らせ配信と同じ流儀＝ヘッダー名で探索→無ければ末尾に追加。既存A〜H列は非破壊）。
+ * **空欄＝表示する（既定）／'×'＝表示しない**＝既存データを1行も触らずに「基本は全員ON」が成立する。
+ * ⚠️止まるのは「表示」だけ。集計 kyukinStatsMap_ は常に全員分そのまま取る＝コンソール📉当欠では回数を隠さず
+ *   「表示OFF」と併記する（数字まで消すと欠勤管理そのものができなくなる）。黒服ブリーフのフラグだけが消える。 */
+var STAFF_KYUKIN_HEADERS = ['当欠注意表示'];
+
+// スタッフマスタ1行目ヘッダーから「当欠注意表示」列の0-based indexを解決。create=trueで無い列を末尾に新設。
+function getStaffKyukinCols_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var cols = {};
+  STAFF_KYUKIN_HEADERS.forEach(function (name) {
+    var idx = headers.indexOf(name);
+    if (idx < 0 && create) {
+      lastCol += 1;
+      sh.getRange(1, lastCol).setValue(name);
+      idx = lastCol - 1;
+    }
+    cols[name] = idx; // 無く未作成なら -1
+  });
+  return cols;
+}
+
+// 表示OFFにしている人の正規化名セット { 正規化名: true }。列が無ければ空＝全員ON。
+function kyukinAlertOffSet_() {
+  var off = {};
+  try {
+    var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (!sh) return off;
+    var col = getStaffKyukinCols_(sh, false)['当欠注意表示'];
+    if (col == null || col < 0) return off;                       // 列がまだ無い＝誰もOFFにしていない
+    var rows = sh.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][col] == null ? '' : rows[i][col]).trim() !== '×') continue;
+      var k = shConNorm_(String(rows[i][1] || ''));
+      if (k) off[k] = true;
+    }
+  } catch (e) { console.error('kyukinAlertOffSet_', e); }
+  return off;
+}
+
+// このシフト行の人は表示ONか。源氏名と元名の両方で見る（kyukinCountForStaff_ と同じ流儀＝リネーム直後にOFFが外れない）
+function kyukinAlertOnFor_(s, off) {
+  if (!off) return true;
+  var ns = [s && s.name, s && s.origName];
+  for (var i = 0; i < ns.length; i++) {
+    var k = shConNorm_(String(ns[i] || ''));
+    if (k && off[k]) return false;
+  }
+  return true;
+}
+
 // 直近N日の当日欠勤を名前別に集計 → { 正規化名: { name, count, dates:[古い順] } }
 function kyukinStatsMap_(days) {
   const out = {};
@@ -9382,8 +9444,10 @@ function buildKurofukuBriefText_() {
   const dow = ['日','月','火','水','木','金','土'][d.getDay()];
   const days  = kyukinStatDays_();
   const stats = kyukinStatsMap_(days);
+  const alertOff = kyukinAlertOffSet_();   // 個別に表示OFFにしている人（名簿の📉当欠注意トグル）
 
   const flagOf = function (s) {
+    if (!kyukinAlertOnFor_(s, alertOff)) return '';   // 表示OFF＝この人だけフラグを出さない（集計はしている）
     const c = kyukinCountForStaff_(s, stats);
     const f = kyukinFlag_(c);
     return f.level ? '　' + f.label + c + '回' : '';
@@ -9461,13 +9525,19 @@ function kyukinStatsView_(days) {
   try {
     const stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
     if (stf) {
-      let rc = -1;
+      let rc = -1, kc = -1;
       try { const c = getStaffRetireCols_(stf, false)['退職']; if (c != null && c >= 0) rc = c; } catch (e) {}
+      // 当欠注意表示のON/OFF。名簿は既に1回読むのでここで相乗りさせる（kyukinAlertOffSet_ を別に呼ぶと名簿を二度読む）
+      try { const c = getStaffKyukinCols_(stf, false)['当欠注意表示']; if (c != null && c >= 0) kc = c; } catch (e) {}
       const rr = stf.getDataRange().getValues();
       for (let i = 1; i < rr.length; i++) {
         const k = shConNorm_(String(rr[i][1] || ''));
         if (!k) continue;
-        roster[k] = { role: String(rr[i][2] || '').trim(), retired: (rc >= 0) ? (String(rr[i][rc]).trim() === '退職') : false };
+        roster[k] = {
+          role: String(rr[i][2] || '').trim(),
+          retired: (rc >= 0) ? (String(rr[i][rc]).trim() === '退職') : false,
+          alertOn: (kc >= 0) ? (String(rr[i][kc]).trim() !== '×') : true
+        };
       }
     }
   } catch (e) { console.error('kyukinStatsView_ roster', e); }
@@ -9482,6 +9552,7 @@ function kyukinStatsView_(days) {
       count: s.count,
       level: f.level,
       flag: f.label,
+      alertOn: (ent.alertOn !== false),         // 名簿に居ない名前（旧名・削除済み）は既定ON扱い
       dates: (s.dates || []).slice()            // 既に新しい順（kyukinStatsMap_ が提出日時で並べ替え済み）
     };
   });
@@ -10317,6 +10388,7 @@ function getAdminConsoleData(userId) {
   const retireCols = sh ? getStaffRetireCols_(sh, false) : {};
   const leaveCols  = sh ? getStaffLeaveCols_(sh, false) : {};
   const noticeCols = sh ? getStaffNoticeCols_(sh, false) : {};
+  const kyukinCols = sh ? getStaffKyukinCols_(sh, false) : {};
   const onboardCol = sh ? getStaffOnboardCol_(sh, false) : -1;
   const kotsuCols  = sh ? getStaffKotsuCols_(sh, false) : {};
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
@@ -10354,6 +10426,8 @@ function getAdminConsoleData(userId) {
       onLeaveAt: (function () { var c = leaveCols['休職開始日']; if (c == null || c < 0) return ''; var v = rows[i][c]; return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v == null ? '' : v).trim(); })(),
       // お知らせ配信対象: '×'のときだけOFF。列が無い/空欄は配信ON（既定）
       noticeOn: !(noticeCols['お知らせ配信'] >= 0 && String(rows[i][noticeCols['お知らせ配信']]).trim() === '×'),
+      // 📉当欠注意の表示: '×'のときだけOFF。列が無い/空欄は表示ON（既定＝全員ON）
+      kyukinAlertOn: !(kyukinCols['当欠注意表示'] >= 0 && String(rows[i][kyukinCols['当欠注意表示']]).trim() === '×'),
       // 🚕交通費設定: 対象ON/OFF＋片道額（円）。列が無ければ OFF/0
       kotsuOn: (kotsuCols['交通費対象'] >= 0 && String(rows[i][kotsuCols['交通費対象']]).trim() === '○'),
       kotsuAmount: (kotsuCols['片道交通費'] >= 0 ? (Number(rows[i][kotsuCols['片道交通費']]) || 0) : 0),
@@ -10548,6 +10622,24 @@ function adminSetNoticeTarget(userId, targetName, on) {
     if (String(rows[i][1]).trim() === targetName) {
       sh.getRange(i + 1, col + 1).setValue(on ? '' : '×'); // 配信する=空欄 / 配信しない='×'
       return { ok: true, name: targetName, noticeOn: !!on };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+
+// 管理コンソール：📉当欠注意の表示ON/OFF切替（動的「当欠注意表示」列）。ON=空欄・OFF='×'。
+// ⚠️集計は止めない＝黒服ブリーフのフラグが出なくなるだけ。コンソール📉当欠には回数が残り「表示OFF」と出る。
+function adminSetKyukinAlert(userId, targetName, on) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  targetName = String(targetName || '').trim();
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  var col = getStaffKyukinCols_(sh, true)['当欠注意表示']; // 無ければ列作成
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, col + 1).setValue(on ? '' : '×'); // 表示する=空欄 / 表示しない='×'
+      return { ok: true, name: targetName, kyukinAlertOn: !!on };
     }
   }
   return { ok: false, error: targetName + ' が見つかりません' };
@@ -13162,10 +13254,17 @@ function transferAttendance_(oldCodes, newCode) {
 }
 
 // テーブル名（"5F ボックス1" 等）→ 席コード（"5F-B1" 等）変換
+// ⚠️⚠️テーブル表記 → 席コードの唯一の口。ALL_SEATS.label との文字列一致で照合を書いてはいけない
+//   （labelは "2Fカウンター1"＝スペース無し／予約シートは "2F カウンター1"＝スペース有りで永久に一致しない。
+//     実際にキャストのNG席リクエストがこれで空振りしていた＝2026-08-13に修正）。
+//   吸収は normTable_ に一任＝スペース有無・全角・大文字小文字・BOX/カウ略称・「離れ」(=5F) が全部通る。
+//   ⚠️ALL_SEATS に実在しない卓は null を返す（"5F カウンター9" 等の幽霊コードを作らない）。呼び側は全て
+//     .filter(Boolean) か null スキップなので、null が増えても壊れない。
 function tableNameToSeatCode_(tableName) {
-  const m = String(tableName || '').match(/^(2F|5F)\s+(カウンター|ボックス)(\d+)$/);
+  const m = normTable_(tableName).match(/^([25])f(counter|box)(\d+)$/);
   if (!m) return null;
-  return m[1] + '-' + (m[2] === 'カウンター' ? 'C' : 'B') + m[3];
+  const code = m[1] + 'F-' + (m[2] === 'counter' ? 'C' : 'B') + Number(m[3]);
+  return ALL_SEATS.some(s => s.code === code) ? code : null;
 }
 
 // 同伴予約は20:30来店として扱う。同伴の目印は「顧客名」or「時刻欄」に "同伴" が入るパターンの両方に対応
