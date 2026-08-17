@@ -57,13 +57,18 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"H
 .row{display:flex;align-items:center;gap:8px;margin-top:10px;}
 .row .lbl{font-size:12px;color:var(--sub);font-weight:700;width:72px;flex-shrink:0;}
 .rolesel{flex:1;background:var(--panel);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:14px;font-weight:700;outline:none;}
-.perms{display:flex;gap:8px;margin-top:11px;}
+/* トグルが5個になった（軍師/管理者/金庫/お知らせ/当欠注意）＝1行に並べると全部の文字が2行に折れるので2列で折り返す */
+.perms{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px;}
+.perms .toggle{flex:1 1 auto;min-width:calc(50% - 4px);}
 .toggle{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;border-radius:9px;border:1px solid var(--line2);background:var(--panel);color:var(--sub);font-size:13px;font-weight:800;cursor:pointer;}
 .toggle.on.admin{background:#241028;border-color:#7a3a6a;color:#f0a0e0;}
 .toggle.on.safe{background:var(--warnbg);border-color:var(--warnline);color:var(--warn);}
 .toggle.on.gunshi{background:#0d2233;border-color:#2a6a9a;color:#7ac8ff;}
 .toggle.on.notice{background:#0d2a1a;border-color:#2a7a4a;color:#6ee0a0;}
 .toggle.off.notice{background:#2a1414;border-color:#6b3a3a;color:#ff9aa0;}
+/* 📉当欠注意の表示ON/OFF。ON=琥珀（注意色そのまま）／OFF=グレー＝「警告を出さない」は異常状態ではないので赤にしない */
+.toggle.on.kyualert{background:#2a2210;border-color:#7a6a2a;color:#f4d98a;}
+.toggle.off.kyualert{background:#17171d;border-color:#3a3a48;color:var(--dim);}
 .toggle.locked{opacity:.5;cursor:not-allowed;}
 
 /* matrix / tables */
@@ -249,6 +254,49 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .mn-sug b{color:var(--warn);}
 .mn-sug.ex{color:var(--ok);}
 
+/* ===== 🏠 トップ（店の全容）＝今日のシフト×予約を並べて「派遣を頼むか」を即断する画面 ===== */
+.tp-jd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-radius:12px;padding:14px 16px;margin-bottom:14px;border:1px solid var(--line2);background:var(--panel2);}
+.tp-jd .jd-ic{font-size:30px;line-height:1;}
+.tp-jd .jd-m{flex:1;min-width:180px;}
+.tp-jd .jd-t{font-size:19px;font-weight:900;line-height:1.3;}
+.tp-jd .jd-s{font-size:12px;font-weight:700;color:var(--sub);margin-top:3px;line-height:1.6;}
+.tp-jd.ok{background:var(--okbg);border-color:var(--okline);} .tp-jd.ok .jd-t{color:var(--ok);}
+.tp-jd.warn{background:var(--warnbg);border-color:var(--warnline);} .tp-jd.warn .jd-t{color:var(--warn);}
+.tp-jd.ng{background:var(--dangerbg);border-color:var(--dangerline);} .tp-jd.ng .jd-t{color:#ff9db4;}
+.tp-jd.off .jd-t{color:var(--dim);}
+.tp-jd .jd-rule{font-size:10px;font-weight:800;color:var(--dim);line-height:1.6;text-align:right;max-width:230px;}
+.tp-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin-bottom:16px;}
+.tp-k{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:11px 13px;}
+.tp-k .k-l{font-size:11px;color:var(--dim);font-weight:800;}
+.tp-k .k-v{font-size:25px;font-weight:900;line-height:1.3;color:var(--txt);}
+.tp-k .k-v small{font-size:12px;font-weight:800;color:var(--sub);margin-left:2px;}
+.tp-k .k-s{font-size:11px;color:var(--sub);font-weight:700;line-height:1.55;}
+.tp-k.hi{border-color:var(--accent-line);background:linear-gradient(180deg,#141d33,#12121f);}
+.tp-k.hi .k-v{color:#bcd6ff;}
+.tp-nm{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.tp-nm span{font-size:12px;font-weight:700;background:var(--panel);border:1px solid var(--line2);color:#cdd8ee;border-radius:8px;padding:4px 9px;white-space:nowrap;}
+.tp-nm span b{color:var(--accent);font-weight:800;margin-left:5px;font-size:11px;}
+.tp-nm span.taiken{border-color:#5a4a2a;color:#e8d6a8;}
+.tp-nm span.haken{border-color:#3a5a6a;color:#a8d8e8;}
+.tp-nm span.kuro{border-color:#3a3560;color:#c8bcff;}
+.tp-grp{font-size:11px;color:var(--dim);font-weight:800;margin:10px 0 0;}
+table.mtx td.tp-d{text-align:left;font-weight:800;white-space:nowrap;}
+table.mtx tr.tp-today td{background:#141d33 !important;}
+table.mtx tr.tp-off td{color:var(--dim);}
+.tp-b{font-size:11px;font-weight:800;padding:2px 8px;border-radius:7px;white-space:nowrap;display:inline-block;}
+.tp-b.ok{background:var(--okbg);border:1px solid var(--okline);color:var(--ok);}
+.tp-b.warn{background:var(--warnbg);border:1px solid var(--warnline);color:var(--warn);}
+.tp-b.ng{background:var(--dangerbg);border:1px solid var(--dangerline);color:#ff9db4;}
+.tp-b.off{background:var(--panel);border:1px solid var(--line2);color:var(--dim);}
+.tp-pd{font-size:10px;color:#e0b84a;font-weight:800;margin-left:4px;}
+.tp-raw{font-size:10px;color:var(--dim);font-weight:700;margin-left:4px;}   /* 切り上げ前の素の必要人数（3名予約=1.5） */
+.tp-bars{display:flex;align-items:flex-end;gap:3px;height:60px;margin-top:10px;overflow-x:auto;padding-bottom:2px;}
+.tp-bar{flex:1 0 8px;min-width:8px;background:#22314e;border-radius:3px 3px 0 0;position:relative;}
+.tp-bar.on{background:linear-gradient(180deg,#5f8fe0,#2a4f8a);}
+.tp-bar.today{background:linear-gradient(180deg,#ffd28a,#c98a20);}
+.tp-cin{color:var(--ok);font-weight:800;}
+.sec-t .nw{white-space:nowrap;}   /* 見出しが「今月の客／入り」のように途中で折れるのを防ぐ */
+
 /* ===== スマホ実用レスポンシブ（2026-07-28）＝画面幅600px以下で自動適用。PC表示は一切不変 =====
    下地(flex-wrap／表の overflow-x スクロール)は既に効いているので、ここでは
    余白の詰め・タップ確保・窮屈スポット(権限トグルの文字折返し等)の解消に絞る。 */
@@ -344,7 +392,7 @@ WINE白	ムルソー ドメーヌ フィリップ シャヴィ	¥50,000
 var GAS_URL='<?= GAS_URL ?>';
 var USER_ID='<?= USER_ID ?>'; if(USER_ID.indexOf('?')>=0) USER_ID='';
 var IS_GAS=(typeof google!=='undefined' && google.script && google.script.run);
-var ST=null, TAB='staff', roleFilter='all', q='';
+var ST=null, TAB='top', roleFilter='all', q='';   // 起動時は🏠トップ（店の全容）＝ボス指示 2026-08-17
 var DENOMS=[{k:'m10000',t:'万'},{k:'m5000',t:'五千'},{k:'m1000',t:'千'}];
 
 var ROLE_DESC={
@@ -468,13 +516,14 @@ function pollAdminAuth(token){
 /* ===== ナビ: 14タブを5グループの2階層に束ねる（各画面のrender関数は無変更・入口の見せ方だけ） =====
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
-  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
+  {g:'top',   label:'🏠 トップ', tabs:[['top','🏠 店の全容']]},
+  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kyukin','📉 当欠'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
 ];
-var GROUP='hr';
+var GROUP='top';
 function groupOf_(t){ for(var i=0;i<TAB_GROUPS.length;i++){ if(TAB_GROUPS[i].tabs.some(function(x){return x[0]===t;})) return TAB_GROUPS[i].g; } return TAB_GROUPS[0].g; }
 function curGroup_(){ return TAB_GROUPS.filter(function(G){return G.g===GROUP;})[0]||TAB_GROUPS[0]; }
 function renderNav(){
@@ -488,10 +537,148 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({staff:renderStaff,matrix:renderMatrix,shift:renderShift,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
+  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
+
+/* ===== 🏠 トップ＝店の全容（ボス依頼 2026-08-17）=====================================
+ * 判断したいこと＝「今日は何人出ていて、何人来るのか。派遣を追加で頼むか」。
+ * 必要キャスト数はボス確定ルール（予約1件ごと・サーバ needCast_ が唯一の持ち主）＝
+ *   1名の予約＝1名必須／2名＝1名／3名以上＝人数÷2、日単位で最後に切り上げ。
+ *   ⚠️「その日の合計人数÷2」ではない（1名予約が並ぶ日を半分に見誤る）＝ここで計算し直さない。
+ * 不足 = 必要 − 出勤（キャスト＋体験＋派遣）。
+ * ⚠️予約人数は当日まだ増える（飛び込み・追加）＝ぴったりは「⚠️」であって「✅」にしない。 */
+var TOPB=null, TOP_DAYS=7;
+var TP_RULE='1名の予約＝キャスト1名／2名＝1名／3名以上＝人数÷2（最後に切り上げ）';
+function tpNeed(d){ return Number(d.need||0); }
+function tpLevel(d){
+  if(d.closed) return 'off';
+  var have=d.floorCount||0, need=tpNeed(d);
+  if(!(d.rsvCount||0)) return 'off';
+  if(have<need) return 'ng';
+  if(have===need) return 'warn';
+  return 'ok';
+}
+function tpMix(d){
+  var m=d.mix||{}, a=[];
+  if(m.solo) a.push('1名'+m.solo+'件');
+  if(m.pair) a.push('2名'+m.pair+'件');
+  if(m.group) a.push('3名以上'+m.group+'件');
+  return a.join('・');
+}
+function tpJudge(d){
+  var lv=tpLevel(d), have=d.floorCount||0, need=tpNeed(d), pax=d.rsvPax||0;
+  var calc='予約'+(d.rsvCount||0)+'件（'+(tpMix(d)||'—')+'）＝必要'+(d.needRaw!==need?((d.needRaw||0)+'→'):'')+need+'名 ／ 出勤'+have+'名';
+  if(d.closed) return {lv:'off',ic:'🏖',t:'店休日',s:esc(d.closed)};
+  if(lv==='ng')   return {lv:lv,ic:'🚨',t:'派遣をあと'+(need-have)+'名',s:calc};
+  if(lv==='warn') return {lv:lv,ic:'⚠️',t:'ぴったり（余裕なし）',s:calc+'。飛び込みが入ると回りません'};
+  if(lv==='ok')   return {lv:lv,ic:'✅',t:'足りています（+'+(have-need)+'名）',s:calc};
+  return {lv:'off',ic:'🕊',t:(have?'予約なし':'予約・出勤なし'),s:'出勤'+have+'名'};
+}
+function tpNames(arr,cls){
+  if(!arr||!arr.length) return '';
+  return arr.map(function(x){ return '<span class="'+cls+'">'+esc(x.name)+'<b>'+esc(x.shift||'')+'</b></span>'; }).join('');
+}
+function renderTop(){
+  loading();
+  api('adminGetTopBoard',{days:TOP_DAYS}).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込みエラー')+'</div>'); return; }
+    TOPB=r; drawTop();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function drawTop(){
+  var B=TOPB; if(!B){ setBody('<div class="empty">読み込みエラー</div>'); return; }
+  var L=B.list||[], t=L[0]||{date:B.today,dow:'',rsvCount:0,rsvPax:0,cast:[],taiken:[],haken:[],kurofuku:[],floorCount:0,kurofukuCount:0,pending:{}}, M=B.month||{};
+  var j=tpJudge(t), h='';
+
+  /* ① 派遣の要否＝この画面の一番の用（最上段に単独で置く） */
+  h+='<div class="tp-jd '+j.lv+'"><div class="jd-ic">'+j.ic+'</div><div class="jd-m"><div class="jd-t">'+esc(j.t)+'</div><div class="jd-s">'+esc(j.s)+'</div></div>'
+    +'<div class="jd-rule">必要キャスト数<br>'+esc(TP_RULE)+'</div></div>';
+
+  /* ② 今日の数字（予約・出勤・黒服・今月の客入り） */
+  var mp=(M.visits&&M.paxRows)?M.pax:0;
+  var diff=(M.visits||0)-(M.prevSameSpan||0);
+  h+='<div class="tp-hero">'
+    +'<div class="tp-k hi"><div class="k-l">本日の予約</div><div class="k-v">'+(t.rsvCount||0)+'<small>件</small> '+(t.rsvPax||0)+'<small>名</small></div><div class="k-s">'+esc(dowLabel_(t))+'<br>必要キャスト<b style="color:#bcd6ff">'+tpNeed(t)+'名</b>'+(tpMix(t)?('（'+esc(tpMix(t))+'）'):'')+'</div></div>'
+    +'<div class="tp-k"><div class="k-l">本日の出勤（接客）</div><div class="k-v">'+(t.floorCount||0)+'<small>名</small></div><div class="k-s">キャスト'+((t.cast||[]).length)+'・体験'+((t.taiken||[]).length)+'・派遣'+((t.haken||[]).length)+tpPendTxt_(t)+'</div></div>'
+    +'<div class="tp-k"><div class="k-l">本日の黒服</div><div class="k-v">'+(t.kurofukuCount||0)+'<small>名</small></div><div class="k-s">'+((t.kurofuku||[]).map(function(x){return x.name;}).join('・')||'—')+'</div></div>'
+    +'<div class="tp-k"><div class="k-l">今月の客入り（'+esc(M.ym||'')+'）</div><div class="k-v">'+(M.visits||0)+'<small>組</small></div><div class="k-s">'+(mp?('延べ'+mp+'名／'):'')+'営業'+(M.bizDays||0)+'日・1日平均'+(M.bizDays?Math.round((M.visits||0)/M.bizDays*10)/10:0)+'組<br>前月同時点 '+(M.prevSameSpan||0)+'組（'+(diff>=0?'+':'')+diff+'）</div></div>'
+    +'</div>';
+
+  /* ③ 今日の出勤者（誰が何時から）＝名前まで見せないと「誰を呼ぶか」が決まらない */
+  h+='<div class="sec"><div class="sec-t">🗓 本日の出勤 <span class="sub">'+esc(B.today||'')+'（'+esc(t.dow||'')+'）・時刻は出勤時間</span></div>';
+  if((t.cast||[]).length||(t.taiken||[]).length||(t.haken||[]).length||(t.kurofuku||[]).length){
+    if((t.cast||[]).length)     h+='<div class="tp-grp">キャスト '+t.cast.length+'名</div><div class="tp-nm">'+tpNames(t.cast,'')+'</div>';
+    if((t.taiken||[]).length)   h+='<div class="tp-grp">体験 '+t.taiken.length+'名</div><div class="tp-nm">'+tpNames(t.taiken,'taiken')+'</div>';
+    if((t.haken||[]).length)    h+='<div class="tp-grp">派遣 '+t.haken.length+'名</div><div class="tp-nm">'+tpNames(t.haken,'haken')+'</div>';
+    if((t.kurofuku||[]).length) h+='<div class="tp-grp">黒服 '+t.kurofuku.length+'名</div><div class="tp-nm">'+tpNames(t.kurofuku,'kuro')+'</div>';
+  } else h+='<div class="empty">本日のシフトがありません</div>';
+  h+='<div class="hint" style="margin-top:10px">シフトの修正は「👥 人事 → 🗓 シフト」。ここは確定分だけを数えています（申請中は人数に入れません）。</div></div>';
+
+  /* ④ 今日の予約明細＝店の全容。件数/人数は上のカードが正（キャンセルは除外済み） */
+  var R=B.todayRsv||[];
+  h+='<div class="sec"><div class="sec-t">📅 本日の予約 <span class="sub">'+R.length+'件・'+(t.rsvPax||0)+'名</span></div>';
+  if(R.length){
+    h+='<div class="mtx-wrap"><table class="mtx sm"><tr><th>時間</th><th>お客様</th><th>人数</th><th>席</th><th>担当</th><th>予約</th><th>同伴</th><th>状態</th></tr>';
+    R.forEach(function(x){
+      h+='<tr><td class="tp-d">'+esc(x.time||'')+'</td><td class="nm">'+esc(x.customer||'')+'</td><td>'+(x.pax||1)+'</td><td>'+esc(x.table||'—')+'</td>'
+        +'<td>'+esc(x.tantouCast||'—')+'</td><td>'+esc(x.yoyakuCast||'—')+'</td><td>'+esc(x.dohanCast||'—')+'</td>'
+        +'<td>'+(x.checkedIn?'<span class="tp-cin">来店済</span>':esc(x.status||''))+'</td></tr>';
+    });
+    h+='</table></div>';
+  } else h+='<div class="empty">本日の予約はまだありません</div>';
+  h+='</div>';
+
+  /* ⑤ 先の需給＝派遣は前日までに頼む＝今日だけ見えても遅い */
+  h+='<div class="sec"><div class="sec-t"><span class="nw">⚖️ 今日からの'+(B.days||L.length)+'日間（予約 × 出勤）</span> <span class="sub">不足＝必要−出勤（接客）。必要＝'+esc(TP_RULE)+'</span></div>'
+    /* ⚠️判定は日付の隣（2列目）に置く＝.mtx-wrap は overflow-x:auto で右端の列はスマホで初期表示に映らない。
+       この画面で一番見たい列を右端に置くと「機能が無い」ように見える（給与明細の✎で実際に踏んだ轍）。 */
+    +'<div class="mtx-wrap"><table class="mtx sm"><tr><th>日付</th><th>判定</th><th>予約</th><th>人数</th><th>必要</th><th>出勤(接客)</th><th>内訳</th><th>黒服</th></tr>';
+  L.forEach(function(d,i){
+    var jj=tpJudge(d);
+    h+='<tr class="'+(i===0?'tp-today':'')+(d.closed?' tp-off':'')+'"><td class="tp-d">'+esc(d.md)+'（'+esc(d.dow)+'）'+(i===0?' <span class="tp-b ok" style="padding:1px 6px">今日</span>':'')+'</td>'
+      +'<td><span class="tp-b '+jj.lv+'">'+jj.ic+' '+esc(jj.t)+'</span></td>'
+      +'<td>'+(d.rsvCount||0)+'</td><td><b>'+(d.rsvPax||0)+'</b></td>'
+      +'<td title="'+esc(tpMix(d))+'"><b>'+tpNeed(d)+'</b>'+(d.needRaw&&d.needRaw!==tpNeed(d)?('<span class="tp-raw">（'+d.needRaw+'）</span>'):'')+'</td>'
+      +'<td><b>'+(d.floorCount||0)+'</b>'+tpPendBadge_(d)+'</td>'
+      +'<td class="role">キ'+((d.cast||[]).length)+'・体'+((d.taiken||[]).length)+'・派'+((d.haken||[]).length)+'</td>'
+      +'<td>'+(d.kurofukuCount||0)+'</td></tr>';
+  });
+  h+='</table></div><div class="hint" style="margin-top:8px">「必要」＝予約1件ごとに算出（'+esc(TP_RULE)+'）。小さい灰色の数字は切り上げ前の素の値です。承認待ちのシフト申請は人数に入れず <span class="tp-pd">+N申請中</span> で別に出しています。</div></div>';
+
+  /* ⑥ 今月の客入り推移 */
+  h+=tpMonthHtml_(M);
+  h+='<div class="hint">最終更新 '+esc(nowHm_())+' ・<span onclick="renderTop()" style="color:var(--accent);cursor:pointer;font-weight:800">🔄 更新</span></div>';
+  setBody(h);
+}
+function dowLabel_(t){ return (t.date||'')+'（'+(t.dow||'')+'）'+(t.closed?(' '+t.closed):''); }
+function tpPendTxt_(t){ var p=t.pending||{}, n=(p.cast||0)+(p.taiken||0)+(p.haken||0); return n?('／申請中'+n+'名'):''; }
+function tpPendBadge_(d){ var p=d.pending||{}, n=(p.cast||0)+(p.taiken||0)+(p.haken||0); return n?('<span class="tp-pd">+'+n+'申請中</span>'):''; }
+function nowHm_(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+/* 今月の客入り（来店記録DB）。⚠️人数はTRUST取込行が空＝「分かる分だけ」と断って出す（大きく見せない）。 */
+function tpMonthHtml_(M){
+  if(!M||!M.ym) return '';
+  var ym=M.ym, y=Number(ym.slice(0,4)), mo=Number(ym.slice(5,7));
+  var last=new Date(y,mo,0).getDate(), today=Number((TOPB.today||'').slice(8,10));
+  var max=1; for(var k in (M.byDay||{})) if(M.byDay[k]>max) max=M.byDay[k];
+  var bars='';
+  for(var i=1;i<=last;i++){
+    var key=ym+'-'+('0'+i).slice(-2), c=(M.byDay||{})[key]||0;
+    var cls=(i===today)?'today':(c?'on':'');
+    bars+='<div class="tp-bar '+cls+'" style="height:'+(c?Math.max(6,Math.round(c/max*58)):2)+'px" title="'+key+' '+c+'組"></div>';
+  }
+  var paxNote=(M.paxRows&&M.paxRows<M.visits)?('（人数の記録があるのは'+M.visits+'組中'+M.paxRows+'組。TRUST取込分は人数が入りません）'):'';
+  return '<div class="sec"><div class="sec-t"><span class="nw">👥 今月の客入り</span> <span class="sub">'+esc(ym)+'・来店記録より（相席のサブ行は除いて1組と数えています）</span></div>'
+    +'<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:baseline">'
+    +'<div><span class="k-l" style="color:var(--dim);font-size:11px;font-weight:800">組数</span> <b style="font-size:22px">'+(M.visits||0)+'</b></div>'
+    +'<div><span class="k-l" style="color:var(--dim);font-size:11px;font-weight:800">延べ人数</span> <b style="font-size:22px">'+(M.pax||0)+'</b></div>'
+    +'<div><span class="k-l" style="color:var(--dim);font-size:11px;font-weight:800">営業日</span> <b style="font-size:22px">'+(M.bizDays||0)+'</b></div>'
+    +'<div><span class="k-l" style="color:var(--dim);font-size:11px;font-weight:800">前月同時点</span> <b style="font-size:22px">'+(M.prevSameSpan||0)+'</b> <span style="color:'+(((M.visits||0)-(M.prevSameSpan||0))>=0?'var(--ok)':'#ff9db4')+';font-weight:800">'+((((M.visits||0)-(M.prevSameSpan||0))>=0)?'+':'')+((M.visits||0)-(M.prevSameSpan||0))+'</span></div>'
+    +'<div><span class="k-l" style="color:var(--dim);font-size:11px;font-weight:800">前月合計</span> <b style="font-size:22px">'+(M.prevVisits||0)+'</b></div>'
+    +'</div><div class="tp-bars">'+bars+'</div>'
+    +'<div class="hint" style="margin-top:8px">日別の組数（琥珀＝今日）。'+esc(paxNote)+'</div></div>';
+}
 
 /* 📋 面談表 一覧（全件・管理者のみ。バック=adminGetMendanList＝mendanRowToObj_で提出済＋面談済の全行）。 */
 var MENDAN_ALL=[], mendanQ='', mendanStatus='all', mendanSel={};
@@ -851,7 +1038,7 @@ function renderStaff(){
   var retired=all.filter(function(s){return s.retired;});     // 退職済み
   var renameTool='<details class="sec compact" style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:800;color:var(--accent)">✏️ スタッフ改名（名前変更の統一）</summary>'
     +'<div class="hint" style="margin-top:8px">既存スタッフが <b>#登録</b> で名前を変えた時、旧名が残るシフト・シフト申請・勤怠・給与・領収書・顧客担当・予約などを新名に一括統一します。まず🔍プレビューで件数を確認してから実行してください。</div>'
-    +'<div class="toolbar"><input class="finput grow" id="rn-old" placeholder="旧名（今シフト等に残る名前）"><span style="color:var(--dim);font-weight:800">→</span><input class="finput grow" id="rn-new" placeholder="新名（#登録した名前）"><button class="btn" onclick="renamePreview()">🔍 プレビュー</button></div>'
+    +'<div class="toolbar">'+rnPick('rn-old','旧名（今シフト等に残る名前）')+'<span style="color:var(--dim);font-weight:800">→</span>'+rnPick('rn-new','新名（#登録した名前）')+'<button class="btn" onclick="renamePreview()">🔍 プレビュー</button></div>'
     +'<div id="rn-result"></div></details>';
   var retiredHtml='';
   if(retired.length){
@@ -867,7 +1054,32 @@ function renderStaff(){
   setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+obCfg+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">在籍スタッフなし</div>')+retiredHtml);
   var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
-function renameGetIn(){ return {o:(document.getElementById('rn-old').value||'').trim(), n:(document.getElementById('rn-new').value||'').trim()}; }
+/* 改名の名前入力＝選択式（登録済み・在籍のスタッフ）＋「一覧にない名前」だけ手入力に落ちる。
+   両側に付ける理由: 旧名は #登録 で名簿が新名に上書き済みだと一覧に無い（→手入力）／
+   逆に管理側で源氏名を変える時は旧名が名簿に在り新名がまだ無い。どちらの向きでも使えるようにする。 */
+function rnStaffOpts(){
+  return (ST.staff||[]).filter(function(s){ return !s.retired && s.registered; })
+    .map(function(s){ return '<option value="'+esc(s.name)+'">'+esc(s.name)+'（'+esc(s.role||'')+'）</option>'; }).join('');
+}
+function rnPick(id,ph){
+  return '<select class="finput grow" id="'+id+'-sel" onchange="renameSelChange(\''+id+'\')">'
+    +'<option value="">'+esc(ph)+'</option>'+rnStaffOpts()
+    +'<option value="__manual__">✏️ 一覧にない名前を手入力</option></select>'
+    +'<input class="finput grow" id="'+id+'" style="display:none" placeholder="'+esc(ph)+'（手入力）">';
+}
+function renameSelChange(id){
+  var s=document.getElementById(id+'-sel'), t=document.getElementById(id); if(!s||!t)return;
+  var man=(s.value==='__manual__');
+  t.style.display=man?'':'none';
+  if(man){ t.focus(); } else { t.value=''; }
+}
+function rnVal(id){
+  var s=document.getElementById(id+'-sel'), t=document.getElementById(id);
+  var v=s?String(s.value||''):'';
+  if(v==='__manual__') return ((t&&t.value)||'').trim();
+  return v.trim();
+}
+function renameGetIn(){ return {o:rnVal('rn-old'), n:rnVal('rn-new')}; }
 function renamePreview(){
   var v=renameGetIn(); if(!v.o||!v.n){ toast('旧名と新名を入力してください',true); return; }
   if(v.o===v.n){ toast('旧名と新名が同じです',true); return; }
@@ -899,6 +1111,10 @@ function cardHtml(s,i){
   var safeBtn=s.hardSafe?'<div class="toggle on safe locked" title="コード保護">🔑 金庫管理 🔒</div>':'<div class="toggle'+(s.safeFlag?' on safe':'')+'" onclick="toggleSafe(\''+jstr(s.name)+'\','+(!s.safeFlag)+')">🔑 金庫管理</div>';
   var noticeOn=(s.noticeOn!==false); // 既定=配信ON。'×'指定のときだけOFF
   var noticeBtn='<div class="toggle '+(noticeOn?'on':'off')+' notice" title="お知らせの配信・既読/未読名簿の対象。OFFにすると配信されず名簿にも出ません" onclick="toggleNotice(\''+jstr(s.name)+'\','+(!noticeOn)+')">📢 お知らせ'+(noticeOn?'':' 停止中')+'</div>';
+  /* 📉当欠注意の表示ON/OFF（2026-08-10）＝既定は全員ON。OFFにすると黒服ブリーフのフラグにこの人が出なくなる。
+     幽霊ロールには出さない（そもそも欠勤申請を出さない）。集計自体は止まらない＝📉当欠タブには回数が残る。 */
+  var kyuAlertOn=(s.kyukinAlertOn!==false); // 既定=表示ON。'×'指定のときだけOFF
+  var kyuAlertBtn=isGhostRole(s.role)?'':'<div class="toggle '+(kyuAlertOn?'on':'off')+' kyualert" title="当日欠勤が続いた時の「⚠️当欠注意／🚨当欠多め」を黒服ブリーフに出すか。OFFにするとこの人だけフラグが出ません（回数の集計は続き、📉当欠タブでは見られます）" onclick="toggleKyukinAlert(\''+jstr(s.name)+'\','+(!kyuAlertOn)+')">📉 当欠注意'+(kyuAlertOn?'':' 非表示')+'</div>';
   var pinRow=s.kioskLogin?'<div class="pinrow"><span class="pinlbl">🔢 PIN</span><span class="pinstat'+(s.hasPin?' set':'')+'">'+(s.hasPin?'個別PIN設定済み':'マスターPIN使用')+'</span><button class="btn sm" onclick="setPin(\''+jstr(s.name)+'\')">設定</button>'+(s.hasPin?'<button class="btn sm" onclick="clearPin(\''+jstr(s.name)+'\')">クリア</button>':'')+'</div>':'';
   var backRuleHtml='';
   if(isTermRole(s.role)){
@@ -990,7 +1206,7 @@ function cardHtml(s,i){
     ? '<div class="row" style="margin-top:8px;border-top:1px solid var(--line2);padding-top:8px;gap:6px">'+leaveBtn+retireBtn+'</div>' : '';
   return '<div class="card"'+(s.retired?' style="opacity:.72"':(s.onLeave?' style="opacity:.85"':''))+'><div class="card-top"><span class="card-nm">'+esc(s.name)+'</span>'+line+retiredBadge+leaveBadge+(s.hardAdmin?'<span class="badge lock">保護</span>':'')+'</div>'+
     '<div class="row"><span class="lbl">属性</span><select class="rolesel" onchange="setRole(\''+jstr(s.name)+'\',this.value)">'+roleOpts+'</select></div>'+
-    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+kotsuHtml+onboardHtml+termHtml+retireRow+'</div>';
+    '<div class="perms">'+gunshiBtn+adminBtn+safeBtn+noticeBtn+kyuAlertBtn+'</div>'+pinRow+bdayInfoHtml+backRuleHtml+kotsuHtml+onboardHtml+termHtml+retireRow+'</div>';
 }
 /* 🚕 交通費（対象ON/OFF＋片道額）＝キャスト永続設定・給与に非課税で自動加算 */
 function toggleKotsu(i,name){
@@ -1049,6 +1265,8 @@ var TERM_FIELDS=[
   {h:'個別メモ',label:'自由メモ',ta:true,ph:'その他メモ（自由記述）'}
 ];
 function isTermRole(role){ role=String(role||''); return role.indexOf('キャスト')>=0||role.indexOf('体験')>=0||role.indexOf('黒服')>=0||role.indexOf('ドライバー')>=0; }
+/* 幽霊ロール＝実在しないアカウント（サーバの GHOST_ROLES_ と同じ集合）。実データ絡みのトグルは出さない。 */
+function isGhostRole(role){ role=String(role||'').trim(); return role==='管理アカウント'||role==='テストスタッフ'; }
 /* ===== 入店チェック（新人オンボーディング）＝キャスト・体験。3段階 未/対応中/完了 ===== */
 var ONBOARD_DEFAULT_ITEMS=['名刺発注','ポケパラ登録','身分証（登録・控え）','その他登録'];
 var ONBOARD_STATES=[{v:'',t:'未',c:'#7a8aa0'},{v:'対応中',t:'対応中',c:'#e0b060'},{v:'完了',t:'完了',c:'#5cc98a'}];
@@ -1114,6 +1332,9 @@ function toggleAdmin(name,on){ var s=findStaff(name); if(s){s.adminFlag=on;s.isA
 function toggleSafe(name,on){ var s=findStaff(name); if(s){s.safeFlag=on;s.isSafeAdmin=on||s.hardSafe;} render(); if(!IS_GAS){toast(name+' 金庫'+(on?'ON':'OFF'));return;} gsr('adminSetSafeAdmin',USER_ID,name,on).then(function(r){res(r,name+' 金庫管理 '+(on?'ON':'OFF'))||load();}).catch(function(){toast('通信エラー',true);load();}); }
 /* お知らせ配信対象のON/OFF。OFF=配信されず既読/未読名簿にも出ない（退職とは別軸の一時停止） */
 function toggleNotice(name,on){ var s=findStaff(name); if(s){s.noticeOn=on;} render(); if(!IS_GAS){toast(name+' お知らせ配信'+(on?'ON':'OFF'));return;} gsr('adminSetNoticeTarget',USER_ID,name,on).then(function(r){res(r,name+' のお知らせ配信を'+(on?'ON':'停止')+'しました')||load();}).catch(function(){toast('通信エラー',true);load();}); }
+/* 📉当欠注意の表示ON/OFF。既定は全員ON（スタッフマスタ「当欠注意表示」列が空欄）。OFF='×'。
+   止まるのは黒服ブリーフのフラグだけ＝集計・📉当欠タブの回数はそのまま残る。 */
+function toggleKyukinAlert(name,on){ var s=findStaff(name); if(s){s.kyukinAlertOn=on;} render(); if(!IS_GAS){toast(name+' 当欠注意表示'+(on?'ON':'OFF'));return;} gsr('adminSetKyukinAlert',USER_ID,name,on).then(function(r){res(r,name+' の当欠注意表示を'+(on?'ON':'OFF（非表示）')+'にしました')||load();}).catch(function(){toast('通信エラー',true);load();}); }
 
 /* ===== 🔐 権限 ===== */
 function renderMatrix(){
@@ -1796,6 +2017,56 @@ function skFinalize(id){
 }
 
 /* 🗂 出勤簿（労基署対応：勤怠ログを月×個人で出退勤/拘束時間として出力・CSV/印刷） */
+// ── 📉 当欠一覧（当日欠勤の実績・2026-08-07）────────────────────────────
+// ⚠️黒服ブリーフ(LINE)のフラグと同じ kyukinStatsView_ を叩く＝画面とLINEで数字が絶対にズレない。
+var kyuDays=0, kyuData=null, kyuSeq=0;
+function renderKyukin(){
+  loading();
+  // ⚠️シーケンス番号方式で古い応答を捨てる。busyガードは入れない（両方やると連打で永久に読み込み中になる）
+  var my=++kyuSeq;
+  api('kyukinStats',{days:kyuDays||0}).then(function(r){
+    if(my!==kyuSeq) return;
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'取得できませんでした')+'</div>'); return; }
+    kyuData=r; kyuDays=r.days||kyuDays; drawKyukin();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function kyuSetDays(d){ kyuDays=Number(d)||90; renderKyukin(); }
+function drawKyukin(){
+  var d=kyuData||{}, rows=d.rows||[];
+  var opts=[30,60,90,180,365].map(function(n){ return '<option value="'+n+'"'+(n===d.days?' selected':'')+'>直近'+n+'日</option>'; }).join('');
+  var bar='<div class="toolbar"><select class="finput" style="width:150px" onchange="kyuSetDays(this.value)">'+opts+'</select>'
+    +'<span class="cnt" style="margin-left:8px">該当 '+rows.length+'名</span><span class="sp" style="flex:1"></span>'
+    +'<button class="btn" onclick="kyuCsv()">⬇️ CSV</button></div>';
+  var hint='<div class="hint">当日欠勤＝「申請した日」と「休む日」が同じ欠勤（前もって出した休みは含みません）。承認されたものだけを数え、同じ日の重複申請は1回に畳んでいます。'
+    +'<b style="color:#f4d98a"> '+(d.warn||2)+'回で⚠️注意／'+(d.alert||3)+'回以上で🚨多め</b>＝この判定がそのまま黒服ブリーフのフラグになります。'
+    +'<br>人ごとにフラグを止めたい時は <b>👥スタッフ</b> のカードの「📉 当欠注意」をOFFにしてください（既定は全員ON）。OFFにしても回数の集計は続き、この一覧には「📉非表示」と出ます。</div>';
+  if(!rows.length){ setBody(bar+hint+'<div class="empty" style="padding:20px">この期間に当日欠勤はありません。</div>'); return; }
+  var tr=rows.map(function(p){
+    var col=(p.level===2)?'#ff8a8a':((p.level===1)?'#f4d98a':'var(--dim)');
+    // 表示OFFの人は回数を消さず「非表示」と明示＝黒服ブリーフに出ない理由がこの画面で分かる
+    var offMark=(p.alertOn===false)?' <span style="color:var(--dim);font-size:11px;font-weight:700">（📉非表示）</span>':'';
+    return '<tr'+((p.alertOn===false)?' style="opacity:.6"':'')+'>'
+      +'<td style="padding:6px 10px"><b>'+esc(p.name)+'</b>'+(p.retired?' <span style="color:#ff9a9a;font-size:11px;font-weight:700">退職</span>':'')+'</td>'
+      +'<td style="padding:6px 10px;color:var(--dim)">'+esc(p.role||'')+'</td>'
+      +'<td style="padding:6px 10px;text-align:right;color:'+col+';font-weight:700">'+p.count+' 回</td>'
+      +'<td style="padding:6px 10px;color:'+col+';font-weight:700">'+esc(p.flag||'')+offMark+'</td>'
+      +'<td style="padding:6px 10px;color:var(--dim);font-size:12px">'+esc((p.dates||[]).join('、'))+'</td></tr>';
+  }).join('');
+  setBody(bar+hint+'<div class="sec"><div class="sec-t">📉 当日欠勤の実績（直近'+(d.days||90)+'日・多い順）</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<thead><tr style="color:var(--dim);text-align:left"><th style="padding:6px 10px">氏名</th><th style="padding:6px 10px">役割</th><th style="padding:6px 10px;text-align:right">当欠</th><th style="padding:6px 10px">判定</th><th style="padding:6px 10px">日付（新しい順）</th></tr></thead>'
+    +'<tbody>'+tr+'</tbody></table></div></div>');
+}
+function kyuCsv(){
+  var d=kyuData||{}, rows=d.rows||[];
+  if(!rows.length){ toast('データがありません',true); return; }
+  var lines=[['氏名','役割','在籍状況','当欠回数','判定','注意表示','日付（新しい順）'].map(kregCsvCell_).join(',')];
+  rows.forEach(function(p){
+    lines.push([p.name,p.role||'',p.retired?'退職':'在籍',p.count,(p.flag||'').replace(/[🚨⚠️]/g,''),(p.alertOn===false)?'非表示':'ON',(p.dates||[]).join(' ')].map(kregCsvCell_).join(','));
+  });
+  kregDownload_('当日欠勤_直近'+(d.days||90)+'日.csv', lines.join('\r\n'));
+}
+
 var kregMonth='', kregName='', kregData=null;
 function kregNowMonth_(){ var d=new Date(); return d.getFullYear()+'-'+((d.getMonth()+1)<10?'0':'')+(d.getMonth()+1); }
 function kregHm_(mins){ if(mins==null) return '—'; var h=Math.floor(mins/60), m=mins%60; return h+':'+(m<10?'0':'')+m; }
@@ -3740,7 +4011,7 @@ function MOCK(){
     {name:'ひろき',role:'黒服社員',registered:true,isAdmin:true,adminFlag:false,hardAdmin:true,isSafeAdmin:true,safeFlag:false,hardSafe:true,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'たかし',role:'黒服社員',registered:true,isAdmin:false,adminFlag:true,hardAdmin:false,isSafeAdmin:true,safeFlag:true,hardSafe:false,kioskLogin:true,hardGunshi:true,gunshiFlag:'',hasPin:false},
     {name:'まや',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'○',hasPin:true,kotsuOn:true,kotsuAmount:1200},
-    {name:'ゆい',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
+    {name:'ゆい',role:'キャスト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false,kyukinAlertOn:false},
     {name:'あん',role:'体験',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
     {name:'かな',role:'キャスト',retired:true,registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:false,hardGunshi:false,gunshiFlag:'',hasPin:false},
     {name:'ゆうた',role:'黒服バイト',registered:true,isAdmin:false,adminFlag:false,hardAdmin:false,isSafeAdmin:false,safeFlag:false,hardSafe:false,kioskLogin:true,hardGunshi:false,gunshiFlag:'',hasPin:false},
@@ -4214,6 +4485,47 @@ function issuerRestore(id){
 }
 
 function MOCKAPI(action,body){
+  /* 🏠 トップ（店の全容）のローカル確認用。予約多め×出勤少なめの日を混ぜて判定3色を出す */
+  if(action==='adminGetTopBoard'){
+    var _t='2026-08-17', _DOW=['日','月','火','水','木','金','土'];
+    /* px=予約1件ごとの人数（必要キャスト数は件ごとに決まる＝合計人数からは出せない）。
+       1名予約だけの日(index3)を混ぜてある＝「人数は少ないのに必要人数は多い」を確認するため */
+    var _seed=[{c:6,tk:1,hk:1,px:[2,4,3,2,3]},{c:4,tk:0,hk:0,px:[2,4,3,4,2,2]},{c:7,tk:1,hk:2,px:[3,3,2]},
+               {c:5,tk:1,hk:0,px:[1,1,1,1,1,1]},{c:0,tk:0,hk:0,px:[],closed:'お盆明け休み'},
+               {c:8,tk:0,hk:1,px:[4,3,2,2,3,3,2]},{c:6,tk:1,hk:0,px:[2,3,2,4,2]}]
+      .map(function(s){
+        var raw=s.px.reduce(function(a,p){return a+Math.max(1,p/2);},0);
+        s.rc=s.px.length; s.rp=s.px.reduce(function(a,p){return a+p;},0);
+        s.needRaw=Math.round(raw*10)/10; s.need=Math.ceil(raw-1e-9);
+        s.mix={solo:s.px.filter(function(p){return p<=1;}).length,pair:s.px.filter(function(p){return p===2;}).length,group:s.px.filter(function(p){return p>=3;}).length};
+        return s;
+      });
+    var _nm=['さくら','みお','あおい','ゆき','れい','ひなの','まや','るか'];
+    var _mk=function(pfx,n,base){var a=[];for(var i=0;i<n;i++)a.push({name:(pfx||'')+_nm[i%_nm.length]+(i>=_nm.length?'2':''),shift:base});return a;};
+    var _list=_seed.map(function(s,i){
+      var d=new Date('2026-08-17T00:00:00'); d.setDate(d.getDate()+i);
+      var ymd=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+      return {date:ymd, md:(d.getMonth()+1)+'/'+d.getDate(), dow:_DOW[d.getDay()], closed:s.closed||'',
+        rsvCount:s.rc, rsvPax:s.rp, need:s.need, needRaw:s.needRaw, mix:s.mix,
+        cast:_mk('',s.c,'20:00'), taiken:_mk('体',s.tk,'20:30'),
+        haken:_mk('派',s.hk,'21:00'), kurofuku:_mk('黒',i===4?0:3,'18:00'),
+        floorCount:s.c+s.tk+s.hk, kurofukuCount:i===4?0:3, pending:{cast:i===1?2:0,taiken:0,haken:0,kurofuku:0}};
+    });
+    var _byDay={}; for(var _i=1;_i<=17;_i++){ if(_i===5||_i===12)continue; _byDay['2026-08-'+('0'+_i).slice(-2)]=3+((_i*7)%9); }
+    return {ok:true,today:_t,days:7,list:_list,
+      todayRsv:[{time:'19:30',customer:'山田 様',pax:2,table:'カウ1',status:'予約',tantouCast:'さくら',yoyakuCast:'さくら',dohanCast:'',checkedIn:true},
+                {time:'20:00',customer:'佐藤 様',pax:4,table:'BOX1',status:'予約',tantouCast:'みお',yoyakuCast:'',dohanCast:'みお',checkedIn:false},
+                {time:'21:00',customer:'鈴木 様',pax:3,table:'離れ',status:'予約',tantouCast:'あおい',yoyakuCast:'あおい',dohanCast:'',checkedIn:false},
+                {time:'21:30',customer:'高橋 様',pax:2,table:'カウ3',status:'予約',tantouCast:'ゆき',yoyakuCast:'',dohanCast:'',checkedIn:false},
+                {time:'22:00',customer:'渡辺 様',pax:3,table:'',status:'仮予約',tantouCast:'れい',yoyakuCast:'れい',dohanCast:'',checkedIn:false}],
+      month:{ym:'2026-08',prevYm:'2026-07',visits:112,pax:288,paxRows:97,byDay:_byDay,bizDays:15,prevVisits:196,prevSameSpan:104}};
+  }
+  if(action==='kyukinStats'){ var _d=Number(body&&body.days)||90; return {ok:true,days:_d,warn:2,alert:3,rows:[
+    {name:'きさき',role:'キャスト',retired:false,count:4,level:2,flag:'🚨当欠多め',alertOn:true, dates:['8/7','7/29','7/14','6/30']},
+    {name:'さや',  role:'キャスト',retired:false,count:2,level:1,flag:'⚠️当欠注意',alertOn:false,dates:['8/2','7/5']},
+    {name:'ちな',  role:'黒服バイト',retired:false,count:1,level:0,flag:'',dates:['7/21']},
+    {name:'まり',  role:'キャスト',retired:true, count:1,level:0,flag:'',dates:['6/12']}
+  ]}; }
   if(action==='adminGetMendanList'){ return {ok:true,list:[
     {id:'M1',at:'7/22 19:30',status:'提出済',name:'山田 花子',kana:'ヤマダハナコ',age:26,tel:'09012345678',addr:'名古屋市中区栄3-1-1 いえやすマンション101',days:4,weekdays:'月火金',exp:'あり',prevSales:800000,prevWage:2500,holdCust:15,expCust:10,expSales:500000,idPhoto:'https://example.com/id',idPhotoBack:'https://example.com/idb',facePhoto:'https://example.com/face',memo:'',judge:''},
     {id:'M2',at:'7/20 20:10',status:'面談済',name:'鈴木 みか',kana:'スズキミカ',age:22,tel:'08099998888',addr:'名古屋市千種区今池1-2-3',days:3,weekdays:'水木土',exp:'なし',prevSales:0,prevWage:0,holdCust:0,expCust:0,expSales:0,idPhoto:'',idPhotoBack:'',facePhoto:'',memo:'明るい子。体験へ進める',judge:'体験へ'},

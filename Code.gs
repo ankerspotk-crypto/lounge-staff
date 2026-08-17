@@ -1094,6 +1094,12 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return getCastReservations_(body.cast);
   }
+  // 管理コンソール「🏠 トップ」＝今日のシフト×予約（派遣を頼むかの判断）＋今月の客入り
+  if (body.action === 'adminGetTopBoard') {
+    const topName = getStaffName(body.userId);
+    if (!topName || !isAdmin_(topName)) return { ok: false, error: '権限がありません' };
+    return adminTopBoard_(body.days);
+  }
   // 管理コンソール「📅 予約」＝店全体の日別マトリクス（縦=キャスト・横=日付）
   if (body.action === 'getRsvMatrix') {
     const adminName = getStaffName(body.userId);
@@ -12748,7 +12754,7 @@ function getRsvMatrix_(fromDate, days) {
     dates.push(s); seen[s] = true;
   }
   const rows = getYoyakuRsrvSheet_().getDataRange().getValues().slice(1);
-  const totals = {}, pax = {}, byCast = {};
+  const totals = {}, pax = {}, byCast = {}, paxList = {};
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (String(row[8]) === 'キャンセル') continue;
@@ -12756,6 +12762,8 @@ function getRsvMatrix_(fromDate, days) {
     if (!seen[date]) continue;
     totals[date] = (totals[date] || 0) + 1;                 // 店全体＝予約そのもの（キャストで重複させない）
     pax[date] = (pax[date] || 0) + (Number(row[4]) || 1);
+    // 予約1件ごとの人数も残す（必要キャスト数は「1件ごと」に決まる＝合計人数からは出せない。🏠トップの needCast_ が使う）
+    (paxList[date] || (paxList[date] = [])).push(Number(row[4]) || 1);
     const map = rsvCastRoleMap_(row);
     Object.keys(map).forEach(k => {
       if (!byCast[k]) byCast[k] = {};
@@ -12776,7 +12784,122 @@ function getRsvMatrix_(fromDate, days) {
   });
   casts.sort((a, b) => b.total - a.total || String(a.name).localeCompare(String(b.name)));
   const closedDays = {}; getHolidays_().forEach(h => { closedDays[h.date] = h.label || '店休日'; });
-  return { ok: true, from: start, days: n, today: bizDateStr_(), dates, casts, totals, pax, closedDays };
+  return { ok: true, from: start, days: n, today: bizDateStr_(), dates, casts, totals, pax, paxList, closedDays };
+}
+
+/* ===== 🏠 管理コンソール「トップ」＝店の全容を1画面（ボス依頼 2026-08-17）=====
+ * 目的＝「今日のシフト（何人出ているか）×今日の予約（何人来るか）」を並べて見て、
+ *       派遣スタッフを追加で頼むかをその場で判断する。あわせて今月の客入りを見る。
+ * ⚠️数え方の持ち主を増やさない：
+ *   ・予約 = getRsvMatrix_（店全体の件数/人数＝キャストで重複させない・店休日つき）
+ *   ・シフト = getShiftMgmtData_（確定cells＋申請中pending。退職者は既に落ちている）
+ *   ここで数え直さない。列/規則が変わってもこの画面は勝手に追従する。
+ * ⚠️接客できる人数 = キャスト＋体験＋派遣（黒服は別枠で出すだけ）。ドライバー/管理者/管理アカウント/
+ *   テストスタッフは現場人数に数えない（catOf が空を返す＝合計に乗らない）。
+ */
+/* 必要キャスト数（ボス確定ルール 2026-08-17）。
+ *   1名の予約＝キャスト1名必須／2名＝1名（客2名に1名）／3名以上＝人数÷2（3名なら1.5）
+ *   ＝1件あたり max(1, 人数÷2)。**予約1件ごとに決まる**＝その日の合計人数からは出せない
+ *   （1名予約が5件なら人数5でも必要5名。ここを合計人数÷2でやると半分に見誤る）。
+ * 端数は日単位で最後に切り上げ（0.5同士は付け回しで吸収できるため、件ごとには切り上げない）。 */
+function needCast_(paxArr) {
+  const raw = (paxArr || []).reduce(function (s, p) {
+    const n = Number(p) || 1;
+    return s + Math.max(1, n / 2);
+  }, 0);
+  return { raw: Math.round(raw * 10) / 10, need: Math.ceil(raw - 1e-9) };
+}
+
+function adminTopBoard_(days) {
+  const n = Math.min(Math.max(Number(days) || 7, 1), 14);
+  const from = bizDateStr_();
+  const mx = getRsvMatrix_(from, n);
+  const sm = getShiftMgmtData_();
+  const rows = (sm && sm.rows) || [];
+  const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  const catOf = function (role) {
+    const r = String(role || '').trim();
+    if (r === 'キャスト') return 'cast';
+    if (r === '体験') return 'taiken';
+    if (r.indexOf('黒服') === 0) return 'kurofuku';
+    if (r === '派遣') return 'haken';
+    return '';
+  };
+  const list = ((mx && mx.dates) || []).map(function (ymd) {
+    const d = new Date(ymd + 'T00:00:00');
+    const md = (d.getMonth() + 1) + '/' + d.getDate();
+    const acc = { cast: [], taiken: [], kurofuku: [], haken: [] };
+    const pend = { cast: 0, taiken: 0, kurofuku: 0, haken: 0 };
+    rows.forEach(function (r) {
+      const c = catOf(r.role); if (!c) return;
+      const v = r.cells && r.cells[md];
+      if (v && v !== '休み') { acc[c].push({ name: r.name, shift: v }); return; }
+      const p = r.pending && r.pending[md];
+      if (p && p !== '休み') pend[c]++;   // 申請中＝まだ確定していない出勤（人数に足さず別表示）
+    });
+    const pl = (mx.paxList && mx.paxList[ymd]) || [];
+    const nc = needCast_(pl);
+    let solo = 0, pair = 0, group = 0;
+    pl.forEach(function (p) { const n = Number(p) || 1; if (n <= 1) solo++; else if (n === 2) pair++; else group++; });
+    return {
+      date: ymd, md: md, dow: DOW[d.getDay()],
+      closed: (mx.closedDays && mx.closedDays[ymd]) || '',
+      rsvCount: (mx.totals && mx.totals[ymd]) || 0,
+      rsvPax: (mx.pax && mx.pax[ymd]) || 0,
+      need: nc.need, needRaw: nc.raw, mix: { solo: solo, pair: pair, group: group },
+      cast: acc.cast, taiken: acc.taiken, kurofuku: acc.kurofuku, haken: acc.haken,
+      floorCount: acc.cast.length + acc.taiken.length + acc.haken.length, // 接客に立てる人数
+      kurofukuCount: acc.kurofuku.length,
+      pending: pend
+    };
+  });
+  // 本日の予約明細（時間順）。件数/人数の集計は上の list（getRsvMatrix_）が正＝ここは中身を見せるだけ。
+  let todayRsv = [];
+  try {
+    todayRsv = getYoyakuReservations_(from).sort(function (a, b) {
+      return String(a.time || '').localeCompare(String(b.time || ''));
+    }).map(function (r) {
+      return {
+        time: r.time, customer: r.customer, pax: r.pax, table: r.table, status: r.status,
+        tantouCast: r.tantouCast, yoyakuCast: r.yoyakuCast, dohanCast: r.dohanCast,
+        checkedIn: !!r.checkInAt
+      };
+    });
+  } catch (e) { todayRsv = []; }
+  return { ok: true, today: from, days: n, list: list, todayRsv: todayRsv, month: visitMonthStats_() };
+}
+
+/* 今月の客入り（来店記録DB＝恒久来店履歴）。
+ * 組数＝来店行。**ソース'軍師同席'（相席のサブ会員行）は除く**＝代表行と二重に数えないため。
+ * 人数＝人数列の合計。⚠️TRUST取込行は人数が空＝「分かる分だけ」なので paxRows（人数が入っている行数）も返し、
+ *   画面側で「◯組中◯組に人数記録あり」と断れるようにする（数字を大きく見せて嘘をつかない）。
+ * 前月は「同じ日数ぶん（1日〜今日と同じ日）」も返す＝今月が多いのか少ないのかを途中経過で比べられる。 */
+function visitMonthStats_() {
+  const today = bizDateStr_();
+  const ym = today.slice(0, 7), dom = Number(today.slice(8, 10));
+  const d0 = new Date(today + 'T00:00:00');
+  const pym = Utilities.formatDate(new Date(d0.getFullYear(), d0.getMonth() - 1, 1), TZ, 'yyyy-MM');
+  const out = { ym: ym, prevYm: pym, visits: 0, pax: 0, paxRows: 0, byDay: {}, bizDays: 0, prevVisits: 0, prevSameSpan: 0 };
+  const sh = getVisitSheet_();
+  const last = sh.getLastRow();
+  if (last < 2) return out;
+  const vals = sh.getRange(2, 1, last - 1, 12).getValues(); // 来店日/…/人数(6)/…/ソース(12)まで
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][11] || '').trim() === '軍師同席') continue;
+    const d = visitDateStr_(vals[i][0]); if (!d) continue;
+    const mo = d.slice(0, 7);
+    if (mo === ym) {
+      out.visits++;
+      const p = Number(vals[i][5]) || 0;
+      if (p > 0) { out.pax += p; out.paxRows++; }
+      out.byDay[d] = (out.byDay[d] || 0) + 1;
+    } else if (mo === pym) {
+      out.prevVisits++;
+      if (Number(d.slice(8, 10)) <= dom) out.prevSameSpan++;
+    }
+  }
+  out.bizDays = Object.keys(out.byDay).length;
+  return out;
 }
 
 /* 管理コンソール「🕘 予約履歴」＝予約変更ログ（登録/変更/削除）を新しい順に返す。
