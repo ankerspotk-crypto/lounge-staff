@@ -297,6 +297,29 @@ table.mtx tr.tp-off td{color:var(--dim);}
 .tp-cin{color:var(--ok);font-weight:800;}
 .sec-t .nw{white-space:nowrap;}   /* 見出しが「今月の客／入り」のように途中で折れるのを防ぐ */
 
+/* ===== 🏖 店休日カレンダー（タップで選ぶ・保存は1回にまとめる）===== */
+.hdcal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px;}
+.hdcal .wd{text-align:center;font-size:11px;font-weight:800;color:var(--dim);padding-bottom:2px;}
+.hdcal .wd.sun{color:#ee6666;} .hdcal .wd.sat{color:#6688ee;}
+.hd-d{min-height:52px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);padding:5px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;transition:border-color .12s,background .12s;}
+.hd-d:hover{border-color:var(--accent);}
+.hd-d.blank{border:none;background:transparent;cursor:default;min-height:0;}
+.hd-d .n{font-size:14px;font-weight:800;color:var(--txt);line-height:1.2;}
+.hd-d .t{font-size:9px;font-weight:800;line-height:1.1;}
+.hd-d .lb{font-size:8px;color:#c9a8f0;line-height:1.1;text-align:center;word-break:break-all;}
+.hd-d.sun .n{color:#ee6666;} .hd-d.sat .n{color:#6688ee;}
+.hd-d.past{opacity:.5;}
+.hd-d.today{box-shadow:inset 0 0 0 1px var(--accent);}
+.hd-d.hol{background:#241a2e;border-color:#7a5bb0;}          /* 登録済みの店休日 */
+.hd-d.hol .n{color:#c9a8f0;}
+.hd-d.padd{background:#0d2618;border-color:#2a6a44;}          /* 未保存：これから店休日にする */
+.hd-d.padd .n,.hd-d.padd .t{color:#7be0a8;}
+.hd-d.pdel{background:#241014;border-color:#5a2430;}          /* 未保存：これから解除する */
+.hd-d.pdel .n{color:#ff9db4;text-decoration:line-through;} .hd-d.pdel .t{color:#ff9db4;}
+.hd-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid var(--line);}
+.hd-bar .cnt{font-size:13px;font-weight:800;color:var(--txt);}
+@media (max-width: 600px){ .hd-d{min-height:46px;padding:4px 2px;} .hd-d .n{font-size:13px;} .hdcal{gap:4px;} }
+
 /* ===== スマホ実用レスポンシブ（2026-07-28）＝画面幅600px以下で自動適用。PC表示は一切不変 =====
    下地(flex-wrap／表の overflow-x スクロール)は既に効いているので、ここでは
    余白の詰め・タップ確保・窮屈スポット(権限トグルの文字折返し等)の解消に絞る。 */
@@ -1498,7 +1521,19 @@ function openShiftPicker(opts){
 function editCell(name,date){
   var row=(shiftMgmt.rows||[]).find(function(x){return x.name===name;}); var cur=(row&&row.cells&&row.cells[date])||'';
   openShiftPicker({ role:(row&&row.role)||'', title:name+' ・ '+date, sub:cur?('現在: '+cur):'未入力', current:cur, allowRest:true,
-    onPick:function(v){ api('writeShiftCellPortal',{name:name,date:date,value:String(v||'').trim()}).then(function(r){ if(res(r,'更新しました'))renderShift(); }); } });
+    onPick:function(v){ shWriteCell(name,date,String(v||'').trim(),false); } });
+}
+/* 🏖店休日の日にシフトを入れようとしたらサーバが closed:true で弾く（ボス指示 2026-08-17）。
+   管理者は臨時営業などで入れたいことがあるので、確認を取ってから allowClosed で通す＝
+   キャストは入れられない／管理者は確認して通せる、の二段構え。 */
+function shWriteCell(name,date,value,allowClosed){
+  api('writeShiftCellPortal',{name:name,date:date,value:value,allowClosed:!!allowClosed}).then(function(r){
+    if(r&&r.closed&&!allowClosed){
+      if(confirm(date+' は店休日です。\nそれでも '+name+' さんのシフトを入れますか？')) shWriteCell(name,date,value,true);
+      return;
+    }
+    if(res(r,'更新しました'))renderShift();
+  });
 }
 /* 申請中セルのアクションメニュー：承諾 / 時間変更で承諾 / 却下 */
 function shiftCellMenu(rowIdx,name,date,time){
@@ -3664,15 +3699,72 @@ function drawHolidays(){
     var past=h.date<tk;
     return '<div class="lrow"'+(past?' style="opacity:.45"':'')+'><div class="main"><div class="nm">'+esc(h.date)+'（'+hdWeekday(h.date)+'）'+(past?' <span class="sub">済</span>':(h.date===tk?' <span class="sub">本日</span>':''))+'</div><div class="meta">'+(h.label?esc(h.label):'店休日')+'</div></div><button class="btn dng sm" onclick="delHoliday(\''+jstr(h.date)+'\')">削除</button></div>';
   }).join('')||'<div class="empty" style="padding:14px">店休日は登録されていません</div>';
-  var form='<div class="sec"><div class="sec-t">➕ 店休日を追加 <span class="sub">単発は開始日だけ／お盆など連続は終了日まで指定</span></div>'
-    +'<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
+  var form='<details class="sec"><summary class="sec-t" style="cursor:pointer">➕ 期間でまとめて追加 <span class="sub">お盆など長い連休はこちら（カレンダーを何度も押さずに済む）</span></summary>'
+    +'<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px">'
     +'<label style="display:flex;align-items:center;gap:6px;font-size:13px">開始 <input class="finput" type="date" id="hd-from"></label>'
     +'<label style="display:flex;align-items:center;gap:6px;font-size:13px">終了 <input class="finput" type="date" id="hd-to"></label>'
     +'<input class="finput grow" id="hd-label" placeholder="例：お盆休み（任意）" style="min-width:150px" onkeydown="if(event.key===\'Enter\')addHoliday()">'
     +'<button class="btn pri" onclick="addHoliday()">追加</button>'
-    +'</div><div class="hint">終了日を空にすると開始日のみ登録。深夜営業のため店休日は「営業日（朝6時境界）」で扱います。</div></div>';
-  var listSec='<div class="sec"><div class="sec-t">📅 登録済みの店休日 <span class="sub">キャストのシフトカレンダーに表示・その日は予約受付を停止・夜間の定時通知も自動停止</span></div>'+rows+'</div>';
-  setBody(form+listSec);
+    +'</div><div class="hint">終了日を空にすると開始日のみ登録。深夜営業のため店休日は「営業日（朝6時境界）」で扱います。</div></details>';
+  var listSec='<details class="sec"><summary class="sec-t" style="cursor:pointer">📅 登録済みの店休日を一覧で見る <span class="sub">'+(holidays||[]).length+'件</span></summary><div style="margin-top:10px">'+rows+'</div></details>';
+  setBody(hdCalHtml()+form+listSec);
+}
+
+/* ===== 🗓 カレンダーで店休日を選ぶ（ボス指示 2026-08-17）=====
+ * 日付入力2つ＋追加ボタンでは「どこが休みか」が見えない＝月を見ながらタップで決められるようにした。
+ * ⚠️1タップごとに保存しない＝GASは何もしなくても応答に約1.9秒かかる（3連休で3回待たされる）。
+ *   タップは未保存の予定として貯め、「保存」で1回だけ送る。緑＝これから店休日／赤取消線＝これから解除。 */
+var hdCalYm='', hdPend={};
+function hdCurYm(){ if(!hdCalYm) hdCalYm=hdToday().slice(0,7); return hdCalYm; }
+function hdCalNav(diff){ var p=hdCurYm().split('-'); var d=new Date(+p[0], +p[1]-1+diff, 1); hdCalYm=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); drawHolidays(); }
+function hdCalToday(){ hdCalYm=hdToday().slice(0,7); drawHolidays(); }
+function hdToggle(date){
+  var isHol=(holidays||[]).some(function(h){return h.date===date;});
+  if(hdPend[date]) delete hdPend[date]; else hdPend[date]=isHol?'del':'add';
+  drawHolidays();
+}
+function hdPendCount(){ var a=0,d=0; Object.keys(hdPend).forEach(function(k){ if(hdPend[k]==='add')a++; else d++; }); return {add:a,del:d,total:a+d}; }
+function hdCancelPend(){ hdPend={}; drawHolidays(); }
+function hdSavePend(){
+  var c=hdPendCount(); if(!c.total){ toast('カレンダーで日付を選んでください',true); return; }
+  var label=((document.getElementById('hd-cal-label')||{}).value||'').trim();
+  var map={}; (holidays||[]).forEach(function(h){ map[h.date]=h; });
+  Object.keys(hdPend).forEach(function(k){ if(hdPend[k]==='add') map[k]={date:k,label:label}; else delete map[k]; });
+  var merged=Object.keys(map).sort().map(function(k){ return map[k]; });
+  var msg=[]; if(c.add)msg.push('店休日'+c.add+'日を追加'); if(c.del)msg.push(c.del+'日を解除');
+  api('saveHolidays',{holidays:merged}).then(function(r){
+    if(res(r,msg.join('・')+'しました')){ holidays=(r&&r.holidays)||merged; hdPend={}; hdWarnConflicts(r&&r.conflicts); drawHolidays(); }
+  }).catch(function(){ toast('通信エラー',true); });
+}
+function hdCalHtml(){
+  var ym=hdCurYm(), y=+ym.slice(0,4), m=+ym.slice(5,7);
+  var lastDay=new Date(y,m,0).getDate(), lead=new Date(y,m-1,1).getDay(), tk=hdToday();
+  var holMap={}; (holidays||[]).forEach(function(h){ holMap[h.date]=h; });
+  var WD=['日','月','火','水','木','金','土'];
+  var cells=WD.map(function(w,i){ return '<div class="wd'+(i===0?' sun':i===6?' sat':'')+'">'+w+'</div>'; }).join('');
+  for(var i=0;i<lead;i++) cells+='<div class="hd-d blank"></div>';
+  for(var d=1;d<=lastDay;d++){
+    var ds=y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2), wd=new Date(y,m-1,d).getDay();
+    var hol=holMap[ds], pend=hdPend[ds], cls='hd-d';
+    if(wd===0)cls+=' sun'; else if(wd===6)cls+=' sat';
+    if(ds===tk)cls+=' today'; else if(ds<tk)cls+=' past';
+    if(hol&&pend!=='del')cls+=' hol';
+    if(pend==='add')cls+=' padd'; else if(pend==='del')cls+=' pdel';
+    var tag=(pend==='add')?'休にする':(pend==='del')?'解除':(hol?'🏖休':'');
+    var lb=(hol&&hol.label&&pend!=='del')?'<span class="lb">'+esc(hol.label)+'</span>':'';
+    cells+='<div class="'+cls+'" onclick="hdToggle(\''+ds+'\')"><span class="n">'+d+'</span>'+(tag?'<span class="t">'+tag+'</span>':'')+lb+'</div>';
+  }
+  var c=hdPendCount();
+  var bar=c.total
+    ? '<div class="hd-bar"><span class="cnt">'+(c.add?'🏖 '+c.add+'日を店休日に':'')+(c.add&&c.del?' ／ ':'')+(c.del?'✕ '+c.del+'日を解除':'')+'</span>'
+      +(c.add?'<input class="finput" id="hd-cal-label" placeholder="名前（例：お盆休み・任意）" style="min-width:170px;flex:1" onkeydown="if(event.key===\'Enter\')hdSavePend()">':'')
+      +'<button class="btn pri" onclick="hdSavePend()">保存する</button><button class="btn sm" onclick="hdCancelPend()">やめる</button></div>'
+    : '<div class="hint" style="margin-top:10px">日付をタップして選び、最後に「保存する」を押してください。登録済みの🏖をタップすると解除できます。深夜営業のため「営業日（朝6時境界）」で扱います。</div>';
+  return '<div class="sec"><div class="sec-t"><span class="nw">🗓 カレンダーで店休日を選ぶ</span> <span class="sub">タップで選択／保存は1回にまとめて送ります</span></div>'
+    +'<div class="toolbar" style="margin-bottom:0"><button class="btn sm" onclick="hdCalNav(-1)">‹ 前の月</button>'
+    +'<button class="btn sm" onclick="hdCalToday()">今月</button><button class="btn sm" onclick="hdCalNav(1)">次の月 ›</button>'
+    +'<span style="font-size:15px;font-weight:800;margin-left:6px">'+y+'年'+m+'月</span></div>'
+    +'<div class="hdcal">'+cells+'</div>'+bar+'</div>';
 }
 function addHoliday(){
   var f=((document.getElementById('hd-from')||{}).value||'');
@@ -3684,7 +3776,14 @@ function addHoliday(){
   while(cur<=end && guard++<400){ add.push({date:hdFmt(cur), label:label}); cur.setDate(cur.getDate()+1); }
   var map={}; (holidays||[]).forEach(function(h){map[h.date]=h;}); add.forEach(function(h){map[h.date]=h;});
   var merged=Object.keys(map).map(function(k){return map[k];});
-  api('saveHolidays',{holidays:merged}).then(function(r){ if(res(r,add.length>1?add.length+'日ぶんの店休日を登録しました':'店休日を登録しました')){ holidays=(r&&r.holidays)||merged; var lb=document.getElementById('hd-label'); if(lb)lb.value=''; drawHolidays(); } }).catch(function(){toast('通信エラー',true);});
+  api('saveHolidays',{holidays:merged}).then(function(r){ if(res(r,add.length>1?add.length+'日ぶんの店休日を登録しました':'店休日を登録しました')){ holidays=(r&&r.holidays)||merged; hdPend={}; var lb=document.getElementById('hd-label'); if(lb)lb.value=''; hdWarnConflicts(r&&r.conflicts); drawHolidays(); } }).catch(function(){toast('通信エラー',true);});
+}
+/* 店休日にした日に既にシフトが入っていたら知らせる（既存シフトは自動で消さない＝消すかどうかは人が決める）。
+   放っておくと🏠トップがその人を出勤者として数え続ける＝黙って矛盾するので、必ず目に入れる。 */
+function hdWarnConflicts(conflicts){
+  if(!conflicts||!conflicts.length)return;
+  var msg=conflicts.map(function(c){ return '・'+c.md+'（'+c.date+'）'+c.names.length+'名：'+c.names.join('、'); }).join('\n');
+  alert('⚠️ 店休日にしましたが、その日には既にシフトが入っています。\n\n'+msg+'\n\n新しくシフトを入れることはもうできません（管理者はシフト表から確認のうえ入れられます）。\n既に入っている分は「👥 人事 → 🗓 シフト」で消してください。');
 }
 function delHoliday(date){
   if(!confirm(date+' の店休日を削除しますか？'))return;
@@ -4761,7 +4860,24 @@ function MOCKAPI(action,body){
   }
   if(action==='mergeStockNames'){ window.__merged=body; return {ok:true,from:body.from,to:body.to,renamed:['2F: 3本'],mergedQty:[],relinked:''}; }
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
-  if(action==='saveHolidays'){window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});return {ok:true,holidays:window.__mockHolidays};}
+  if(action==='saveHolidays'){
+    var _before={}; (window.__mockHolidays||[]).forEach(function(h){_before[h.date]=true;});
+    window.__mockHolidays=(body.holidays||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+    // 新しく店休日にした日に既にシフトが入っている想定（本番は shiftsOnDates_ が返す）
+    var _added=window.__mockHolidays.filter(function(h){return !_before[h.date];});
+    return {ok:true,holidays:window.__mockHolidays,
+      conflicts:_added.slice(0,1).map(function(h){var d=new Date(h.date+'T00:00:00');return {date:h.date,md:(d.getMonth()+1)+'/'+d.getDate(),names:['さくら','みお','たかし']};})};
+  }
+  // 🏖店休日ガードの確認用：mockHolidaysに載っている日は closed:true を返す（本番は writeShiftCell_ が返す）
+  if(action==='writeShiftCellPortal'){
+    var _hs=(window.__mockHolidays||[{date:'2026-08-13'},{date:'2026-08-14'},{date:'2026-08-15'}]);
+    var _p=String(body.date||'').split('/'), _y=new Date().getFullYear();
+    var _ymd=_p.length===2?(_y+'-'+('0'+_p[0]).slice(-2)+'-'+('0'+_p[1]).slice(-2)):String(body.date||'');
+    var _v=String(body.value||'').trim();
+    if(!body.allowClosed && _v && _v!=='休み' && _hs.some(function(h){return h.date===_ymd;}))
+      return {ok:false,closed:true,date:_ymd,error:body.date+' は店休日のためシフトを入れられません'};
+    return {ok:true};
+  }
   if(action==='getShiftRequests')return {ok:true,requests:[{rowIdx:2,name:'まや',date:'7/8',time:'20:30',status:'pending',role:'キャスト',submittedAt:'7/6 12:00'}]};
   if(action==='getShiftMgmt')return {ok:true,data:{closedDays:{'2026-07-07':'テスト店休'},headers:['7/6','7/7','7/8'],rows:[{name:'まや',role:'キャスト',cells:{'7/6':'20:30','7/8':'20:00'},wish:{},pending:{},pendingRow:{}},{name:'たかし',role:'黒服社員',cells:{'7/6':'19:00'},wish:{'7/6':'19:00'},pending:{},pendingRow:{}},{name:'ゆうた',role:'黒服バイト',cells:{},wish:{},pending:{'7/6':'18:00','7/8':'20:00'},pendingRow:{'7/6':10,'7/8':11}},{name:'鈴木海',role:'黒服バイト',cells:{'7/7':'19:00～25:00'},wish:{'7/7':'20:00～24:00'},pending:{'7/8':'20:00'},pendingRow:{'7/8':12}}]}};
   if(action==='getShiftSubmitStatus')return {ok:true,weekLabel:'7/14〜7/20',weekKey8:'20260714',total:5,submitted:['まや','たかし'],declined:['ゆうた'],missing:[{name:'鈴木海',registered:true},{name:'あや',registered:false}]};

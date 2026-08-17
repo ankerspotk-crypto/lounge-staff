@@ -4147,6 +4147,12 @@ function doSubmit() {
     if (d.ok) {
       btn.textContent = '✓ 提出しました';
       btn.style.background = '#1a4422';
+      // 🏖店休日で受け付けられなかった日（＝店休日を設定する前に開いた画面から送った場合）。
+      //   カレンダーは店休日を押せないので普段は起きないが、起きた時に黙って消えると「出したのに入っていない」になる。
+      if (d.closedSkipped && d.closedSkipped.length) {
+        alert('次の日は店休日のため受け付けられませんでした。\n\n' + d.closedSkipped.join('\n') + '\n\n画面を更新すると最新の店休日が反映されます。');
+        d.closedSkipped.forEach(function(x) { var k = String(x).split('（')[0]; delete submittedTimes[k]; });
+      }
       var autoSet = {};
       (d.autoApproved || []).forEach(function(date) { autoSet[date] = true; });
       Object.keys(submittedTimes).forEach(function(k) {

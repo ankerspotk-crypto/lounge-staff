@@ -1239,7 +1239,12 @@ function handleApiRequest_(body) {
   if (body.action === 'saveHolidays') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
-    return { ok: true, holidays: setHolidays_(body.holidays) };
+    // 「今回新しく店休日にした日」に既にシフトが入っていないかを返す。
+    // ⚠️店休日にしても既存のシフトは消えない＝放っておくと🏠トップが出勤者として数え続ける（黙って矛盾する）。
+    const beforeH = {}; getHolidays_().forEach(h => { beforeH[h.date] = true; });
+    const savedH = setHolidays_(body.holidays);
+    const addedH = savedH.filter(h => !beforeH[h.date]).map(h => h.date);
+    return { ok: true, holidays: savedH, conflicts: shiftsOnDates_(addedH) };
   }
   if (body.action === 'resetOpeningCheck') {
     const adminName = getStaffName(body.userId);
@@ -1626,7 +1631,8 @@ function handleApiRequest_(body) {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     const val = String(body.value);
-    const r = writeShiftCell_(String(body.name), String(body.date), val);
+    // 🏖店休日：既定は弾き、画面で確認を取った時だけ allowClosed で通す（管理者の意図的な例外＝臨時営業など）
+    const r = writeShiftCell_(String(body.name), String(body.date), val, '', { allowClosed: !!body.allowClosed });
     if (val.trim() === '' && r && r.ok) { // クリア＝承諾/申請中の申請も片付けて再生成を防ぐ（黒服が消せない罠の対策）
       r.clearedRequests = clearShiftRequestsForCell_(String(body.name), String(body.date));
     }
@@ -8621,7 +8627,14 @@ function submitShift(payload) {
   //   ⚠️payload.userId は「呼び出した人」＝管理者代理提出だと別人になる。必ず name（自分or代理提出先）から引き直すこと。
   const staffUserId = (rosterEntryByName_(name) || {}).userId || '';
 
+  const closedSkipped = [];
   payload.shifts.forEach(s => {
+    /* 🏖店休日は受け付けない（ボス指示 2026-08-17）。ポータルのカレンダーは店休日を押せないが、
+     * **店休日を設定する前に開いた画面**からは送れてしまうためサーバでも断る。
+     * ⚠️ここで断らず writeShiftCell_ のガードに任せると「シフト表未反映」の行が立ち黒服LINEへ警告が飛ぶ＝
+     *   店休日は事故ではないので静かに断る（欠勤申請も同じ＝その日は出勤自体が無い）。 */
+    const closedDay = shiftClosedReason_(s.date);
+    if (closedDay) { closedSkipped.push(s.date + '（' + closedDay.label + '）'); return; }
     const role = staffRole;
     const isKyukin = s.time === '欠勤';
     const isSameDayKyukin = isKyukin && s.date === todayMD;
@@ -8670,7 +8683,8 @@ function submitShift(payload) {
     written.push(s.date);
   });
 
-  return { ok: true, name, written, autoApproved, pending: written.length - autoApproved.length, errors, duplicated };
+  // 店休日で弾いた分は closedSkipped で返す（errorsに混ぜない＝画面で「店休日なので入れられません」と別に出せる）
+  return { ok: true, name, written, autoApproved, pending: written.length - autoApproved.length, errors, duplicated, closedSkipped };
 }
 
 // 承認待ちで残っている申請のキー集合（名前|日付|希望）。submitShift の二度押しガード用（2026-08-07）。
@@ -9116,6 +9130,13 @@ function approveShiftRequest_(rowIdx, name, date, time, decision, newTime) {
 
   const isKyukin = time === '欠勤';
   if (decision === '承諾') {
+    /* 🏖店休日になった日の申請は承諾できない（申請の後から店休日を設定した場合に起きる）。
+     * ⚠️ここで断らないと申請だけ「承諾」になりシフト表には書かれない＝幽霊承諾になる（2026-07-27に潰した型の再発）。
+     * 却下は下の分岐でそのまま通す＝店休日になった申請を片付けられなくなるのを防ぐ。 */
+    const closedDay = shiftClosedReason_(date, isKyukin ? '' : (newTime || time));
+    if (closedDay) {
+      return { ok: false, closed: true, error: date + ' は' + closedDay.label + '（店休日）です。承諾できません（却下で片付けてください）' };
+    }
     const nt = newTime ? String(newTime).trim() : '';
     const finalTime = (nt && !isKyukin) ? nt : time;
     const writeVal = isKyukin ? '休み' : finalTime;
@@ -15550,6 +15571,45 @@ function isHoliday_(dateStr) {
   return getHolidays_().some(h => h.date === d);
 }
 
+/* シフト表の日付表記('M/d')を営業日キー(yyyy-MM-dd)に。既にyyyy-MM-ddならそのまま返す。
+ * ⚠️店休日は yyyy-MM-dd で持ち、シフト表の列見出しは 'M/d'＝この変換を挟まないと永久に一致しない。
+ * 年またぎは mdToBizDate_（過去15日より前の月は翌年扱い）に委ねる＝規則を二重に持たない。 */
+function shiftDateToYmd_(date) {
+  const s = String(date == null ? '' : date).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = mdToBizDate_(s, new Date());
+  return d ? Utilities.formatDate(d, TZ, 'yyyy-MM-dd') : '';
+}
+
+/* 指定日(yyyy-MM-dd[])に既に入っているシフトを返す [{date, md, names:[]}]。
+ * 店休日を設定した時に「その日はもう5人入っています」と気づかせる用（既存シフトは自動では消さない＝人が決める）。
+ * 数え方はシフト管理と同じ getShiftMgmtData_（確定cells・'休み'除外・退職者除外）に委ねる。 */
+function shiftsOnDates_(ymdList) {
+  const list = (ymdList || []).filter(Boolean);
+  if (!list.length) return [];
+  const sm = getShiftMgmtData_();
+  return list.map(ymd => {
+    const d = new Date(ymd + 'T00:00:00');
+    const md = (d.getMonth() + 1) + '/' + d.getDate();
+    const names = (sm.rows || [])
+      .filter(r => { const v = r.cells && r.cells[md]; return v && v !== '休み'; })
+      .map(r => r.name);
+    return { date: ymd, md: md, names: names };
+  }).filter(x => x.names.length);
+}
+
+/* その日が店休日なら理由つきで返す（違えば null）。店休日ガードの判定はここだけが持つ。
+ * value を渡した場合、**「休み」と空(クリア)は素通り**＝掃除・欠勤処理・却下を止めない。 */
+function shiftClosedReason_(date, value) {
+  const v = String(value == null ? '' : value).trim();
+  if (arguments.length > 1 && (!v || v === '休み')) return null;
+  const ymd = shiftDateToYmd_(date);
+  if (!ymd) return null;
+  const hit = getHolidays_().filter(h => h.date === ymd)[0];
+  if (!hit) return null;
+  return { date: ymd, label: hit.label || '店休日' };
+}
+
 // 管理者操作: 本日の開店チェックを削除（ロック解除して再提出可能にする）
 function resetOpeningCheck_(dateKey, adminName) {
   const sh = getOpeningCheckSheet_();
@@ -19646,7 +19706,16 @@ function rosterEntryByName_(name) {
 // Stage1(2026-07-27): 第4引数 userId(LINE ID) を追加。行の照合を「ID優先→名前キー」に。
 //   名前で当たった行にIDが空なら刻む(self-heal)＝以降はIDで一意に引ける。同名別人の取り違えを構造的に潰す。
 //   userId 未指定でも従来どおり名前キーで動く（後方互換）。
-function writeShiftCell_(name, date, value, userId) {
+function writeShiftCell_(name, date, value, userId, opts) {
+  /* 🏖店休日ガード（ボス指示 2026-08-17）＝**シフト書込みの全経路がここを通る唯一の関所**。
+   * ポータル提出/旧`Shift.html`(?page=shift)/LINE申請の承認/「シフト表未反映」の再反映まで一括で効く。
+   * フロント（ポータルのカレンダー）は店休日を押せないが、**店休日を設定する前に開いた画面から送られると素通り**していた。
+   * 「休み」「空(クリア)」は通す＝掃除・欠勤・却下を止めない。
+   * 管理者のコンソール編集だけ `opts.allowClosed` で通す＝画面側で確認してから渡す（席の定員と同じ流儀＝止めるのは事故だけ）。 */
+  if (!(opts && opts.allowClosed)) {
+    const _cl = shiftClosedReason_(date, value);
+    if (_cl) return { ok: false, closed: true, date: _cl.date, error: date + ' は' + _cl.label + '（店休日）のためシフトを入れられません' };
+  }
   tsdCacheClear_(); // シフト表を書き換える＝シフト詳細キャッシュを破棄（全成功returnを1点でカバー・≤20s TTLが保険）
   const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
   if (!sh) return { ok: false, error: 'シフト表が見つかりません' };
