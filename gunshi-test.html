@@ -1389,7 +1389,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-13e-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-19b-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2888,7 +2888,7 @@ function rcardHtml(r,isNext){
   if(r.tantou) badges+='<span class="rb t">担当 '+esc(r.tantou)+'</span>';
   if(r.dohan) badges+='<span class="rb d">同伴 '+esc(r.dohan)+'</span>';
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
-  // 🖊 伝票の印刷状態。ボス指示 2026-08-13「伝票はかなり重要なので予約一覧に入れる」＝黒服が一番見る場所に出す。
+  // 🖊 伝票の印刷状態。ボス指示 2026-08-19「伝票はかなり重要なので予約一覧に入れる」＝黒服が一番見る場所に出す。
   //    ⚠️キャンセルと退店済みには出さない（済んだ組に「未印刷」を出し続けると警告が読まれなくなる）。
   if(tslipNeedsSlip_(r)) badges+='<span class="rslip '+(tslipIsDone_(r)?'ok':'ng')+'" onclick="event.stopPropagation();openTableSlipFor('+r.id+')">🖊 伝票 '+(tslipIsDone_(r)?'済':'未印刷')+'</span>';
   var ms=membershipInfo(r.joined,r.feeDate);
@@ -5972,10 +5972,10 @@ var TSLIP_MODE='rsv';     // 'rsv'=予約から刷る（既定） / 'blank'=白�
 var TSLIP_SEL=-1;         // tslipList_() の index（-1＝未選択＝白紙で刷る）
 var TSLIP_DATE='today';   // 'today'=日付欄に今日を刷る / 'blank'=空欄（手書き）
 var TSLIP_W=576;          // 印字ドット幅（80mm紙）
-var TSLIP_MEMO_MM=30;     // 明細の下に空けるメモ欄の高さ(mm)。ボス依頼 2026-08-13「あと3センチくらい」。203dpi≒8ドット/mm
+var TSLIP_MEMO_MM=30;     // 明細の下に空けるメモ欄の高さ(mm)。ボス依頼 2026-08-19「あと3センチくらい」。203dpi≒8ドット/mm
 /* ===== 印刷済みの管理（全端末で共有：backend getSlipPrinted / markSlipPrinted） =====
  * 運用は2本＝①来店前に事前印刷して席に置く ②突発来店はその場で予約入力→印刷。どちらも漏らさないため、
- * 「まだ刷っていない予約」を全端末で同じように見せる（ボス確定 2026-08-13）。
+ * 「まだ刷っていない予約」を全端末で同じように見せる（ボス確定 2026-08-19）。
  * ⚠️⚠️「印刷ボタンを押した」では印刷済みにしない。TM Print Assistantへ飛ばすだけでは成否が分からず、
  *   楽観的に記録すると失敗した1枚が黙って漏れる＝この機能の目的と真逆になる。押した時は端末ローカルに
  *   「確認待ち」を置き、戻ってきた黒服の「✓刷れた」で初めてサーバへ記録する。
@@ -6155,7 +6155,7 @@ function tslipCanvas_(){
     right(String(d.getDate()),     488, yDate, 'bold 23px sans-serif');
   }
   dot(yDate+14);
-  // ── テーブル番号（席マスタ ALL_SEATS のとおり。⚠️「離れ」は使わない＝5Fに統一〔ボス確定 2026-08-13〕。
+  // ── テーブル番号（席マスタ ALL_SEATS のとおり。⚠️「離れ」は使わない＝5Fに統一〔ボス確定 2026-08-19〕。
   //    呼び名は軍師の見取り図と同じ略称「カウ / BOX」で揃える）──
   var seats = o?tslipSeats_(o.table):[];
   var hit=function(f,t,n){ return seats.some(function(s){ return s.f===f&&s.t===t&&s.n===n; }); };

@@ -1343,7 +1343,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-19a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-19b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2835,7 +2835,7 @@ function rcardHtml(r,isNext){
   if(r.tantou) badges+='<span class="rb t">担当 '+esc(r.tantou)+'</span>';
   if(r.dohan) badges+='<span class="rb d">同伴 '+esc(r.dohan)+'</span>';
   if(r.yoyaku) badges+='<span class="rb">予約 '+esc(r.yoyaku)+'</span>';
-  // 🖊 伝票の印刷状態。ボス指示 2026-08-13「伝票はかなり重要なので予約一覧に入れる」＝黒服が一番見る場所に出す。
+  // 🖊 伝票の印刷状態。ボス指示 2026-08-19「伝票はかなり重要なので予約一覧に入れる」＝黒服が一番見る場所に出す。
   //    ⚠️キャンセルと退店済みには出さない（済んだ組に「未印刷」を出し続けると警告が読まれなくなる）。
   if(tslipNeedsSlip_(r)) badges+='<span class="rslip '+(tslipIsDone_(r)?'ok':'ng')+'" onclick="event.stopPropagation();openTableSlipFor('+r.id+')">🖊 伝票 '+(tslipIsDone_(r)?'済':'未印刷')+'</span>';
   var ms=membershipInfo(r.joined,r.feeDate);
@@ -5594,9 +5594,10 @@ var TSLIP_MODE='rsv';     // 'rsv'=予約から刷る（既定） / 'blank'=白�
 var TSLIP_SEL=-1;         // tslipList_() の index（-1＝未選択＝白紙で刷る）
 var TSLIP_DATE='today';   // 'today'=日付欄に今日を刷る / 'blank'=空欄（手書き）
 var TSLIP_W=576;          // 印字ドット幅（80mm紙）
+var TSLIP_MEMO_MM=30;     // 明細の下に空けるメモ欄の高さ(mm)。ボス依頼 2026-08-19「あと3センチくらい」。203dpi≒8ドット/mm
 /* ===== 印刷済みの管理（全端末で共有：backend getSlipPrinted / markSlipPrinted） =====
  * 運用は2本＝①来店前に事前印刷して席に置く ②突発来店はその場で予約入力→印刷。どちらも漏らさないため、
- * 「まだ刷っていない予約」を全端末で同じように見せる（ボス確定 2026-08-13）。
+ * 「まだ刷っていない予約」を全端末で同じように見せる（ボス確定 2026-08-19）。
  * ⚠️⚠️「印刷ボタンを押した」では印刷済みにしない。TM Print Assistantへ飛ばすだけでは成否が分からず、
  *   楽観的に記録すると失敗した1枚が黙って漏れる＝この機能の目的と真逆になる。押した時は端末ローカルに
  *   「確認待ち」を置き、戻ってきた黒服の「✓刷れた」で初めてサーバへ記録する。
@@ -5741,7 +5742,8 @@ function tslipCanvas_(){
   var yTitle=52,yDate=92,yTbl1=134,yTbl2=166,yPax=214,yCust=254,yCast=294,yMem=334;
   var warnTop=352, warnH=warn?62:0;
   var gridTop=warn?(warnTop+warnH+14):366;
-  var H=Math.ceil((gridTop+HH+RH*nRow+26)/8)*8;
+  var memoH=Math.round(TSLIP_MEMO_MM*8);              // メモ欄（白紙）。⚠️ここはラスタで送らない＝tslipXml_が紙送りに振り替える
+  var H=Math.ceil((gridTop+HH+RH*nRow+34+memoH)/8)*8;
   var c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d');
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
@@ -5775,7 +5777,7 @@ function tslipCanvas_(){
     right(String(d.getDate()),     488, yDate, 'bold 23px sans-serif');
   }
   dot(yDate+14);
-  // ── テーブル番号（席マスタ ALL_SEATS のとおり。⚠️「離れ」は使わない＝5Fに統一〔ボス確定 2026-08-13〕。
+  // ── テーブル番号（席マスタ ALL_SEATS のとおり。⚠️「離れ」は使わない＝5Fに統一〔ボス確定 2026-08-19〕。
   //    呼び名は軍師の見取り図と同じ略称「カウ / BOX」で揃える）──
   var seats = o?tslipSeats_(o.table):[];
   var hit=function(f,t,n){ return seats.some(function(s){ return s.f===f&&s.t===t&&s.n===n; }); };
@@ -5861,21 +5863,35 @@ function tslipCanvas_(){
     y+=hgt;
     if(y<bottom) line(x1,y,x4,y,1.4);                  // 品名行の区切り
   });
+  // ── メモ欄（明細の下に約3cmの手書きスペース）──
+  // ⚠️余白そのものは白いだけ＝ラスタで送らない（tslipXml_ が末尾の白紙行を <feed> に振り替える）。
+  //   刷るのはこの見出し1行だけ＝データ増はほぼゼロ。画面プレビューでは3cmぶんちゃんと見える。
+  g.font='bold 17px sans-serif'; g.fillText('メモ', ML+4, bottom+26);
+  g.setLineDash([4,4]); line(ML+46, bottom+20, W-MR, bottom+20, 1.2); g.setLineDash([]);
   return c;
 }
 /* canvas → ePOS-Print XML（1bitラスタ）。サーマルのかすれ対策＝閾値184＋右下1px太らせ */
 function tslipXml_(){
   var c=tslipCanvas_(), w=c.width, h=c.height;
   var d=c.getContext('2d').getImageData(0,0,w,h).data;
-  var bpr=Math.ceil(w/8), R=new Uint8Array(bpr*h), ink=new Uint8Array(w*h);
+  var ink=new Uint8Array(w*h);
   for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>96 && (d[i]+d[i+1]+d[i+2])/3<184) ink[y*w+x]=1; } }
-  for(var y2=0;y2<h;y2++){ for(var x2=0;x2<w;x2++){
+  // ⚠️末尾の白紙行（＝メモ欄の余白）はラスタで送らず紙送り(<feed>)に振り替える。
+  //   3cmを画像で送ると約28KB増えて印字URLが約164KBになる＝iOSのURLスキーム上限に近づく。
+  //   紙の出方は同じで、送るデータだけ減る（白い行を1bitで送っても白いだけ＝情報がない）。
+  var last=h-1, any;
+  while(last>=0){ any=false; for(var xa=0;xa<w;xa++){ if(ink[last*w+xa]){ any=true; break; } } if(any)break; last--; }
+  var hh=Math.max(1,last+1), feedDots=24+(h-hh);
+  var bpr=Math.ceil(w/8), R=new Uint8Array(bpr*hh);
+  for(var y2=0;y2<hh;y2++){ for(var x2=0;x2<w;x2++){
     if(ink[y2*w+x2] || (x2>0&&ink[y2*w+x2-1]) || (y2>0&&ink[(y2-1)*w+x2])) R[y2*bpr+(x2>>3)] |= (0x80>>(x2&7));
   } }
   var s=''; for(var k=0;k<R.length;k++) s+=String.fromCharCode(R[k]);
+  // ⚠️<feed unit> は 0〜255 が上限＝240ドット+仕上げ分は1本に収まらないので分割して並べる
+  var fx='', rest=feedDots; while(rest>0){ var u=Math.min(255,rest); fx+='<feed unit="'+u+'"/>'; rest-=u; }
   return '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'
-    +'<image width="'+w+'" height="'+h+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
-    +'<feed unit="24"/><cut type="feed"/></epos-print>';
+    +'<image width="'+w+'" height="'+hh+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
+    +fx+'<cut type="feed"/></epos-print>';
 }
 function tslipSetMode(m){ TSLIP_MODE=m; if(m==='blank')TSLIP_SEL=-1; renderMenu(); }
 function tslipSetDate(v){ TSLIP_DATE=v; renderMenu(); }
