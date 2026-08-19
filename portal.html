@@ -4564,7 +4564,7 @@ function loadProfile() {
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
-      profileData = d; renderProfile(d);
+      profileData = d; profNgCust = ((d.profile || {}).ngCustomers || []).slice(); renderProfile(d);
     })
     .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
 }
@@ -4589,6 +4589,15 @@ function renderProfile(d) {
   h += '<div style="' + box + '"><div style="' + lbl + '">性格・接客スタイル</div><div style="' + sub + '">接客の雰囲気</div>' + profChips_('chara', v.chara, p.chara) + '</div>';
   h += '<div style="' + box + '"><div style="' + lbl + '">得意なお客様</div><div style="' + sub + '">こういう方が得意</div>' + profChips_('good', v.client, p.good) + '</div>';
   h += '<div style="' + box + '"><div style="' + lbl + '">苦手なお客様</div><div style="' + sub + '">無理せず外したいタイプ（正直でOK）</div>' + profChips_('bad', v.client, p.bad) + '</div>';
+  // ⚠️苦手な「お客様ご本人」の申告（2026-08-19 ボス指示）。黒服の付け回し画面に⚠️として出る＝守られるための欄
+  h += '<div style="' + box + ';border-color:#5a2430;background:#1a1013">'
+    + '<div style="' + lbl + '">⚠️ 苦手なお客様（お名前を指定）</div>'
+    + '<div style="' + sub + '">このお客様は正直つらい、という方がいれば入れてください。<b>黒服さんの付け回しの画面に注意として出ます</b>（お客様には一切見えません）。<br>※ 付け回しを必ず止めるものではありません。どうしても無理な場合は黒服さんに直接ご相談ください。</div>'
+    + '<div id="profNgList">' + profNgListHtml_() + '</div>'
+    + '<div style="display:flex;gap:6px;margin-top:10px">'
+    + '<input id="profNgQ" placeholder="お名前・会員番号で検索" style="flex:1;padding:11px;background:#0d1626;border:1px solid #2a2114;border-radius:9px;color:#f2ead9;font-size:14px;box-sizing:border-box">'
+    + '<button type="button" onclick="profNgSearch()" style="width:92px;padding:11px;background:#33291a;color:#f2ead9;border:1px solid #4a3a22;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">🔍 検索</button></div>'
+    + '<div id="profNgRes"></div></div>';
   var weakNote = d.seededWeak ? '<div style="font-size:11px;color:#88cc44;margin-bottom:8px">🌱 面談のときの回答から仮に入れています。違ったら外してください。</div>' : '';
   h += '<div style="' + box + '"><div style="' + lbl + '">苦手なお酒</div><div style="' + sub + '">付き合うと潰れてしまうお酒</div>' + weakNote + profChips_('weak', v.drink, p.weak) + '</div>';
   h += '<div style="' + box + '"><div style="' + lbl + '">自己PR・メモ</div><div style="' + sub + '">タグに入らない強み・注意点（黒服・家康くんが読みます）</div>'
@@ -4599,6 +4608,45 @@ function renderProfile(d) {
   h += '</div>';
   setContent(h);
 }
+/* ⚠️苦手なお客様（個別申告）。相性プロフィールに相乗りして保存する＝保存経路は1本だけ */
+var profNgCust = [];
+var profNgRes = [];
+function profNgListHtml_() {
+  if (!profNgCust.length) return '<div style="font-size:12px;color:#9a8a66">まだ登録はありません</div>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px">' + profNgCust.map(function (x, i) {
+    return '<span style="display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:16px;background:#4a1620;border:1px solid #a63a46;color:#ffc2c2;font-size:14px;font-weight:700">'
+      + esc(x.name || x.no) + (x.no ? '<span style="font-size:11px;color:#c08088">' + esc(x.no) + '</span>' : '')
+      + '<span onclick="profNgDel(' + i + ')" style="cursor:pointer;color:#ff8f9a;font-weight:800">×</span></span>';
+  }).join('') + '</div>';
+}
+function profNgRedraw_() {
+  var el = document.getElementById('profNgList'); if (el) el.innerHTML = profNgListHtml_();
+}
+function profNgDel(i) { profNgCust.splice(i, 1); profNgRedraw_(); }
+function profNgSearch() {
+  var q = String((document.getElementById('profNgQ') || {}).value || '').trim();
+  var box = document.getElementById('profNgRes'); if (!box) return;
+  if (!q) { box.innerHTML = '<div style="font-size:12px;color:#9a8a66;margin-top:8px">お名前を入れて検索してください</div>'; return; }
+  box.innerHTML = '<div style="font-size:12px;color:#9a8a66;margin-top:8px">検索中...</div>';
+  var url = GAS_URL + '?action=portal&tab=customers&userId=' + encodeURIComponent(userId) + '&filter=&q=' + encodeURIComponent(q);
+  gasFetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    profNgRes = ((d && d.customers) || []).slice(0, 12);
+    box.innerHTML = profNgRes.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">' + profNgRes.map(function (c, i) {
+          var nm = c.name || c.card || '';
+          return '<span onclick="profNgAdd(' + i + ')" style="display:inline-block;padding:9px 13px;border-radius:16px;background:#16130d;border:1px solid #33291a;color:#cdbb8e;font-size:14px;cursor:pointer">＋ '
+            + esc(nm) + (c.no ? '<span style="font-size:11px;color:#9a8a66"> ' + esc(c.no) + '</span>' : '') + '</span>';
+        }).join('') + '</div>'
+      : '<div style="font-size:12px;color:#9a8a66;margin-top:8px">見つかりませんでした</div>';
+  }).catch(function () { box.innerHTML = '<div style="font-size:12px;color:#f66;margin-top:8px">検索エラー</div>'; });
+}
+function profNgAdd(i) {
+  var c = profNgRes[i]; if (!c) return;
+  var nm = c.name || c.card || '', no = c.no || '';
+  var dup = profNgCust.some(function (x) { return (no && x.no && String(x.no) === String(no)) || (!no && String(x.name) === String(nm)); });
+  if (!dup) profNgCust.push({ no: no, name: nm });
+  profNgRedraw_();
+}
 function saveProfile() {
   var root = document.getElementById('profRoot');
   if (!root) return;
@@ -4607,6 +4655,7 @@ function saveProfile() {
     return Array.prototype.map.call(sel, function(c){ return c.getAttribute('data-val'); });
   };
   var profile = { look: pick('look'), chara: pick('chara'), good: pick('good'), bad: pick('bad'), weak: pick('weak'),
+                  ngCustomers: profNgCust.slice(),   // ⚠️これを落とすと保存のたびに申告が消える
                   memo: (document.getElementById('profMemo') || {}).value || '' };
   var st = document.getElementById('profStatus');
   if (st) { st.style.color = '#b8a67c'; st.textContent = '保存中...'; }
