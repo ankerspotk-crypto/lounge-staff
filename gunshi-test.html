@@ -49,10 +49,11 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
  * ヘッダーは1行固定（折り返すと見取り図の縦予算[reference: マップの縦の予算]を食う）。
  * 幅が足りない端末では ①余白 ②ロゴのIEYAS ③タブの長いラベル ④ボタンの文字 の順で畳む。 */
 .vt-s{display:none;}
-@media(max-width:1300px){
+@media(max-width:1500px){
   .hdr{gap:8px;padding-left:calc(10px + env(safe-area-inset-left));padding-right:calc(10px + env(safe-area-inset-right));}
   .brand .b-full{display:none;}
-  .term-badge{font-size:10px;padding:3px 7px;}
+  .term-badge{font-size:10px;padding:3px 6px;}
+  .term-badge .tb-l{display:none;}
   .datenav{gap:5px;}
   .dbtn{width:26px;height:26px;font-size:15px;}
   .dtoday{padding:5px 8px;}
@@ -65,18 +66,17 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 @media(max-width:1100px){
   .menu-btn .mb-l{display:none;}
   .menu-btn{padding:8px 10px;font-size:15px;}
-  .clock .upd{display:none;}
+  .clock{display:none;}                 /* 時刻はiPad側の時計と重複＝狭い時はこれを畳む */
+  .slip-chip .sc-l{display:none;}       /* 「伝票 未印刷 3」→「未印刷 3」 */
   .who{padding:5px 6px 5px 10px;gap:6px;}
 }
-/* 縦向き・Split View等の細い幅：時計と端末バッジは畳む（時刻はiPadのステータスバーにある） */
+/* 縦向き・Split View等の細い幅：端末バッジ（版表示）まで畳む */
 @media(max-width:900px){
   .hdr{gap:6px;}
-  .clock{display:none;}
   .term-badge{display:none;}
   .vtoggle button{padding:8px 8px;}
   .dlabel{min-width:74px;font-size:12px;}
   .slip-chip{font-size:11px;padding:4px 8px;}
-  .slip-chip .sc-l{display:none;}
 }
 /* 768pxの縦向きまで面倒を見る（ログイン名は畳む＝ログアウトは残す） */
 @media(max-width:820px){
@@ -1297,7 +1297,7 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 
 <div class="hdr">
   <div class="brand">⚡<span class="b-full">IEYAS </span><span class="z">軍師</span></div>
-  <div class="term-badge" id="termBadge" onclick="hardReload()" title="タップで最新版に更新">2F 端末 · v…</div>
+  <div class="term-badge" id="termBadge" onclick="hardReload()" title="タップで最新版に更新">2F<span class="tb-l"> 端末 ·</span> v…</div>
   <div class="datenav">
     <button class="dbtn" onclick="shiftDay(-1)">‹</button>
     <button class="dtoday" onclick="goToday()">今日</button>
@@ -8694,7 +8694,7 @@ function doLogout(){ if(!IS_GAS){ alert('（ローカル）ログアウト'); re
 
 /* ============ BOOT ============ */
 function renderAll(){
-  document.getElementById('termBadge').textContent=TERM+' 端末 · v'+BUILD;
+  document.getElementById('termBadge').innerHTML=TERM+'<span class="tb-l"> 端末 ·</span> v'+BUILD;   /* 端末の文字は狭い画面で畳む（CSS .tb-l） */
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
   renderAlerts();renderHall();renderRight();renderHome();bmRenderIfIdle();
