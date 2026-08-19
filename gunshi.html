@@ -7322,11 +7322,12 @@ var DP_FIELDS={
    backend: getSeikyuBootstrap / saveSeikyusaki / submitSeikyu / kioskGetSeikyuImage / getSeikyuListKiosk（GUNSHI_API_FNS登録済）。 */
 var SK_BOOT=null, SK_VIEW='form', SK_SEL='', SK_CLOSE='', SK_DUE='',
     SK_ITEMS=[{name:'',amount:0}], SK_SLIPS=[], SK_NOTE='', SK_NOTE_TOUCHED=false,
-    SK_MEISHI=null, SK_EDIT_ID='', SK_LIST=null;
+    SK_MEISHI=null, SK_EDIT_ID='', SK_LIST=null, SK_USAGE='';
+function skBizToday_(){ var d=new Date(); if(d.getHours()<6)d.setDate(d.getDate()-1); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
 
 function openSeikyu(){
   menuView='seikyu'; SK_VIEW='form'; SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[];
-  SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null;
+  SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null; SK_USAGE=skBizToday_();
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
   if(!IS_GAS){ SK_BOOT={ok:true,senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込'}],closeMonth:'2026-07',due:'2026-08-31',taxRate:0.10}; SK_CLOSE='2026-07'; SK_DUE='2026-08-31'; renderMenu(); return; }
   gsr('getSeikyuBootstrap').then(function(r){
@@ -7369,6 +7370,7 @@ function skFormHtml_(){
         +'<span class="sk-chip" onclick="skEditSender()">✎ 請求先を編集</span></div>'
       +'</div>';
   }
+  h+='<div class="flabel">利用日（ご来店日）</div><input type="date" class="finput" value="'+esc(SK_USAGE)+'" onchange="SK_USAGE=this.value">';
   h+='<div style="display:flex;gap:10px"><div style="flex:1"><div class="flabel">締め月</div>'
     +'<input type="month" class="finput" value="'+esc(SK_CLOSE)+'" onchange="skSetClose(this.value)"></div>'
     +'<div style="flex:1"><div class="flabel">支払期限</div><input type="date" class="finput" value="'+esc(SK_DUE)+'" onchange="SK_DUE=this.value"></div></div>';
@@ -7510,7 +7512,7 @@ function skSubmit(){
   var items=SK_ITEMS.filter(function(x){return (x.name||'').trim()||Number(x.amount)>0;}).map(function(x){return {name:x.name||'',amount:Number(x.amount)||0};});
   if(!total && !items.length){ toast('金額を入力してください'); return; }
   var st=document.getElementById('sk-status'); if(st)st.textContent='送信中…';
-  var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
+  var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, usageDate:SK_USAGE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
     slips:SK_SLIPS.map(function(s){ return s.copyFileId?{copyFileId:s.copyFileId}:{base64:s.base64,mime:s.mime}; }) };
   if(!IS_GAS){ toast('（ローカルでは登録不可）'); return; }
   gsr('submitSeikyu',payload).then(function(r){
