@@ -45,6 +45,52 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .hdr{position:relative;}
 .hdr::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;pointer-events:none;background:repeating-linear-gradient(45deg,#ff7a1a 0 10px,#0a0d12 10px 20px);opacity:.8;}
 .brand .z{text-shadow:0 0 14px rgba(255,122,26,.5);}
+/* ---------- ヘッダーの横詰め（iPadで右上=時計/ログアウトが見切れる対策） ----------
+ * ヘッダーは1行固定（折り返すと見取り図の縦予算を食う）。
+ * 幅が足りない端末では ①余白 ②ロゴのIEYAS ③タブの長いラベル ④ボタンの文字 の順で畳む。 */
+.vt-s{display:none;}
+@media(max-width:1500px){
+  .hdr{gap:8px;padding-left:calc(10px + env(safe-area-inset-left));padding-right:calc(10px + env(safe-area-inset-right));}
+  .brand .b-full{display:none;}
+  .term-badge{font-size:10px;padding:3px 6px;}
+  .term-badge .tb-l{display:none;}
+  .datenav{gap:5px;}
+  .dbtn{width:26px;height:26px;font-size:15px;}
+  .dtoday{padding:5px 8px;}
+  .dlabel{min-width:84px;font-size:13px;}
+  .vtoggle button{padding:8px 10px;}
+  .vt-l{display:none;} .vt-s{display:inline;}
+  .slip-chip{padding:5px 8px;}
+  .menu-btn{padding:8px 11px;}
+}
+@media(max-width:1100px){
+  .menu-btn .mb-l{display:none;}
+  .menu-btn{padding:8px 10px;font-size:15px;}
+  .clock{display:none;}                 /* 時刻はiPad側の時計と重複＝狭い時はこれを畳む */
+  .slip-chip .sc-l{display:none;}       /* 「伝票 未印刷 3」→「未印刷 3」 */
+  .who{padding:5px 6px 5px 10px;gap:6px;}
+}
+/* 縦向き・Split View等の細い幅：端末バッジ（版表示）まで畳む */
+@media(max-width:900px){
+  .hdr{gap:6px;}
+  .term-badge{display:none;}
+  .vtoggle button{padding:8px 8px;}
+  .dlabel{min-width:74px;font-size:12px;}
+  .slip-chip{font-size:11px;padding:4px 8px;}
+}
+/* 768pxの縦向きまで面倒を見る（ログイン名は畳む＝ログアウトは残す） */
+@media(max-width:820px){
+  .who .nm{display:none;}
+  .who{padding:5px 6px;}
+  .hdr{gap:5px;padding-left:calc(7px + env(safe-area-inset-left));padding-right:calc(7px + env(safe-area-inset-right));}
+  .vtoggle button{padding:8px 7px;}
+  .menu-btn{padding:8px 8px;}
+}
+/* 最後の保険：想定外に細い端末では切り捨てず横スクロールで全部に触れるようにする */
+@media(max-width:700px){
+  .hdr{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .spacer{display:none;}
+}
 
 /* ---------- Alert bar ---------- */
 .alertbar{display:flex;align-items:stretch;gap:10px;padding:9px 15px;background:linear-gradient(180deg,#14101c,#0d0b14);border-bottom:1px solid var(--line);flex-shrink:0;min-height:64px;}
@@ -1205,8 +1251,8 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 </script>
 
 <div class="hdr">
-  <div class="brand">⚡IEYAS <span class="z">軍師</span></div>
-  <div class="term-badge" id="termBadge" onclick="hardReload()" title="タップで最新版に更新">2F 端末 · v…</div>
+  <div class="brand">⚡<span class="b-full">IEYAS </span><span class="z">軍師</span></div>
+  <div class="term-badge" id="termBadge" onclick="hardReload()" title="タップで最新版に更新">2F<span class="tb-l"> 端末 ·</span> v…</div>
   <div class="datenav">
     <button class="dbtn" onclick="shiftDay(-1)">‹</button>
     <button class="dtoday" onclick="goToday()">今日</button>
@@ -1214,15 +1260,15 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
     <button class="dbtn" onclick="shiftDay(1)">›</button>
   </div>
   <div class="vtoggle" id="vtoggle">
-    <button id="vt-home" onclick="setViewMode('home')">👔 黒服業務</button>
-    <button id="vt-dash" class="on" onclick="setViewMode('dash')">🪑 ホール状況</button>
-    <button id="vt-bill" onclick="setViewMode('bill')">🧾 伝票管理</button>
+    <button id="vt-home" onclick="setViewMode('home')">👔 <span class="vt-l">黒服業務</span><span class="vt-s">黒服</span></button>
+    <button id="vt-dash" class="on" onclick="setViewMode('dash')">🪑 <span class="vt-l">ホール状況</span><span class="vt-s">ホール</span></button>
+    <button id="vt-bill" onclick="setViewMode('bill')">🧾 <span class="vt-l">伝票管理</span><span class="vt-s">伝票</span></button>
   </div>
   <button class="slip-chip" id="slipChip" onclick="openTableSlip()" title="タップでテーブル伝票へ"></button>
   <div class="spacer"></div>
-  <button class="menu-btn cust" onclick="openCustomer()">👤 顧客管理</button>
-  <button class="menu-btn reload" onclick="hardReload()" title="表示がおかしい時はここ">🔄 再読込</button>
-  <div class="clock" id="clock"><b>--:--</b><br>更新 --:--</div>
+  <button class="menu-btn cust" onclick="openCustomer()">👤<span class="mb-l"> 顧客管理</span></button>
+  <button class="menu-btn reload" onclick="hardReload()" title="表示がおかしい時はここ">🔄<span class="mb-l"> 再読込</span></button>
+  <div class="clock" id="clock"><b>--:--</b><span class="upd"><br>更新 --:--</span></div>
   <div class="who" onclick="doLogout()">
     <span class="nm" id="whoName">りく</span>
     <span class="lo">ログアウト</span>
@@ -1297,7 +1343,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-13d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-19a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1409,7 +1455,7 @@ function overMins(s){return -Math.min.apply(null,s.casts.map(function(c){return 
 function warnMin(s){return Math.min.apply(null,s.casts.filter(function(c){return c.status==='warn';}).map(function(c){return c.mins;}));}
 
 /* ============ CLOCK / DATE ============ */
-function tickClock(){var d=new Date();var hh=('0'+d.getHours()).slice(-2),mm=('0'+d.getMinutes()).slice(-2);document.getElementById('clock').innerHTML='<b>'+hh+':'+mm+'</b><br>更新 '+hh+':'+mm;}
+function tickClock(){var d=new Date();var hh=('0'+d.getHours()).slice(-2),mm=('0'+d.getMinutes()).slice(-2);document.getElementById('clock').innerHTML='<b>'+hh+':'+mm+'</b><span class="upd"><br>更新 '+hh+':'+mm+'</span>';}
 function shiftDay(n){var d=parseKey(curDate);d.setDate(d.getDate()+n);curDate=fmtKey(d);renderAll();}
 function goToday(){curDate=TODAY;renderAll();}
 
@@ -5582,7 +5628,7 @@ function openTableSlipFor(id){
 function tslipUpdateChip_(){
   var el=document.getElementById('slipChip'); if(!el)return;
   var n=tslipUnprinted_().length;
-  el.textContent='🖊 伝票 未印刷 '+n;
+  el.innerHTML='🖊 <span class="sc-l">伝票 </span>未印刷 '+n;
   el.className='slip-chip'+(n?' on':'');
 }
 function tslipPend_(){ try{ return JSON.parse(localStorage.getItem(TSLIP_PEND_KEY)||'null'); }catch(e){ return null; } }
@@ -8301,7 +8347,7 @@ function doLogout(){ if(!IS_GAS){ alert('（ローカル）ログアウト'); re
 
 /* ============ BOOT ============ */
 function renderAll(){
-  document.getElementById('termBadge').textContent=TERM+' 端末 · v'+BUILD;
+  document.getElementById('termBadge').innerHTML=TERM+'<span class="tb-l"> 端末 ·</span> v'+BUILD;   /* 端末の文字は狭い画面で畳む（CSS .tb-l） */
   document.getElementById('whoName').textContent=LOGIN||'—';
   document.getElementById('dlabel').textContent=dateLabel(curDate);
   renderAlerts();renderHall();renderRight();renderHome();bmRenderIfIdle();
