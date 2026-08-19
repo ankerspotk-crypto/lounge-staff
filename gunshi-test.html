@@ -82,6 +82,14 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 @media(max-width:820px){
   .who .nm{display:none;}
   .who{padding:5px 6px;}
+  .hdr{gap:5px;padding-left:calc(7px + env(safe-area-inset-left));padding-right:calc(7px + env(safe-area-inset-right));}
+  .vtoggle button{padding:8px 7px;}
+  .menu-btn{padding:8px 8px;}
+}
+/* 最後の保険：想定外に細い端末では切り捨てず横スクロールで全部に触れるようにする */
+@media(max-width:700px){
+  .hdr{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .spacer{display:none;}
 }
 
 /* ---------- Alert bar ---------- */
