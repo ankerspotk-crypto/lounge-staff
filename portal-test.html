@@ -537,6 +537,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 .aw-win .aw-w-name b{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
 .aw-mine{ background:linear-gradient(135deg,#2a2012,#15100a); border:1px solid rgba(214,183,120,.42); border-radius:16px; padding:20px 18px; margin-bottom:14px; text-align:center; box-shadow:0 12px 30px rgba(0,0,0,.42); }
 
+
 /* ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦） */
 .ks-arena{ position:relative; overflow:hidden; background:linear-gradient(160deg,#221a0f,#14100a 60%,#0f0c07); border:1px solid rgba(214,183,120,.34); border-radius:18px; padding:16px 15px 14px; margin-bottom:13px; box-shadow:0 12px 30px rgba(0,0,0,.44); }
 .ks-arena::before{ content:''; position:absolute; top:-55%; left:50%; transform:translateX(-50%); width:230px; height:230px; border-radius:50%; background:radial-gradient(circle, rgba(232,202,122,.13), rgba(232,202,122,0) 70%); pointer-events:none; }
@@ -657,8 +658,8 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
-var PORTAL_BUILD = '2026-07-31a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
+var GAS_URL ='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
+var PORTAL_BUILD = '2026-08-13a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -844,12 +845,19 @@ function checkPortalMaintenance_(){ return fetch(GAS_URL+'?action=portalMaintena
 function startPortalMaintPoll(){
   if(window._pMaintPoll) return;
   window._pMaintPoll=setInterval(function(){
+    if(document.hidden) return; /* タブ非表示中は撃たない（放置端末の空撃ち防止・復帰時に再取得） */
     checkPortalMaintenance_().then(function(m){
       if(m&&m.on){ if(!window._pMaintOn) showPortalMaintenance(m); }
       else { if(window._pMaintOn) location.reload(); }   /* 再開＝クリーンに復帰 */
     });
   },60000);
 }
+/* タブ復帰時：メンテ状態と空席を即再取得（非表示中に間引いた分を埋める）。軍師の visibilitychange と同型 */
+if(!window._portalVis){ window._portalVis=1; document.addEventListener('visibilitychange',function(){
+  if(document.hidden) return;
+  try{ checkPortalMaintenance_().then(function(m){ if(m&&m.on){ if(!window._pMaintOn) showPortalMaintenance(m); } else if(window._pMaintOn){ location.reload(); } }); }catch(e){}
+  try{ if(document.getElementById('home-vac-list')) fetchVacancy(); }catch(e){}
+}); }
 /* 起動と並列にメンテ判定（通常起動は止めない・停止中だけ全面表示を被せる） */
 checkPortalMaintenance_().then(function(m){ if(m&&m.on) showPortalMaintenance(m); });
 startPortalMaintPoll();
@@ -1100,6 +1108,7 @@ var SECTIONS = {
   skill:    { t:'スキルテスト',   i:'📝' },
   requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'全員シフト',   i:'📋' },
+  cashapv:  { t:'現金の承認・差し戻し', i:'🌙' },
   notif:    { t:'通知設定',     i:'🔔' },
   cashset:  { t:'軍師設定',     i:'⚙️' }
 };
@@ -1167,7 +1176,7 @@ function homeMenu() {
     //   ゲートはサーバ側 isAdmin_（管理者ロール＋りく）＝ここに出るのは管理者/りくだけ。
     //   申請管理・通知設定・軍師設定は従来どおり管理コンソールに集約。
     html += '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:20px 2px 8px">管理者・りく 専用</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + menuBtn('shiftmgmt') + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + menuBtn('shiftmgmt') + menuBtn('cashapv') + '</div>'
       + '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:12px;font-size:12px;color:#cbb98a;line-height:1.6;margin-top:10px">その他の管理機能（申請管理・通知設定・軍師設定）は<b style="color:#f2ead9">管理コンソール</b>に集約しています。</div>';
   }
   return html + versionFooter();
@@ -1202,6 +1211,7 @@ function switchTab(tab) {
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
   if (tab === 'shiftmgmt') { loadShiftMgmt(); return; }
+  if (tab === 'cashapv') { loadCashApproval(); return; }
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (tab === 'wine') { loadWine(); return; }
@@ -1904,10 +1914,10 @@ function renderHome(){
   if (portalData && portalData.vacancy) renderHomeVacancy(portalData.vacancy);
   else if (!homeRestPending) fetchVacancy();   // rest待ち中は個別取得せず、届くのを待つ
   if(window._vacTimer) clearInterval(window._vacTimer);
-  window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } fetchVacancy(); }, 60000);
+  window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } if(document.hidden) return; fetchVacancy(); }, 60000);
 
-  // 呼び出しの有効時間帯(20:00〜0:30)は時計で変わるため、席表示とボタンゲートを定期的に貼り直して自己修復する
-  // （例: 19:55にホームを開いた人も、20:00になれば再読込せずボタンが有効化される）
+  // 呼び出しの有効時間帯(19:45〜1:00)は時計で変わるため、席表示とボタンゲートを定期的に貼り直して自己修復する
+  // （例: 19:40にホームを開いた人も、19:45になれば再読込せずボタンが有効化される）
   if(window._callGateTimer) clearInterval(window._callGateTimer);
   window._callGateTimer = setInterval(function(){ if(!document.getElementById('home-callbtns')){ clearInterval(window._callGateTimer); return; } renderMySeat(); applyWorkingGate(); }, 30000);
 }
@@ -4284,6 +4294,8 @@ function reqStatusInfo_(s) {
   if (s === '承諾') return { cls: 'ok',  txt: '✓ 承諾済み（出勤）' };
   if (s === '休み' || s === '却下') return { cls: 'off', txt: '✗ 休み決定' };
   if (s === 'クリア') return { cls: 'off', txt: '— クリア済み' };
+  // 『重複』＝同じ申請の二度押しを承認時にまとめて閉じた行（2026-08-07・closeDupRequests_）。未処理と誤読させない
+  if (s === '重複') return { cls: 'off', txt: '— 重複（同じ申請）' };
   return { cls: '', txt: '⏳ 未処理' };
 }
 
@@ -4554,7 +4566,7 @@ function loadProfile() {
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
-      profileData = d; renderProfile(d);
+      profileData = d; profNgCust = ((d.profile || {}).ngCustomers || []).slice(); renderProfile(d);
     })
     .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
 }
@@ -4579,6 +4591,15 @@ function renderProfile(d) {
   h += '<div style="' + box + '"><div style="' + lbl + '">性格・接客スタイル</div><div style="' + sub + '">接客の雰囲気</div>' + profChips_('chara', v.chara, p.chara) + '</div>';
   h += '<div style="' + box + '"><div style="' + lbl + '">得意なお客様</div><div style="' + sub + '">こういう方が得意</div>' + profChips_('good', v.client, p.good) + '</div>';
   h += '<div style="' + box + '"><div style="' + lbl + '">苦手なお客様</div><div style="' + sub + '">無理せず外したいタイプ（正直でOK）</div>' + profChips_('bad', v.client, p.bad) + '</div>';
+  // ⚠️苦手な「お客様ご本人」の申告（2026-08-19 ボス指示）。黒服の付け回し画面に⚠️として出る＝守られるための欄
+  h += '<div style="' + box + ';border-color:#5a2430;background:#1a1013">'
+    + '<div style="' + lbl + '">⚠️ 苦手なお客様（お名前を指定）</div>'
+    + '<div style="' + sub + '">このお客様は正直つらい、という方がいれば入れてください。<b>黒服さんの付け回しの画面に注意として出ます</b>（お客様には一切見えません）。<br>※ 付け回しを必ず止めるものではありません。どうしても無理な場合は黒服さんに直接ご相談ください。</div>'
+    + '<div id="profNgList">' + profNgListHtml_() + '</div>'
+    + '<div style="display:flex;gap:6px;margin-top:10px">'
+    + '<input id="profNgQ" placeholder="お名前・会員番号で検索" style="flex:1;padding:11px;background:#0d1626;border:1px solid #2a2114;border-radius:9px;color:#f2ead9;font-size:14px;box-sizing:border-box">'
+    + '<button type="button" onclick="profNgSearch()" style="width:92px;padding:11px;background:#33291a;color:#f2ead9;border:1px solid #4a3a22;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">🔍 検索</button></div>'
+    + '<div id="profNgRes"></div></div>';
   var weakNote = d.seededWeak ? '<div style="font-size:11px;color:#88cc44;margin-bottom:8px">🌱 面談のときの回答から仮に入れています。違ったら外してください。</div>' : '';
   h += '<div style="' + box + '"><div style="' + lbl + '">苦手なお酒</div><div style="' + sub + '">付き合うと潰れてしまうお酒</div>' + weakNote + profChips_('weak', v.drink, p.weak) + '</div>';
   h += '<div style="' + box + '"><div style="' + lbl + '">自己PR・メモ</div><div style="' + sub + '">タグに入らない強み・注意点（黒服・家康くんが読みます）</div>'
@@ -4589,6 +4610,45 @@ function renderProfile(d) {
   h += '</div>';
   setContent(h);
 }
+/* ⚠️苦手なお客様（個別申告）。相性プロフィールに相乗りして保存する＝保存経路は1本だけ */
+var profNgCust = [];
+var profNgRes = [];
+function profNgListHtml_() {
+  if (!profNgCust.length) return '<div style="font-size:12px;color:#9a8a66">まだ登録はありません</div>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:6px">' + profNgCust.map(function (x, i) {
+    return '<span style="display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:16px;background:#4a1620;border:1px solid #a63a46;color:#ffc2c2;font-size:14px;font-weight:700">'
+      + esc(x.name || x.no) + (x.no ? '<span style="font-size:11px;color:#c08088">' + esc(x.no) + '</span>' : '')
+      + '<span onclick="profNgDel(' + i + ')" style="cursor:pointer;color:#ff8f9a;font-weight:800">×</span></span>';
+  }).join('') + '</div>';
+}
+function profNgRedraw_() {
+  var el = document.getElementById('profNgList'); if (el) el.innerHTML = profNgListHtml_();
+}
+function profNgDel(i) { profNgCust.splice(i, 1); profNgRedraw_(); }
+function profNgSearch() {
+  var q = String((document.getElementById('profNgQ') || {}).value || '').trim();
+  var box = document.getElementById('profNgRes'); if (!box) return;
+  if (!q) { box.innerHTML = '<div style="font-size:12px;color:#9a8a66;margin-top:8px">お名前を入れて検索してください</div>'; return; }
+  box.innerHTML = '<div style="font-size:12px;color:#9a8a66;margin-top:8px">検索中...</div>';
+  var url = GAS_URL + '?action=portal&tab=customers&userId=' + encodeURIComponent(userId) + '&filter=&q=' + encodeURIComponent(q);
+  gasFetch(url).then(function (r) { return r.json(); }).then(function (d) {
+    profNgRes = ((d && d.customers) || []).slice(0, 12);
+    box.innerHTML = profNgRes.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">' + profNgRes.map(function (c, i) {
+          var nm = c.name || c.card || '';
+          return '<span onclick="profNgAdd(' + i + ')" style="display:inline-block;padding:9px 13px;border-radius:16px;background:#16130d;border:1px solid #33291a;color:#cdbb8e;font-size:14px;cursor:pointer">＋ '
+            + esc(nm) + (c.no ? '<span style="font-size:11px;color:#9a8a66"> ' + esc(c.no) + '</span>' : '') + '</span>';
+        }).join('') + '</div>'
+      : '<div style="font-size:12px;color:#9a8a66;margin-top:8px">見つかりませんでした</div>';
+  }).catch(function () { box.innerHTML = '<div style="font-size:12px;color:#f66;margin-top:8px">検索エラー</div>'; });
+}
+function profNgAdd(i) {
+  var c = profNgRes[i]; if (!c) return;
+  var nm = c.name || c.card || '', no = c.no || '';
+  var dup = profNgCust.some(function (x) { return (no && x.no && String(x.no) === String(no)) || (!no && String(x.name) === String(nm)); });
+  if (!dup) profNgCust.push({ no: no, name: nm });
+  profNgRedraw_();
+}
 function saveProfile() {
   var root = document.getElementById('profRoot');
   if (!root) return;
@@ -4597,6 +4657,7 @@ function saveProfile() {
     return Array.prototype.map.call(sel, function(c){ return c.getAttribute('data-val'); });
   };
   var profile = { look: pick('look'), chara: pick('chara'), good: pick('good'), bad: pick('bad'), weak: pick('weak'),
+                  ngCustomers: profNgCust.slice(),   // ⚠️これを落とすと保存のたびに申告が消える
                   memo: (document.getElementById('profMemo') || {}).value || '' };
   var st = document.getElementById('profStatus');
   if (st) { st.style.color = '#b8a67c'; st.textContent = '保存中...'; }
@@ -4752,6 +4813,154 @@ function cancelBirthdayWeek() {
     .then(function(r){ return r.json(); })
     .then(function(d){ if (!d.ok) { alert(d.error || '取り下げに失敗しました'); return; } loadBirthday(); })
     .catch(function(){ alert('通信エラーが発生しました'); });
+}
+
+/* ===== 🌙 現金の承認・差し戻し（管理者・りく専用） =====
+   管理コンソール ⚙️運営 の「閉店チェックの承認」＋「♻️各種リセット」と同じ操作を、手元のポータルから。
+   ⚠️承認が有るのは閉店チェックだけ（開店・金庫は提出のみ＝差し戻して再提出させる）。
+   ⚠️権限の砦はサーバの isAdmin_。ここの adminPriv() は表示の出し分けにすぎない（[[project_portal_mode_separation]]）。 */
+var cashApvData = null, cashApvBusy = false;
+
+function loadCashApproval() {
+  if (!adminPriv()) {
+    setContent('<div style="padding:24px;color:#b09f74;font-size:14px;line-height:1.8">🌙 現金の承認・差し戻しは管理者専用の画面です。</div>');
+    return;
+  }
+  setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">読み込み中...</div>');
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'portalCashApproval', userId: userId }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
+      cashApvData = d; renderCashApproval(d);
+    })
+    .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
+}
+
+function cashApvYen(n) { return '¥' + Number(n || 0).toLocaleString(); }
+
+/* カードの1行（ラベル｜値）。値の色で 合/不合 を出す */
+function cashApvRow(label, value, color) {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #241d12">'
+    + '<span style="font-size:12.5px;color:#b8a67c">' + label + '</span>'
+    + '<b style="font-size:14px;color:' + (color || '#f2ead9') + '">' + value + '</b></div>';
+}
+
+function cashApvCard(inner) {
+  return '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:16px;margin-bottom:14px">' + inner + '</div>';
+}
+
+function cashApvSendbackBtn(kind, label, enabled, why) {
+  if (!enabled) return '<div style="margin-top:12px;font-size:12px;color:#8d7c56">' + esc(why || '差し戻せる記録がありません') + '</div>';
+  return '<button onclick="sendbackCash(\'' + kind + '\',\'' + esc(label) + '\')" '
+    + 'style="margin-top:12px;width:100%;padding:11px;background:#2a1214;color:#ff9aa0;border:1px solid #5a2226;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">↩️ ' + esc(label) + ' を差し戻す</button>';
+}
+
+function renderCashApproval(d) {
+  var o = d.opening || {}, s = d.safe || {}, c = d.closing || {};
+  var h = '<div style="padding:14px">';
+  h += '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:2px 2px 12px">対象日（営業日） <b style="color:#e6cf95">' + esc(d.dateKey) + '</b>　操作者 <b style="color:#e6cf95">' + esc(d.adminName || '') + '</b></div>';
+
+  /* 🌅 開店チェック */
+  var oh = '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:10px">🌅 開店チェック</div>';
+  if (o.submitted) {
+    oh += cashApvRow('報告者', esc(o.reporterName || '—'));
+    oh += cashApvRow('スタート合計（4袋）', cashApvYen(o.total));
+    if (o.safeUnchecked) oh += '<div style="margin-top:8px;font-size:12px;color:#e0a060">⚠️ 金庫は数えず前日残額を自動入力しています</div>';
+  } else {
+    oh += '<div style="font-size:13px;color:#e0a060;line-height:1.7">まだ提出されていません。<br>閉店チェックの照合は開店の提出が前提です。</div>';
+  }
+  oh += cashApvSendbackBtn('opening', '開店チェック', !!o.submitted, '未提出です（差し戻す記録がありません）');
+  h += cashApvCard(oh);
+
+  /* 🏦 金庫出金ログ */
+  var sh = '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:10px">🏦 金庫出金ログ</div>';
+  if (s.count) {
+    sh += cashApvRow('本日の出金', s.count + '件');
+    sh += cashApvRow('出金合計', cashApvYen(s.total), '#e0a060');
+    sh += '<div style="margin-top:10px;font-size:12px;color:#b8a67c;line-height:1.8">'
+      + (s.rows || []).map(function(x){
+          return '・' + esc(x.time) + '　' + esc(x.floor) + '　' + esc(x.out) + '（' + cashApvYen(x.amount) + '）' + (x.reporter ? '　' + esc(x.reporter) : '');
+        }).join('<br>') + '</div>';
+    sh += '<div style="margin-top:10px;font-size:11.5px;color:#8d7c56;line-height:1.6">⚠️ 差し戻すと本日の出金ログを<b>すべて</b>消します（1件だけの取り消しはできません）。</div>';
+  } else {
+    sh += '<div style="font-size:13px;color:#94886a">本日の金庫出金はありません。</div>';
+  }
+  sh += cashApvSendbackBtn('safe', '金庫出金ログ', !!s.count, '本日の出金記録はありません');
+  h += cashApvCard(sh);
+
+  /* 🌙 閉店チェック（承認があるのはここだけ） */
+  var ch = '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:10px">🌙 閉店チェック</div>';
+  if (!c.reportSubmitted) {
+    ch += '<div style="font-size:13px;color:#94886a;line-height:1.7">本日の閉店チェックはまだ黒服から提出されていません。</div>';
+    ch += cashApvSendbackBtn('closing', '閉店チェック', false, '未提出です（差し戻す記録がありません）');
+  } else {
+    ch += cashApvRow('報告者', esc(c.reporterName || '—'));
+    if (o.submitted) {
+      ch += cashApvRow('🌅 スタート', cashApvYen(c.openingTotal));
+      ch += cashApvRow('＋ 現金売上', cashApvYen(c.cashSalesInput), '#7be0a8');
+      ch += cashApvRow('－ 伝票 出金', cashApvYen(c.slipTotal), '#e0a060');
+      ch += cashApvRow('＝ 残るはず', cashApvYen(c.expectedRemain));
+      ch += cashApvRow('実測（4袋）', cashApvYen(c.actualTotal));
+      var df = Number(c.diff || 0), within = !!c.within;
+      ch += cashApvRow('差額', (within ? '✅ ' : '⚠️ ') + cashApvYen(Math.abs(df)) + (within ? '（許容内）' : (df > 0 ? ' 足りない' : ' 多い')), within ? '#66cc88' : '#e06666');
+    } else {
+      ch += '<div style="margin-top:8px;font-size:12.5px;color:#e0a060;line-height:1.7">⚠️ 開店の現金が未提出のため照合できていません（承認には開店チェックの提出が必要）</div>';
+    }
+    var slips = c.slipDetails || [];
+    if (slips.length) {
+      ch += '<div style="margin-top:10px;font-size:12px;color:#b8a67c;line-height:1.8">伝票 ' + slips.length + '枚：'
+        + slips.map(function(x){ return esc((x.category || 'その他') + (x.payee ? '/' + x.payee : '') + ' ') + cashApvYen(x.amount); }).join('、') + '</div>';
+    }
+    if (c.approved) {
+      ch += '<div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:rgba(102,204,136,.14);color:#8fe0ab;font-size:13px;font-weight:700;line-height:1.7">✅ 承認済み　承認者 ' + esc(c.approver) + '（' + esc(c.approvedAt) + '）<br>黒服の退勤OK</div>';
+    } else if (o.submitted) {
+      ch += '<button onclick="approveCash()" style="margin-top:12px;width:100%;padding:13px;background:#1a2a0a;color:#a8e06a;border:1px solid #446622;border-radius:9px;font-size:15px;font-weight:800;cursor:pointer">✅ この内容で承認する</button>';
+    } else {
+      ch += '<div style="margin-top:12px;font-size:12px;color:#8d7c56">開店チェックが提出されると承認できるようになります。</div>';
+    }
+    ch += cashApvSendbackBtn('closing', '閉店チェック', true, '');
+  }
+  h += cashApvCard(ch);
+
+  h += '<div style="font-size:11.5px;color:#8d7c56;line-height:1.7;margin:2px 2px 34px">差し戻すとその記録を消して、黒服グループのLINEに再提出のお願いが流れます。'
+    + '同じ操作は黒服LINEでも可能です（「承認」＝閉店チェック承認／「修正」＝差し戻す対象を選ぶ）。</div>';
+  setContent(h + '</div>');
+}
+
+function approveCash() {
+  if (cashApvBusy) return;
+  var c = (cashApvData && cashApvData.closing) || {};
+  if (!confirm('本日(' + (cashApvData ? cashApvData.dateKey : '') + ')の閉店チェックを承認します。\n\n承認すると黒服の退勤が可能になり、本日の発注も「承認済み・未納品」で確定します。\n10分後に軍師の全端末が自動ログアウトします。\n\nよろしいですか？')) return;
+  cashApvBusy = true;
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'portalApproveCash', userId: userId }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      cashApvBusy = false;
+      if (!d || d.ok === false) { alert(d && d.error ? d.error : '承認に失敗しました'); loadCashApproval(); return; }
+      alert('✅ 承認しました。黒服グループにも通知しました。');
+      loadCashApproval();
+    })
+    .catch(function(){ cashApvBusy = false; alert('通信エラーが発生しました'); loadCashApproval(); });
+}
+
+function sendbackCash(kind, label) {
+  if (cashApvBusy) return;
+  var extra = (kind === 'safe') ? '\n\n※本日の金庫出金ログを「すべて」消します。' : '';
+  var c = (cashApvData && cashApvData.closing) || {};
+  if (kind === 'closing' && c.approved) extra = '\n\n※すでに承認済みです。差し戻すと承認も取り消されます（承認済みにした発注は戻りません）。';
+  if (!confirm(label + ' を差し戻します。記録を消して、黒服に再提出してもらいます。' + extra + '\n\nよろしいですか？')) return;
+  var reason = prompt(label + ' の差し戻し理由（黒服グループのLINEに載ります）:', '');
+  if (reason === null) return;   // キャンセル＝何もしない
+  cashApvBusy = true;
+  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'portalSendbackCash', userId: userId, kind: kind, reason: reason }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      cashApvBusy = false;
+      if (!d || d.ok === false) { alert(d && d.error ? d.error : '差し戻しに失敗しました'); loadCashApproval(); return; }
+      alert('↩️ ' + label + ' を差し戻しました。黒服グループに再提出のお願いを送りました。');
+      loadCashApproval();
+    })
+    .catch(function(){ cashApvBusy = false; alert('通信エラーが発生しました'); loadCashApproval(); });
 }
 
 function setContent(html) {
