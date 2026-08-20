@@ -5143,6 +5143,8 @@ var MENU_TILES=[
   {group:'管理', items:[
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
     {ic:'📋', t:'面談表',         act:"openMendanManager()"},
+    {ic:'🤵', t:'黒服の面談を開始', act:"startKurofukuMendanFlow()"},
+    {ic:'🗂', t:'黒服の面談表',     act:"openKurofukuMendanManager()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🍶', t:'ボトル棚マップ',     act:"openBottleShelfMap()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
@@ -8241,6 +8243,103 @@ window.gsrDiag = gsrDiag;
 
 /* 📝 面談を開始：トークンを発行して応募者フロント(mendan.html)を開く。
    ⚠️封じ込め：iPadを応募者に渡す前に軍師セッションを破棄する（戻られてもPINログインで止まる）。 */
+
+/* ===== 黒服（男性スタッフ）採用の面談表 =====
+ * キャスト用（startMendanFlow/openMendanManager）とは別系統。
+ * 開始→ iPadを応募者に渡す／一覧→ 面談しながら所感＋合否。 */
+var KMENDAN_LIST=[];
+function startKurofukuMendanFlow(){
+  if(!confirm('黒服の面談を開始します。\nこの iPad を応募者にお渡しする準備はよろしいですか？\n（安全のため、いったん軍師からログアウトします）')) return;
+  gsr('gunshiStartKurofukuMendan', LOGIN).then(function(r){
+    if(!r || !r.ok){ alert((r&&r.error)||'開始できませんでした'); return; }
+    var base=location.origin+location.pathname.replace(/[^/]*$/,'');
+    try{ localStorage.removeItem(kSessKey()); }catch(_){}   // 封じ込め：軍師セッション破棄
+    location.href=base+'kurofuku-mendan.html?t='+r.token;
+  }).catch(function(){ alert('通信に失敗しました。もう一度お試しください。'); });
+}
+function openKurofukuMendanManager(){
+  document.getElementById('menuOverlay').classList.add('show');
+  var el=document.getElementById('menu-body');
+  el.innerHTML=mendanBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>';
+  gsr('gunshiGetKurofukuMendanList', LOGIN).then(function(r){
+    KMENDAN_LIST=(r&&r.ok&&r.list)?r.list:[];
+    renderKMendanList();
+  }).catch(function(){ document.getElementById('menu-body').innerHTML=mendanBack_()+'<div class="empty-msg" style="padding:24px">読み込みエラー</div>'; });
+}
+function renderKMendanList(){
+  var el=document.getElementById('menu-body');
+  var h=mendanBack_()+'<div class="menu-grp">🤵 黒服の面談表（面談待ち '+KMENDAN_LIST.length+'）</div>';
+  if(!KMENDAN_LIST.length){ h+='<div class="empty-msg" style="padding:24px;color:#888">面談待ちの応募者はいません。</div>'; el.innerHTML=h; return; }
+  h+='<div style="display:flex;flex-direction:column;gap:10px">'+KMENDAN_LIST.map(function(m,i){
+    // 送りを任せられるか＝一覧の時点で見えたほうが早い
+    var lic=String(m.license||'');
+    var licTag=(lic.indexOf('あり')===0)
+      ? ((m.driveFreq==='ペーパー')?'<span style="color:#e6c14a"> ／免許あり(運転せず)</span>':'<span style="color:#7fbf8f"> ／🚗'+esc(m.driveFreq||'免許あり')+'</span>')
+      : '<span style="color:#a29a8e"> ／免許'+esc(lic||'—')+'</span>';
+    var acc=(m.accident==='あり')?'<span style="color:#e6c14a"> ／⚠️事故・違反</span>':'';
+    return '<div onclick="openKMendanDetail('+i+')" style="border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:14px 16px;cursor:pointer;background:#15120f">'
+      +'<div style="font-size:16px;font-weight:700">'+esc(m.name||'（無名）')+' <span style="color:#a29a8e;font-size:13px;font-weight:400">満'+(m.age!==''?m.age+'歳':'—')+'</span></div>'
+      +'<div style="color:#a29a8e;font-size:12.5px;margin-top:4px">'+esc(m.at||'')+' ／ ナイト'+esc(m.nightExp||'—')+licTag+acc+'</div></div>';
+  }).join('')+'</div>';
+  el.innerHTML=h;
+}
+function openKMendanDetail(i){
+  var m=KMENDAN_LIST[i]; if(!m)return;
+  var el=document.getElementById('menu-body');
+  var row=function(k,v){ return v?('<div style="display:flex;gap:10px;padding:7px 0;border-top:1px solid rgba(255,255,255,.06)"><div style="width:96px;flex:none;color:#a29a8e;font-size:12.5px">'+k+'</div><div style="font-size:14px">'+esc(String(v))+'</div></div>'):''; };
+  var photo=function(k,url){ return url?('<a href="'+url+'" target="_blank" style="color:#c9a45c;text-decoration:underline;font-size:13px">'+k+'を開く</a>'):('<span style="color:#6f685e;font-size:13px">'+k+'なし</span>'); };
+  var lic=String(m.license||'');
+  var licTxt=lic+((lic.indexOf('あり')===0)?('（'+(m.licYear?m.licYear+'年取得・':'')+(m.driveFreq||'—')+'）'):'');
+  var nightTxt=(m.nightExp||'')+((m.nightExp==='あり'||m.nightExp==='少し')?('（'+[m.nightYears,m.prevShop,m.prevRole].filter(Boolean).join('・')+'）'):'');
+  var h=mendanBack_()
+    +'<div class="menu-grp">'+esc(m.name||'（無名）')+' <span style="color:#a29a8e">満'+(m.age!==''?m.age+'歳':'—')+'</span></div>'
+    +'<div style="background:#15120f;border:1px solid rgba(201,164,92,.2);border-radius:12px;padding:6px 16px 12px">'
+    +row('フリガナ',m.kana)+row('生年月日',m.birth)+row('電話',m.tel)+row('住所',m.addr)+row('緊急連絡先',m.emergency)
+    +row('免許',licTxt)
+    +row('事故・違反',(m.accident==='あり')?('⚠️あり '+(m.accidentNote||'')):(m.accident||'—'))
+    +row('希望シフト','週'+(m.days||'—')+' '+(m.weekdays||'')+(m.timeRange?('／'+m.timeRange):''))
+    +row('開始時期',m.startWhen)+row('昼職',m.dayJob)+row('通勤',m.commute)
+    +row('ナイト経験',nightTxt)+row('飲食・接客',m.foodExp)+row('退職理由',m.leaveReason)
+    +row('深夜勤務',m.nightWork)+row('立ち仕事',m.physical)
+    +row('持病',(m.health==='あり')?('あり '+(m.healthNote||'')):(m.health||'—'))
+    +row('応募経路',m.channel)+row('志望動機',m.motive)+row('将来',m.future)
+    +row('希望給与',m.payHope)
+    +row('掛け持ち',(m.otherJob==='あり')?('⚠️あり '+(m.otherJobNote||'')):(m.otherJob||'—'))
+    +row('保証人',m.guarantor)
+    +row('反社確認',m.antisocial||'⚠️未確認')
+    +'<div style="display:flex;gap:18px;padding:10px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">'+photo('📷 顔写真',m.facePhoto)+photo('🪪 身分証(表)',m.idPhoto)+photo('🪪 身分証(裏)',m.idPhotoBack)+'</div>'
+    +'</div>'
+    +'<div style="margin-top:16px"><div style="font-size:13px;color:#a29a8e;margin-bottom:6px">面談の所感</div>'
+    +'<textarea id="kjMemo" style="width:100%;min-height:80px;background:#0c0a08;border:1px solid rgba(201,164,92,.2);color:#ece7dd;border-radius:10px;padding:12px;font-size:15px;font-family:inherit">'+esc(m.memo||'')+'</textarea></div>'
+    +'<div style="font-size:13px;color:#a29a8e;margin:16px 0 8px">判定</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="showKSaiyo(\''+m.id+'\')" style="flex:1;background:#c9a45c;color:#1a1207;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700">採用</button>'
+    +'<button onclick="submitKMendanJudge(\''+m.id+'\',\'保留\')" style="flex:1;background:transparent;border:1px solid rgba(201,164,92,.4);color:#e6d2a8;border-radius:11px;padding:15px;font-size:14px">保留</button>'
+    +'<button onclick="submitKMendanJudge(\''+m.id+'\',\'不採用\')" style="flex:1;background:transparent;border:1px solid rgba(163,59,50,.5);color:#d1786d;border-radius:11px;padding:15px;font-size:14px">不採用</button>'
+    +'</div>'
+    +'<div id="kSaiyoForm" style="display:none;margin-top:14px;border:1px solid rgba(201,164,92,.3);border-radius:12px;padding:16px;background:#15120f"></div>';
+  el.innerHTML=h;
+}
+function showKSaiyo(id){
+  var box=document.getElementById('kSaiyoForm'); if(!box) return;
+  var d=new Date(); d.setDate(d.getDate()+1);
+  var v=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  box.style.display='block';
+  box.innerHTML='<div style="font-size:13px;color:#a29a8e;margin-bottom:8px">勤務の開始予定日</div>'
+    +'<input type="date" id="kStartDate" value="'+v+'" style="width:100%;background:#0c0a08;border:1px solid rgba(201,164,92,.25);color:#ece7dd;border-radius:10px;padding:13px;font-size:16px;font-family:inherit">'
+    +'<button onclick="submitKMendanJudge(\''+id+'\',\'採用\')" style="width:100%;margin-top:12px;background:#c9a45c;color:#1a1207;border:none;border-radius:11px;padding:15px;font-size:15px;font-weight:700">この内容で確定</button>';
+}
+function submitKMendanJudge(id, judge){
+  if(judge==='不採用' && !confirm('不採用として記録します。よろしいですか？')) return;
+  var memo=(document.getElementById('kjMemo')||{}).value||'';
+  var sd=(document.getElementById('kStartDate')||{}).value||'';
+  gsr('gunshiJudgeKurofukuMendan', LOGIN, id, memo, judge, sd).then(function(r){
+    if(!r || !r.ok){ alert((r&&r.error)||'記録できませんでした'); return; }
+    alert('「'+judge+'」で記録しました。');
+    openKurofukuMendanManager();
+  }).catch(function(){ alert('通信に失敗しました。'); });
+}
+
 function startMendanFlow(){
   if(!confirm('面談を開始します。\nこの iPad を応募者にお渡しする準備はよろしいですか？\n（安全のため、いったん軍師からログアウトします）')) return;
   gsr('gunshiStartMendan', LOGIN).then(function(r){

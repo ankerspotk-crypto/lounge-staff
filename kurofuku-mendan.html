@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>面談表｜ラウンジ いえやす</title>
+<style>
+/* ===== 世界観は求人サイト(ieyasu-web)と統一：濃紺墨＋金 ===== */
+:root{
+  --bg:#0b0a09; --bg2:#100e0c; --panel:#15120f; --panel2:#1c1815;
+  --gold:#c9a45c; --gold-lt:#e6d2a8; --gold-dk:#8c6d30;
+  --shu:#a33b32; --shu-lt:#d1786d;
+  --text:#ece7dd; --muted:#a29a8e; --muted2:#6f685e;
+  --line:rgba(201,164,92,.20); --line2:rgba(255,255,255,.06);
+  --ok:#5a9e6f;
+  --mincho:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP","Times New Roman",serif;
+  --gothic:"Hiragino Sans","Yu Gothic",YuGothic,"Noto Sans JP",system-ui,-apple-system,sans-serif;
+  --pad:22px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:radial-gradient(1200px 600px at 50% -10%, #17130d 0%, transparent 60%), var(--bg);
+  color:var(--text);font-family:var(--gothic);line-height:1.7;-webkit-font-smoothing:antialiased;
+  min-height:100vh;min-height:100dvh;overscroll-behavior:none;
+}
+.mincho{font-family:var(--mincho)}
+.wrap{max-width:680px;margin:0 auto;padding:0 var(--pad) 40px}
+
+/* ヘッダー＋進捗 */
+.top{padding:20px var(--pad) 0;text-align:center;position:sticky;top:0;z-index:5;
+  background:linear-gradient(180deg,var(--bg) 70%,transparent)}
+.crest{font-size:20px;line-height:1;color:var(--gold);opacity:.9}
+.bnm{font-family:var(--mincho);font-size:15px;letter-spacing:.18em;margin-top:5px}
+.prog{margin:14px 0 0;display:none}
+.prog .pt{display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.12em;color:var(--muted);margin-bottom:7px}
+.prog .pb{height:3px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden}
+.prog .pb i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--gold-dk),var(--gold),var(--gold-lt));transition:width .3s}
+.rule{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:14px 0 0}
+
+/* ステップ */
+.step{display:none;animation:fade .3s ease}
+.step.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.shead{text-align:center;margin:26px 0 4px}
+.shead .k{font-size:10.5px;letter-spacing:.3em;color:var(--gold);opacity:.85}
+.shead h1{font-family:var(--mincho);font-weight:500;font-size:clamp(22px,5.6vw,30px);letter-spacing:.06em;margin:8px 0 0;line-height:1.4}
+.shead p{color:var(--muted);font-size:12.5px;margin:8px 0 0}
+
+/* 質問ブロック */
+.q{margin:24px 0 0}
+.q .ql{font-size:15px;font-weight:600;margin-bottom:11px}
+.q .ql .req{color:var(--shu-lt);font-size:11px;margin-left:7px;font-weight:400;letter-spacing:.05em}
+.q .hint{font-size:12px;color:var(--muted);font-weight:400;display:block;margin-top:2px}
+.tin{width:100%;background:#0c0a08;border:1px solid var(--line);color:var(--text);border-radius:12px;
+  padding:14px 15px;font-size:16px;font-family:var(--gothic)}
+.tin:focus{outline:none;border-color:var(--gold)}
+.tin.bad{border-color:var(--shu)}
+.tsel{-webkit-appearance:none;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 17px) 22px,calc(100% - 12px) 22px;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
+.bdrow{display:flex;gap:8px;align-items:center}
+.bdrow .tsel{flex:1;min-width:0}
+.bdrow .tsel.y{flex:1.45}
+.err{color:var(--shu-lt);font-size:12px;margin-top:7px;display:none}
+.err.on{display:block}
+.age{margin-top:10px;font-size:13px;color:var(--muted)}
+.age b{font-family:var(--mincho);font-size:18px;color:var(--text);margin:0 4px}
+.age .warn{color:var(--shu-lt);display:block;margin-top:4px;font-size:12px}
+
+/* 単一選択（seg） */
+.opts{display:flex;gap:8px;flex-wrap:wrap}
+.opts button{flex:1;min-width:88px;background:#0c0a08;border:1px solid var(--line);color:var(--muted);
+  border-radius:12px;padding:14px 10px;font-size:14px;font-family:var(--gothic);transition:.15s}
+.opts button.on{background:var(--gold);border-color:var(--gold);color:#1a1207;font-weight:700}
+.opts.narrow button{flex:0 1 auto;min-width:56px}
+
+/* 複数選択（chips） */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{background:#0c0a08;border:1px solid var(--line);color:var(--muted);border-radius:999px;
+  padding:10px 15px;font-size:13.5px;font-family:var(--gothic)}
+.chips button.on{background:var(--gold);border-color:var(--gold);color:#1a1207;font-weight:700}
+
+.row2{display:flex;gap:10px;align-items:center}
+.row2 .tin{text-align:center}
+.row2 .sep{color:var(--muted);flex:none}
+.cond{display:none;margin-top:14px;padding-top:16px;border-top:1px solid var(--line2)}
+.cond.on{display:block}
+.subq{margin-top:16px}
+.subq .ql{font-size:14px}
+
+/* 写真 */
+.photo{display:flex;gap:14px}
+.pcard{flex:1;border:1px dashed var(--line);border-radius:14px;background:#0c0a08;overflow:hidden;position:relative}
+.pcard label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  min-height:150px;cursor:pointer;padding:16px 10px;text-align:center}
+.pcard .ic{font-size:30px}
+.pcard .pt2{font-size:13px;color:var(--text)}
+.pcard .ph{font-size:11px;color:var(--muted2)}
+.pcard img{width:100%;height:150px;object-fit:cover;display:block}
+.pcard .redo{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:#fff;border:1px solid var(--line);
+  border-radius:999px;font-size:11px;padding:5px 11px}
+.pnote{font-size:11.5px;color:var(--muted2);margin-top:12px;line-height:1.7;text-align:center}
+
+/* ウェルカム／完了 */
+.welcome{text-align:center;padding:14px 0 0}
+.welcome .big{font-family:var(--mincho);font-size:clamp(26px,7vw,38px);letter-spacing:.06em;line-height:1.45;margin:20px 0 0}
+.welcome .lead2{color:var(--muted);font-size:14px;margin:16px auto 0;max-width:440px}
+.welcome ul{list-style:none;padding:0;margin:26px auto 0;max-width:400px;text-align:left}
+.welcome li{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line2);font-size:14px}
+.welcome li:first-child{border-top:none}
+.welcome li .n{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--gold);color:var(--gold);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-family:var(--mincho)}
+.startb{margin:30px auto 0;display:block;width:100%;max-width:360px;background:linear-gradient(175deg,var(--gold-lt),var(--gold) 46%,var(--gold-dk));
+  color:#1a1207;border:none;border-radius:14px;padding:17px;font-size:16px;font-weight:700;font-family:var(--gothic);letter-spacing:.08em}
+.done{text-align:center;padding:50px 0}
+.done .mk{font-size:52px;color:var(--gold);line-height:1}
+.done .dt{font-family:var(--mincho);font-size:24px;letter-spacing:.06em;margin:18px 0 0}
+.done .dp{color:var(--muted);font-size:14px;margin:14px 0 0}
+.done .hand{margin:26px auto 0;max-width:340px;border:1px solid var(--line);border-radius:14px;padding:18px;
+  background:rgba(201,164,92,.05);font-size:14px}
+.done .backstaff{margin:30px auto 0;display:inline-block;background:transparent;border:1px solid var(--line2);
+  color:var(--muted2);border-radius:10px;padding:10px 20px;font-size:12px;font-family:var(--gothic)}
+
+/* ===== シミュ（既存・そのまま） ===== */
+.hero{margin:10px 0 0;padding:24px 20px 22px;border-radius:16px;text-align:center;border:1px solid var(--line);
+  background:linear-gradient(170deg,var(--panel2),#0d0b0a);box-shadow:0 12px 40px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.03)}
+.hero .cap{font-size:12px;letter-spacing:.18em;color:var(--muted)}
+.hero .big{font-family:var(--mincho);font-weight:500;letter-spacing:.02em;line-height:1.05;font-size:clamp(44px,14vw,68px);margin:6px 0 0;
+  background:linear-gradient(175deg,var(--gold-lt),var(--gold) 46%,var(--gold-dk));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .big small{font-size:.34em;letter-spacing:.06em;-webkit-text-fill-color:var(--gold-lt);margin-left:6px}
+.hero .sub{font-size:12px;color:var(--muted);margin-top:8px}
+.hero .sub b{color:var(--text);font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 0}
+.card{position:relative;border:1px solid var(--line2);border-radius:13px;padding:16px 10px 15px;text-align:center;background:linear-gradient(175deg,var(--panel),#0d0b0a)}
+.card.mid{border-color:var(--gold);background:linear-gradient(175deg,#1a1611,#100d0a)}
+.card .tag{font-size:10.5px;letter-spacing:.16em;color:var(--muted)}
+.card.mid .tag{color:var(--gold-lt)}
+.card .amt{font-family:var(--mincho);font-size:clamp(19px,5.6vw,25px);margin:7px 0 0}
+.card .amt small{font-size:.5em;color:var(--muted);margin-left:2px}
+.card .rate{display:inline-block;margin-top:7px;font-size:10.5px;color:var(--muted2);border:1px solid var(--line2);border-radius:999px;padding:2px 9px}
+.card.mid .rate{color:var(--gold);border-color:var(--line)}
+.card .flag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:9.5px;letter-spacing:.14em;background:var(--gold);color:#1a1207;font-weight:700;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.compare{margin:16px 0 0;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.compare .ch{padding:11px 16px;font-size:11px;letter-spacing:.14em;color:var(--gold);background:rgba(201,164,92,.06);border-bottom:1px solid var(--line)}
+.crow{display:flex;align-items:center;gap:12px;padding:13px 16px}
+.crow+.crow{border-top:1px solid var(--line2)}
+.crow .who{width:92px;flex:none;font-size:12.5px;color:var(--muted)}
+.crow.us .who{color:var(--gold-lt)}
+.crow .bar{flex:1;height:9px;border-radius:999px;background:rgba(255,255,255,.05);overflow:hidden}
+.crow .bar i{display:block;height:100%;border-radius:999px}
+.crow.prev .bar i{background:linear-gradient(90deg,#4a443c,#6f685e)}
+.crow.us .bar i{background:linear-gradient(90deg,var(--gold-dk),var(--gold),var(--gold-lt))}
+.crow .n{width:84px;flex:none;text-align:right;font-family:var(--mincho);font-size:15px}
+.crow.prev .n{color:var(--muted)}
+.cdiff{padding:12px 16px;text-align:center;font-size:13px;background:rgba(201,164,92,.05);border-top:1px solid var(--line)}
+.cdiff b{font-family:var(--mincho);color:var(--gold-lt);font-size:18px}
+.brk{margin:14px 0 0;border:1px solid var(--line2);border-radius:12px;background:var(--panel)}
+.brk summary{list-style:none;cursor:pointer;padding:13px 16px;font-size:12.5px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.brk summary::-webkit-details-marker{display:none}
+.brk summary .cv{color:var(--gold);font-size:11px}
+.bt{width:100%;border-collapse:collapse;font-size:12.5px}
+.bt td{padding:9px 16px;border-top:1px solid var(--line2)}
+.bt td:last-child{text-align:right;font-family:var(--mincho);font-size:14px}
+.bt tr.sum td{color:var(--gold-lt)}
+.bt .mut{color:var(--muted)}
+.simnote{margin:14px 0 0;font-size:11px;color:var(--muted2);line-height:1.7;text-align:center;padding:0 4px}
+
+/* ナビ */
+.nav{position:sticky;bottom:0;z-index:5;display:none;gap:10px;padding:14px var(--pad) calc(14px + env(safe-area-inset-bottom));
+  max-width:680px;margin:0 auto;background:linear-gradient(0deg,var(--bg) 72%,transparent)}
+.nav.on{display:flex}
+.nav button{padding:15px;border-radius:13px;font-size:15px;font-family:var(--gothic)}
+.nav .back{flex:0 0 96px;background:transparent;border:1px solid var(--line);color:var(--muted)}
+.nav .next{flex:1;background:linear-gradient(175deg,var(--gold-lt),var(--gold) 46%,var(--gold-dk));color:#1a1207;border:none;font-weight:700;letter-spacing:.06em}
+
+@media (max-width:400px){ .cards{gap:7px} .card{padding:14px 5px 13px} .photo{flex-direction:column} .pcard img,.pcard label{height:auto;min-height:130px} }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="crest">◆</div>
+  <div class="bnm mincho">ラウンジ いえやす</div>
+  <div class="prog" id="prog">
+    <div class="pt"><span id="progLbl">STEP 1 / 6</span><span id="progName">基本情報</span></div>
+    <div class="pb"><i id="progBar" style="width:0%"></i></div>
+  </div>
+  <div class="rule"></div>
+</div>
+
+<div class="wrap">
+
+  <!-- 0. ようこそ -->
+  <section class="step on" data-name="ようこそ" data-k="welcome">
+    <div class="welcome">
+      <div class="big mincho">面談表<br>ご入力のお願い</div>
+      <p class="lead2">かんたんな質問にお答えください。3〜5分ほどで終わります。<br>正直にお答えいただいて大丈夫です。合否には、入力の丁寧さではなく、あなたのことを知るために使います。</p>
+      <ul>
+        <li><span class="n">1</span><span>基本のこと・運転免許・希望のシフト</span></li>
+        <li><span class="n">2</span><span>これまでのご経験と、志望の動機</span></li>
+        <li><span class="n">3</span><span>身分証と、お顔の写真の撮影</span></li>
+      </ul>
+      <button class="startb" onclick="go(1)">はじめる</button>
+    </div>
+  </section>
+
+  <!-- 1. 基本情報 -->
+  <section class="step" data-name="基本情報" data-k="basic">
+    <div class="shead"><div class="k">STEP 1</div><h1 class="mincho">あなたのこと</h1></div>
+    <div class="q"><div class="ql">お名前<span class="req">必須</span></div><input class="tin" id="f_name" placeholder="山田 太郎" autocomplete="off"></div>
+    <div class="q"><div class="ql">フリガナ</div><input class="tin" id="f_kana" placeholder="ヤマダ タロウ" autocomplete="off"></div>
+    <div class="q"><div class="ql">生年月日<span class="req">必須</span></div>
+      <div class="bdrow">
+        <select class="tin tsel y" id="f_by" onchange="onBirth()"></select>
+        <select class="tin tsel" id="f_bm" onchange="onBirth()"></select>
+        <select class="tin tsel" id="f_bd" onchange="onBirth()"></select>
+      </div>
+      <div class="age" id="ageOut"></div>
+    </div>
+    <div class="q"><div class="ql">ご住所<span class="req">必須</span><span class="hint">番地・建物名・部屋番号まで</span></div>
+      <input class="tin" id="f_addr" placeholder="名古屋市中区栄3-1-1 〇〇マンション101" oninput="clearErr('e_addr')">
+      <div class="err" id="e_addr">建物名・部屋番号まで正しくご入力ください（戸建て・寮の方はその旨をご記入）</div>
+    </div>
+    <div class="q"><div class="ql">電話番号<span class="req">必須</span><span class="hint">採用のご連絡に使います</span></div>
+      <input class="tin" id="f_tel" type="tel" inputmode="numeric" placeholder="09012345678" oninput="clearErr('e_tel')">
+      <div class="err" id="e_tel">電話番号をご確認ください（ハイフンなし・10〜11桁）</div>
+    </div>
+    <div class="q"><div class="ql">緊急連絡先<span class="hint">ご家族などのお名前・続柄・電話番号</span></div>
+      <input class="tin" id="f_emg" placeholder="山田 花子（母）09012345678" autocomplete="off"></div>
+  </section>
+
+  <!-- 2. 運転 -->
+  <section class="step" data-name="運転" data-k="drive">
+    <div class="shead"><div class="k">STEP 2</div><h1 class="mincho">運転のこと</h1><p>閉店後、お客様やキャストをお送りする業務があります。差し支えなければお答えください。</p></div>
+    <div class="q"><div class="ql">運転免許はお持ちですか？<span class="req">必須</span></div>
+      <div class="opts" data-k="license"><button data-v="あり（普通）">あり（普通）</button><button data-v="あり（普通以外）">あり（その他）</button><button data-v="なし">なし</button><button data-v="取得予定">取得予定</button></div>
+    </div>
+    <div class="q lic"><div class="ql">取得した年<span class="hint">だいたいで大丈夫です</span></div>
+      <select class="tin tsel" id="f_licyear"></select>
+    </div>
+    <div class="q lic"><div class="ql">ふだん運転していますか？<span class="hint">ペーパードライバーでも構いません。正直にお答えください</span></div>
+      <div class="opts" data-k="driveFreq"><button data-v="日常的に運転">日常的に運転</button><button data-v="たまに運転">たまに運転</button><button data-v="ペーパー">ほとんど運転しない</button></div>
+    </div>
+    <div class="q lic"><div class="ql">この3年で、事故や違反はありましたか？</div>
+      <div class="opts" data-k="accident"><button data-v="なし">なし</button><button data-v="あり">あり</button></div>
+      <input class="tin sub" id="f_accidentNote" placeholder="差し支えなければ内容（例：一時停止違反 1回）" style="display:none">
+    </div>
+  </section>
+
+  <!-- 3. 希望シフト -->
+  <section class="step" data-name="希望シフト" data-k="shift">
+    <div class="shead"><div class="k">STEP 3</div><h1 class="mincho">出勤の希望</h1></div>
+    <div class="q"><div class="ql">週に何日くらい入れますか？</div>
+      <div class="opts narrow" data-k="daysPerWeek">
+        <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button>
+        <button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button><button data-v="7">7</button>
+      </div>
+    </div>
+    <div class="q"><div class="ql">入れる曜日<span class="hint">当てはまるものをすべて</span></div>
+      <div class="chips" data-multi="weekdays">
+        <button data-v="月">月</button><button data-v="火">火</button><button data-v="水">水</button><button data-v="木">木</button>
+        <button data-v="金">金</button><button data-v="土">土</button><button data-v="日">日</button>
+      </div>
+    </div>
+    <div class="q"><div class="ql">だいたいの時間<span class="hint">入れる時間帯の目安で大丈夫です</span></div>
+      <div class="row2"><input class="tin" id="f_from" type="time" value="19:00"><span class="sep">〜</span><input class="tin" id="f_to" type="time" value="02:00"></div>
+    </div>
+    <div class="q"><div class="ql">いつから入れますか？<span class="req">必須</span></div>
+      <div class="opts" data-k="startWhen"><button data-v="すぐ">すぐ</button><button data-v="1週間以内">1週間以内</button><button data-v="1か月以内">1か月以内</button><button data-v="相談したい">相談したい</button></div>
+    </div>
+    <div class="q"><div class="ql">お昼のお仕事はしていますか？</div>
+      <div class="opts" data-k="dayJob"><button data-v="なし">していない</button><button data-v="あり">している</button></div>
+    </div>
+    <div class="q"><div class="ql">通勤の手段</div>
+      <div class="opts" data-k="commute"><button data-v="車">車</button><button data-v="電車">電車</button><button data-v="自転車・徒歩">自転車・徒歩</button><button data-v="バイク">バイク</button></div>
+    </div>
+  </section>
+
+  <!-- 4. ご経験 -->
+  <section class="step" data-name="ご経験" data-k="exp">
+    <div class="shead"><div class="k">STEP 4</div><h1 class="mincho">これまでのお仕事</h1></div>
+    <div class="q"><div class="ql">ナイトのお仕事（黒服・ボーイ）のご経験は？<span class="req">必須</span></div>
+      <div class="opts" data-k="nightExp"><button data-v="あり">あり</button><button data-v="少し">少し</button><button data-v="なし">なし</button></div>
+    </div>
+    <div class="q nx"><div class="ql">その期間<span class="hint">合計でだいたいの年数</span></div>
+      <div class="opts" data-k="nightYears"><button data-v="半年未満">半年未満</button><button data-v="1年">1年</button><button data-v="2〜3年">2〜3年</button><button data-v="4年以上">4年以上</button></div>
+    </div>
+    <div class="q nx"><div class="ql">お店の名前・エリア<span class="hint">差し支えなければ</span></div>
+      <input class="tin" id="f_prevShop" placeholder="錦のラウンジ / 名駅のキャバクラ など" autocomplete="off"></div>
+    <div class="q nx"><div class="ql">役職・お任せされていたこと</div>
+      <div class="opts" data-k="prevRole"><button data-v="ホール">ホール</button><button data-v="主任・リーダー">主任・リーダー</button><button data-v="店長・幹部">店長・幹部</button></div>
+    </div>
+    <div class="q"><div class="ql">飲食店・接客業のご経験は？</div>
+      <div class="opts" data-k="foodExp"><button data-v="あり">あり</button><button data-v="なし">なし</button></div>
+    </div>
+    <div class="q"><div class="ql">前のお仕事の、辞めた理由<span class="hint">正直で大丈夫です。合否を決めるものではありません</span></div>
+      <textarea class="tin ta" id="f_leaveReason" rows="2" placeholder="例：昼職の勤務時間が合わなくなったため"></textarea></div>
+  </section>
+
+  <!-- 5. 体力・健康 -->
+  <section class="step" data-name="体力・健康" data-k="body">
+    <div class="shead"><div class="k">STEP 5</div><h1 class="mincho">お体のこと</h1><p>無理なく続けていただくために伺います。</p></div>
+    <div class="q"><div class="ql">深夜のお仕事のご経験は？</div>
+      <div class="opts" data-k="nightWork"><button data-v="慣れている">慣れている</button><button data-v="少しある">少しある</button><button data-v="はじめて">はじめて</button></div>
+    </div>
+    <div class="q"><div class="ql">立ち仕事・力仕事は大丈夫ですか？<span class="hint">ボトルの運搬などがあります</span></div>
+      <div class="opts" data-k="physical"><button data-v="問題ない">問題ない</button><button data-v="やや不安">やや不安</button><button data-v="相談したい">相談したい</button></div>
+    </div>
+    <div class="q"><div class="ql">持病・通院されていることはありますか？<span class="hint">配慮のために伺うものです</span></div>
+      <div class="opts" data-k="health"><button data-v="なし">なし</button><button data-v="あり">あり</button></div>
+      <input class="tin sub" id="f_healthNote" placeholder="差し支えなければ内容" style="display:none">
+    </div>
+  </section>
+
+  <!-- 6. 志望動機 -->
+  <section class="step" data-name="志望動機" data-k="motive">
+    <div class="shead"><div class="k">STEP 6</div><h1 class="mincho">当店を選んだ理由</h1></div>
+    <div class="q"><div class="ql">応募のきっかけ</div>
+      <div class="opts" data-k="channel"><button data-v="求人サイト">求人サイト</button><button data-v="紹介">知人の紹介</button><button data-v="SNS">SNS</button><button data-v="ホームページ">ホームページ</button><button data-v="その他">その他</button></div>
+    </div>
+    <div class="q"><div class="ql">志望の動機<span class="req">必須</span></div>
+      <textarea class="tin ta" id="f_motive" rows="3" placeholder="例：接客の仕事を長く続けたく、落ち着いた客層のお店で働きたいと思いました" oninput="clearErr('e_motive')"></textarea>
+      <div class="err" id="e_motive">ひとことで構いませんので、ご記入ください</div>
+    </div>
+    <div class="q"><div class="ql">将来やってみたいこと<span class="hint">この仕事で目指すもの。決まっていなければ「未定」で大丈夫です</span></div>
+      <div class="opts" data-k="future"><button data-v="長く勤めたい">長く勤めたい</button><button data-v="役職を目指す">役職を目指す</button><button data-v="独立したい">独立したい</button><button data-v="未定">未定</button></div>
+    </div>
+  </section>
+
+  <!-- 7. 条件・確認 -->
+  <section class="step" data-name="条件・確認" data-k="terms">
+    <div class="shead"><div class="k">STEP 7</div><h1 class="mincho">条件のこと</h1></div>
+    <div class="q"><div class="ql">希望のお給料<span class="hint">月給・時給どちらでも。「相談」でも構いません</span></div>
+      <input class="tin" id="f_payHope" placeholder="月30万円 / 時給1500円 / 相談" autocomplete="off"></div>
+    <div class="q"><div class="ql">他のお店との掛け持ちの予定は？</div>
+      <div class="opts" data-k="otherJob"><button data-v="なし">なし</button><button data-v="あり">あり</button></div>
+      <input class="tin sub" id="f_otherJobNote" placeholder="お店・曜日など" style="display:none">
+    </div>
+    <div class="q"><div class="ql">身元保証人になっていただける方<span class="hint">ご家族など。お名前と続柄</span></div>
+      <input class="tin" id="f_guarantor" placeholder="山田 花子（母）" autocomplete="off"></div>
+    <div class="q"><div class="ql">確認事項<span class="req">必須</span></div>
+      <div class="opts" data-k="antisocial"><button data-v="相違ありません">反社会的勢力との関わりはありません</button></div>
+      <div class="hint" style="margin-top:6px">当店は現金・お客様の送迎をお任せするため、全員に同じ確認をしています。</div>
+    </div>
+  </section>
+
+  <section class="step" data-name="写真" data-k="photo">
+    <div class="shead"><div class="k">STEP 7</div><h1 class="mincho">写真の撮影</h1><p>年齢確認と本人確認のためにお願いしています。</p></div>
+    <div class="q"><div class="ql">身分証明書<span class="hint">表面と裏面の両方をお願いします</span></div>
+      <div class="photo">
+        <div class="pcard" id="pc_id">
+          <label id="lbl_id"><span class="ic">🪪</span><span class="pt2">身分証（表）を撮る</span><span class="ph">免許証・保険証など<br>顔・生年月日が見えるように</span>
+            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="if(this.files[0])takePhoto('id',this.files[0])"></label>
+        </div>
+        <div class="pcard" id="pc_idback">
+          <label id="lbl_idback"><span class="ic">🪪</span><span class="pt2">身分証（裏）を撮る</span><span class="ph">裏面もお願いします<br>住所や記載事項が見えるように</span>
+            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="if(this.files[0])takePhoto('idback',this.files[0])"></label>
+        </div>
+      </div>
+    </div>
+    <div class="q"><div class="ql">お顔の写真</div>
+      <div class="photo">
+        <div class="pcard" id="pc_face">
+          <label id="lbl_face"><span class="ic">📷</span><span class="pt2">お顔を撮る</span><span class="ph">正面・明るいところで</span>
+            <input type="file" accept="image/*" capture="user" style="display:none" onchange="if(this.files[0])takePhoto('face',this.files[0])"></label>
+        </div>
+      </div>
+    </div>
+    <div class="pnote">お預かりした写真は、お店の管理者だけが確認します。第三者には共有しません。</div>
+  </section>
+
+  <!-- 8. 完了 -->
+  <section class="step" data-name="完了" data-k="done">
+    <div class="done">
+      <div class="mk">✓</div>
+      <div class="dt mincho">ありがとうございました</div>
+      <div class="dp">ご入力を受け付けました。</div>
+      <div class="hand">この iPad を、スタッフにお渡しください。<br>このあと担当より、面談の続きをご案内します。</div>
+      <button class="backstaff" onclick="backToGunshi()">スタッフの方はこちら →</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- ナビ -->
+<nav class="nav" id="nav">
+  <button class="back" onclick="back()">戻る</button>
+  <button class="next" id="nextBtn" onclick="next()">次へ</button>
+</nav>
+
+<script>
+/* ===================================================================
+ *  黒服（男性スタッフ）採用の面談表 フロント（応募者が iPad で入力）
+ *  ※このページは KIOSK_KEY を持たない。顧客データには一切触らない。
+ *  ※送信は doPost action:'kmendan' + 面談トークン。キャスト用(mendan.html)とは
+ *    シートもトークンも別系統。給与シミュは無し（黒服は時給＋ポイント制）。
+ * =================================================================== */
+
+
+/* ---------- サーバ接続 ----------
+ * 面談トークン t 付きで開かれた時だけ実送信する（黒服が軍師で「面談を開始」→ ?t=… で開く）。
+ * t 無し＝ローカル/デモ（サーバに送らず完了画面へ）。KIOSK_KEY は一切持たない。 */
+var GAS_URL='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+var TOKEN=(function(){ try{ return new URLSearchParams(location.search).get('t')||''; }catch(e){ return ''; } })();
+function mendanPost(fn, extra){
+  var body={ action:'kmendan', fn:fn, t:TOKEN };
+  if(extra) for(var k in extra) body[k]=extra[k];
+  return fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) }).then(function(r){ return r.json(); });
+}
+
+/* ---------- 応募者の入力 STATE ---------- */
+var STATE = {
+  name:'', kana:'', birth:'', age:null, addr:'', tel:'', emergency:'',
+  license:'', licYear:'', driveFreq:'', accident:'', accidentNote:'',
+  daysPerWeek:0, weekdays:[], timeFrom:'19:00', timeTo:'02:00', startWhen:'', dayJob:'', commute:'',
+  nightExp:'', nightYears:'', prevShop:'', prevRole:'', foodExp:'', leaveReason:'',
+  nightWork:'', physical:'', health:'', healthNote:'',
+  channel:'', motive:'', future:'',
+  payHope:'', otherJob:'', otherJobNote:'', guarantor:'', antisocial:'',
+  idPhoto:'', idPhotoBack:'', facePhoto:''
+};
+
+/* ---------- ステップ管理 ---------- */
+var steps = Array.prototype.slice.call(document.querySelectorAll('.step'));
+var LAST_INPUT = steps.length - 2;   // 最後の入力ステップ（=シミュ。送信で完了へ）
+var cur = 0;
+function go(i){
+  cur = i;
+  steps.forEach(function(s,idx){ s.classList.toggle('on', idx===i); });
+  var isEdge = (i===0 || i===steps.length-1);
+  document.getElementById('nav').classList.toggle('on', !isEdge);
+  document.getElementById('prog').style.display = isEdge ? 'none' : 'block';
+  if(!isEdge){
+    var total = LAST_INPUT;            // 入力ステップ数（ようこそ/完了を除く）
+    document.getElementById('progLbl').textContent = 'STEP ' + i + ' / ' + total;
+    document.getElementById('progName').textContent = steps[i].dataset.name;
+    document.getElementById('progBar').style.width = Math.round(i/total*100) + '%';
+  }
+  document.getElementById('nextBtn').textContent = (i===LAST_INPUT) ? 'この内容で送る' : '次へ';
+  window.scrollTo(0,0);
+}
+function back(){ if(cur>0) go(cur-1); }
+function next(){
+  if(!validate(cur)) return;
+  collect(cur);
+  if(cur===LAST_INPUT){ submitMendan(); return; }
+  go(cur+1);
+}
+
+/* ---------- 単一選択・複数選択 ---------- */
+document.querySelectorAll('.opts[data-k]').forEach(function(g){
+  g.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    g.querySelectorAll('button').forEach(function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+    STATE[g.dataset.k] = b.dataset.v;
+    onSelect(g.dataset.k, b.dataset.v);
+  });
+});
+document.querySelectorAll('.chips[data-multi]').forEach(function(g){
+  var key = g.dataset.multi;
+  g.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return;
+    b.classList.toggle('on');
+    var v = b.dataset.v, arr = STATE[key];
+    var i = arr.indexOf(v);
+    if(b.classList.contains('on')){ if(i<0) arr.push(v); } else { if(i>=0) arr.splice(i,1); }
+  });
+});
+/* 条件表示：関係ない質問は畳んで、答える数を減らす */
+function showIf_(sel, on){
+  var els = document.querySelectorAll(sel);
+  for(var i=0;i<els.length;i++) els[i].style.display = on ? '' : 'none';
+}
+function subIf_(id, on){
+  var el = document.getElementById(id); if(!el) return;
+  el.style.display = on ? '' : 'none';
+  if(!on) el.value = '';
+}
+function onSelect(k,v){
+  if(k==='license')  showIf_('.q.lic', v.indexOf('あり')===0);   // 免許なし/取得予定なら運転の詳細は聞かない
+  if(k==='accident') subIf_('f_accidentNote', v==='あり');
+  if(k==='nightExp') showIf_('.q.nx', v!=='なし');               // ナイト未経験なら前店の質問を出さない
+  if(k==='health')   subIf_('f_healthNote', v==='あり');
+  if(k==='otherJob') subIf_('f_otherJobNote', v==='あり');
+}
+
+/* ---------- 生年月日→年齢 ---------- */
+function calcAge(birth){
+  if(!birth) return null;
+  var b = new Date(birth); if(isNaN(b)) return null;
+  var t = new Date(), a = t.getFullYear()-b.getFullYear(), m = t.getMonth()-b.getMonth();
+  if(m<0 || (m===0 && t.getDate()<b.getDate())) a--;
+  return a;
+}
+/* 年は「今日時点で満18歳以上」になる年から（今年-18）を先頭に降順。18歳未満の年はそもそも出さない */
+var BD_MIN_AGE = 18, BD_MAX_AGE = 60;
+function bdFill_(el, from, to, label){
+  var h = '<option value="">' + label + '</option>';
+  if(from <= to){ for(var v=from; v<=to; v++) h += '<option value="'+v+'">'+v+label+'</option>'; }
+  else          { for(var v=from; v>=to; v--) h += '<option value="'+v+'">'+v+label+'</option>'; }
+  var keep = el.value; el.innerHTML = h;
+  if(keep && el.querySelector('option[value="'+keep+'"]')) el.value = keep;
+}
+function bdDaysIn_(y, m){
+  if(!y || !m) return 31;
+  return new Date(Number(y), Number(m), 0).getDate(); // 0日=前月末日＝うるう年も正しい
+}
+function initBirth(){
+  var t = new Date(), ty = t.getFullYear();
+  bdFill_(document.getElementById('f_by'), ty - BD_MIN_AGE, ty - BD_MAX_AGE, '年');
+  bdFill_(document.getElementById('f_bm'), 1, 12, '月');
+  bdFill_(document.getElementById('f_bd'), 1, 31, '日');
+}
+function onBirth(){
+  var ey = document.getElementById('f_by'), em = document.getElementById('f_bm'), ed = document.getElementById('f_bd');
+  var dim = bdDaysIn_(ey.value, em.value);
+  if(Number(ed.value) > dim) ed.value = String(dim);       // 3/31→2月に変更 等は末日へ丸める
+  if(ed.options.length - 1 !== dim) bdFill_(ed, 1, dim, '日');
+  var v = (ey.value && em.value && ed.value)
+    ? (ey.value + '-' + ('0'+em.value).slice(-2) + '-' + ('0'+ed.value).slice(-2)) : '';
+  STATE.birth = v; STATE.age = calcAge(v);
+  var el = document.getElementById('ageOut');
+  if(STATE.age==null){ el.innerHTML=''; return; }
+  var warn = '';
+  if(STATE.age < 18)      warn = '<span class="warn">※ 18歳未満の方はお勤めいただけません。</span>';
+  else if(STATE.age < 20) warn = '<span class="warn">※ 深夜のお仕事のため、20歳以上の方が対象です。</span>';
+  el.innerHTML = '満<b>' + STATE.age + '</b>歳' + warn;
+}
+
+/* ---------- バリデーション ---------- */
+function clearErr(id){ document.getElementById(id).classList.remove('on'); var f=document.getElementById(id.replace('e_','f_')); if(f)f.classList.remove('bad'); }
+function validate(i){
+  var k = steps[i].dataset.k;
+  if(k==='basic'){
+    var name = document.getElementById('f_name').value.trim();
+    var birth = STATE.birth;
+    var tel = document.getElementById('f_tel').value.replace(/[^0-9]/g,'');
+    if(!name){ alert('お名前をご入力ください'); document.getElementById('f_name').focus(); return false; }
+    if(!birth){ alert('生年月日をご入力ください（年・月・日）'); return false; }
+    if(STATE.age != null && STATE.age < 18){ alert('18歳未満の方はお勤めいただけません。'); return false; }
+    var addr = document.getElementById('f_addr').value.trim();
+    if(!addr){
+      document.getElementById('e_addr').classList.add('on');
+      document.getElementById('f_addr').classList.add('bad');
+      document.getElementById('f_addr').focus();
+      return false;
+    }
+    if(!/^0\d{9,10}$/.test(tel)){
+      document.getElementById('e_tel').classList.add('on');
+      document.getElementById('f_tel').classList.add('bad');
+      document.getElementById('f_tel').focus();
+      return false;
+    }
+  }
+  if(k==='drive' && !STATE.license){ alert('運転免許について、いずれかをお選びください'); return false; }
+  if(k==='shift' && !STATE.startWhen){ alert('いつから入れるかをお選びください'); return false; }
+  if(k==='exp' && !STATE.nightExp){ alert('ナイトのお仕事のご経験をお選びください'); return false; }
+  if(k==='motive'){
+    var mv = document.getElementById('f_motive').value.trim();
+    if(!mv){
+      document.getElementById('e_motive').classList.add('on');
+      document.getElementById('f_motive').classList.add('bad');
+      document.getElementById('f_motive').focus();
+      return false;
+    }
+  }
+  if(k==='terms' && !STATE.antisocial){ alert('確認事項へのチェックをお願いします'); return false; }
+  return true;
+}
+function collect(i){
+  var k = steps[i].dataset.k, g = function(id){ return ((document.getElementById(id)||{}).value || ''); };
+  if(k==='basic'){ STATE.name=g('f_name').trim(); STATE.kana=g('f_kana').trim(); STATE.addr=g('f_addr').trim(); STATE.tel=g('f_tel').replace(/[^0-9]/g,''); STATE.emergency=g('f_emg').trim(); } /* birth/ageはonBirth()が確定済み */
+  if(k==='drive'){ STATE.licYear=g('f_licyear'); STATE.accidentNote=g('f_accidentNote').trim(); }
+  if(k==='shift'){ STATE.timeFrom=g('f_from'); STATE.timeTo=g('f_to'); }
+  if(k==='exp'){ STATE.prevShop=g('f_prevShop').trim(); STATE.leaveReason=g('f_leaveReason').trim(); }
+  if(k==='body'){ STATE.healthNote=g('f_healthNote').trim(); }
+  if(k==='motive'){ STATE.motive=g('f_motive').trim(); }
+  if(k==='terms'){ STATE.payHope=g('f_payHope').trim(); STATE.otherJobNote=g('f_otherJobNote').trim(); STATE.guarantor=g('f_guarantor').trim(); }
+}
+
+/* ---------- 写真（既存 canvas 縮小を流用：長辺1000px・JPEG0.75） ---------- */
+var PHOTO_META = {
+  id:     { st:'idPhoto',     pc:'pc_id',     cap:'environment', ic:'🪪', t1:'身分証（表）を撮る', t2:'免許証・保険証など<br>顔・生年月日が見えるように' },
+  idback: { st:'idPhotoBack', pc:'pc_idback', cap:'environment', ic:'🪪', t1:'身分証（裏）を撮る', t2:'裏面もお願いします<br>住所や記載事項が見えるように' },
+  face:   { st:'facePhoto',   pc:'pc_face',   cap:'user',        ic:'📷', t1:'お顔を撮る',        t2:'正面・明るいところで' }
+};
+function takePhoto(which, file){
+  var m = PHOTO_META[which]; if(!m) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      var MAX=1000, w=img.width, h=img.height;
+      if(w>MAX||h>MAX){ if(w>h){ h=Math.round(h*MAX/w); w=MAX; } else { w=Math.round(w*MAX/h); h=MAX; } }
+      var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      var du = cv.toDataURL('image/jpeg',0.75);
+      STATE[m.st]=du;
+      document.getElementById(m.pc).innerHTML = '<img src="'+du+'"><button class="redo" onclick="redo(\''+which+'\')">撮り直す</button>';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function redo(which){
+  var m = PHOTO_META[which]; if(!m) return;
+  STATE[m.st]='';
+  document.getElementById(m.pc).innerHTML = '<label><span class="ic">'+m.ic+'</span><span class="pt2">'+m.t1+'</span><span class="ph">'+m.t2+'</span>'
+    + '<input type="file" accept="image/*" capture="'+m.cap+'" style="display:none" onchange="if(this.files[0])takePhoto(\''+which+'\',this.files[0])"></label>';
+}
+
+/* ---------- シミュ描画 ---------- */
+function workHours(from,to){
+  if(!from||!to) return 6;
+  var f=from.split(':'), t=to.split(':');
+  var h = (+t[0]+ (+t[1])/60) - (+f[0]+ (+f[1])/60);
+  if(h<=0) h+=24;
+  return Math.round(h*10)/10;
+}
+
+/* ---------- 送信（Phase後半でトークンAPIに接続。今はローカルで完了画面へ） ---------- */
+function submitMendan(){
+  var payload = JSON.parse(JSON.stringify(STATE));
+  if(!TOKEN){   // ローカル/デモ：サーバに送らず完了画面へ
+    try { localStorage.setItem('mendan_last', JSON.stringify({at:new Date().toISOString(), data:payload})); } catch(e){}
+    console.log('[面談表] (demo) submit =', payload);
+    go(steps.length-1); return;
+  }
+  var btn=document.getElementById('nextBtn'); btn.disabled=true; btn.textContent='送信中…';
+  mendanPost('submit', { data:payload })
+    .then(function(r){
+      if(r && r.ok){ go(steps.length-1); }
+      else { alert((r&&r.error)||'送信に失敗しました。スタッフにお声がけください。'); btn.disabled=false; btn.textContent='この内容で送る'; }
+    })
+    .catch(function(){ alert('通信に失敗しました。もう一度お試しください。'); btn.disabled=false; btn.textContent='この内容で送る'; });
+}
+
+/* スタッフが軍師に戻る（応募者は軍師PINを知らないので入れない＝封じ込め）。 */
+function backToGunshi(){
+  var base=location.origin+location.pathname.replace(/[^/]*$/,'');
+  location.href=base+'gunshi.html';
+}
+
+/* node からの検証用（純ロジックのみ） */
+
+initBirth();
+/* 免許の取得年（今年〜50年前）。初期値は空＝未選択のまま送れる */
+(function(){
+  var el=document.getElementById('f_licyear'); if(!el) return;
+  var ty=new Date().getFullYear(), h='<option value="">選択してください</option>';
+  for(var y=ty; y>=ty-50; y--) h+='<option value="'+y+'">'+y+' 年</option>';
+  el.innerHTML=h;
+})();
+/* 条件つきの質問は、選ぶまで畳んでおく */
+showIf_('.q.lic', false);
+showIf_('.q.nx', false);
+go(0);
+</script>
+</body>
+</html>
