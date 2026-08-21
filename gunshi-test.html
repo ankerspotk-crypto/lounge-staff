@@ -1394,7 +1394,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-21a-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-21b-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -8707,7 +8707,7 @@ function pollAuth(token){
   stopAuthPoll();
   var GAP=800;                       /* 応答が返ってから次を撃つまでの間隔。実効周期＝GAS往復+0.8秒 */
   function alive(){ return !_authDone && _authToken===token; }
-  function again(){ if(alive()) _authTimer=setTimeout(tick,GAP); }
+  function again(ms){ if(alive()) _authTimer=setTimeout(tick,ms||GAP); }
   function tick(){
     _authTimer=null;
     if(!alive()) return;
@@ -8716,7 +8716,7 @@ function pollAuth(token){
       if(r&&r.status==='ok'){ stopAuthPoll(); loginSuccess(r.name); return; }
       if(r&&r.status==='expired'){ stopAuthPoll(); startQrLogin(); return; }
       again();
-    }).catch(function(){ again(); });
+    }).catch(function(){ again(2500); });   /* 通信失敗時は間隔を広げる＝オフラインのiPadがログイン画面で撃ち続けない */
   }
   tick();                            /* QR表示直後に1発目＝旧実装の2.5秒待ちも解消 */
 }
