@@ -1362,7 +1362,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-19b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-21a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -8624,8 +8624,8 @@ function loadAll(){
 
 /* ============ ログイン（GAS本番のみ） ============ */
 var loginName='', loginPin='';
-var _authToken=null,_authTimer=null;
-function stopAuthPoll(){ if(_authTimer){clearInterval(_authTimer);_authTimer=null;} }
+var _authToken=null,_authTimer=null,_authDone=false;
+function stopAuthPoll(){ if(_authTimer){clearTimeout(_authTimer);clearInterval(_authTimer);_authTimer=null;} }
 var _booted=false;
 function startLogin(){ if(IS_GAS && !window._authStartP) window._authStartP = gsr('kioskAuthStart').catch(function(){return null;}); /* ⚡QRトークンを起動演出/表示と並行して先撃ち＝GAS往復1.9秒を演出時間に重ねる */ if(_booted){ startQrLogin(); return; } _booted=true; runBoot(startQrLogin); }   // 既定＝QRログイン（初回だけブート演出）
 /* 起動シーケンス（タイプライター）。初回ログイン表示時のみ。タップで即スキップ */
@@ -8649,6 +8649,7 @@ function runBoot(done){
 }
 /* 認証成功：緑フラッシュ＋AUTHORIZED を一瞬見せてから本編へ */
 function loginSuccess(name){
+  _authDone=true; _authToken=null; stopAuthPoll();   /* ⚠️先に認証を締める＝遅れて届く古いポーリング応答(expired)でQR画面に戻される事故を封じる */
   LOGIN=name; try{ saveKioskSession(name); }catch(_){}
   var lo=document.getElementById('loginOverlay');
   var host=document.getElementById('loginContent');
@@ -8662,6 +8663,7 @@ function loginSuccess(name){
   }, 500);
 }
 function startQrLogin(){
+  if(_authDone||LOGIN) return;   /* ⚠️ログイン済みならQRを被せない。営業中の画面がQRで塞がれる事故の最終防波堤 */
   stopAuthPoll();
   document.getElementById('klTerm').textContent=TERM+' 端末';
   document.getElementById('loginOverlay').style.display='flex';
@@ -8680,15 +8682,25 @@ function startQrLogin(){
   }).catch(function(){ var e=document.getElementById('klQr'); if(e)e.innerHTML='<div class="kl-err">通信エラー</div>'; });
 }
 function pollAuth(token){
+  /* ⚠️ここは間隔ポーリングにしてはいけない。GASの応答は最速でも1.9秒（床）で、2.5秒間隔だと前回の応答が返る前に次が飛ぶ。
+   * サーバの kioskAuthStatus は「1回のみ有効」＝先に届いた方がokでトークンを消し、後から返る方はexpiredを持って帰る。
+   * 旧実装はそのexpiredでstartQrLoginを呼び、ログイン成功直後の営業中画面にQRを被せていた（＝再起動が必要だった真因）。
+   * 対策は3枚：①応答が返ってから次を撃つ（重ならない）②応答受領時にトークンを再判定して古い応答を捨てる ③startQrLogin側の関所。 */
   stopAuthPoll();
-  _authTimer=setInterval(function(){
-    if(_authToken!==token){ stopAuthPoll(); return; }
+  var GAP=800;                       /* 応答が返ってから次を撃つまでの間隔。実効周期＝GAS往復+0.8秒 */
+  function alive(){ return !_authDone && _authToken===token; }
+  function again(){ if(alive()) _authTimer=setTimeout(tick,GAP); }
+  function tick(){
+    _authTimer=null;
+    if(!alive()) return;
     gsr('kioskAuthStatus',token).then(function(r){
-      if(!r)return;
-      if(r.status==='ok'){ stopAuthPoll(); loginSuccess(r.name); }
-      else if(r.status==='expired'){ stopAuthPoll(); startQrLogin(); }
-    }).catch(function(){});
-  },2500);
+      if(!alive()) return;           /* 遅れて届いた古い応答は捨てる */
+      if(r&&r.status==='ok'){ stopAuthPoll(); loginSuccess(r.name); return; }
+      if(r&&r.status==='expired'){ stopAuthPoll(); startQrLogin(); return; }
+      again();
+    }).catch(function(){ again(); });
+  }
+  tick();                            /* QR表示直後に1発目＝旧実装の2.5秒待ちも解消 */
 }
 function startPinLogin(){
   stopAuthPoll();
