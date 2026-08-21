@@ -846,6 +846,11 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 .sb.mode.jib{background:#1e1a0a;color:#e6c060;border:1px solid #5a4a1a;}
 .sb.shusen{background:#0e1a22;color:#8fd0e0;border:1px solid #2a4a5a;cursor:pointer;}
 .sb.shusen.off{background:#161626;color:#5a6a80;border:1px solid var(--line2);}
+/* 実効出勤の理由（シフト表の生値と違う時だけ出す。20:00シフト＝依頼が無ければ実際は20:30着） */
+.sr-arr{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;white-space:nowrap;flex-shrink:0;}
+.sr-arr.doh{background:#241428;color:#e6b0d6;border:1px solid #5a2a5a;}
+.sr-arr.pnd{background:#1c1608;color:#cfa85a;border:1px solid #4a3a1a;}
+.sr-arr.ok{background:#0f2a18;color:#7fe0a0;border:1px solid #2a6a44;}
 /* 出退勤の打刻ステータス（出退勤LINEマスター＝勤怠ログ由来・表示のみ） */
 .sr-att{font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;white-space:nowrap;font-variant-numeric:tabular-nums;flex-shrink:0;}
 .sr-att.in{background:#0f2a18;color:#7fe0a0;border:1px solid #2a6a44;}
@@ -2824,6 +2829,15 @@ function attBadge(s){
   if(s.punchIn)  return '<span class="sr-att in" title="出勤打刻 '+esc(s.punchIn)+'">🟢 出勤 '+esc(s.punchIn)+'</span>';
   return '<span class="sr-att none" title="まだ出退勤の打刻・報告がありません">⚪ 未</span>';
 }
+/* 実効出勤の理由バッジ。シフト表の生値と実際の出勤が違う時だけ出す（＝14:00ラインナップLINEと同じ時刻を表示している根拠）。
+   20:00シフトは20時出勤の依頼が無ければ実際は20:30着＝これが既定なのでバッジは出さない。 */
+function arrBadge(s){
+  var raw=s.rawShift?('　シフト表: '+s.rawShift):'';
+  if(s.arrival==='dohan') return '<span class="sr-arr doh" title="同伴のため20:30着'+esc(raw)+'">🤝 同伴</span>';
+  if(s.arrival==='pend')  return '<span class="sr-arr pnd" title="20時出勤を打診中。返事待ちなので20:30着で見込む'+esc(raw)+'">⏳ 20時打診中</span>';
+  if(s.arrival==='ok')    return '<span class="sr-arr ok" title="20時出勤を了承済み'+esc(raw)+'">⚡ 20時了承</span>';
+  return '';
+}
 function shiftRow(s){
   var i=SHIFT.indexOf(s);
   var col=castColor(s.name);
@@ -2832,7 +2846,7 @@ function shiftRow(s){
   var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
   var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
   var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>'+castBadge(s.name);
-  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+(s.out?('〜'+fmtTime(s.out)):'')+'</span>'+attBadge(s)+'<span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
+  return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+(s.out?('〜'+fmtTime(s.out)):'')+'</span>'+arrBadge(s)+attBadge(s)+'<span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
 }
 /* 当日の源氏名を修正（体験の子など）。空欄で元名に戻す。keyは元のシート名。 */
 function setGenji(i){
@@ -8545,7 +8559,7 @@ function applyRsvGrouping(){
   });
 }
 function adaptRot(list){return (list||[]).map(function(c){return {cast:c.cast, interval:c.interval||15, tables:(c.tables||[]).map(function(t){return {key:t.label, code:t.code, cust:(t.cust||'')+(t.cust?'様':''), cur:!!t.current, min:0, wait:t.awayMin||0};})};});}
-function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||'', punchIn:s.punchIn||'', punchOut:s.punchOut||''};});}
+function adaptShift(list){return (list||[]).map(function(s){return {name:s.name, origName:s.origName||s.name, renamed:!!s.renamed, in:s.in, out:s.out, hayaagari:s.hayaagari, okuri:!!s.okuri, okuriMode:s.okuriMode||'ドライバー', shusen:s.shusen||'', punchIn:s.punchIn||'', punchOut:s.punchOut||'', arrival:s.arrival||'', rawShift:s.rawShift||''};});}
 // 保存ラベルは「HH:mm 客名様（卓）」を ' / ' で連結（複数予約対象）。ここから客名キーだけを抜く。
 // ⚠️旧実装は custKey(r.target) 一発＝末尾が「）」だと様を外せず丸ごとキー化し、席の客名と一致しなかった（実データで卓に出ない主因）。
 function reqCustKeys_(target){
