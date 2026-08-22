@@ -340,6 +340,15 @@ table.mtx tr.tp-off td{color:var(--dim);}
   .perms .toggle{flex:1 1 calc(50% - 4px);min-width:0;}
   .mtx-scroll{max-height:64vh;}
 }
+
+/* 📈 年間集計（売上年鑑） */
+.nen-chart{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 6px 4px;overflow-x:auto;}
+.nen-bar{cursor:crosshair;}
+.nen-bar:hover{opacity:.82;}
+.nen-tip{position:fixed;pointer-events:none;z-index:99;opacity:0;transition:opacity .1s;background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:8px 11px;font-size:12px;font-weight:700;line-height:1.7;color:var(--txt);white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.55);}
+.nen-gap{background:var(--warnbg);border:1px solid var(--warnline);border-radius:12px;padding:13px 15px;margin-bottom:16px;}
+.nen-gap ul{margin:8px 0 0;padding-left:1.15em;font-size:13px;color:var(--sub);font-weight:600;line-height:1.9;}
+.nen-gap b{color:var(--warn);}
 </style>
 
 <div class="wrap">
@@ -542,7 +551,7 @@ var TAB_GROUPS=[
   {g:'top',   label:'🏠 トップ', tabs:[['top','🏠 店の全容']]},
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kyukin','📉 当欠'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
-  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
+  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['nenkan','📈 年間集計'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
 ];
@@ -560,7 +569,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
+  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -612,7 +621,7 @@ function renderTop(){
 }
 function drawTop(){
   var B=TOPB; if(!B){ setBody('<div class="empty">読み込みエラー</div>'); return; }
-  var L=B.list||[], t=L[0]||{date:B.today,dow:'',rsvCount:0,rsvPax:0,cast:[],taiken:[],haken:[],kurofuku:[],floorCount:0,kurofukuCount:0,pending:{}}, M=B.month||{};
+  var L=B.list||[], t=L[0]||{date:B.today,dow:'',rsvCount:0,rsvPax:0,cast:[],taiken:[],haken:[],kurofuku:[],yoyaku:[],floorCount:0,kurofukuCount:0,yoyakuCount:0,pending:{}}, M=B.month||{};
   var j=tpJudge(t), h='';
 
   /* ① 派遣の要否＝この画面の一番の用（最上段に単独で置く） */
@@ -624,7 +633,7 @@ function drawTop(){
   var diff=(M.visits||0)-(M.prevSameSpan||0);
   h+='<div class="tp-hero">'
     +'<div class="tp-k hi"><div class="k-l">本日の予約</div><div class="k-v">'+(t.rsvCount||0)+'<small>件</small> '+(t.rsvPax||0)+'<small>名</small></div><div class="k-s">'+esc(dowLabel_(t))+'<br>必要キャスト<b style="color:#bcd6ff">'+tpNeed(t)+'名</b>'+(tpMix(t)?('（'+esc(tpMix(t))+'）'):'')+'</div></div>'
-    +'<div class="tp-k"><div class="k-l">本日の出勤（接客）</div><div class="k-v">'+(t.floorCount||0)+'<small>名</small></div><div class="k-s">キャスト'+((t.cast||[]).length)+'・体験'+((t.taiken||[]).length)+'・派遣'+((t.haken||[]).length)+tpPendTxt_(t)+'</div></div>'
+    +'<div class="tp-k"><div class="k-l">本日の出勤（接客）</div><div class="k-v">'+(t.floorCount||0)+'<small>名</small></div><div class="k-s">キャスト'+((t.cast||[]).length)+'・体験'+((t.taiken||[]).length)+'・派遣'+((t.haken||[]).length)+tpYoyakuTxt_(t)+tpPendTxt_(t)+'</div></div>'
     +'<div class="tp-k"><div class="k-l">本日の黒服</div><div class="k-v">'+(t.kurofukuCount||0)+'<small>名</small></div><div class="k-s">'+((t.kurofuku||[]).map(function(x){return x.name;}).join('・')||'—')+'</div></div>'
     +'<div class="tp-k"><div class="k-l">今月の客入り（'+esc(M.ym||'')+'）</div><div class="k-v">'+(M.visits||0)+'<small>組</small></div><div class="k-s">'+(mp?('延べ'+mp+'名／'):'')+'営業'+(M.bizDays||0)+'日・1日平均'+(M.bizDays?Math.round((M.visits||0)/M.bizDays*10)/10:0)+'組<br>前月同時点 '+(M.prevSameSpan||0)+'組（'+(diff>=0?'+':'')+diff+'）</div></div>'
     +'</div>';
@@ -636,8 +645,10 @@ function drawTop(){
     if((t.taiken||[]).length)   h+='<div class="tp-grp">体験 '+t.taiken.length+'名</div><div class="tp-nm">'+tpNames(t.taiken,'taiken')+'</div>';
     if((t.haken||[]).length)    h+='<div class="tp-grp">派遣 '+t.haken.length+'名</div><div class="tp-nm">'+tpNames(t.haken,'haken')+'</div>';
     if((t.kurofuku||[]).length) h+='<div class="tp-grp">黒服 '+t.kurofuku.length+'名</div><div class="tp-nm">'+tpNames(t.kurofuku,'kuro')+'</div>';
+    /* 予約出勤＝予約が入ったら呼ぶ待機枠。上の人数（接客）には数えず、誰を呼べるかだけ見せる */
+    if((t.yoyaku||[]).length)   h+='<div class="tp-grp">予約出勤 '+t.yoyaku.length+'名 <span class="sub">※接客人数には含みません</span></div><div class="tp-nm">'+tpNames((t.yoyaku||[]).map(function(x){return {name:x.name,shift:''};}),'taiken')+'</div>';
   } else h+='<div class="empty">本日のシフトがありません</div>';
-  h+='<div class="hint" style="margin-top:10px">シフトの修正は「👥 人事 → 🗓 シフト」。ここは確定分だけを数えています（申請中は人数に入れません）。</div></div>';
+  h+='<div class="hint" style="margin-top:10px">シフトの修正は「👥 人事 → 🗓 シフト」。ここは確定分だけを数えています（申請中は人数に入れません）。<b>「予約出勤」は待機枠なので接客人数に数えていません</b>（予約が入って呼び出したら時刻に直してください）。</div></div>';
 
   /* ④ 今日の予約明細＝店の全容。件数/人数は上のカードが正（キャンセルは除外済み） */
   var R=B.todayRsv||[];
@@ -665,10 +676,10 @@ function drawTop(){
       +'<td>'+(d.rsvCount||0)+'</td><td><b>'+(d.rsvPax||0)+'</b></td>'
       +'<td title="'+esc(tpMix(d))+'"><b>'+tpNeed(d)+'</b>'+(d.needRaw&&d.needRaw!==tpNeed(d)?('<span class="tp-raw">（'+d.needRaw+'）</span>'):'')+'</td>'
       +'<td><b>'+(d.floorCount||0)+'</b>'+tpPendBadge_(d)+'</td>'
-      +'<td class="role">キ'+((d.cast||[]).length)+'・体'+((d.taiken||[]).length)+'・派'+((d.haken||[]).length)+'</td>'
+      +'<td class="role">キ'+((d.cast||[]).length)+'・体'+((d.taiken||[]).length)+'・派'+((d.haken||[]).length)+((d.yoyakuCount||0)?('・<span class="tp-pd">予'+d.yoyakuCount+'</span>'):'')+'</td>'
       +'<td>'+(d.kurofukuCount||0)+'</td></tr>';
   });
-  h+='</table></div><div class="hint" style="margin-top:8px">「必要」＝予約1件ごとに算出（'+esc(TP_RULE)+'）。小さい灰色の数字は切り上げ前の素の値です。承認待ちのシフト申請は人数に入れず <span class="tp-pd">+N申請中</span> で別に出しています。</div></div>';
+  h+='</table></div><div class="hint" style="margin-top:8px">「必要」＝予約1件ごとに算出（'+esc(TP_RULE)+'）。小さい灰色の数字は切り上げ前の素の値です。承認待ちのシフト申請は人数に入れず <span class="tp-pd">+N申請中</span> で別に出しています。「予約出勤」も接客人数に入れず <span class="tp-pd">予N</span> で別に出しています。</div></div>';
 
   /* ⑥ 今月の客入り推移 */
   h+=tpMonthHtml_(M);
@@ -676,6 +687,7 @@ function drawTop(){
   setBody(h);
 }
 function dowLabel_(t){ return (t.date||'')+'（'+(t.dow||'')+'）'+(t.closed?(' '+t.closed):''); }
+function tpYoyakuTxt_(t){ var n=(t.yoyakuCount||0); return n?('／予約出勤'+n+'名'):''; }
 function tpPendTxt_(t){ var p=t.pending||{}, n=(p.cast||0)+(p.taiken||0)+(p.haken||0); return n?('／申請中'+n+'名'):''; }
 function tpPendBadge_(d){ var p=d.pending||{}, n=(p.cast||0)+(p.taiken||0)+(p.haken||0); return n?('<span class="tp-pd">+'+n+'申請中</span>'):''; }
 function nowHm_(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
@@ -985,9 +997,111 @@ function mbForm_(mode,c){
   var html='<div class="toolbar"><button class="btn" onclick="mbBack()">← 会員一覧へ戻る</button><span class="cnt">'+title+'</span></div>'
     +'<div class="sec"><div class="hint" style="margin:0 0 12px">'+note+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+fields+'</div>'
-    +'<div class="toolbar" style="margin-top:16px"><button class="btn pri" onclick="mbSave('+(isEdit?'false':'true')+')">'+(isEdit?'💾 保存する':'＋ 登録する')+'</button></div></div>';
+    +'<div class="toolbar" style="margin-top:16px"><button class="btn pri" onclick="mbSave('+(isEdit?'false':'true')+')">'+(isEdit?'💾 保存する':'＋ 登録する')+'</button></div></div>'
+    // ⚠️注意情報は別の保存ボタン（会員情報の「変更した項目だけ送信」と混ぜない＝Y3の和暦列を巻き込まないため）
+    +(isEdit?'<div class="sec" id="mb-ngbox"><div class="hint">⚠️ 注意情報を読み込み中...</div></div>':'');
   setBody(html);
   MB_ORIG=isEdit?mbReadForm_():{}; // 描画後DOM値を基準（type=date正規化と一致＝未変更の誤送信を防ぐ）
+  if(isEdit) mbNgLoad(c||{});
+}
+
+/* ══ ⚠️注意情報（NGキャスト／苦手タイプ／NG行為／同席NGのお客様）══════════════════
+   ボス指示 2026-08-19。実体は軍師と同じ backend（ng.gs の kioskGetCustomerNote / kioskSaveCustomerNote）。
+   ここは管理者が落ち着いて棚卸しするための入口＝現場入力は軍師、整備はコンソール。
+   ⛔NGキャストに入れた名前は、付け回し・予定キャストで**完全ブロック**になる。 */
+var MB_NG=null, MB_NG_CUST=null, MB_NG_SEARCH=[];
+function mbNgNm_(s){ return String(s||'').replace(/[\s　]/g,'').replace(/(様|さま)$/,''); }
+function mbNgLoad(c){
+  MB_NG_CUST={no:c.no||'',name:c.name||c.card||''};
+  api('adminGetCustomerNote',{no:MB_NG_CUST.no,name:MB_NG_CUST.name}).then(function(r){
+    if(r&&r.ok){ MB_NG={note:r.note||{},vocab:r.vocab||null,casts:r.casts||[]}; }
+    else { MB_NG={note:{ngCasts:[],ngTypes:[],ngActs:[],ngCustomers:[],memo:''},vocab:null,casts:[],err:(r&&r.error)||''}; }
+    mbNgDraw();
+  }).catch(function(){ MB_NG={note:{ngCasts:[],ngTypes:[],ngActs:[],ngCustomers:[],memo:''},vocab:null,casts:[],err:'通信エラー'}; mbNgDraw(); });
+}
+function mbNgChip_(kind,val,on){
+  return '<span class="mbng-chip'+(on?' on':'')+'" onclick="mbNgTog(\''+String(val).replace(/'/g,"\\'")+'\',\''+kind+'\')">'+(on?'✓ ':'')+esc(val)+'</span>';
+}
+function mbNgDraw(){
+  var el=document.getElementById('mb-ngbox'); if(!el||!MB_NG) return;
+  var n=MB_NG.note, V=MB_NG.vocab||{type:{look:[],chara:[]},act:[]};
+  var types=((V.type&&V.type.look)||[]).concat((V.type&&V.type.chara)||[]);
+  var has=function(k,v){ return (n[k]||[]).some(function(x){return mbNgNm_(x)===mbNgNm_(v);}); };
+  var extraCasts=(n.ngCasts||[]).filter(function(x){ return !(MB_NG.casts||[]).some(function(c){return mbNgNm_(c)===mbNgNm_(x);}); });
+  var extraActs=(n.ngActs||[]).filter(function(x){ return (V.act||[]).indexOf(x)<0; });
+  el.innerHTML='<style>'
+    +'.mbng-chip{display:inline-block;margin:4px 6px 0 0;padding:7px 13px;border-radius:15px;font-size:13px;cursor:pointer;background:#f6f6f8;border:1px solid #d8d8e0;color:#555;}'
+    +'.mbng-chip.on{background:#fdecee;border-color:#d2707c;color:#a3202f;font-weight:700;}'
+    +'.mbng-h{font-weight:800;color:#a3202f;margin-bottom:4px;}'
+    +'.mbng-l{font-size:12px;font-weight:700;color:#666;margin:14px 0 4px;}'
+    +'</style>'
+    +'<div class="mbng-h">⚠️ 注意情報</div>'
+    +'<div class="hint" style="margin:0 0 6px">ここに入れた内容が、軍師の予約一覧と付け回しで自動的に警告になります。'
+      +'<b>NGキャストは付け回しを完全にブロック</b>します。'+(MB_NG.err?'<br><span style="color:#c00">読込エラー：'+esc(MB_NG.err)+'</span>':'')+'</div>'
+    +'<div class="mbng-l">⛔ NGキャスト（このお客様に付けられません）</div><div>'
+      +(MB_NG.casts||[]).map(function(c){return mbNgChip_('ngCasts',c,has('ngCasts',c));}).join('')
+      +extraCasts.map(function(c){return mbNgChip_('ngCasts',c,true);}).join('')
+      +((MB_NG.casts||[]).length||extraCasts.length?'':'<span class="hint">キャスト名簿を取得できませんでした</span>')+'</div>'
+    +'<div class="mbng-l">🚫 苦手なキャストのタイプ</div><div>'+types.map(function(t){return mbNgChip_('ngTypes',t,has('ngTypes',t));}).join('')+'</div>'
+    +'<div class="mbng-l">📋 NG行為</div><div>'
+      +(V.act||[]).map(function(a){return mbNgChip_('ngActs',a,has('ngActs',a));}).join('')
+      +extraActs.map(function(a){return mbNgChip_('ngActs',a,true);}).join('')+'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;max-width:520px"><input id="mb-ng-free" class="inp" style="flex:1" placeholder="その他（例：奥様の話をしない）"><button class="btn" onclick="mbNgAddFree()">＋追加</button></div>'
+    +'<div class="mbng-l">🚷 同席NGのお客様（同じフロアに居たら警告）</div>'
+      +'<div>'+((n.ngCustomers||[]).length?(n.ngCustomers||[]).map(function(x,i){
+          return '<span class="mbng-chip on">'+esc(x.name||x.no)+(x.no?'（'+esc(x.no)+'）':'')+' <span onclick="mbNgDelCust('+i+')" style="cursor:pointer">×</span></span>';
+        }).join(''):'<span class="hint">登録なし</span>')+'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:8px;max-width:520px"><input id="mb-ng-q" class="inp" style="flex:1" placeholder="お客様を検索（名前・会員番号）"><button class="btn" onclick="mbNgSearch()">🔍 検索</button></div>'
+      +'<div id="mb-ng-res"></div>'
+    +'<div class="mbng-l">📝 補足メモ</div>'
+      +'<textarea id="mb-ng-memo" class="inp" rows="2" style="max-width:520px;width:100%">'+esc(n.memo||'')+'</textarea>'
+    +'<div class="toolbar" style="margin-top:14px"><button class="btn pri" onclick="mbNgSave()">💾 注意情報を保存</button></div>';
+}
+function mbNgKeep_(){ var m=document.getElementById('mb-ng-memo'); if(m&&MB_NG&&MB_NG.note)MB_NG.note.memo=m.value; }
+function mbNgTog(val,kind){
+  if(!MB_NG||!MB_NG.note)return; mbNgKeep_();
+  var free=(document.getElementById('mb-ng-free')||{}).value||'';
+  var arr=MB_NG.note[kind]||(MB_NG.note[kind]=[]);
+  var i=-1; arr.forEach(function(x,ix){ if(mbNgNm_(x)===mbNgNm_(val))i=ix; });
+  if(i>=0)arr.splice(i,1); else arr.push(val);
+  mbNgDraw(); var f=document.getElementById('mb-ng-free'); if(f)f.value=free;
+}
+function mbNgAddFree(){
+  var el=document.getElementById('mb-ng-free'); if(!el||!MB_NG)return;
+  var v=String(el.value||'').trim(); if(!v)return; mbNgKeep_();
+  if(!(MB_NG.note.ngActs||[]).some(function(x){return mbNgNm_(x)===mbNgNm_(v);})) (MB_NG.note.ngActs=MB_NG.note.ngActs||[]).push(v);
+  el.value=''; mbNgDraw();
+}
+function mbNgDelCust(i){ if(!MB_NG)return; mbNgKeep_(); (MB_NG.note.ngCustomers||[]).splice(i,1); mbNgDraw(); }
+function mbNgSearch(){
+  var q=String(((document.getElementById('mb-ng-q')||{}).value)||'').trim();
+  var box=document.getElementById('mb-ng-res'); if(!box)return;
+  if(!q){ box.innerHTML='<div class="hint">名前か会員番号を入れてください</div>'; return; }
+  box.innerHTML='<div class="hint">検索中...</div>';
+  var all=((MB_DATA&&MB_DATA.customers)||[]).filter(function(c){
+    var hay=(c.name||'')+(c.card||'')+(c.no||'');
+    return hay.indexOf(q)>=0;
+  }).slice(0,12);
+  MB_NG_SEARCH=all;
+  box.innerHTML=all.length
+    ? '<div style="margin-top:6px">'+all.map(function(c,i){ return '<span class="mbng-chip" onclick="mbNgAddCust('+i+')">＋ '+esc(c.name||c.card||'')+(c.no?'（'+esc(c.no)+'）':'')+'</span>'; }).join('')+'</div>'
+    : '<div class="hint">該当なし（会員一覧に読み込まれている中から探します）</div>';
+}
+function mbNgAddCust(i){
+  var c=MB_NG_SEARCH[i]; if(!c||!MB_NG)return; mbNgKeep_();
+  var nm=c.name||c.card||'', no=c.no||'';
+  if(MB_NG_CUST&&((no&&String(MB_NG_CUST.no)===String(no))||(!no&&mbNgNm_(MB_NG_CUST.name)===mbNgNm_(nm)))){ toast('ご本人は登録できません',true); return; }
+  var cur=MB_NG.note.ngCustomers=MB_NG.note.ngCustomers||[];
+  if(!cur.some(function(x){ return (no&&x.no&&String(x.no)===String(no))||(!no&&mbNgNm_(x.name)===mbNgNm_(nm)); })) cur.push({no:no,name:nm});
+  mbNgDraw();
+}
+function mbNgSave(){
+  if(!MB_NG||!MB_NG_CUST){ toast('読み込めていません',true); return; }
+  mbNgKeep_();
+  api('adminSaveCustomerNote',{no:MB_NG_CUST.no,name:MB_NG_CUST.name,note:MB_NG.note}).then(function(r){
+    if(r&&r.ok){ toast('⚠️ 注意情報を保存しました'); MB_NG.note=r.note||MB_NG.note; mbNgDraw(); }
+    else toast((r&&r.error)||'保存に失敗しました',true);
+  }).catch(function(){ toast('通信エラー',true); });
 }
 function mbEditForm(rowIdx){ var c=((MB_DATA&&MB_DATA.customers)||[]).filter(function(x){return x.rowIdx===rowIdx;})[0]; if(c)mbForm_('edit',c); }
 function mbAddForm(){ mbForm_('add',null); }
@@ -4257,7 +4371,7 @@ function blMockDetail(uuid){
 /* ===== 📄 請求書管理（管理者・コンソール）：軍師で入力された請求を管理し、A4請求書(PDF)を生成 =====
    backend actions（handleApiRequest_・isAdmin_ゲート）: seikyuData / seikyuGenerate / seikyuSetStatus / seikyuUpdate / seikyuSaveSettings / seikyuSaveSender / seikyuImage
    請求書のPDFは 出勤簿と同じ window.open + print CSS 方式（ブラウザのPDF保存）。写真は制限付きDriveをGAS経由base64で閲覧。 */
-var skData=null, skFilter='open', skSenderF='', skSettingsOpen=false, skEditState=null;
+var skData=null, skFilter='open', skSenderF='', skSettingsOpen=false, skEditState=null, skSel={};
 
 function skEnsureAdminCss_(){ if(document.getElementById('sk-admin-css'))return; var s=document.createElement('style'); s.id='sk-admin-css'; s.textContent=
   '.sk-fl{font-size:11px;color:var(--dim,#8a9ac0);font-weight:700;margin:0 0 4px;}'
@@ -4274,7 +4388,12 @@ function skEnsureAdminCss_(){ if(document.getElementById('sk-admin-css'))return;
  +'.sk-ov{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;}'
  +'.sk-ov-card{background:var(--panel,#12121f);border:1px solid var(--line2,#2a2f45);border-radius:12px;padding:18px;max-width:560px;width:100%;max-height:90vh;overflow:auto;}'
  +'.sk-item-row{display:flex;gap:6px;margin-bottom:6px;}.sk-item-row .finput{flex:1;}.sk-item-row .sk-iamt{max-width:120px;}'
- +'.sk-irm{background:#241014;border:1px solid #5a2430;color:#e0a0b0;border-radius:8px;padding:0 12px;cursor:pointer;}';
+ +'.sk-irm{background:#241014;border:1px solid #5a2430;color:#e0a0b0;border-radius:8px;padding:0 12px;cursor:pointer;}'
+ +'.sk-cb{width:17px;height:17px;cursor:pointer;accent-color:#3fbf7f;}'
+ +'.sk-inv.sksel{border-color:#3fbf7f;box-shadow:0 0 0 1px #3fbf7f inset;}'
+ +'.sk-bundle{font-size:11px;font-weight:800;color:#7fc7ff;background:#12233a;border:1px solid #2a4a6a;border-radius:20px;padding:2px 8px;}'
+ +'.sk-bulkbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#10221a;border:1px solid #2a6a44;border-radius:10px;padding:10px 14px;margin-bottom:10px;}'
+ +'.sk-bulkbar .btn{font-size:13px;}';
   document.head.appendChild(s);
 }
 function skBadge_(s){ var c={'未請求':['#20304a','#8fb4e0'],'請求済':['#123a2a','#5fd0a0'],'入金済':['#1a3a1a','#7fe07f'],'取消':['#3a1a24','#e0a0b0']}[s]||['#20304a','#8fb4e0']; return '<span class="sk-badge" style="background:'+c[0]+';color:'+c[1]+'">'+esc(s)+'</span>'; }
@@ -4309,9 +4428,57 @@ function drawSeikyu(d){
     +'<button class="btn" onclick="skToggleSettings()">⚙️ 発行者・振込先設定</button></div>';
   var alertHtml='';
   if(overdue||soon){ alertHtml='<div class="hint" style="border-left:3px solid #d66">⚠️ 支払期限：超過 <b>'+overdue+'</b>件'+(soon?(' ／ 7日以内 <b>'+soon+'</b>件'):'')+'</div>'; }
+  // 合算検知：同じ請求番号が2件以上なら束ね
+  var noCount={}; invs.forEach(function(x){ if(x.no) noCount[x.no]=(noCount[x.no]||0)+1; });
+  invs.forEach(function(x){ x._bundleCount = x.no?(noCount[x.no]||0):0; });
   var rows=view.map(function(inv){ return skRowHtml_(inv,st); }).join('')||'<div class="empty" style="padding:16px">該当する請求はありません</div>';
-  var listSec='<div class="sec"><div class="sec-t">📄 請求一覧 <span class="sub">未入金 '+unpaid+'件 ／ 全'+invs.length+'件</span></div>'+rows+'</div>';
-  setBody(bar+alertHtml+skSettingsPanel_(st)+listSec);
+  var listSec='<div class="sec"><div class="sec-t">📄 請求一覧 <span class="sub">未入金 '+unpaid+'件 ／ 全'+invs.length+'件・チェックで同じ請求先を合算</span></div>'+rows+'</div>';
+  setBody(bar+alertHtml+skBulkBar_()+skSettingsPanel_(st)+listSec);
+}
+function skToggleSel(id,on){ if(on)skSel[id]=true; else delete skSel[id]; drawSeikyu(skData); }
+function skBulkBar_(){
+  var ids=Object.keys(skSel).filter(function(k){return skSel[k];});
+  var invs=ids.map(skInvById_).filter(Boolean);
+  if(!invs.length) return '';
+  var sum=invs.reduce(function(a,b){return a+(Number(b.amount)||0);},0);
+  var sameSender=invs.every(function(v){return v.senderId===invs[0].senderId;});
+  var act='';
+  if(invs.length>=2){ act = sameSender
+    ? '<button class="btn pri" onclick="skBundle()">🧾 選択した'+invs.length+'件を1枚に合算</button>'
+    : '<span style="color:#e88;font-size:13px">⚠️ 同じ請求先だけ合算できます</span>'; }
+  return '<div class="sk-bulkbar"><b>'+invs.length+'件選択</b> ・ ¥'+sum.toLocaleString()+' '+act+'<button class="btn" onclick="skSel={};drawSeikyu(skData)">選択解除</button></div>';
+}
+function skLatestDue_(invs){ var ds=invs.map(function(v){return v.due;}).filter(Boolean).sort(); return ds.length?ds[ds.length-1]:''; }
+function skFmtUse_(d){ var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?(Number(m[2])+'/'+Number(m[3])):''; }
+function skBuildCombined_(invs){
+  var base=invs[0], items=[], slips=[], total=0, closes=[];
+  invs.forEach(function(v){
+    ((v.items&&v.items.length)?v.items:[{name:(v.closeMonth||'')+' ご利用分',amount:v.amount}]).forEach(function(it){ items.push({name:it.name,amount:it.amount,_close:v.closeMonth,date:v.usageDate||''}); });
+    (v.slips||[]).forEach(function(s){ slips.push(s); });
+    total+=Number(v.amount)||0; if(v.closeMonth)closes.push(v.closeMonth);
+  });
+  // 利用日（無ければ締め月）で時系列に並べる＝どの夜の分か読みやすく
+  items.sort(function(a,b){ return String(a.date||a._close||'').localeCompare(String(b.date||b._close||'')); });
+  closes.sort(); var uniq=closes.filter(function(c,i){return closes.indexOf(c)===i;});
+  if(uniq.length>1) items.forEach(function(it){ it.name=(it._close?('['+it._close+'] '):'')+it.name; });
+  return { id:base.id, no:base.no, senderId:base.senderId, senderName:base.senderName,
+    closeMonth:(uniq.length>1?uniq.join('・'):(uniq[0]||base.closeMonth)), issueDate:base.issueDate,
+    due:skLatestDue_(invs), amount:total, taxRate:base.taxRate, items:items, slips:slips,
+    note:invs.map(function(v){return v.note;}).filter(Boolean).join(' / '), _bundle:invs.length };
+}
+function skBundle(){
+  var ids=Object.keys(skSel).filter(function(k){return skSel[k];});
+  var invs=ids.map(skInvById_).filter(Boolean);
+  if(invs.length<2){ toast('2件以上選んでください',true); return; }
+  if(!invs.every(function(v){return v.senderId===invs[0].senderId;})){ toast('同じ請求先だけ合算できます',true); return; }
+  var w=window.open('','_blank'); if(!w){ toast('ポップアップがブロックされました',true); return; }
+  w.document.write('<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;color:#666">合算請求書を生成中…</body>');
+  api('seikyuGenerateBundle',{rowIdxList:invs.map(function(v){return v.rowIdx;})}).then(function(r){
+    if(r&&r.ok===false){ try{w.document.body.innerHTML='合算に失敗: '+esc(r.error||'');}catch(e){} toast(r.error||'合算に失敗',true); return; }
+    invs.forEach(function(v){ v.no=r.no; v.issueDate=r.issueDate; if(v.status==='未請求')v.status='請求済'; });
+    w.document.open(); w.document.write(skInvoiceDoc_(skBuildCombined_(invs))); w.document.close();
+    skSel={}; renderSeikyu();
+  }).catch(function(){ try{w.document.body.innerHTML='通信エラー';}catch(e){} toast('通信エラー',true); });
 }
 function skRowHtml_(inv, st){
   var rate=inv.taxRate||st.taxRate||0.10, pct=Math.round(rate*100);
@@ -4320,17 +4487,63 @@ function skRowHtml_(inv, st){
   var sender=skSenderById_(inv.senderId);
   var meishi=(sender&&sender.meishiUrl)?'<span class="sk-chip" onclick="skViewImg(\''+esc(sender.meishiUrl)+'\')">🪪 名刺</span>':'';
   var photos=(inv.slips&&inv.slips.length)?'<span class="sk-chip" onclick="skViewPhotos(\''+esc(inv.id)+'\')">📷 対象伝票 '+inv.slips.length+'</span>':'';
-  var noLine=inv.no?('請求番号 '+esc(inv.no)+' ／ 発行 '+esc(inv.issueDate)):'<span style="color:var(--dim)">請求書 未作成</span>';
+  var noLine=inv.no?('請求番号 '+esc(inv.no)+(inv._bundleCount>1?('（合算'+inv._bundleCount+'件）'):'')+' ／ 発行 '+esc(inv.issueDate)):'<span style="color:var(--dim)">請求書 未作成</span>';
   var paidLine=(inv.status==='入金済'&&inv.paidDate)?('　入金 '+esc(inv.paidDate)):'';
-  return '<div class="sk-inv">'
-    +'<div class="sk-inv-h"><div><b>'+esc(inv.senderName)+'</b>'+skBadge_(inv.status)+'</div><div class="sk-amt">¥'+Number(inv.amount).toLocaleString()+'</div></div>'
-    +'<div class="sk-inv-m">'+esc(inv.closeMonth)+'締め ／ 支払期限 <b style="color:'+dueColor+'">'+esc(inv.due||'—')+'</b> ／ 税抜¥'+excl.toLocaleString()+'・消費税¥'+tax.toLocaleString()+'</div>'
+  var chk=(inv.status!=='取消')?('<input type="checkbox" class="sk-cb" '+(skSel[inv.id]?'checked ':'')+'onclick="skToggleSel(\''+esc(inv.id)+'\',this.checked)">'):'<span style="width:16px;display:inline-block"></span>';
+  var bundleBadge=(inv._bundleCount>1)?('<span class="sk-bundle">🧾 合算'+inv._bundleCount+'件</span>'):'';
+  return '<div class="sk-inv'+(skSel[inv.id]?' sksel':'')+'">'
+    +'<div class="sk-inv-h"><div style="display:flex;align-items:center;gap:8px">'+chk+'<b>'+esc(inv.senderName)+'</b>'+skBadge_(inv.status)+bundleBadge+'</div><div class="sk-amt">¥'+Number(inv.amount).toLocaleString()+'</div></div>'
+    +'<div class="sk-inv-m">'+esc(inv.closeMonth)+'締め'+(inv.usageDate?(' ・ 利用 '+esc(skFmtUse_(inv.usageDate))):'')+' ／ 支払期限 <b style="color:'+dueColor+'">'+esc(inv.due||'—')+'</b> ／ 税抜¥'+excl.toLocaleString()+'・消費税¥'+tax.toLocaleString()+'</div>'
     +'<div class="sk-inv-m" style="color:var(--dim)">'+noLine+paidLine+(inv.registeredBy?('　登録 '+esc(inv.registeredBy)):'')+(inv.note?('　📝 '+esc(inv.note)):'')+'</div>'
     +'<div class="sk-inv-a">'
       +'<button class="btn pri" onclick="skInvoice(\''+esc(inv.id)+'\')">'+(inv.no?'🖨 請求書を再表示':'📄 請求書を作成')+'</button>'
       +skStatusBtns_(inv)+meishi+photos
+      +'<button class="btn" onclick="skLetterpack(\''+esc(inv.id)+'\')">🏷 レタパ宛名</button>'
       +'<button class="btn" onclick="skEdit(\''+esc(inv.id)+'\')">✎ 編集</button>'
     +'</div></div>';
+}
+/* レターパック等の宛名ラベルをA4で印刷（お届け先＝請求先／ご依頼主＝発行者設定）。切って貼る用。バックエンド不要＝手元データで生成 */
+function skLetterpack(id){
+  var inv=skInvById_(id); if(!inv)return;
+  var sender=skSenderById_(inv.senderId)||{name:inv.senderName,keisho:'御中',zip:'',addr:'',contact:''};
+  if(!(sender.zip||sender.addr)){ if(!confirm(esc(sender.name)+' の住所が未登録です。\n軍師の「請求先を編集」で住所を登録すると宛名に入ります。\nこのまま空欄で印刷しますか？'))return; }
+  var w=window.open('','_blank'); if(!w){ toast('ポップアップがブロックされました',true); return; }
+  w.document.write(skLetterpackDoc_(sender,(skData&&skData.settings)||{})); w.document.close();
+}
+function skLetterpackDoc_(sender, st){
+  var toName=esc(sender.name||'')+'　'+esc(sender.keisho||'御中');
+  var toContact=sender.contact?('ご担当　'+esc(sender.contact)+' 様'):'';
+  var css='@page{size:A4;margin:14mm}*{box-sizing:border-box}'
+    +'body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#111;margin:0;padding:16px;background:#eceef3}'
+    +'.noprint{margin-bottom:12px}.noprint button{padding:9px 18px;font-size:14px;cursor:pointer;border-radius:6px;border:1px solid #888;background:#fff}'
+    +'.sheet{background:#fff;max-width:186mm;margin:0 auto;padding:10mm;box-shadow:0 2px 14px rgba(0,0,0,.18)}'
+    +'@media print{body{background:#fff;padding:0}.sheet{box-shadow:none;max-width:none;padding:0}.noprint{display:none}}'
+    +'.hint{font-size:12px;color:#666;margin-bottom:8px}'
+    +'.label{border:1.5px dashed #555;border-radius:4px;padding:8mm 8mm;margin-bottom:10mm;position:relative;page-break-inside:avoid}'
+    +'.tag{position:absolute;top:-10px;left:12px;background:#fff;padding:0 8px;font-size:12px;font-weight:800;color:#444}'
+    +'.to{width:118mm;min-height:52mm}.from{width:100mm;min-height:38mm}'
+    +'.zip{font-size:20px;font-weight:700;letter-spacing:3px;margin-bottom:6mm}'
+    +'.addr{font-size:16px;line-height:1.6;margin-bottom:5mm}'
+    +'.to .name{font-size:26px;font-weight:800;letter-spacing:1px}'
+    +'.to .contact{font-size:14px;color:#333;margin-top:3mm}'
+    +'.from .fzip{font-size:14px;font-weight:700;letter-spacing:2px;margin-bottom:3mm}'
+    +'.from .faddr{font-size:13px;line-height:1.6}.from .fname{font-size:16px;font-weight:800;margin-top:2mm}.from .ftel{font-size:12px;color:#333}'
+    +'.cut{font-size:11px;color:#999;margin:-6mm 0 8mm}';
+  var toBlock='<div class="label to"><div class="tag">お届け先（レターパックのあて名に貼る）</div>'
+    +'<div class="zip">〒 '+esc(sender.zip||'　　　-　　　　')+'</div>'
+    +'<div class="addr">'+(sender.addr?esc(sender.addr):'（住所未登録）')+'</div>'
+    +'<div class="name">'+toName+'</div>'
+    +(toContact?'<div class="contact">'+toContact+'</div>':'')+'</div>'
+    +'<div class="cut">✁ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</div>';
+  var fromBlock='<div class="label from"><div class="tag">ご依頼主</div>'
+    +'<div class="fzip">〒 '+esc(st.issuerZip||'')+'</div>'
+    +'<div class="faddr">'+esc(st.issuerAddr||'')+'</div>'
+    +'<div class="fname">'+esc(st.issuerName||'ラウンジいえやす')+'</div>'
+    +(st.issuerTel?'<div class="ftel">TEL '+esc(st.issuerTel)+'</div>':'')+'</div>';
+  return '<!doctype html><html><head><meta charset="utf-8"><title>レタパ宛名_'+esc(sender.name||'')+'</title><style>'+css+'</style></head><body>'
+    +'<div class="noprint"><button onclick="window.print()">🖨 印刷 / PDF保存</button></div>'
+    +'<div class="sheet"><div class="hint">A4に印刷して破線で切り、レターパックのあて名欄に貼ってください（お届け先＝上／ご依頼主＝下）。</div>'
+    +toBlock+fromBlock+'</div></body></html>';
 }
 function skStatusBtns_(inv){
   var h='';
@@ -4352,14 +4565,16 @@ function skStatus(id,status){
 /* 請求書(A4) 生成：ポップアップは同期で開き、採番後に書き込む（ブロッカー回避） */
 function skInvoice(id){
   var inv=skInvById_(id); if(!inv)return;
+  var mates=inv.no?(skData.invoices||[]).filter(function(x){return x.no===inv.no;}):[inv];
   var w=window.open('','_blank');
   if(!w){ toast('ポップアップがブロックされました',true); return; }
   w.document.write('<!doctype html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;color:#666">請求書を生成中…</body>');
-  var finish=function(){ w.document.open(); w.document.write(skInvoiceDoc_(inv)); w.document.close(); };
+  // 既に合算済み（同じ請求番号が複数）＝再採番せずまとめて統合表示
+  if(inv.no && mates.length>1){ w.document.open(); w.document.write(skInvoiceDoc_(skBuildCombined_(mates))); w.document.close(); return; }
   api('seikyuGenerate',{rowIdx:inv.rowIdx}).then(function(r){
     if(r&&r.ok===false){ try{w.document.body.innerHTML='作成に失敗: '+esc(r.error||'');}catch(e){} toast(r.error||'作成に失敗',true); return; }
     inv.no=r.no; inv.issueDate=r.issueDate; if(inv.status==='未請求')inv.status='請求済';
-    finish(); renderSeikyu();
+    w.document.open(); w.document.write(skInvoiceDoc_(inv)); w.document.close(); renderSeikyu();
   }).catch(function(){ try{w.document.body.innerHTML='通信エラー';}catch(e){} toast('通信エラー',true); });
 }
 function skInvoiceDoc_(inv){
@@ -4368,8 +4583,9 @@ function skInvoiceDoc_(inv){
   var rate=inv.taxRate||st.taxRate||0.10, pct=Math.round(rate*100);
   var tax=Math.floor(inv.amount*pct/(100+pct)), excl=inv.amount-tax;
   var items=(inv.items&&inv.items.length)?inv.items:[{name:(inv.closeMonth||'')+' ご利用分',amount:inv.amount}];
-  var itemRows=items.map(function(it){ return '<tr><td>'+esc(it.name)+'</td><td class="r">¥'+Number(it.amount||0).toLocaleString()+'</td></tr>'; }).join('');
-  var pad=Math.max(0,6-items.length); for(var i=0;i<pad;i++) itemRows+='<tr><td>&nbsp;</td><td></td></tr>';
+  var hasDate=!!inv.usageDate||items.some(function(it){return it.date;});
+  var itemRows=items.map(function(it){ var d=it.date||inv.usageDate||''; return '<tr><td>'+esc(it.name)+'</td>'+(hasDate?('<td class="c">'+esc(skFmtUse_(d))+'</td>'):'')+'<td class="r">¥'+Number(it.amount||0).toLocaleString()+'</td></tr>'; }).join('');
+  var pad=Math.max(0,6-items.length); for(var i=0;i<pad;i++) itemRows+='<tr><td>&nbsp;</td>'+(hasDate?'<td></td>':'')+'<td></td></tr>';
   var bank=[st.bankName,st.bankBranch].filter(Boolean).join('　');
   var bankBlock=(st.bankName||st.accountNo)
     ? '<div class="bank"><div class="bank-t">お振込先</div>'+esc(bank)+'　'+esc((st.accountType||'')+' '+(st.accountNo||''))+(st.accountHolder?('<br>口座名義：'+esc(st.accountHolder)):'')+'</div>'
@@ -4390,7 +4606,7 @@ function skInvoiceDoc_(inv){
     +'.total-box span{font-size:15px;font-weight:700}.total-box b{font-size:25px}'
     +'.due{font-size:13px;margin:8px 0 16px}'
     +'.items{width:100%;border-collapse:collapse;font-size:13px}'
-    +'.items th,.items td{border:1px solid #999;padding:8px 10px}.items th{background:#f0f0f0;text-align:left}.items .r{text-align:right}'
+    +'.items th,.items td{border:1px solid #999;padding:8px 10px}.items th{background:#f0f0f0;text-align:left}.items .r{text-align:right}.items .c{text-align:center;white-space:nowrap}'
     +'.items tfoot td{background:#fafafa}.items tfoot .grand td{background:#eef0f3;font-weight:700;font-size:15px}'
     +'.bank{margin-top:16px;font-size:13px;border:1px solid #999;padding:9px 12px;line-height:1.6}'
     +'.bank-t{font-weight:700;font-size:12px;color:#333;margin-bottom:2px}'
@@ -4414,10 +4630,10 @@ function skInvoiceDoc_(inv){
       +'<div class="lead">下記の通りご請求申し上げます。</div>'
       +'<div class="total-box"><span>ご請求金額（税込）</span><b>¥'+Number(inv.amount).toLocaleString()+'</b></div>'
       +'<div class="due">お支払期限：<b>'+esc(inv.due||'')+'</b>'+(inv.closeMonth?('　（'+esc(inv.closeMonth)+'締め）'):'')+'</div>'
-      +'<table class="items"><thead><tr><th>品目</th><th class="r">金額（税込）</th></tr></thead><tbody>'+itemRows+'</tbody>'
-        +'<tfoot><tr><td class="r">小計（税抜）</td><td class="r">¥'+excl.toLocaleString()+'</td></tr>'
-        +'<tr><td class="r">消費税（'+Math.round(rate*100)+'%）</td><td class="r">¥'+tax.toLocaleString()+'</td></tr>'
-        +'<tr class="grand"><td class="r">合計（税込）</td><td class="r">¥'+Number(inv.amount).toLocaleString()+'</td></tr></tfoot></table>'
+      +'<table class="items"><thead><tr><th>品目</th>'+(hasDate?'<th class="c">利用日</th>':'')+'<th class="r">金額（税込）</th></tr></thead><tbody>'+itemRows+'</tbody>'
+        +'<tfoot><tr><td class="r"'+(hasDate?' colspan="2"':'')+'>小計（税抜）</td><td class="r">¥'+excl.toLocaleString()+'</td></tr>'
+        +'<tr><td class="r"'+(hasDate?' colspan="2"':'')+'>消費税（'+Math.round(rate*100)+'%）</td><td class="r">¥'+tax.toLocaleString()+'</td></tr>'
+        +'<tr class="grand"><td class="r"'+(hasDate?' colspan="2"':'')+'>合計（税込）</td><td class="r">¥'+Number(inv.amount).toLocaleString()+'</td></tr></tfoot></table>'
       +bankBlock
       +(inv.note?'<div class="note"><div class="bank-t">備考</div>'+esc(inv.note).replace(/\n/g,'<br>')+'</div>':'')
       +(st.footerNote?'<div class="foot">'+esc(st.footerNote)+'</div>':'')
@@ -4450,7 +4666,7 @@ function skViewPhotos(id){
 function skEdit(id){
   var inv=skInvById_(id); if(!inv)return;
   var items=(inv.items&&inv.items.length)?inv.items.map(function(x){return {name:x.name,amount:x.amount};}):[{name:'',amount:inv.amount}];
-  skEditState={id:id,rowIdx:inv.rowIdx,close:inv.closeMonth,due:inv.due,items:items,note:inv.note||'',name:inv.senderName};
+  skEditState={id:id,rowIdx:inv.rowIdx,close:inv.closeMonth,due:inv.due,usage:inv.usageDate||'',items:items,note:inv.note||'',name:inv.senderName};
   skRenderEdit_();
 }
 function skEditItemsHtml_(){
@@ -4466,6 +4682,7 @@ function skRenderEdit_(){
   var h='<div class="sk-ov-card"><div style="font-weight:800;font-size:15px;margin-bottom:12px">✎ 請求を編集 <span style="color:var(--dim);font-weight:600;font-size:12px">'+esc(e.name)+'</span></div>'
     +'<div style="display:flex;gap:10px"><div style="flex:1"><div class="sk-fl">締め月</div><input type="month" class="finput" value="'+esc(e.close)+'" onchange="skEditState.close=this.value"></div>'
     +'<div style="flex:1"><div class="sk-fl">支払期限</div><input type="date" class="finput" value="'+esc(e.due)+'" onchange="skEditState.due=this.value"></div></div>'
+    +'<div class="sk-fl" style="margin-top:10px">利用日（ご来店日）</div><input type="date" class="finput" value="'+esc(e.usage||'')+'" onchange="skEditState.usage=this.value">'
     +'<div class="sk-fl" style="margin-top:12px">明細（税込）</div><div id="sk-edit-items">'+skEditItemsHtml_()+'</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px"><span style="color:#7ac6ff;font-size:13px;cursor:pointer" onclick="skEditState.items.push({name:\'\',amount:0});skRenderEdit_()">＋ 明細を追加</span>'
     +'<span style="font-weight:800">合計 <b id="sk-edit-total">¥'+e.items.reduce(function(a,b){return a+(Number(b.amount)||0);},0).toLocaleString()+'</b></span></div>'
@@ -4479,7 +4696,7 @@ function skCloseEdit(){ var ov=document.getElementById('skEditOv'); if(ov){ov.st
 function skSaveEdit(){
   var e=skEditState; if(!e)return;
   var items=e.items.filter(function(x){return (x.name||'').trim()||Number(x.amount)>0;}).map(function(x){return {name:x.name||'',amount:Number(x.amount)||0};});
-  var patch={ closeMonth:e.close, due:e.due, note:e.note, items:items };
+  var patch={ closeMonth:e.close, due:e.due, usageDate:e.usage, note:e.note, items:items };
   api('seikyuUpdate',{rowIdx:e.rowIdx,patch:patch}).then(function(r){ if(!res(r,'請求を更新しました'))return; skCloseEdit(); renderSeikyu(); }).catch(function(){ toast('通信エラー',true); });
 }
 
@@ -4584,6 +4801,21 @@ function issuerRestore(id){
 }
 
 function MOCKAPI(action,body){
+  /* ⚠️注意情報（NG）のローカル確認用。本番は ng.gs の kioskGetCustomerNote/kioskSaveCustomerNote */
+  if(action==='adminGetCustomerNote'){
+    window.__MOCKNG=window.__MOCKNG||{};
+    var key=String(body.no||body.name||'');
+    return {ok:true,rowIdx:12,note:window.__MOCKNG[key]||{ngCasts:['みれい'],ngTypes:['ギャル系'],ngActs:['下ネタ'],ngCustomers:[{no:'0462',name:'鈴木一郎'}],memo:'前回、鈴木様と口論。'},
+      vocab:{type:{look:['若い','大人っぽい','綺麗系','可愛い系','清楚系','ギャル系','グラマー','スレンダー','ぽっちゃり','小柄'],
+                   chara:['おとなしい','明るい','聞き上手','トーク強め','ぐいぐい','天然','知的','妹系','お姉さん系','落ち着き']},
+             act:['下ネタ','ボディタッチ','タメ口','説教・武勇伝','無理に飲ませる','タバコ','恋愛・彼氏の話','仕事の詮索','政治・宗教の話','大声・騒ぐ','写真撮影','連絡先交換','同伴の催促','ボトルの催促']},
+      casts:['みれい','りお','さくら','ゆうか','あや','なな'],legacy:{ng:'',ngStaff:''}};
+  }
+  if(action==='adminSaveCustomerNote'){
+    window.__MOCKNG=window.__MOCKNG||{};
+    window.__MOCKNG[String(body.no||body.name||'')]=body.note;
+    return {ok:true,note:body.note};
+  }
   /* 🏠 トップ（店の全容）のローカル確認用。予約多め×出勤少なめの日を混ぜて判定3色を出す */
   if(action==='adminGetTopBoard'){
     var _t='2026-08-17', _DOW=['日','月','火','水','木','金','土'];
@@ -4608,7 +4840,7 @@ function MOCKAPI(action,body){
         rsvCount:s.rc, rsvPax:s.rp, need:s.need, needRaw:s.needRaw, mix:s.mix,
         cast:_mk('',s.c,'20:00'), taiken:_mk('体',s.tk,'20:30'),
         haken:_mk('派',s.hk,'21:00'), kurofuku:_mk('黒',i===4?0:3,'18:00'),
-        floorCount:s.c+s.tk+s.hk, kurofukuCount:i===4?0:3, pending:{cast:i===1?2:0,taiken:0,haken:0,kurofuku:0}};
+        floorCount:s.c+s.tk+s.hk, kurofukuCount:i===4?0:3, yoyaku:i===0?[{name:'みか',shift:'予約出勤'},{name:'さら',shift:'予約出勤'}]:[], yoyakuCount:i===0?2:0, pending:{cast:i===1?2:0,taiken:0,haken:0,kurofuku:0}};
     });
     var _byDay={}; for(var _i=1;_i<=17;_i++){ if(_i===5||_i===12)continue; _byDay['2026-08-'+('0'+_i).slice(-2)]=3+((_i*7)%9); }
     return {ok:true,today:_t,days:7,list:_list,
@@ -4637,10 +4869,11 @@ function MOCKAPI(action,body){
     settings:{issuerName:'ラウンジいえやす',issuerZip:'460-0003',issuerAddr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル',issuerTel:'',invoiceNo:'T4180302027983',bankName:'',bankBranch:'',accountType:'普通',accountNo:'',accountHolder:'',taxRate:0.10,footerNote:'お振込手数料は御社にてご負担くださいますようお願い申し上げます。'},
     senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込',state:'有効',rowIdx:2}],
     invoices:[
-      {id:'INV1',no:'',senderId:'demoA',senderName:'株式会社デモ商事',closeMonth:'2026-07',issueDate:'',due:'2026-08-31',amount:110000,taxRate:0.10,taxExcl:100000,taxAmount:10000,items:[{name:'2026年7月分 ご利用料金',amount:88000},{name:'ボトルキープ',amount:22000}],slips:[],note:'7月接待分',status:'未請求',paidDate:'',registeredBy:'徳子',registeredAt:'2026-07-30 21:00',overdue:false,dueSoon:false,rowIdx:2},
-      {id:'INV2',no:'202606-001',senderId:'demoA',senderName:'株式会社デモ商事',closeMonth:'2026-06',issueDate:'2026-07-01',due:'2026-07-31',amount:66000,taxRate:0.10,taxExcl:60000,taxAmount:6000,items:[{name:'2026年6月分 ご利用料金',amount:66000}],slips:[],note:'',status:'請求済',paidDate:'',registeredBy:'りく',registeredAt:'2026-06-30 23:00',overdue:true,dueSoon:false,rowIdx:3}
+      {id:'INV1',no:'',senderId:'demoA',senderName:'株式会社デモ商事',closeMonth:'2026-07',issueDate:'',due:'2026-08-31',amount:110000,taxRate:0.10,taxExcl:100000,taxAmount:10000,items:[{name:'2026年7月分 ご利用料金',amount:88000},{name:'ボトルキープ',amount:22000}],slips:[],note:'7月接待分',status:'未請求',paidDate:'',registeredBy:'徳子',registeredAt:'2026-07-30 21:00',usageDate:'2026-07-15',overdue:false,dueSoon:false,rowIdx:2},
+      {id:'INV2',no:'202606-001',senderId:'demoA',senderName:'株式会社デモ商事',closeMonth:'2026-06',issueDate:'2026-07-01',due:'2026-07-31',amount:66000,taxRate:0.10,taxExcl:60000,taxAmount:6000,items:[{name:'2026年6月分 ご利用料金',amount:66000}],slips:[],note:'',status:'請求済',paidDate:'',registeredBy:'りく',registeredAt:'2026-06-30 23:00',usageDate:'2026-06-20',overdue:true,dueSoon:false,rowIdx:3}
     ]}; }
   if(action==='seikyuGenerate') return {ok:true,no:'202607-001',issueDate:'2026-07-30'};
+  if(action==='seikyuGenerateBundle') return {ok:true,no:'202607-009',issueDate:'2026-07-30',count:((body&&body.rowIdxList)||[]).length};
   if(action==='seikyuSetStatus'||action==='seikyuUpdate'||action==='seikyuSaveSettings'||action==='seikyuSaveSender') return {ok:true};
   if(action==='seikyuImage') return {ok:false,error:'ローカルでは画像不可'};
   if(action==='issuerList') return {ok:true,issuers:[
@@ -4938,5 +5171,208 @@ function MOCKAPI(action,body){
   if(action==='setHallGroups')return {ok:true,groups:body.groups||[]};
   return {ok:true};
 }
+
+/* ===== 📈 年間集計（売上年鑑）＝💰会計 → 📈年間集計 ==================================
+ * ボス依頼 2026-08-18「売上利益ベースを年間で」。
+ * 売上＝伝票シートが全期間そろっている → そのまま出す。
+ * 利益＝原価の台帳が数ヶ月ぶんしか無い → 「確定した月だけ」出し、残りは穴として明示する。
+ * ⚠️ここに推定値・按分・月平均での穴埋めを混ぜない。混ぜた瞬間にこの画面は経営判断に使えなくなる。
+ * 期の切り方＝9月始まり（伝票データが2024年9月から＝1年目/2年目が素直に揃う）。 */
+var NEN=null, NEN_VIEW='fy';
+
+function renderNenkan(){
+  loading();
+  api('adminGetAnnual').then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込みエラー')+'</div>'); return; }
+    NEN=r; drawNenkan();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function nenSetView(v){ NEN_VIEW=v; drawNenkan(); }
+function nenYen(n){ return '¥'+Math.round(n||0).toLocaleString('ja-JP'); }
+function nenNum(n){ return Math.round(n||0).toLocaleString('ja-JP'); }
+function nenMan(n){ return Math.round((n||0)/10000).toLocaleString('ja-JP')+'万'; }
+function nenFy_(ym){ var y=+ym.slice(0,4), m=+ym.slice(5,7); return m>=9?y:y-1; }   /* 9月始まり */
+function nenFyIdx_(ym){ var m=+ym.slice(5,7); return m>=9?m-9:m+3; }                /* 0=9月 */
+function nenLabel_(ym){ return ym.slice(0,4)+'年'+(+ym.slice(5,7))+'月'; }
+function nenAgg_(list){
+  var a={sales:0,bills:0,guests:0,days:0,tanto:0,n:list.length};
+  list.forEach(function(m){ a.sales+=m.sales;a.bills+=m.bills;a.guests+=m.guests;a.days+=m.days;a.tanto+=m.tanto; });
+  a.perDay=a.days?a.sales/a.days:0; a.perBill=a.bills?a.sales/a.bills:0; a.perGuest=a.guests?a.sales/a.guests:0;
+  return a;
+}
+function nenDelta_(a,b){
+  if(!a){ return '<span style="color:var(--dim)">—</span>'; }
+  var d=(b/a-1)*100, c=d>=0?'var(--ok)':'var(--warn)';
+  return '<span style="color:'+c+';font-weight:800">'+(d>=0?'+':'')+d.toFixed(1)+'%</span>';
+}
+
+function drawNenkan(){
+  var N=NEN; if(!N){ setBody('<div class="empty">読み込みエラー</div>'); return; }
+  var MS=N.months||[];
+  if(!MS.length){ setBody('<div class="empty">伝票データがありません</div>'); return; }
+  /* 取込が止まっている月＝途中。比較からは必ず外す（半端な月を丸ごと1ヶ月として混ぜない） */
+  var partial=String(N.range&&N.range.max||'').slice(0,7);
+  var full=MS.filter(function(m){ return m.ym!==partial; });
+  var all=nenAgg_(MS), h='';
+
+  /* ① 全期間の総計 */
+  h+='<div class="tp-hero">'
+    +'<div class="tp-k hi"><div class="k-l">総売上（税サ込）</div><div class="k-v">'+nenYen(all.sales)+'</div>'
+      +'<div class="k-s">'+esc(N.range.min||'')+' 〜 '+esc(N.range.max||'')+'<br>営業'+nenNum(all.days)+'日・伝票'+nenNum(all.bills)+'件</div></div>'
+    +'<div class="tp-k"><div class="k-l">組数</div><div class="k-v">'+nenNum(all.bills)+'<small>組</small></div><div class="k-s">1日平均 '+(all.days?(all.bills/all.days).toFixed(1):0)+'組</div></div>'
+    +'<div class="tp-k"><div class="k-l">来店客数</div><div class="k-v">'+nenNum(all.guests)+'<small>人</small></div><div class="k-s">1組平均 '+(all.bills?(all.guests/all.bills).toFixed(2):0)+'人</div></div>'
+    +'<div class="tp-k"><div class="k-l">1日平均売上</div><div class="k-v">'+nenYen(all.perDay)+'</div><div class="k-s">組単価 '+nenYen(all.perBill)+'<br>客単価 '+nenYen(all.perGuest)+'</div></div>'
+    +'</div>';
+  if(partial) h+='<div class="hint">※ '+esc(nenLabel_(partial))+' は '+esc(N.range.max)+' までの途中。下の比較からは外してある。</div>';
+
+  /* ② 期別／暦年別 */
+  var keyOf=(NEN_VIEW==='fy')?function(m){return nenFy_(m.ym);}:function(m){return +m.ym.slice(0,4);};
+  var buckets={}, order=[];
+  MS.forEach(function(m){ var k=keyOf(m); if(!buckets[k]){buckets[k]=[];order.push(k);} buckets[k].push(m); });
+  order.sort(function(a,b){return a-b;});
+  h+='<div class="sec"><div class="sec-t">📊 '+(NEN_VIEW==='fy'?'期別':'暦年別')+'の売上 '
+    +'<span class="sub">'+(NEN_VIEW==='fy'?'9月始まり（伝票データが2024年9月から）':'1月始まり')+'</span></div>'
+    +'<div class="toolbar" style="margin-bottom:10px">'
+    +'<button class="chip'+(NEN_VIEW==='fy'?' on':'')+'" onclick="nenSetView(\'fy\')">期（9月始まり）</button>'
+    +'<button class="chip'+(NEN_VIEW==='cal'?' on':'')+'" onclick="nenSetView(\'cal\')">暦年</button></div>'
+    +'<div class="mtx-wrap"><table class="mtx sm"><tr><th>'+(NEN_VIEW==='fy'?'期':'年')+'</th><th>月数</th><th>売上</th><th>組数</th><th>客数</th><th>営業日</th><th>日平均</th><th>組単価</th><th>客単価</th></tr>';
+  order.forEach(function(k){
+    var a=nenAgg_(buckets[k]);
+    var lab=(NEN_VIEW==='fy')?(k+'/9 〜 '+(k+1)+'/8'):(k+'年');
+    var pt=buckets[k].some(function(m){return m.ym===partial;})?'<span style="color:var(--warn)"> ※途中</span>':'';
+    h+='<tr><td class="role">'+esc(lab)+pt+'</td><td>'+a.n+'</td><td style="text-align:right;font-weight:800;color:#bcd6ff">'+nenYen(a.sales)+'</td>'
+      +'<td>'+nenNum(a.bills)+'</td><td>'+nenNum(a.guests)+'</td><td>'+nenNum(a.days)+'</td>'
+      +'<td style="text-align:right">'+nenYen(a.perDay)+'</td><td style="text-align:right">'+nenYen(a.perBill)+'</td><td style="text-align:right">'+nenYen(a.perGuest)+'</td></tr>';
+  });
+  h+='</table></div></div>';
+
+  /* ③ 前期との同期間比較＝月数を揃えないと「減った/増えた」が嘘になる */
+  var fys={}; full.forEach(function(m){ var k=nenFy_(m.ym); (fys[k]=fys[k]||[]).push(m); });
+  var fyKeys=Object.keys(fys).map(Number).sort(function(a,b){return a-b;});
+  if(fyKeys.length>=2){
+    var cur=fyKeys[fyKeys.length-1], prv=cur-1;
+    if(fys[prv]){
+      var idx={}; fys[cur].forEach(function(m){ idx[nenFyIdx_(m.ym)]=1; });
+      var prevSame=fys[prv].filter(function(m){ return idx[nenFyIdx_(m.ym)]; });
+      var A=nenAgg_(prevSame), B=nenAgg_(fys[cur]);
+      h+='<div class="sec"><div class="sec-t">⚖️ 前期との同期間比較 <span class="sub">'+A.n+'ヶ月どうしで揃えて比較（途中の月は除外）</span></div>'
+        +'<div class="mtx-wrap"><table class="mtx sm"><tr><th>指標</th><th>'+prv+'年度</th><th>'+cur+'年度</th><th>増減</th></tr>';
+      [['売上',A.sales,B.sales,nenYen],['組数',A.bills,B.bills,function(v){return nenNum(v)+'組';}],
+       ['客数',A.guests,B.guests,function(v){return nenNum(v)+'人';}],['営業日数',A.days,B.days,function(v){return nenNum(v)+'日';}],
+       ['1日平均売上',A.perDay,B.perDay,nenYen],['組単価',A.perBill,B.perBill,nenYen],['客単価',A.perGuest,B.perGuest,nenYen]
+      ].forEach(function(x){
+        h+='<tr><td class="role">'+x[0]+'</td><td style="text-align:right">'+x[3](x[1])+'</td><td style="text-align:right;font-weight:800">'+x[3](x[2])+'</td><td>'+nenDelta_(x[1],x[2])+'</td></tr>';
+      });
+      h+='</table></div></div>';
+    }
+  }
+
+  /* ④ 月別＝グラフ＋表 */
+  h+='<div class="sec"><div class="sec-t">📈 月別の売上 <span class="sub">棒にカーソルを当てると内訳</span></div>'
+    +'<div class="nen-chart">'+nenChart_(MS,partial)+'</div>'
+    +'<div class="mtx-wrap" style="margin-top:12px;max-height:420px;overflow-y:auto"><table class="mtx sm">'
+    +'<tr><th>月</th><th>売上</th><th>組数</th><th>客数</th><th>営業日</th><th>日平均</th><th>組単価</th><th>客単価</th></tr>';
+  MS.slice().reverse().forEach(function(m){
+    var pt=(m.ym===partial)?'<span style="color:var(--warn)"> ※途中</span>':'';
+    h+='<tr><td class="role">'+esc(nenLabel_(m.ym))+pt+'</td><td style="text-align:right;font-weight:800;color:#bcd6ff">'+nenYen(m.sales)+'</td>'
+      +'<td>'+nenNum(m.bills)+'</td><td>'+nenNum(m.guests)+'</td><td>'+nenNum(m.days)+'</td>'
+      +'<td style="text-align:right">'+nenYen(m.days?m.sales/m.days:0)+'</td>'
+      +'<td style="text-align:right">'+nenYen(m.bills?m.sales/m.bills:0)+'</td>'
+      +'<td style="text-align:right">'+nenYen(m.guests?m.sales/m.guests:0)+'</td></tr>';
+  });
+  h+='</table></div></div>';
+
+  /* ⑤ 人件費＝担当小計が伝票と一致した月だけ率を出す */
+  var LB=N.labor||[], okRows=LB.filter(function(x){return x.complete;}), ngRows=LB.filter(function(x){return !x.complete;});
+  h+='<div class="sec"><div class="sec-t">💴 キャスト人件費率 <span class="sub">担当小計の合計が伝票シートと一致した月だけ＝数字が信用できる月</span></div>';
+  if(okRows.length){
+    h+='<div class="mtx-wrap"><table class="mtx sm"><tr><th>月</th><th>売上</th><th>キャスト人件費</th><th>人件費率</th><th>人数</th><th>出典</th></tr>';
+    okRows.forEach(function(x){
+      var pc=x.ratio*100, col=pc>=55?'var(--warn)':'var(--ok)';
+      h+='<tr><td class="role">'+esc(nenLabel_(x.ym))+'</td><td style="text-align:right">'+nenYen(x.sales)+'</td>'
+        +'<td style="text-align:right">'+nenYen(x.labor)+'</td>'
+        +'<td style="font-weight:900;color:'+col+'">'+pc.toFixed(1)+'%</td><td>'+nenNum(x.heads)+'名</td>'
+        +'<td class="role" style="font-size:12px">'+esc(x.source)+'</td></tr>';
+    });
+    h+='</table></div>';
+  } else h+='<div class="empty">担当小計が伝票と一致した月がありません（＝率を出せる月がない）</div>';
+  if(ngRows.length){
+    h+='<div class="hint" style="margin-top:10px">率を出さなかった月（担当小計が伝票シートと合わない＝途中集計）：'
+      +ngRows.map(function(x){
+        return esc(nenLabel_(x.ym))+'／'+esc(x.source.slice(0,6))+'（台帳'+nenMan(x.tanto)+' 対 伝票'+(x.billTanto==null?'—':nenMan(x.billTanto))+'）';
+      }).join('　')+'</div>';
+  }
+  h+='<div class="hint">売上は伝票合計（サービス料・消費税込みの総額）。この率は家賃・黒服人件費・仕入れを引く<b style="color:var(--warn)">前</b>の数字。</div></div>';
+
+  /* ⑥ 経費（現金精算ぶんだけ） */
+  var KH=N.keihi||[];
+  h+='<div class="sec"><div class="sec-t">🧾 現金の経費袋 <span class="sub">閉店チェックで現金精算した分だけ＝経費の全体ではない</span></div>';
+  if(KH.length){
+    h+='<div class="mtx-wrap"><table class="mtx sm"><tr><th>月</th><th>経費（現金）</th></tr>';
+    KH.forEach(function(k){ h+='<tr><td class="role">'+esc(nenLabel_(k.ym))+'</td><td style="text-align:right">'+nenYen(k.amount)+'</td></tr>'; });
+    h+='</table></div><div class="hint" style="margin-top:8px">記録がある期間：'+esc(N.keihiRange.min||'—')+' 〜 '+esc(N.keihiRange.max||'—')+'</div>';
+  } else h+='<div class="empty">記録がありません</div>';
+  h+='</div>';
+
+  /* ⑦ データの穴＝ここを隠すと、この画面は嘘になる */
+  var C=N.coverage||{};
+  h+='<div class="nen-gap"><div style="font-weight:900;color:var(--warn)">⚠️ 年間の利益がまだ出せない理由</div><ul>'
+    +'<li>売上（伝票）は<b>'+nenNum(C.billMonths)+'ヶ月ぶん</b>そろっている。原価側がそろっていない。</li>'
+    +'<li><b>TRUST報酬シートは'+nenNum(C.trustMonths)+'ヶ月ぶんしか無い</b>：取り込むたび最新1ヶ月で上書きされる作りで、過去の報酬履歴が残らない。</li>'
+    +'<li><b>給与計算シートは'+nenNum(C.kyuyoMonths)+'ヶ月ぶん</b>。うち担当小計が伝票と一致した月だけ上の表に出している。</li>'
+    +'<li><b>経費立替台帳は'+(C.tatekaeRows<0?'シートなし':nenNum(C.tatekaeRows)+'件')+'</b>、現金の経費袋は'+nenNum(C.keihiMonths)+'ヶ月ぶんのみ。</li>'
+    +'<li><b>家賃・水道光熱費・仕入れ・黒服人件費・広告費の台帳はシステムに無い</b>。ここはボスから月額をもらうか、税理士の月次試算表を入れる必要がある。</li>'
+    +(N.range.max<N.today?('<li><b>伝票の取込が '+esc(N.range.max)+' で止まっている</b>（本日 '+esc(N.today)+'）。💰売上給与 →「これ1つで取得」を1回押すと埋まる。</li>'):'')
+    +'</ul></div>';
+
+  h+='<div class="toolbar" style="margin-top:4px"><button class="btn" onclick="renderNenkan()">🔄 再集計</button></div>';
+  setBody(h);
+  nenBindTip_();
+}
+
+/* 月別売上の棒グラフ（外部ライブラリ無し・SVG直書き） */
+function nenChart_(MS,partial){
+  var W=980,H=250,PL=62,PR=12,PT=12,PB=36;
+  var max=0; MS.forEach(function(m){ if(m.sales>max) max=m.sales; });
+  var top=Math.max(2000000,Math.ceil(max/2000000)*2000000);
+  var iw=(W-PL-PR)/MS.length, bw=Math.max(3,iw-6), ph=H-PB-PT;
+  var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="min-width:620px;display:block" role="img" aria-label="月別売上の推移">';
+  for(var t=0;t<=4;t++){
+    var v=top*t/4, y=H-PB-(v/top)*ph;
+    s+='<line x1="'+PL+'" x2="'+(W-PR)+'" y1="'+y+'" y2="'+y+'" stroke="'+(t?'#22223a':'#2e2e4a')+'" stroke-width="1"/>'
+      +'<text x="'+(PL-8)+'" y="'+(y+4)+'" text-anchor="end" font-size="10" fill="#5a6688">'+(v?nenMan(v):'0')+'</text>';
+  }
+  MS.forEach(function(m,i){
+    var bh=(m.sales/top)*ph, x0=PL+iw*i+3, y0=H-PB-bh, r=Math.min(4,bh);
+    var col=(m.ym===partial)?'#3d5a99':'#7aa2ff';
+    s+='<path class="nen-bar" d="M'+x0+' '+(H-PB)+' L'+x0+' '+(y0+r)+' Q'+x0+' '+y0+' '+(x0+r)+' '+y0
+      +' L'+(x0+bw-r)+' '+y0+' Q'+(x0+bw)+' '+y0+' '+(x0+bw)+' '+(y0+r)+' L'+(x0+bw)+' '+(H-PB)+' Z" fill="'+col+'"'
+      +' data-t="'+esc(nenLabel_(m.ym)+(m.ym===partial?'（途中）':''))+'／売上 '+esc(nenYen(m.sales))
+      +'／'+m.bills+'組 '+m.guests+'人 '+m.days+'営業日／日平均 '+esc(nenYen(m.days?m.sales/m.days:0))+'"/>';
+    var mo=+m.ym.slice(5,7);
+    if(i%2===0) s+='<text x="'+(PL+iw*i+iw/2)+'" y="'+(H-PB+14)+'" text-anchor="middle" font-size="10" fill="#5a6688">'+mo+'</text>';
+    if(mo===1||i===0) s+='<text x="'+(PL+iw*i+iw/2)+'" y="'+(H-PB+29)+'" text-anchor="middle" font-size="10" fill="#7aa2ff" font-weight="700">'+m.ym.slice(0,4)+'</text>';
+  });
+  s+='</svg>';
+  return s;
+}
+function nenBindTip_(){
+  var tip=document.getElementById('nenTip');
+  if(!tip){ tip=document.createElement('div'); tip.id='nenTip'; tip.className='nen-tip'; document.body.appendChild(tip); }
+  var bars=document.querySelectorAll('.nen-bar');
+  for(var i=0;i<bars.length;i++){
+    (function(b){
+      b.addEventListener('mousemove',function(e){
+        tip.innerHTML=String(b.getAttribute('data-t')||'').split('／').join('<br>');
+        tip.style.opacity='1';
+        var r=tip.getBoundingClientRect();
+        tip.style.left=Math.min(e.clientX+14,window.innerWidth-r.width-8)+'px';
+        tip.style.top=Math.max(8,e.clientY-r.height-12)+'px';
+      });
+      b.addEventListener('mouseleave',function(){ tip.style.opacity='0'; });
+    })(bars[i]);
+  }
+}
+
 boot();
 </script>
