@@ -507,24 +507,46 @@ function skillAdminSaveGrade_(g) {
 // 現場ドラフト(SKILL_DRAFTS_)を下書きとして一括取り込み＝総入れ替え。
 //   既存の「未分類（＝下書き中）」を全削除 → 最新の SKILL_DRAFTS_ を投入。
 //   ⚠️確定済み（級='初級/中級/上級'）には一切触らない＝受験中の本番問題は無傷。
+// 下書きの照合キー＝選択肢4本の連結（問題文は表記修正で変わりうるが、選択肢は動かない）。
+function skillDraftKey_(choices, q) {
+  var c = (choices || []).map(function (x) { return String(x == null ? '' : x); }).join('|').replace(/\s/g, '');
+  return c.replace(/\|+$/, '') || String(q || '').replace(/\s/g, '');
+}
+
+// 現場ドラフト（skilldrafts.gs）を取り込み直す。
+// ⚠️人が入れたもの（レビューのやりとり・状態・確定した正解・マニュアル章）は引き継ぐ。
+//   これが無いと、文言を1つ直すたびに りく のキャッチボールが全部消える（2026-08-22に潰した罠）。
 function skillImportDrafts_() {
   if (typeof SKILL_DRAFTS_ === 'undefined' || !SKILL_DRAFTS_.length) return { ok: false, error: '取り込む下書きがありません' };
   var sh = skillEnsureQCols_();
-  // 既存の未分類（下書き）を下から削除（行ズレ防止）
-  var delRows = skillQuestionsAll_(null)
-    .filter(function (x) { return x.grade === '未分類'; })
-    .map(function (x) { return x.row; })
-    .sort(function (a, b) { return b - a; });
+  var olds = skillQuestionsAll_(null).filter(function (x) { return x.grade === '未分類'; });
+  // 引き継ぎ台帳（選択肢キー → 人が入れた内容）
+  var keep = {}, kept = 0;
+  olds.forEach(function (x) {
+    keep[skillDraftKey_(x.choices, x.q)] = { status: x.status, review: x.review, answer: x.answer, manCh: x.manCh };
+  });
+  // 既存の未分類を下から削除（行ズレ防止）
+  var delRows = olds.map(function (x) { return x.row; }).sort(function (a, b) { return b - a; });
   delRows.forEach(function (r) { sh.deleteRow(r); });
   // 最新の下書きを投入（級='未分類'・有効FALSE＝受験には出ない）
   var now = skillNow_();
   var rows = SKILL_DRAFTS_.map(function (d) {
     // d = [カテゴリ, 問題, 選1..4, 正解(1-4), 初期メモ]
+    var choices = [d[2], d[3], d[4], d[5]];
     var note = d[7] ? ('[取込 ' + now.slice(5, 16) + '] ' + d[7]) : '';
-    return skillQRowVals_({ grade: '未分類', cat: d[0], q: d[1], choices: [d[2], d[3], d[4], d[5]], answer: d[6], points: 1, active: false, at: now, status: '下書き', review: note });
+    var prev = keep[skillDraftKey_(choices, d[1])];
+    var answer = d[6], status = '下書き', manCh = null;
+    if (prev) {
+      kept++;
+      if (prev.review) note = prev.review;                                  // やりとりのログをそのまま残す
+      if (prev.status) status = prev.status;                                // 下書き/確認中/確定
+      if (prev.status === '確認中' || prev.status === '確定') answer = prev.answer || d[6];  // 人が決めた正解を優先
+      if (prev.manCh) manCh = prev.manCh;                                   // 手で振った章を優先
+    }
+    return skillQRowVals_({ grade: '未分類', cat: d[0], q: d[1], choices: choices, answer: answer, points: 1, active: false, at: now, status: status, review: note, manCh: manCh });
   });
   if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, SKILL_Q_HEAD_.length).setValues(rows);
-  return { ok: true, added: rows.length, removed: delRows.length };
+  return { ok: true, added: rows.length, removed: delRows.length, kept: kept };
 }
 
 function skillQRow_(id) {

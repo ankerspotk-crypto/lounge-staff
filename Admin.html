@@ -2319,9 +2319,9 @@ function skBuilderCard_(q,num,grades){
       +'<button class="btn" style="padding:5px 10px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="skDelQ(\''+esc(q.id)+'\')">🗑</button></div></div>';
 }
 function skImportDrafts(){
-  if(!confirm('下書き（未分類）を最新の現場ドラフトに総入れ替えします。\n・確定済み（級に入れた問題）には影響しません\n・受験には出ません')) return;
+  if(!confirm('下書き（未分類）を最新の現場ドラフトに入れ替えます。\n・コメントのやりとり／状態／決めた正解／章は引き継ぎます\n・確定済み（級に入れた問題）には影響しません\n・受験には出ません')) return;
   api('skillImportDrafts',{}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'取込に失敗'); return; }
-    alert('入れ替えました（投入'+(r.added||0)+'問／旧下書き削除'+(r.removed||0)+'問）。'); renderSkillTest();
+    alert('入れ替えました（投入'+(r.added||0)+'問／うち やりとりを引き継いだ問題 '+(r.kept||0)+'問）。'); renderSkillTest();
   }).catch(function(){ alert('通信エラー'); });
 }
 function skSetAnswer(id,n){
