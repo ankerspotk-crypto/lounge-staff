@@ -2050,8 +2050,11 @@ function drawManualAdmin(){
     +body
     +'<div class="sec"><div class="sec-t">まとめて</div>'
       +'<button class="btn pri" onclick="manaNew(-1)">＋ 新しい章を作る</button> '
-      +'<button class="btn" onclick="manaSeed()">📥 定番マニュアルを投入</button>'
-      +'<div class="hint" style="margin-top:8px">「定番マニュアル」＝店の実データ（開店前チェック・定時LINE・現金4袋・りく確定の判断基準）から起こした初期本文。<b>同じタイトルは重複しません</b>ので、消してしまった項目を戻す時にも使えます。</div>'
+      +'<button class="btn" onclick="manaSeed()">📥 定番マニュアルを投入</button> '
+      +'<button class="btn" style="color:#ff9a9a;border-color:#5a2226" onclick="manaReset()">🔄 定番の内容に戻す</button>'
+      +'<div class="hint" style="margin-top:8px">「定番マニュアル」＝店の実データ（開店前チェック・定時LINE・現金4袋・現場の確定ルール）から起こした初期本文。<br>'
+      +'<b>📥 投入</b>＝足りない項目だけ追加（同じタイトルは重複しません）。消した項目を戻す時に使います。<br>'
+      +'<b>🔄 戻す</b>＝<b>いまの中身を捨てて</b>定番で入れ直します。定番側の文言を直した時と、編集でぐちゃぐちゃになった時に使います。手で編集した項目があると、一度止まって確認します。</div>'
     +'</div>'
   );
 }
@@ -2108,6 +2111,18 @@ function manaRenameCh(ci){
   var em=prompt('章の絵文字（変えないなら そのままOK）', cur.emoji||'');
   api('manualRenameChapter',{oldCh:cur.ch,newCh:nv,emoji:(em==null?'':em)}).then(function(r){ if(!res(r,'章名を変更しました'))return; renderManualAdmin(); })
     .catch(function(){ toast('通信エラー',true); });
+}
+function manaReset(){
+  if(!confirm('いまのマニュアルの中身を捨てて、定番の内容で入れ直します。\n手で書き足した項目は消えます。よろしいですか？')) return;
+  api('manualResetDefaults',{}).then(function(r){
+    if(r&&r.needConfirm){
+      if(!confirm('⚠️ '+r.error+'\n\nそれでも定番で入れ直しますか？')) return;
+      api('manualResetDefaults',{force:true}).then(function(r2){ if(!res(r2))return; toast((r2.wrote||0)+'項目で入れ直しました'); renderManualAdmin(); })
+        .catch(function(){ toast('通信エラー',true); });
+      return;
+    }
+    if(!res(r))return; toast((r.wrote||0)+'項目で入れ直しました'); renderManualAdmin();
+  }).catch(function(){ toast('通信エラー',true); });
 }
 function manaSeed(){
   if(!confirm('定番マニュアルを投入します。\n（同じタイトルの項目は重複しません）')) return;
@@ -5019,6 +5034,7 @@ function MOCKAPI(action,body){
     }
     if(action==='manualRenameChapter'){ MM.forEach(function(r){ if(r.ch===body.oldCh){ r.ch=body.newCh; if(body.emoji) r.emoji=body.emoji; } }); return {ok:true}; }
     if(action==='manualSeedDefaults') return {ok:true,added:0};
+    if(action==='manualResetDefaults'){ return {ok:true,wrote:MM.length,discarded:MM.length,edited:0}; }
   }
   /* ⚠️注意情報（NG）のローカル確認用。本番は ng.gs の kioskGetCustomerNote/kioskSaveCustomerNote */
   if(action==='adminGetCustomerNote'){

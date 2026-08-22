@@ -1739,6 +1739,7 @@ function handleApiRequest_(body) {
   if (body.action === 'manualMoveChapter')   { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return manualAdminMoveChapter_(body.ch, body.dir); }
   if (body.action === 'manualRenameChapter') { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return manualAdminRenameChapter_(body.oldCh, body.newCh, body.emoji); }
   if (body.action === 'manualSeedDefaults')  { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return manualSeedDefaults_(); }
+  if (body.action === 'manualResetDefaults') { const _an = getStaffName(body.userId); if (!_an || !isAdmin_(_an)) return { ok: false, error: '権限がありません' }; return manualResetToDefaults_(body.force === true); }
   // ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦）
   if (body.action === 'kassenPlay') return kassenPlay_(body);
   if (body.action === 'kassenPing') return kassenPing_(body);
