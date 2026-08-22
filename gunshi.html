@@ -386,6 +386,9 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .rb.d{color:#ffbf6a;border-color:#5a4010;background:#1c1300;}
 .rb.undef{color:#ff9a6a;border-color:#7a3a1a;background:#241000;}
 .rnote{font-size:10px;color:var(--sub);margin-top:3px;background:#0f0f1c;border-radius:7px;padding:3px 7px;border:1px solid var(--line);}
+/* 予約を入れた人（登録者）。既定表示＝誰が入力したか常に分かるようにする（ボス指示 2026-08-22） */
+.rby{font-size:10px;color:#7b86a8;margin-top:4px;text-align:right;}
+.rby b{color:#9fb0d8;font-weight:700;}
 /* 予約カードのボトル位置（黒服が来店前に準備できるよう銘柄＋位置を明示） */
 .rbottle{font-size:11px;font-weight:700;color:#8fd06a;background:#12240f;border:1px solid #356020;border-radius:7px;padding:3px 8px;margin-top:4px;display:inline-block;}
 .rbottle b{color:#c8f0a8;font-weight:800;}
@@ -1362,7 +1365,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-21b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-22a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2888,8 +2891,12 @@ function rcardHtml(r,isNext){
     +((r.subCustomers&&r.subCustomers.length)?'<div class="rnote" style="color:#66cc88">👥 同席 +'+r.subCustomers.length+'名: '+r.subCustomers.map(function(s){return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':'');}).join('、')+'</div>':'')
     +(r.nextMemo?'<div class="rnextmemo">📌 次回対応: '+esc(r.nextMemo)+'</div>':'')
     +ngCardHtml(r)
-    +(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')+'</div>';
+    +(r.note?'<div class="rnote">📝 '+esc(r.note)+'</div>':'')
+    +rsvByHtml_(r)+'</div>';
 }
+/* ✍️この予約を入れた人。regBy＝予約管理シート10列目（登録者）。
+   旧データは端末名だけ（例『5F端末』）／ポータル・LINE経由は本人名／取込は『インポート』＝出さない。 */
+function rsvByHtml_(r){ var v=String((r&&r.regBy)||'').trim(); if(!v||v==='インポート') return ''; return '<div class="rby">✍️ 入力 <b>'+esc(v)+'</b></div>'; }
 /* ⚠️予約カードの注意情報（NG）。予約が入った時点で黒服の目に必ず入る場所＝ここに出す。
    ⛔NGキャストが担当/予約/同伴に入っていたら、その場で赤く名指しする（付け回し前に気づける）。 */
 function ngCardHtml(r){
@@ -5027,6 +5034,9 @@ function afSubPick(name,member,tantou){
 function afSubRemove(i){ afSyncInputs(); (addSel.subs||[]).splice(i,1); refreshAddForm(); }
 function afSubPax(i,v){ if(addSel.subs&&addSel.subs[i])addSel.subs[i].pax=parseInt(v)||1; }
 function afSubTantou(i,v){ if(addSel.subs&&addSel.subs[i])addSel.subs[i].tantouCast=v; }
+/* 予約の登録者/操作者。⚠️端末名だけだと『誰が入れたか』が分からない（ボス指摘 2026-08-22）＝ログイン中の黒服名を主にする。
+   ログイン前（ローカル/未認証）は従来どおり端末名だけ。 */
+function rsvActor_(){ var n=(typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):''; return n? n+'（'+TERM+'端末）' : TERM+'端末'; }
 function submitRsv(){
   afSyncInputs();
   if(addSel.custMode==='new'){ var nm=(addSel.name||'').replace(/\s*様\s*$/,'').trim(); if(nm){ addSel.name=nm; addSel.newCust=true; } }
@@ -5055,7 +5065,7 @@ function submitRsv(){
   if(!IS_GAS){ toast('（ローカル）予約を保存'); closeSheet(); return; }
   if(addSel._busy) return; addSel._busy=true;            // 二重送信ロック（連打で人数分入るのを防止）
   var btn=document.querySelector('#sheetBody .savebtn'); if(btn){ btn.textContent='保存中…'; btn.style.opacity='.55'; btn.style.pointerEvents='none'; }
-  var p=addSel.rowIdx?gsr('updateKioskReservation',addSel.rowIdx,payload,TERM+'端末'):gsr('addKioskReservation',payload,TERM+'端末');
+  var p=addSel.rowIdx?gsr('updateKioskReservation',addSel.rowIdx,payload,rsvActor_()):gsr('addKioskReservation',payload,rsvActor_());
   p.then(function(d){ if(d&&d.ok===false){ addSel._busy=false; if(btn){btn.textContent='予約を確定する';btn.style.opacity='';btn.style.pointerEvents='';} alert('エラー: '+(d.error||''));return;} toast(d&&d.duplicate?'この予約は既に入っています':'✅ 予約を保存しました'); closeSheet(); loadAll(); }).catch(function(){ addSel._busy=false; if(btn){btn.textContent='予約を確定する';btn.style.opacity='';btn.style.pointerEvents='';} alert('通信エラー'); });
 }
 function cancelRsv(){
@@ -5067,7 +5077,7 @@ function cancelRsv(){
     : 'この予約をキャンセルしますか？';
   if(!confirm(msg))return;
   if(!IS_GAS){toast('（ローカル）キャンセル');closeSheet();return;}
-  gsr('cancelKioskReservation',addSel.rowIdx,TERM+'端末').then(function(){toast(seated?'キャンセル＆ホールをリセットしました':'予約をキャンセルしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');});
+  gsr('cancelKioskReservation',addSel.rowIdx,rsvActor_()).then(function(){toast(seated?'キャンセル＆ホールをリセットしました':'予約をキャンセルしました');closeSheet();loadAll();}).catch(function(){alert('通信エラー');});
 }
 
 function openSchedule(){
@@ -8543,7 +8553,7 @@ function adaptHall(data){
   Object.keys(comb).forEach(function(pc){var pi=byCode[pc]; if(pi==null)return; (comb[pc]||[]).forEach(function(oc){var oi=byCode[oc]; if(oi==null)return; (arr[pi].mergeWith=arr[pi].mergeWith||[]).push(oi); arr[oi].mergedTo=pi;});});
   return arr;
 }
-function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, checkTime:r.checkTime||'', cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', ngInfo:r.ngInfo||null, bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[]};});}
+function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, checkTime:r.checkTime||'', cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', ngInfo:r.ngInfo||null, bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[], regBy:r.regBy||''};});}
 // 同じお客様の予約が複数テーブルに跨る場合、その席同士を1組(結合表示)にまとめる。
 // 手動結合が既にある席は尊重してスキップ。キャンセル/退店済み・未定は対象外。
 function applyRsvGrouping(){
