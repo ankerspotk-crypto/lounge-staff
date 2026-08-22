@@ -3082,6 +3082,51 @@ function pskillSubmit(){
     })
     .catch(function(){ PSKILL.busy = false; alert('通信エラーが発生しました'); if (sb) { sb.disabled = false; sb.textContent = '採点する'; } });
 }
+/* 📖 復習：間違えた問題を「新人マニュアルの章」単位でまとめて出す（backend: skillReviewFor_）。
+   ⚠️正解そのものは返ってこない＝答えの丸暗記でなくマニュアルを読ませる設計。
+   PSKILL_REVIEW_BODY=false にすると本文を出さず「軍師の📖新人マニュアルの◯章を読むこと」の案内だけになる。 */
+var PSKILL_REVIEW_BODY = true;
+function pskillLvChip_(lv){
+  if (lv === '禁止') return '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid #6b2a2a;background:#241010;color:#e0908f;margin-right:6px">⛔ 禁止</span>';
+  if (lv === '重要') return '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid #6b5520;background:#221b0c;color:#e6cf95;margin-right:6px">⚠️ 重要</span>';
+  return '';
+}
+function pskillReviewHtml_(d){
+  var rv = (d && d.review) || [];
+  if (!rv.length) return '';
+  var h = '<div style="margin-top:18px">'
+    + '<div style="font-size:14px;color:#e6cf95;font-weight:800;margin-bottom:4px">📖 読み直すところ</div>'
+    + '<div style="font-size:11.5px;color:#94886a;margin-bottom:10px">間違えた問題は、新人マニュアルのここに書いてあります。</div>';
+  rv.forEach(function(g){
+    var title = g.chapter ? (g.emoji + ' ' + g.chapter) : '（マニュアル未収録）';
+    h += '<div style="border:1px solid #33291a;border-radius:12px;background:#14110b;margin-bottom:10px;overflow:hidden">'
+      + '<div style="padding:12px 13px;border-bottom:1px solid #241d12">'
+        + '<div style="font-size:14.5px;color:#f2ead9;font-weight:800">' + esc(title) + '</div>'
+        + '<div style="font-size:11px;color:#94886a;margin-top:3px">間違えた問題 ' + g.questions.length + '問</div>'
+      + '</div>'
+      + '<div style="padding:10px 13px">'
+      + g.questions.map(function(q){
+          return '<div style="font-size:12.5px;color:#cbb98a;line-height:1.6;margin-bottom:6px">✗ ' + esc(q) + '</div>';
+        }).join('');
+    if (PSKILL_REVIEW_BODY && g.items && g.items.length) {
+      h += '<div style="border-top:1px solid #241d12;margin-top:8px;padding-top:8px">'
+        + g.items.map(function(it){
+            return '<details style="margin-bottom:6px">'
+              + '<summary style="cursor:pointer;font-size:13px;color:#e6cf95;font-weight:700;list-style:none">'
+                + pskillLvChip_(it.level) + esc(it.title)
+              + '</summary>'
+              + '<div style="white-space:pre-wrap;font-size:13px;line-height:1.8;color:#d9cfb8;padding:8px 2px 4px">' + esc(it.body) + '</div>'
+            + '</details>';
+          }).join('')
+        + '</div>';
+    } else if (g.chapter) {
+      h += '<div style="border-top:1px solid #241d12;margin-top:8px;padding-top:8px;font-size:12.5px;color:#b09f74">'
+        + '軍師の「📖 新人マニュアル → ' + esc(g.chapter) + '」を読み直してください。</div>';
+    }
+    h += '</div></div>';
+  });
+  return h + '</div>';
+}
 function pskillResult(d){
   var ok = d.passed, head = ok ? '🎉 合格' : '✋ 不合格', color = ok ? '#7fd18b' : '#e0908f';
   var h = '<div style="padding:14px">';
@@ -3092,6 +3137,7 @@ function pskillResult(d){
   if (ok && d.unlock) h += '<div style="margin-top:12px;font-size:13px;color:#e6cf95">この級で <b>時給' + (d.unlock === 'アップ' ? 'アップ' : '維持') + '</b> の資格を満たしました。</div>';
   if (!ok) h += '<div style="margin-top:12px;font-size:12px;color:#b09f74">もう一度挑戦できます。落ち着いていきましょう。</div>';
   h += '</div>';
+  h += pskillReviewHtml_(d);
   h += '<div style="display:flex;gap:10px;margin-top:16px">'
     + '<button onclick="pskillStart(\'' + encodeURIComponent(d.grade) + '\')" style="flex:1;border:1px solid #33291a;background:#16130d;color:#cbb98a;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">もう一度</button>'
     + '<button onclick="loadSkill()" style="flex:1;border:1px solid #c9a459;background:#1a1611;color:#e6cf95;border-radius:10px;padding:12px;font-size:13px;cursor:pointer">級一覧へ</button></div>';

@@ -549,7 +549,7 @@ function pollAdminAuth(token){
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
 var TAB_GROUPS=[
   {g:'top',   label:'🏠 トップ', tabs:[['top','🏠 店の全容']]},
-  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kyukin','📉 当欠'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
+  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kyukin','📉 当欠'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['awards','🏆 表彰'],['manual','📖 マニュアル'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['nenkan','📈 年間集計'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
@@ -569,7 +569,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
+  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -1968,6 +1968,153 @@ function saveChecklist(){
   api('saveChecklistConfig',{config:{opening:op,closing:cl}}).then(function(r){ res(r,'チェックリストを保存しました'); });
 }
 
+/* 📖 新人マニュアル（黒服の新人向け・軍師で読む本文の正本）
+   ここが正本。編集すると軍師の「📖 新人マニュアル」に即反映される（端末は開き直し or 🔄）。
+   backend: manual.gs（manualAdminData_/manualAdminSave_/…） */
+var manAdm=null, manaEdit=null;
+function renderManualAdmin(){
+  loading();
+  api('manualAdminData',{}).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'取得できませんでした')+'</div>'); return; }
+    manAdm=r; drawManualAdmin();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function manaLvChip_(lv){
+  if(lv==='禁止') return '<span class="chip" style="color:#ff9a9a;border-color:#5a2226">⛔ 禁止</span>';
+  if(lv==='重要') return '<span class="chip" style="color:#f4d98a;border-color:#c9a45c">⚠️ 重要</span>';
+  return '';
+}
+function manaLvOpts_(v){
+  return '<option value=""'+(!v?' selected':'')+'>通常</option>'
+    +'<option value="重要"'+(v==='重要'?' selected':'')+'>⚠️ 重要（強調して出す）</option>'
+    +'<option value="禁止"'+(v==='禁止'?' selected':'')+'>⛔ 禁止（やってはいけない）</option>';
+}
+function manaChOpts_(sel){
+  var chs=(manAdm&&manAdm.chapters)||[];
+  return chs.map(function(c){ return '<option value="'+esc(c.ch)+'"'+(c.ch===sel?' selected':'')+'>'+esc(c.emoji+' '+c.ch)+'</option>'; }).join('');
+}
+/* 編集フォーム（新規も編集も同じ形。ch は既存章のプルダウン＋新しい章の手入力） */
+function manaForm_(){
+  var e=manaEdit;
+  return '<div class="sec" style="border-color:#c9a45c">'
+    +'<div class="sec-t">'+(e.id?'✏️ 項目を編集':'＋ 項目を追加')+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+      +'<label style="font-size:12px;color:var(--dim)">章</label>'
+      +'<select id="mana-ch" style="min-width:200px">'+manaChOpts_(e.ch)+'<option value="__new"'+(e.ch==='__new'?' selected':'')+'>＋ 新しい章にする…</option></select>'
+      +'<input id="mana-newch" placeholder="新しい章名（＋新しい章のとき）" style="flex:1;min-width:160px" value="'+esc(e.newCh||'')+'">'
+      +'<input id="mana-emoji" placeholder="絵文字" style="width:80px" value="'+esc(e.emoji||'')+'">'
+    +'</div>'
+    +'<input id="mana-title" placeholder="タイトル（新人が探す言葉で）" style="width:100%;margin-bottom:8px" value="'+esc(e.title||'')+'">'
+    +'<textarea id="mana-body" placeholder="本文。改行はそのまま軍師に出ます。" style="width:100%;height:180px;margin-bottom:8px">'+esc(e.body||'')+'</textarea>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
+      +'<label style="font-size:12px;color:var(--dim)">重要度</label><select id="mana-level">'+manaLvOpts_(e.level)+'</select>'
+      +'<input id="mana-tags" placeholder="タグ（検索用・任意）" style="width:200px" value="'+esc(e.tags||'')+'">'
+      +'<label style="font-size:12px;color:var(--dim)"><input type="checkbox" id="mana-active"'+(e.active===false?'':' checked')+'> 軍師に表示する</label>'
+    +'</div>'
+    +'<button class="btn pri" onclick="manaSave()">保存</button> <button class="btn" onclick="manaCancel()">キャンセル</button>'
+  +'</div>';
+}
+function drawManualAdmin(){
+  var chs=(manAdm.chapters)||[];
+  var total=(manAdm.rows||[]).length;
+  var body=chs.map(function(c,ci){
+    var items=c.items.map(function(it,ii){
+      var preview=String(it.body||'').split('\n')[0];
+      return '<div class="lrow" style="align-items:flex-start;gap:8px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:9px;margin-bottom:2px">'
+        +'<div class="main"><div style="font-size:13.5px;line-height:1.5">'
+          +(it.active===false?'<span class="chip" style="color:#ff9a9a;border-color:#5a2226">非表示</span> ':'')
+          +manaLvChip_(it.level)+' <b>'+esc(it.title)+'</b></div>'
+        +'<div style="font-size:12px;color:var(--dim);margin-top:3px">'+esc(preview)+(String(it.body||'').indexOf('\n')>=0?' …':'')+'</div></div>'
+        +'<div style="display:flex;flex-direction:column;gap:4px;flex:none">'
+          +'<div style="display:flex;gap:4px"><button class="btn" style="padding:4px 9px;font-size:12px" onclick="manaMove(\''+it.id+'\',-1)">↑</button>'
+          +'<button class="btn" style="padding:4px 9px;font-size:12px" onclick="manaMove(\''+it.id+'\',1)">↓</button></div>'
+          +'<button class="btn" style="padding:5px 11px;font-size:12px" onclick="manaEditItem(\''+it.id+'\')">✏️ 編集</button>'
+          +'<button class="btn" style="padding:5px 11px;font-size:12px;color:#ff9a9a;border-color:#5a2226" onclick="manaDel(\''+it.id+'\')">削除</button>'
+        +'</div></div>';
+    }).join('')||'<div class="empty" style="padding:8px;color:var(--dim)">この章はまだ空です</div>';
+    return '<div class="sec"><div class="sec-t">'+esc(c.emoji+' '+c.ch)
+      +' <span style="font-weight:400;color:var(--dim);font-size:12px">'+c.items.length+'項目</span>'
+      +'<span style="float:right">'
+        +'<button class="btn" style="padding:4px 9px;font-size:12px" onclick="manaMoveCh('+ci+',-1)">↑</button> '
+        +'<button class="btn" style="padding:4px 9px;font-size:12px" onclick="manaMoveCh('+ci+',1)">↓</button> '
+        +'<button class="btn" style="padding:4px 9px;font-size:12px" onclick="manaRenameCh('+ci+')">✏️ 章名</button>'
+      +'</span></div>'
+      +items
+      +'<div style="margin-top:10px"><button class="btn pri" onclick="manaNew('+ci+')">＋ この章に項目を追加</button></div></div>';
+  }).join('')||'<div class="empty">マニュアルがまだありません。下の「📥 定番マニュアルを投入」で入ります。</div>';
+  setBody(
+    '<div class="hint">ここが<b>軍師の「📖 新人マニュアル」の正本</b>です。保存すると黒服のiPadに反映されます（端末は開き直すか🔄）。<br>'
+    +'<b>重要度</b>は⚠️重要／⛔禁止で色が変わります。<b>非表示</b>にすると軍師には出ません（下書き置き場に使えます）。</div>'
+    +(manaEdit?manaForm_():'')
+    +'<div class="hint" style="color:var(--dim)">全'+total+'項目 ／ '+chs.length+'章</div>'
+    +body
+    +'<div class="sec"><div class="sec-t">まとめて</div>'
+      +'<button class="btn pri" onclick="manaNew(-1)">＋ 新しい章を作る</button> '
+      +'<button class="btn" onclick="manaSeed()">📥 定番マニュアルを投入</button>'
+      +'<div class="hint" style="margin-top:8px">「定番マニュアル」＝店の実データ（開店前チェック・定時LINE・現金4袋・りく確定の判断基準）から起こした初期本文。<b>同じタイトルは重複しません</b>ので、消してしまった項目を戻す時にも使えます。</div>'
+    +'</div>'
+  );
+}
+function manaEditItem(id){
+  var rows=(manAdm&&manAdm.rows)||[];
+  for(var i=0;i<rows.length;i++) if(rows[i].id===id){
+    manaEdit={id:rows[i].id,ch:rows[i].ch,title:rows[i].title,body:rows[i].body,level:rows[i].level,tags:rows[i].tags,active:rows[i].active,emoji:rows[i].emoji};
+    drawManualAdmin(); window.scrollTo(0,0); return;
+  }
+}
+function manaNew(ci){
+  var chs=(manAdm&&manAdm.chapters)||[];
+  var c=(ci>=0&&chs[ci])?chs[ci]:null;
+  manaEdit={id:'',ch:c?c.ch:'__new',emoji:c?c.emoji:'',title:'',body:'',level:'',tags:'',active:true,newCh:''};
+  drawManualAdmin(); window.scrollTo(0,0);
+}
+function manaCancel(){ manaEdit=null; drawManualAdmin(); }
+function manaSave(){
+  var chSel=document.getElementById('mana-ch').value;
+  var ch=(chSel==='__new')?String(document.getElementById('mana-newch').value||'').trim():chSel;
+  if(!ch){ toast('章を選ぶか、新しい章名を入れてください',true); return; }
+  var title=String(document.getElementById('mana-title').value||'').trim();
+  if(!title){ toast('タイトルを入れてください',true); return; }
+  var item={
+    id:manaEdit.id||'', ch:ch, emoji:String(document.getElementById('mana-emoji').value||'').trim(),
+    title:title, body:String(document.getElementById('mana-body').value||''),
+    level:document.getElementById('mana-level').value,
+    tags:String(document.getElementById('mana-tags').value||'').trim(),
+    active:document.getElementById('mana-active').checked
+  };
+  api('manualSave',{item:item}).then(function(r){ if(!res(r,'保存しました'))return; manaEdit=null; renderManualAdmin(); })
+    .catch(function(){ toast('通信エラー',true); });
+}
+function manaDel(id){
+  if(!confirm('この項目を削除します。よろしいですか？')) return;
+  api('manualDelete',{id:id}).then(function(r){ if(!res(r,'削除しました'))return; renderManualAdmin(); })
+    .catch(function(){ toast('通信エラー',true); });
+}
+function manaMove(id,dir){
+  api('manualMove',{id:id,dir:dir}).then(function(r){ if(!res(r))return; renderManualAdmin(); })
+    .catch(function(){ toast('通信エラー',true); });
+}
+function manaMoveCh(ci,dir){
+  var chs=(manAdm&&manAdm.chapters)||[]; if(!chs[ci])return;
+  api('manualMoveChapter',{ch:chs[ci].ch,dir:dir}).then(function(r){ if(!res(r))return; renderManualAdmin(); })
+    .catch(function(){ toast('通信エラー',true); });
+}
+function manaRenameCh(ci){
+  var chs=(manAdm&&manAdm.chapters)||[]; if(!chs[ci])return;
+  var cur=chs[ci];
+  var nv=prompt('章名を変更します（この章の全項目に反映）', cur.ch);
+  if(nv==null) return;
+  nv=String(nv).trim(); if(!nv) return;
+  var em=prompt('章の絵文字（変えないなら そのままOK）', cur.emoji||'');
+  api('manualRenameChapter',{oldCh:cur.ch,newCh:nv,emoji:(em==null?'':em)}).then(function(r){ if(!res(r,'章名を変更しました'))return; renderManualAdmin(); })
+    .catch(function(){ toast('通信エラー',true); });
+}
+function manaSeed(){
+  if(!confirm('定番マニュアルを投入します。\n（同じタイトルの項目は重複しません）')) return;
+  api('manualSeedDefaults',{}).then(function(r){ if(!res(r))return; toast((r.added||0)+'項目を投入しました'); renderManualAdmin(); })
+    .catch(function(){ toast('通信エラー',true); });
+}
+
 /* 📝 スキルテスト（黒服の知識関門・時給の維持/アップ資格）
    結果一覧（誰が何級合格＝時給資格）／級設定／作問。受験は軍師側。
    ⚠️合否はフラグ。基本時給は自動で書き換えない（改定は人が判断）。 */
@@ -2021,7 +2168,7 @@ function drawSkill(){
           +'<span style="width:15px;flex:none;text-align:center">'+(isC?'✓':(k+1))+'</span><span>'+esc(ch)+'</span></div>';
       }).join('');
       return '<div class="lrow" style="align-items:flex-start;gap:8px;border-bottom:1px solid rgba(255,255,255,.07);padding-bottom:10px;margin-bottom:2px">'
-        +'<div class="main"><div style="font-size:13.5px;line-height:1.5"><b style="color:#b8934e">Q'+(qi+1)+'.</b> '+(q.active===false?'<span class="chip" style="color:#ff9a9a;border-color:#5a2226">停止</span> ':'')+(q.cat?'<span class="chip">'+esc(q.cat)+'</span> ':'')+esc(q.q)+'</div>'
+        +'<div class="main"><div style="font-size:13.5px;line-height:1.5"><b style="color:#b8934e">Q'+(qi+1)+'.</b> '+(q.active===false?'<span class="chip" style="color:#ff9a9a;border-color:#5a2226">停止</span> ':'')+(q.cat?'<span class="chip">'+esc(q.cat)+'</span> ':'')+skChChip_(q.manCh)+' '+esc(q.q)+'</div>'
         +choicesHtml
         +(q.points&&q.points!==1?'<div style="font-size:11px;color:var(--dim);margin-top:3px">配点 '+q.points+'</div>':'')+'</div>'
         +'<div style="display:flex;flex-direction:column;gap:4px;flex:none"><button class="btn" style="padding:5px 11px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">✏️ 編集</button>'
@@ -2044,7 +2191,12 @@ function drawSkill(){
     +'<div style="margin-bottom:10px">'+importBtn+'　<span style="color:var(--dim);font-size:12px">下書き '+drafts.length+' 問</span></div>'
     +builderBody;
   setBody(
-    '<div class="hint">合格した級が時給の<b>維持・アップ</b>の資格になります。判定はここに出ますが、<b>実際の時給の改定は人が確定</b>します（自動では変えません）。受験は軍師の「📝 スキルテスト」から。</div>'
+    '<div class="hint">合格した級が時給の<b>維持・アップ</b>の資格になります。判定はここに出ますが、<b>実際の時給の改定は人が確定</b>します（自動では変えません）。受験は<b>ポータルの「📝 スキルテスト」</b>から（黒服＋管理者のみ表示）。<br>'
+    +'問題は<b>📖 新人マニュアルの章に紐づけ</b>ます。間違えた問題は、採点結果でその章の本文が出ます（＝テストはマニュアルからの抜き取り）。</div>'
+    +'<div class="sec"><div class="sec-t">🔗 マニュアル連動に整える</div>'
+      +'<div class="hint" style="margin-top:0">全級の定番問題を投入し、残った<b>サンプル問題を停止</b>し、章が未設定の問題に既定の章を入れます。'
+      +'（定番の無い級は問題ゼロ＝「まだ受験できない」と正しく出ます）</div>'
+      +'<button class="btn pri" onclick="skSeedAll()">📥 実行する</button></div>'
     +'<div class="sec"><div class="sec-t">🎖 時給資格ボード（黒服ごと）</div>'
       +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:var(--dim);text-align:left"><th style="padding:4px 8px">名前</th><th style="padding:4px 8px">役割</th><th style="padding:4px 8px">合格した級</th><th style="padding:4px 8px">時給資格</th><th style="padding:4px 8px">直近の受験</th></tr></thead><tbody>'+resRows+'</tbody></table></div></div>'
     +'<div class="sec"><div class="sec-t">🪜 級の設定 <span style="font-weight:400;color:var(--dim);font-size:12px">解放資格で「維持／アップ」を切り分け</span></div>'
@@ -2078,9 +2230,20 @@ function skSaveGrades(){
     api('skillSaveGrade',{g:list[i]}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'級の保存に失敗'); return; } next(i+1); }).catch(function(){ alert('通信エラー'); });
   })(0);
 }
-function skNewQ(grade){ skQEdit={id:null,grade:grade||((skAdm.grades[0]||{}).grade)||'',cat:'',q:'',choices:['','','',''],answer:1,points:1,active:true}; drawSkill(); location.hash='#skq'; }
-function skEditQ(id){ var q=(skAdm.questions||[]).filter(function(x){return x.id===id;})[0]; if(!q) return; skQEdit={id:q.id,grade:q.grade,cat:q.cat,q:q.q,choices:(q.choices||['','','','']).slice(),answer:q.answer||1,points:q.points||1,active:q.active!==false}; drawSkill(); location.hash='#skq'; }
+function skNewQ(grade){ skQEdit={id:null,grade:grade||((skAdm.grades[0]||{}).grade)||'',cat:'',q:'',choices:['','','',''],answer:1,points:1,active:true,manCh:''}; drawSkill(); location.hash='#skq'; }
+function skEditQ(id){ var q=(skAdm.questions||[]).filter(function(x){return x.id===id;})[0]; if(!q) return; skQEdit={id:q.id,grade:q.grade,cat:q.cat,q:q.q,choices:(q.choices||['','','','']).slice(),answer:q.answer||1,points:q.points||1,active:q.active!==false,manCh:q.manCh||''}; drawSkill(); location.hash='#skq'; }
 function skCancelQ(){ skQEdit=null; drawSkill(); }
+/* 📖 マニュアル章のプルダウン（skillAdminData_ が chapters を返す）。
+   ここで選んだ章が「不正解だった人がポータルで読み直す本文」になる。 */
+function skChOpts_(sel){
+  var chs=(skAdm&&skAdm.chapters)||[];
+  return '<option value=""'+(!sel?' selected':'')+'>（未設定）</option>'
+    +chs.map(function(c){ return '<option value="'+esc(c.ch)+'"'+(c.ch===sel?' selected':'')+'>'+esc(c.emoji+' '+c.ch)+'</option>'; }).join('');
+}
+function skChChip_(ch){
+  return ch ? '<span class="chip" style="border-color:#4a6b8a;color:#9fc4e6">📖 '+esc(ch)+'</span>'
+            : '<span class="chip" style="border-color:#5a2226;color:#ff9a9a">📖 章 未設定</span>';
+}
 function skQFormHtml_(){
   var q=skQEdit, gopts=(skAdm.grades||[]).map(function(g){ return '<option value="'+esc(g.grade)+'"'+(g.grade===q.grade?' selected':'')+'>'+esc(g.grade)+'</option>'; }).join('');
   var ch=q.choices||['','','',''];
@@ -2093,6 +2256,9 @@ function skQFormHtml_(){
     +'<div class="lrow" style="align-items:center;gap:10px"><div style="flex:none;color:var(--dim);font-size:13px">級</div><select class="finput" style="width:130px" onchange="skQEdit.grade=this.value">'+gopts+'</select>'
       +'<div style="flex:none;color:var(--dim);font-size:13px">カテゴリ</div><input class="finput" style="width:150px" placeholder="任意" value="'+esc(q.cat||'')+'" oninput="skQEdit.cat=this.value">'
       +'<div style="flex:none;color:var(--dim);font-size:13px">配点</div><input class="finput" style="width:64px" type="number" value="'+esc(q.points)+'" oninput="skQEdit.points=+this.value"></div>'
+    +'<div class="lrow" style="align-items:center;gap:10px;margin-top:8px"><div style="flex:none;color:var(--dim);font-size:13px">📖 マニュアル章</div>'
+      +'<select class="finput" style="width:260px" onchange="skQEdit.manCh=this.value">'+skChOpts_(q.manCh)+'</select>'
+      +'<span style="font-size:11.5px;color:var(--dim)">この問題を間違えた人には、この章の本文が復習で出ます</span></div>'
     +'<textarea class="finput" style="width:100%;height:60px;margin-top:8px" placeholder="問題文" oninput="skQEdit.q=this.value">'+esc(q.q||'')+'</textarea>'
     +'<div style="margin-top:8px">'+chRows+'</div>'
     +'<div class="lrow" style="align-items:center;margin-top:8px"><span class="chip'+(q.active?' on':'')+'" style="cursor:pointer" onclick="skQEdit.active=!skQEdit.active;drawSkill()">'+(q.active?'有効':'停止')+'</span>'
@@ -2109,6 +2275,15 @@ function skSaveQ(){
 }
 function skDelQ(id){ if(!confirm('この問題を削除しますか？')) return;
   api('skillDeleteQuestion',{id:id}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'削除に失敗'); return; } renderSkillTest(); }).catch(function(){ alert('通信エラー'); });
+}
+function skSeedAll(){
+  if(!confirm('全級の定番問題を投入し、サンプル問題を停止します。\n・サンプルは削除でなく「停止」なので後から中身を見られます\n・章が未設定の問題に既定の章が入ります（設定済みは上書きしません）')) return;
+  api('skillSeedAll',{}).then(function(r){
+    if(!r||r.ok===false){ alert((r&&r.error)||'実行に失敗'); return; }
+    var det=(r.grades||[]).map(function(x){ return x.grade+' +'+x.added+'問'; }).join('／');
+    alert('整えました。\n'+det+'\nサンプル停止 '+(r.stoppedSamples||0)+'問／章を補完 '+(r.chapterFilled||0)+'問');
+    renderSkillTest();
+  }).catch(function(){ alert('通信エラー'); });
 }
 function skSeedDefaults(grade){
   if(!confirm(grade+'の定番問題を投入します。\n（この級の「サンプル」は消え、まだ無い定番だけが追加されます）')) return;
@@ -2137,6 +2312,7 @@ function skBuilderCard_(q,num,grades){
     +reviewLog
     +'<div style="display:flex;gap:6px;margin-top:9px"><input class="finput" id="skc_'+esc(q.id)+'" style="flex:1" placeholder="コメント（例：13は幹の許可確認まで出さないでOK）"><button class="btn" onclick="skReviewNote(\''+esc(q.id)+'\')">💬 追加</button></div>'
     +'<div class="lrow" style="align-items:center;gap:8px;margin-top:9px"><select class="finput" style="width:110px" id="skf_'+esc(q.id)+'">'+gopts+'</select>'
+      +'<select class="finput" style="width:200px" id="skch_'+esc(q.id)+'">'+skChOpts_(q.manCh)+'</select>'
       +'<button class="btn pri" onclick="skFinalize(\''+esc(q.id)+'\')">✅ 確定して級へ</button>'
       +'<span class="sp" style="flex:1"></span>'
       +'<button class="btn" style="padding:5px 10px;font-size:12px" onclick="skEditQ(\''+esc(q.id)+'\')">✏️ 編集</button>'
@@ -2158,9 +2334,11 @@ function skReviewNote(id){
 }
 function skFinalize(id){
   var el=document.getElementById('skf_'+id); var grade=el?el.value:'';
+  var chEl=document.getElementById('skch_'+id); var manCh=chEl?chEl.value:'';
   if(!grade){ alert('級を選んでください'); return; }
+  if(!manCh && !confirm('📖 マニュアル章が未設定です。\nこのまま確定すると、間違えた人に読み直す本文が出ません。続けますか？')) return;
   if(!confirm(grade+'に確定して受験に載せます。よろしいですか？')) return;
-  api('skillFinalize',{id:id,grade:grade}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'確定に失敗'); return; }
+  api('skillFinalize',{id:id,grade:grade,manCh:manCh}).then(function(r){ if(!r||r.ok===false){ alert((r&&r.error)||'確定に失敗'); return; }
     alert(grade+'に投入しました。'); renderSkillTest();
   }).catch(function(){ alert('通信エラー'); });
 }
@@ -4801,6 +4979,47 @@ function issuerRestore(id){
 }
 
 function MOCKAPI(action,body){
+  /* 📖 新人マニュアルのローカル確認用（本番は manual.gs）。押して動く最低限の状態を持つ。 */
+  if(action.indexOf('manual')===0){
+    if(!window.__MOCKMAN){ window.__MOCKMAN=[
+      {id:'m1',ch:'はじめに',chOrder:1,order:1,emoji:'📖',title:'この店はどういう店か',body:'ラウンジいえやすは、2フロア（2Fと5F）で営業する会員制のラウンジ。\nご来店いただけるのは会員のお客様と、会員からご紹介いただいたお客様のみ。',level:'',tags:'店の基本',active:true},
+      {id:'m2',ch:'はじめに',chOrder:1,order:2,emoji:'📖',title:'迷ったら自己判断で通さない',body:'判断に迷ったら、インカムと黒服グループLINEで必ず相談する。',level:'重要',tags:'心構え',active:true},
+      {id:'m3',ch:'開店前',chOrder:2,order:1,emoji:'🌅',title:'開店前チェックは軍師から・2Fと5Fの両方',body:'軍師の「👔黒服業務 →🌅開店前」を開き、チェックを進める。\n⚠️2F と 5F それぞれで完了させる。',level:'重要',tags:'開店前',active:true},
+      {id:'m4',ch:'やってはいけないこと',chOrder:3,order:1,emoji:'⛔',title:'禁止事項まとめ',body:'・お客様やキャストの個人情報を教える\n・幹の許可なく、ボトルを出す\n・客前でPOSを操作する',level:'禁止',tags:'まとめ',active:true}
+    ]; }
+    var MM=window.__MOCKMAN;
+    var mgroup=function(){ var map={},out=[]; MM.slice().sort(function(a,b){return (a.chOrder-b.chOrder)||(a.order-b.order);}).forEach(function(r){
+      if(!map[r.ch]){ map[r.ch]={ch:r.ch,emoji:r.emoji,chOrder:r.chOrder,items:[]}; out.push(map[r.ch]); }
+      map[r.ch].items.push({id:r.id,title:r.title,body:r.body,level:r.level,tags:r.tags,order:r.order,active:r.active}); }); return out; };
+    if(action==='manualAdminData') return {ok:true,chapters:mgroup(),rows:MM.slice().sort(function(a,b){return (a.chOrder-b.chOrder)||(a.order-b.order);}),levels:['','重要','禁止']};
+    if(action==='manualSave'){
+      var it=body.item||{}, ex=null; MM.forEach(function(r){ if(r.id===it.id) ex=r; });
+      var chOrder=0,maxCh=0,maxOr=0;
+      MM.forEach(function(r){ if(r.chOrder>maxCh)maxCh=r.chOrder; if(r.ch===it.ch){ chOrder=r.chOrder; if(r.order>maxOr)maxOr=r.order; } });
+      if(!chOrder) chOrder=maxCh+1;
+      if(ex){ ex.ch=it.ch; ex.chOrder=chOrder; ex.emoji=it.emoji||ex.emoji; ex.title=it.title; ex.body=it.body; ex.level=it.level; ex.tags=it.tags; ex.active=it.active!==false; }
+      else MM.push({id:'m'+(MM.length+1)+'_'+MM.length,ch:it.ch,chOrder:chOrder,order:maxOr+1,emoji:it.emoji||'📄',title:it.title,body:it.body,level:it.level,tags:it.tags,active:it.active!==false});
+      return {ok:true};
+    }
+    if(action==='manualDelete'){ window.__MOCKMAN=MM.filter(function(r){return r.id!==body.id;}); return {ok:true}; }
+    if(action==='manualMove'){
+      var cur=null; MM.forEach(function(r){ if(r.id===body.id) cur=r; });
+      if(!cur) return {ok:false,error:'項目が見つかりません'};
+      var sib=MM.filter(function(r){return r.ch===cur.ch;}).sort(function(a,b){return a.order-b.order;});
+      var i=sib.indexOf(cur), t=i+(body.dir<0?-1:1);
+      if(t<0||t>=sib.length) return {ok:true,moved:false};
+      var o=cur.order; cur.order=sib[t].order; sib[t].order=o; return {ok:true,moved:true};
+    }
+    if(action==='manualMoveChapter'){
+      var chs=mgroup(), ci=-1; chs.forEach(function(c,i){ if(c.ch===body.ch) ci=i; });
+      var tj=ci+(body.dir<0?-1:1); if(ci<0||tj<0||tj>=chs.length) return {ok:true,moved:false};
+      var a=chs[ci].chOrder,b2=chs[tj].chOrder;
+      MM.forEach(function(r){ if(r.ch===chs[ci].ch) r.chOrder=b2; else if(r.ch===chs[tj].ch) r.chOrder=a; });
+      return {ok:true,moved:true};
+    }
+    if(action==='manualRenameChapter'){ MM.forEach(function(r){ if(r.ch===body.oldCh){ r.ch=body.newCh; if(body.emoji) r.emoji=body.emoji; } }); return {ok:true}; }
+    if(action==='manualSeedDefaults') return {ok:true,added:0};
+  }
   /* ⚠️注意情報（NG）のローカル確認用。本番は ng.gs の kioskGetCustomerNote/kioskSaveCustomerNote */
   if(action==='adminGetCustomerNote'){
     window.__MOCKNG=window.__MOCKNG||{};
@@ -4909,10 +5128,11 @@ function MOCKAPI(action,body){
         {id:'Q2',grade:'初級',cat:'サンプル',q:'黒服としてふさわしくない身だしなみは？',choices:['清潔なスーツと磨いた靴','香水を強くつける','髪を整える','爪を短く保つ'],answer:2,points:1,active:true},
         {id:'Q3',grade:'中級',cat:'サンプル',q:'お会計で金額を伝える前に、まず確認すべきことは？',choices:['伝票の内容と合計が正しいか','次回予約の希望','おしぼりの補充','照明の明るさ'],answer:1,points:1,active:true},
         {id:'Q4',grade:'上級',cat:'サンプル',q:'お客様同士のトラブル、黒服の最優先は？',choices:['双方を落ち着かせ安全を確保','その場を離れる','どちらかの味方をする','会計を急がせる'],answer:1,points:1,active:true},
-        {id:'D1',grade:'未分類',cat:'ボトル',q:'枝の客が来店し、幹の客のボトルを飲みたいと言った。対応は？',choices:['枝の客が言うなら出す','勝手に出す','購入者(幹)のもの。許可が確認できるまで出さない','キャストに任せる'],answer:3,points:1,active:false,status:'下書き',review:'[取込 07-25 12:00] 根拠:04.09「勝手にボトル出すのはNG」',draft:true},
+        {id:'D1',grade:'未分類',cat:'ボトル',q:'枝の客が来店し、幹の客のボトルを飲みたいと言った。対応は？',choices:['枝の客が言うなら出す','勝手に出す','購入者(幹)のもの。許可が確認できるまで出さない','キャストに任せる'],answer:3,points:1,active:false,status:'下書き',review:'[取込 07-25 12:00] 根拠:04.09「勝手にボトル出すのはNG」',draft:true,manCh:'ドリンク・ボトル'},
         {id:'D2',grade:'未分類',cat:'休憩',q:'混雑時、キャストがタバコ休憩に行きたいと言ってきた。',choices:['好きに行かせる','一切認めない','状況を見て回るタイミングで短く、ピークは待たせる','キャスト任せ'],answer:3,points:1,active:false,status:'確認中',review:'[取込 07-25 12:00] ⚠️要確認:混雑時の休憩基準\n[07-25 12:30 りく] ピーク帯は原則ダメでいい',draft:true}
       ],
       defaults:['初級','中級'],
+      chapters:[{ch:'はじめに',emoji:'📖',count:5},{ch:'出勤・身だしなみ',emoji:'👔',count:5},{ch:'開店前',emoji:'🌅',count:7},{ch:'お迎え・受付',emoji:'🚪',count:8},{ch:'席とキャスト（付け回し）',emoji:'🪑',count:11},{ch:'ドリンク・ボトル',emoji:'🍶',count:7},{ch:'清掃・店内の維持',emoji:'🧹',count:2},{ch:'会計（チェック）',emoji:'🧾',count:6},{ch:'退店・送り',emoji:'🚗',count:5},{ch:'閉店・締め',emoji:'🌙',count:8},{ch:'現金の扱い',emoji:'💴',count:4},{ch:'軍師の使い方',emoji:'🏯',count:6},{ch:'やってはいけないこと',emoji:'⛔',count:1}],
       draftsAvailable:40,
       results:[
         {name:'りく',role:'黒服社員',status:{name:'りく',heldGrades:['初級','中級'],topGrade:'中級',eligibility:'アップ',canMaintain:true,canRaise:true,attempts:3,recent:[{date:'2026-07-24 21:30',grade:'中級',pct:90,result:'合格'}]}},

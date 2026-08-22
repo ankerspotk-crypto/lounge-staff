@@ -1297,6 +1297,34 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .bsv-hud-bt{font-size:12px;color:#e7c98f;margin-top:1px;}
 .bp-pos-go{cursor:pointer;}
 .bp-see{margin-left:4px;font-size:12px;opacity:.9;}
+
+/* ===== 📖 新人マニュアル（黒服の新人向け・読み取り専用。正本はシート「マニュアル」） ===== */
+.man-wrap{padding:10px 12px 30px;}
+.man-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
+.man-q{flex:1;min-width:180px;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;color:var(--txt);font-size:15px;padding:11px 12px;outline:none;}
+.man-q:focus{border-color:var(--accent-line);}
+.man-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 13px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2);color:var(--sub);font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;}
+.man-btn:active{background:var(--line);}
+.man-meta{font-size:11px;color:var(--dim);margin:0 2px 12px;}
+.man-chs{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;}
+.man-ch{display:flex;align-items:center;gap:11px;padding:15px 13px;border:1px solid var(--line);border-radius:12px;background:var(--panel);cursor:pointer;}
+.man-ch:active{background:var(--panel2);}
+.man-ch .e{font-size:25px;line-height:1;}
+.man-ch .t{font-weight:800;font-size:15px;line-height:1.35;}
+.man-ch .n{margin-left:auto;font-size:12px;color:var(--dim);font-weight:700;}
+.man-h{font-weight:900;font-size:20px;margin:4px 0 13px;}
+.man-it{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:9px;overflow:hidden;}
+.man-it.lv1{border-color:var(--warn-line);}
+.man-it.lv2{border-color:var(--over-line);}
+.man-ith{display:flex;align-items:flex-start;gap:9px;padding:13px 13px;cursor:pointer;}
+.man-ith .tt{font-weight:800;font-size:15px;flex:1;line-height:1.45;}
+.man-ith .ar{color:var(--dim);font-size:13px;padding-top:2px;}
+.man-bd{margin:0 13px 14px;padding-top:12px;border-top:1px solid var(--line);white-space:pre-wrap;line-height:1.8;font-size:14.5px;color:#d6e0f4;}
+.man-tag{display:inline-block;font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--dim);background:var(--panel2);}
+.man-lv1{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn);}
+.man-lv2{background:var(--over-bg);border-color:var(--over-line);color:var(--over);}
+.man-res-ch{font-size:11px;color:var(--accent);font-weight:800;margin:0 0 4px;}
+.man-empty{padding:28px 10px;text-align:center;color:var(--dim);font-size:14px;line-height:1.7;}
 </style>
 </head>
 <body>
@@ -5492,7 +5520,106 @@ function isNoLine(c){ if(c.lineRegistered===false)return true; if(c.lineRegister
 function adaptCustomer(c){return {name:c.name||c.card||'', card:c.card||'', member:c.no||'', bottle:c.bottle||'', bottlePos:'', bday:c.bday||'', tantou:c.tantou||'', nomikata:c.drink||'', tabako:c.tabaco||'', ng:'', note:c.note||'', joined:c.memberSince||'', feeDate:c.annualFeeDate||'', lineRegistered:(c.lineRegistered!=null?c.lineRegistered:null), visitCount:c.visitCount||0, lastVisit:c.lastVisit||'', dohanCount:c.dohanCount||0, lastDohanCast:c.lastDohanCast||'', totalSales:c.totalSales||0};}
 var custDetailList=[]; // 検索結果を保持（詳細表示のタップ用）
 var custLastQ='';      // 直近の検索キーワード（詳細→検索に戻る時に復元）
+
+/* ===== 📖 新人マニュアル（黒服の新人向け）=====
+   backend: gunshiGetManual()（manual.gs・GUNSHI_API_FNS登録済み）＝読み取り専用。
+   ⚠️本文の正本はスプレッドシート「マニュアル」。直すのは管理コンソールの人事📖マニュアル。
+   ⚠️検索の再描画は #man-list だけ差し替える＝入力中にフォーカスを奪わない。 */
+var MANUAL=null, MAN_LOADING=false, MAN_CH=null, MAN_Q='', MAN_OPEN={};
+function openManual(){
+  closeMenu(); MAN_CH=null; MAN_Q=''; MAN_OPEN={};
+  showSheet('📖 新人マニュアル','<div class="man-wrap"><div class="man-empty">読み込み中…</div></div>','full');
+  if(MANUAL){ manRender(); return; }
+  manLoad();
+}
+function manLoad(force){
+  if(!IS_GAS){ MANUAL={chapters:[],count:0,updated:''}; manRender(); return; }
+  if(MAN_LOADING) return;
+  if(force){ MANUAL=null; manSetBody('<div class="man-empty">読み込み中…</div>'); }
+  MAN_LOADING=true;
+  gsr('gunshiGetManual').then(function(r){
+    MAN_LOADING=false;
+    MANUAL=(r&&r.chapters)?r:{chapters:[],count:0,updated:''};
+    manRender();
+  }).catch(function(){
+    MAN_LOADING=false; MANUAL=null;
+    manSetBody('<div class="man-empty">読み込みに失敗しました。<br><span class="man-btn" style="margin-top:12px" onclick="manLoad(1)">🔄 もう一度</span></div>');
+  });
+}
+function manSetBody(html){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="man-wrap">'+html+'</div>'; }
+function manLvClass(lv){ return lv==='禁止'?'lv2':(lv==='重要'?'lv1':''); }
+function manLvBadge(lv){
+  if(lv==='禁止') return '<span class="man-tag man-lv2">⛔ 禁止</span>';
+  if(lv==='重要') return '<span class="man-tag man-lv1">⚠️ 重要</span>';
+  return '';
+}
+/* 画面全体（検索欄＋一覧）。検索の入力中は manRenderList だけを呼ぶ。 */
+function manRender(){
+  if(!MANUAL){ return; }
+  var upd=MANUAL.updated?('　最終更新 '+esc(String(MANUAL.updated).slice(0,10))):'';
+  var h='<div class="man-top">'
+    +'<input id="man-q" class="man-q" type="search" placeholder="🔍 わからない事を検索（例：ボトル／現金／チェック）" value="'+esc(MAN_Q)+'" oninput="manSearch()">'
+    +'<span class="man-btn" onclick="manLoad(1)">🔄</span>'
+    +'</div>'
+    +'<div class="man-meta">全'+(MANUAL.count||0)+'項目'+upd+'　迷ったら自己判断で進めず、インカムか黒服グループLINEで確認すること。</div>'
+    +'<div id="man-list"></div>';
+  manSetBody(h);
+  manRenderList();
+}
+function manSearch(){
+  var el=document.getElementById('man-q');
+  MAN_Q=el?el.value:'';
+  if(MAN_Q.trim()) MAN_CH=null;
+  manRenderList();
+}
+function manRenderList(){
+  var box=document.getElementById('man-list'); if(!box)return;
+  var chs=(MANUAL&&MANUAL.chapters)||[];
+  var q=MAN_Q.trim();
+  if(!chs.length){ box.innerHTML='<div class="man-empty">マニュアルがまだありません。<br>管理コンソールの「人事 → 📖マニュアル」から投入してください。</div>'; return; }
+  // 検索モード
+  if(q){
+    var hits=[];
+    chs.forEach(function(c){ c.items.forEach(function(it){
+      if((it.title+' '+it.body+' '+(it.tags||'')).indexOf(q)>=0) hits.push({c:c,it:it});
+    });});
+    if(!hits.length){ box.innerHTML='<div class="man-empty">「'+esc(q)+'」に当たる項目はありません。<br>言葉を短くして試してください。</div>'; return; }
+    box.innerHTML='<div class="man-meta">'+hits.length+'件</div>'+hits.map(function(x){
+      return '<div class="man-it '+manLvClass(x.it.level)+'">'
+        +'<div class="man-ith"><div class="tt"><div class="man-res-ch">'+esc(x.c.emoji+' '+x.c.ch)+'</div>'+esc(x.it.title)+'</div>'+manLvBadge(x.it.level)+'</div>'
+        +'<div class="man-bd">'+esc(x.it.body)+'</div></div>';
+    }).join('');
+    return;
+  }
+  // 章の中
+  if(MAN_CH){
+    var cur=null; chs.forEach(function(c){ if(c.ch===MAN_CH) cur=c; });
+    if(!cur){ MAN_CH=null; manRenderList(); return; }
+    box.innerHTML='<div><span class="man-btn" onclick="manBack()">← 章の一覧へ</span></div>'
+      +'<div class="man-h">'+esc(cur.emoji+' '+cur.ch)+'</div>'
+      +cur.items.map(function(it){
+        var open=!!MAN_OPEN[it.id];
+        return '<div class="man-it '+manLvClass(it.level)+'">'
+          +'<div class="man-ith" onclick="manToggle(\''+it.id+'\')"><div class="tt">'+esc(it.title)+'</div>'+manLvBadge(it.level)+'<div class="ar">'+(open?'▲':'▼')+'</div></div>'
+          +(open?'<div class="man-bd">'+esc(it.body)+'</div>':'')
+        +'</div>';
+      }).join('');
+    return;
+  }
+  // 章の一覧
+  box.innerHTML='<div class="man-chs">'+chs.map(function(c,ci){
+    return '<div class="man-ch" onclick="manOpenCh('+ci+')">'
+      +'<span class="e">'+esc(c.emoji)+'</span><span class="t">'+esc(c.ch)+'</span><span class="n">'+c.items.length+'</span></div>';
+  }).join('')+'</div>';
+}
+function manOpenCh(i){ var chs=(MANUAL&&MANUAL.chapters)||[]; if(!chs[i])return; MAN_CH=chs[i].ch; MAN_OPEN={}; manRenderList(); var b=document.getElementById('sheetBody'); if(b)b.scrollTop=0; }
+function manBack(){ MAN_CH=null; manRenderList(); var b=document.getElementById('sheetBody'); if(b)b.scrollTop=0; }
+function manToggle(id){ MAN_OPEN[id]=!MAN_OPEN[id]; manRenderList(); }
+
 var MENU_TILES=[
+  {group:'新人・マニュアル', items:[
+    {ic:'📖', t:'新人マニュアル',   act:"openManual()"}
+  ]},
   {group:'開店・閉店 / 現金', items:[
     {ic:'🌅', t:'開店チェック',   act:"openOpeningCheck()"},
     {ic:'🔓', t:'金庫出金',       act:"openSafeWithdrawal()"},

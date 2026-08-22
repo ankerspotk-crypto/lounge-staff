@@ -22,12 +22,64 @@ var SKILL_GRADE_TAB_    = 'スキル級';
 var SKILL_GRADE_HEAD_   = ['級', '順位', '合格ライン%', '出題数', '解放資格', '説明', '有効'];
 var SKILL_Q_TAB_        = 'スキル問題';
 //   ⚠️末尾2列(状態・レビュー)は問題ビルダー用に後付け（非破壊）。状態=下書き/確認中/確定、レビュー=キャッチボールのログ。
-var SKILL_Q_HEAD_       = ['問題ID', '級', 'カテゴリ', '問題文', '選択肢1', '選択肢2', '選択肢3', '選択肢4', '正解', '配点', '有効', '作成日時', '状態', 'レビュー'];
+var SKILL_Q_HEAD_       = ['問題ID', '級', 'カテゴリ', '問題文', '選択肢1', '選択肢2', '選択肢3', '選択肢4', '正解', '配点', '有効', '作成日時', '状態', 'レビュー', 'マニュアル章'];
 var SKILL_ATTEMPT_TAB_  = 'スキル受験';
 var SKILL_ATTEMPT_HEAD_ = ['受験ID', '日時', '名前', '役割', '級', '得点', '満点', '得点率%', '合否', '合格ライン%', '回答JSON'];
 
 // 解放資格の格付け（大きいほど上位）。維持 < アップ。空欄＝資格なし。
 var SKILL_UNLOCK_RANK_ = { '維持': 1, 'アップ': 2 };
+
+// ============================================================
+// 📖 マニュアル連動（2026-08-22 ボス確定：テスト＝マニュアルからの抜き取り）
+//   問題1問ごとに「マニュアル章」を持たせ、不正解だった問題は採点結果でその章を読み直させる。
+//   ここは"既定値"。1問ずつの割り当てはコンソールで上書きできる（列＝マニュアル章）。
+// ============================================================
+var SKILL_CAT_CHAPTER_ = {
+  // 初級・中級の定番カテゴリ
+  '店の基本': 'はじめに', '店の設備': '開店前', '開店前': '開店前', '開店後': '閉店・締め', '閉店': '閉店・締め',
+  '接客判断': 'はじめに', 'キャスト対応': '席とキャスト（付け回し）', '店の方針': 'はじめに', '店のルール': 'お迎え・受付',
+  // 現場ドラフト（skilldrafts.gs）のカテゴリ
+  'チェック': '会計（チェック）', '退店': '退店・送り', '付け回し': '席とキャスト（付け回し）', 'LINE': '出勤・身だしなみ',
+  '予約': 'お迎え・受付', 'ファースト': 'お迎え・受付', '来店遅れ': 'お迎え・受付', '休憩': '席とキャスト（付け回し）',
+  '同伴': '席とキャスト（付け回し）', '清掃': '清掃・店内の維持', '新規': 'お迎え・受付', 'リクエスト': '席とキャスト（付け回し）',
+  'ボトル': 'ドリンク・ボトル', 'キャスト': '席とキャスト（付け回し）', '荷物': '会計（チェック）', '団体席': '席とキャスト（付け回し）',
+  'システム': '軍師の使い方', '会員登録': 'お迎え・受付', 'ネック': 'ドリンク・ボトル', 'キャストリクエスト': 'ドリンク・ボトル',
+  '日払い': '閉店・締め',
+  '実務-出勤': '出勤・身だしなみ', '実務-開店前': '開店前', '実務-留意': '閉店・締め', '実務-閉店': '閉店・締め',
+  '実務-場所': ''   // 混在（POS/ボトル棚/現金）＝下の例外で1問ずつ振る
+};
+// カテゴリだけでは振り分けられない問題の例外（問題文の先頭一致）
+var SKILL_Q_CHAPTER_OVERRIDE_ = {
+  '店の現金を分けて管理する': '現金の扱い',
+  'お客様を車で送り届ける': '退店・送り',
+  'お客様がかなり酔っていて': 'ドリンク・ボトル',
+  'お客様から理不尽なクレーム': 'ドリンク・ボトル',
+  'お客様が目立って酔った状態で退店': '退店・送り',
+  'お客様に「領収書の宛名を別会社に': '会計（チェック）',
+  'POS(会計)の操作はどこで': '会計（チェック）',
+  'お客様から預かったボトルキープの保管': 'ドリンク・ボトル',
+  '店の現金の管理は': '現金の扱い',
+  '領収書のために端末の日付を過去に': '会計（チェック）',
+  'トイレのレストチェックで気をつける': '清掃・店内の維持'
+};
+// 1問のマニュアル章を決める（例外→カテゴリ表の順。無ければ空＝未割当）
+function skillChapterFor_(cat, qtext) {
+  var q = String(qtext == null ? '' : qtext);
+  for (var k in SKILL_Q_CHAPTER_OVERRIDE_) { if (q.indexOf(k) === 0) return SKILL_Q_CHAPTER_OVERRIDE_[k]; }
+  return SKILL_CAT_CHAPTER_[String(cat || '')] || '';
+}
+// 問題1行をシートの列幅ちょうどに整える（列を足しても行がズレない）
+function skillQRowVals_(o) {
+  var row = [
+    o.id || skillId_('Q'), o.grade || '', o.cat || '', o.q || '',
+    (o.choices || [])[0] || '', (o.choices || [])[1] || '', (o.choices || [])[2] || '', (o.choices || [])[3] || '',
+    Number(o.answer) || 0, Number(o.points) || 1, (o.active === false ? false : true),
+    o.at || skillNow_(), o.status || '', o.review || '',
+    (o.manCh != null ? o.manCh : skillChapterFor_(o.cat, o.q))
+  ];
+  while (row.length < SKILL_Q_HEAD_.length) row.push('');
+  return row.slice(0, SKILL_Q_HEAD_.length);
+}
 
 // ============================================================
 // 級ごとの「定番問題」（コンソールの📥ボタン／新規シートの初期投入で使う）
@@ -132,7 +184,7 @@ function skillEnsureSeed_() {
     // 定番が用意されている級（初級・中級…）は実問を投入
     Object.keys(SKILL_DEFAULTS_).forEach(function (gr) {
       (SKILL_DEFAULTS_[gr] || []).forEach(function (d) {
-        rows.push([skillId_('Q'), gr, d[0], d[1], d[2], d[3], d[4], d[5], d[6], 1, true, now]);
+        rows.push(skillQRowVals_({ grade: gr, cat: d[0], q: d[1], choices: [d[2], d[3], d[4], d[5]], answer: d[6], at: now }));
       });
     });
     // 定番がまだ無い級（上級）はサンプル（ボスが差し替える前提の雛形）
@@ -142,7 +194,7 @@ function skillEnsureSeed_() {
       ['上級', 'サンプル', '新人黒服への指導で最も大切なことは？', '手本を示し理由まで伝える', '失敗を強く叱る', '自分で全部やってしまう', '放任する', 1]
     ].filter(function (d) { return !(SKILL_DEFAULTS_[d[0]] && SKILL_DEFAULTS_[d[0]].length); })
      .forEach(function (d) {
-      rows.push([skillId_('Q'), d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], 1, true, now]);
+      rows.push(skillQRowVals_({ grade: d[0], cat: d[1], q: d[2], choices: [d[3], d[4], d[5], d[6]], answer: d[7], at: now }));
     });
     q.getRange(q.getLastRow() + 1, 1, rows.length, SKILL_Q_HEAD_.length).setValues(rows);
   }
@@ -164,7 +216,7 @@ function skillSeedDefaults_(grade) {
   // 未登録の定番だけ追加
   var now = skillNow_();
   var rows = defs.filter(function (d) { return !seen[String(d[1]).replace(/\s/g, '')]; })
-                 .map(function (d) { return [skillId_('Q'), grade, d[0], d[1], d[2], d[3], d[4], d[5], d[6], 1, true, now]; });
+                 .map(function (d) { return skillQRowVals_({ grade: grade, cat: d[0], q: d[1], choices: [d[2], d[3], d[4], d[5]], answer: d[6], at: now }); });
   if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, SKILL_Q_HEAD_.length).setValues(rows);
   return { ok: true, grade: grade, added: rows.length, removedSamples: delRows.length };
 }
@@ -224,6 +276,7 @@ function skillQuestionsAll_(grade) {
       active: active,
       status: String(vals[i][12] || ''),   // 下書き/確認中/確定
       review: String(vals[i][13] || ''),   // キャッチボールのログ
+      manCh: String(vals[i][14] || '').trim(),  // 📖 紐づくマニュアルの章
       draft: (gr === '未分類' || !active),  // ビルダーで扱う下書き
       row: i + 1
     });
@@ -273,8 +326,36 @@ function skillGradeAnswers_(name, grade, answers) {
   return {
     ok: true, grade: grade, score: score, max: max, pct: pct,
     passed: passed, pass: cfg.pass, unlock: cfg.unlock,
-    status: skillStatus_(name)
+    status: skillStatus_(name),
+    review: skillReviewFor_(detail, byId)   // 📖 間違えた問題→読み直すマニュアルの章
   };
+}
+
+// 間違えた問題を「マニュアルの章」単位にまとめて返す（本文つき）。
+// ⚠️正解そのものは返さない＝暗記でなくマニュアルを読ませる。章が未割当の問題は chapter='' で問題文だけ返す。
+function skillReviewFor_(detail, byId) {
+  var wrong = (detail || []).filter(function (d) { return !d.ok; });
+  if (!wrong.length) return [];
+  var manual = null;
+  try { manual = manualRows_().filter(function (r) { return r.active; }); } catch (e) { manual = null; }
+  var order = [], map = {};
+  wrong.forEach(function (d) {
+    var q = byId[d.id]; if (!q) return;
+    var ch = q.manCh || '';
+    if (!map[ch]) { map[ch] = { chapter: ch, emoji: '', items: [], questions: [] }; order.push(map[ch]); }
+    map[ch].questions.push(q.q);
+  });
+  if (manual) {
+    order.forEach(function (g) {
+      if (!g.chapter) return;
+      manual.forEach(function (r) {
+        if (r.ch !== g.chapter) return;
+        if (!g.emoji) g.emoji = r.emoji;
+        g.items.push({ title: r.title, body: r.body, level: r.level });
+      });
+    });
+  }
+  return order;
 }
 
 // ============================================================
@@ -350,7 +431,9 @@ function skillAdminData_() {
   var results = staff
     .filter(function (s) { return !retired[skillNameKey_(s.name)]; })
     .map(function (s) { return { name: s.name, role: s.role, status: skillStatus_(s.name) }; });
+  var chapters = []; try { chapters = manualChapterList_(); } catch (e) { chapters = []; }
   return { ok: true, grades: grades, questions: questions, results: results, defaults: Object.keys(SKILL_DEFAULTS_),
+           chapters: chapters,   // 📖 マニュアルの章一覧（問題の紐づけ先）
            draftsAvailable: (typeof SKILL_DRAFTS_ !== 'undefined' ? SKILL_DRAFTS_.length : 0) };
 }
 
@@ -366,17 +449,21 @@ function skillAdminSaveQuestion_(q) {
     String(choices[0] || ''), String(choices[1] || ''), String(choices[2] || ''), String(choices[3] || ''),
     answer, Number(q.points) || 1, (q.active === false ? false : true)
   ];
+  // 📖 マニュアル章：明示指定があればそれ、無ければカテゴリ表から既定値
+  var manCh = (q.manCh != null) ? String(q.manCh).trim() : skillChapterFor_(q.cat, q.q);
   if (q.id) {
     // 既存を id で探して上書き（作成日時は保持）
     var all = skillQuestionsAll_(null);
     var hit = all.filter(function (x) { return x.id === q.id; })[0];
     if (hit) {
       sh.getRange(hit.row, 2, 1, rowVals.length).setValues([rowVals]); // B〜K（IDと作成日時は触らない）
+      skillEnsureQCols_().getRange(hit.row, 15).setValue(manCh);
       return { ok: true, id: q.id, updated: true };
     }
   }
   var id = skillId_('Q');
-  sh.appendRow([id].concat(rowVals).concat([skillNow_()]));
+  skillEnsureQCols_();
+  sh.appendRow(skillQRowVals_({ id: id, grade: q.grade, cat: q.cat, q: q.q, choices: choices, answer: answer, points: q.points, active: q.active, manCh: manCh }));
   return { ok: true, id: id, created: true };
 }
 
@@ -434,7 +521,7 @@ function skillImportDrafts_() {
   var rows = SKILL_DRAFTS_.map(function (d) {
     // d = [カテゴリ, 問題, 選1..4, 正解(1-4), 初期メモ]
     var note = d[7] ? ('[取込 ' + now.slice(5, 16) + '] ' + d[7]) : '';
-    return [skillId_('Q'), '未分類', d[0], d[1], d[2], d[3], d[4], d[5], d[6], 1, false, now, '下書き', note];
+    return skillQRowVals_({ grade: '未分類', cat: d[0], q: d[1], choices: [d[2], d[3], d[4], d[5]], answer: d[6], points: 1, active: false, at: now, status: '下書き', review: note });
   });
   if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, SKILL_Q_HEAD_.length).setValues(rows);
   return { ok: true, added: rows.length, removed: delRows.length };
@@ -473,7 +560,7 @@ function skillAdminSetStatus_(id, status) {
 }
 
 // 確定して級へ投入：級を割り当て・有効化・状態=確定 ＝ 本番の受験に載る
-function skillAdminFinalize_(id, grade) {
+function skillAdminFinalize_(id, grade, manCh) {
   if (!grade || grade === '未分類') return { ok: false, error: '級を選んでください' };
   if (!skillGradeCfg_(grade)) return { ok: false, error: 'その級はありません: ' + grade };
   var hit = skillQRow_(id); if (!hit) return { ok: false, error: '対象が見つかりません' };
@@ -481,5 +568,43 @@ function skillAdminFinalize_(id, grade) {
   sh.getRange(hit.row, 2).setValue(grade);   // 級
   sh.getRange(hit.row, 11).setValue(true);   // 有効
   sh.getRange(hit.row, 13).setValue('確定'); // 状態
-  return { ok: true, grade: grade };
+  var ch = (manCh != null && String(manCh).trim()) ? String(manCh).trim() : (hit.manCh || skillChapterFor_(hit.cat, hit.q));
+  sh.getRange(hit.row, 15).setValue(ch);     // 📖 マニュアル章
+  return { ok: true, grade: grade, manCh: ch };
+}
+
+// 📖 マニュアル章だけを付け替える（ビルダー・作問一覧から）
+function skillAdminSetChapter_(id, manCh) {
+  var hit = skillQRow_(id); if (!hit) return { ok: false, error: '対象が見つかりません' };
+  skillEnsureQCols_().getRange(hit.row, 15).setValue(String(manCh || '').trim());
+  return { ok: true, manCh: String(manCh || '').trim() };
+}
+
+// 全級の定番問題を投入し、残ったサンプルは停止する（＝サンプルで受験させない）。
+// 定番の無い級（上級など）は問題ゼロになる＝available:0 で受験ボタンが出ない＝正しく「まだ受けられない」。
+function skillSeedAllDefaults_() {
+  var res = [], grades = skillGrades_();
+  grades.forEach(function (g) {
+    if (!SKILL_DEFAULTS_[g.grade]) return;
+    var r = skillSeedDefaults_(g.grade);
+    res.push({ grade: g.grade, added: r.added || 0, removedSamples: r.removedSamples || 0 });
+  });
+  // 定番の無い級に残っているサンプルは「停止」（消さずに残す＝ボスが中身を見て差し替えられる）
+  var sh = skillEnsureQCols_();
+  var stopped = 0;
+  skillQuestionsAll_(null).forEach(function (q) {
+    if (q.cat !== 'サンプル' || !q.active) return;
+    sh.getRange(q.row, 11).setValue(false);
+    stopped++;
+  });
+  // 既存の全問にマニュアル章の既定値を入れる（未割当だけ・上書きしない）
+  var filled = 0;
+  skillQuestionsAll_(null).forEach(function (q) {
+    if (q.manCh) return;
+    var ch = skillChapterFor_(q.cat, q.q);
+    if (!ch) return;
+    sh.getRange(q.row, 15).setValue(ch);
+    filled++;
+  });
+  return { ok: true, grades: res, stoppedSamples: stopped, chapterFilled: filled };
 }
