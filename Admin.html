@@ -2793,6 +2793,10 @@ function menuDelete(rowIdx,nm){
 
 /* ===== 💰 給与・ランキング ===== */
 var payMonth=null, payStat=null, paySub='tatekae';
+// 🧮給与明細の「支払対象のみ」フィルタ。支払対象＝最終支給が KYU_PAY_MIN 以上（ボス確定 2026-08-24）。
+// 既定OFF＝従来どおり全員を出す。黙って人が消えると「取込漏れ」と誤読するため、絞るのは明示タップの時だけ。
+// kyuLast＝直近のサーバ応答。トグルとCSVはこれを使い回す＝再取得しない（GASの床1.9秒を毎回払わない）。
+var KYU_PAY_MIN=1000, kyuPayOnly=false, kyuLast=null;
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
 function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
@@ -3276,17 +3280,26 @@ function renderKyuyo(){
 }
 function drawKyuyo(r){
   payMonth=r.month;
+  kyuLast=r;
   var opts=(r.months||[]).map(function(m){return '<option value="'+esc(m)+'"'+(m===r.month?' selected':'')+'>'+esc(m)+'</option>';}).join('')||'<option>'+esc(r.month||'—')+'</option>';
+  // 支払対象＝最終支給 ¥1,000以上。除外ぶんは消さずに人数と合計を脚注に出す＝全体合計と突き合わせて検算できる
+  var all=r.casts||[];
+  var offList=all.filter(function(c){return (c.finalPay||0)<KYU_PAY_MIN;});
+  var list=kyuPayOnly?all.filter(function(c){return (c.finalPay||0)>=KYU_PAY_MIN;}):all;
+  var t=kyuPayOnly?kyuSumRows_(list):r.totals;
   var head='<div class="toolbar"><span class="cnt">対象月</span><select class="finput" id="km" onchange="onKyuyoMonth()" style="width:120px">'+opts+'</select>'
-    +'<span class="cnt">'+(r.casts.length)+'名 ・ 最終支給計'+fmtYen(r.totals.finalPay)+'</span>'
+    +(all.length?'<button class="btn sm'+(kyuPayOnly?' pri':'')+'" onclick="toggleKyuPayOnly()" title="支払対象＝最終支給が'+fmtYen(KYU_PAY_MIN)+'以上のキャストだけに絞ります。合計もその母集団で計算し直します。">'+(kyuPayOnly?'☑':'☐')+' 支払対象のみ（'+fmtYen(KYU_PAY_MIN)+'以上）</button>':'')
+    +'<span class="cnt">'+(list.length)+'名 ・ 最終支給計'+fmtYen(t.finalPay)+'</span>'
     +(r.published?'<span style="color:#7fd88f;font-weight:800;font-size:12px">● 公開中</span>':'<span style="color:var(--dim);font-weight:800;font-size:12px">○ 非公開</span>')
-    +(r.casts.length?'<button class="btn '+(r.published?'dng':'ok')+' sm" onclick="togglePay('+(!r.published)+')">'+(r.published?'非公開にする':'キャストに公開する')+'</button>':'')+'</div>';
+    +(all.length?'<button class="btn '+(r.published?'dng':'ok')+' sm" onclick="togglePay('+(!r.published)+')">'+(r.published?'非公開にする':'キャストに公開する')+'</button>':'')
+    +(list.length?'<button class="btn sm" onclick="kyuyoCsv()" title="いま表示している'+list.length+'名をCSVで書き出します">⬇️ CSV</button>':'')+'</div>';
   var body;
-  if(!r.casts.length){ body='<div class="empty">この月のTRUST報酬データがありません。「📥 TRUST取込」から取込んでください。</div>'; }
+  if(!all.length){ body='<div class="empty">この月のTRUST報酬データがありません。「📥 TRUST取込」から取込んでください。</div>'; }
+  else if(!list.length){ body='<div class="empty">最終支給が'+fmtYen(KYU_PAY_MIN)+'以上のキャストがいません（'+all.length+'名すべて対象外）。<br><small>「☑ 支払対象のみ」を外すと全員を表示します。</small></div>'; }
   else{
     var cols=[['名前','nm'],['勤務','日'],['時間報酬','¥'],['担当小計','¥'],['倍率',''],['率',''],['新バック','¥'],['課税支給','¥'],['源泉','¥'],['日払','¥'],['マイナス','¥'],['🚕交通費','¥'],['残り','¥'],['立替+','¥'],['最終支給','¥'],['','']];
     var th='<thead><tr>'+cols.map(function(c,i){return '<th'+(i===cols.length-1?' class="kyu-act"':'')+' style="'+(i===0?'text-align:left':(i>=4&&i<=5?'text-align:center':''))+'">'+esc(c[0])+'</th>';}).join('')+'</tr></thead>';
-    var rows=r.casts.map(function(c){
+    var rows=list.map(function(c){
       function y(v,cls){ return '<td style="text-align:right'+(cls?';'+cls:'')+'">'+(v?fmtYen(v):'<span style="color:var(--dim)">—</span>')+'</td>'; }
       var rateLbl=(c.ratePct||0)+'%'+(c.fixed?'<span style="color:#e0b060" title="固定率">固</span>':'');
       if(c.bday){ var bd=c.bday; rateLbl+=' <span style="color:#c9a0ff" title="🎂誕生日バック '+esc(bd.start)+'〜'+esc(bd.end)+'&#10;通常 '+fmtYen(bd.tantoNormal)+'×'+bd.normalRate+'%='+fmtYen(bd.normalBack)+'&#10;誕生日週 '+fmtYen(bd.tantoBday)+'×'+bd.rate+'%='+fmtYen(bd.bdayBack)+'">🎂'+bd.rate+'%</span>'; }
@@ -3315,17 +3328,58 @@ function drawKyuyo(r){
         +'<td style="text-align:right;font-weight:900;color:var(--accent)">'+fmtYen(c.finalPay)+'</td>'
         +'<td class="kyu-act" style="text-align:center"><button class="btn sm" style="padding:2px 6px;font-size:11px" onclick=\'editKyuyoManual('+JSON.stringify(c.name)+','+(c.intro||0)+','+(c.nyuten||0)+','+(c.adjust||0)+','+(c.kotsu||0)+','+(c.kotsuManual?1:0)+','+((c.kotsuInfo&&c.kotsuInfo.kotsu)||0)+')\'>✎</button></td></tr>';
     }).join('');
-    var t=r.totals;
-    var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計</td><td></td>'
+    var totalRow='<tr class="total-row"><td class="nm" style="color:#8fd0ff">合計'+(kyuPayOnly?'<div style="font-size:10px;color:var(--sub);font-weight:400">支払対象のみ</div>':'')+'</td><td></td>'
       +'<td style="text-align:right">'+fmtYen(t.jikan)+'</td><td style="text-align:right">'+fmtYen(t.tanto)+'</td><td></td><td></td>'
       +'<td style="text-align:right">'+fmtYen(t.newBack)+'</td><td style="text-align:right">'+fmtYen(t.kazei)+'</td>'
       +'<td style="text-align:right">-'+fmtYen(t.gensen)+'</td><td style="text-align:right">-'+fmtYen(t.hibarai)+'</td><td style="text-align:right">-'+fmtYen(t.minusTotal)+'</td>'
       +'<td style="text-align:right;color:#7fd88f">'+(t.kotsu?'+'+fmtYen(t.kotsu):'—')+'</td>'
       +'<td style="text-align:right">'+fmtYen(t.net)+'</td><td style="text-align:right">+'+fmtYen(t.tatekae)+'</td><td style="text-align:right">'+fmtYen(t.finalPay)+'</td><td class="kyu-act"></td></tr>';
-    body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'
-      +'<div class="hint" style="margin-top:8px"><b>📅 対象月は先月まで</b>（当月はTRUST報酬が締まっておらず、取込途中の数字が給与の顔で出てしまうため出しません）。当月の売上を見るなら「🧾 売上明細」「👤 個人売上明細」へ。<br>🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。<br>🚕 <b>交通費</b>（非課税）＝<b>往路（出勤日）＋復路（送りを使わなかった日）× 片道額</b>を月次で自動集計。片道額と対象ON/OFFは<b>👥スタッフの各カード「🚕交通費」</b>で設定。源泉には掛からず残り支給に加算（日払いの逆）。セルの<b>✎</b>から1件だけ手修正も可（空欄で自動へ戻す）。公開は「📣 公開設定」から。</div>';
+    // 除外ぶんの脚注＝「消えた」のか「元々0円」なのかを判別できるようにする（総額がTRUSTと合わない時の追跡口）
+    var offNote='';
+    if(offList.length){
+      var offSum=0, offMinus=0;
+      offList.forEach(function(c){ offSum+=(c.finalPay||0); if((c.finalPay||0)<0) offMinus++; });
+      offNote='<div class="hint" style="margin-top:8px;background:#1a1a26;border:1px solid #3a3a52">'
+        +'<b>支払対象外 '+offList.length+'名</b>（最終支給が'+fmtYen(KYU_PAY_MIN)+'未満）・計'+fmtYenS_(offSum)+(offMinus?'（うちマイナス'+offMinus+'名）':'')
+        +'<div style="margin-top:4px;color:var(--sub);font-size:11px">'+offList.map(function(c){return esc(c.name)+' '+fmtYenS_(c.finalPay||0);}).join(' ／ ')+'</div>'
+        +'<div style="margin-top:4px;color:var(--sub);font-size:11px">全'+all.length+'名の最終支給計＝'+fmtYenS_(r.totals.finalPay)+'（対象'+fmtYenS_(r.totals.finalPay-offSum)+' ＋ 対象外'+fmtYenS_(offSum)+'）。日払いで受け取り済みなら残りが小さくなるのは正常です。</div></div>';
+    }
+    body='<div class="mtx-wrap" style="overflow-x:auto"><table class="mtx" style="font-size:12px">'+th+'<tbody>'+rows+totalRow+'</tbody></table></div>'+offNote
+      +'<div class="hint" style="margin-top:8px"><b>📅 対象月は先月まで</b>（当月はTRUST報酬が締まっておらず、取込途中の数字が給与の顔で出てしまうため出しません）。当月の売上を見るなら「🧾 売上明細」「👤 個人売上明細」へ。<br>🆕 <b>新バック方式</b>：新バック＝担当小計×率（倍率〈担当小計÷時間報酬〉で 10/15/20%、<span style="color:#e0b060">固</span>＝固定率）。課税支給＝総支給−担当バック＋新バック＋入店祝金＋紹介料。源泉＝課税×10.21%（切捨）。最終＝課税−源泉−日払−マイナス＋立替代。<b>バック方式（新ルール/固定率）は👥スタッフの各カード「💴バック方式」で設定</b>。<b>✎</b>は紹介料・入店祝金・<b>売上調整</b>（月単位）の編集。<b>売上調整</b>＝TRUSTとは別にコンソールから担当へ加算/減算する売上。担当小計に合算され<b>実売上と同じ扱い</b>（倍率にも効く）。減算はバック0で打ち止め。変更は理由必須で「給与手入力ログ」シートに履歴が残ります。<br>🚕 <b>交通費</b>（非課税）＝<b>往路（出勤日）＋復路（送りを使わなかった日）× 片道額</b>を月次で自動集計。片道額と対象ON/OFFは<b>👥スタッフの各カード「🚕交通費」</b>で設定。源泉には掛からず残り支給に加算（日払いの逆）。セルの<b>✎</b>から1件だけ手修正も可（空欄で自動へ戻す）。公開は「📣 公開設定」から。<br>💴 <b>支払対象のみ</b>＝最終支給が¥1,000以上のキャストだけに絞り、合計もその母集団で計算し直します（対象外は下に人数・金額を明示）。<b>⬇️ CSV</b>は<b>いま表示している母集団</b>をそのまま書き出します。</div>';
   }
   setBody(paySubToggle('kyuyo')+head+body);
+}
+// 符号つき金額。fmtYenは負数を「¥-4,001」と出すので、金額欄では「−¥4,001」に整える（読み違い防止）
+function fmtYenS_(n){ n=Number(n)||0; return n<0?('−'+fmtYen(-n)):fmtYen(n); }
+// 表示中の母集団で合計を作り直す。サーバの r.totals は「全員」なので、絞った時にそのまま出すと
+// 表の縦計と合計行が一致せず、どちらが正か分からなくなる（金額の画面で一番やってはいけない）。
+function kyuSumRows_(list){
+  var t={jikan:0,tanto:0,newBack:0,backTotal:0,plusTotal:0,gross:0,kazei:0,gensen:0,hibarai:0,okuri:0,kotsu:0,minusTotal:0,net:0,tatekae:0,finalPay:0};
+  (list||[]).forEach(function(c){
+    t.jikan+=c.jikan||0; t.tanto+=c.tanto||0; t.newBack+=c.newBack||0; t.backTotal+=c.newBack||0;
+    t.plusTotal+=c.plusTotal||0; t.gross+=c.gross||0; t.kazei+=c.kazei||0; t.gensen+=c.gensen||0;
+    t.hibarai+=c.hibarai||0; t.okuri+=c.okuri||0; t.kotsu+=c.kotsu||0; t.minusTotal+=c.minusTotal||0;
+    t.net+=c.net||0; t.tatekae+=c.tatekae||0; t.finalPay+=c.finalPay||0;
+  });
+  return t;
+}
+// トグルは手元のデータを描き直すだけ＝サーバに行かない（月の再取得は onKyuyoMonth のみ）
+function toggleKyuPayOnly(){ kyuPayOnly=!kyuPayOnly; if(kyuLast) drawKyuyo(kyuLast); }
+// いま表示している母集団をそのままCSVに出す（画面と食い違わないよう、絞り込みの状態を必ず反映する）
+function kyuyoCsv(){
+  var r=kyuLast; if(!r||!(r.casts||[]).length){ toast('データがありません',true); return; }
+  var list=kyuPayOnly?r.casts.filter(function(c){return (c.finalPay||0)>=KYU_PAY_MIN;}):r.casts;
+  if(!list.length){ toast('対象者がいません',true); return; }
+  var head=['月','名前','勤務日数','時間報酬','担当小計','うちTRUST','うち売上調整','倍率','バック率(%)','新バック','課税支給','源泉徴収','日払','マイナス','交通費','残り支給','立替','最終支給'];
+  var lines=[head.map(kregCsvCell_).join(',')];
+  list.forEach(function(c){
+    lines.push([r.month,c.name,c.kinmu||0,c.jikan||0,c.tanto||0,c.tantoTrust||0,c.adjust||0,
+      (c.bairitu||0).toFixed(2),c.ratePct||0,c.newBack||0,c.kazei||0,c.gensen||0,c.hibarai||0,
+      c.minusTotal||0,c.kotsu||0,c.net||0,c.tatekae||0,c.finalPay||0].map(kregCsvCell_).join(','));
+  });
+  var t=kyuSumRows_(list);
+  lines.push(['','合計('+list.length+'名)','',t.jikan,t.tanto,'','','','',t.newBack,t.kazei,t.gensen,t.hibarai,t.minusTotal,t.kotsu,t.net,t.tatekae,t.finalPay].map(kregCsvCell_).join(','));
+  kregDownload_('給与明細_'+String(r.month||'').replace('/','-')+(kyuPayOnly?'_支払対象':'_全員')+'.csv', lines.join('\r\n'));
 }
 /* 🚕 交通費セル：自動値＋内訳（往路/復路/送りあり）をツールチップで。手修正中は✎印 */
 function kotsuCellHtml(c){
