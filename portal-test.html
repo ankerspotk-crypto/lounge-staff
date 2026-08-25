@@ -659,7 +659,7 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 var LIFF_ID = '2010376677-EDF5MZuq';
 var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
 var GAS_URL ='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-08-25a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var PORTAL_BUILD = '2026-08-25b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -1865,7 +1865,7 @@ function renderHome(){
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める）。休職中は予約・空席・呼び出しを出さない ---
   // ⚠️休職中である旨は本人の画面に一切表示しない（ボス指定2026-07-15）。メニューが黙って減るだけ。
   // ＝本人が「予約が消えた」と黒服に問い合わせてくる可能性がある点は承知の上での判断。
-  var html = homeGreetHero() + awHomeBanner() + '<div id="home-notice">' + noticeBanner() + '</div>' + shiftCard
+  var html = homeGreetHero() + awHomeBanner() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard
     + (onLeave ? '' : homeCallCard()
     + '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
@@ -1885,6 +1885,7 @@ function renderHome(){
     // --- メニュー（全機能ボタン） ---
     + homeMenu();
   setContent(html);
+  loadHomeKyuritsu();   // 📊給率カードを非同期で埋める（初回描画はブロックしない）
   // 休職中は予約/空席/席の非同期描画そのものを走らせない（要素も無い）
   if (onLeave) return;
 
@@ -2426,6 +2427,92 @@ function renderSales() {
 
 function switchSalesMonth(m) { currentMonth = m; renderSales(); }
 
+// ---- 📊 給率 ホーム常設カード（ボス指示 2026-08-25「トップに常に出して意識させたい」）----
+// ⚠️ホームの初回描画をブロックしない。枠だけ先に出して非同期で埋める（空席カードと同じ型）。
+//   ホームは1日に何度も開かれる画面で、GASの応答床は1.9秒（reference_gas_performance_floor）。
+// ⚠️`light=1` で叩く＝伝票シート(数千行)のフルスキャンと日別・シフト読みをサーバ側で飛ばす。
+//   カードに要るのは月次の率と1日の目標額だけ。日別が要るのはタブを開いた時だけ。
+// ⚠️セッション中はキャッシュして再取得しない（ホームに戻るたびに叩かない）。キャストを切り替えたら取り直す。
+var homeKyuCache = null;   // { key: viewAs名, data: payload }
+
+function homeKyuSkip_() {
+  return onLeave || (isAdmin && !adminViewAs);   // 休職中は売上系を見せない／管理者はキャスト未選択なら出さない
+}
+
+function homeKyuCard() {
+  if (homeKyuSkip_()) return '';
+  var inner = homeKyuCache ? homeKyuCardInner_(homeKyuCache.data)
+    : '<div style="font-size:12px;color:#94886a;padding:6px 0">給率を確認中...</div>';
+  return '<div class="card" id="home-kyu" onclick="switchTab(\'kyuritsu\')" '
+    + 'style="cursor:pointer;background:linear-gradient(135deg,#1a1610,#12100a)">' + inner + '</div>';
+}
+
+function loadHomeKyuritsu() {
+  if (homeKyuSkip_()) return;
+  var key = adminViewAs || '';
+  if (homeKyuCache && homeKyuCache.key === key) { paintHomeKyu_(); return; }   // 取得済み＝叩かない
+  var url = GAS_URL + '?action=portal&tab=kyuritsu&light=1&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (!d || !d.ok) { paintHomeKyuErr_(); return; }
+    homeKyuCache = { key: key, data: d };
+    paintHomeKyu_();
+  }).catch(function(){ paintHomeKyuErr_(); });
+}
+function paintHomeKyu_() {
+  var el = document.getElementById('home-kyu');
+  if (el && homeKyuCache) el.innerHTML = homeKyuCardInner_(homeKyuCache.data);
+}
+function paintHomeKyuErr_() {
+  var el = document.getElementById('home-kyu');
+  if (el) el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">今月の給率</span>'
+    + '<span style="font-size:12px;color:#8d7c56">取得できませんでした ›</span></div>';
+}
+
+// カードの中身。⚠️担当売上0(rate=null)を 0%＝満点 に見せない分岐は消さないこと。
+function homeKyuCardInner_(d) {
+  var T = (d && d.target) || 30, me = d && d.me, st = d && d.store;
+  var head = '<div style="display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">今月の給率</span>';
+  if (!me) {
+    return head + '<span style="font-size:12px;color:#8d7c56">データ待ち ›</span></div>';
+  }
+  var c = kyuColor(me.rate, T);
+  var h = head
+    + '<span style="font-size:11px;font-weight:700;color:' + c + ';border:1px solid ' + c + '66;border-radius:9px;padding:2px 9px">'
+    + kyuBadge(me.rate, T) + '</span></div>'
+    // ⚠️率が出せない時(担当売上0)に巨大な「—」を置くと壊れた画面に見える。文言に差し替える。
+    + (me.rate === null
+        ? '<div style="margin-top:8px;font-size:16px;font-weight:700;color:#cbb98a">担当売上がまだありません</div>'
+        : '<div style="display:flex;align-items:baseline;gap:9px;margin-top:6px">'
+          + '<span style="font-size:34px;font-weight:800;color:' + c + ';line-height:1">' + kyuPct(me.rate) + '</span>'
+          + '<span style="font-size:12px;color:#94886a">目標 ' + T + '% 以下</span>'
+          + '</div>')
+    + kyuGauge(me.rate, T);
+
+  // 次の一手は必ず「1日いくら売れば達成か」に着地させる。月の総額より手が届く。
+  var msg;
+  if (me.rate !== null && me.gap <= 0) {
+    msg = '<span style="color:#9fe0b4">🏆 目標達成中。この調子で。</span>';
+  } else if (me.dayTarget > 0) {
+    msg = '1日 <b style="color:#e6cf95;font-size:16px">' + yen(me.dayTarget) + '</b> 売れば達成ライン';
+  } else {
+    msg = '目標ライン <b style="color:#e6cf95">' + yen(me.needSales) + '</b>';
+  }
+  h += '<div style="margin-top:9px;padding-top:9px;border-top:1px solid #241d10;font-size:12.5px;color:#b8a67c;line-height:1.6">' + msg + '</div>';
+
+  // 店全体と「くわしく ›」は1行に同居させる。狭い端末で文言が折り返しても矢印が押し出されない。
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px">'
+    + '<span style="font-size:11px;color:#7d7159">'
+    +   (st && st.rate !== null
+          ? '店全体 <b style="color:' + kyuColor(st.rate, T) + '">' + kyuPct(st.rate) + '</b>　→　目標 ' + T + '%'
+          : '')
+    + '</span>'
+    + '<span style="font-size:13px;color:#8d7c56;white-space:nowrap">くわしく ›</span></div>';
+  return h;
+}
+
 // ---- 📊 給率（じぶんの採算）------------------------------------------------
 // 定義は必ず画面に出す: 給率 ＝ 時間報酬 ÷ 担当売上。目標30% ＝ 時給の3.33倍稼ぐ。
 // ⚠️TRUSTの「給率」列はバック込み((時間報酬+バック)÷担当小計)で別物。式を画面から消すと
@@ -2507,10 +2594,13 @@ function renderKyuritsuBody(d) {
     +   '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">' + esc(d.month) + ' あなたの給率</span>'
     +   '<span style="font-size:11px;font-weight:700;color:' + c + ';border:1px solid ' + c + '66;border-radius:9px;padding:3px 10px">' + kyuBadge(me.rate, T) + '</span>'
     + '</div>'
-    + '<div style="display:flex;align-items:baseline;gap:10px;margin-top:8px">'
-    +   '<span style="font-size:44px;font-weight:800;color:' + c + ';line-height:1">' + kyuPct(me.rate) + '</span>'
-    +   '<span style="font-size:13px;color:#94886a">目標 ' + T + '% 以下</span>'
-    + '</div>'
+    // ⚠️率が出せない時(担当売上0)に巨大な「—」を置くと壊れた画面に見える。文言に差し替える。
+    + (me.rate === null
+        ? '<div style="margin-top:10px;font-size:19px;font-weight:700;color:#cbb98a">担当売上がまだありません</div>'
+        : '<div style="display:flex;align-items:baseline;gap:10px;margin-top:8px">'
+          + '<span style="font-size:44px;font-weight:800;color:' + c + ';line-height:1">' + kyuPct(me.rate) + '</span>'
+          + '<span style="font-size:13px;color:#94886a">目標 ' + T + '% 以下</span>'
+          + '</div>')
     + kyuGauge(me.rate, T);
 
   // 次の一手（数字1本に絞る）
