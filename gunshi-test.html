@@ -1833,10 +1833,20 @@ function cfSteps_(){
       :((noName.length?'受取人が空欄 '+noName.length+'件':'')+(noName.length&&unknown.length?' / ':'')+(unknown.length?'名簿に無い名前 '+unknown.length+'件':'')),
     state:slipOk?'done':'todo',act:'openCashCheck()'});
   // ③ TRUSTへの入力と突合
-  var t=gate&&gate.today, trustOk=!!(t&&t.hasTrust&&t.matched);
-  S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',
-    s:trustOk?('伝票と一致'+(t.perPerson?'（人別）':'（合計）')):(t&&t.hasTrust?((t.lines||[]).join(' / ')||'伝票とTRUSTが合っていません'):'TRUSTの数字がまだ取り込めていません'),
-    state:trustOk?'done':'todo',act:'openCashCheck()'});
+  /* ⚠️閉店チェック側のゲートと判定を必ず揃えること。あちらは「TRUSTが取れない夜は自己申告で通す」ので、
+     ここだけ hasTrust&&matched を要求すると【送信は通ったのに工程が✅にならず永久に帰れない】が起きる。
+     ただし送信後にTRUSTを取り込んで不一致が出た時は、承認前に直させたいので✅に戻さない。
+     ⚠️照合しているのは日払いだけ（経費はTRUST側の内訳と突合していない）＝文言で嘘をつかない。 */
+  var t=gate&&gate.today;
+  var trustHit=!!(t&&t.hasTrust&&t.matched);
+  var trustBad=!!(t&&t.hasTrust&&!t.matched);
+  var trustOk=trustHit||(submitted&&!trustBad);
+  var trustS;
+  if(trustBad) trustS=(t.lines||[]).join(' / ')||'日払いが伝票とTRUSTで合っていません';
+  else if(trustHit) trustS='日払いが伝票と一致'+(t.perPerson?'（人別）':'（合計）');
+  else if(submitted) trustS='入力済みとして送信しました（TRUSTを取り込めていないので翌日に照合します）';
+  else trustS='TRUSTに入力したら、💰の閉店チェックで「入力しました」にチェック';
+  S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openCashCheck()'});
   // ④⑤ 手作業（端末チェック）
   S.push({id:'okuri',em:'🚗',t:'送りを確定する',s:'本日の送りを締める',state:homeChecks()['okuri']?'done':'todo',act:'openOkuriManager()',manual:true});
   S.push({id:'safe', em:'🔐',t:'金庫へ収納・出金確認',s:'残金の収納と臨時出金',state:homeChecks()['safe']?'done':'todo',act:'openSafeWithdrawal()',manual:true});
