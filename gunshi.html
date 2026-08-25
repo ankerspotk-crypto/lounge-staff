@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-25a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-25b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1569,6 +1569,7 @@ function showTaskDetail(id){
     +(t.memo?'<div class="td-memo">'+esc(t.memo).replace(/\n/g,'<br>')+'</div>':'')
     +((t.by||t.at)?'<div class="td-meta">'+(t.by?'追加：'+esc(t.by):'')+(t.at?'　'+esc(t.at):'')+'</div>':'')
     +'<div class="td-actions"><button class="td-done" onclick="completeTaskFromDetail(\''+jsStr(id)+'\')">✅ 完了にする</button>'
+    +(t.deferred?'':'<button class="td-close" onclick="closeSheet();cfDefer(\''+jsStr(id)+'\')">➡️ 明日へ持ち越す</button>')
     +'<button class="td-close" onclick="closeSheet()">閉じる</button></div></div>';
   showSheet('📋 タスク詳細',body,false);
 }
@@ -1674,7 +1675,7 @@ function setViewMode(m){
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
   // loadAll(30秒間隔)が来るまで開店/金銭チェックが「未提出」に誤表示される。
-  if(m==='home'&&BOOTED){loadHandover();loadOrderAlerts();loadPunch();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
+  if(m==='home'&&BOOTED){loadHandover();loadOrderAlerts();loadPunch();var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post'){loadChecklistConfig();loadClosingFlow(false);}}
 }
 function setHomePhase(p){homePhaseOverride=p;renderHome();if(p==='pre'||p==='post')loadHomeStatus();if(p==='pre')loadOpeningPrep();if(p==='post')loadChecklistConfig();}
 function gotoDash(tab){setViewMode('dash');if(tab)switchRight(tab);}   // ホーム→現場の該当タブへ
@@ -1741,6 +1742,194 @@ function renderHomeMid(){
     +'</div>';
   return h;
 }
+/* --- 🌙 締めワークフロー（閉店の入口をここ1つにする） ------------------------
+   ボス指示 2026-08-25:「入口を一箇所に。順番が多少変わっても、締めが全部完了しないと帰れない」。
+   これまで閉店の作業はランチャーが4つ並ぶだけで、チェックは端末のlocalStorage＝実態と無関係だった。
+   ここでは**機械が見られるものは機械が見て**、残り件数と「帰れるかどうか」を一番上に大きく出す。
+   ⚠️順不同。どれから触ってもよく、全部 ✅ になった時だけ 🚪退勤OK になる。 */
+var CLOSE_FLOW={loading:false,at:0,cash:null,pos:null,gate:null,denpyo:null,err:''};
+function loadClosingFlow(force){
+  if(!IS_GAS||CLOSE_FLOW.loading)return;
+  if(!force&&CLOSE_FLOW.at&&(Date.now()-CLOSE_FLOW.at)<20000)return;   // 20秒はキャッシュ（GASの床1.9秒を毎回払わない）
+  CLOSE_FLOW.loading=true;
+  Promise.all([
+    gsr('getCashCheckInit').catch(function(){return null;}),
+    gsr('getPosDayStatus').catch(function(){return null;}),
+    gsr('kioskGetDenpyoDay').catch(function(){return null;})
+  ]).then(function(r){
+    CLOSE_FLOW.cash=r[0]; CLOSE_FLOW.pos=(r[1]&&r[1].ok!==false)?r[1]:null; CLOSE_FLOW.denpyo=r[2];
+    var slips=readSlipsFromDenpyo(r[2]).filter(function(x){return Number(x.amount)>0;})
+      .map(function(x){return {category:x.category,payee:x.payee,amount:Number(x.amount)||0};});
+    var dk=(r[0]&&r[0].dateKey)||'';
+    return gsr('ccGateStatus',dk,slips).catch(function(){return null;});
+  }).then(function(g){
+    CLOSE_FLOW.gate=(g&&g.ok!==false)?g:null;
+    CLOSE_FLOW.err=CLOSE_FLOW.gate?'':'TRUSTの状態を確認できませんでした';
+    CLOSE_FLOW.loading=false; CLOSE_FLOW.at=Date.now();
+    if(viewMode==='home'&&curPhase()==='post')renderHome();
+  }).catch(function(){
+    CLOSE_FLOW.loading=false; CLOSE_FLOW.at=Date.now(); CLOSE_FLOW.err='締めの状態を確認できませんでした';
+    if(viewMode==='home'&&curPhase()==='post')renderHome();
+  });
+}
+/* 締めの工程。state: 'done' 完了 / 'todo' これから / 'wait' 自分では動かせない待ち */
+function cfSteps_(){
+  var F=CLOSE_FLOW, cash=F.cash||{}, pos=F.pos, gate=F.gate;
+  var submitted=!!cash.reportSubmitted, approved=!!cash.approved;
+  var S=[];
+  // ① POS
+  var posOk=!pos||!pos.enforce||!!pos.ready;
+  var posWhy='';
+  if(pos&&pos.enforce&&!pos.ready){
+    var m=[]; if((pos.open||[]).length)m.push('未会計 '+pos.open.length+'件');
+    if((pos.invoice||[]).length)m.push('請求書の依頼 '+pos.invoice.length+'件');
+    posWhy=m.join(' / ');
+  }else if(!pos){ posWhy='確認中'; }
+  S.push({id:'cf_pos',em:'🧾',t:'POSを締める',s:posOk?'未会計・請求書の依頼なし':posWhy,
+    state:posOk?'done':'todo',act:"setViewMode('bill')"});
+  // ② 日払い伝票を整える（受取人・金額）
+  var slips=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&/日払/.test(String(x.category||''));});
+  var known=(gate&&gate.payees)||null;
+  var noName=slips.filter(function(x){return !String(x.payee||'').trim();});
+  var unknown=slips.filter(function(x){
+    var n=String(x.payee||'').replace(/[\s　]/g,'').trim(); if(!n)return false; if(!known)return false;
+    return !known.some(function(p){return String(p||'').replace(/[\s　]/g,'').trim()===n;});
+  });
+  var slipOk=(noName.length===0&&unknown.length===0);
+  S.push({id:'cf_slip',em:'💴',t:'日払い伝票を整える',
+    s:slipOk?(slips.length?('日払い '+slips.length+'件 すべて受取人あり'):'今日の日払いはありません')
+      :((noName.length?'受取人が空欄 '+noName.length+'件':'')+(noName.length&&unknown.length?' / ':'')+(unknown.length?'名簿に無い名前 '+unknown.length+'件':'')),
+    state:slipOk?'done':'todo',act:'openCashCheck()'});
+  // ③ TRUSTへの入力と突合
+  var t=gate&&gate.today, trustOk=!!(t&&t.hasTrust&&t.matched);
+  S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',
+    s:trustOk?('伝票と一致'+(t.perPerson?'（人別）':'（合計）')):(t&&t.hasTrust?((t.lines||[]).join(' / ')||'伝票とTRUSTが合っていません'):'TRUSTの数字がまだ取り込めていません'),
+    state:trustOk?'done':'todo',act:'openCashCheck()'});
+  // ④⑤ 手作業（端末チェック）
+  S.push({id:'okuri',em:'🚗',t:'送りを確定する',s:'本日の送りを締める',state:homeChecks()['okuri']?'done':'todo',act:'openOkuriManager()',manual:true});
+  S.push({id:'safe', em:'🔐',t:'金庫へ収納・出金確認',s:'残金の収納と臨時出金',state:homeChecks()['safe']?'done':'todo',act:'openSafeWithdrawal()',manual:true});
+  // ⑥ 残っているタスクを決める（対応した or 明日へ持ち越す）
+  var pend=(TASKS||[]).filter(function(x){return !x.deferred;});
+  S.push({id:'cf_task',em:'📋',t:'残っているタスクを決める',
+    s:pend.length?(pend.length+'件が未決（対応するか、明日へ持ち越すか決めてください）'):'すべて決まっています',
+    state:pend.length?'todo':'done',act:'openCloseTasks()'});
+  // ⑦ 現金を数えて送信（ここが関所）
+  S.push({id:'cf_cash',em:'💰',t:'現金を数えて閉店チェックを送信',
+    s:submitted?('提出済み　報告者 '+(cash.reporterName||'')):'4袋を数えて送信（締めの条件が全部そろわないと送れません）',
+    state:submitted?'done':'todo',act:'openCashCheck()'});
+  // ⑦ 追加タスク（コンソールで編集）
+  if(CLOSING_TASKS&&CLOSING_TASKS.length){
+    CLOSING_TASKS.forEach(function(x){
+      S.push({id:x.id,em:'🪧',t:x.label,s:x.sub||'',state:homeChecks()[x.id]?'done':'todo',act:"toggleHomeCheck('"+x.id+"')",manual:true});
+    });
+  }
+  // ⑧ 管理者の承認（黒服では動かせない）
+  S.push({id:'cf_appr',em:'✅',t:'管理者の承認',
+    s:approved?('承認済み　'+(cash.approver||'')):(submitted?'承認待ちです（管理コンソールから承認されます）':'閉店チェックの送信後に承認されます'),
+    state:approved?'done':'wait',act:'openCashCheck()'});
+  return S;
+}
+function cfCanGoHome_(){ return cfSteps_().every(function(s){return s.state==='done';}); }
+function cfStepHtml_(s){
+  var done=s.state==='done', wait=s.state==='wait';
+  var mark=done?'✓':(wait?'…':'');
+  var col=done?'var(--green)':(wait?'var(--dim)':'var(--gold)');
+  return '<div class="hv-chk'+(done?' done':'')+'" onclick="'+s.act+'" style="'+(done?'':'border-color:'+col)+'">'
+    +'<div class="box"'+(s.manual?' onclick="toggleHomeCheck(\''+s.id+'\',event)"':'')+' style="color:'+(done?'':'transparent')+';border-color:'+col+'">'+mark+'</div>'
+    +'<div class="em">'+s.em+'</div>'
+    +'<div class="bd"><div class="t">'+esc(s.t)+'</div><div class="s" style="color:'+(done?'var(--dim)':col)+'">'+esc(s.s)+'</div></div>'
+    +'<div class="go">›</div></div>';
+}
+function renderClosingFlow(){
+  if(CLOSING_TASKS==null&&IS_GAS)loadChecklistConfig();
+  loadClosingFlow(false);
+  var S=cfSteps_(), doneN=S.filter(function(x){return x.state==='done';}).length, total=S.length;
+  var pct=total?Math.round(doneN/total*100):0;
+  var left=total-doneN, ok=cfCanGoHome_();
+  /* 🚪 一番上に「帰れるかどうか」だけを大きく出す。締めの目的はこれ1つなので、他は全部その下。 */
+  var banner=ok
+    ? '<div style="border:2px solid #3ea06a;background:rgba(62,160,106,.14);border-radius:16px;padding:18px;text-align:center;margin-bottom:14px">'
+      +'<div style="font-size:34px;line-height:1">🚪</div><div style="font-size:20px;font-weight:900;color:#8fe0ac;margin-top:4px">退勤OK</div>'
+      +'<div style="font-size:12.5px;color:var(--dim);margin-top:4px">締めはすべて完了しています。お疲れさまでした</div></div>'
+    : '<div style="border:2px solid #e05050;background:rgba(224,80,80,.10);border-radius:16px;padding:18px;text-align:center;margin-bottom:14px">'
+      +'<div style="font-size:30px;line-height:1">🚪</div><div style="font-size:19px;font-weight:900;color:#ff9a9a;margin-top:4px">まだ帰れません</div>'
+      +'<div style="font-size:13px;color:var(--txt);margin-top:5px">あと <b style="font-size:20px;color:#ffcf7a">'+left+'</b> 件</div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-top:4px">順番は自由です。どれから片付けても構いません</div></div>';
+  var h=banner
+    +'<div class="hv-prog"><div class="big">'+doneN+'<span style="font-size:14px;color:var(--dim)">/'+total+'</span></div>'
+    +'<div style="flex:1"><div class="lbl">閉店の締め処理</div><div class="hv-pbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div></div>'
+    +'<div class="hv-cd" onclick="loadClosingFlow(true)" style="cursor:pointer">🔄 更新</div></div>';
+  if(CLOSE_FLOW.err) h+='<div style="font-size:11.5px;color:#e0a060;margin:8px 0">⚠️ '+esc(CLOSE_FLOW.err)+'</div>';
+  var todo=S.filter(function(x){return x.state!=='done';}), fin=S.filter(function(x){return x.state==='done';});
+  if(todo.length){
+    h+='<div class="hv-sec todo"><span class="st">🌙 やること</span><span class="cnt">残り '+todo.length+'</span></div>';
+    h+=todo.map(cfStepHtml_).join('');
+  }
+  if(fin.length){
+    h+='<div class="hv-sec done"><span class="st">✓ 完了</span><span class="cnt">'+fin.length+'</span></div>';
+    h+=fin.map(cfStepHtml_).join('');
+  }
+  return h;
+}
+
+/* 📋 残っているタスクを1画面で決める（対応した／明日へ持ち越す）。
+   ⚠️「そのまま」を許さないのが目的なので、どちらも押さないと締めは通らない。 */
+function openCloseTasks(){
+  closeMenu();
+  showSheet('📋 残っているタスク', cfTasksHtml(), false);
+}
+function cfTasksHtml(){
+  var q=TASKS||[];
+  var pend=q.filter(function(t){return !t.deferred;}), done=q.filter(function(t){return t.deferred;});
+  if(!q.length) return '<div class="empty-msg">残っているタスクはありません</div>';
+  var row=function(t){
+    return '<div class="cc-slip">'
+      +'<div style="display:flex;gap:9px;align-items:flex-start">'
+      +'<span style="font-size:18px">'+esc(t.icon||'📋')+'</span>'
+      +'<div style="flex:1"><div style="font-size:13.5px;font-weight:700;color:var(--txt)">'+esc(t.title||'')+'</div>'
+      +(t.sub?'<div style="font-size:11.5px;color:var(--dim);margin-top:2px">'+esc(t.sub)+'</div>':'')
+      +(t.memo?'<div style="font-size:11.5px;color:var(--sub);margin-top:4px;white-space:pre-wrap">'+esc(t.memo)+'</div>':'')
+      +(t.deferred?'<div style="font-size:11.5px;color:#8fb0e0;margin-top:4px">➡️ 明日へ持ち越し'+(t.deferredBy?'（'+esc(t.deferredBy)+'）':'')+'</div>':'')
+      +'</div></div>'
+      +'<div style="display:flex;gap:8px;margin-top:9px">'
+      +(t.deferred
+        ? '<button class="bm-btn sm" onclick="cfUndefer(\''+jsStr(t.id)+'\')">↩️ 持ち越しをやめる</button>'
+        : '<button class="bm-btn sm" style="border-color:#3ea06a;color:#8fe0ac" onclick="cfDone(\''+jsStr(t.id)+'\')">✅ 対応した</button>'
+          +'<button class="bm-btn sm" onclick="cfDefer(\''+jsStr(t.id)+'\')">➡️ 明日へ持ち越す</button>')
+      +'</div></div>';
+  };
+  var h='';
+  if(pend.length){
+    h+='<div class="flabel">まだ決まっていない　<span style="color:#ffcf7a">'+pend.length+'件</span></div>'+pend.map(row).join('');
+  }else{
+    h+='<div class="ck-banner ok">✅ すべて決まりました</div>';
+  }
+  if(done.length) h+='<div class="flabel">明日へ持ち越し '+done.length+'件</div>'+done.map(row).join('');
+  h+='<div style="font-size:11.5px;color:var(--dim);margin-top:12px;line-height:1.6">'
+    +'「対応した」＝そのタスクは消えます。「明日へ持ち越す」＝今夜は保留にして、<b>明日また出ます</b>。<br>'
+    +'どちらも押さないタスクが残っていると、閉店チェックは送信できません。</div>';
+  return h;
+}
+function cfDone(id){
+  TASKS=(TASKS||[]).filter(function(t){return t.id!==id;});
+  cfTasksRefresh(); if(typeof toast==='function')toast('✅ 完了しました');
+  if(IS_GAS) gsr('completeKioskTask',id).catch(function(){ loadAll(); });
+}
+function cfDefer(id){
+  var t=(TASKS||[]).find(function(x){return x.id===id;}); if(t){t.deferred=true;t.deferredBy=(typeof LOGIN!=='undefined'&&LOGIN?String(LOGIN):'');}
+  cfTasksRefresh(); if(typeof toast==='function')toast('➡️ 明日へ持ち越しました');
+  if(IS_GAS) gsr('deferKioskTask',id,(typeof LOGIN!=='undefined'&&LOGIN?String(LOGIN):''),'').catch(function(){ loadAll(); });
+}
+function cfUndefer(id){
+  var t=(TASKS||[]).find(function(x){return x.id===id;}); if(t){t.deferred=false;}
+  cfTasksRefresh();
+  if(IS_GAS) gsr('undeferKioskTask',id).catch(function(){ loadAll(); });
+}
+function cfTasksRefresh(){
+  var b=document.getElementById('sheetBody'); if(b)b.innerHTML=cfTasksHtml();
+  renderAlerts(); if(viewMode==='home')renderHome();
+}
+
 function renderHomeChecklist(phase){
   var list=(HOME_LISTS[phase]||[]).slice();
   if(phase==='post'&&CLOSING_TASKS==null&&IS_GAS)loadChecklistConfig();
@@ -1783,7 +1972,8 @@ function renderHome(){
   if(viewMode!=='home')return;
   var w=document.getElementById('hvWrap'); if(!w)return;
   var phase=curPhase();
-  var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderHomeChecklist(phase));
+  // 🌙閉店は締めワークフロー（入口ひとつ・順不同・全部完了しないと帰れない）。開店前は従来のチェックリスト。
+  var mainHtml=(phase==='mid')?renderHomeMid():(phase==='pre'?renderOpeningPre():renderClosingFlow());
   /* setHtml経由＝生成HTMLが前回と同一ならDOM張替えを飛ばす（30秒ポーリング毎の無駄な全再構築＝チラつき/スクロール飛び/入力ロストを防ぐ）。
      待ち分/超過など時刻で変わる値はHTMLが変わる→ちゃんと更新される。hvWrapはrenderHomeだけが書く＝キャッシュ整合。 */
   setHtml('hvWrap', punchCardHtml()+orderAlertCardHtml()+handoverCardHtml()+hvPhaseBar(phase)+mainHtml+hvToolsSection());
@@ -8821,7 +9011,7 @@ function applyLoadAll_(r){
   applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
   annotateLeavePlan(); // 占有席に「空く予定」(=在席組の退店予定時刻)を付与
   BOOTED=true; renderAll();
-  if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post')loadChecklistConfig();}
+  if(viewMode==='home'){var ph=curPhase();if(ph==='pre'||ph==='post')loadHomeStatus();if(ph==='pre')loadOpeningPrep();if(ph==='post'){loadChecklistConfig();loadClosingFlow(false);}}
 }
 /* 従来の9本バラ撃ち（フォールバック）。1本失敗でも他を描画するため各fetchに .catch(null) を付与。 */
 function loadAllLegacy_(){
