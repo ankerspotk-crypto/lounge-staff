@@ -1,3 +1,9 @@
 kirein-repo
 
 .preview/
+
+# 個人データ（実名の給与・売上明細）は絶対にコミットしない
+cast_pay_final_*
+cast_sales_*
+sales_*.csv
+*.xlsx
