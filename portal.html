@@ -653,7 +653,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-07-31a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var PORTAL_BUILD = '2026-08-25a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -1092,6 +1092,7 @@ var SECTIONS = {
   shift:    { t:'シフト提出',   i:'📅' },
   yoyaku:   { t:'予約管理',     i:'🗓' },
   stats:    { t:'売上・給与',   i:'💰' },
+  kyuritsu: { t:'給率チェック', i:'📊' },
   hair:     { t:'領収書提出',   i:'🧾' },
   seatreq:  { t:'席リクエスト', i:'💺' },
   customers:{ t:'顧客管理',     i:'👥' },
@@ -1156,7 +1157,7 @@ function versionFooter() {
 
 function homeMenu() {
   ksPingOnce();   // ⚔️合戦の「手番」バッジ用。ホーム描画をブロックしない（結果が来たら描き直す）
-  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','hair','seatreq','customers','custbday','bday','profile','wine'];
+  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
@@ -1199,6 +1200,7 @@ function switchTab(tab) {
   if (tab === 'awards') { loadAwards(); return; }
   if (tab === 'kassen') { loadKassen(); return; }
   if (tab === 'stats') { renderStats(); return; }
+  if (tab === 'kyuritsu') { renderKyuritsu(); return; }
   if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
   if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
@@ -2094,9 +2096,9 @@ function loadStatsData(force, cb) {
 }
 
 function renderStats() {
-  var labels = { sales: '売上明細', bills: '伝票', pay: '給与明細', ranking: 'ランキング' };
+  var labels = { sales: '売上明細', kyuritsu: '給率', bills: '伝票', pay: '給与明細', ranking: 'ランキング' };
   // 休職中は給与明細のみ（売上明細・伝票・ランキングは出さない）。サブタブ自体を1本に畳む。
-  var subKeys = onLeave ? ['pay'] : ['sales', 'bills', 'pay', 'ranking'];
+  var subKeys = onLeave ? ['pay'] : ['sales', 'kyuritsu', 'bills', 'pay', 'ranking'];
   if (onLeave) statsSubTab = 'pay';
   var subtabs = '<div style="display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap">'
     + subKeys.map(function(t) {
@@ -2116,8 +2118,9 @@ function renderStats() {
     setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
   }
-  // 伝票は成績ペイロード非依存（専用APIをその場でfetch）
+  // 伝票・給率は成績ペイロード非依存（専用APIをその場でfetch）
   if (statsSubTab === 'bills') { renderBills(); return; }
+  if (statsSubTab === 'kyuritsu') { renderKyuritsu(); return; }
   // 成績データ未ロード（tab=homeでは含まれない）なら遅延ロードしてから再描画
   if (!portalData || portalData.sales === undefined) { loadStatsData(false, function(){ renderStats(); }); return; }
   if (statsSubTab === 'sales') renderSales();
@@ -2414,6 +2417,183 @@ function renderSales() {
 }
 
 function switchSalesMonth(m) { currentMonth = m; renderSales(); }
+
+// ---- 📊 給率（じぶんの採算）------------------------------------------------
+// 定義は必ず画面に出す: 給率 ＝ 時間報酬 ÷ 担当売上。目標30% ＝ 時給の3.33倍稼ぐ。
+// ⚠️TRUSTの「給率」列はバック込み((時間報酬+バック)÷担当小計)で別物。式を画面から消すと
+//   「TRUSTと数字が違う」と必ず言われる＝式の1行は装飾ではなく仕様。
+// ⚠️担当売上0は rate=null で来る（0%＝満点に見せない）。null分岐を消さないこと。
+var kyuData = null;
+
+function kyuColor(rate, target) {
+  if (rate === null || rate === undefined) return '#8d7c56';
+  if (rate <= target) return '#44bb66';
+  if (rate <= target * 1.7) return '#c8a800';
+  return '#e08000';
+}
+function kyuBadge(rate, target) {
+  if (rate === null || rate === undefined) return '売上が未計上';
+  if (rate <= target) return '目標達成';
+  if (rate <= target * 1.7) return 'あと一歩';
+  return 'ここから';
+}
+function kyuPct(v) { return (v === null || v === undefined) ? '—' : v.toFixed(1) + '%'; }
+
+// 0%〜100%の帯。左（低い方）が緑＝給率は低いほど良い
+function kyuGauge(rate, target) {
+  var pos = (rate === null || rate === undefined) ? null : Math.min(rate, 100);
+  var c = kyuColor(rate, target);
+  var h = '<div style="position:relative;height:32px;margin:10px 0 0">'
+    + '<div style="position:absolute;top:11px;left:0;width:' + target + '%;height:10px;background:#12301d;border-radius:5px 0 0 5px"></div>'
+    + '<div style="position:absolute;top:11px;left:' + target + '%;right:0;height:10px;background:#2a1d0c;border-radius:0 5px 5px 0"></div>'
+    + '<div style="position:absolute;top:7px;left:' + target + '%;width:2px;height:18px;background:#e6cf95;transform:translateX(-1px)"></div>';
+  if (pos !== null) h += '<div style="position:absolute;top:8px;left:' + pos.toFixed(1) + '%;width:16px;height:16px;background:' + c
+    + ';border:2px solid #f2ead9;border-radius:50%;transform:translateX(-8px);box-shadow:0 0 10px ' + c + '"></div>';
+  h += '</div>'
+    + '<div style="position:relative;height:15px;font-size:10px;color:#94886a">'
+    + '<span style="position:absolute;left:0">0%</span>'
+    + '<span style="position:absolute;left:' + target + '%;transform:translateX(-50%);color:#e6cf95;font-weight:700">目標' + target + '%</span>'
+    + '<span style="position:absolute;right:0">100%</span></div>';
+  return h;
+}
+
+function renderKyuritsu() {
+  setContent('<div class="loading">読み込み中...</div>');
+  var url = GAS_URL + '?action=portal&tab=kyuritsu&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
+  gasFetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (!d.ok) { setContent('<div style="color:#e88;padding:24px 16px;font-size:13px">エラー: ' + esc(d.error||'') + '</div>'); return; }
+    kyuData = d; renderKyuritsuBody(d);
+  }).catch(function(e){ setContent('<div style="color:#e88;padding:24px 16px;font-size:13px">通信エラー<br><small>'+esc(e&&e.message||'')+'</small>'+retryBtn_('renderKyuritsu')+'</div>'); });
+}
+function kyuSwitchMonth(m) { currentMonth = m; renderKyuritsu(); }
+
+function renderKyuritsuBody(d) {
+  var T = d.target || 30, me = d.me, st = d.store;
+  var h = '<div style="padding:14px">';
+
+  if (d.months && d.months.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
+    d.months.forEach(function(m) {
+      var act = m === d.month;
+      h += '<button onclick="kyuSwitchMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
+        + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + esc(m) + '</button>';
+    });
+    h += '</div>';
+  }
+
+  if (!me) {
+    h += '<div style="text-align:center;padding:56px 20px">'
+      + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">この月のデータはまだありません</div>'
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">売上データは毎日深夜に自動更新されます。</div></div></div>';
+    setContent(h); return;
+  }
+
+  // ── 今月の給率（主役） ──
+  var c = kyuColor(me.rate, T);
+  h += '<div style="background:linear-gradient(160deg,#1a1610,#12100a);border:1px solid ' + c + '55;border-radius:14px;padding:16px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center">'
+    +   '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">' + esc(d.month) + ' あなたの給率</span>'
+    +   '<span style="font-size:11px;font-weight:700;color:' + c + ';border:1px solid ' + c + '66;border-radius:9px;padding:3px 10px">' + kyuBadge(me.rate, T) + '</span>'
+    + '</div>'
+    + '<div style="display:flex;align-items:baseline;gap:10px;margin-top:8px">'
+    +   '<span style="font-size:44px;font-weight:800;color:' + c + ';line-height:1">' + kyuPct(me.rate) + '</span>'
+    +   '<span style="font-size:13px;color:#94886a">目標 ' + T + '% 以下</span>'
+    + '</div>'
+    + kyuGauge(me.rate, T);
+
+  // 次の一手（数字1本に絞る）
+  if (me.rate === null) {
+    h += '<div style="margin-top:12px;padding:11px 13px;background:#241d10;border:1px solid #4a3a1c;border-radius:9px;font-size:13px;color:#e6cf95;line-height:1.7">'
+      + 'この月はまだ担当売上が計上されていません。<br>'
+      + '<span style="color:#b8a67c;font-size:12px">目標ラインは <b style="color:#e6cf95">' + yen(me.needSales) + '</b>（時間報酬 ' + yen(me.jikan) + ' ÷ ' + T + '%）です。</span></div>';
+  } else if (me.gap > 0) {
+    h += '<div style="margin-top:12px;padding:11px 13px;background:#241d10;border:1px solid #4a3a1c;border-radius:9px;font-size:13px;color:#efe4cd;line-height:1.7">'
+      + '目標まで あと <b style="font-size:17px;color:' + c + '">' + yen(me.gap) + '</b>'
+      + '<div style="font-size:11px;color:#b8a67c;margin-top:3px">この月の目標担当売上 ' + yen(me.needSales) + '</div></div>';
+  } else {
+    h += '<div style="margin-top:12px;padding:11px 13px;background:#122c1b;border:1px solid #2a6a44;border-radius:9px;font-size:13px;color:#9fe0b4;line-height:1.7">'
+      + '🏆 目標達成中。時給に対して <b>' + (me.bairitu !== null ? me.bairitu.toFixed(2) : '—') + '倍</b> 稼げています。この調子で。</div>';
+  }
+
+  // 式（TRUSTの給率と食い違って見える事故を防ぐ）
+  h += '<div style="margin-top:12px;padding-top:11px;border-top:1px solid #241d10;font-size:11px;color:#94886a;line-height:1.9">'
+    + '給率 ＝ 時間報酬 <b style="color:#cbb98a">' + yen(me.jikan) + '</b> ÷ 担当売上 <b style="color:#cbb98a">' + yen(me.tanto) + '</b><br>'
+    + '出勤 ' + me.days + '日'
+    + (me.bairitu !== null ? '　時給の <b style="color:#cbb98a">' + me.bairitu.toFixed(2) + '倍</b>（目標は3.33倍）' : '')
+    + '<br><span style="color:#7d7159">※バックは含みません（バックは頑張った分のご褒美。TRUSTの給率欄はバック込みのため数字が異なります）</span>'
+    + '</div></div>';
+
+  // ── 出勤1日あたりの目標 ──
+  if (me.perDayCost > 0) {
+    h += '<div style="background:#16130d;border:1px solid #211a0f;border-radius:12px;padding:14px 16px;margin-top:10px">'
+      + '<div style="font-size:11px;color:#b8a67c;letter-spacing:.5px;margin-bottom:10px">出勤1日あたり</div>'
+      + '<div style="display:flex;gap:10px">'
+      +   '<div style="flex:1;background:#12100a;border:1px solid #241d10;border-radius:9px;padding:10px 12px">'
+      +     '<div style="font-size:11px;color:#94886a">1日の人件費</div>'
+      +     '<div style="font-size:19px;font-weight:700;color:#cbb98a;margin-top:2px">' + yen(me.perDayCost) + '</div></div>'
+      +   '<div style="flex:1;background:#12100a;border:1px solid #4a3a1c;border-radius:9px;padding:10px 12px">'
+      +     '<div style="font-size:11px;color:#b09f74">1日の目標売上</div>'
+      +     '<div style="font-size:19px;font-weight:800;color:#e6cf95;margin-top:2px">' + yen(me.dayTarget) + '</div></div>'
+      + '</div>'
+      + '<div style="font-size:10px;color:#7d7159;margin-top:8px;line-height:1.7">1日の人件費 ＝ 時間報酬 ' + yen(me.jikan) + ' ÷ 出勤 ' + me.days + '日（月の平均）</div>'
+      + '</div>';
+  }
+
+  // ── 日別（伝票ベース・前日まで） ──
+  if (d.days && d.days.length) {
+    var hitN = d.days.filter(function(x){ return x.hit === true; }).length;
+    h += '<div style="background:#16130d;border:1px solid #211a0f;border-radius:12px;padding:14px 16px;margin-top:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
+      +   '<span style="font-size:11px;color:#b8a67c;letter-spacing:.5px">日別（前日まで）</span>'
+      +   '<span style="font-size:11px;color:#94886a">目標クリア <b style="color:#e6cf95">' + hitN + '</b> / ' + d.days.length + '日</span>'
+      + '</div>';
+    d.days.forEach(function(x) {
+      var dc = x.hit === true ? '#44bb66' : '#8d7c56';
+      h += '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #1c1710">'
+        + '<span style="font-size:14px;color:' + dc + ';width:16px;text-align:center">' + (x.hit === true ? '◎' : '·') + '</span>'
+        + '<span style="font-size:12px;color:#cbb98a;width:64px">' + fmtBillDate(x.date) + '</span>'
+        + '<span style="flex:1;font-size:13px;font-weight:700;color:' + (x.sales > 0 ? '#efe4cd' : '#6f6650') + '">' + (x.sales > 0 ? yen(x.sales) : '¥0') + '</span>'
+        + '<span style="font-size:12px;font-weight:700;color:' + kyuColor(x.rate, T) + ';width:62px;text-align:right">' + kyuPct(x.rate) + '</span>'
+        + '</div>';
+    });
+    h += '<div style="font-size:10px;color:#7d7159;margin-top:8px;line-height:1.7">◎ ＝ その日の売上が目標 ' + yen(me.dayTarget) + ' 以上。伝票は前日分まで確定します。</div></div>';
+  }
+
+  // ── 店全体 ──
+  if (st) {
+    var sc = kyuColor(st.rate, T);
+    h += '<div style="background:#16130d;border:1px solid #211a0f;border-radius:12px;padding:14px 16px;margin-top:10px">'
+      + '<div style="font-size:11px;color:#b8a67c;letter-spacing:.5px">🏯 店全体の給率</div>'
+      + '<div style="display:flex;align-items:baseline;gap:10px;margin-top:6px">'
+      +   '<span style="font-size:30px;font-weight:800;color:' + sc + ';line-height:1">' + kyuPct(st.rate) + '</span>'
+      +   '<span style="font-size:12px;color:#94886a">目標 ' + T + '% 以下</span>'
+      + '</div>'
+      + kyuGauge(st.rate, T)
+      + '<div style="display:flex;gap:10px;margin-top:12px">'
+      +   '<div style="flex:1;background:#12100a;border:1px solid #241d10;border-radius:9px;padding:9px 11px">'
+      +     '<div style="font-size:10px;color:#94886a">あなたの売上シェア</div>'
+      +     '<div style="font-size:17px;font-weight:700;color:#e6cf95;margin-top:2px">' + st.myShareSales.toFixed(1) + '%</div></div>'
+      +   '<div style="flex:1;background:#12100a;border:1px solid #241d10;border-radius:9px;padding:9px 11px">'
+      +     '<div style="font-size:10px;color:#94886a">あなたの人件費シェア</div>'
+      +     '<div style="font-size:17px;font-weight:700;color:#cbb98a;margin-top:2px">' + st.myShareCost.toFixed(1) + '%</div></div>'
+      + '</div>';
+    if (st.ifIHit !== null && st.rate !== null && st.ifIHit < st.rate) {
+      h += '<div style="margin-top:10px;padding:10px 12px;background:#241d10;border:1px solid #4a3a1c;border-radius:9px;font-size:12px;color:#efe4cd;line-height:1.8">'
+        + 'あなたが目標 ' + T + '% を達成すると、店全体は '
+        + '<b style="color:' + sc + '">' + kyuPct(st.rate) + '</b> → <b style="color:#e6cf95">' + kyuPct(st.ifIHit) + '</b> になります。</div>';
+    }
+    h += '<div style="font-size:10px;color:#7d7159;margin-top:9px;line-height:1.7">'
+      + '全スタッフ ' + st.people + '名の 時間報酬合計 ' + yen(st.jikan) + ' ÷ 担当売上合計 ' + yen(st.tanto) + '</div></div>';
+  }
+
+  h += '</div>';
+  setContent(h);
+}
+
 
 function salesSetDate(month) {
   var cur = ((portalData && portalData.salesDataDates) || {})[month] || '';
