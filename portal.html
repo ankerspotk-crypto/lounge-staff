@@ -266,6 +266,12 @@ header h1 { font-size: 17px; font-weight: 600; }
 .yc-cast.yoyaku { background: #1a1500; color: #ffcc66; border: 1px solid #554400; }
 .yoyaku-card .yc-badges { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 50px; margin-bottom: 3px; }
 .yoyaku-card .yc-note { font-size: 11px; color: #b8a67c; padding-left: 50px; }
+/* ✋つきたい（キャストが予約に立候補）。カード内タップ＝予約編集を開く導線と衝突するので行ごとstopPropagationする */
+.yoyaku-card .yc-want-row { padding-left: 50px; margin-top: 8px; }
+.yoyaku-card .yc-want { width: 100%; padding: 9px 10px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer;
+  background: #1b1710; border: 1px solid #4a3a1e; color: #d8c9a8; }
+.yoyaku-card .yc-want.on { background: #241d10; border-color: #9a7a3e; color: #efe4cd; }
+.yoyaku-card .yc-want[disabled] { opacity: .55; cursor: default; }
 .yb { font-size: 10px; padding: 2px 8px; border-radius: 7px; font-weight: 600; }
 .yb-seat { background: #0a1428; color: #e6cf95; border: 1px solid #3a2e18; }
 .yb-pax  { background: #1b1710; color: #cbb98a; border: 1px solid #33291a; }
@@ -4746,7 +4752,7 @@ function confirmKurofukuShift(ev) {
 }
 
 // ---- 席リクエスト（NG／着席希望、本日限りで黒服LINEに即時通知） ----
-var seatReqType = 'NG';
+var seatReqType = '希望';   // 既定＝🙋着席希望（2026-08-25。従来はNGが既定で「つきたくない」が主役になっていた）
 var seatReqMode = 'rsv';   // 'rsv' = 本日の予約から選ぶ / 'store' = 店全体へのリクエスト
 var seatReqRsvs = null;    // 本日の予約一覧（タブを開くたびに再取得）
 var seatReqSelected = [];  // 選択中の予約 rowIdx 配列
@@ -5653,6 +5659,7 @@ var yoyakuCastList = [];
 var yoyakuCustResults = [];
 var yoyakuSelectedCust = null;
 var yoyakuMemberFeeMap = {};
+var yoyakuMyWants = [];     // その日に自分が「✋つきたい」を出している予約 rowIdx（backendの getMyCastWants_ 由来）
 var yoyakuSubTab = 'list'; // list / sched / add / cal
 var yoyakuListFilter = ''; // 廃止（各カードにインラインボタン）
 var yoyakuGridPreset = null; // {table, time} — グリッドクリック時の事前入力
@@ -5694,6 +5701,8 @@ var YOYAKU_TABLES = [
 function yoyakuDateStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
+// 表示中の日が今日か（見出しの「本日の予約」を別日で嘘にしないため）
+function yoyakuIsToday_() { return yoyakuDateStr(yoyakuDate) === yoyakuDateStr(new Date()); }
 function yoyakuDateDisplay(d) {
   var dow = ['日','月','火','水','木','金','土'][d.getDay()];
   return (d.getMonth()+1) + '/' + d.getDate() + '（' + dow + '）';
@@ -5710,6 +5719,7 @@ function loadYoyaku() {
       yoyakuRsvs = d.reservations || [];
       yoyakuCastList = d.casts || [];
       yoyakuMemberFeeMap = d.memberFeeMap || {};
+      yoyakuMyWants = d.myWants || [];
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = ''; yoyakuCheckTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
@@ -5863,10 +5873,10 @@ function renderYoyakuList() {
   var all = yoyakuRsvs.slice().sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
   var pax = all.reduce(function(s,r){ return s+(r.pax||0); }, 0);
   var stats = '<div class="yoyaku-stats">'
-    + '<div class="yoyaku-stat"><div class="num" style="color:#e6cf95">'+all.length+'</div><div class="lbl">本日の予約</div></div>'
+    + '<div class="yoyaku-stat"><div class="num" style="color:#e6cf95">'+all.length+'</div><div class="lbl">'+(yoyakuIsToday_() ? '本日の予約' : 'この日の予約')+'</div></div>'
     + '<div class="yoyaku-stat"><div class="num" style="color:#66cc88">'+pax+'</div><div class="lbl">予約人数</div></div>'
     + '</div>';
-  if (all.length === 0) return stats + '<div style="text-align:center;color:#94886a;padding:30px 0;font-size:13px">本日の予約はありません</div>';
+  if (all.length === 0) return stats + '<div style="text-align:center;color:#94886a;padding:30px 0;font-size:13px">'+(yoyakuIsToday_() ? '本日' : 'この日')+'の予約はありません</div>';
   var cards = all.map(function(r) {
     var tantouBadge = r.tantouCast ? '<span class="yb yb-cast">担当: '+esc(r.tantouCast)+'</span>' : '';
     var yoyakuCastBadge = r.yoyakuCast ? '<span class="yb" style="background:#1a1000;color:#ffcc66;border:1px solid #554400">予約: '+esc(r.yoyakuCast)+'</span>' : '';
@@ -5914,9 +5924,83 @@ function renderYoyakuList() {
       + ((r.subCustomers && r.subCustomers.length) ? '<div class="yc-note" style="color:#66cc88">同席: '+r.subCustomers.map(function(s){ return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':''); }).join('、')+'</div>' : '')
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
       + (r.regBy && r.regBy !== 'インポート' ? '<div class="yc-note" style="color:#94886a">予約入力: '+esc(r.regBy)+'</div>' : '')
+      + yoyakuWantBtn_(r)
       + '</div>';
   }).join('');
   return stats + cards;
+}
+
+/* ---- ✋つきたい（キャストが予約に立候補する。2026-08-25 ボス依頼） ----
+   送信先＝既存のキャストリクエスト台帳＋黒服LINE＋軍師の📣一覧（種別='希望'＝着席希望）。
+   ⚠️出す相手はキャスト本人だけ＝黒服・管理者には出さない（予約タブは全員が見るタブのため自前でrole判定が要る）。 */
+function yoyakuCanWant_(r) {
+  if (onLeave) return false;
+  if (staffRole !== 'キャスト' && staffRole !== '体験') return false;
+  if (r.status === 'キャンセル' || r.status === '退店済み') return false;
+  var me = String(homeMyName() || '').replace(/\s/g, '');
+  if (!me) return false;
+  // 既に自分が担当/同伴/予約キャストなら立候補は不要
+  var mine = [r.tantouCast, r.dohanCast, r.yoyakuCast].map(function(v){ return String(v||'').replace(/\s/g,''); });
+  return mine.indexOf(me) < 0;
+}
+
+function yoyakuWantBtn_(r) {
+  if (!yoyakuCanWant_(r)) return '';
+  var on = yoyakuMyWants.indexOf(r.rowIdx) >= 0;
+  var busy = !!yoyakuWantBusy[r.rowIdx];
+  return '<div class="yc-want-row" onclick="event.stopPropagation()">'
+    + '<button class="yc-want' + (on ? ' on' : '') + '"' + (busy ? ' disabled' : '')
+    + ' onclick="yoyakuToggleWant(' + r.rowIdx + ',event)">'
+    + (busy ? '送信中…' : on ? '✋ つきたい 送信済み（タップで取消）' : '✋ このお客様につきたい')
+    + '</button></div>';
+}
+
+// 送信中の予約行（連打で黒服LINEに同じ通知が何通も飛ぶのを塞ぐ。LINE通数は上限気味＝[[reference_line_message_quota]]）。
+// ⚠️「古い結果を捨てる」ガードは同居させない＝永久に送信中で固まる罠を踏む（[[reference_async_stale_guard_trap]]）。
+// 必ず全ての終了経路（成功・エラー応答・通信エラー）で消す。
+var yoyakuWantBusy = {};
+
+function yoyakuToggleWant(rowIdx, ev) {
+  if (ev) ev.stopPropagation();
+  if (yoyakuWantBusy[rowIdx]) return;
+  var r = null;
+  for (var i = 0; i < yoyakuRsvs.length; i++) if (yoyakuRsvs[i].rowIdx === rowIdx) r = yoyakuRsvs[i];
+  if (!r) return;
+  var dateStr = yoyakuDateStr(yoyakuDate);
+  var label = (r.time || '') + ' ' + (r.customer || '') + '様';
+  var on = yoyakuMyWants.indexOf(rowIdx) >= 0;
+  var done = function(){ delete yoyakuWantBusy[rowIdx]; renderYoyaku(); };
+
+  if (on) {
+    if (!confirm('「' + label + 'につきたい」を取り消します。よろしいですか？')) return;
+    yoyakuWantBusy[rowIdx] = 1; renderYoyaku();
+    gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({
+      action: 'cancelCastSeatRequest', userId: userId, rowIdx: rowIdx, rsvDate: dateStr }) })
+    .then(function(x){ return x.json(); })
+    .then(function(d){
+      if (!d.ok) { done(); alert('エラー: ' + (d.error || '不明')); return; }
+      var i = yoyakuMyWants.indexOf(rowIdx); if (i >= 0) yoyakuMyWants.splice(i, 1);
+      done();
+    })
+    .catch(function(){ done(); alert('通信エラー'); });
+    return;
+  }
+
+  var comment = prompt('✋「' + label + 'につきたい」を黒服に伝えます。\n理由や一言があれば入れてください（任意・空のままでOK）\n※ やめる場合はキャンセル', '');
+  if (comment === null) return;
+  yoyakuWantBusy[rowIdx] = 1; renderYoyaku();
+  gasFetch(GAS_URL, { method: 'POST', body: JSON.stringify({
+    action: 'sendCastSeatRequest', userId: userId, type: '希望', storeWide: false,
+    rsvDate: dateStr, comment: String(comment || '').trim(),
+    targets: [{ rowIdx: rowIdx, time: r.time, customer: r.customer, table: r.table || '未定' }] }) })
+  .then(function(x){ return x.json(); })
+  .then(function(d){
+    if (!d.ok) { done(); alert('エラー: ' + (d.error || '不明')); return; }
+    if (yoyakuMyWants.indexOf(rowIdx) < 0) yoyakuMyWants.push(rowIdx);
+    done();
+    alert('黒服に伝えました');
+  })
+  .catch(function(){ done(); alert('通信エラー'); });
 }
 
 function renderAvailability_(all) {
