@@ -4044,6 +4044,287 @@ function adminSetKyuyoManual(userId, month, name, vals) {
 }
 
 // ── 管理コンソール: 給与明細（新バック方式で再計算＋立替代を合算） ──────────
+/* ===== 💴 日払い照合（伝票 × TRUST）＝二重払いの関所 ==========================
+ * 背景: 黒服が現金で日払いしてもTRUSTに入力し忘れると、給与計算が「日払いゼロ」と判断して
+ *       満額を払う＝二重払いになる。閉店チェックのゲートは「入力しました」の自己申告だけで
+ *       実額を突合していないため、月末の給与計算まで誰も気づけなかった。
+ * 方針: 読み取り専用。金額は1円も書き換えない。3つの台帳を突き合わせて差異を可視化するだけ。
+ *   ① 日払い記録   … LINE画像OCRが起こした受領書（生・誤読あり）
+ *   ② 現金管理     … 閉店チェックの伝票明細JSON（黒服が目で確認・訂正した値）
+ *   ③ TRUST報酬    … 給与計算が実際に控除に使う「日払」列
+ * ⚠️ ①と②は同じ伝票を別々に持つ二重台帳。②での訂正は①に戻らないので、突合して両方出す。
+ */
+const HIBARAI_MAP_TAB = '日払い名寄せ';
+const HIBARAI_MAP_HEAD = ['受領書の表記', 'TRUST表記', '区分', 'メモ'];
+// 区分: 空/日払い=照合対象 ・ 月給=月給受領書なので日払いから除外 ・ 除外=伝票でない画像等
+
+// 受領書表記の照合キー（空白ゆらぎを吸収。normalizeName_は内部スペースを消さない＝ここでは自前）
+function hbKey_(s) { return String(s == null ? '' : s).replace(/[\s　]/g, '').trim(); }
+
+// 名寄せシート（無ければ作成し、2026-08-25の実査で判明した対応をシード）
+function ensureHibaraiMapSheet_(ss) {
+  let sh = ss.getSheetByName(HIBARAI_MAP_TAB);
+  if (sh) {
+    if (String(sh.getRange(1, 1).getValue()).trim() !== HIBARAI_MAP_HEAD[0]) {
+      sh.getRange(1, 1, 1, HIBARAI_MAP_HEAD.length).setValues([HIBARAI_MAP_HEAD]);
+    }
+    return sh;
+  }
+  sh = ss.insertSheet(HIBARAI_MAP_TAB);
+  sh.appendRow(HIBARAI_MAP_HEAD);
+  sh.setFrozenRows(1);
+  const seed = [
+    ['るな', 'P.森月.るな', '日払い', ''],
+    ['みな', 'P.高森．みな', '日払い', ''],
+    ['けいこ', 'P.樋口景子.けいこ', '日払い', ''],
+    ['あいり', 'P.照内あいり.さりな', '日払い', ''],
+    ['爪堀あいり', 'P.照内あいり.さりな', '日払い', ''],
+    ['紙さりな', 'P.照内あいり.さりな', '日払い', 'OCR誤読(派さりな)'],
+    ['にな', 'P.サナダハヤシジョバンナヨシエ.にな', '日払い', ''],
+    ['派遣にな', 'P.サナダハヤシジョバンナヨシエ.にな', '日払い', ''],
+    ['派みく', 'P.小倉美久.優華.みく', '日払い', ''],
+    ['さくら', 'P.山内絢絵.さくら.ゆず', '日払い', ''],
+    ['ゆず', 'P.山内絢絵.さくら.ゆず', '日払い', ''],
+    ['派ゆず', 'P.山内絢絵.さくら.ゆず', '日払い', ''],
+    ['派遣さくら', 'P.山内絢絵.さくら.ゆず', '日払い', ''],
+    ['派みづき', 'P.鈴木那保.みつき', '日払い', ''],
+    ['体市原', 'いちはら黒服体験', '日払い', ''],
+    ['体ちな', 'ちな', '日払い', ''],
+    ['サクト', 'さくと', '日払い', ''],
+    ['松田朔音', 'さくと', '日払い', '本名署名'],
+    ['松田朔者', 'さくと', '日払い', 'OCR誤読(松田朔音)'],
+    ['鈴木海', '鈴木海', '日払い', ''],
+    ['海', '鈴木海', '日払い', ''],
+    ['ほん', 'ぼん', '日払い', 'OCR誤読(ぼん)'],
+    ['岡柿市', 'ゆき', '日払い', 'OCR誤読(岡柚希)'],
+    ['岡柚希', 'ゆき', '月給', '本名署名'],
+    ['木村絢野', 'りお', '月給', '本名署名'],
+    ['片野希空', 'のあ', '月給', '本名署名'],
+    ['丹橋有加', 'ゆうか', '月給', '本名署名'],
+    ['伊禮雅美', 'みれい', '月給', '本名署名'],
+    ['渡邊和衣', 'かえで', '月給', '本名署名'],
+    ['小山翔子', '', '月給', '本名署名・源氏名未確認']
+  ];
+  sh.getRange(2, 1, seed.length, HIBARAI_MAP_HEAD.length).setValues(seed);
+  return sh;
+}
+
+// 受領書表記 → { trust, kubun, memo }
+function hibaraiNameMap_(ss) {
+  const sh = ensureHibaraiMapSheet_(ss);
+  const map = {};
+  if (sh.getLastRow() < 2) return map;
+  sh.getRange(2, 1, sh.getLastRow() - 1, HIBARAI_MAP_HEAD.length).getValues().forEach(function (r) {
+    const k = hbKey_(r[0]); if (!k) return;
+    map[k] = { trust: String(r[1] || '').trim(), kubun: String(r[2] || '').trim() || '日払い', memo: String(r[3] || '').trim() };
+  });
+  return map;
+}
+
+// 給与受領一覧に載っている支給額。日払い記録に紛れ込んだ月給受領書の判定に使う（額は端数まで一致する）
+function kyuyoReceiptAmounts_(ss) {
+  const sh = ss.getSheetByName('給与受領一覧');
+  const set = {};
+  if (!sh || sh.getLastRow() < 1) return set;
+  sh.getDataRange().getValues().forEach(function (r) {
+    const a = Number(r[2]) || 0; if (a > 0) set[a] = String(r[1] || '').trim();
+  });
+  return set;
+}
+
+// 日払い記録シートから対象月(yyyy-MM)の行を取り出す
+function hibaraiOcrRows_(ss, ym) {
+  const sh = ss.getSheetByName('日払い記録');
+  if (!sh || sh.getLastRow() < 2) return [];
+  const vals = sh.getDataRange().getValues();
+  const h = vals[0].map(String);
+  // ⚠️見出しが崩れていても黙って0にしないこと（indexOf=-1 → r[-1]=undefined → 0 で金額が消える）。
+  //   日払い記録の列順は appendDailyPayRecord_ のHDR固定なので、見つからなければ位置で拾う。
+  const pick = function (name, fallback) { const i = h.indexOf(name); return i >= 0 ? i : fallback; };
+  const iName = pick('受取人', 1), iAmt = pick('伝票金額', 2), iNote = pick('但し書き', 5), iImg = pick('画像リンク', 8);
+  const out = [];
+  for (let i = 1; i < vals.length; i++) {
+    const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (d.slice(0, 7) !== ym) continue;
+    out.push({
+      d: d, rowIdx: i + 1, src: 'OCR',
+      name: String(iName >= 0 ? vals[i][iName] : '').trim(),
+      amt: Number(iAmt >= 0 ? vals[i][iAmt] : 0) || 0,
+      note: String(iNote >= 0 ? vals[i][iNote] : '').trim(),
+      img: String(iImg >= 0 ? vals[i][iImg] : '').trim(),
+      cat: '日払い'
+    });
+  }
+  return out;
+}
+
+// 現金管理(閉店チェック)の伝票明細JSONから対象月の日払い/給与行を取り出す
+function hibaraiCashRows_(ss, ym) {
+  const sh = ss.getSheetByName(CASH_CHECK_TAB);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const vals = sh.getDataRange().getValues();
+  const iJson = vals[0].map(String).indexOf('伝票明細JSON');
+  if (iJson < 0) return [];
+  const out = [];
+  for (let i = 1; i < vals.length; i++) {
+    const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (d.slice(0, 7) !== ym) continue;
+    let arr = null;
+    try { arr = JSON.parse(String(vals[i][iJson] || '[]')); } catch (e) { arr = null; }
+    if (!Array.isArray(arr)) continue;
+    arr.forEach(function (x) {
+      const cat = String((x && x.category) || '');
+      if (!/日払|給与/.test(cat)) return;
+      if (x && x.include === false) return;
+      out.push({
+        d: d, rowIdx: i + 1, src: 'CASH',
+        name: String((x && x.payee) || '').trim(),
+        amt: Number((x && x.amount) || 0) || 0,
+        note: '', img: String((x && x.imageUrl) || ''), cat: cat
+      });
+    });
+  }
+  return out;
+}
+
+// 同じ日の OCR行 と 現金管理行 を1件にまとめる（同じ伝票を二重に数えないため）
+//   ①名前も金額も一致 ②名前一致・金額違い(=閉店で訂正) ③金額一致・名前違い(=OCRの氏名誤り)
+//   ④残り＝片方の台帳にしか無い
+function hibaraiPairDay_(ocr, cash) {
+  const usedO = {}, out = [];
+  function take(pred) {
+    const res = [];
+    cash.forEach(function (c) {
+      if (c.__done) return;
+      for (let i = 0; i < ocr.length; i++) {
+        if (usedO[i]) continue;
+        if (pred(c, ocr[i])) { usedO[i] = true; c.__done = true; res.push({ c: c, o: ocr[i] }); return; }
+      }
+    });
+    return res;
+  }
+  const eqName = function (a, b) { return hbKey_(a.name) === hbKey_(b.name); };
+  take(function (c, o) { return eqName(c, o) && c.amt === o.amt; }).forEach(function (p) {
+    out.push({ d: p.c.d, name: p.c.name, amt: p.c.amt, cat: p.c.cat, img: p.o.img || p.c.img, flags: [] });
+  });
+  take(function (c, o) { return eqName(c, o) && c.amt !== o.amt; }).forEach(function (p) {
+    out.push({ d: p.c.d, name: p.c.name, amt: p.c.amt, cat: p.c.cat, img: p.o.img || p.c.img,
+      flags: ['金額不一致（受領書OCR ¥' + p.o.amt.toLocaleString() + ' → 閉店チェック ¥' + p.c.amt.toLocaleString() + '）'] });
+  });
+  take(function (c, o) { return c.amt === o.amt; }).forEach(function (p) {
+    out.push({ d: p.c.d, name: p.c.name || p.o.name, amt: p.c.amt, cat: p.c.cat, img: p.o.img || p.c.img,
+      flags: ['受取人が不一致（受領書「' + (p.o.name || '空欄') + '」／閉店チェック「' + (p.c.name || '空欄') + '」）'] });
+  });
+  cash.forEach(function (c) {
+    if (c.__done) return;
+    out.push({ d: c.d, name: c.name, amt: c.amt, cat: c.cat, img: c.img, flags: ['閉店チェックのみ（受領書の記録なし）'] });
+  });
+  ocr.forEach(function (o, i) {
+    if (usedO[i]) return;
+    out.push({ d: o.d, name: o.name, amt: o.amt, cat: o.cat, img: o.img, note: o.note, flags: ['受領書のみ（閉店チェックに未計上）'] });
+  });
+  return out;
+}
+
+// ── 本体: 指定月の 伝票 × TRUST日払い 照合 ─────────────────────────────
+function hibaraiRecon_(ss, month) {
+  const tsh = ss.getSheetByName(TRUST_TAB);
+  const monthsSet = {};
+  if (tsh && tsh.getLastRow() >= 2) {
+    tsh.getRange(2, 1, tsh.getLastRow() - 1, 1).getValues().forEach(function (r) { const m = mStr_(r[0]); if (m) monthsSet[m] = true; });
+  }
+  const months = Object.keys(monthsSet).sort().reverse();
+  const req = monthKey_(month);
+  const mSel = (req && monthsSet[req]) ? req : (months[0] || '');
+  if (!mSel) return { ok: false, error: 'TRUST報酬シートに月データがありません。先に📥TRUST取込を行ってください' };
+  const ym = mSel.replace('/', '-');
+
+  // TRUST側の当月の日払い（先に読む＝名寄せ不要な自明の名前を判定するため）
+  const trust = {};
+  if (tsh && tsh.getLastRow() >= 2) {
+    const tv = tsh.getDataRange().getValues();
+    let iH = tv[0].map(String).indexOf('日払');
+    if (iH < 0) iH = 21;   // 本番の見出し行が崩れている場合の保険（TRUST_HEADの固定位置）
+    for (let i = 1; i < tv.length; i++) {
+      if (mStr_(tv[i][0]) !== mSel) continue;
+      const nm = String(tv[i][1] || '').trim(); if (!nm) continue;
+      trust[nm] = (trust[nm] || 0) + (Number(tv[i][iH]) || 0);
+    }
+  }
+
+  const map = hibaraiNameMap_(ss);
+  const kyuyoAmt = kyuyoReceiptAmounts_(ss);
+  const days = {};
+  hibaraiOcrRows_(ss, ym).forEach(function (x) { (days[x.d] = days[x.d] || { o: [], c: [] }).o.push(x); });
+  hibaraiCashRows_(ss, ym).forEach(function (x) { (days[x.d] = days[x.d] || { o: [], c: [] }).c.push(x); });
+  let slips = [];
+  Object.keys(days).sort().forEach(function (d) { slips = slips.concat(hibaraiPairDay_(days[d].o, days[d].c)); });
+
+  const ledger = {}, detail = {}, excluded = [], unmapped = {}, issues = [];
+  slips.forEach(function (s) {
+    const k = hbKey_(s.name);
+    const m = k ? map[k] : null;
+    const isKyuyoCat = /給与/.test(s.cat || '');
+    const isKyuyoAmt = !!kyuyoAmt[s.amt];
+    if ((m && m.kubun === '月給') || isKyuyoCat || isKyuyoAmt) {
+      excluded.push({ d: s.d, name: s.name, amt: s.amt, img: s.img,
+        why: isKyuyoCat ? '閉店チェックで「給与 一部払い」' : ((m && m.kubun === '月給') ? '名寄せで「月給」指定' : '給与受領一覧と同額（月給受領書の疑い）') });
+      return;
+    }
+    if (m && m.kubun === '除外') { excluded.push({ d: s.d, name: s.name, amt: s.amt, img: s.img, why: '名寄せで「除外」指定' }); return; }
+    if (!k) issues.push({ d: s.d, amt: s.amt, name: '', kind: '受取人が空欄', msg: '署名を読み取れていない伝票。誰の日払いか特定できません', img: s.img });
+    s.flags.forEach(function (f) { issues.push({ d: s.d, amt: s.amt, name: s.name, kind: '台帳のズレ', msg: f, img: s.img }); });
+    const t = (m && m.trust) ? m.trust : (k ? s.name.trim() : '(受取人不明)');
+    // 名寄せが要るのは「TRUSTに同名の行が無い」表記だけ（自分の名前がそのままTRUSTに在る人は登録不要）
+    if (k && !m && trust[s.name.trim()] == null) unmapped[k] = (unmapped[k] || 0) + s.amt;
+    ledger[t] = (ledger[t] || 0) + s.amt;
+    (detail[t] = detail[t] || []).push({ d: s.d, amt: s.amt, name: s.name, flags: s.flags, img: s.img });
+  });
+
+  const names = {};
+  Object.keys(ledger).forEach(function (n) { names[n] = true; });
+  Object.keys(trust).forEach(function (n) { names[n] = true; });
+  const rows = Object.keys(names).map(function (n) {
+    return { name: n, ledger: ledger[n] || 0, trust: trust[n] || 0, diff: (ledger[n] || 0) - (trust[n] || 0),
+      inTrust: trust[n] != null, detail: (detail[n] || []).sort(function (a, b) { return a.d < b.d ? -1 : 1; }) };
+  }).filter(function (r) { return r.ledger || r.trust; })
+    .sort(function (a, b) { return b.diff - a.diff; });
+
+  const tot = rows.reduce(function (a, r) { a.ledger += r.ledger; a.trust += r.trust; return a; }, { ledger: 0, trust: 0 });
+  tot.diff = tot.ledger - tot.trust;
+  // 二重払いリスク＝伝票の方が多く、かつその人がTRUSTに居る（＝給与の支払対象になっている）
+  tot.risk = rows.filter(function (r) { return r.inTrust && r.diff > 0; }).reduce(function (s, r) { return s + r.diff; }, 0);
+  // TRUSTに行が無い相手への支払い（給与計算に乗らない＝別ルート精算かどうかの確認が要る）
+  tot.noTrustRow = rows.filter(function (r) { return !r.inTrust; }).reduce(function (s, r) { return s + r.ledger; }, 0);
+
+  // 伝票が1件も無い営業日＝そもそも監査できない日
+  const bill = ss.getSheetByName('伝票');
+  const openDays = {}, ledgerDays = {};
+  slips.forEach(function (s) { ledgerDays[s.d] = true; });
+  if (bill && bill.getLastRow() >= 2) {
+    bill.getRange(2, 1, bill.getLastRow() - 1, 1).getValues().forEach(function (r) {
+      const d = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim().replace(/\//g, '-');
+      if (d.slice(0, 7) === ym) openDays[d] = true;
+    });
+  }
+  const missingDays = Object.keys(openDays).filter(function (d) { return !ledgerDays[d]; }).sort();
+
+  return {
+    ok: true, month: mSel, months: months, rows: rows, totals: tot,
+    issues: issues.sort(function (a, b) { return a.d < b.d ? -1 : 1; }),
+    excluded: excluded.sort(function (a, b) { return a.d < b.d ? -1 : 1; }),
+    unmapped: Object.keys(unmapped).map(function (k) { return { name: k, amt: unmapped[k] }; }).sort(function (a, b) { return b.amt - a.amt; }),
+    missingDays: missingDays, slipCount: slips.length
+  };
+}
+
+// 管理コンソール: 💴 日払い照合（読み取り専用・金額は一切書き換えない）
+function adminHibaraiRecon(userId, month) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  try { return hibaraiRecon_(getOrOpenSS_(), month); }
+  catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+}
+
 function adminGetPayrollDetail(userId, month) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
   return payrollDetail_(getOrOpenSS_(), month);
