@@ -1774,6 +1774,73 @@ function renderHomeMid(){
     +'</div>';
   return h;
 }
+/* 🔢 TRUST入力の画面（締めワークフローの「TRUSTに日払い・経費を入力」から開く）
+   ⚠️以前はここから閉店の現金画面へ飛ばしていた＝「TRUSTに入力」と書いてあるのにTRUSTと関係ない画面が出る、
+   という導線の嘘だった（ボス指摘 2026-08-25）。この工程に必要なものだけをここに集める：
+   ①今日TRUSTへ入れる中身（日払い・経費）②TRUSTを開くボタン ③突合結果 or 「入力しました」の申告。
+   自己申告は端末に営業日ごとで持ち、閉店チェックのゲートと共有する（別々に持つと片方だけONになる）。 */
+function trustSelfKey_(){ var d=(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||(cashState&&cashState.dateKey)||''; return 'trustSelf_'+d; }
+function trustSelfGet_(){ try{ return localStorage.getItem(trustSelfKey_())==='1'; }catch(e){ return false; } }
+function trustSelfSet_(v){ try{ localStorage.setItem(trustSelfKey_(), v?'1':'0'); }catch(e){} if(cashState) cashState.trustConfirmed=!!v; }
+
+function openTrustEntry(){
+  closeMenu();
+  showSheet('🔢 TRUSTに入力', trustEntryHtml(), false);
+}
+function trustEntryHtml(){
+  var F=CLOSE_FLOW||{}, all=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0;});
+  var hib=all.filter(function(x){return /日払/.test(String(x.category||''));});
+  var kei=all.filter(function(x){return !/日払/.test(String(x.category||''));});
+  var sum=function(a){ return a.reduce(function(t,x){return t+Number(x.amount||0);},0); };
+  var t=F.gate&&F.gate.today;
+  var rows=function(list,empty){
+    if(!list.length) return '<div style="font-size:12px;color:var(--dim);padding:4px 0">'+empty+'</div>';
+    return list.map(function(x){
+      var nm=String(x.payee||'').trim();
+      return '<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--line2)">'
+        +'<span style="flex:1;font-size:13px;color:'+(nm?'var(--txt)':'#ff9a9a')+'">'+esc(nm||'⚠️ 受取人が空欄')+'</span>'
+        +'<span style="font-weight:800;color:var(--gold)">¥'+Number(x.amount||0).toLocaleString()+'</span></div>';
+    }).join('');
+  };
+  var h='<div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px">'
+    +'今日ぶんを <b style="color:#ffcf7a">TRUST</b> に入力してください。下は軍師が持っている伝票＝<b>これと同じ額</b>をTRUSTに入れます。</div>';
+  h+='<div class="flabel">💴 日払い　<span style="color:var(--gold)">計 ¥'+sum(hib).toLocaleString()+'</span>（'+hib.length+'件）</div>'
+    +'<div class="cc-slip">'+rows(hib,'今日の日払いはありません')+'</div>';
+  h+='<div class="flabel">🧾 経費　<span style="color:var(--gold)">計 ¥'+sum(kei).toLocaleString()+'</span>（'+kei.length+'件）</div>'
+    +'<div class="cc-slip">'+rows(kei,'今日の経費はありません')+'</div>';
+  h+='<div class="act pri" style="margin-top:14px" onclick="openTrustSite()">🔗 TRUSTを開く</div>';
+
+  // 突合の状態
+  if(t&&t.hasTrust&&t.matched){
+    h+='<div class="ck-banner ok" style="margin-top:14px">✅ TRUSTと一致しています'+(t.perPerson?'（人別）':'（合計）')
+      +'<div style="font-size:11.5px;color:var(--dim);margin-top:3px">この工程は完了です</div></div>';
+  }else if(t&&t.hasTrust){
+    h+='<div class="ck-banner warn" style="margin-top:14px">⚠️ TRUSTと合っていません'
+      +'<div style="font-size:12px;margin-top:5px;line-height:1.6">'+(t.lines||[]).map(esc).join('<br>')+'</div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-top:5px">TRUSTを直したら「🔄 取り直す」で再確認してください</div></div>'
+      +'<div class="act" style="margin-top:8px" onclick="loadClosingFlow(true);setTimeout(trustEntryRefresh_,1200)">🔄 取り直す</div>';
+  }else{
+    var on=trustSelfGet_();
+    h+='<div style="border:2px solid '+(on?'#3ea06a':'#e05050')+';background:'+(on?'rgba(62,160,106,.12)':'rgba(224,80,80,.10)')+';border-radius:12px;padding:12px 14px;margin-top:14px">'
+      +'<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer">'
+      +'<input type="checkbox" '+(on?'checked':'')+' style="width:22px;height:22px;margin-top:1px;flex:0 0 auto;accent-color:#3ea06a" onchange="trustSelfSet_(this.checked);trustEntryRefresh_()">'
+      +'<span style="font-size:14.5px;font-weight:700;color:var(--txt);line-height:1.45">TRUSTに入力しました'
+      +'<div style="font-size:11.5px;font-weight:400;color:var(--dim);margin-top:3px">TRUSTの数字はまだ取り込めていません。今夜はこの申告で進めますが、<b style="color:#ffcf7a">翌日の取り込みで必ず突き合わせます</b>（合わなければ翌日の閉店が止まります）。</div></span>'
+      +'</label></div>';
+  }
+  h+='<div class="act" style="margin-top:10px" onclick="closeSheet()">閉じる</div>';
+  return h;
+}
+function trustEntryRefresh_(){
+  var b=document.getElementById('sheetBody'); if(b)b.innerHTML=trustEntryHtml();
+  if(viewMode==='home')renderHome();
+}
+/* TRUSTは外部システム（別オリジン）。軍師からは開くだけ＝中身は触らない。 */
+function openTrustSite(){
+  try{ window.open('https://admin.trust-operation.com/','_blank','noopener'); }
+  catch(e){ if(typeof toast==='function')toast('TRUSTを開けませんでした',true); }
+}
+
 /* --- 🌙 締めワークフロー（閉店の入口をここ1つにする） ------------------------
    ボス指示 2026-08-25:「入口を一箇所に。順番が多少変わっても、締めが全部完了しないと帰れない」。
    これまで閉店の作業はランチャーが4つ並ぶだけで、チェックは端末のlocalStorage＝実態と無関係だった。
@@ -1840,13 +1907,17 @@ function cfSteps_(){
   var t=gate&&gate.today;
   var trustHit=!!(t&&t.hasTrust&&t.matched);
   var trustBad=!!(t&&t.hasTrust&&!t.matched);
-  var trustOk=trustHit||(submitted&&!trustBad);
+  /* ⚠️自己申告(trustSelfGet_)も「この工程は終わった」に数える。黒服は送信より先に入力してチェックする＝
+     送信を条件にすると、やったのに❌のままで「まだ帰れません」と言われる（実測で踏んだ）。 */
+  var selfOk=trustSelfGet_();
+  var trustOk=trustHit||((submitted||selfOk)&&!trustBad);
   var trustS;
   if(trustBad) trustS=(t.lines||[]).join(' / ')||'日払いが伝票とTRUSTで合っていません';
   else if(trustHit) trustS='日払いが伝票と一致'+(t.perPerson?'（人別）':'（合計）');
   else if(submitted) trustS='入力済みとして送信しました（TRUSTを取り込めていないので翌日に照合します）';
-  else trustS='TRUSTに入力したら、💰の閉店チェックで「入力しました」にチェック';
-  S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openCashCheck()'});
+  else if(selfOk) trustS='入力したと申告済み（TRUSTを取り込めていないので翌日に照合します）';
+  else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
+  S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
   // ④⑤ 手作業（端末チェック）
   S.push({id:'okuri',em:'🚗',t:'送りを確定する',s:'本日の送りを締める',state:homeChecks()['okuri']?'done':'todo',act:'openOkuriManager()',manual:true});
   S.push({id:'safe', em:'🔐',t:'金庫へ収納・出金確認',s:'残金の収納と臨時出金',state:homeChecks()['safe']?'done':'todo',act:'openSafeWithdrawal()',manual:true});
@@ -7450,7 +7521,7 @@ function openCashCheck(){
 }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
-  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:false};
+  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
   renderCashCheck();
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
   CC_GATE=null; CC_GATE_ERR=''; ccGateLoad();   // 🔒 締めの条件（TRUST突合・過去の未照合日・受取人の候補）
@@ -7641,7 +7712,7 @@ function ccGateHtml(){
       +'<div style="flex:1"><div style="font-size:13.5px;font-weight:700;color:'+(c.ok?'var(--txt)':'#ffcf7a')+'">'+c.label+'</div>';
     if(c.detail) h+='<div style="font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.55">'+c.detail+'</div>';
     if(c.selfDeclare) h+='<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer">'
-      +'<input type="checkbox" '+(cashState&&cashState.trustConfirmed?'checked':'')+' style="width:20px;height:20px;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;ccGateRefresh()">'
+      +'<input type="checkbox" '+(cashState&&cashState.trustConfirmed?'checked':'')+' style="width:20px;height:20px;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;trustSelfSet_(this.checked);ccGateRefresh()">'
       +'<span style="font-size:12.5px;color:var(--txt)">TRUSTに入力しました（今夜は自己申告で通します）</span></label>';
     if(c.key==='trust') h+='<div style="margin-top:6px"><button class="bm-btn sm" onclick="ccGateLoad()">🔄 TRUSTを取り直す</button></div>';
     return h+'</div></div>';
