@@ -2833,7 +2833,11 @@ function adminGetKotsuPreview(userId, month) {
 // 通常は新バック方式（倍率10/15/20% or 固定率）。設定した来店日レンジの担当売上ぶんだけ率を上書き（既定30%）。
 // 分割の正はあくまでTRUST月合計「担当小計」。伝票シート(TRUST由来・日別担当売上)で比率だけ出し、月合計へ掛けるのでズレない（案A）。
 var BIRTHDAY_BACK_TAB  = '誕生日バック';
-var BIRTHDAY_BACK_HEAD = ['月', '名前', '開始日', '終了日', '率(%)', 'ステータス', '申請日時', '承認日時', '差戻理由'];
+var BIRTHDAY_BACK_HEAD = ['月', '名前', '開始日', '終了日', '率(%)', 'ステータス', '申請日時', '承認日時', '差戻理由',
+  '支給月', '差額', '算定日時', '算定根拠'];
+// 🎂遡及（過去月に誕生日バックを後付けし、差額を「次の給与」で払う）用の列。
+// ⚠️『支給月』が入っている行は"遡及行"＝対象月(A列)の明細には効かせない（既に払った月の額を動かさないため）。
+// 『差額』は起票時に計算して凍結する（毎回再計算しない）。伝票が後から動いても渡した額が変わらないようにするため。
 // キャスト申請フロー用ステータス。空欄＝旧データ（管理者直接設定）＝承認済み扱い（給与に効く）
 var BB_STATUS = { APPROVED: '承認済', PENDING: '申請中', SENTBACK: '差戻' };
 
@@ -2868,7 +2872,11 @@ function upsertBirthdayBackRow_(sh, cols, mk, name, start, end, rate, status, ex
   var rowNum = (found >= 0) ? found + 1 : sh.getLastRow() + 1;
   function setC(colName, val) { var c = cols[colName]; if (c != null && c >= 0 && val !== undefined) sh.getRange(rowNum, c + 1).setValue(val); }
   setC('月', mk); setC('名前', name); setC('開始日', start); setC('終了日', end); setC('率(%)', rate); setC('ステータス', status);
-  if (extra) { setC('申請日時', extra.applied); setC('承認日時', extra.approved); setC('差戻理由', extra.reason); }
+  if (extra) {
+    setC('申請日時', extra.applied); setC('承認日時', extra.approved); setC('差戻理由', extra.reason);
+    // 🎂遡及用（通常の設定からは undefined で来る＝setC が触らないので既存行は汚れない）
+    setC('支給月', extra.payMonth); setC('差額', extra.diff); setC('算定日時', extra.calcedAt); setC('算定根拠', extra.basis);
+  }
   return rowNum;
 }
 // 指定キャストの指定ステータス行を全削除（下から）。statuses=['申請中','差戻']等
@@ -2984,10 +2992,12 @@ function getBirthdayBackMap_(ss, monthKey) {
   const rows = sh.getDataRange().getValues();
   const h = rows[0].map(String);
   const ci = function (n) { return h.indexOf(n); };
-  const iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)'), iSt = ci('ステータス');
+  const iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)'), iSt = ci('ステータス'), iPay = ci('支給月');
   const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== monthKey) continue;
+    // 遡及行（支給月あり）はその月の明細を動かさない＝差額は支給月側で加算する（bdayRetroTotals_）
+    if (iPay >= 0 && String(rows[i][iPay] || '').trim()) continue;
     // 給与に効くのは承認済みのみ（申請中/差戻は無視）。ステータス空欄＝旧データ（管理者直接設定）＝承認済み扱い
     if (iSt >= 0) { const st = String(rows[i][iSt] || '').trim(); if (st && st !== BB_STATUS.APPROVED) continue; }
     const nm = normalizeName_(String(rows[i][1]).trim());
@@ -3050,6 +3060,227 @@ function mkShift_(mk, delta) {
   while (m < 1) { m += 12; y--; }
   while (m > 12) { m -= 12; y++; }
   return y + '/' + ('0' + m).slice(-2);
+}
+
+// ── 🎂誕生日バックの遡及（過去月に後付けし、差額を「次の給与」で払う） ──────────────────────
+// 設計（ボス確定 2026-08-25）:
+//   ①対象月の明細は据え置き（既に払った額を動かさない）→ 遡及行は getBirthdayBackMap_ から除外される
+//   ②差額は自動計算 ③起票できるのは管理者のみ
+//   ④差額は起票時に凍結して『差額』列へ書く。給与側は足すだけで再計算しない
+//     （毎回計算し直すと、伝票が後から動いた時に"もう渡した額"が勝手に変わる）
+// 差額＝その月の新バックを「誕生日バックあり」「なし」で二度計算した差分。課税支給に直加算＝源泉はかかる。
+
+// 指定月×キャストの TRUST報酬行を引く（無ければ null）。g(見出し名) アクセサを返す。
+function bdayRetroSrcRow_(ss, srcMonth, nmNorm) {
+  const sh = ss.getSheetByName(TRUST_TAB);
+  if (!sh || sh.getLastRow() < 2) return null;
+  const rows = sh.getDataRange().getValues();
+  const hdrs = rows[0].map(String);
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) !== srcMonth) continue;
+    if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+    const r = rows[i];
+    return function (h) { const j = hdrs.indexOf(h); return j >= 0 ? (Number(r[j]) || 0) : 0; };
+  }
+  return null;
+}
+
+// 遡及差額を算定する（プレビューにも確定にも同じ関数を使う＝画面の数字と保存される数字が必ず一致）
+function bdayRetroCalc_(ss, srcMonth, name, start, end, rate) {
+  const nmNorm = normalizeName_(String(name || '').trim());
+  const g = bdayRetroSrcRow_(ss, srcMonth, nmNorm);
+  if (!g) return { ok: false, error: srcMonth + ' のTRUST報酬に ' + name + ' の行がありません（その月の取込が必要です）' };
+  const manual = getKyuyoManual_(ss, srcMonth)[nmNorm] || {};
+  const fixed  = getCastBackRuleMap_(ss)[nmNorm];
+  // 対象月の条件を再現（交通費・立替・紹介料は新バックに影響しないので渡さない）
+  const base = { fixedRate: (fixed != null ? fixed : null), adjust: manual.adjust || 0 };
+  const bwr = birthdayWeekRatio_(ss, name, srcMonth, start, end);
+  if (!(bwr.ratio > 0)) {
+    return { ok: true, diff: 0, ratio: 0, monthSum: bwr.monthSum, bdaySum: bwr.bdaySum,
+             note: 'この期間に ' + name + ' が主担当の伝票がありません（差額¥0）' };
+  }
+  const before = newBackCalc_(g, base);
+  const after  = newBackCalc_(g, Object.assign({}, base, {
+    bday: { ratio: bwr.ratio, rate: Number(rate) || 30, start: start, end: end }
+  }));
+  const diff = after.newBack - before.newBack;
+  return {
+    ok: true, diff: diff,
+    ratio: bwr.ratio, monthSum: bwr.monthSum, bdaySum: bwr.bdaySum,
+    tanto: before.tanto, normalRate: before.ratePct, bdayRate: Number(rate) || 30,
+    newBackBefore: before.newBack, newBackAfter: after.newBack,
+    tantoBday: (after.bday && after.bday.tantoBday) || 0
+  };
+}
+
+// 算定根拠を1行の文字列にする（シートに残す監査用）
+function bdayRetroBasis_(srcMonth, c) {
+  return srcMonth + ' 担当小計' + c.tanto + ' / 誕生日週' + c.tantoBday
+    + ' (伝票比率' + Math.round(c.ratio * 1000) / 10 + '%) / 通常' + c.normalRate + '%→' + c.bdayRate + '%'
+    + ' / 新バック ' + c.newBackBefore + '→' + c.newBackAfter;
+}
+
+// 支給月に計上する遡及差額を集計 { 正規化名: {total, items:[{srcMonth,start,end,rate,diff}]} }
+function bdayRetroTotals_(ss, payMonth) {
+  const out = {};
+  const sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!sh || sh.getLastRow() < 2 || !payMonth) return out;
+  const rows = sh.getDataRange().getValues();
+  const h = rows[0].map(String);
+  const ci = function (n) { return h.indexOf(n); };
+  const iPay = ci('支給月'), iDiff = ci('差額'), iSt = ci('ステータス');
+  const iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)');
+  if (iPay < 0 || iDiff < 0) return out;
+  const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+  for (let i = 1; i < rows.length; i++) {
+    if (monthKey_(String(rows[i][iPay] || '').trim()) !== payMonth) continue;
+    if (iSt >= 0) { const st = String(rows[i][iSt] || '').trim(); if (st && st !== BB_STATUS.APPROVED) continue; }
+    const nm = normalizeName_(String(rows[i][1]).trim());
+    if (!nm) continue;
+    const diff = Number(rows[i][iDiff]) || 0;
+    if (!diff) continue;
+    if (!out[nm]) out[nm] = { total: 0, items: [] };
+    out[nm].total += diff;
+    out[nm].items.push({
+      srcMonth: mStr_(rows[i][0]), start: iS >= 0 ? toD(rows[i][iS]) : '', end: iE >= 0 ? toD(rows[i][iE]) : '',
+      rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0, diff: diff
+    });
+  }
+  return out;
+}
+
+// ── 🎂遡及の管理者API（起票できるのは管理者のみ・ボス確定） ────────────────────────────
+// 既存の(対象月,名前)行が"通常の誕生日バック"なら遡及に化けさせない。既にその月の明細に効いているので、
+// 上書きすると対象月の額が動く＝据え置きの約束を破る。
+function bdayRetroExistingKind_(ss, srcMonth, nmNorm) {
+  const sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+  if (!sh || sh.getLastRow() < 2) return 'none';
+  const rows = sh.getDataRange().getValues();
+  const iPay = rows[0].map(String).indexOf('支給月');
+  for (let i = 1; i < rows.length; i++) {
+    if (mStr_(rows[i][0]) !== srcMonth) continue;
+    if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+    return (iPay >= 0 && String(rows[i][iPay] || '').trim()) ? 'retro' : 'normal';
+  }
+  return 'none';
+}
+
+// 遡及差額のプレビュー（保存しない）。月をまたぐレンジは月ごとに分割して各月ぶんを出す。
+function adminPreviewBdayRetro(userId, name, start, end, rate, payMonth) {
+  try {
+    if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+    const nm = String(name || '').trim();
+    if (!nm) return { ok: false, error: 'キャストを選んでください' };
+    const s = String(start || '').trim(), e = String(end || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(e)) return { ok: false, error: '日付形式が不正です' };
+    if (s > e) return { ok: false, error: '開始日が終了日より後です' };
+    const pm = monthKey_(payMonth);
+    if (!/^\d{4}\/\d{2}$/.test(pm)) return { ok: false, error: '支給月が不正です' };
+    const ss = getOrOpenSS_();
+    const nmNorm = normalizeName_(nm);
+    const rt = (rate === '' || rate == null || isNaN(Number(rate))) ? 30 : Number(rate);
+    const segs = splitRangeByMonth_(s, e);
+    const items = [];
+    let total = 0;
+    for (let i = 0; i < segs.length; i++) {
+      const seg = segs[i];
+      if (seg.mk >= pm) return { ok: false, error: '支給月は対象月より後にしてください（対象 ' + seg.mk + ' / 支給 ' + pm + '）' };
+      const kind = bdayRetroExistingKind_(ss, seg.mk, nmNorm);
+      if (kind === 'normal') return { ok: false, error: seg.mk + ' には通常の誕生日バック設定が既にあります（その月の明細に反映済み）。遡及で二重に付けられません。' };
+      const c = bdayRetroCalc_(ss, seg.mk, nm, seg.start, seg.end, rt);
+      if (c.ok === false) return c;
+      total += c.diff;
+      items.push({ srcMonth: seg.mk, start: seg.start, end: seg.end, rate: rt, diff: c.diff,
+                   tanto: c.tanto || 0, tantoBday: c.tantoBday || 0, ratio: c.ratio || 0,
+                   normalRate: c.normalRate || 0, newBackBefore: c.newBackBefore || 0, newBackAfter: c.newBackAfter || 0,
+                   note: c.note || '', replace: kind === 'retro' });
+    }
+    return { ok: true, name: nm, payMonth: pm, rate: rt, total: total, items: items };
+  } catch (err) {
+    return { ok: false, error: '遡及プレビューエラー: ' + String((err && err.message) || err) };
+  }
+}
+
+// 遡及差額を確定＝算定した額を『差額』へ凍結して書き込む。以後この額は再計算されない。
+function adminCommitBdayRetro(userId, name, start, end, rate, payMonth) {
+  const pv = adminPreviewBdayRetro(userId, name, start, end, rate, payMonth);
+  if (pv.ok === false) return pv;
+  if (!pv.total) return { ok: false, error: '差額が¥0です（この期間に主担当の伝票がありません）。計上しません。' };
+  try {
+    const ss = getOrOpenSS_();
+    const sh = ensureBirthdayBackSheet_(ss);
+    const cols = bbCols_(sh);
+    const now = bbNow_();
+    const who = getStaffName(userId);
+    pv.items.forEach(function (it) {
+      upsertBirthdayBackRow_(sh, cols, it.srcMonth, pv.name, it.start, it.end, it.rate, BB_STATUS.APPROVED, {
+        approved: now, reason: '',
+        payMonth: pv.payMonth, diff: it.diff, calcedAt: now,
+        basis: bdayRetroBasis_(it.srcMonth, { tanto: it.tanto, tantoBday: it.tantoBday, ratio: it.ratio,
+                normalRate: it.normalRate, bdayRate: it.rate,
+                newBackBefore: it.newBackBefore, newBackAfter: it.newBackAfter }) + ' / 操作者:' + who
+      });
+    });
+    return { ok: true, name: pv.name, payMonth: pv.payMonth, total: pv.total, count: pv.items.length };
+  } catch (err) {
+    return { ok: false, error: '遡及の保存エラー: ' + String((err && err.message) || err) };
+  }
+}
+
+// 遡及行の一覧（支給月ごとにまとめる）
+function adminListBdayRetro(userId) {
+  try {
+    if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+    const ss = getOrOpenSS_();
+    const sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+    const out = [];
+    if (sh && sh.getLastRow() >= 2) {
+      const rows = sh.getDataRange().getValues();
+      const h = rows[0].map(String);
+      const ci = function (n) { return h.indexOf(n); };
+      const iPay = ci('支給月'), iDiff = ci('差額'), iS = ci('開始日'), iE = ci('終了日'), iR = ci('率(%)'), iB = ci('算定根拠'), iC = ci('算定日時');
+      const toD = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+      if (iPay >= 0) {
+        for (let i = 1; i < rows.length; i++) {
+          const pm = monthKey_(String(rows[i][iPay] || '').trim());
+          if (!pm) continue;
+          out.push({ payMonth: pm, srcMonth: mStr_(rows[i][0]), name: String(rows[i][1]).trim(),
+            start: iS >= 0 ? toD(rows[i][iS]) : '', end: iE >= 0 ? toD(rows[i][iE]) : '',
+            rate: iR >= 0 ? (Number(rows[i][iR]) || 0) : 0, diff: iDiff >= 0 ? (Number(rows[i][iDiff]) || 0) : 0,
+            basis: iB >= 0 ? String(rows[i][iB] || '') : '', calcedAt: iC >= 0 ? String(rows[i][iC] || '') : '' });
+        }
+      }
+    }
+    out.sort(function (a, b) { return (b.payMonth + b.srcMonth).localeCompare(a.payMonth + a.srcMonth); });
+    return { ok: true, rows: out };
+  } catch (err) {
+    return { ok: false, error: '遡及一覧エラー: ' + String((err && err.message) || err) };
+  }
+}
+
+// 遡及行の取消（対象月×キャストの遡及行だけ削除。通常の設定行は消さない）
+function adminDeleteBdayRetro(userId, srcMonth, name) {
+  try {
+    if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+    const ss = getOrOpenSS_();
+    const sh = ss.getSheetByName(BIRTHDAY_BACK_TAB);
+    if (!sh || sh.getLastRow() < 2) return { ok: false, error: 'データがありません' };
+    const mk = monthKey_(srcMonth);
+    const nmNorm = normalizeName_(String(name || '').trim());
+    const rows = sh.getDataRange().getValues();
+    const iPay = rows[0].map(String).indexOf('支給月');
+    if (iPay < 0) return { ok: false, error: '支給月列がありません' };
+    for (let i = rows.length - 1; i >= 1; i--) {
+      if (mStr_(rows[i][0]) !== mk) continue;
+      if (normalizeName_(String(rows[i][1]).trim()) !== nmNorm) continue;
+      if (!String(rows[i][iPay] || '').trim()) continue; // 通常設定は触らない
+      sh.deleteRow(i + 1);
+      return { ok: true, srcMonth: mk, name: name };
+    }
+    return { ok: false, error: '該当する遡及行が見つかりません' };
+  } catch (err) {
+    return { ok: false, error: '遡及の取消エラー: ' + String((err && err.message) || err) };
+  }
 }
 
 // 管理者: 誕生日バック週を設定/更新。start・endどちらか空なら当該キャスト×（表示中の）月の設定を削除。率未指定は既定30%。
@@ -3711,16 +3942,20 @@ function newBackCalc_(g, m) {
   const intro   = m.intro  || 0;
   const nyuten  = m.nyuten || 0;
   const vote    = m.vote   || 0;   // 🏆月間投票賞：入店祝い金と同じく¥1:¥1で課税支給に直加算
+  // 🎂誕生日バックの遡及差額：過去月に後付けした誕生日バックの不足ぶんを、この月の課税支給に直加算する。
+  // 起票時に凍結済みの金額をそのまま足すだけ（ここで再計算しない＝渡した額が後から動かない）。
+  const retro   = m.retro  || 0;
   // 新バックは担当バックの置換。TRUST担当小計>0 の時のみTRUST担当バックを剥がす。
   // 担当小計=0で担当バックだけ残る例外行（手当扱い）は保全する。
   // ⚠️判定はTRUST側の数字で行う（調整後のtantoで判定すると、減算で0に落ちた瞬間に剥がしが止まり課税支給が跳ね上がる）。
   const stripTantoBk = tantoTru > 0 ? tantoBk : 0;
-  const kazei   = gross - stripTantoBk + newBack + nyuten + intro + vote;
+  const kazei   = gross - stripTantoBk + newBack + nyuten + intro + vote + retro;
   const gensen  = Math.floor(kazei * 0.1021);
   const nokori  = kazei - gensen - hibarai - minusT + kotsu; // 🚕交通費は非課税＝源泉の後に加算（日払いの鏡像）
   return {
     bairitu: Math.round(bairitu * 100) / 100, ratePct: ratePct, newBack: newBack,
     fixed: (m.fixedRate != null), intro: intro, nyuten: nyuten, vote: vote, kotsu: kotsu,
+    retro: retro, retroInfo: m.retroInfo || null,   // 🎂遡及差額（内訳＝どの月の何日〜何日ぶんか）
     kazei: kazei, gensen: gensen, nokori: nokori,
     hibarai: hibarai, minusTotal: minusT, tantoBk: tantoBk, jikan: jikan, tanto: tanto, gross: gross,
     tantoTrust: tantoTru, adjust: adjust,   // 調整の内訳（tanto = max(0, tantoTrust + adjust)）
@@ -3836,8 +4071,9 @@ function payrollDetail_(ss, month) {
   const castRule = getCastBackRuleMap_(ss);
   const bdayMap = getBirthdayBackMap_(ss, mSel); // 誕生日バック週設定 { 正規化名: {start,end,rate} }
   const kotsuAuto = computeMonthlyKotsu_(ss, mSel); // 🚕交通費 月次自動集計 { 正規化名: {days,okuriDays,fukuroDays,legCount,oneWay,kotsu} }
+  const retroMap = bdayRetroTotals_(ss, mSel);      // 🎂遡及差額（この月に計上する過去月ぶん・凍結済みの額）
   const list = [];
-  const tot = { jikan: 0, tanto: 0, newBack: 0, backTotal: 0, plusTotal: 0, gross: 0, kazei: 0, gensen: 0, hibarai: 0, okuri: 0, kotsu: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0 };
+  const tot = { jikan: 0, tanto: 0, newBack: 0, backTotal: 0, plusTotal: 0, gross: 0, kazei: 0, gensen: 0, hibarai: 0, okuri: 0, kotsu: 0, minusTotal: 0, net: 0, tatekae: 0, finalPay: 0, retro: 0 };
   for (let i = 1; i < rows.length; i++) {
     if (mStr_(rows[i][0]) !== mSel) continue;
     const g = function (h) { const j = ci(h); return j >= 0 ? (Number(rows[i][j]) || 0) : 0; };
@@ -3851,7 +4087,11 @@ function payrollDetail_(ss, month) {
     const manRow = manual[nmN] || {};
     const kInfo = kotsuAuto[nmN] || null;
     const effKotsu = manRow.kotsuSet ? manRow.kotsu : (kInfo ? kInfo.kotsu : 0);
-    const m = Object.assign({}, manRow, { fixedRate: (castRule[nmN] != null ? castRule[nmN] : null), kotsu: effKotsu });
+    const rr = retroMap[nmN] || null;
+    const m = Object.assign({}, manRow, {
+      fixedRate: (castRule[nmN] != null ? castRule[nmN] : null), kotsu: effKotsu,
+      retro: rr ? rr.total : 0, retroInfo: rr ? rr.items : null   // 🎂遡及差額（課税支給に直加算）
+    });
     // 誕生日バック週: 設定があれば伝票シートから比率を出して率上書きを仕込む（案A・比率方式）
     const bcfg = bdayMap[nmN];
     if (bcfg) {
@@ -3866,6 +4106,7 @@ function payrollDetail_(ss, month) {
       bairitu: nb.bairitu, ratePct: nb.ratePct, fixed: nb.fixed, newBack: nb.newBack,
       bday: nb.bday, // 誕生日バック週の内訳（未設定null）
       intro: nb.intro, nyuten: nb.nyuten,
+      retro: nb.retro, retroInfo: nb.retroInfo,   // 🎂遡及差額と内訳（未計上は0/null）
       yoyakuBk: g('予約バック'), dohanBk: g('同伴バック'),
       drinkBk: g('ドリンクバック'), bottleBk: g('ボトルバック'), foodBk: g('フードバック'),
       plusTotal: g('プラス計'), gross: nb.gross, kazei: nb.kazei,
@@ -3881,7 +4122,7 @@ function payrollDetail_(ss, month) {
     tot.backTotal += rec.newBack; tot.plusTotal += rec.plusTotal; tot.gross += rec.gross;
     tot.kazei += rec.kazei; tot.gensen += rec.gensen; tot.hibarai += rec.hibarai;
     tot.okuri += rec.okuri; tot.kotsu += rec.kotsu; tot.minusTotal += rec.minusTotal; tot.net += rec.net;
-    tot.tatekae += rec.tatekae; tot.finalPay += rec.finalPay;
+    tot.tatekae += rec.tatekae; tot.finalPay += rec.finalPay; tot.retro += rec.retro || 0;
   }
   list.sort(function (a, b) { return b.finalPay - a.finalPay; });
   return { ok: true, month: mSel, months: months, casts: list, totals: tot, method: 'newback', published: !!prop('PAY_PUBLISHED_' + mSel) };
@@ -3911,6 +4152,7 @@ function portalTrustPay_(ss, name, filterMonth) {
   const castFixed = getCastBackRuleMap_(ss)[name]; // 固定率（無ければundefined＝倍率ルール）
   const bdayCache = {}; // 月別 誕生日バック設定キャッシュ { monthKey: {start,end,rate}|null }
   const kotsuCache = {}; // 🚕月別 交通費自動集計キャッシュ（対象外キャストはnull＝シフト/送迎を読まない）
+  const retroCache = {}; // 🎂月別 遡及差額キャッシュ（この月に計上する過去月ぶん）
   const out = {};
   for (let i = 1; i < rows.length; i++) {
     const m = mStr_(rows[i][0]);
@@ -3926,6 +4168,10 @@ function portalTrustPay_(ss, name, filterMonth) {
     if (!(m in kotsuCache)) kotsuCache[m] = (computeMonthlyKotsu_(ss, m, name)[name] || null);
     mm.kotsu = mm.kotsuSet ? mm.kotsu : (kotsuCache[m] ? kotsuCache[m].kotsu : 0);
     // 誕生日バック週: 本人の画面もTRUST数字ではなく分割後で見せる
+    // 🎂遡及差額: 本人の画面にも「◯月分の差額」を出す（黙って課税支給だけ増えると本人が検算できない）
+    if (!(m in retroCache)) retroCache[m] = (bdayRetroTotals_(ss, m)[name] || null);
+    mm.retro = retroCache[m] ? retroCache[m].total : 0;
+    mm.retroInfo = retroCache[m] ? retroCache[m].items : null;
     if (!(m in bdayCache)) bdayCache[m] = getBirthdayBackMap_(ss, m)[name] || null;
     const bcfg = bdayCache[m];
     if (bcfg) {
@@ -3943,7 +4189,8 @@ function portalTrustPay_(ss, name, filterMonth) {
       'ボーナス': g('運営手当'), '送迎手当': g('送迎手当'), '残業代': g('残業代'), '売り半': g('売り半'),
       '新バック': nb.newBack, '倍率': nb.bairitu, 'バック率(%)': nb.ratePct, '__bday': nb.bday, '課税支給': nb.kazei,
       '源泉徴収': nb.gensen, '日払': g('日払'), 'マイナス': g('マイナス計'), '送り代': g('送り代'),
-      '交通費': nb.kotsu, '残り支給額': nb.nokori, '__trust': true
+      '交通費': nb.kotsu, '残り支給額': nb.nokori,
+      '遡及差額': nb.retro, '__retro': nb.retroInfo, '__trust': true
     };
   }
   return out;
