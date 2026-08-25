@@ -1161,6 +1161,7 @@ function handleApiRequest_(body) {
     return broadcastShiftSubmitOpen_();
   }
   if (body.action === 'sendCastSeatRequest') return sendCastSeatRequest_(body);
+  if (body.action === 'cancelCastSeatRequest') return cancelCastSeatRequest_(body);
   if (body.action === 'castCall') return castCall_(body);
   if (body.action === 'getCastSeats') return getCastSeats_(body);
   if (body.action === 'sendPayrollReceipt') return sendPayrollReceipt_(body);
@@ -9176,9 +9177,13 @@ function getCastRequestSheet_() {
   let sh = ss.getSheetByName(CAST_REQUEST_TAB);
   if (!sh) {
     sh = ss.insertSheet(CAST_REQUEST_TAB);
-    sh.appendRow(['日付', '時刻', 'キャスト名', '種別', '対象', 'コメント', 'NG自動反映席', '対応済み']);
+    sh.appendRow(['日付', '時刻', 'キャスト名', '種別', '対象', 'コメント', 'NG自動反映席', '対応済み', '対象予約日', '対象予約行']);
     sh.setFrozenRows(1);
+    return sh;
   }
+  // 9/10列＝「先の予約にも手を挙げられる」ための後付け（2026-08-25）。
+  // ⚠️途中挿入は禁止＝1〜8列目は各所にハードコードされている。末尾追加のみ。
+  if (sh.getLastColumn() < 10) sh.getRange(1, 9, 1, 2).setValues([['対象予約日', '対象予約行']]);
   return sh;
 }
 
@@ -9199,6 +9204,11 @@ function sendCastSeatRequest_(payload) {
   const rawTargets = Array.isArray(payload.targets) ? payload.targets : [];
   if (!storeWide && rawTargets.length === 0) return { ok: false, error: '対象の予約を選択するか、店全体へのリクエストを選んでください' };
   const comment = String(payload.comment || '').trim();
+  // 対象予約日＝「先の予約にも手を挙げられる」ための軸（2026-08-25）。未指定は従来どおり本日扱い＝旧フロントも壊れない。
+  const today = bizDateStr_();
+  const rsvDate = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.rsvDate || '')) ? String(payload.rsvDate) : today;
+  const isToday = (rsvDate === today);
+  const rsvRows = rawTargets.map(t => Number((t && t.rowIdx) || 0)).filter(n => n > 0);
 
   const KF = prop('GROUP_KUROFUKU');
   if (!KF) return { ok: false, error: '黒服グループが設定されていません' };
@@ -9211,7 +9221,8 @@ function sendCastSeatRequest_(payload) {
     const customer = String((t && t.customer) || '').trim();
     const table = String((t && t.table) || '').trim();
     labels.push((time ? time + ' ' : '') + customer + '様' + (table && table !== '未定' ? '（' + table + '）' : ''));
-    if (type === 'NG' && table && table !== '未定') {
+    // ⚠️NGの自動反映は本日分のみ。NGCAST_は席プロパティ＝当日運用で、先の日付を今の席に書くと誤爆する。
+    if (type === 'NG' && isToday && table && table !== '未定') {
       table.split(/[、,]/).forEach(tn => {
         // ⚠️旧実装は ALL_SEATS.label と完全一致で照合していた＝予約の "2F カウンター1"(スペース有り)が
         //   label "2Fカウンター1"(スペース無し)と一致せず、NG席が1件も登録されていなかった（2026-08-13修正）。
@@ -9222,10 +9233,12 @@ function sendCastSeatRequest_(payload) {
   });
 
   const d = new Date();
-  const mm = (d.getMonth() + 1) + '/' + d.getDate();
+  const dp = rsvDate.split('-');
+  const mm = Number(dp[1]) + '/' + Number(dp[2]);
+  const whenLabel = isToday ? '本日(' + mm + ')' : mm + 'の予約';
   const icon = type === 'NG' ? '🚫' : type === 'キャスト希望' ? '✋' : '🙋';
   const typeLabel = type === 'NG' ? 'NG希望' : type === 'キャスト希望' ? '担当キャスト希望' : '着席希望';
-  let msg = '📣【キャストリクエスト・本日(' + mm + ')】\n' + name + 'さんより\n';
+  let msg = '📣【キャストリクエスト・' + whenLabel + '】\n' + name + 'さんより\n';
   if (storeWide) {
     msg += icon + ' 店全体への' + (type === 'NG' ? 'NG希望' : 'リクエスト');
   } else {
@@ -9252,25 +9265,35 @@ function sendCastSeatRequest_(payload) {
   const sh = getCastRequestSheet_();
   const newRow = sh.getLastRow() + 1;
   sh.getRange(newRow, 1, 1, 2).setNumberFormat('@');
-  sh.getRange(newRow, 1, 1, 8).setValues([[bizDateStr_(), Utilities.formatDate(d, TZ, 'HH:mm'), name, type, storeWide ? '店全体' : labels.join(' / '), comment, autoNote, '']]);
+  sh.getRange(newRow, 9, 1, 1).setNumberFormat('@'); // 対象予約日を日付値に化けさせない（[[reference_sheet_date_tostring_trap]]）
+  sh.getRange(newRow, 1, 1, 10).setValues([[today, Utilities.formatDate(d, TZ, 'HH:mm'), name, type, storeWide ? '店全体' : labels.join(' / '), comment, autoNote, '', rsvDate, rsvRows.join(',')]]);
 
-  return { ok: true, ngApplied };
+  return { ok: true, ngApplied, rsvDate };
 }
 
 // IEYAS軍師：本日分のキャストリクエスト一覧を取得（対応済みチェック用）
+// シートのセルは日付値になっている場合がある＝String()すると "Sat Dec 30 1899" が漏れる（[[reference_sheet_date_tostring_trap]]）
+function castReqDateStr_(cell) {
+  if (cell instanceof Date) return Utilities.formatDate(cell, TZ, 'yyyy-MM-dd');
+  return String(cell || '').trim();
+}
+
 function getCastRequestsToday() {
   const sh = getCastRequestSheet_();
   const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
   if (lastRow < 2) return [];
   const today = bizDateStr_();
-  // 追記型＝当日分は末尾。直近500行だけ読む（全履歴スキャン回避）。行番号は startRow 起点で採る。
-  const startRow = Math.max(2, lastRow - 499), numRows = lastRow - startRow + 1;
+  // 追記型＝当日分は末尾。直近1000行だけ読む（全履歴スキャン回避）。行番号は startRow 起点で採る。
+  // ⚠️500→1000に広げた理由＝「先の予約」への立候補は"送信日"に書かれる＝当日には末尾から離れた位置にいる（2026-08-25）。
+  const startRow = Math.max(2, lastRow - 999), numRows = lastRow - startRow + 1;
   const rows = sh.getRange(startRow, 1, numRows, lastCol).getValues();
   const list = [];
   for (let i = 0; i < rows.length; i++) {
-    const cell = rows[i][0];
-    const cellDateStr = (cell instanceof Date) ? Utilities.formatDate(cell, TZ, 'yyyy-MM-dd') : String(cell);
-    if (cellDateStr !== today) continue;
+    const sentStr = castReqDateStr_(rows[i][0]);
+    const tgtStr = (rows[i].length > 8) ? castReqDateStr_(rows[i][8]) : '';
+    // 対象予約日があればそれが正（先の予約への立候補は"その日"に出す）。無い旧行は従来どおり送信日で判定。
+    if ((tgtStr || sentStr) !== today) continue;
+    if (String(rows[i][7]) === '取消') continue;
     const timeCell = rows[i][1];
     const timeStr = (timeCell instanceof Date) ? Utilities.formatDate(timeCell, TZ, 'HH:mm') : String(timeCell);
     list.push({
@@ -9281,10 +9304,80 @@ function getCastRequestsToday() {
       target: String(rows[i][4]),
       comment: String(rows[i][5]),
       ngApplied: String(rows[i][6]),
-      handled: String(rows[i][7]) === '済'
+      handled: String(rows[i][7]) === '済',
+      rsvDate: tgtStr,
+      advance: !!(tgtStr && tgtStr !== sentStr)   // 事前に手を挙げていた分＝軍師で「事前」と分かるように
     });
   }
   return list.reverse();
+}
+
+// ポータル：その日に自分が手を挙げている予約行（=予約シートのrowIdx）の一覧。
+// 予約カードの「✋つきたい」を押下済み表示にするためだけの軽量読み。
+function getMyCastWants_(name, date) {
+  const me = String(name || '').replace(/\s/g, '');
+  if (!me || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return [];
+  const sh = getCastRequestSheet_();
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 10) return [];
+  const startRow = Math.max(2, lastRow - 999), numRows = lastRow - startRow + 1;
+  const rows = sh.getRange(startRow, 1, numRows, lastCol).getValues();
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][3]) !== '希望') continue;
+    if (String(rows[i][7]) === '取消') continue;
+    // ⚠️normalizeName_は内部スペースを消さない（[[reference_name_normalization]]）＝ここは空白全除去で突き合わせる
+    if (String(rows[i][2] || '').replace(/\s/g, '') !== me) continue;
+    const tgt = castReqDateStr_(rows[i][8]) || castReqDateStr_(rows[i][0]);
+    if (tgt !== date) continue;
+    String(rows[i][9] || '').split(',').forEach(function (v) {
+      const n = Number(String(v).trim());
+      if (n > 0 && out.indexOf(n) < 0) out.push(n);
+    });
+  }
+  return out;
+}
+
+// ポータル：自分の「✋つきたい」を取り下げる。誤爆を残すと黒服が古い情報で付け回すため必須。
+// ⚠️取り消せるのは「予約1件だけを対象にした自分の希望」＝席リクエストからまとめて送った複数対象の行は触らない（ラベルの整合が崩れるため）。
+function cancelCastSeatRequest_(payload) {
+  const name = getStaffName(payload.userId);
+  if (!name) return { ok: false, error: '登録されていません。グループLINEで #登録 名前 を送ってください。' };
+  const rowIdx = Number(payload.rowIdx || 0);
+  const date = String(payload.rsvDate || '');
+  if (!rowIdx || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: '対象が不正です' };
+
+  const sh = getCastRequestSheet_();
+  const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 10) return { ok: false, error: '取り消せる希望が見つかりません' };
+  const startRow = Math.max(2, lastRow - 999), numRows = lastRow - startRow + 1;
+  const rows = sh.getRange(startRow, 1, numRows, lastCol).getValues();
+  const me = String(name).replace(/\s/g, '');
+  let canceled = 0, label = '', multi = false;
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][3]) !== '希望') continue;
+    if (String(rows[i][7]) === '取消') continue;
+    if (String(rows[i][2] || '').replace(/\s/g, '') !== me) continue;
+    const tgt = castReqDateStr_(rows[i][8]) || castReqDateStr_(rows[i][0]);
+    if (tgt !== date) continue;
+    const targets = String(rows[i][9] || '').split(',').map(v => Number(String(v).trim())).filter(n => n > 0);
+    if (targets.indexOf(rowIdx) < 0) continue;
+    if (targets.length > 1) { multi = true; continue; }
+    sh.getRange(startRow + i, 8).setValue('取消');
+    if (!label) label = String(rows[i][4] || '');
+    canceled++;
+  }
+  if (!canceled) {
+    return { ok: false, error: multi
+      ? 'この希望は席リクエストからまとめて送った分です。黒服に直接お伝えください'
+      : '取り消せる希望が見つかりません' };
+  }
+  // 一度通知が飛んでいる＝取り下げも伝えないと黒服が古い情報で付け回す
+  try {
+    const KF = prop('GROUP_KUROFUKU');
+    if (KF) push_(KF, '📣【キャストリクエスト・取消】\n' + name + 'さんが着席希望を取り下げました\n🙋 ' + (label || date));
+  } catch (e) { /* 通知が落ちても取消自体は通す */ }
+  return { ok: true, canceled };
 }
 
 // IEYAS軍師：対応済みチェックの切り替え
@@ -10409,6 +10502,7 @@ function handlePortalApi_(e) {
       reservations: reservations,
       requests: getYoyakuRequests_(null),
       casts: getCastNamesForYoyaku_(ss, { withKurofuku: true }), // 担当/同伴/予約キャストに黒服も出す
+      myWants: getMyCastWants_(name, date), // 予約カードの「✋つきたい」押下済み表示用
       memberFeeMap: memberFeeMap });
   }
   if (tab === 'customers') {
