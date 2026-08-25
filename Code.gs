@@ -10545,7 +10545,7 @@ function handlePortalApi_(e) {
   if (tab === 'kyuritsu') {
     const lookupNameK = normalizeName_(isAdmin ? viewAs : name);
     const sinceK = isAdmin ? '' : billTenureCutoff_(userId);
-    const rk = portalKyuritsu_(ss, lookupNameK, month, sinceK);
+    const rk = portalKyuritsu_(ss, lookupNameK, month, sinceK, e.parameter.light === '1');
     return out(Object.assign({ name, isAdmin, viewAs: lookupNameK }, rk));
   }
   // 伝票明細（ライブ取得・所有ガード＋在籍期間ガード）
@@ -17483,7 +17483,11 @@ function kyuritsuNeedSales_(jikan) {
   return Math.ceil(jikan / (KYURITSU_TARGET_ / 100));
 }
 
-function portalKyuritsu_(ss, lookupName, month, sinceDate) {
+// light=true でホームの常設カード用の軽量版（本人の月次＋店全体のみ）。
+//   ⚠️日別は伝票シート(数千行)のフルスキャン＋シフト読みが要る。ホームは毎回開かれる画面なので
+//   そこに載せるとGASの1.9秒の床(reference_gas_performance_floor)に更に積む。カードに要るのは
+//   rate/gap/dayTarget/store.rate だけ＝重い方を丸ごと飛ばす。
+function portalKyuritsu_(ss, lookupName, month, sinceDate, light) {
   const T = KYURITSU_TARGET_, rateT = T / 100;
   const name = normalizeName_(lookupName);
   const nowYmDash = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
@@ -17532,7 +17536,7 @@ function portalKyuritsu_(ss, lookupName, month, sinceDate) {
 
   // ── 日別（伝票＝前日まで確定。出勤したのに売上が付かなかった日も0で出す）──
   const days = [];
-  if (meOut) {
+  if (meOut && !light) {
     const bills = portalGetMyBills_(name, ymDash, sinceDate);
     const byDate = {};
     (bills.days || []).forEach(d => { byDate[d.date] = { date: d.date, sales: d.total, count: d.count }; });
