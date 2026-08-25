@@ -8147,13 +8147,13 @@ function taskDeferralsAll_() {
 function taskDeferralsToday_() { return taskDeferralsAll_()[bizDateStr_()] || {}; }
 
 // タスクを「今日は持ち越す」と決める。GUNSHI_API_FNS登録必須。
-function deferKioskTask(taskId, by, note) {
+function deferKioskTask(taskId, by, note, title) {
   const id = String(taskId || '').trim();
   if (!id) return { ok: false, error: 'タスクIDが空です' };
   const all = taskDeferralsAll_();
   const day = bizDateStr_();
   if (!all[day]) all[day] = {};
-  all[day][id] = { by: String(by || '').trim(), at: now_(), note: String(note || '').trim() };
+  all[day][id] = { by: String(by || '').trim(), at: now_(), note: String(note || '').trim(), title: String(title || '').trim() };
   // 古い日付は捨てる（7営業日分だけ残す＝プロパティを太らせない）
   const days = Object.keys(all).sort().slice(-7);
   const keep = {}; days.forEach(function (d) { keep[d] = all[d]; });
@@ -10489,9 +10489,83 @@ function pendingConsultList_() {
   return out.sort(function (a, b) { return b.at - a.at; });
 }
 
+
+/* ===== 🌙 閉店チェックを黒服LINEの「承認」で承認する ==========================
+ * ボス指示 2026-08-25:「黒服LINEで、管理者だけが『承認』と送ると承認されるように。
+ * 閉店作業の内容も要約して送ってほしい」。
+ * 既存の一言承認（当日欠勤・当日相談）と同じ入口に相乗りする＝黒服が覚える言葉を増やさない。
+ * ⚠️閉店チェックの承認だけは管理者限定（欠勤/相談は従来どおり誰でも）。approveCashCheck 側でも
+ *   isAdmin_ を見ているが、LINEでは弾いた理由を返さないと黒服が延々と送り続けるので手前でも見る。
+ */
+// 承認待ちの閉店チェック（提出済み・未承認）。無ければ空配列＝一言承認は従来どおり動く
+function pendingCashCheckList_() {
+  var out = [];
+  try {
+    var sh = getCashCheckSheet_();
+    if (!sh || sh.getLastRow() < 2) return out;
+    var vals = sh.getDataRange().getValues();
+    var limit = Date.now() - QUICK_DECIDE_WINDOW_H_ * 3600 * 1000;
+    for (var i = vals.length - 1; i >= 1; i--) {
+      var d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+      if (!d) continue;
+      if (!String(vals[i][1] || '').trim()) continue;          // 未提出
+      if (String(vals[i][15] || '').trim()) continue;          // 16列目=承認者 が入っていれば承認済み
+      var ts = vals[i][2] instanceof Date ? vals[i][2].getTime() : 0;
+      if (ts && ts < limit) continue;                          // 古い取り残しはコンソールから
+      out.push({ kind: 'cash', name: '閉店チェック', date: d.slice(5).replace('-', '/'), dateKey: d,
+                 reporter: String(vals[i][1] || '').trim(), at: ts });
+      if (out.length >= 3) break;                              // 直近だけ見る
+    }
+  } catch (e) { console.error('pendingCashCheckList_', e); }
+  return out;
+}
+
+// 閉店作業の要約（黒服LINEへ送る本文）。提出時の実データから組む＝画面と食い違わない
+function closingSummaryLines_(slipDetails, gate, summary) {
+  var yen = function (n) { return '¥' + (Number(n) || 0).toLocaleString(); };
+  var sum = function (a) { return a.reduce(function (t, x) { return t + (Number(x.amount) || 0); }, 0); };
+  var all = (slipDetails || []).filter(function (s) { return Number(s.amount) > 0; });
+  var hib = all.filter(function (s) { return /日払/.test(String(s.category || '')); });
+  var kei = all.filter(function (s) { return !/日払/.test(String(s.category || '')); });
+  var L = ['', '──── 締め作業の中身 ────'];
+
+  L.push('💴 日払い ' + hib.length + '件　' + yen(sum(hib)));
+  hib.slice(0, 12).forEach(function (s) { L.push('　・' + (String(s.payee || '').trim() || '(受取人なし)') + '　' + yen(s.amount)); });
+  if (hib.length > 12) L.push('　…ほか' + (hib.length - 12) + '件');
+
+  L.push('🧾 経費 ' + kei.length + '件　' + yen(sum(kei)));
+  kei.slice(0, 8).forEach(function (s) { L.push('　・' + (String(s.payee || '').trim() || '(相手先なし)') + '　' + yen(s.amount)); });
+  if (kei.length > 8) L.push('　…ほか' + (kei.length - 8) + '件');
+
+  if (gate) {
+    L.push(gate.trustStatus === '照合済み'
+      ? '🔢 TRUST照合　✅ ' + (gate.note || '一致')
+      : '🔢 TRUST照合　⚠️ 未照合（' + (gate.note || '') + '）→ 翌日の取り込みで突き合わせます');
+  }
+  if (summary && summary.posOk != null) L.push('🧾 POSの締め　' + (summary.posOk ? '✅ 未会計・請求書の依頼なし' : '⚠️ 残あり'));
+
+  // 📋 明日へ持ち越したタスク（そのままにさせない仕組みの結果＝管理者が把握できるように必ず出す）
+  try {
+    var def = taskDeferralsToday_();
+    var keys = Object.keys(def);
+    if (keys.length) {
+      L.push('📋 明日へ持ち越し ' + keys.length + '件');
+      keys.slice(0, 8).forEach(function (k) {
+        var d = def[k] || {};
+        L.push('　・' + (d.title || k) + (d.by ? '（' + d.by + '）' : ''));
+      });
+      if (keys.length > 8) L.push('　…ほか' + (keys.length - 8) + '件');
+    } else {
+      L.push('📋 持ち越したタスク　なし');
+    }
+  } catch (e) {}
+  return L;
+}
+
 // 「承認」「却下」の一言を処理。処理した(=返信した)なら true、対象なしで通常処理へ返すなら false。
 function handleQuickDecision_(event, userId, decision, rest) {
-  var list = pendingKyukinList_().concat(pendingConsultList_());
+  // 🌙閉店チェックも同じ入口で承認する（先頭＝深夜はこれが本命）
+  var list = pendingCashCheckList_().concat(pendingKyukinList_()).concat(pendingConsultList_());
   if (!list.length) return false;                                  // 承認待ちゼロ＝ただの会話。触らない
 
   var tail = String(rest || '').trim();
@@ -10521,6 +10595,12 @@ function handleQuickDecision_(event, userId, decision, rest) {
   //   同一種別×同一名×同一日付は"同じ申請の二度押し"なので1件として扱い、確定時に残りも閉じる（closeDupRequests_）。
   var uniq = quickDecideCollapse_(list);
 
+  // (2') 「承認 閉店」＝閉店チェックを名指し（欠勤の名前と衝突しない語で確定させる）
+  if (!target && !isBare && /^(閉店|しめ|締め|現金)/.test(tail)) {
+    target = uniq.filter(function (x) { return x.kind === 'cash'; })[0] || null;
+    if (target) note = '';
+  }
+
   // (2) 名前指定「承認 まや」「却下 まや 人手が足りず」
   if (!target && !isBare) {
     var parts = tail.split(/[\s　]+/);
@@ -10540,8 +10620,11 @@ function handleQuickDecision_(event, userId, decision, rest) {
     uniq.forEach(function (x) { var k = shConNorm_(x.name); nameCnt[k] = (nameCnt[k] || 0) + 1; });
     var dupCnt = list.length - uniq.length;
     var lines = uniq.map(function (x) {
-      var label = (x.kind === 'kyukin' ? '当日欠勤 ' : '当日相談 ') + x.name + (x.date ? '（' + x.date + '）' : '');
-      var how = (x.kind === 'kyukin' && nameCnt[shConNorm_(x.name)] > 1)
+      var label = (x.kind === 'cash')
+        ? ('🌙 閉店チェック' + (x.date ? '（' + x.date + '）' : '') + (x.reporter ? '　報告者 ' + x.reporter : ''))
+        : ((x.kind === 'kyukin' ? '当日欠勤 ' : '当日相談 ') + x.name + (x.date ? '（' + x.date + '）' : ''));
+      var how = (x.kind === 'cash') ? '「' + decision + ' 閉店」'
+        : (x.kind === 'kyukin' && nameCnt[shConNorm_(x.name)] > 1)
         ? '「#休み' + decision + ' ' + x.row + '」'
         : '「' + decision + ' ' + x.name + '」';
       return '・' + label + '　→' + how;
@@ -10551,6 +10634,22 @@ function handleQuickDecision_(event, userId, decision, rest) {
     return true;
   }
 
+  if (target.kind === 'cash') {
+    var who = getStaffName(userId);
+    if (!who || !isAdmin_(who)) {
+      reply(event.replyToken, '⚠️ 閉店チェックの承認は管理者だけです' + (who ? '（' + who + 'さんは管理者ではありません）' : '（LINEが名簿に紐づいていません）'));
+      return true;
+    }
+    if (decision !== '承認') {
+      reply(event.replyToken, '⚠️ 閉店チェックは「却下」できません。数字を直すなら管理コンソールからリセットしてください');
+      return true;
+    }
+    var ar = approveCashCheck(target.dateKey, who);
+    reply(event.replyToken, (ar && ar.ok)
+      ? '✅【承認】' + target.dateKey + ' の閉店チェックを承認しました（承認者 ' + who + '）\n🚪 黒服の退勤OKです'
+      : '⚠️ 承認できませんでした：' + ((ar && ar.error) || '不明なエラー'));
+    return true;
+  }
   if (target.kind === 'consult') {
     handleShiftConsultDecision_(event, userId, decision, target.name + (note ? ' ' + note : ''));
     return true;
@@ -17427,7 +17526,11 @@ function submitCashCheck(payload) {
         : '⚠️ ' + (diff > 0 ? '¥' + Math.abs(diff).toLocaleString() + ' 足りません' : '¥' + Math.abs(diff).toLocaleString() + ' 多いです'));
     }
     if (safeUnchecked) lines.push('', '🔒 金庫は未確認（開店時の ¥' + denomYen_(bags.safe).toLocaleString() + ' をそのまま使用）');
-    lines.push('', '（4袋 ' + formatBagsShort_(bags) + '）', '', '管理者の承認をお待ちください');
+    lines.push('', '（4袋 ' + formatBagsShort_(bags) + '）');
+    // 🌙 締め作業の中身を要約して添える（管理者が画面を開かずに承認を判断できるように）
+    try { closingSummaryLines_(slipDetails, payload.gate, payload.summary).forEach(function (l) { lines.push(l); }); }
+    catch (e) { console.error('closingSummaryLines_ error:', e); }
+    lines.push('', '▼ 管理者の方は、このまま「承認」と送信してください', '（他にも承認待ちがある時は「承認 閉店」）');
     push_(prop('GROUP_KUROFUKU'), lines.join('\n'));
 
     return {
