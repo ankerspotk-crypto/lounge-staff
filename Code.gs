@@ -10293,6 +10293,14 @@ function handlePortalApi_(e) {
     const r = portalGetMyBills_(lookupNameB, month, sinceB);
     return out(Object.assign({ name, isAdmin, viewAs: lookupNameB }, r));
   }
+  // 📊 給率（本人が「時給以上の仕事ができているか」を見る。定義＝時間報酬÷担当売上・目標30%）
+  //   伝票と同じく在籍カットオフを効かせる＝使い回し源氏名で前任者の売上を自分の実績にしない
+  if (tab === 'kyuritsu') {
+    const lookupNameK = normalizeName_(isAdmin ? viewAs : name);
+    const sinceK = isAdmin ? '' : billTenureCutoff_(userId);
+    const rk = portalKyuritsu_(ss, lookupNameK, month, sinceK);
+    return out(Object.assign({ name, isAdmin, viewAs: lookupNameK }, rk));
+  }
   // 伝票明細（ライブ取得・所有ガード＋在籍期間ガード）
   if (tab === 'billdetail') {
     const lookupNameD = normalizeName_(isAdmin ? viewAs : name);
@@ -10761,7 +10769,7 @@ function isOnLeaveName_(name) {
 // 休職中が参照できないポータルのtab（サーバー側で拒否＝フロントを隠すだけにしない）。
 // ⚠️'stats'は含めない：給与明細(renderPay)が同じペイロードのsalesを土台に組み立てるため。
 // 売上明細/伝票/ランキングのサブタブ抑止はフロント側(renderStats)で行う。
-var PORTAL_LEAVE_DENY_TABS_ = ['yoyaku', 'yoyakuMonth', 'yoyakuCustomers', 'customers', 'customerVisits', 'vacancy', 'ranking', 'hair', 'bills', 'billdetail'];
+var PORTAL_LEAVE_DENY_TABS_ = ['yoyaku', 'yoyakuMonth', 'yoyakuCustomers', 'customers', 'customerVisits', 'vacancy', 'ranking', 'hair', 'bills', 'billdetail', 'kyuritsu'];
 
 // 管理コンソール：休職中/復帰の切替（動的「休職中」「休職開始日」列）。属性・履歴は非破壊。
 function adminSetOnLeave(userId, targetName, onLeave) {
@@ -17197,6 +17205,140 @@ function portalGetMyBills_(lookupName, month, sinceDate) {
   days.forEach(d => d.slips.sort((a, b) => String(a.inTime).localeCompare(String(b.inTime))));
   const monthTotal = days.reduce((s, d) => s + d.total, 0);
   return { ok: true, month: ym, cast: target, monthTotal: monthTotal, days: days };
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 📊 給率（キャスト本人が「時給以上の仕事ができているか」を自分で見る画面）
+// ══════════════════════════════════════════════════════════════════════════════
+// ボス確定(2026-08-25)の定義:  給率 ＝ 時間報酬 ÷ 担当売上
+//   ⚠️TRUSTの「給率」列は ((時間報酬 + バック計) ÷ 担当小計) ＝ここでの定義とは別物。
+//     実データで検算済み: 2026-08 りく (394,125+55,800)/1,259,000 = 35.7% ＝TRUST値と一致。
+//     バックを分子から外すのはボスの方針＝「バックは罰ではなくご褒美」。分子に入れると
+//     売れば売るほど給率が悪化して見え、頑張った子ほど画面が赤くなる。画面には必ず式を出して
+//     TRUSTの数字と食い違って見える事故を防ぐこと。
+//   目標30% ⇔ 担当売上が時間報酬の 3.33倍。既存のバック率メーター(2倍=15%/3倍=20%)の一段上に乗る。
+//
+// 店全体は「売上明細の全行の時間報酬合計 ÷ 担当売上合計」＝母集団を一切絞らない。
+//   ⚠️「キャストだけに絞る」案は捨てた: TRUST源氏名と名簿の属性が毎月12〜20件未照合で
+//     (reference_payroll_rules)、黒服がキャスト側へ黙って紛れる。全員合算なら嘘が無い。
+//   実測(2026-08-25時点): 2026-08 64.9% / 2026-07 66.9% / 2026-06 69.7% / 2026-05 62.9%。
+const KYURITSU_TARGET_ = 30;   // ボス確定の目標ライン(%)。ここを変えると全画面の判定が動く
+
+// 給率(%)。⚠️担当売上0は null を返す＝0%(満点)に見せない。実際は最悪の状態で、
+//   売上明細には「担当0・時間報酬あり」の行が毎月実在する（黒服/売上未計上のキャスト）。
+function kyuritsuRate_(jikan, tanto) {
+  if (!(tanto > 0)) return null;
+  return Math.round((jikan / tanto) * 1000) / 10;
+}
+
+// 目標給率を満たすのに必要な担当売上（＝人件費 ÷ 目標率）
+function kyuritsuNeedSales_(jikan) {
+  return Math.ceil(jikan / (KYURITSU_TARGET_ / 100));
+}
+
+function portalKyuritsu_(ss, lookupName, month, sinceDate) {
+  const T = KYURITSU_TARGET_, rateT = T / 100;
+  const name = normalizeName_(lookupName);
+  const nowYmDash = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  const ymSlash = String(month || nowYmDash).replace(/-/g, '/').slice(0, 7);   // 売上明細の月キー(mStr_と同形)
+  const ymDash  = ymSlash.replace(/\//g, '-');                                 // 伝票・日付の形
+  const num = v => Number(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')) || 0;
+
+  const sh = ss.getSheetByName(URIAGE_TAB);
+  if (!sh || sh.getLastRow() < 2) {
+    return { ok: true, month: ymSlash, cast: name, target: T, months: [], me: null, days: [], store: null };
+  }
+  const rows = sh.getDataRange().getValues();
+  const hdrs = rows[0].map(String);
+  // 見出しで引く。列を消された時に黙って0を返さないよう、既知の固定位置へフォールバックする
+  const at = (h, fb) => { const i = hdrs.indexOf(h); return i >= 0 ? i : fb; };
+  const iTanto = at('担当小計', 2), iDays = at('勤務日数', 6), iJikan = at('時間報酬', 8);
+
+  const monthSet = {};
+  const store = { tanto: 0, jikan: 0, people: 0 };
+  let me = null;
+  for (let i = 1; i < rows.length; i++) {
+    const m = mStr_(rows[i][0]);
+    if (m) monthSet[m] = 1;
+    if (m !== ymSlash) continue;
+    const tanto = num(rows[i][iTanto]), jikan = num(rows[i][iJikan]);
+    store.tanto += tanto; store.jikan += jikan; store.people++;
+    if (normalizeName_(rows[i][1]) === name) me = { tanto: tanto, jikan: jikan, days: num(rows[i][iDays]) };
+  }
+  const months = Object.keys(monthSet).sort().reverse();
+
+  // ── 本人 ──────────────────────────────────────────────
+  let meOut = null;
+  if (me) {
+    const need = kyuritsuNeedSales_(me.jikan);
+    const perDay = me.days > 0 ? Math.round(me.jikan / me.days) : 0;
+    meOut = {
+      tanto: me.tanto, jikan: me.jikan, days: me.days,
+      rate: kyuritsuRate_(me.jikan, me.tanto),
+      bairitu: me.jikan > 0 ? Math.round((me.tanto / me.jikan) * 100) / 100 : null,
+      needSales: need,                                   // 30%に必要な担当売上（月）
+      gap: Math.max(0, need - me.tanto),                 // あといくら
+      perDayCost: perDay,                                // 1日あたり人件費（月の時間報酬÷勤務日数）
+      dayTarget: perDay > 0 ? Math.ceil(perDay / rateT) : 0   // 出勤1日あたりの目標売上
+    };
+  }
+
+  // ── 日別（伝票＝前日まで確定。出勤したのに売上が付かなかった日も0で出す）──
+  const days = [];
+  if (meOut) {
+    const bills = portalGetMyBills_(name, ymDash, sinceDate);
+    const byDate = {};
+    (bills.days || []).forEach(d => { byDate[d.date] = { date: d.date, sales: d.total, count: d.count }; });
+    // 当月だけシフトを重ねる。シフト表のキーは "M/d" で年を持たない＝過去月に当てると別年の日を拾う
+    if (ymDash === nowYmDash) {
+      const yst = (function () { const d = new Date(); d.setDate(d.getDate() - 1); return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); })();
+      const yy = ymDash.slice(0, 4);
+      const shifts = portalShifts_(name) || {};
+      Object.keys(shifts).forEach(function (k) {
+        const v = String(shifts[k] || '').trim();
+        if (!v || v === '休み' || v === '欠勤') return;
+        const p = String(k).split('/');
+        if (p.length < 2) return;
+        const mm = ('0' + String(parseInt(p[0], 10))).slice(-2), dd = ('0' + String(parseInt(p[1], 10))).slice(-2);
+        if (mm !== ymDash.slice(5, 7)) return;
+        const ds = yy + '-' + mm + '-' + dd;
+        if (ds > yst) return;                       // 当日以降は未確定なので出さない
+        if (!byDate[ds]) byDate[ds] = { date: ds, sales: 0, count: 0 };
+      });
+    }
+    const cost = meOut.perDayCost;
+    Object.keys(byDate).sort().reverse().forEach(function (k) {
+      const d = byDate[k];
+      days.push({
+        date: d.date, sales: d.sales, count: d.count, cost: cost,
+        rate: (cost > 0 && d.sales > 0) ? Math.round((cost / d.sales) * 1000) / 10 : null,
+        hit: cost > 0 ? (d.sales * rateT >= cost) : null,
+        target: meOut.dayTarget
+      });
+    });
+  }
+
+  // ── 店全体（母集団を絞らない全員合算）──────────────────
+  let storeOut = null;
+  if (store.tanto > 0 || store.jikan > 0) {
+    const rate = kyuritsuRate_(store.jikan, store.tanto);
+    let ifHit = null;
+    if (meOut && store.tanto > 0) {
+      // 「自分が30%を達成したら店全体はいくつになるか」＝寄与の実額。担当売上だけを目標値まで伸ばす
+      const lifted = store.tanto - meOut.tanto + Math.max(meOut.tanto, meOut.needSales);
+      ifHit = kyuritsuRate_(store.jikan, lifted);
+    }
+    storeOut = {
+      tanto: store.tanto, jikan: store.jikan, people: store.people, rate: rate,
+      needSales: kyuritsuNeedSales_(store.jikan),
+      gap: Math.max(0, kyuritsuNeedSales_(store.jikan) - store.tanto),
+      myShareSales: (meOut && store.tanto > 0) ? Math.round((meOut.tanto / store.tanto) * 1000) / 10 : 0,
+      myShareCost:  (meOut && store.jikan > 0) ? Math.round((meOut.jikan / store.jikan) * 1000) / 10 : 0,
+      ifIHit: ifHit
+    };
+  }
+
+  return { ok: true, month: ymSlash, cast: name, target: T, months: months, me: meOut, days: days, store: storeOut };
 }
 
 // 管理者: 保存済みTRUST伝票を「店全体」または「キャスト個人」で見る（コンソール💰給与→🧾売上伝票）。
