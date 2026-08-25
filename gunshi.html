@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-25e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-25f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1999,7 +1999,7 @@ function cfDone(id){
 function cfDefer(id){
   var t=(TASKS||[]).find(function(x){return x.id===id;}); if(t){t.deferred=true;t.deferredBy=(typeof LOGIN!=='undefined'&&LOGIN?String(LOGIN):'');}
   cfTasksRefresh(); if(typeof toast==='function')toast('➡️ 明日へ持ち越しました');
-  if(IS_GAS) gsr('deferKioskTask',id,(typeof LOGIN!=='undefined'&&LOGIN?String(LOGIN):''),'').catch(function(){ loadAll(); });
+  if(IS_GAS) gsr('deferKioskTask',id,(typeof LOGIN!=='undefined'&&LOGIN?String(LOGIN):''),'',(t&&t.title)||'').catch(function(){ loadAll(); });
 }
 function cfUndefer(id){
   var t=(TASKS||[]).find(function(x){return x.id===id;}); if(t){t.deferred=false;}
@@ -7601,7 +7601,10 @@ function submitCash(){
   var _gate=(_t&&_t.hasTrust&&_t.matched)
     ? {trustStatus:'照合済み',trustDiff:0,note:(_t.perPerson?'人別':'合計')+'で一致'}
     : {trustStatus:'未照合',trustDiff:(_t&&_t.hasTrust)?Number(_t.diff||0):0,note:(_t&&_t.hasTrust)?'差異あり':'TRUST未取得（黒服の自己申告で送信）'};
-  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto',gate:_gate};
+  /* 🌙 締め作業の要約用。LINEに「何をやって帰ったか」を出すための材料（金額計算には使わない） */
+  var _cf=(typeof CLOSE_FLOW!=='undefined'&&CLOSE_FLOW)?CLOSE_FLOW:null;
+  var _sum={posOk:(_cf&&_cf.pos)?(!_cf.pos.enforce||!!_cf.pos.ready):null};
+  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto',gate:_gate,summary:_sum};
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
     gsr('getCashCheckInit').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
