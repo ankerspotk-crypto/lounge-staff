@@ -687,7 +687,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted',
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus',
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
   // 📖 新人マニュアル（manual.gs）＝軍師は読み取りのみ。編集はコンソール(handleApiRequest_のmanual*)。
@@ -1605,6 +1605,14 @@ function handleApiRequest_(body) {
       if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     }
     if (!body.dateKey) return { ok: false, error: 'dateKey required' };
+    // 🔒 締め条件ゲート用: 人別の日払いを保存する。旧ブックマークレット（合計しか送らない）でも
+    //    「(合計)」1行として残し、少なくとも合計での突合はできるようにする＝取得できた事実を必ず記録。
+    try {
+      const dpRows = Array.isArray(body.dayPayRows) && body.dayPayRows.length
+        ? body.dayPayRows
+        : [{ name: '(合計)', amount: Number(body.dayPayTotal) || 0 }];
+      saveTrustDayPayRows_(body.dateKey, dpRows, bySecret ? 'ブックマークレット' : 'コンソール');
+    } catch (e) { console.error('saveTrustDayPayRows_ error:', e); }
     const dailyRes = writeTrustDailyCash_(body.dateKey, body.dayPayTotal || 0, body.costOutTotal || 0, body.costOutDetail || []);
     logTrustImport_('日次現金', body.dateKey, (body.costOutDetail || []).length, bySecret ? 'ブックマークレット' : 'コンソール',
       (dailyRes && dailyRes.ok === false) ? '失敗' : '完了',
@@ -16436,6 +16444,11 @@ const CASH_CHECK_HEADERS_ = [
   '実測合計', '伝票合計', '残るはず', '差額', '判定',
   '伝票明細JSON', '承認者', '承認時刻'
 ];
+/* 🔒 締め条件ゲートの記録列。⚠️CASH_CHECK_HEADERS_ には足さないこと。
+   本番の現金管理シートは19列あり、18列目「経費実測内訳（閉店）」と19列目に実データが入っている
+   （コード側の17列定義より広い）。固定幅の書き込みを広げると、その2列を毎晩上書きして消す。
+   よって見出し名で場所を解決し、無ければシートの右端に足す方式にする。 */
+const CC_GATE_COLS_ = ['TRUST照合', 'TRUST差額', 'ゲート備考'];
 
 // 現金管理シートを取得（なければ作成。旧ヘッダーなら新ヘッダーへ正規化）
 function getCashCheckSheet_() {
@@ -16448,6 +16461,25 @@ function getCashCheckSheet_() {
     sh.getRange(1, 1, 1, CASH_CHECK_HEADERS_.length).setValues([CASH_CHECK_HEADERS_]);
   }
   return sh;
+}
+
+// 締め条件ゲートの3列の位置（1始まり）を返す。無ければシートの右端に足す＝既存の列には一切触らない。
+function ccGateCols_(sh) {
+  // ⚠️見出しは getMaxColumns まで読む。getLastColumn までだと、前回足した列を見落として
+  //   毎回右へ列を増やし続ける（実測で踏んだ）。
+  const hdr = sh.getRange(1, 1, 1, sh.getMaxColumns()).getValues()[0].map(function (h) { return String(h).trim(); });
+  const out = {};
+  const missing = [];
+  CC_GATE_COLS_.forEach(function (name) {
+    const i = hdr.indexOf(name);
+    if (i >= 0) out[name] = i + 1; else missing.push(name);
+  });
+  if (missing.length) {
+    let col = sh.getLastColumn();
+    if (sh.getMaxColumns() < col + missing.length) sh.insertColumnsAfter(sh.getMaxColumns(), col + missing.length - sh.getMaxColumns());
+    missing.forEach(function (name) { col += 1; sh.getRange(1, col).setValue(name); out[name] = col; });
+  }
+  return out;
 }
 
 // dateKey(yyyy-MM-dd)に対応する行番号を返す（見つからなければ-1）
@@ -16985,6 +17017,223 @@ function getCashApproverNames() {
 }
 
 // IEYAS軍師「閉店の現金」初期表示データ
+/* ===== 🔒 閉店チェックの締め条件ゲート（日次） =============================
+ * ボス確定（2026-08-25）＝「毎日の締めは、条件が全部そろわないと通さない」。
+ * 自己申告チェック1つでは止まらなかった（押せば通る）ので、機械が判定できるものは機械で止める。
+ *
+ * 当日その場で止められるもの（TRUSTに依存しない・確実）
+ *   ①日払い伝票の受取人が空欄  ②受取人が名簿にも名寄せにも無い
+ *   ③OCR金額と現金が食い違う伝票が未確認  ④伝票でない画像（金種メモ・画面スクショ）が残っている
+ * TRUSTとの突合
+ *   ⑤当日ぶんのTRUST日払いが取れていれば、その場で人別（取れなければ合計）で突合して差異ゼロを要求
+ *   ⑥TRUSTが取れなかった日は「未照合」として記録し、**翌日の閉店チェックを止める**（逃げ道を残さない）
+ *
+ * ⚠️GAS→TRUSTは403で恒久ブロック（reference_trust_gas_waf_block）＝TRUSTの数字は
+ *   ログイン済みブラウザからのリレー（ブックマークレット）でしか入らない。ここは前提。
+ */
+const TRUST_DAYPAY_TAB  = 'TRUST日払い日次';
+const TRUST_DAYPAY_HEAD = ['営業日', '名前', '金額', '取得時刻', '取得元'];
+const CC_GATE_LOOKBACK_ = 30;   // 未照合日をさかのぼって探す日数
+
+function ensureTrustDayPaySheet_(ss) {
+  let sh = ss.getSheetByName(TRUST_DAYPAY_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(TRUST_DAYPAY_TAB);
+    sh.appendRow(TRUST_DAYPAY_HEAD);
+    sh.setFrozenRows(1);
+  } else if (String(sh.getRange(1, 1).getValue()).trim() !== TRUST_DAYPAY_HEAD[0]) {
+    sh.getRange(1, 1, 1, TRUST_DAYPAY_HEAD.length).setValues([TRUST_DAYPAY_HEAD]);
+  }
+  return sh;
+}
+
+// TRUST日報から取れた当日の日払いを保存（同じ営業日は消して入れ直す＝取り直しても増えない）
+//   rows = [{name, amount}] 人別が取れなかった場合は [{name:'(合計)', amount:合計}] で入る
+function saveTrustDayPayRows_(dateKey, rows, source) {
+  const ss = getOrOpenSS_();
+  const sh = ensureTrustDayPaySheet_(ss);
+  const d = String(dateKey || '').trim();
+  if (!d) return { ok: false, error: '営業日が空です' };
+  const vals = sh.getDataRange().getValues();
+  for (let i = vals.length - 1; i >= 1; i--) {
+    const rd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (rd === d) sh.deleteRow(i + 1);
+  }
+  const stamp = now_();
+  const out = (rows || []).filter(function (r) { return r && Number(r.amount) > 0; })
+    .map(function (r) { return [d, String(r.name || '').trim() || '(名前なし)', Number(r.amount) || 0, stamp, source || '']; });
+  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_DAYPAY_HEAD.length).setValues(out);
+  return { ok: true, saved: out.length };
+}
+
+// 当日ぶんのTRUST日払い（保存済み）を読む
+function getTrustDayPay_(dateKey) {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(TRUST_DAYPAY_TAB);
+  const d = String(dateKey || '').trim();
+  const res = { hasData: false, perPerson: false, rows: [], total: 0, fetchedAt: '', source: '' };
+  if (!sh || sh.getLastRow() < 2) return res;
+  const vals = sh.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    const rd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (rd !== d) continue;
+    const nm = String(vals[i][1] || '').trim();
+    res.rows.push({ name: nm, amount: Number(vals[i][2]) || 0 });
+    res.total += Number(vals[i][2]) || 0;
+    res.fetchedAt = fmtStamp_(vals[i][3]);
+    res.source = String(vals[i][4] || '');
+  }
+  res.hasData = res.rows.length > 0;
+  // 「(合計)」1行だけ＝人別が取れなかった日。人別が1行でもあれば人別照合ができる
+  res.perPerson = res.hasData && !res.rows.every(function (r) { return /^\(?合計\)?$/.test(r.name) || r.name === '(名前なし)'; });
+  return res;
+}
+
+// 受取人として選ばせてよい名前（名簿＋日払い名寄せ＋直近TRUST表記）。
+// ⚠️派遣・体験は名簿に居ないことがあるので名寄せとTRUSTからも拾う＝「選べないから空欄のまま」を作らない。
+function ccKnownPayees_() {
+  const ss = getOrOpenSS_();
+  const set = {};
+  const add = function (n) { const s = String(n || '').trim(); if (s) set[s] = true; };
+  try { (getAllStaff_(ss) || []).forEach(function (s) { add(s.name); }); } catch (e) {}
+  try {
+    const msh = ss.getSheetByName(HIBARAI_MAP_TAB);
+    if (msh && msh.getLastRow() >= 2) {
+      msh.getRange(2, 1, msh.getLastRow() - 1, 2).getValues().forEach(function (r) { add(r[0]); add(r[1]); });
+    }
+  } catch (e) {}
+  try {
+    const tsh = ss.getSheetByName(TRUST_TAB);
+    if (tsh && tsh.getLastRow() >= 2) {
+      const v = tsh.getDataRange().getValues();
+      const months = {};
+      for (let i = 1; i < v.length; i++) months[mStr_(v[i][0])] = true;
+      const latest = Object.keys(months).sort().pop();
+      for (let i = 1; i < v.length; i++) if (mStr_(v[i][0]) === latest) add(v[i][1]);
+    }
+  } catch (e) {}
+  return Object.keys(set).sort();
+}
+
+// 指定営業日の「伝票の日払い」と「TRUST日払い日次」を突き合わせる。
+//   TRUSTが人別で取れていれば人別、合計しか無ければ合計で比べる。
+//   戻り: {hasTrust, matched, diff, lines:[...説明...]}
+function ccReconcileDay_(dateKey, slipDetails) {
+  const t = getTrustDayPay_(dateKey);
+  const slips = (slipDetails || []).filter(function (s) { return /日払/.test(String(s.category || '')) && Number(s.amount) > 0; });
+  const slipTotal = slips.reduce(function (a, s) { return a + (Number(s.amount) || 0); }, 0);
+  if (!t.hasData) return { hasTrust: false, matched: false, diff: 0, trustTotal: 0, slipTotal: slipTotal, lines: ['TRUSTの日払いがまだ取得されていません'] };
+
+  if (!t.perPerson) {
+    const diff = slipTotal - t.total;
+    return {
+      hasTrust: true, perPerson: false, matched: diff === 0, diff: diff,
+      trustTotal: t.total, slipTotal: slipTotal,
+      lines: diff === 0 ? [] : ['合計が合いません（伝票 ¥' + slipTotal.toLocaleString() + ' / TRUST ¥' + t.total.toLocaleString() + '）']
+    };
+  }
+
+  // ⚠️TRUST側に名前を取れなかった行が混ざっている時は人別で比べない。
+  //   （パーサがTRUSTの表の形に負けただけで「未入力の人がいる」と誤判定し、締めを不当にブロックするため）
+  if (t.rows.some(function (r) { return !r.name || r.name === '(名前なし)'; })) {
+    const diff0 = slipTotal - t.total;
+    return {
+      hasTrust: true, perPerson: false, matched: diff0 === 0, diff: diff0,
+      trustTotal: t.total, slipTotal: slipTotal,
+      lines: diff0 === 0 ? [] : ['合計が合いません（伝票 ¥' + slipTotal.toLocaleString() + ' / TRUST ¥' + t.total.toLocaleString() + '）。TRUST側で名前を読み取れない行があったため合計で比べています']
+    };
+  }
+
+  // 人別。受領書の表記→TRUST表記は日払い名寄せで寄せる（本名署名・派遣の「P.本名.源氏名」対策）
+  const map = hibaraiNameMap_(getOrOpenSS_());
+  const byName = {};
+  slips.forEach(function (s) {
+    const k = hbKey_(s.payee);
+    const m = k ? map[k] : null;
+    const n = (m && m.trust) ? m.trust : (String(s.payee || '').trim() || '(受取人不明)');
+    byName[n] = (byName[n] || 0) + (Number(s.amount) || 0);
+  });
+  const tByName = {};
+  t.rows.forEach(function (r) {
+    const k = hbKey_(r.name);
+    const m = k ? map[k] : null;
+    const n = (m && m.trust) ? m.trust : (r.name || '(名前なし)');
+    tByName[n] = (tByName[n] || 0) + (Number(r.amount) || 0);
+  });
+  const names = {};
+  Object.keys(byName).forEach(function (n) { names[n] = true; });
+  Object.keys(tByName).forEach(function (n) { names[n] = true; });
+  const lines = [];
+  Object.keys(names).sort().forEach(function (n) {
+    const a = byName[n] || 0, b = tByName[n] || 0;
+    if (a === b) return;
+    if (b === 0)      lines.push(n + '：現金で ¥' + a.toLocaleString() + ' 渡したのに TRUST が 0（未入力）');
+    else if (a === 0) lines.push(n + '：TRUST に ¥' + b.toLocaleString() + ' あるが伝票が無い');
+    else              lines.push(n + '：伝票 ¥' + a.toLocaleString() + ' ／ TRUST ¥' + b.toLocaleString());
+  });
+  return {
+    hasTrust: true, perPerson: true, matched: lines.length === 0,
+    diff: slipTotal - t.total, trustTotal: t.total, slipTotal: slipTotal, lines: lines
+  };
+}
+
+// 未照合のまま残っている過去の営業日（＝翌日の閉店チェックを止める根拠）
+//   提出済みの行のうち「TRUST照合」列が『照合済み』でない日。当日は含めない。
+function cashUnresolvedDays_(todayKey) {
+  const sh = getCashCheckSheet_();
+  const out = [];
+  if (!sh || sh.getLastRow() < 2) return out;
+  const hdr = sh.getRange(1, 1, 1, sh.getMaxColumns()).getValues()[0].map(function (h) { return String(h).trim(); });
+  const iChk = hdr.indexOf('TRUST照合'), iDiff = hdr.indexOf('TRUST差額');
+  if (iChk < 0) return out;                    // 列がまだ無い＝運用開始前。止めない（列は初回送信時に作られる）
+  const vals = sh.getDataRange().getValues();
+  const start = new Date();
+  start.setDate(start.getDate() - CC_GATE_LOOKBACK_);
+  const startKey = Utilities.formatDate(start, TZ, 'yyyy-MM-dd');
+  for (let i = 1; i < vals.length; i++) {
+    const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (!d || d >= todayKey || d < startKey) continue;
+    if (!String(vals[i][1] || '').trim()) continue;               // 未提出の日は対象外
+    const st = String(vals[i][iChk] || '').trim();
+    if (st === '照合済み') continue;
+    if (!st) continue;                                            // ゲート導入前の古い行は止めない
+    // 🔁 自己回復: あとから管理者がTRUSTを取り込んでいれば、ここで照合し直して自動でクリアする。
+    //    （そうしないと「TRUSTは取れているのに翌日の閉店が永久に止まる」デッドロックになる）
+    let slipDetails = [];
+    try { slipDetails = JSON.parse(String(vals[i][14] || '[]')); } catch (e) { slipDetails = []; }
+    const rec = ccReconcileDay_(d, slipDetails);
+    if (rec.hasTrust && rec.matched) {
+      sh.getRange(i + 1, iChk + 1).setValue('照合済み');
+      if (iDiff >= 0) sh.getRange(i + 1, iDiff + 1).setValue(0);
+      continue;
+    }
+    out.push({
+      dateKey: d, status: st, hasTrust: !!rec.hasTrust,
+      diff: rec.hasTrust ? rec.diff : (iDiff >= 0 ? (Number(vals[i][iDiff]) || 0) : 0),
+      lines: rec.lines || []
+    });
+  }
+  return out;
+}
+
+// ── 軍師: 閉店チェックの締め条件（⚠️GUNSHI_API_FNS登録必須） ──────────────
+function ccGateStatus(dateKey, slips) {
+  try {
+    const d = String(dateKey || '').trim() || bizDateStr_();
+    return {
+      ok: true, dateKey: d,
+      trust: getTrustDayPay_(d),
+      // 今夜ぶんの突合。slips は軍師が画面に持っている伝票（まだ未提出なのでサーバには無い）
+      today: ccReconcileDay_(d, slips || []),
+      unresolved: cashUnresolvedDays_(d),
+      payees: ccKnownPayees_()
+    };
+  } catch (e) {
+    // ゲートの取得に失敗しても閉店作業そのものは止めない（フロントは自己申告に落ちる）
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
 function getCashCheckInit() {
   const dateKey = bizDateStr_();
   const sh = getCashCheckSheet_();
@@ -17094,6 +17343,20 @@ function submitCashCheck(payload) {
     ];
     if (rowIdx > 0) sh.getRange(rowIdx, 1, 1, rowData.length).setValues([rowData]);
     else sh.appendRow(rowData);
+    // 🔒 締め条件ゲートの結果を記録（セル単位＝コードが知らない18/19列目を壊さない）。
+    //    payload.gate が無い＝旧版の軍師端末からの送信なので何も書かない
+    //    （空欄は cashUnresolvedDays_ が「ゲート導入前」として無視する＝旧端末で翌日が止まらない）
+    if (payload.gate) {
+      try {
+        const _r = (rowIdx > 0) ? rowIdx : findCashCheckRow_(sh, dateKey);
+        const _c = ccGateCols_(sh);
+        if (_r > 0) {
+          sh.getRange(_r, _c['TRUST照合']).setValue(String(payload.gate.trustStatus || '未照合'));
+          sh.getRange(_r, _c['TRUST差額']).setValue(Number(payload.gate.trustDiff) || 0);
+          sh.getRange(_r, _c['ゲート備考']).setValue(String(payload.gate.note || ''));
+        }
+      } catch (e) { console.error('gate record error:', e); }
+    }
 
     // 「立替 精算」スリップを経費立替台帳へ反映（born 精算済み・冪等）。本体の現金締めからは独立＝転んでも締めは無事。
     try { applyKeihiSettlementsFromSlips_(dateKey, slipDetails, reporterName); } catch (e) { console.error('applyKeihiSettlementsFromSlips_ error:', e); }
