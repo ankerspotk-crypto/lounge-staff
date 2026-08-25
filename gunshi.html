@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-22d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-25a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -7010,8 +7010,15 @@ function readSlipsFromDenpyo(dp){
     if(!sec||!sec.rows)return; var hs=sec.headers||[];
     var iP=hs.indexOf(payeeHdr), iA=hs.indexOf(amtHdr), iImg=-1;
     hs.forEach(function(hd,idx){ if(/画像|写真|URL|リンク|ドライブ/.test(String(hd))) iImg=idx; });
+    /* 🔒 締め条件ゲート用: OCRが読んだ金額と、写真に写っていた現金が食い違う伝票を拾う。
+       「不一致」＝OCRの桁誤読（¥9,000を¥49,000と読む等）が実在した＝黒服に必ず見せる。 */
+    var iCash=hs.indexOf('現金合計'), iChk=hs.indexOf('照合');
     sec.rows.forEach(function(r){ var c=r.cells||[]; var amt=Number(c[iA])||0; if(!amt)return;
-      out.push({source:'read',category:defCat,payee:iP>=0?String(c[iP]||''):'',amount:amt,imageUrl:iImg>=0?String(c[iImg]||''):'',include:true}); });
+      var cash=(iCash>=0&&String(c[iCash]||'').trim()!=='')?Number(c[iCash]):null;
+      var mism=(iChk>=0)?(String(c[iChk]||'').trim()==='不一致'):(cash!=null&&cash!==amt);
+      out.push({source:'read',category:defCat,payee:iP>=0?String(c[iP]||''):'',amount:amt,
+        imageUrl:iImg>=0?String(c[iImg]||''):'',include:true,rowIdx:r.rowIdx,
+        ocrAmount:amt,cashSeen:cash,mismatch:!!mism,amountOk:false}); });
   }
   pull(dp.daily,'受取人','伝票金額','在籍 日払い');
   pull(dp.receipt,'発行元','金額','買出し・経費');
@@ -7030,6 +7037,7 @@ function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:false};
   renderCashCheck();
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
+  CC_GATE=null; CC_GATE_ERR=''; ccGateLoad();   // 🔒 締めの条件（TRUST突合・過去の未照合日・受取人の候補）
 }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
 function ccRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.reporterName=n; }
@@ -7132,27 +7140,101 @@ function ccPosGateHtml(){
     +rows(d.open,'未会計の伝票')
     +rows(d.invoice,'請求書の発行依頼がまだ'));
 }
-/* --- TRUST入力の確認ゲート（閉店送信の最終関門・完全ブロック） ---
-   狙い＝黒服がTRUSTへの日払い/経費入力を忘れて帰るのを止める。TRUSTは外部システムで
-   GASから入力有無を検知できない（403）ため、送信前に黒服自身へ必須チェックを突きつける方式。
-   軍師は当日の日払い伝票（現金袋から出た額）を既に持っているので、有る日は件数と額を添えて気づかせる。 */
+/* --- 🔒 締めの条件ゲート（毎日・全部そろわないと送信できない） ------------------
+   ボス確定 2026-08-25。自己申告チェック1つでは止まらなかった（押せば通る）ので、
+   機械で判定できるものは機械で止める。TRUSTが取れない夜だけ自己申告に落とし、
+   その日は「未照合」として記録して**翌日の閉店チェックを止める**＝逃げ道を残さない。 */
+var CC_GATE=null, CC_GATE_ERR='';
+function ccGateLoad(){
+  if(typeof gsr!=='function'){ CC_GATE_ERR='取得できません'; return; }
+  var dk=(cashState&&cashState.dateKey)||'';
+  var slips=(cashState&&cashState.slips||[]).filter(function(x){ return x.include!==false&&Number(x.amount)>0; })
+    .map(function(x){ return {category:x.category,payee:x.payee,amount:Number(x.amount)||0}; });
+  gsr('ccGateStatus',dk,slips).then(function(r){
+    CC_GATE=(r&&r.ok!==false)?r:null;
+    if(!CC_GATE) CC_GATE_ERR=(r&&r.error)||'締め条件を確認できませんでした';
+    ccGateRefresh();
+  }).catch(function(){ CC_GATE_ERR='締め条件を確認できませんでした'; ccGateRefresh(); });
+}
 function ccDayPaySlips_(){ var st=cashState||{}; return (st.slips||[]).filter(function(x){ return x.include!==false&&Number(x.amount)>0&&/日払/.test(String(x.category||'')); }); }
-function ccTrustGateHtml(){
-  var st=cashState||{};
-  var dp=ccDayPaySlips_(), dpN=dp.length, dpSum=dp.reduce(function(t,x){ return t+Number(x.amount||0); },0);
-  var on=!!st.trustConfirmed;
-  var hint=dpN?('<div style="font-size:12px;color:#e0a060;margin-top:7px;line-height:1.55">📌 本日の日払い伝票 <b>'+dpN+'件</b>（計 ¥'+dpSum.toLocaleString()+'）。<b>全員分</b>TRUSTに入力しましたか？</div>'):'';
-  return '<div id="cc-trust-gate" style="border:2px solid '+(on?'#3ea06a':'#e05050')+';background:'+(on?'rgba(62,160,106,.12)':'rgba(224,80,80,.10)')+';border-radius:12px;padding:12px 14px;margin-top:16px;transition:border-color .15s,background .15s">'
-    +'<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer">'
-    +'<input type="checkbox" '+(on?'checked':'')+' style="width:22px;height:22px;margin-top:1px;flex:0 0 auto;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;ccTrustRefresh()">'
-    +'<span style="font-size:15px;font-weight:700;color:var(--txt);line-height:1.4">日払い・経費を <span style="color:#ffcf7a">TRUST</span> に入力しました'
-    +'<div style="font-size:12px;font-weight:400;color:var(--dim);margin-top:3px">チェックを入れないと閉店チェックは送信できません</div></span>'
-    +'</label>'+hint+'</div>';
+/* 受取人が「ちゃんと決まっている」か。空欄と、名簿にも名寄せにも無い名前はNG。
+   ⚠️名簿を取れていない時（CC_GATE=null）は空欄だけを見る＝通信不良で全部NGにしない。 */
+function ccPayeeKnown_(name){
+  var n=String(name||'').replace(/[\s　]/g,'').trim(); if(!n) return false;
+  if(!CC_GATE||!(CC_GATE.payees||[]).length) return true;
+  return CC_GATE.payees.some(function(p){ return String(p||'').replace(/[\s　]/g,'').trim()===n; });
 }
-function ccTrustRefresh(){
-  var w=document.getElementById('cc-trust-gate'); if(w) w.outerHTML=ccTrustGateHtml();
-  var b=document.getElementById('cc-submit-btn'); if(b){ var on=!!(cashState&&cashState.trustConfirmed)&&ccPosReady_(); b.style.opacity=on?'1':'.45'; b.textContent=(on?'':'🔒 ')+'閉店チェックを送信'; }
+/* 締めの条件。hard=true は満たさないと送信できない */
+function ccGateConds_(){
+  var st=cashState||{}, dp=ccDayPaySlips_(), C=[];
+  // ① 受取人
+  var noName=dp.filter(function(s){ return !String(s.payee||'').trim(); });
+  var unknown=dp.filter(function(s){ return String(s.payee||'').trim()&&!ccPayeeKnown_(s.payee); });
+  var pd='';
+  if(noName.length) pd+='受取人が空欄 '+noName.length+'件（'+noName.map(function(s){return '¥'+Number(s.amount).toLocaleString();}).join('・')+'）';
+  if(noName.length&&unknown.length) pd+=' / ';
+  if(unknown.length) pd+='名簿に無い名前 '+unknown.map(function(s){return '「'+esc(s.payee)+'」';}).join('・');
+  if(pd) pd+=' — 誰の日払いか決まらないとTRUSTと突き合わせられません。伝票でない写真（金種メモ・画面のスクショ）は「含める」を外してください。';
+  C.push({key:'payee', hard:true, ok:(noName.length===0&&unknown.length===0),
+    label:'日払い伝票の受取人がすべて決まっている', detail:pd});
+  // ② 金額の食い違い
+  var bad=(st.slips||[]).filter(function(s){ return s.source==='read'&&s.include!==false&&s.mismatch&&!s.amountOk; });
+  C.push({key:'amount', hard:true, ok:bad.length===0,
+    label:'金額とお金が合わない伝票を確認した',
+    detail: bad.length?('未確認 '+bad.length+'件 — 受領書の写真を開いて、正しい金額に直すか「確認しました」を押してください。'):'' });
+  // ③ TRUSTとの突合
+  var t=CC_GATE&&CC_GATE.today;
+  if(t&&t.hasTrust){
+    C.push({key:'trust', hard:true, ok:!!t.matched,
+      label:'TRUSTの日払いと一致している'+(t.perPerson?'（人別）':'（合計）'),
+      detail: t.matched?'' : ((t.lines||[]).join(' / ')||('伝票 ¥'+Number(t.slipTotal||0).toLocaleString()+' ／ TRUST ¥'+Number(t.trustTotal||0).toLocaleString()))
+        +' — TRUSTを直してから「TRUSTを取り直す」を押してください。' });
+  }else{
+    C.push({key:'trust', hard:true, ok:!!st.trustConfirmed, selfDeclare:true,
+      label:'日払い・経費を TRUST に入力した',
+      detail:'TRUSTの数字をまだ取り込めていません。今夜は自己申告で送信できますが、<b style="color:#ffcf7a">「未照合」として記録され、翌日の取り込みで必ず突き合わせます</b>（合わなければ翌日の閉店チェックが止まります）。' });
+  }
+  // ④ 過去の未照合日
+  var un=(CC_GATE&&CC_GATE.unresolved)||[];
+  C.push({key:'past', hard:true, ok:un.length===0,
+    label:'過去に未照合の日が残っていない',
+    detail: un.length?(un.map(function(u){ return u.dateKey.slice(5)+'（'+((u.lines&&u.lines.length)?u.lines.join(' / '):(u.hasTrust?('差 ¥'+Number(u.diff||0).toLocaleString()):'TRUST未取得'))+'）'; }).join('　')
+      +' — 管理者にコンソール「📥TRUST取込」で日払いを取り直してもらってください。合えば自動で解けます。'):'' });
+  return C;
 }
+function ccGateReady_(){ return ccGateConds_().every(function(c){ return !c.hard||c.ok; }); }
+function ccGateBlockMsg_(){
+  var ng=ccGateConds_().filter(function(c){ return c.hard&&!c.ok; });
+  return ng.length?('締めの条件がそろっていません。\n\n'+ng.map(function(c){ return '・'+c.label; }).join('\n')):'';
+}
+function ccGateRefresh(){
+  var w=document.getElementById('cc-trust-gate'); if(w) w.outerHTML=ccGateHtml();
+  var b=document.getElementById('cc-submit-btn');
+  if(b){ var on=ccGateReady_()&&ccPosReady_(); b.style.opacity=on?'1':'.45'; b.textContent=(on?'':'🔒 ')+'閉店チェックを送信'; }
+}
+function ccTrustRefresh(){ ccGateRefresh(); }   // 旧名の呼び出し元（ccPosRefresh）を生かす
+function ccGateHtml(){
+  var C=ccGateConds_(), ngN=C.filter(function(c){ return c.hard&&!c.ok; }).length;
+  var head=ngN? '<div style="font-size:15px;font-weight:800;color:#ff9a9a">🔒 締めの条件が '+ngN+' 件そろっていません</div>'
+                +'<div style="font-size:12px;color:var(--dim);margin-top:3px">全部 ✅ になるまで閉店チェックは送信できません</div>'
+              : '<div style="font-size:15px;font-weight:800;color:#8fe0ac">✅ 締めの条件はすべてそろっています</div>';
+  var rows=C.map(function(c){
+    var mark=c.ok?'✅':'❌';
+    var h='<div style="display:flex;gap:9px;align-items:flex-start;margin-top:9px">'
+      +'<span style="font-size:16px;line-height:1.3">'+mark+'</span>'
+      +'<div style="flex:1"><div style="font-size:13.5px;font-weight:700;color:'+(c.ok?'var(--txt)':'#ffcf7a')+'">'+c.label+'</div>';
+    if(c.detail) h+='<div style="font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.55">'+c.detail+'</div>';
+    if(c.selfDeclare) h+='<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer">'
+      +'<input type="checkbox" '+(cashState&&cashState.trustConfirmed?'checked':'')+' style="width:20px;height:20px;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;ccGateRefresh()">'
+      +'<span style="font-size:12.5px;color:var(--txt)">TRUSTに入力しました（今夜は自己申告で通します）</span></label>';
+    if(c.key==='trust') h+='<div style="margin-top:6px"><button class="bm-btn sm" onclick="ccGateLoad()">🔄 TRUSTを取り直す</button></div>';
+    return h+'</div></div>';
+  }).join('');
+  var err=(!CC_GATE&&CC_GATE_ERR)?'<div style="font-size:11.5px;color:#e0a060;margin-top:8px">⚠️ '+esc(CC_GATE_ERR)+'（TRUSTと過去日の確認ができていません。今夜は自己申告で通します）</div>':'';
+  var color=ngN?'#e05050':'#3ea06a', bg=ngN?'rgba(224,80,80,.10)':'rgba(62,160,106,.12)';
+  return '<div id="cc-trust-gate" style="border:2px solid '+color+';background:'+bg+';border-radius:12px;padding:12px 14px;margin-top:16px">'+head+rows+err+'</div>';
+}
+
 function ccFlowRow(l,v,c){ return '<div class="cc-flow-row"><span style="color:#889">'+l+'</span><span style="color:'+(c||'#ccc')+'">'+v+'</span></div>'; }
 function ccFlowHtml(v,withDiag){
   var h='<div class="cc-flow">';
@@ -7184,8 +7266,9 @@ function renderCashCheck(){
   h+='<div class="flabel">閉店時の現金を数える（4袋・紙幣の枚数）</div><div id="cc-bags">'+CASH_BAGS.map(ccBagCard).join('')+'</div>';
   h+='<div class="flabel">現金の流れ（自動照合）</div><div id="cc-recon"></div>';
   h+=ccPosGateHtml();
-  h+=ccTrustGateHtml();
-  h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" id="cc-submit-btn" onclick="submitCash()" style="opacity:'+(st.trustConfirmed?'1':'.45')+'">'+(st.trustConfirmed?'':'🔒 ')+'閉店チェックを送信</div>';
+  h+=ccGateHtml();
+  var _ready=ccGateReady_()&&ccPosReady_();
+  h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" id="cc-submit-btn" onclick="submitCash()" style="opacity:'+(_ready?'1':'.45')+'">'+(_ready?'':'🔒 ')+'閉店チェックを送信</div>';
   b.innerHTML=h; ccRenderSlips(); ccRefresh();
 }
 function slipCatSelect(i){ var s=cashState.slips[i]; return '<select onchange="cashState.slips['+i+'].category=this.value;ccRenderSlips();ccRefresh()">'+SLIP_CATS.map(function(c){return '<option'+(s.category===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'; }
@@ -7194,12 +7277,19 @@ function ccRenderSlips(){
   var w=document.getElementById('cc-slips'); if(!w)return;
   var reads=[],mans=[]; cashState.slips.forEach(function(s,i){ (s.source==='read'?reads:mans).push(i); });
   var readTotal=reads.reduce(function(t,i){ var s=cashState.slips[i]; return t+((s.include!==false&&s.amount>0)?Number(s.amount):0); },0);
-  var h='<div class="flabel">読み取り済み伝票（画像から）'+(reads.length?' <span style="color:#e0a060;font-weight:400">計 −¥'+readTotal.toLocaleString()+'</span>':'')+'</div>';
+  var h=(CC_GATE&&(CC_GATE.payees||[]).length?('<datalist id="cc-payees">'+CC_GATE.payees.map(function(n){return '<option value="'+esc(n)+'">';}).join('')+'</datalist>'):'')
+    +'<div class="flabel">読み取り済み伝票（画像から）'+(reads.length?' <span style="color:#e0a060;font-weight:400">計 −¥'+readTotal.toLocaleString()+'</span>':'')+'</div>';
   h+=reads.length?reads.map(function(i){ var s=cashState.slips[i];
     return '<div class="cc-slip"><div class="cc-slip-top">'+slipCatSelect(i)+'<label style="margin-left:auto;font-size:12px;color:var(--dim)"><input type="checkbox" '+(s.include!==false?'checked':'')+' onchange="cashState.slips['+i+'].include=this.checked;ccRenderSlips();ccRefresh()"> 含める</label></div>'
-      +'<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-size:13px;color:var(--txt)">'+esc(s.payee||'（相手先不明）')+'</span>'
-      +'<input type="number" class="finput" style="width:110px;margin:0" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;ccRefresh()">'
-      +(s.imageUrl&&s.imageUrl!=='#'?'<a href="'+esc(s.imageUrl)+'" target="_blank" class="dp-img">📷</a>':'<span class="dp-img" style="opacity:.45">📷</span>')+'</div></div>';
+      +(s.include===false?'<div style="font-size:11.5px;color:var(--dim);margin-bottom:6px">この写真は伝票として数えません（金種メモ・画面のスクショなど）</div>':'')
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<input type="text" class="finput" list="cc-payees" style="flex:1;margin:0'+(ccPayeeKnown_(s.payee)?'':';border-color:#e05050')+'" placeholder="受取人（署名の名前）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value;ccGateRefresh()" onchange="ccRenderSlips()">'
+      +'<input type="number" class="finput" style="width:104px;margin:0" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;cashState.slips['+i+'].amountOk=true;ccRefresh();ccGateRefresh()">'
+      +(s.imageUrl&&s.imageUrl!=='#'?'<a href="'+esc(s.imageUrl)+'" target="_blank" class="dp-img">📷</a>':'<span class="dp-img" style="opacity:.45">📷</span>')+'</div>'
+      +(s.mismatch&&s.include!==false?('<div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11.5px;color:'+(s.amountOk?'#8fe0ac':'#ffcf7a')+'">'
+        +'<span style="flex:1">'+(s.amountOk?'✅ 確認しました':'⚠️ 読み取った金額 ¥'+Number(s.ocrAmount||0).toLocaleString()+' と、写真の現金 '+(s.cashSeen==null?'（不明）':'¥'+Number(s.cashSeen).toLocaleString())+' が合いません')+'</span>'
+        +(s.amountOk?'':'<button class="bm-btn sm" onclick="cashState.slips['+i+'].amountOk=true;ccRenderSlips();ccGateRefresh()">確認しました</button>')+'</div>'):'')
+      +'</div>';
   }).join(''):'<div class="empty-msg" style="padding:6px 0;font-size:12px">画像から読み取った伝票はありません</div>';
   h+='<div class="flabel">手入力で追加（写真が無い支払い）</div>';
   h+=mans.map(function(i){ var s=cashState.slips[i];
@@ -7225,7 +7315,7 @@ function ccPhoto(idx,file){
 }
 function submitCash(){
   var st=cashState; if(!st.reporterName){ alert('報告者を選択してください'); return; }
-  if(!st.trustConfirmed){ alert('日払い・経費を TRUST に入力してから、チェックを入れて送信してください。'); var g=document.getElementById('cc-trust-gate'); if(g&&g.scrollIntoView)g.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  if(!ccGateReady_()){ alert(ccGateBlockMsg_()); var g=document.getElementById('cc-trust-gate'); if(g&&g.scrollIntoView)g.scrollIntoView({behavior:'smooth',block:'center'}); return; }
   /* 🔒 設計ベース＝**閉店報告までに全部終わっていること**。未会計/請求書依頼漏れは翌日には誰も気づけない */
   if(!ccPosReady_()){
     alert(ccPosBlockMsg_());
@@ -7234,7 +7324,13 @@ function submitCash(){
   }
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
   var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
-  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto'};
+  /* 🔒 締め条件の結果を一緒に送る。TRUSTと突合できていない夜は「未照合」で残し、翌日の取込で必ず突き合わせる
+     （＝その日の逃げ道は残すが、翌日の閉店チェックが止まるので溜められない） */
+  var _t=CC_GATE&&CC_GATE.today;
+  var _gate=(_t&&_t.hasTrust&&_t.matched)
+    ? {trustStatus:'照合済み',trustDiff:0,note:(_t.perPerson?'人別':'合計')+'で一致'}
+    : {trustStatus:'未照合',trustDiff:(_t&&_t.hasTrust)?Number(_t.diff||0):0,note:(_t&&_t.hasTrust)?'差異あり':'TRUST未取得（黒服の自己申告で送信）'};
+  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto',gate:_gate};
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
     gsr('getCashCheckInit').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
