@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-26b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-26c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1912,7 +1912,7 @@ function hbuSend_(id,text,to){
    これまで閉店の作業はランチャーが4つ並ぶだけで、チェックは端末のlocalStorage＝実態と無関係だった。
    ここでは**機械が見られるものは機械が見て**、残り件数と「帰れるかどうか」を一番上に大きく出す。
    ⚠️順不同。どれから触ってもよく、全部 ✅ になった時だけ 🚪退勤OK になる。 */
-var CLOSE_FLOW={loading:false,at:0,cash:null,pos:null,gate:null,denpyo:null,err:''};
+var CLOSE_FLOW={loading:false,at:0,cash:null,pos:null,gate:null,denpyo:null,extra:null,err:''};
 function loadClosingFlow(force){
   if(!IS_GAS||CLOSE_FLOW.loading)return;
   if(!force&&CLOSE_FLOW.at&&(Date.now()-CLOSE_FLOW.at)<20000)return;   // 20秒はキャッシュ（GASの床1.9秒を毎回払わない）
@@ -1926,8 +1926,15 @@ function loadClosingFlow(force){
     var slips=readSlipsFromDenpyo(r[2]).filter(function(x){return Number(x.amount)>0;})
       .map(function(x){return {category:x.category,payee:x.payee,amount:Number(x.amount)||0};});
     var dk=(r[0]&&r[0].dateKey)||'';
-    return gsr('ccGateStatus',dk,slips).catch(function(){return null;});
-  }).then(function(g){
+    /* ⚠️ゲート（帰宅をブロックする条件）と警告ブロックは並列で取る＝GASの床1.9秒を2回払わない。
+       ⚠️警告が取れなくても締めは進める＝extra は null のまま「警告が出ないだけ」に留める。 */
+    return Promise.all([
+      gsr('ccGateStatus',dk,slips).catch(function(){return null;}),
+      gsr('getClosingExtras',dk).catch(function(){return null;})
+    ]);
+  }).then(function(rr){
+    var g=rr[0], ex=rr[1];
+    CLOSE_FLOW.extra=(ex&&ex.ok!==false)?ex:null;
     CLOSE_FLOW.gate=(g&&g.ok!==false)?g:null;
     CLOSE_FLOW.err=CLOSE_FLOW.gate?'':'TRUSTの状態を確認できませんでした';
     CLOSE_FLOW.loading=false; CLOSE_FLOW.at=Date.now();
@@ -2009,6 +2016,37 @@ function cfSteps_(){
   return S;
 }
 function cfCanGoHome_(){ return cfSteps_().every(function(s){return s.state==='done';}); }
+/* ⚠️「今日中に片付けたいこと」＝退勤はブロックしない警告（ボス確定 2026-08-26「まずは警告表示から」）。
+   ⛔ここに出す条件を cfSteps_ 側にも書かないこと。同じ条件を2箇所で判定すると必ずズレて
+      「送信済みなのに永久に帰れない」が起きる（2026-08-25に2回踏んだ）。必須はcfSteps_・警告はここ、で分ける。 */
+function cfWarnItems_(){
+  var F=CLOSE_FLOW, ex=F.extra, W=[];
+  /* ③ 当日の経費（領収書）＝日払いと同じ現金袋から出るのに、これまで受取人も金額も無検査だった */
+  var keihi=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&!/日払/.test(String(x.category||''));});
+  var kNo=keihi.filter(function(x){return !String(x.payee||'').trim();});
+  var kMis=keihi.filter(function(x){return !!x.mismatch;});
+  if(kNo.length||kMis.length) W.push({em:'🧾',t:'経費の伝票を整える',
+    s:[kNo.length?('発行元が空欄 '+kNo.length+'件'):'',kMis.length?('金額とお金が合わない '+kMis.length+'件'):''].filter(Boolean).join(' / '),
+    act:'openCashCheck()'});
+  if(!ex) return W;
+  /* ④ お客様の伝票で人数・注文の食い違いが出たまま（従来はLINEに流れて終わりだった） */
+  if((ex.kaikei||[]).length) W.push({em:'🧾',t:'お客様の伝票に要確認があります',
+    s:ex.kaikei.length+'件　人数や注文の食い違い', act:'openKaikeiIssues()'});
+  /* ② 納品書を撮ったのに在庫へ反映していない */
+  if(ex.deliveryN) W.push({em:'📦',t:'納品が在庫に反映されていません',
+    s:ex.deliveryN+'伝票'+((ex.delivery||[])[0]?('　'+(ex.delivery[0].supplier||'')+' ほか'):''), act:'openDeliveryReflect()'});
+  /* ① 過去の営業日に残ったままの日払い未仕訳（当日ぶんはゲートが既に止めている） */
+  if(ex.hibaraiPastN) W.push({em:'💴',t:'前の日の日払い伝票が仕訳されていません',
+    s:ex.hibaraiPastN+'件　受取人が不明のまま（給与の前に片付けてください）', act:'openHibaraiUnknown()'});
+  return W;
+}
+function cfWarnHtml_(w){
+  return '<div class="hv-chk" onclick="'+w.act+'" style="border-color:#e6c14a">'
+    +'<div class="box" style="color:#e6c14a;border-color:#e6c14a">!</div>'
+    +'<div class="em">'+w.em+'</div>'
+    +'<div class="bd"><div class="t">'+esc(w.t)+'</div><div class="s" style="color:#e6c14a">'+esc(w.s)+'</div></div>'
+    +'<div class="go">›</div></div>';
+}
 function cfStepHtml_(s){
   var done=s.state==='done', wait=s.state==='wait';
   var mark=done?'✓':(wait?'…':'');
@@ -2044,11 +2082,50 @@ function renderClosingFlow(){
     h+='<div class="hv-sec todo"><span class="st">🌙 やること</span><span class="cnt">残り '+todo.length+'</span></div>';
     h+=todo.map(cfStepHtml_).join('');
   }
+  /* ⚠️退勤をブロックする「やること」と、ブロックしない「今日中に片付けたいこと」を必ず分けて出す。
+     混ぜると『あと N 件』が何を指すのか分からなくなる＝締めの目的がぼやける。 */
+  var Wn=cfWarnItems_();
+  if(Wn.length){
+    h+='<div class="hv-sec todo" style="border-color:#e6c14a"><span class="st" style="color:#e6c14a">⚠️ 今日中に片付けたいこと</span><span class="cnt">'+Wn.length+'</span></div>';
+    h+='<div style="font-size:11px;color:var(--dim);margin:0 2px 6px">退勤は止めません。ただし溜めると後で必ず面倒になります</div>';
+    h+=Wn.map(cfWarnHtml_).join('');
+  }
   if(fin.length){
     h+='<div class="hv-sec done"><span class="st">✓ 完了</span><span class="cnt">'+fin.length+'</span></div>';
     h+=fin.map(cfStepHtml_).join('');
   }
   return h;
+}
+
+/* 🧾 お客様の伝票の「要確認」を1画面で片付ける。持ち越しは付けない＝伝票の食い違いは翌日に送る意味が薄い。 */
+function openKaikeiIssues(){ closeMenu(); showSheet('🧾 お客様の伝票 要確認', kkIssuesHtml_(), false); }
+function kkIssuesHtml_(){
+  var ex=CLOSE_FLOW.extra, rows=(ex&&ex.kaikei)||[];
+  if(!rows.length) return '<div class="empty-msg">要確認の伝票はありません</div>';
+  return '<div style="font-size:12px;color:var(--dim);margin-bottom:10px">写真の読み取りで食い違いが出た伝票です。現物を確認して、直したら「対応した」を押してください。</div>'
+    +rows.map(function(r){
+      return '<div class="hv-chk" style="border-color:#e6c14a">'
+        +'<div class="em">🧾</div>'
+        +'<div class="bd"><div class="t">'+esc(r.cust||'（客名なし）')+(r.table?' <span style="color:var(--dim);font-weight:400">'+esc(r.table)+'</span>':'')+'</div>'
+        +'<div class="s" style="color:#e6c14a">'+esc(r.issues||'')+'</div>'
+        +(r.time?'<div class="s" style="color:var(--dim)">'+esc(r.time)+'</div>':'')+'</div>'
+        +'<div class="go"><button onclick="kkResolve('+r.rowIdx+')" style="background:var(--accent);color:#1a1000;border:0;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:800;cursor:pointer">✅ 対応した</button></div></div>';
+    }).join('');
+}
+/* ⚠️busyは行ごとに持つ。1つのフラグを全カードで共有すると、GASの応答(床1.9秒)の間に別カードを押した時に
+   黙って無反応になる（💴日払いの不明分で実測して踏んだ）。 */
+var KK_BUSY={};
+function kkResolve(rowIdx){
+  if(KK_BUSY[rowIdx]){ alert('保存中です'); return; }
+  KK_BUSY[rowIdx]=true;
+  gsr('resolveKaikeiCheck',rowIdx,LOGIN||'').then(function(r){
+    KK_BUSY[rowIdx]=false;
+    if(!r||r.ok===false){ alert('保存できませんでした'+((r&&r.error)?'：'+r.error:'')); return; }
+    if(CLOSE_FLOW.extra&&CLOSE_FLOW.extra.kaikei)
+      CLOSE_FLOW.extra.kaikei=CLOSE_FLOW.extra.kaikei.filter(function(x){return Number(x.rowIdx)!==Number(rowIdx);});
+    var el=document.getElementById('sheetBody'); if(el)el.innerHTML=kkIssuesHtml_();
+    if(viewMode==='home')renderHome();
+  }).catch(function(){ KK_BUSY[rowIdx]=false; alert('通信エラー'); });
 }
 
 /* 📋 残っているタスクを1画面で決める（対応した／明日へ持ち越す）。
