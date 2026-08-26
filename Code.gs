@@ -687,7 +687,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck',
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', 'importTrustReportShot',
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
   // 📖 新人マニュアル（manual.gs）＝軍師は読み取りのみ。編集はコンソール(handleApiRequest_のmanual*)。
@@ -17391,6 +17391,53 @@ const TRUST_DAYPAY_TAB  = 'TRUST日払い日次';
 const TRUST_DAYPAY_HEAD = ['営業日', '名前', '金額', '取得時刻', '取得元'];
 const CC_GATE_LOOKBACK_ = 30;   // 未照合日をさかのぼって探す日数
 
+// ── 📷 日報スクショから取れる「出金（経費）」の受け皿 ───────────────────────
+//   ⚠️出金は名前のような一意キーが無い（同じ項目名が複数行ありうる）ので、
+//     「出金の表が写っていた枚」でその日ぶんを丸ごと置き換える。写っていない枚では触らない。
+const TRUST_DAYCOST_TAB  = 'TRUST出金日次';
+const TRUST_DAYCOST_HEAD = ['営業日', '項目', '金額', '取得時刻', '取得元'];
+
+function ensureTrustDayCostSheet_(ss) {
+  let sh = ss.getSheetByName(TRUST_DAYCOST_TAB);
+  if (!sh) { sh = ss.insertSheet(TRUST_DAYCOST_TAB); sh.appendRow(TRUST_DAYCOST_HEAD); sh.setFrozenRows(1); }
+  return sh;
+}
+
+function saveTrustDayCost_(dateKey, rows, source) {
+  const ss = getOrOpenSS_();
+  const sh = ensureTrustDayCostSheet_(ss);
+  const d = String(dateKey || '').trim();
+  if (!d) return { ok: false, error: '営業日が空です' };
+  const vals = sh.getDataRange().getValues();
+  for (let i = vals.length - 1; i >= 1; i--) {
+    const rd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (rd === d) sh.deleteRow(i + 1);
+  }
+  const stamp = now_();
+  const out = (rows || []).filter(function (r) { return r && Number(r.amount) > 0; })
+    .map(function (r) { return [d, String(r.label || '').trim() || '(項目なし)', Number(r.amount) || 0, stamp, source || '日報スクショ']; });
+  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_DAYCOST_HEAD.length).setValues(out);
+  return { ok: true, saved: out.length };
+}
+
+function getTrustDayCost_(dateKey) {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(TRUST_DAYCOST_TAB);
+  const d = String(dateKey || '').trim();
+  const res = { hasData: false, rows: [], total: 0, fetchedAt: '' };
+  if (!sh || sh.getLastRow() < 2) return res;
+  const vals = sh.getDataRange().getValues();
+  for (let i = 1; i < vals.length; i++) {
+    const rd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (rd !== d) continue;
+    res.rows.push({ label: String(vals[i][1] || ''), amount: Number(vals[i][2]) || 0 });
+    res.total += Number(vals[i][2]) || 0;
+    res.fetchedAt = fmtStamp_(vals[i][3]);
+  }
+  res.hasData = res.rows.length > 0;
+  return res;
+}
+
 function ensureTrustDayPaySheet_(ss) {
   let sh = ss.getSheetByName(TRUST_DAYPAY_TAB);
   if (!sh) {
@@ -17422,6 +17469,39 @@ function saveTrustDayPayRows_(dateKey, rows, source) {
   return { ok: true, saved: out.length };
 }
 
+// 日払いを「名前キー」でマージ保存する（複数枚のスクショを1日ぶんに合成する）。
+//   seen … このスクショに写っていた全員の名前（日払いが空欄の人も含む）
+//   rows … そのうち日払い>0 の人だけ
+// ⚠️「写っていた人はいったん消してから入れ直す」＝TRUST側で日払いを消した人の古い値が残らない。
+// ⚠️上の saveTrustDayPayRows_（その日を全消し→書き直し）とは別物。あちらはブックマークレット用で
+//    1回に全員ぶん取れる経路だから全消しが正しい。スクショは1枚に全員入らないので消してはいけない。
+function mergeTrustDayPayRows_(dateKey, seen, rows, source) {
+  const ss = getOrOpenSS_();
+  const sh = ensureTrustDayPaySheet_(ss);
+  const d = String(dateKey || '').trim();
+  if (!d) return { ok: false, error: '営業日が空です' };
+
+  const seenKey = {};
+  (seen || []).forEach(function (n) { const k = hbKey_(n); if (k) seenKey[k] = true; });
+  (rows || []).forEach(function (r) { const k = hbKey_(r && r.name); if (k) seenKey[k] = true; });
+
+  const vals = sh.getDataRange().getValues();
+  for (let i = vals.length - 1; i >= 1; i--) {
+    const rd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+    if (rd !== d) continue;
+    const nm = String(vals[i][1] || '').trim();
+    // 今回のスクショに写っていた人だけ消す＝別の枚で入れた人は残る（これがマージの肝）。
+    // 「(合計)」しか無い行はブックマークレットが人別を取れなかった名残＝人別が入る時点で用済み。
+    if (seenKey[hbKey_(nm)] || /^\(?合計\)?$/.test(nm) || nm === '(名前なし)') sh.deleteRow(i + 1);
+  }
+
+  const stamp = now_();
+  const out = (rows || []).filter(function (r) { return r && Number(r.amount) > 0; })
+    .map(function (r) { return [d, String(r.name || '').trim() || '(名前なし)', Number(r.amount) || 0, stamp, source || '日報スクショ']; });
+  if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_DAYPAY_HEAD.length).setValues(out);
+  return { ok: true, saved: out.length, seen: Object.keys(seenKey).length };
+}
+
 // 当日ぶんのTRUST日払い（保存済み）を読む
 function getTrustDayPay_(dateKey) {
   const ss = getOrOpenSS_();
@@ -17443,6 +17523,121 @@ function getTrustDayPay_(dateKey) {
   // 「(合計)」1行だけ＝人別が取れなかった日。人別が1行でもあれば人別照合ができる
   res.perPerson = res.hasData && !res.rows.every(function (r) { return /^\(?合計\)?$/.test(r.name) || r.name === '(名前なし)'; });
   return res;
+}
+
+// 日報スクショ専用のOCR。
+// ⚠️汎用の extractReceiptWithGemini_ には混ぜないこと。日報だけスキーマが桁違いに重く、
+//   混ぜると伝票（領収書・日払い・納品書）側の判定精度を巻き添えで落とす。
+// ⚠️このプロンプトは 2026-08-26 に実データ3枚で全項目一致を実測した版（scratchpad/trust_prompt.txt と同一）。
+//   ①黒い空欄を数字と誤読しない ②見出しだけの空テーブルから幻の行を作らない ③写っていない日付を推測しない
+//   の3点を、検算ルール（支給額合計−日払い＝残り支給額）で担保している。文言を削るなら再検証すること。
+function extractTrustReportWithGemini_(blob) {
+  const key = prop('GEMINI_API_KEY'); if (!key) return null;
+  const model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
+  const prompt =
+    'これは店舗管理システム「TRUST」の日報（Report）画面のスクリーンショットです。表を読み取ってJSONだけで返してください（説明・コードブロック不要）。\n' +
+    '\n' +
+    '画面は上から順に次の構成です。1枚に収まらないため複数枚に分けて撮られます。★写っている範囲だけを返し、切れて読めない行は絶対に推測で補完しないこと。\n' +
+    '　(1) 大きな見出しの日付「YYYY年MM月DD日」\n' +
+    '　(2) キャストの表：列は「キャスト」／勤怠(開始・終了・時間外・労働時間・時間給与単価)／日払い支給額(支給額合計・残り支給額・日払い・送り代・個人支払い・宿泊代・早上がり・計)／マイナス …\n' +
+    '　　★1人が2行に分かれて表示される（2行目は空の追加行で「削除」リンクが付く）。必ず1人1件にまとめる。\n' +
+    '　(3) スタッフ（黒服）の表：列は「スタッフ」／勤怠／日払い支給額(日払い)／マイナス(送り代・個人支払い・宿泊代・早上がり・計)／ボーナス(送迎手当・残業代・売り半 …)\n' +
+    '　(4) 入金の表：「入金」「金額」「メモ」\n' +
+    '　(5) 出金の表：「出金」「金額」「メモ」（＝店の経費）\n' +
+    '　(6) メモ欄と「登録」ボタン\n' +
+    '\n' +
+    '次の形のJSONだけを返す:\n' +
+    '{"date":"見出しの日付をyyyy-MM-dd（写っていなければ空文字）",\n' +
+    '"hasCast":キャストの表の見出しか行が写っているか true/false,\n' +
+    '"hasStaff":スタッフの表の見出しか行が写っているか true/false,\n' +
+    '"hasNyukin":入金の表が写っているか true/false,\n' +
+    '"hasShukkin":出金の表が写っているか true/false,\n' +
+    '"cast":[{"name":"キャスト名（表示どおり。源氏名でも本名でも）","hibarai":「日払い」列の整数（空欄なら0）,"total":「支給額合計」の整数,"nokori":「残り支給額」の整数}],\n' +
+    '"staff":[{"name":"スタッフ名","hibarai":「日払い」列の整数（空欄なら0）}],\n' +
+    '"nyukin":[{"label":"入金の項目名","amount":金額整数}],\n' +
+    '"shukkin":[{"label":"出金の項目名","amount":金額整数}]}\n' +
+    '\n' +
+    '【必ず守るルール】\n' +
+    '① 入力欄が黒く塗りつぶされて見えるのは「空欄（未入力）」。0として返す。★黒い枠から数字を想像してはいけない。この画面は日払いを受け取っていない人の方が多く、日払い列はほとんどが空欄になる。\n' +
+    '② ★表の見出しだけが写っていて行が1件も無いことがよくある（その日にスタッフの日払い・入金・出金が無かった場合）。そのときは has… を true にしたうえで、配列は必ず空 [] を返す。★見出しから行を作り出してはいけない。\n' +
+    '③ 金額は¥やカンマを除いた整数。「¥33,500」→33500。\n' +
+    '④ ★検算：キャストの各行は「支給額合計 −（日払い＋送り代＋個人支払い＋宿泊代＋早上がり）＝ 残り支給額」になる。日払いを読んだら必ずこの引き算が合うか確かめ、合わなければ桁を読み直すこと。\n' +
+    '　　例：支給額合計 ¥21,000 ／ 残り支給額 ¥3,000 なら 日払いは 18000。\n' +
+    '　　日払いが空欄の人は「支給額合計 ＝ 残り支給額」になる。この2つが同額なら日払いは必ず0。\n' +
+    '⑤ 表の途中で画面が切れている行、名前が読めない行は含めない。\n' +
+    '⑥ 画面に他のアプリやブラウザのウィンドウ、メニューバー、Dockが写り込んでいても、TRUSTの表だけを読む。\n' +
+    '⑦ 日払いが0（空欄）の人も、名前が読めるなら cast / staff に必ず含める（何人ぶん写っていたかを数えるのに使う）。\n' +
+    '\n' +
+    'JSON以外は出力しないこと。';
+  const payload = {
+    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: blob.getContentType() || 'image/png', data: Utilities.base64Encode(blob.getBytes()) } }] }],
+    generationConfig: { temperature: 0, response_mime_type: 'application/json' }
+  };
+  let res = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key),
+      { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    if (res.getResponseCode() === 429 && attempt < 2) { Utilities.sleep(2500); continue; }
+    break;
+  }
+  if (res.getResponseCode() !== 200) { console.error('trust report gemini http', res.getResponseCode(), res.getContentText().slice(0, 200)); return null; }
+  try { return JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text); }
+  catch (e) { console.error('trust report parse', e); return null; }
+}
+
+// 軍師：日報スクショを1枚取り込む。payload={base64, mime, dateKey}
+// ⚠️GUNSHI_API_FNS登録必須。
+// ⚠️実測で1枚あたり6〜12秒かかる（Gemini往復）。フロントは必ず1枚ずつ順に投げて進捗を出すこと。
+function importTrustReportShot(payload) {
+  try {
+    payload = payload || {};
+    const raw = String(payload.base64 || '').replace(/^data:[^;]+;base64,/, '');
+    if (!raw) return { ok: false, error: '画像がありません' };
+    const blob = Utilities.newBlob(Utilities.base64Decode(raw), payload.mime || 'image/png', 'trust_report.png');
+    const ai = extractTrustReportWithGemini_(blob);
+    if (!ai) return { ok: false, error: '読み取れませんでした（少し時間をおいてもう一度お試しください）' };
+
+    // 日付は画面の見出しを最優先。2枚目以降は見出しが写らないので、画面が開いている営業日にフォールバック
+    const shot = /^\d{4}-\d{2}-\d{2}$/.test(String(ai.date || '')) ? String(ai.date) : '';
+    const d = shot || String(payload.dateKey || '').trim() || bizDateStr_();
+    // ⚠️別の日の日報を撮ってしまった時に黙って混ぜない＝呼び出し側に伝えて確認させる
+    const dateMismatch = !!(shot && payload.dateKey && shot !== String(payload.dateKey).trim());
+
+    const cast = Array.isArray(ai.cast) ? ai.cast : [];
+    const staff = Array.isArray(ai.staff) ? ai.staff : [];
+    const people = cast.concat(staff).filter(function (r) { return r && String(r.name || '').trim(); });
+    const seen = people.map(function (r) { return String(r.name).trim(); });
+    const pay = people.filter(function (r) { return Number(r.hibarai) > 0; })
+      .map(function (r) { return { name: String(r.name).trim(), amount: Number(r.hibarai) || 0 }; });
+
+    // ★検算：支給額合計 − 日払い = 残り支給額。合わない行は読み違いの疑いとして返す（保存はする＝人が見て直す）
+    const suspect = [];
+    cast.forEach(function (r) {
+      const t = Number(r.total) || 0, n = Number(r.nokori) || 0, h = Number(r.hibarai) || 0;
+      if (!t || !h) return;                     // 支給額合計か日払いが無い行は検算の対象外
+      // ⚠️expect は「日払いの正しい値」＝支給額合計 − 残り支給額。
+      //   t - h（残り支給額の期待値）と取り違えないこと。フロントは「正しくは ¥◯◯」と金額を名指しで出す。
+      if (t - h !== n) suspect.push({ name: String(r.name || ''), total: t, hibarai: h, nokori: n, expect: t - n });
+    });
+
+    const m = mergeTrustDayPayRows_(d, seen, pay, '日報スクショ');
+    if (!m.ok) return { ok: false, error: m.error };
+    let savedCost = 0, costTotal = null;
+    if (ai.hasShukkin) {                        // 出金の表が写っていた枚だけ置き換える
+      const c = saveTrustDayCost_(d, Array.isArray(ai.shukkin) ? ai.shukkin : [], '日報スクショ');
+      savedCost = c.saved || 0;
+      costTotal = getTrustDayCost_(d).total;
+    }
+
+    const after = getTrustDayPay_(d);
+    return {
+      ok: true, dateKey: d, dateOnShot: shot, dateMismatch: dateMismatch,
+      readPeople: people.length, readPay: pay.length,
+      hasShukkin: !!ai.hasShukkin, savedCost: savedCost, costTotal: costTotal,
+      suspect: suspect,
+      dayPeople: after.rows.length, dayTotal: after.total, dayRows: after.rows
+    };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
 }
 
 // 受取人として選ばせてよい名前（名簿＋日払い名寄せ＋直近TRUST表記）。
