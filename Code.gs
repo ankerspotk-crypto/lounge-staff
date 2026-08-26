@@ -17742,6 +17742,7 @@ function extractTrustReportWithGemini_(blob) {
     '\n' +
     '次の形のJSONだけを返す:\n' +
     '{"date":"見出しの日付をyyyy-MM-dd（写っていなければ空文字）",\n' +
+    '"dateRaw":"その見出しを書かれているままの文字列で（例 2026年08月26日(水)）。写っていなければ空文字",\n' +
     '"hasCast":キャストの表の見出しか行が写っているか true/false,\n' +
     '"hasStaff":スタッフの表の見出しか行が写っているか true/false,\n' +
     '"hasNyukin":入金の表が写っているか true/false,\n' +
@@ -17781,6 +17782,32 @@ function extractTrustReportWithGemini_(blob) {
   if (res.getResponseCode() !== 200) { console.error('trust report gemini http', res.getResponseCode(), res.getContentText().slice(0, 200)); return null; }
   try { return JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text); }
   catch (e) { console.error('trust report parse', e); return null; }
+}
+
+// 日付だけを読む「2つめの目」。本体OCRと食い違った時だけ呼ぶ（1枚につき最大1回・約2〜4秒）。
+// ⚠️わざと本体とは別文面にしてある。同じ聞き方で2回読ませても同じ読み違いをするので照合にならない。
+//   ここでは表も金額も一切読ませず、見出しの年月日だけに集中させる。
+// ⚠️これは「スクショの日付を信用してよいか」を測るためのもので、勝ち負けを決めるものではない。
+//   2つの目が一致したときだけ、スクショの日付を軍師の営業日と同格の根拠として扱う。
+function extractTrustReportDateWithGemini_(blob) {
+  const key = prop('GEMINI_API_KEY'); if (!key) return null;
+  const model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
+  const prompt =
+    'この画像は店舗管理システムの日報画面です。画面の一番上にある大きな見出しの日付だけを読んでください。\n' +
+    '・表の中の数字、勤怠の時刻、カレンダー、前日／翌日の送りリンク、OSの時計、ブラウザのタブは見ないこと。\n' +
+    '・見出しの年・月・日を一文字ずつ確かめること。日にちの一の位（5と6、3と8、1と7、0と8）は特に読み違えやすい。\n' +
+    '・見出しが写っていない、または最後まで読み切れないときは空文字を返すこと（推測は禁止）。\n' +
+    '次のJSONだけを返す: {"date":"yyyy-MM-dd または空文字","raw":"見出しを書かれているままの文字列"}';
+  const payload = {
+    contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: blob.getContentType() || 'image/png', data: Utilities.base64Encode(blob.getBytes()) } }] }],
+    generationConfig: { temperature: 0, response_mime_type: 'application/json' }
+  };
+  try {
+    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key),
+      { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) return null;
+    return JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
+  } catch (e) { console.error('trust report date 2nd', e); return null; }
 }
 
 // 軍師：日報スクショを1枚取り込む。payload={base64, mime, dateKey}
@@ -17828,8 +17855,16 @@ function importTrustReportShot(payload) {
     // ⚠️どちらの日付が正しいかは人しか決められない。決まるまで1行も書かない（書いてから直すのは至難）。
     //   payload.dateOk=true ＝この取り込み一式の日付は人が決めた、の意。以後は聞き直さない。
     if (dateMismatch && !payload.dateOk) {
+      // ⚠️ここで「2つめの目」を回す。別文面で日付だけを読み直させ、1回目と一致するかを見る。
+      //   一致＝スクショの日付は信用してよい（疑うのは軍師の営業日の方）。
+      //   不一致／読めない＝OCRが日付で迷っている＝スクショの日付は根拠として弱い。
+      const second = extractTrustReportDateWithGemini_(blob) || {};
+      const shot2 = /^\d{4}-\d{2}-\d{2}$/.test(String(second.date || '')) ? String(second.date) : '';
       return {
         ok: true, needDateConfirm: true, dateOnShot: shot, dateKey: dk,
+        dateRaw: String(ai.dateRaw || '').trim(),
+        dateSecond: shot2, dateSecondRaw: String(second.raw || '').trim(),
+        dateConfident: !!(shot2 && shot2 === shot),
         readPeople: people.length, readPay: pay.length
       };
     }

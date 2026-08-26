@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1966,14 +1966,7 @@ function trustShotDone_(files,i,r){
   /* ⚠️日付が食い違った＝サーバはまだ1行も保存していない。人が決めてから【同じ枚をやり直す】。
      先に保存してから聞くと、間違った日に入った行を後から取り除くのが実質できない。 */
   if(r&&r.needDateConfirm&&!TRS.dateOk){
-    var mine=r.dateKey||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
-    var keep=confirm('スクショから読み取れた日付は '+r.dateOnShot+' でした。\n'
-      +'いま締めているのは '+mine+' です。\n\n'
-      +'OK … '+mine+' ぶんとして取り込む\n'
-      +'　（日付の読み取り違い。TRUSTで '+mine+' の日報を開いているならこちら）\n\n'
-      +'キャンセル … '+r.dateOnShot+' ぶんとして取り込む\n'
-      +'　（前の日の日報を撮っていた場合はこちら）');
-    TRS.date=keep?mine:r.dateOnShot;
+    TRS.date=trustAskDate_(r);
     TRS.dateOk=true;
     TRS.log.push({ok:true,text:'この取り込みは '+TRS.date+' ぶんとして進めます',warn:[]});
     trustEntryRefresh_();
@@ -1985,6 +1978,37 @@ function trustShotDone_(files,i,r){
   trustEntryRefresh_();
   trustShotNext_(files,i+1);
 }
+/* 日付が食い違ったときに、証拠を見せて人に決めさせる。
+   ⚠️スクショの日付と軍師の営業日は【どちらも証拠】。片方を機械的に勝たせない。
+     ・2つの目が一致（dateConfident）＝スクショの日付は信用できる → スクショ側をおすすめにする
+     ・食い違う／読めない＝OCRが日付で迷っている → 軍師の営業日をおすすめにする
+   ⚠️おすすめは必ず confirm の【OK】側に置く。押しやすい方が正解になるようにする。
+   ⚠️見出しの生テキスト（dateRaw）を必ず見せる。数字だけ見せても人には確かめようがない。 */
+function trustAskDate_(r){
+  var mine=r.dateKey||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
+  var shot=r.dateOnShot||'';
+  var L=['日報の日付が、いま締めている営業日と違います。','',
+         'スクショの見出し … '+shot+(r.dateRaw?'（「'+r.dateRaw+'」と読めました）':'')];
+  if(r.dateSecond) L.push('　もう一度読ませた結果 … '+r.dateSecond+(r.dateSecondRaw?'（「'+r.dateSecondRaw+'」）':''));
+  else L.push('　もう一度読ませた結果 … 読み取れず');
+  L.push('軍師で開いている営業日 … '+mine,'');
+  var rec,other;
+  if(r.dateConfident){
+    L.push('▶ 2回とも '+shot+' と読めました。スクショの日付は確かそうです。');
+    rec=shot; other=mine;
+    L.push('','OK … '+shot+' ぶんとして取り込む（おすすめ）',
+           '　　TRUSTで前の日の日報を開いたままだった可能性が高いです。','',
+           'キャンセル … '+mine+' ぶんとして取り込む');
+  }else{
+    L.push('▶ 2回の読み取りが揃いませんでした。日付の読み取り違いの可能性があります。');
+    rec=mine; other=shot;
+    L.push('','OK … '+mine+' ぶんとして取り込む（おすすめ）',
+           '　　TRUSTで '+mine+' の日報を開いているならこちらです。','',
+           'キャンセル … '+shot+' ぶんとして取り込む');
+  }
+  return confirm(L.join('\n'))?rec:other;
+}
+
 /* 今日の伝票から、この名前の日払い額を引く。表記が完全に一致する時だけ言い切る（名寄せまではしない）。 */
 function trustSlipAmount_(name){
   var k=String(name||'').replace(/[\s　]/g,'');
