@@ -1082,6 +1082,67 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 @keyframes nPop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 
 .proto-flag{position:fixed;left:12px;bottom:9px;z-index:60;font-size:10px;color:#8a7a3a;background:#1c1808;border:1px solid #4a3d10;border-radius:20px;padding:4px 11px;font-weight:700;}
+/* ===== 🪪 派遣スタッフ 本人確認（顔写真＋身分証）＝軍師メニュー。iPad前提で指で押せる大きさ（最小44px） ===== */
+.hkn-note{background:var(--panel2);border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:10px;padding:11px 14px;font-size:12.5px;line-height:1.6;color:var(--sub);margin-bottom:16px;}
+.hkn-note b{color:var(--txt);}
+.hkn-sec{font-size:12px;color:var(--dim);font-weight:800;letter-spacing:.5px;margin:4px 2px 10px;overflow:hidden;}
+.hkn-cards{display:flex;flex-direction:column;gap:9px;margin-bottom:6px;}
+.hkn-card{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:11px 13px;cursor:pointer;}
+.hkn-card:active{opacity:.7;}
+.hkn-card.ok{border-color:var(--ok-line);background:var(--ok-bg);}
+.hkn-card.ng{border-color:var(--over-line);background:var(--over-bg);}
+.hkn-c-b{flex:1;min-width:0;}
+.hkn-c-n{font-size:16px;font-weight:800;}
+.hkn-c-s{font-size:12.5px;color:var(--sub);font-weight:400;}
+.hkn-c-m{font-size:12px;color:var(--sub);margin-top:3px;}
+.hkn-c-w{font-size:12.5px;color:var(--over);margin-top:3px;font-weight:700;}
+.hkn-c-go{color:var(--dim);font-size:20px;flex:none;}
+.hkn-minor{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn);font-size:11px;font-weight:800;border-radius:6px;padding:1px 6px;margin-left:7px;}
+/* 写真枠。制限付きDriveの画像はJSがbackground-imageで後から差し込む（loadedが付くまでは枠だけ） */
+.hkn-ph{flex:none;border:1px solid var(--line2);border-radius:10px;background:var(--panel2) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;cursor:pointer;overflow:hidden;}
+.hkn-ph.loaded{border-color:var(--accent-line);}
+.hkn-ph.sm{width:100%;height:100%;border:none;border-radius:9px;}
+.hkn-btn{flex:none;min-height:44px;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:11px;padding:11px 15px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+.hkn-btn:active{opacity:.65;}
+.hkn-btn.pri{background:var(--accent);border-color:var(--accent);color:#1a1004;}
+.hkn-btn.ng{border-color:var(--over-line);color:var(--over);}
+.hkn-btn.big{flex:1;min-height:54px;font-size:15px;}
+.hkn-btn:disabled{opacity:.5;}
+.hkn-actions{display:flex;gap:10px;margin-top:18px;}
+.hkn-q{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:11px;padding:13px 16px;color:var(--txt);font-size:16px;outline:none;margin-bottom:12px;font-family:inherit;}
+/* 照合／詳細の大きい写真。横並び＋狭い画面では折り返す */
+.hkn-bigrow{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+.hkn-big{flex:1;min-width:132px;}
+.hkn-big-l{font-size:11.5px;color:var(--dim);font-weight:800;margin-bottom:5px;}
+.hkn-big .hkn-ph{width:100%!important;}
+.hkn-kv{background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:2px 14px 8px;}
+.hkn-kv-r{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);}
+.hkn-kv-r:first-child{border-top:none;}
+.hkn-kv-k{width:92px;flex:none;color:var(--sub);font-size:12px;}
+.hkn-kv-v{font-size:14px;flex:1;min-width:0;word-break:break-all;}
+/* 撮影タイル。iPadのカメラを直接開く（capture属性） */
+.hkn-shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px;}
+.hkn-shot{border:1px dashed var(--line2);background:var(--panel2);border-radius:12px;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;min-height:150px;justify-content:center;text-align:center;}
+.hkn-shot.done{border-style:solid;border-color:var(--ok-line);background:var(--ok-bg);}
+.hkn-shot.has{border-style:solid;border-color:var(--line2);}
+.hkn-shot img,.hkn-shot .hkn-ph{width:84px;height:84px;object-fit:cover;border-radius:10px;flex:none;}
+.hkn-shot-ic{font-size:30px;}
+.hkn-shot-t{font-size:13px;font-weight:800;}
+.hkn-shot-s{font-size:11px;color:var(--sub);line-height:1.4;}
+.hkn-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--sub);padding:8px 2px 14px;cursor:pointer;}
+.hkn-chk input{width:20px;height:20px;}
+.hkn-form{display:flex;flex-direction:column;gap:13px;}
+.hkn-f label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;font-weight:700;}
+.hkn-req{color:var(--over);font-size:10.5px;font-weight:800;margin-left:4px;}
+.hkn-in{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:13px 14px;color:var(--txt);font-size:16px;outline:none;font-family:inherit;}
+.hkn-in:focus{border-color:var(--accent-line);}
+.hkn-in.ta{min-height:70px;resize:vertical;}
+.hkn-agehint{font-size:12.5px;color:var(--ok);margin-top:6px;font-weight:700;}
+.hkn-agehint.warn{color:var(--warn);}
+.hkn-agehint.ng{color:var(--over);}
+.hkn-chips{display:flex;flex-wrap:wrap;gap:7px;}
+.hkn-chip{border:1px solid var(--line2);background:var(--panel2);border-radius:9px;padding:10px 13px;font-size:13px;cursor:pointer;min-height:44px;display:flex;align-items:center;}
+.hkn-chip.sel{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent);font-weight:800;}
 .empty-msg{text-align:center;color:var(--dim);padding:40px 12px;font-size:14px;}
 /* ===== 今やることホーム（landing） ===== */
 .vtoggle{display:flex;border:1px solid var(--line2);border-radius:11px;overflow:hidden;flex-shrink:0;}
@@ -5840,6 +5901,7 @@ var MENU_TILES=[
     {ic:'📋', t:'面談表',         act:"openMendanManager()"},
     {ic:'🤵', t:'黒服の面談を開始', act:"startKurofukuMendanFlow()"},
     {ic:'🗂', t:'黒服の面談表',     act:"openKurofukuMendanManager()"},
+    {ic:'🪪', t:'派遣スタッフ登録',   act:"openHakenId()"},
     {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
     {ic:'🍶', t:'ボトル棚マップ',     act:"openBottleShelfMap()"},
     {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
@@ -6917,6 +6979,7 @@ function renderMenu(){
   if(menuView==='receipt'){ rcptRenderMenu_(el); return; }
   if(menuView==='tslip'){ tslipRenderMenu_(el); return; }
   if(menuView==='seikyu'){ seikyuRenderMenu_(el); return; }
+  if(menuView==='hakenid'){ hknRenderMenu_(el); return; }
   el.innerHTML=MENU_TILES.map(function(g){
     return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
       return '<div class="menu-tile" onclick="'+it.act+'"><span class="mt-ic">'+it.ic+'</span><span class="mt-t">'+esc(it.t)+'</span></div>';
@@ -9213,6 +9276,293 @@ function buildSimHtml_(m){
   if(compare){ h+='<div style="text-align:center;font-size:12px;color:#c9a45c;margin-top:10px">前のお店 '+yen(compare.prev)+' → いえやす <b>'+yen(compare.our)+'</b>（月 +'+Math.round(compare.our-compare.prev).toLocaleString('ja-JP')+'円）</div>'; }
   h+='<div style="font-size:9.5px;color:#6f685e;text-align:center;margin-top:8px">※担当売上の想定にもとづく試算。保証ではありません。</div></div>';
   return h;
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+ * 🪪 派遣スタッフ 本人確認（顔写真＋身分証）  2026-08-26
+ * 誰が使うか＝軍師（店内iPad・黒服）。派遣会社から来た人を入店時に確認する。
+ *  ・初回＝顔／身分証(表)／身分証(裏)を撮り、生年月日を入れて登録
+ *  ・2回目以降＝台帳の顔写真を出して見比べ「本人確認OK」を押すだけ（撮り直し不要）
+ * backend: gunshiGetHakenRoster / gunshiSaveHakenId / gunshiConfirmHaken / gunshiGetHakenPhoto
+ * ⚠️画像は制限付きDrive＝直リンクでは開けない。必ず gunshiGetHakenPhoto でbase64を取る。
+ * ⚠️この1ブロック＋MENU_TILES 1行＋renderMenu 1行の外科注入で済む（本番昇格もこの3点だけ）。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+var HKN_DATA=null;              // {today:[],ledger:[]}
+var HKN_VIEW='list';            // 'list' | 'form' | 'detail' | 'confirm'
+var HKN_FORM=null;              // 編集中の入力内容
+var HKN_SEL=null;               // 詳細/照合の対象レコード
+var HKN_Q='';                   // 台帳の検索語
+var HKN_IMG={};                 // {写真URL: dataUrl} 取得済みキャッシュ（同じ画像を何度も取らない）
+var HKN_IDTYPES=['運転免許証','マイナンバーカード','健康保険証','パスポート','在留カード','その他'];
+
+function hknBack_(){ return '<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>'; }
+function hknKey_(s){ return String(s||'').replace(/[\s　]/g,''); }
+function hknAge_(birth){
+  var m=String(birth||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return null;
+  var n=new Date(), a=n.getFullYear()-(+m[1]);
+  if(n.getMonth()+1 < +m[2] || (n.getMonth()+1===+m[2] && n.getDate() < +m[3])) a--;
+  return (a>=0&&a<120)?a:null;
+}
+function openHakenId(){
+  menuView='hakenid'; HKN_VIEW='list'; HKN_SEL=null; HKN_FORM=null; HKN_Q='';
+  document.getElementById('menuOverlay').classList.add('show');
+  var el=document.getElementById('menu-body');
+  el.innerHTML=hknBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>';
+  hknLoad_();
+}
+function hknLoad_(cb){
+  if(!IS_GAS){ HKN_DATA=hknMock_(); if(menuView==='hakenid')renderMenu(); if(cb)cb(); return; }
+  gsr('gunshiGetHakenRoster', LOGIN).then(function(r){
+    HKN_DATA=(r&&r.ok)?r:{today:[],ledger:[]};
+    if(menuView==='hakenid')renderMenu(); if(cb)cb();
+  }).catch(function(){
+    var el=document.getElementById('menu-body');
+    if(el&&menuView==='hakenid')el.innerHTML=hknBack_()+'<div class="empty-msg" style="padding:24px">読み込みエラー</div>';
+  });
+}
+function hknMock_(){ /* ローカル確認用（IS_GAS=false のときだけ） */
+  var rec={id:'H20260801-AB12',at:'2026-08-01 19:40',by:'りく',name:'ゆず',realName:'山内 絢絵',kana:'ヤマウチアヤエ',
+    agency:'サナダ',birth:'1999-05-12',age:27,facePhoto:'x',idPhoto:'x',idPhotoBack:'',idType:'運転免許証',
+    memo:'',lastAt:'2026-08-20 19:10',lastBy:'たけし',times:4,status:'有効'};
+  return {ok:true,today:[{name:'ゆず',origName:'ゆず',shift:'20:00',rec:rec,registered:true},
+                         {name:'にな',origName:'にな',shift:'19:30',rec:null,registered:false}],ledger:[rec]};
+}
+
+/* 画像は制限付きDrive＝<img>の直リンクでは出ない。取得できたらその場で差し替える */
+function hknImg_(url,dom){
+  if(!url) return;
+  if(HKN_IMG[url]){ if(dom)dom.style.backgroundImage='url('+HKN_IMG[url]+')',dom.classList.add('loaded'); return; }
+  if(!IS_GAS) return;
+  gsr('gunshiGetHakenPhoto',url).then(function(r){
+    if(!r||!r.dataUrl)return; HKN_IMG[url]=r.dataUrl;
+    var d=document.querySelector('[data-hknimg="'+url+'"]');
+    if(d){ d.style.backgroundImage='url('+r.dataUrl+')'; d.classList.add('loaded'); }
+  }).catch(function(){});
+}
+function hknImgBox_(url,size,label){
+  var s=size||64;
+  return '<div class="hkn-ph" data-hknimg="'+esc(url||'')+'" onclick="hknOpenImg(\''+esc(url||'')+'\',\''+esc(label||'')+'\')" '
+    +'style="width:'+s+'px;height:'+s+'px">'+(url?'':'<span>—</span>')+'</div>';
+}
+function hknPaintImgs_(){ /* 描画後に画面内の写真をまとめて取りにいく */
+  var ns=document.querySelectorAll('[data-hknimg]');
+  for(var i=0;i<ns.length;i++){ var u=ns[i].getAttribute('data-hknimg'); if(u) hknImg_(u,ns[i]); }
+}
+function hknOpenImg(url,label){
+  if(!url)return;
+  if(HKN_IMG[url]){ showImgOverlay(HKN_IMG[url],label||'身分証'); return; }
+  if(!IS_GAS){ toast('（ローカルでは画像プレビュー不可）'); return; }
+  gsr('gunshiGetHakenPhoto',url).then(function(r){
+    if(!r||!r.dataUrl){ toast((r&&r.error)||'画像を取得できませんでした'); return; }
+    HKN_IMG[url]=r.dataUrl; showImgOverlay(r.dataUrl,label||'身分証');
+  }).catch(function(){ toast('画像の取得に失敗しました'); });
+}
+
+/* ── 画面 ────────────────────────────────────────────────────────── */
+function hknRenderMenu_(el){
+  if(!HKN_DATA){ el.innerHTML=hknBack_()+'<div class="empty-msg" style="padding:24px">読み込み中…</div>'; return; }
+  if(HKN_VIEW==='form')    { el.innerHTML=hknFormHtml_();    hknPaintImgs_(); return; }
+  if(HKN_VIEW==='detail')  { el.innerHTML=hknDetailHtml_();  hknPaintImgs_(); return; }
+  if(HKN_VIEW==='confirm') { el.innerHTML=hknConfirmHtml_(); hknPaintImgs_(); return; }
+  el.innerHTML=hknListHtml_(); hknPaintImgs_();
+}
+function hknListHtml_(){
+  var today=HKN_DATA.today||[], ledger=HKN_DATA.ledger||[];
+  var un=today.filter(function(t){return !t.registered;}).length;
+  var h=hknBack_()+'<div class="menu-grp">🪪 派遣スタッフ 本人確認</div>';
+  h+='<div class="hkn-note">派遣会社から来たスタッフの<b>顔写真と身分証</b>を初回だけ登録する。2回目以降は台帳の顔写真と見比べて「本人確認OK」を押すだけ。</div>';
+
+  h+='<div class="hkn-sec">本日の派遣（'+today.length+'名'+(un?('・<span style="color:var(--over)">未登録'+un+'名</span>'):'')+'）</div>';
+  if(!today.length){
+    h+='<div class="empty-msg" style="padding:18px;color:var(--dim)">本日のシフト表に派遣スタッフの登録がありません。<br>派遣会社のLINEが未反映か、コンソールの「➕派遣/体験を追加」で行を作ってください。</div>';
+  }else{
+    h+='<div class="hkn-cards">'+today.map(function(t,i){
+      if(!t.registered){
+        return '<div class="hkn-card ng">'
+          +hknImgBox_('',56,'')
+          +'<div class="hkn-c-b"><div class="hkn-c-n">'+esc(t.name||'')+'<span class="hkn-c-s"> '+esc(t.shift||'')+'</span></div>'
+          +'<div class="hkn-c-w">⚠️ 未登録 — 顔写真と身分証を撮ってください</div></div>'
+          +'<button class="hkn-btn pri" onclick="hknNew('+i+')">🪪 登録する</button></div>';
+      }
+      var r=t.rec, age=(r.age==null?hknAge_(r.birth):r.age);
+      var minor=(age!=null&&age<20)?'<span class="hkn-minor">⚠️'+age+'歳</span>':'';
+      return '<div class="hkn-card ok">'
+        +hknImgBox_(r.facePhoto,56,r.name+' の顔写真')
+        +'<div class="hkn-c-b"><div class="hkn-c-n">'+esc(t.name||'')+'<span class="hkn-c-s"> '+esc(t.shift||'')+'</span>'+minor+'</div>'
+        +'<div class="hkn-c-m">'+(r.realName?esc(r.realName)+'／':'')+(age!=null?('満'+age+'歳'):'—')
+        +'　前回確認 '+esc(String(r.lastAt||'—').slice(0,10))+'（'+(r.times||0)+'回）</div></div>'
+        +'<button class="hkn-btn" onclick="hknConfirmOpen(\''+esc(r.id)+'\')">👁 照合する</button></div>';
+    }).join('')+'</div>';
+  }
+
+  h+='<div class="hkn-sec" style="margin-top:20px">台帳（'+ledger.length+'名）'
+    +'<button class="hkn-btn pri" style="float:right;margin-top:-4px" onclick="hknNew(-1)">＋ 新規登録</button></div>';
+  h+='<input class="hkn-q" id="hkn-q" placeholder="氏名・本名・派遣会社で絞り込み" value="'+esc(HKN_Q)+'" oninput="hknSearch(this.value)">';
+  h+='<div id="hkn-ledger">'+hknLedgerHtml_()+'</div>';
+  return h;
+}
+/* 台帳リストだけを描く。⚠️検索のたびに入力欄ごと描き直すと iPad の日本語変換（IME）が中断される＝
+   フォーカスを当て直しても変換候補は戻らない。差し替えるのは #hkn-ledger の中身だけにする。 */
+function hknLedgerHtml_(){
+  var ledger=(HKN_DATA&&HKN_DATA.ledger)||[];
+  var q=hknKey_(HKN_Q), list=!q?ledger:ledger.filter(function(r){
+    return [r.name,r.realName,r.kana,r.agency].some(function(v){ return hknKey_(v).indexOf(q)>=0; }); });
+  if(!list.length) return '<div class="empty-msg" style="padding:18px;color:var(--dim)">'+(ledger.length?'該当なし':'まだ登録がありません')+'</div>';
+  return '<div class="hkn-cards">'+list.map(function(r){
+    var age=(r.age==null?hknAge_(r.birth):r.age);
+    return '<div class="hkn-card" onclick="hknDetail(\''+esc(r.id)+'\')">'
+      +hknImgBox_(r.facePhoto,48,r.name+' の顔写真')
+      +'<div class="hkn-c-b"><div class="hkn-c-n">'+esc(r.name||'')+(r.realName?'<span class="hkn-c-s"> '+esc(r.realName)+'</span>':'')+'</div>'
+      +'<div class="hkn-c-m">'+(age!=null?('満'+age+'歳'):'—')+(r.agency?('／'+esc(r.agency)):'')
+      +'　最終 '+esc(String(r.lastAt||'—').slice(0,10))+'</div></div>'
+      +'<span class="hkn-c-go">›</span></div>';
+  }).join('')+'</div>';
+}
+function hknSearch(v){
+  HKN_Q=v;
+  var box=document.getElementById('hkn-ledger'); if(!box)return;   // 入力欄には一切触らない＝フォーカスもIMEも保つ
+  box.innerHTML=hknLedgerHtml_(); hknPaintImgs_();
+}
+function hknRecById_(id){ return (HKN_DATA.ledger||[]).filter(function(r){return r.id===id;})[0]||null; }
+
+/* ── 照合（2回目以降。ここが一番使う画面）───────────────────────── */
+function hknConfirmOpen(id){ HKN_SEL=hknRecById_(id); if(!HKN_SEL){toast('台帳に見つかりません');return;} HKN_VIEW='confirm'; renderMenu(); }
+function hknConfirmHtml_(){
+  var r=HKN_SEL, age=(r.age==null?hknAge_(r.birth):r.age);
+  return '<span class="menu-back" onclick="HKN_VIEW=\'list\';renderMenu()">← 一覧に戻る</span>'
+    +'<div class="menu-grp">👁 本人確認 — '+esc(r.name||'')+'</div>'
+    +'<div class="hkn-note">登録済みの写真と、目の前の本人を見比べてください。別人・別の身分証なら「別人／要確認」を押して店長へ。</div>'
+    +'<div class="hkn-bigrow">'
+      +'<div class="hkn-big"><div class="hkn-big-l">📷 登録時の顔</div>'+hknImgBox_(r.facePhoto,168,'顔写真')+'</div>'
+      +'<div class="hkn-big"><div class="hkn-big-l">🪪 身分証(表)</div>'+hknImgBox_(r.idPhoto,168,'身分証(表)')+'</div>'
+      +(r.idPhotoBack?('<div class="hkn-big"><div class="hkn-big-l">🪪 身分証(裏)</div>'+hknImgBox_(r.idPhotoBack,168,'身分証(裏)')+'</div>'):'')
+    +'</div>'
+    +'<div class="hkn-kv">'+hknKv_('氏名',r.name)+hknKv_('本名',r.realName)+hknKv_('フリガナ',r.kana)
+      +hknKv_('生年月日',(r.birth||'—')+(age!=null?('（満'+age+'歳'+(age<20?' ⚠️20歳未満＝酒類提供不可':'')+'）'):''))
+      +hknKv_('身分証',r.idType)+hknKv_('派遣会社',r.agency)
+      +hknKv_('登録',(r.at||'—')+'　'+(r.by||''))+hknKv_('前回確認',(r.lastAt||'—')+'　'+(r.lastBy||'')+'（通算'+(r.times||0)+'回）')
+      +hknKv_('メモ',r.memo)+'</div>'
+    +'<div class="hkn-actions">'
+      +'<button class="hkn-btn pri big" onclick="hknConfirmGo()">✅ 本人確認OK</button>'
+      +'<button class="hkn-btn big" onclick="hknEdit(\''+esc(r.id)+'\')">📷 撮り直す／直す</button>'
+      +'<button class="hkn-btn ng big" onclick="hknMismatch()">⚠️ 別人／要確認</button>'
+    +'</div>';
+}
+function hknKv_(k,v){ return '<div class="hkn-kv-r"><div class="hkn-kv-k">'+k+'</div><div class="hkn-kv-v">'+esc(String(v||'—'))+'</div></div>'; }
+function hknConfirmGo(){
+  var r=HKN_SEL; if(!r)return;
+  if(!IS_GAS){ toast('確認しました（ローカル）'); HKN_VIEW='list'; renderMenu(); return; }
+  gsr('gunshiConfirmHaken', LOGIN, r.id).then(function(res){
+    if(!res||!res.ok){ toast((res&&res.error)||'記録に失敗しました'); return; }
+    toast('✅ '+r.name+' の本人確認を記録しました（通算'+res.times+'回）');
+    HKN_VIEW='list'; hknLoad_();
+  }).catch(function(){ toast('通信に失敗しました'); });
+}
+function hknMismatch(){
+  alert('登録の写真と一致しない場合は、その場で接客に入れず店長へ連絡してください。\n\n別人ではなく本人の見た目が変わっただけなら「📷 撮り直す／直す」で写真を更新できます。');
+}
+
+/* ── 台帳の詳細 ──────────────────────────────────────────────── */
+function hknDetail(id){ HKN_SEL=hknRecById_(id); if(!HKN_SEL){toast('台帳に見つかりません');return;} HKN_VIEW='detail'; renderMenu(); }
+function hknDetailHtml_(){
+  var r=HKN_SEL, age=(r.age==null?hknAge_(r.birth):r.age);
+  return '<span class="menu-back" onclick="HKN_VIEW=\'list\';renderMenu()">← 一覧に戻る</span>'
+    +'<div class="menu-grp">🪪 '+esc(r.name||'')+(age!=null?('<span style="color:var(--sub);font-size:14px;font-weight:400"> 満'+age+'歳</span>'):'')+'</div>'
+    +'<div class="hkn-bigrow">'
+      +'<div class="hkn-big"><div class="hkn-big-l">📷 顔写真</div>'+hknImgBox_(r.facePhoto,132,'顔写真')+'</div>'
+      +'<div class="hkn-big"><div class="hkn-big-l">🪪 身分証(表)</div>'+hknImgBox_(r.idPhoto,132,'身分証(表)')+'</div>'
+      +'<div class="hkn-big"><div class="hkn-big-l">🪪 身分証(裏)</div>'+hknImgBox_(r.idPhotoBack,132,'身分証(裏)')+'</div>'
+    +'</div>'
+    +'<div class="hkn-kv">'+hknKv_('氏名',r.name)+hknKv_('本名',r.realName)+hknKv_('フリガナ',r.kana)
+      +hknKv_('生年月日',r.birth)+hknKv_('身分証',r.idType)+hknKv_('派遣会社',r.agency)
+      +hknKv_('登録',(r.at||'—')+'　'+(r.by||''))
+      +hknKv_('最終確認',(r.lastAt||'—')+'　'+(r.lastBy||'')+'（通算'+(r.times||0)+'回）')
+      +hknKv_('メモ',r.memo)+'</div>'
+    +'<div class="hkn-actions"><button class="hkn-btn pri big" onclick="hknEdit(\''+esc(r.id)+'\')">📷 撮り直す／直す</button></div>';
+}
+
+/* ── 登録フォーム ────────────────────────────────────────────── */
+function hknNew(todayIdx){
+  var t=(todayIdx>=0)?(HKN_DATA.today||[])[todayIdx]:null;
+  HKN_FORM={id:'',name:t?t.name:'',realName:'',kana:'',agency:'',birth:'',idType:'',memo:'',
+            face:'',idf:'',idb:'',noBack:false,prev:null};
+  HKN_VIEW='form'; renderMenu();
+}
+function hknEdit(id){
+  var r=hknRecById_(id); if(!r){toast('台帳に見つかりません');return;}
+  HKN_FORM={id:r.id,name:r.name,realName:r.realName,kana:r.kana,agency:r.agency,birth:r.birth,
+            idType:r.idType,memo:r.memo,face:'',idf:'',idb:'',noBack:!r.idPhotoBack,prev:r};
+  HKN_VIEW='form'; renderMenu();
+}
+function hknFormHtml_(){
+  var f=HKN_FORM, p=f.prev, age=hknAge_(f.birth);
+  var fld=function(k,label,ph,type){
+    return '<div class="hkn-f"><label>'+label+'</label>'
+      +'<input class="hkn-in" type="'+(type||'text')+'" value="'+esc(f[k]||'')+'" placeholder="'+esc(ph||'')+'" oninput="hknSet(\''+k+'\',this.value)"></div>'; };
+  var shot=function(k,label,hint,cap,prevUrl){
+    var cur=f[k]?('<img src="'+f[k]+'">'):(prevUrl?('<div class="hkn-ph sm" data-hknimg="'+esc(prevUrl)+'"></div>'):'<span class="hkn-shot-ic">📷</span>');
+    var st=f[k]?'撮影済み（タップで撮り直し）':(prevUrl?'登録済み（タップで撮り直し）':hint);
+    return '<label class="hkn-shot'+(f[k]?' done':(prevUrl?' has':''))+'">'+cur
+      +'<span class="hkn-shot-t">'+label+'</span><span class="hkn-shot-s">'+st+'</span>'
+      +'<input type="file" accept="image/*" capture="'+cap+'" style="display:none" onchange="if(this.files[0])hknShot(\''+k+'\',this.files[0]);this.value=\'\'"></label>'; };
+  var h='<span class="menu-back" onclick="HKN_VIEW=\'list\';renderMenu()">← 一覧に戻る</span>'
+    +'<div class="menu-grp">'+(p?'📷 '+esc(p.name)+' を撮り直す／直す':'🪪 派遣スタッフを登録')+'</div>'
+    +'<div class="hkn-note">身分証は<b>顔・氏名・生年月日</b>が読める大きさで。生年月日は身分証を見て入力してください（年齢確認の記録になります）。</div>'
+    +'<div class="hkn-shots">'
+      +shot('face','📷 顔写真','正面・明るいところで','user',   p?p.facePhoto:'')
+      +shot('idf', '🪪 身分証（表）','免許証・マイナンバーカード等','environment', p?p.idPhoto:'')
+      +shot('idb', '🪪 身分証（裏）','住所・記載事項の面','environment', p?p.idPhotoBack:'')
+    +'</div>'
+    +'<label class="hkn-chk"><input type="checkbox" '+(f.noBack?'checked':'')+' onchange="hknSet(\'noBack\',this.checked)"> 裏面のない身分証（パスポート等）＝裏は撮らない</label>'
+    +'<div class="hkn-form">'
+      +fld('name','氏名（シフト表の表記／源氏名）','例: ゆず')
+      +fld('realName','本名','身分証どおりに')
+      +fld('kana','フリガナ','ヤマウチアヤエ')
+      +'<div class="hkn-f"><label>生年月日 <span class="hkn-req">必須</span></label>'
+        +'<input class="hkn-in" type="date" value="'+esc(f.birth||'')+'" onchange="hknSet(\'birth\',this.value)">'
+        +(age!=null?('<div class="hkn-agehint'+(age<18?' ng':(age<20?' warn':''))+'">満'+age+'歳'
+            +(age<18?' ⛔18歳未満は接客業務に就かせられません':(age<20?' ⚠️20歳未満＝酒類の提供不可':''))+'</div>'):'')
+      +'</div>'
+      +'<div class="hkn-f"><label>身分証の種類</label><div class="hkn-chips">'
+        +HKN_IDTYPES.map(function(t){ return '<span class="hkn-chip'+(f.idType===t?' sel':'')+'" onclick="hknSet(\'idType\',\''+t+'\')">'+t+'</span>'; }).join('')
+      +'</div></div>'
+      +fld('agency','派遣会社','例: サナダ')
+      +'<div class="hkn-f"><label>メモ</label><textarea class="hkn-in ta" oninput="hknSet(\'memo\',this.value)" placeholder="気づいたこと（任意）">'+esc(f.memo||'')+'</textarea></div>'
+    +'</div>'
+    +'<div class="hkn-actions"><button class="hkn-btn pri big" id="hkn-save" onclick="hknSave()">'+(p?'更新する':'登録する')+'</button></div>';
+  return h;
+}
+function hknSet(k,v){
+  HKN_FORM[k]=v;
+  // 生年月日だけは満年齢の表示が変わる＝その場で描き直す。他はDOMの値がそのまま正
+  if(k==='birth'||k==='idType'||k==='noBack'){ var el=document.getElementById('menu-body'); if(el){ el.innerHTML=hknFormHtml_(); hknPaintImgs_(); } }
+}
+function hknShot(k,file){
+  skImgResize_(file,function(du){ HKN_FORM[k]=du; var el=document.getElementById('menu-body'); if(el){ el.innerHTML=hknFormHtml_(); hknPaintImgs_(); } });
+}
+function hknSave(){
+  var f=HKN_FORM, p=f.prev;
+  if(!String(f.name||'').trim()){ toast('氏名を入れてください'); return; }
+  if(!f.birth){ toast('生年月日を入れてください（年齢確認の記録に必要です）'); return; }
+  var age=hknAge_(f.birth);
+  if(age==null){ toast('生年月日が正しくありません'); return; }
+  if(age<18){ alert('⛔ 満'+age+'歳です。18歳未満は接客業務に就かせられません。\n\n身分証を再確認のうえ、派遣会社へ連絡してください。'); return; }
+  if(!f.face && !(p&&p.facePhoto)){ toast('顔写真を撮ってください'); return; }
+  if(!f.idf  && !(p&&p.idPhoto)){ toast('身分証（表）を撮ってください'); return; }
+  if(!f.noBack && !f.idb && !(p&&p.idPhotoBack)){
+    if(!confirm('身分証の裏面がまだ撮れていません。\n\nこのまま登録しますか？（裏面のない身分証なら「裏面のない身分証」にチェックを入れてください）')) return;
+  }
+  if(age<20 && !confirm('満'+age+'歳＝20歳未満です。酒類の提供はできません。\n\nこのまま登録しますか？')) return;
+
+  var btn=document.getElementById('hkn-save'); if(btn){ btn.disabled=true; btn.textContent='保存中…'; }
+  var payload={ id:f.id, name:f.name, realName:f.realName, kana:f.kana, agency:f.agency,
+                birth:f.birth, idType:f.idType, memo:f.memo,
+                facePhoto:f.face, idPhoto:f.idf, idPhotoBack:f.idb };
+  if(!IS_GAS){ toast('保存しました（ローカル）'); HKN_VIEW='list'; renderMenu(); return; }
+  gsr('gunshiSaveHakenId', LOGIN, payload).then(function(r){
+    if(!r||!r.ok){ toast((r&&r.error)||'保存に失敗しました'); if(btn){btn.disabled=false;btn.textContent=p?'更新する':'登録する';} return; }
+    toast('🪪 '+(r.msg||'登録しました')+(r.minor?' ⚠️20歳未満':''));
+    HKN_VIEW='list'; HKN_FORM=null; HKN_IMG={}; hknLoad_();
+  }).catch(function(){ toast('通信に失敗しました'); if(btn){btn.disabled=false;btn.textContent=p?'更新する':'登録する';} });
 }
 function mendanBack_(){ return '<span class="menu-back" onclick="closeMenu()">← 閉じる</span>'; }
 function openMendanManager(){
