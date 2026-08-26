@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-26e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-26f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2130,8 +2130,10 @@ function cfSteps_(){
   else if(selfOk) trustS='入力したと申告済み（TRUSTを取り込めていないので翌日に照合します）';
   else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
   S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
-  // ④⑤ 手作業（端末チェック）
-  S.push({id:'okuri',em:'🚗',t:'送りを確定する',s:'本日の送りを締める',state:homeChecks()['okuri']?'done':'todo',act:'openOkuriManager()',manual:true});
+  // ④ 手作業（端末チェック）
+  // ⛔送りは締めの工程に置かない（ボス確定 2026-08-26）＝締めの時点で送りはもう終わっている。
+  //   終わっている作業をチェックさせると「あと N 件」が実態とズレて、警告そのものが読まれなくなる。
+  //   画面は業務メニュー「🚗 送り管理」から常時開ける＝導線は消えていない。
   S.push({id:'safe', em:'🔐',t:'金庫へ収納・出金確認',s:'残金の収納と臨時出金',state:homeChecks()['safe']?'done':'todo',act:'openSafeWithdrawal()',manual:true});
   // ⑥ 残っているタスクを決める（対応した or 明日へ持ち越す）
   var pend=(TASKS||[]).filter(function(x){return !x.deferred;});
