@@ -8137,6 +8137,7 @@ var KIOSK_TIME_TASKS = [
  *   0:30の席リセット掃除に巻き込まれ、締め作業中（深夜1時台）に持ち越しが消える。
  */
 const TASK_DEFER_PROP_ = 'TASK_DEFERRALS';
+var CC_APPROVE_WINDOW_D_ = 3;   // LINEの一言承認が効くのは直近3営業日ぶんまで（取り残しはコンソールから）
 
 function taskDeferralsAll_() {
   let o = null;
@@ -10504,17 +10505,26 @@ function pendingCashCheckList_() {
     var sh = getCashCheckSheet_();
     if (!sh || sh.getLastRow() < 2) return out;
     var vals = sh.getDataRange().getValues();
-    var limit = Date.now() - QUICK_DECIDE_WINDOW_H_ * 3600 * 1000;
+    /* ⚠️足切りは「営業日」で行う。提出時刻(3列目)だけで見ると通り抜ける行がある：
+       ・2026-07-08以前の現金管理は**列の並びが違う旧フォーマット**で、2列目に金額が入っている
+       　（＝報告者として読むと「11600」等になる）。提出時刻も日付型でないので ts=0 になり、
+       　`ts && ts < limit` が false → 足切りをすり抜けて**永久に承認待ちに並ぶ**。
+       　実際にLINEへ「閉店チェック（07/06）報告者 11600」等が3件出た（2026-08-26 ボス報告）。
+       ・しかもそれらは開店の現金が無く判定が空＝approveCashCheck が必ず失敗する＝詰む。 */
+    var lim = new Date(); lim.setDate(lim.getDate() - CC_APPROVE_WINDOW_D_);
+    var limKey = Utilities.formatDate(lim, TZ, 'yyyy-MM-dd');
     for (var i = vals.length - 1; i >= 1; i--) {
       var d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
       if (!d) continue;
-      if (!String(vals[i][1] || '').trim()) continue;          // 未提出
+      if (d < limKey) break;                                   // 日付降順で見ているのでここで打ち切ってよい
+      var rep = String(vals[i][1] || '').trim();
+      if (!rep) continue;                                      // 未提出
+      if (/^[0-9０-９,，.\-]+$/.test(rep)) continue;             // 報告者が数字＝旧フォーマットの行。承認対象ではない
       if (String(vals[i][15] || '').trim()) continue;          // 16列目=承認者 が入っていれば承認済み
       var ts = vals[i][2] instanceof Date ? vals[i][2].getTime() : 0;
-      if (ts && ts < limit) continue;                          // 古い取り残しはコンソールから
       out.push({ kind: 'cash', name: '閉店チェック', date: d.slice(5).replace('-', '/'), dateKey: d,
-                 reporter: String(vals[i][1] || '').trim(), at: ts });
-      if (out.length >= 3) break;                              // 直近だけ見る
+                 reporter: rep, at: ts });
+      if (out.length >= 3) break;
     }
   } catch (e) { console.error('pendingCashCheckList_', e); }
   return out;
