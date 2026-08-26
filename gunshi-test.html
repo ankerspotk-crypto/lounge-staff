@@ -1186,13 +1186,22 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 body.home-on #homeView{display:block;}
 body.home-on .alertbar,body.home-on .dash{display:none;}
 .hv-wrap{max-width:1000px;margin:0 auto;}
-.hv-phasebar{display:flex;gap:8px;}
-.hv-ptab{flex:1;text-align:center;padding:9px 4px;border-radius:12px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:13px;font-weight:800;cursor:pointer;}
-.hv-ptab .em{font-size:16px;display:block;margin-bottom:1px;}
-.hv-ptab.on.pre{border-color:#3a6a86;background:#0c1e26;color:#8fd4e6;}
-.hv-ptab.on.mid{border-color:#7a2424;background:#241012;color:#ff9a9a;}
-.hv-ptab.on.post{border-color:#5a4a1a;background:#1e1908;color:#e6c060;}
-.hv-auto{font-size:10px;color:var(--dim);text-align:center;margin:5px 0 2px;}
+.hv-phasebar{display:flex;gap:8px;margin-top:14px;}
+.hv-ptab{position:relative;flex:1;padding:11px 6px 12px;border-radius:12px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;text-align:center;}
+.hv-ptab .em{font-size:19px;line-height:1.25;}
+.hv-ptab .nm{font-size:14px;font-weight:900;}
+.hv-ptab .sp{font-size:10.5px;font-weight:700;color:var(--dim);letter-spacing:.03em;}
+.hv-ptab .jb{font-size:11px;color:var(--dim);margin-top:3px;}
+.hv-ptab .stt{font-size:12.5px;font-weight:800;margin-top:5px;}
+.hv-ptab .stt .ok{color:var(--green);}
+.hv-ptab .nowchip{position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:900;padding:2px 9px;border-radius:9px;background:var(--accent);color:#1a0d00;white-space:nowrap;}
+.hv-ptab.on{border-width:2px;padding:10px 5px 11px;}
+.hv-ptab.on .sp,.hv-ptab.on .jb{color:inherit;opacity:.72;}
+.hv-ptab.on.pre{border-color:#5a9ec0;background:#0d2530;color:#a8e2f2;}
+.hv-ptab.on.mid{border-color:#c04040;background:#2c1214;color:#ffb0b0;}
+.hv-ptab.on.post{border-color:#8a7020;background:#2a2209;color:#f0d080;}
+.hv-auto{font-size:12px;color:var(--dim);text-align:center;margin:9px 0 4px;}
+.hv-auto .lnk{color:var(--accent);font-weight:800;cursor:pointer;text-decoration:underline;}
 .hv-sec{margin:18px 0 9px;display:flex;align-items:center;gap:8px;}
 .hv-sec .st{font-size:13px;font-weight:900;letter-spacing:.5px;}
 .hv-sec .cnt{font-size:12px;color:var(--dim);font-weight:700;}
@@ -1819,12 +1828,70 @@ function hvChk(it){
     +'<div class="bd"><div class="t">'+esc(it.t)+'</div><div class="s">'+esc(it.s)+'</div></div>'
     +'<div class="go">›</div></div>';
 }
+/* ===== 1日の進行バー（🌅開店前 → 🔥営業中 → 🌙閉店）＝黒服業務タブの背骨 =====
+   ⭐タブを「3つのボタン」ではなく1日の流れとして読ませる＝各タブに 時間帯／そこで何をやるか／残り を載せる。
+   ⚠️「選択中のフェーズ」と「いまの時刻のフェーズ」は別物。手動で他を見ている時に迷子にならないよう
+     両方を示す（選択中＝色と太枠／いまの時刻＝●いま チップ）。
+   ⛔状態行のために gsr を呼ぶな＝既にロード済みのグローバルだけを見る
+     （GASは応答の床が1.9秒・ホームは30秒ごとに再描画される）。取れないフェーズは黙る＝0件と嘘をつかない。 */
+var PHASE_DEF=[
+  {p:'pre', em:'🌅', t:'開店前', job:'現金セット・仕込み'},
+  {p:'mid', em:'🔥', t:'営業中', job:'付け回し・会計'},
+  {p:'post',em:'🌙', t:'閉店',   job:'締め・送り・申し送り'}
+];
+/* 時間帯の文字は PH_OPEN_MIN/PH_CLOSE_MIN から出す＝定数を変えたら表示も自動で追従する（二重管理しない）。
+   24時超えはそのまま「24:30」と出す＝営業日の感覚に合わせる（0:30と書くと前夜か翌夜か迷う）。 */
+function phMinLabel_(m){ var h=Math.floor(m/60), mm=m%60; return h+':'+(mm<10?'0':'')+mm; }
+function phaseSpan_(p){
+  if(p==='pre') return '〜'+phMinLabel_(PH_OPEN_MIN);
+  if(p==='mid') return phMinLabel_(PH_OPEN_MIN)+'〜'+phMinLabel_(PH_CLOSE_MIN);
+  return phMinLabel_(PH_CLOSE_MIN)+'〜';
+}
+function phaseName_(p){ var n=''; PHASE_DEF.forEach(function(d){ if(d.p===p)n=d.t; }); return n; }
+/* そのフェーズの残り。データが手元に無ければ '' ＝何も出さない。 */
+function phaseStatLine_(p){
+  try{
+    if(p==='pre'){
+      if(!OPPREP) return '';                                 /* 準備リスト未取得＝総数が確定しない */
+      var t=1, d=(HOME_STATUS&&HOME_STATUS.opening)?1:0;     /* 1＝開店チェック（レジ現金） */
+      OPPREP.items.forEach(function(it){
+        if(it.common){ t+=1; if(it.c.done)d++; }
+        else { t+=2; if(it.f2.done)d++; if(it.f5.done)d++; }
+      });
+      return (d>=t) ? '<span class="ok">✓ 準備OK</span>' : '残り '+(t-d)+'件';
+    }
+    if(p==='mid'){
+      var n=(TASKS||[]).length;
+      if(typeof buildTimeline==='function') n+=buildTimeline().filter(function(x){return x.g<=1;}).length;
+      return n ? '対応待ち '+n+'件' : '<span class="ok">✓ 対応待ちなし</span>';
+    }
+    if(p==='post'){
+      if(!CLOSE_FLOW||!CLOSE_FLOW.at) return '';             /* 閉店データを一度も読んでいない＝黙る */
+      var left=cfSteps_().filter(function(x){return x.state!=='done';}).length;
+      return left ? '残り '+left+'件' : '<span class="ok">✓ 退勤OK</span>';
+    }
+  }catch(e){ return ''; }
+  return '';
+}
 function hvPhaseBar(cur){
-  var tabs=[{p:'pre',em:'🌅',t:'開店前'},{p:'mid',em:'🔥',t:'営業中'},{p:'post',em:'🌙',t:'閉店'}];
-  return '<div class="hv-phasebar">'+tabs.map(function(t){
-    return '<div class="hv-ptab'+(cur===t.p?' on '+t.p:'')+'" onclick="setHomePhase(\''+t.p+'\')"><span class="em">'+t.em+'</span>'+t.t+'</div>';
-  }).join('')+'</div>'
-   +'<div class="hv-auto">'+(homePhaseOverride?'手動表示中・<span style="color:var(--accent)" onclick="setHomePhase(\'\')">時刻の自動判定に戻す</span>':'⏱ 時刻から自動表示中（タブで切替できます）')+'</div>';
+  var real=autoPhase();
+  var h='<div class="hv-phasebar">'+PHASE_DEF.map(function(d){
+    var st=phaseStatLine_(d.p);
+    return '<div class="hv-ptab'+(cur===d.p?' on '+d.p:'')+'" onclick="setHomePhase(\''+d.p+'\')">'
+      +(real===d.p?'<span class="nowchip">●&nbsp;いま</span>':'')
+      +'<span class="em">'+d.em+'</span>'
+      +'<span class="nm">'+d.t+'</span>'
+      +'<span class="sp">'+phaseSpan_(d.p)+'</span>'
+      +'<span class="jb">'+d.job+'</span>'
+      +(st?'<span class="stt">'+st+'</span>':'')
+      +'</div>';
+  }).join('')+'</div>';
+  h+='<div class="hv-auto">'+(homePhaseOverride
+    ? '✋ 手動で「'+phaseName_(cur)+'」を見ています（いまの時刻は「'+phaseName_(real)+'」）　'
+      +'<span class="lnk" onclick="setHomePhase(\'\')">いまの時刻に戻す</span>'
+    : '⏱ '+phMinLabel_(nowBizMin())+'　いまの時刻から「'+phaseName_(real)+'」を表示中（タブで切り替えられます）')
+    +'</div>';
+  return h;
 }
 function renderHomeMid(){
   var tl=buildTimeline();
