@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-26d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-26e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2528,13 +2528,33 @@ function oppItemsHtml(){
   }).join('');
 }
 /* 開店前フェーズ全体＝現金セット(launcher)＋開店前やること(2F/5F同期) */
+/* 🔓 開店チェックの未提出を手前で気づかせる（ボス確定 2026-08-26「警告くらいにしておこう」）。
+   ⛔ブロックはしない＝開店を止めない。閉店の「まだ帰れません」と違い、ここは警告に留める。
+   ⚠️提出済みなら何も描かない。毎日出る警告は読まれなくなる。
+   なぜ夜に効くか＝閉店の照合は「開店の現金 ＋ 現金売上 − 伝票」で立つ。開店の額が無いと式が成立せず、
+     閉店チェックは「開店の現金が未提出のため照合できません」、管理者の承認は approveCashCheck が
+     必ず失敗する（Code.gs「開店の現金が未提出で照合できていません」）。＝出し忘れが深夜1時に判明する。
+   ⚠️開店時刻を過ぎているかで強さを変える。まだ時間がある間に赤を出しても効かない。 */
+function openingGateHtml_(cashDone){
+  if(cashDone) return '';
+  if(nowBizMin() >= PH_OPEN_MIN){
+    return '<div style="border:2px solid #e05050;background:rgba(224,80,80,.10);border-radius:14px;padding:14px 16px;margin-bottom:12px">'
+      +'<div style="font-size:15.5px;font-weight:900;color:#ff9a9a;line-height:1.4">⚠️ 開店チェックが未提出のまま営業が始まっています</div>'
+      +'<div style="font-size:12.5px;color:var(--txt);margin-top:6px;line-height:1.65">このままだと<b style="color:#ffcf7a">今夜の閉店で現金の照合ができず、管理者の承認も通りません</b>。いま4袋を数えて提出してください。</div>'
+      +'<div class="act pri" style="margin-top:11px" onclick="openOpeningCheck()">🔓 開店チェックを開く</div></div>';
+  }
+  return '<div style="border:1px solid var(--accent-line);background:var(--accent-bg);border-radius:14px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:800;color:var(--accent)">🔓 開店チェックがまだです</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-top:4px;line-height:1.6">開けるまでに4袋を数えて提出してください。これが無いと今夜の閉店で現金の照合ができません。</div></div>';
+}
 function renderOpeningPre(){
   var cashDone=!!HOME_STATUS.opening;
   var prepTotal=0,prepDone=0;
   if(OPPREP){ OPPREP.items.forEach(function(it){ if(it.common){prepTotal+=1; if(it.c.done)prepDone++;} else {prepTotal+=2; if(it.f2.done)prepDone++; if(it.f5.done)prepDone++;} }); }
   var total=1+prepTotal, done=(cashDone?1:0)+prepDone, pct=total?Math.round(done/total*100):0;
   var cd=''; var left=PH_OPEN_MIN-nowBizMin(); if(left>0&&left<=180)cd='開店まで '+left+'分';
-  var h='<div class="hv-prog"><div class="big">'+done+'<span style="font-size:14px;color:var(--dim)">/'+total+'</span></div>'
+  var h=openingGateHtml_(cashDone)
+    +'<div class="hv-prog"><div class="big">'+done+'<span style="font-size:14px;color:var(--dim)">/'+total+'</span></div>'
     +'<div style="flex:1"><div class="lbl">開店前の準備</div><div class="hv-pbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div></div>'
     +(cd?'<div class="hv-cd">'+cd+'</div>':'')+'</div>';
   // 現金セット（レジ）＝別フロー・launcher
