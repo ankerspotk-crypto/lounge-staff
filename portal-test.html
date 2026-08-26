@@ -284,6 +284,57 @@ header h1 { font-size: 17px; font-weight: 600; }
 .table-chip.sel { background:#241d10;color:#e6cf95;border-color:#8a6a2e;font-weight:700; }
 .table-chip.booked { background:#2a1a1e;color:#c08080;border-color:#5a2a30; }
 .table-chip.booked.sel { background:#3a1420;color:#ff9999;border-color:#a03050;font-weight:700; }
+
+/* ===== 予約フォーム：店内見取り図（ビジュアル席選択・2026-08-26） =====
+ * ⚠️セルは .table-chip を兼ねる＝data-val / .sel / .booked / #yrsv-table-wrap の契約は従来チップと同一。
+ *   saveFormInputs()・yoyakuSubmitRsv()・toggleTableChip() は一切改造していない＝ここを外すと席が送信されなくなる。
+ * ⚠️セレクタは必ず .table-chip.ymap-seat で書く（詳細度で .table-chip.booked.sel に負けないため）。
+ * ⚠️行高44px以上は「指で押せる下限」＝軍師のSEAT_POS(絶対px)をそのまま持ってくるとスマホでカウンターが23pxになる。
+ *   だから位置関係だけ受け継いでCSS Gridで組み直している。実測の間取りではなくデフォルメ（軍師と同じ思想）。 */
+.ymap-wrap { display:flex; gap:8px; margin-bottom:6px; }
+.ymap-floor { flex:1; min-width:0; background:linear-gradient(180deg,#0d1524 0%,#090e17 100%); border:1px solid #2a2415; border-radius:12px; padding:8px 8px 9px; box-shadow:inset 0 1px 0 rgba(230,207,149,.06); }
+.ymap-fhd { display:flex; align-items:baseline; justify-content:space-between; gap:4px; margin-bottom:6px; }
+.ymap-fl { font-size:13px; font-weight:800; color:#e6cf95; letter-spacing:.1em; }
+.ymap-fmeta { font-size:10px; color:#8c7f5e; white-space:nowrap; }
+.ymap-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
+.ymap-grid.f2 { grid-template-rows:44px 44px 44px 44px 50px 72px; }
+.ymap-grid.f5 { grid-template-rows:44px 44px 44px 44px 44px 78px; }
+
+.table-chip.ymap-seat { position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:center; gap:1px;
+  padding:4px 6px; border-radius:7px; font-size:11px; line-height:1.15; text-align:left; transition:.15s;
+  background:linear-gradient(180deg,#132a1f 0%,#0c1a13 100%); border:1px solid #22513a; color:#6ec49a; -webkit-tap-highlight-color:transparent; }
+.table-chip.ymap-seat.counter { flex-direction:row; align-items:center; gap:6px; padding-left:9px; }
+.table-chip.ymap-seat.counter::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:currentColor; opacity:.4; } /* カウンター天板 */
+.table-chip.ymap-seat.box { border-radius:11px; padding-top:9px; }
+.table-chip.ymap-seat.box::before { content:''; position:absolute; left:9px; right:9px; top:4px; height:3px; border-radius:2px; background:currentColor; opacity:.3; } /* ソファの背もたれ */
+.ymap-nm { font-size:11px; font-weight:800; color:#d5ece0; white-space:nowrap; }
+/* 定員はボックスの右下へ逃がす＝客名の横幅を1文字も食わせない（客名は一番読まれる情報）。
+ * ⚠️右上は .sel の✓が使う＝重ねない。 */
+.table-chip.ymap-seat.box .ymap-cap { position:absolute; right:6px; bottom:4px; font-size:9px; font-weight:700; opacity:.62; }
+.ymap-st { font-size:10px; opacity:.95; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.table-chip.ymap-seat.counter .ymap-st { flex:1; text-align:right; font-size:9.5px; }
+.table-chip.ymap-seat.counter.nw { flex-direction:column; align-items:flex-start; justify-content:center; gap:0; padding-left:7px; padding-right:4px; }
+.table-chip.ymap-seat.counter.nw .ymap-nm { font-size:10.5px; }
+.table-chip.ymap-seat.counter.nw .ymap-st { flex:none; text-align:left; font-size:9px; }
+
+.table-chip.ymap-seat.booked { background:linear-gradient(180deg,#2c161a 0%,#1c0e11 100%); border-color:#6a2a33; color:#e79aa2; }
+.table-chip.ymap-seat.booked .ymap-nm { color:#f0c8cc; }
+.table-chip.ymap-seat.sel { background:linear-gradient(180deg,#40331544 0%,#241d10 100%); border-color:#e6cf95; color:#e6cf95;
+  box-shadow:0 0 10px rgba(230,207,149,.28), inset 0 0 0 1px rgba(230,207,149,.4); }
+.table-chip.ymap-seat.sel .ymap-nm { color:#fff4dc; }
+.table-chip.ymap-seat.sel::after { content:'✓'; position:absolute; right:4px; top:1px; font-size:11px; font-weight:800; color:#e6cf95; }
+.table-chip.ymap-seat.booked.sel { background:linear-gradient(180deg,#4a1c24 0%,#2a1014 100%); border-color:#e6a8b0; color:#ffc4ca;
+  box-shadow:0 0 10px rgba(230,168,176,.3), inset 0 0 0 1px rgba(230,168,176,.4); }
+.table-chip.ymap-seat.booked.sel::after { color:#ffc4ca; }
+/* 人数に対して定員が足りない席＝斜線で「入らないかも」を見せるだけ（超過も確認して通す＝ブロックしない） */
+.table-chip.ymap-seat.tight { background-image:repeating-linear-gradient(135deg,rgba(255,180,80,.085) 0 4px,transparent 4px 11px); }
+
+.ymap-legend { display:flex; gap:9px; align-items:center; flex-wrap:wrap; font-size:10px; color:#8c7f5e; margin-bottom:12px; }
+.ymap-legend i { width:9px; height:9px; border-radius:3px; display:inline-block; margin-right:3px; vertical-align:-1px; }
+.ymap-tgl { display:inline-flex; border:1px solid #33291a; border-radius:7px; overflow:hidden; margin-left:6px; vertical-align:middle; }
+.ymap-tgl b { font-size:10px; font-weight:700; padding:2px 7px; color:#8c7f5e; cursor:pointer; background:#141018; }
+.ymap-tgl b.on { background:#241d10; color:#e6cf95; }
+@media (max-width:340px) { .ymap-wrap { flex-direction:column; } }
 .yb-ok   { background: #0d2010; color: #66cc88; border: 1px solid #1a4a22; }
 .yb-pend { background: #2a2210; color: #ddaa44; border: 1px solid #5a4400; }
 /* 顧客検索 */
@@ -6287,6 +6338,129 @@ function renderYoyakuSched() {
   return '<div class="ysched-wrap"><div class="ysched-inner"><div class="ysched-left">'+leftHtml+'</div><div class="ysched-right">'+rightHdr+rowsWrapper+'</div></div></div>';
 }
 
+/* ============ 予約フォームの席選択＝店内見取り図（2026-08-26） ============
+ * 位置関係の正本は軍師 gunshi.html の SEAT_POS（2026-07-15にボスが実店舗と照合して確定した並び）。
+ * ここはその「並び」だけを受け継いでCSS Gridで組み直したもの＝実測の間取りではなくデフォルメ。
+ *   ・カウンターは上から番号順に縦並び
+ *   ・2F＝ボックス1が上、その下に ボックス3(左)・ボックス2(右)
+ *   ・5F＝カウンター6はカウンター5の右隣（角）／下段は ボックス2(左)・ボックス1(右)
+ * ⚠️入れ替えると現場と食い違って席を取り違える。並びを変える時は軍師のSEAT_POSと必ず両方直す。
+ * ⚠️卓の正本は YOYAKU_TABLES（定員capの唯一の持ち主）。ここは配置だけを持ち、卓名/定員はそちらから引く。
+ *   YOYAKU_TABLESに無い卓名を書いてもセルは描かれない（幽霊席を作らない）。 */
+var YOYAKU_MAP_LAYOUT = {
+  '2F': [
+    {n:'カウンター1',r:1,c:1,cs:6},{n:'カウンター2',r:2,c:1,cs:6},
+    {n:'カウンター3',r:3,c:1,cs:6},{n:'カウンター4',r:4,c:1,cs:6},
+    {n:'ボックス1',r:5,c:1,cs:6},
+    {n:'ボックス3',r:6,c:1,cs:2},{n:'ボックス2',r:6,c:3,cs:4}
+  ],
+  '5F': [
+    {n:'カウンター1',r:1,c:1,cs:6},{n:'カウンター2',r:2,c:1,cs:6},
+    {n:'カウンター3',r:3,c:1,cs:6},{n:'カウンター4',r:4,c:1,cs:6},
+    {n:'カウンター5',r:5,c:1,cs:4},{n:'カウンター6',r:5,c:5,cs:2},
+    {n:'ボックス2',r:6,c:1,cs:3},{n:'ボックス1',r:6,c:4,cs:3}
+  ]
+};
+/* マップ⇄チップの切替。端末ごとにlocalStorageで保持（軍師のhallViewと同じ流儀）*/
+var yoyakuSeatView = (function(){ try { return localStorage.getItem('portal_yseat_view') || 'map'; } catch(e) { return 'map'; } })();
+function setYoyakuSeatView(v) {
+  saveFormInputs();   /* ⚠️必須：選択中の席・入力中の欄を退避してから描き直す */
+  yoyakuSeatView = v;
+  try { localStorage.setItem('portal_yseat_view', v); } catch(e) {}
+  renderYoyaku();
+}
+function yoyakuSeatShort_(n) { return n.replace('カウンター','カウ').replace('ボックス','BOX'); }
+
+/* 1席ぶんのセル。⚠️class="table-chip" と data-val と onclick=toggleTableChip は従来チップと同一契約
+ *   （saveFormInputs / yoyakuSubmitRsv は #yrsv-table-wrap の .table-chip.sel を読む＝ここを崩すと席が送信されない）*/
+function yoyakuMapCell_(f, t, L, initTables, bookedTables, pax) {
+  var val    = f + ' ' + t.n;
+  var isC    = t.n.indexOf('カウンター') >= 0;
+  var sel    = initTables.indexOf(val) >= 0;
+  var booked = bookedTables ? bookedTables[(f + t.n).replace(/\s/g,'')] : null;
+  /* 状態の3値。bookedTables=null は「この日の予約状況が取れていない」＝空きだと嘘をつかず「—」 */
+  var st = booked ? (esc(booked.join('・')) + '様') : (bookedTables ? '空き' : '—');
+  /* 幅2/6のカウンター（＝5Fカウ6の角席）は客名が構造的に入らない＝2段に組んで「予約済/空き」だけ出す */
+  var narrow = isC && L.cs <= 2;
+  if (narrow) st = booked ? '予約済' : (bookedTables ? '空き' : '—');
+  return '<button type="button" class="table-chip ymap-seat ' + (isC ? 'counter' : 'box') + (narrow ? ' nw' : '')
+    + (sel ? ' sel' : '') + (booked ? ' booked' : '') + (!isC && pax > t.cap ? ' tight' : '') + '"'
+    + ' style="grid-row:' + L.r + ';grid-column:' + L.c + ' / span ' + L.cs + '"'
+    + ' data-val="' + esc(val) + '" data-cap="' + t.cap + '"'
+    + ' title="' + esc(val) + '（定員' + t.cap + '名）' + (booked ? '／' + esc(booked.join('・')) + '様 予約済み' : '') + '"'
+    + (booked ? ' data-booked="' + esc(booked.join('・')) + '"' : '')
+    + ' onclick="toggleTableChip(this)">'
+    + '<span class="ymap-nm">' + esc(yoyakuSeatShort_(t.n)) + '</span>'
+    + (isC ? '' : '<span class="ymap-cap">' + t.cap + '名</span>')
+    + '<span class="ymap-st">' + st + '</span>'
+    + '</button>';
+}
+function yoyakuSeatMapHtml_(initTables, bookedTables, pax) {
+  return '<div class="ymap-wrap">' + ['2F','5F'].map(function(f) {
+    var cells = '', free = 0, total = 0;
+    (YOYAKU_MAP_LAYOUT[f] || []).forEach(function(L) {
+      var t = null;
+      for (var i = 0; i < YOYAKU_TABLES.length; i++) {
+        if (YOYAKU_TABLES[i].f === f && YOYAKU_TABLES[i].n === L.n) { t = YOYAKU_TABLES[i]; break; }
+      }
+      if (!t) return;   /* YOYAKU_TABLESに無い卓は描かない */
+      total++;
+      if (bookedTables && !bookedTables[(f + t.n).replace(/\s/g,'')]) free++;
+      cells += yoyakuMapCell_(f, t, L, initTables, bookedTables, pax);
+    });
+    return '<div class="ymap-floor">'
+      + '<div class="ymap-fhd"><span class="ymap-fl">' + f + '</span>'
+      + '<span class="ymap-fmeta">' + (bookedTables ? '空き ' + free + '/' + total : '確認中') + '</span></div>'
+      + '<div class="ymap-grid ' + (f === '2F' ? 'f2' : 'f5') + '">' + cells + '</div>'
+      + '</div>';
+  }).join('') + '</div>';
+}
+/* マップのセルは幅が有限＝長い客名は必ず切れる。切れた分をここで1行に畳んで担保する。
+ * ⚠️同じ客が複数席なら束ねる（「早坂幸三様＝5F カウ1・カウ2」）＝席の数だけ名前を並べない。 */
+function yoyakuSeatBookedSummary_(bookedTables) {
+  if (!bookedTables) return '';
+  var byCust = {}, order = [];
+  ['2F','5F'].forEach(function(f) {
+    (YOYAKU_MAP_LAYOUT[f] || []).forEach(function(L) {
+      var who = bookedTables[(f + L.n).replace(/\s/g,'')];
+      if (!who) return;
+      who.forEach(function(c) {
+        if (!byCust[c]) { byCust[c] = []; order.push(c); }
+        byCust[c].push({ f: f, n: yoyakuSeatShort_(L.n) });
+      });
+    });
+  });
+  if (!order.length) return '';
+  return '<div style="font-size:10px;color:#c08a90;background:#1c1013;border:1px solid #3d1e23;border-radius:7px;padding:6px 8px;margin:-6px 0 12px;line-height:1.5">'
+    + order.map(function(c) {
+        var lastF = '';
+        var parts = byCust[c].map(function(s) { var lb = (s.f === lastF ? s.n : s.f + ' ' + s.n); lastF = s.f; return lb; });
+        return '<b style="color:#e79aa2">' + esc(c) + '様</b> ' + esc(parts.join('・'));
+      }).join('　／　')
+    + '</div>';
+}
+function yoyakuSeatLegendHtml_() {
+  return '<div class="ymap-legend">'
+    + '<span><i style="background:#132a1f;border:1px solid #22513a"></i>空き</span>'
+    + '<span><i style="background:#2c161a;border:1px solid #6a2a33"></i>予約済み（タップで相席）</span>'
+    + '<span><i style="background:#241d10;border:1px solid #e6cf95"></i>選択中</span>'
+    + '<span><i style="background:repeating-linear-gradient(135deg,rgba(255,180,80,.5) 0 2px,#12241c 2px 5px);border:1px solid #22513a"></i>人数に対して定員が小さい席</span>'
+    + '<span style="color:#7a6f52">タップで選択／複数選択できます</span>'
+    + '</div>';
+}
+/* 人数を変えた時のヒント塗り替え。⚠️再描画しない＝入力中の他の欄を飛ばさないため。
+ * 定員オーバーでもブロックはしない（超過は確認して通す＝yoyakuCapWarnMsg_の役割）。 */
+function yoyakuMapCapHint_() {
+  var el = document.getElementById('yrsv-pax');
+  if (!el) return;
+  var pax = parseInt(el.value) || 1;
+  var cells = document.querySelectorAll('#yrsv-table-wrap .ymap-seat.box');
+  Array.prototype.forEach.call(cells, function(c) {
+    var cap = parseInt(c.getAttribute('data-cap')) || 0;
+    if (cap && pax > cap) c.classList.add('tight'); else c.classList.remove('tight');
+  });
+}
+
 function renderYoyakuAdd() {
   var preset = yoyakuGridPreset || {};
   var presetTime  = preset.time  || '20:00';
@@ -6392,12 +6566,19 @@ function renderYoyakuAdd() {
         var curPax = yoyakuRsvPax || 1;
         var opts = [1,2,3,4,5].map(function(n){ return '<option'+(n===curPax?' selected':'')+'>'+n+'名</option>'; }).join('');
         opts += '<option'+(curPax>5?' selected':'')+'>6名+</option>';
-        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px">'+opts+'</select>';
+        /* 人数を変えたら見取り図の「定員が足りない席」ヒントだけ塗り替える（再描画はしない＝入力中の欄が飛ぶ） */
+        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px" onchange="yoyakuMapCapHint_()">'+opts+'</select>';
       })()
     + (yoyakuRsvMode === '仮予約' ? '' :
-        '<div class="yform-label">席<span style="font-size:10px;color:#94886a;margin-left:6px">（複数選択可・<span style="color:#ff6666">●</span>=予約済み）</span></div>'
+        /* 席の選び方は2通り（端末ごとに保持）。既定=🗺見取り図＝店内の並びそのまま。▦一覧=従来のチップ羅列を温存 */
+        '<div class="yform-label">席<span style="font-size:10px;color:#94886a;margin-left:6px">（複数選択可）</span>'
+        + '<span class="ymap-tgl"><b class="'+(yoyakuSeatView==='map'?'on':'')+'" onclick="setYoyakuSeatView(\'map\')">🗺 見取り図</b>'
+        + '<b class="'+(yoyakuSeatView==='map'?'':'on')+'" onclick="setYoyakuSeatView(\'chip\')">▦ 一覧</b></span></div>'
         + bookedNote
-        + '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>')
+        + (yoyakuSeatView === 'map'
+            ? '<div id="yrsv-table-wrap">'+yoyakuSeatMapHtml_(initTables, bookedTables, yoyakuRsvPax || 1)+'</div>'
+              + yoyakuSeatLegendHtml_() + yoyakuSeatBookedSummary_(bookedTables)
+            : '<div id="yrsv-table-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">'+tableChips+'</div>'))
     + '<div class="yform-label">同伴キャスト<span style="font-size:10px;color:#94886a;margin-left:6px">（複数選択可）</span></div>'
     + (function(){
         var defVal = yoyakuRsvDohan || (yoyakuEditRsv ? yoyakuEditRsv.dohanCast||'' : '');
