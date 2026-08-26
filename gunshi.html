@@ -902,7 +902,7 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 .rbtn.ext{background:#141d30;border-color:#2a4068;color:#9dc8ff;}
 .rbtn.mv{background:linear-gradient(180deg,#153a72,#0f2040);border-color:#2a5590;color:#dcecff;}
 .rbtn.mv.urg{background:linear-gradient(180deg,#7a2424,#4a1414);border-color:#a03434;color:#ffd9d9;animation:apulse 1.5s ease-in-out infinite;}
-.rot-toast{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);background:#0d2618;border:1px solid #2a6a44;color:#9fe8c0;font-size:13px;font-weight:700;padding:11px 20px;border-radius:12px;z-index:70;opacity:0;transition:.25s;pointer-events:none;}
+.rot-toast{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);background:#0d2618;border:1px solid #2a6a44;color:#9fe8c0;font-size:13px;font-weight:700;padding:11px 20px;border-radius:12px;z-index:100002;opacity:0;transition:.25s;pointer-events:none;}
 .rot-toast.show{opacity:1;}
 
 /* ---------- キャストチップ（席上の担当を色で識別） ---------- */
@@ -8662,22 +8662,24 @@ function skSaveSender(){
     gsr('getSeikyuBootstrap').then(function(b){ if(b&&b.ok!==false){ SK_BOOT=b; if(!SK_CLOSE)SK_CLOSE=b.closeMonth; } SK_SEL=r.id; SK_NOTE_TOUCHED=false; SK_VIEW='form'; renderMenu(); });
   }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
 }
+/* 送信を弾いた理由はトーストだけに頼らない＝フォーム内(ボタン直下)にも赤字で残す */
+function skWarn_(msg){ var st=document.getElementById('sk-status'); if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ '+msg; } toast(msg); }
 function skSubmit(){
-  if(!SK_SEL){ toast('請求先を選択してください'); return; }
+  if(!SK_SEL){ skWarn_('請求先を選択してください'); return; }
   var total=skTotal_();
   var items=SK_ITEMS.filter(function(x){return (x.name||'').trim()||Number(x.amount)>0;}).map(function(x){return {name:x.name||'',amount:Number(x.amount)||0};});
-  if(!total && !items.length){ toast('金額を入力してください'); return; }
-  var st=document.getElementById('sk-status'); if(st)st.textContent='送信中…';
+  if(!total && !items.length){ skWarn_('金額を入力してください（明細の金額欄に税込金額を入れてください）'); return; }
+  var st=document.getElementById('sk-status'); if(st){ st.style.color='var(--dim)'; st.textContent='送信中…'; }
   var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, usageDate:SK_USAGE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
     slips:SK_SLIPS.map(function(s){ return s.copyFileId?{copyFileId:s.copyFileId}:{base64:s.base64,mime:s.mime}; }) };
   if(!IS_GAS){ toast('（ローカルでは登録不可）'); return; }
   gsr('submitSeikyu',payload).then(function(r){
-    if(!r||r.ok===false){ if(st)st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); return; }
+    if(!r||r.ok===false){ if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); } return; }
     var extra=(r&&r.reclassified)?('／経費から'+r.reclassified+'件を対象伝票へ振替'):'';
     toast('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）'+extra);
     if(typeof bmSeikyuDone_==='function') bmSeikyuDone_();   // POSから来ていたら伝票に「依頼済み」を刻む
     SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[]; SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_VIEW='list'; SK_LIST=null; renderMenu();
-  }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
+  }).catch(function(){ if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ 通信エラー（もう一度お試しください）'; } });
 }
 function skListHtml_(){
   var h='<span class="menu-back" onclick="SK_VIEW=\'form\';renderMenu()">← 請求書入力に戻る</span>';
