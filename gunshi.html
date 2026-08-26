@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-25f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-26b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1807,6 +1807,104 @@ function trustEntryRefresh_(){
 function openTrustSite(){
   try{ window.open('https://admin.trust-operation.com/','_blank','noopener'); }
   catch(e){ if(typeof toast==='function')toast('TRUSTを開けませんでした',true); }
+}
+
+/* --- 💴 日払いの不明分（まとめて仕訳） -------------------------------------
+   ボス指示 2026-08-26。受取人が空欄／名簿にも名寄せにも無い伝票を月ごとに一覧し、その場で仕訳する。
+   ⚠️直し方が2通りあり意味が違う（画面でも言い分ける）：
+     A「この表記のままでOK」→ 名寄せに登録＝以後この表記は自動で寄る（本名署名など・根治）
+     B「表記を直す」        → 受取人セルを書き換え（OCR誤読・空欄）＋必要なら名寄せも登録
+   金額はここでは触らない（金額の訂正は閉店チェックの伝票欄）。 */
+var HBU=null, HBU_MONTH='', HBU_BUSY={};   /* ⚠️busyは行ごとに持つ。1つのフラグを全カードで共有すると、
+   GASの応答(床1.9秒)の間に別のカードを押しても【黙って何も起きない】＝現場では固まったように見える。 */
+function openHibaraiUnknown(ym){
+  closeMenu();
+  HBU_MONTH=ym||HBU_MONTH||'';
+  showSheet('💴 日払いの不明分','<div class="empty-msg">読み込み中...</div>',false);
+  if(!IS_GAS){ var b0=document.getElementById('sheetBody'); if(b0)b0.innerHTML='<div class="empty-msg">（ローカル）本番でご確認ください</div>'; return; }
+  gsr('getHibaraiUnknown',HBU_MONTH).then(function(r){
+    if(!r||r.ok===false){ var b1=document.getElementById('sheetBody'); if(b1)b1.innerHTML='<div class="empty-msg">'+esc((r&&r.error)||'読み込みエラー')+'</div>'; return; }
+    HBU=r; if(!HBU_MONTH&&(r.months||[]).length) HBU_MONTH=r.months[0];
+    hbuRender();
+  }).catch(function(){ var b2=document.getElementById('sheetBody'); if(b2)b2.innerHTML='<div class="empty-msg">通信エラー</div>'; });
+}
+function hbuMonth(v){ HBU_MONTH=v; openHibaraiUnknown(v); }
+function hbuRender(){
+  var b=document.getElementById('sheetBody'); if(!b||!HBU)return;
+  var rows=HBU.rows||[], months=HBU.months||[];
+  var sum=rows.reduce(function(t,x){return t+Number(x.amount||0);},0);
+  var opts=months.map(function(m){return '<option value="'+esc(m)+'"'+(m===HBU_MONTH?' selected':'')+'>'+esc(m)+'</option>';}).join('');
+  var h='<div class="toolbar"><span class="cnt">対象月</span>'
+    +'<select class="finput" style="width:130px;margin:0" onchange="hbuMonth(this.value)">'+opts+'</select>'
+    +'<span class="cnt">'+rows.length+'件 ・ 計 ¥'+sum.toLocaleString()+'</span></div>';
+  if(!rows.length){
+    h+='<div class="ck-banner ok">✅ この月の不明分はありません</div>';
+    b.innerHTML=h+hbuGuide(); return;
+  }
+  h+='<div style="font-size:12px;color:var(--dim);line-height:1.6;margin:8px 0">'
+    +'受取人が分からない日払い伝票です。<b>誰の日払いか決まらないとTRUSTと突き合わせられず、給与の控除も合いません。</b>'
+    +'📷で受領書の署名を確認してから決めてください。</div>';
+  h+=rows.map(hbuCard).join('');
+  b.innerHTML=h+hbuGuide();
+}
+function hbuGuide(){
+  return '<div style="font-size:11.5px;color:var(--dim);margin-top:14px;line-height:1.7;border-top:1px solid var(--line2);padding-top:10px">'
+    +'<b>「この表記でOK」</b>＝署名どおりの表記です。誰のことかを選ぶと<b>名寄せに登録</b>され、次からこの表記は自動で寄ります（本名で署名する人はこれ）。<br>'
+    +'<b>「表記を直す」</b>＝読み取りが間違っている・空欄のときに使います。受取人そのものを書き換えます。<br>'
+    +'金額の訂正はここではできません。閉店チェックの伝票欄から直してください。</div>';
+}
+function hbuCard(x){
+  var id=x.rowIdx;
+  var img=(x.img&&x.img!=='#')?'<a href="'+esc(x.img)+'" target="_blank" class="dp-img" style="padding:2px 8px">📷 受領書</a>':'<span class="dp-img" style="opacity:.4;padding:2px 8px">📷 なし</span>';
+  var opts='<option value="">— 誰の日払いか選ぶ —</option>'+(HBU.payees||[]).map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
+  return '<div class="cc-slip" id="hbu-'+id+'">'
+    +'<div style="display:flex;gap:8px;align-items:baseline">'
+    +'<span style="font-size:12px;color:var(--dim)">'+esc(x.date.slice(5))+'</span>'
+    +'<span style="flex:1;font-size:14px;font-weight:700;color:'+(x.payee?'var(--txt)':'#ff9a9a')+'">'+esc(x.payee||'（受取人が空欄）')+'</span>'
+    +'<span style="font-weight:800;color:var(--gold)">¥'+Number(x.amount||0).toLocaleString()+'</span></div>'
+    +'<div style="font-size:11.5px;color:#e0a060;margin-top:3px">'+esc(x.why)+(x.note?'　<span style="color:var(--dim)">'+esc(x.note)+'</span>':'')+'</div>'
+    +'<div style="margin-top:7px">'+img+'</div>'
+    +'<select class="finput" id="hbu-sel-'+id+'" style="margin-top:8px">'+opts+'</select>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+    +(x.payee?'<button class="bm-btn sm" style="border-color:#3ea06a;color:#8fe0ac" onclick="hbuKeep('+id+')">✅ この表記でOK（名寄せに登録）</button>':'')
+    +'<button class="bm-btn sm" onclick="hbuRewrite('+id+')">✏️ 表記を直す</button>'
+    +'</div><div id="hbu-msg-'+id+'" style="font-size:11.5px;color:#8fe0ac;margin-top:6px"></div></div>';
+}
+function hbuSel_(id){ var s=document.getElementById('hbu-sel-'+id); return s?String(s.value||'').trim():''; }
+function hbuMsg_(id,t,err){ var m=document.getElementById('hbu-msg-'+id); if(m){ m.style.color=err?'#ff9a9a':'#8fe0ac'; m.textContent=t; } }
+/* A: 表記はそのまま＝名寄せに登録して根治 */
+function hbuKeep(id){
+  var to=hbuSel_(id);
+  if(!to){ hbuMsg_(id,'誰の日払いかを選んでください',true); return; }
+  hbuSend_(id,'',to);
+}
+/* B: 表記そのものを直す（OCR誤読・空欄）。ついでに名寄せも登録できる */
+function hbuRewrite(id){
+  var cur=(HBU.rows||[]).filter(function(r){return r.rowIdx===id;})[0]||{};
+  var to=hbuSel_(id);
+  var def=to||cur.payee||'';
+  var v=prompt('受取人を入力してください（受領書の署名どおりに）',def);
+  if(v==null) return;
+  v=String(v).trim();
+  if(!v){ hbuMsg_(id,'受取人が空のままです',true); return; }
+  hbuSend_(id,v,to);   // 選択があれば名寄せも同時に登録
+}
+function hbuSend_(id,text,to){
+  if(HBU_BUSY[id]){ hbuMsg_(id,'保存中です。少しお待ちください'); return; }
+  HBU_BUSY[id]=true;
+  hbuMsg_(id,'保存中…');
+  var by=(typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):'';
+  gsr('hibaraiResolveUnknown',id,text,to,by).then(function(r){
+    delete HBU_BUSY[id];
+    if(!r||r.ok===false){ hbuMsg_(id,(r&&r.error)||'保存に失敗しました',true); return; }
+    var card=document.getElementById('hbu-'+id);
+    if(card){
+      card.style.opacity='.55';
+      card.innerHTML='<div style="font-size:13px;color:#8fe0ac">✅ '+esc(r.payee||'')+(r.mapped?'　→ 名寄せ「'+esc(r.mapped)+'」に登録しました':'　（受取人を書き換えました）')+'</div>';
+    }
+    HBU.rows=(HBU.rows||[]).filter(function(x){return x.rowIdx!==id;});
+    if(typeof toast==='function')toast('✅ 仕訳しました');
+  }).catch(function(){ delete HBU_BUSY[id]; hbuMsg_(id,'通信エラー。もう一度押してください',true); });
 }
 
 /* --- 🌙 締めワークフロー（閉店の入口をここ1つにする） ------------------------
@@ -5559,7 +5657,8 @@ var MENU_TILES=[
   {group:'開店・閉店 / 現金', items:[
     {ic:'🌅', t:'開店チェック',   act:"openOpeningCheck()"},
     {ic:'🔓', t:'金庫出金',       act:"openSafeWithdrawal()"},
-    {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"}
+    {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"},
+    {ic:'💴', t:'日払いの不明分', act:"openHibaraiUnknown()"}
   ]},
   {group:'管理', items:[
     {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},

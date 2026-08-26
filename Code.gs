@@ -687,7 +687,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask',
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown',
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
   // 📖 新人マニュアル（manual.gs）＝軍師は読み取りのみ。編集はコンソール(handleApiRequest_のmanual*)。
@@ -17374,6 +17374,100 @@ function cashUnresolvedDays_(todayKey) {
     });
   }
   return out;
+}
+
+
+/* ===== 💴 日払い伝票の「不明分」仕訳（軍師） =================================
+ * ボス指示 2026-08-26:「7月の日払い伝票で不明分がないかチェック。軍師で不明分をまとめて
+ * 確認して仕訳できるように」。
+ * 不明＝①受取人が空欄（署名を読めなかった）②名簿にも日払い名寄せにもTRUSTにも無い表記。
+ * ②が多いのは本名で署名するから（「沢渡 みな」「松田朔音」）＋OCRの誤読（「松田翔音」）。
+ * ⚠️直し方は2通りあり、意味が違う：
+ *   A) 名寄せに登録  … 表記は正しい（本名署名など）→ 以後この表記は自動で寄る＝根治
+ *   B) 受取人を書き直す… 表記そのものが誤り（OCR誤読・空欄）→ その行だけ直る
+ * 両方できるようにする（Aだけだと誤読表記が名寄せに溜まる、Bだけだと毎回直すことになる）。
+ */
+// 不明分の一覧。ym='2026-07' で月指定、省略で直近90日
+function getHibaraiUnknown(ym) {
+  try {
+    const ss = getOrOpenSS_();
+    const sh = ss.getSheetByName('日払い記録');
+    if (!sh || sh.getLastRow() < 2) return { ok: true, rows: [], payees: ccKnownPayees_(), months: [] };
+    const vals = sh.getDataRange().getValues();
+    const h = vals[0].map(String);
+    const pick = function (name, fb) { const i = h.indexOf(name); return i >= 0 ? i : fb; };
+    const iName = pick('受取人', 1), iAmt = pick('伝票金額', 2), iNote = pick('但し書き', 5), iImg = pick('画像リンク', 8);
+
+    // 既知の名前＝名簿＋日払い名寄せ（受領書表記もTRUST表記も）＋TRUST報酬の直近月
+    const known = {};
+    ccKnownPayees_().forEach(function (n) { known[hbKey_(n)] = true; });
+    const map = hibaraiNameMap_(ss);
+    Object.keys(map).forEach(function (k) { known[k] = true; });
+
+    const rows = [], monthsSet = {};
+    const from = new Date(); from.setDate(from.getDate() - 90);
+    const fromKey = Utilities.formatDate(from, TZ, 'yyyy-MM-dd');
+    for (let i = 1; i < vals.length; i++) {
+      const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+      if (!d) continue;
+      const amt = Number(vals[i][iAmt]) || 0;
+      if (!amt) continue;
+      const raw = String(vals[i][iName] || '').trim();
+      const k = hbKey_(raw);
+      if (k && known[k]) continue;                       // 名前が分かっている＝仕訳済み
+      monthsSet[d.slice(0, 7)] = true;
+      if (ym ? (d.slice(0, 7) !== String(ym)) : (d < fromKey)) continue;
+      rows.push({
+        rowIdx: i + 1, date: d, payee: raw, amount: amt,
+        note: String(vals[i][iNote] || '').trim(),
+        img: String(vals[i][iImg] || '').trim(),
+        why: k ? '名簿にも名寄せにも無い表記' : '受取人が空欄（署名を読めなかった）'
+      });
+    }
+    rows.sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+    return { ok: true, rows: rows, payees: ccKnownPayees_(), months: Object.keys(monthsSet).sort().reverse() };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+// 不明分を1件仕訳する。GUNSHI_API_FNS登録必須。
+//   payeeText … 受取人セルに書き直す表記（空文字なら書き換えない＝表記は正しいまま）
+//   trustName … 日払い名寄せに登録するTRUST表記（空なら登録しない）
+// ⚠️名寄せに登録する「受領書の表記」は、書き換え後の表記（＝これから先この伝票が持つ表記）。
+function hibaraiResolveUnknown(rowIdx, payeeText, trustName, by) {
+  try {
+    const ss = getOrOpenSS_();
+    const sh = ss.getSheetByName('日払い記録');
+    if (!sh) return { ok: false, error: '日払い記録シートがありません' };
+    const ri = Number(rowIdx) || 0;
+    if (ri < 2 || ri > sh.getLastRow()) return { ok: false, error: '行が不正です' };
+    const h = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    const iName = h.indexOf('受取人') >= 0 ? h.indexOf('受取人') : 1;
+
+    const newText = String(payeeText == null ? '' : payeeText).trim();
+    if (newText) sh.getRange(ri, iName + 1).setValue(newText);
+    const label = newText || String(sh.getRange(ri, iName + 1).getValue() || '').trim();
+
+    let mapped = '';
+    const tn = String(trustName == null ? '' : trustName).trim();
+    if (tn && label) {
+      const msh = ensureHibaraiMapSheet_(ss);
+      const key = hbKey_(label);
+      let hit = 0;
+      if (msh.getLastRow() >= 2) {
+        const mv = msh.getRange(2, 1, msh.getLastRow() - 1, 2).getValues();
+        for (let i = 0; i < mv.length; i++) {
+          if (hbKey_(mv[i][0]) === key) { msh.getRange(i + 2, 2).setValue(tn); hit = i + 2; break; }
+        }
+      }
+      if (!hit) msh.appendRow([label, tn, '日払い', '軍師で仕訳' + (by ? '（' + by + '）' : '')]);
+      mapped = tn;
+    }
+    return { ok: true, rowIdx: ri, payee: label, mapped: mapped };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
 }
 
 // ── 軍師: 閉店チェックの締め条件（⚠️GUNSHI_API_FNS登録必須） ──────────────
