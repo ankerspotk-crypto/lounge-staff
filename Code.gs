@@ -691,7 +691,9 @@ var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem'
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
   // 📖 新人マニュアル（manual.gs）＝軍師は読み取りのみ。編集はコンソール(handleApiRequest_のmanual*)。
-  'gunshiGetManual'];
+  'gunshiGetManual',
+  // 🪪 派遣スタッフ 本人確認台帳（顔写真＋身分証）＝軍師で登録・照合。画像は制限付きDriveをGAS経由で返す
+  'gunshiGetHakenRoster', 'gunshiSaveHakenId', 'gunshiConfirmHaken', 'gunshiGetHakenPhoto'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -13077,7 +13079,8 @@ var PHOTO_ROOTS_ = {
   receipt: /^ラウンジ家康_領収書_/,          // 月フォルダ ラウンジ家康_領収書_YYYY-MM 配下
   slip:    /^ラウンジ家康_現金チェック伝票$/, // 現金チェック伝票（直下に日付フォルダ）配下
   seikyu:  /^ラウンジ家康_請求書$/,           // 請求書（配下に 名刺／対象伝票/YYYY-MM フォルダ）
-  groupimg:/^(売上伝票|受領書・伝票・営業中画像)$/ // 黒服グループに上がった写真の溜まり場（会計伝票＝売上伝票／領収書等＝受領書・伝票・営業中画像）
+  groupimg:/^(売上伝票|受領書・伝票・営業中画像)$/, // 黒服グループに上がった写真の溜まり場（会計伝票＝売上伝票／領収書等＝受領書・伝票・営業中画像）
+  hakenid: /^ラウンジ家康_派遣身分証$/   // 派遣スタッフの顔写真・身分証（配下に YYYY-MM/登録ID）。⚠️公開共有しない＝閲覧はGAS経由のみ
 };
 var PHOTO_MAX_BYTES_ = 8 * 1024 * 1024;      // base64転送の暴発を防ぐ上限（8MB）
 
@@ -23695,3 +23698,275 @@ function adminGetAnnual_() {
     }
   };
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * 🪪 派遣スタッフ 本人確認台帳（顔写真＋身分証）  2026-08-26
+ * ───────────────────────────────────────────────────────────────────────────
+ * 誰が使うか＝軍師（店内iPad・黒服）。派遣会社から来たスタッフの顔と身分証を
+ * 入店時に1度だけ登録し、2回目以降は台帳の顔写真と見比べて「確認OK」を押すだけ。
+ *
+ * 設計の要（ボス確定 2026-08-26）
+ *  - 撮るもの＝顔写真／身分証(表)／身分証(裏)／生年月日は手入力（年齢確認の証跡）
+ *  - 初回だけ登録・以後は照合のみ（確認回数と最終確認日時を積む）
+ *  - 閲覧は軍師にログインした黒服なら全員可（画像は制限付きDrive＋GAS経由base64）
+ *
+ * ⚠️地雷メモ
+ *  - 台帳の突合キーは「氏名(シフト表の表記)」と「本名」の両方を空白除去して見る。
+ *    normalizeName_ は内部スペースを消さない＝必ず hakenIdKey_ を通すこと。
+ *  - 列は末尾追加のみ。途中に挿すと hakenIdColMap_ 以外の既存行がズレる。
+ *  - 写真は setSharing しない＝制限付き。閲覧は gunshiGetHakenPhoto 経由のみ
+ *    （面談表は LINE に貼るため公開しているが、こちらは公開する理由が無い）。
+ *  - 18歳未満は登録を拒否する（接客させられない＝台帳に載せてはいけない）。
+ *    18〜19歳は登録するが ⚠️未成年 を返して画面に出す（酒類提供の可否）。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+const HAKEN_ID_TAB = '派遣スタッフ台帳';
+const HAKEN_ID_FOLDER_ = 'ラウンジ家康_派遣身分証';
+const HAKEN_ID_COLS_ = ['登録ID', '登録日時', '登録者', '氏名', '本名', 'フリガナ', '派遣会社',
+  '生年月日', '顔写真', '身分証表', '身分証裏', '身分証の種類', 'メモ',
+  '最終確認日時', '最終確認者', '確認回数', '状態'];
+
+// 突合キー。normalizeName_ は内部スペースを残す（[[reference_name_normalization]]）ので必ず全空白を落とす
+function hakenIdKey_(s) {
+  return normalizeName_(String(s == null ? '' : s).trim()).replace(/[\s　]/g, '');
+}
+
+function getOrCreateHakenIdSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(HAKEN_ID_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(HAKEN_ID_TAB);
+    sh.appendRow(HAKEN_ID_COLS_);
+    sh.setFrozenRows(1);
+    try { sh.hideSheet(); } catch (e) {}   // 身分証の台帳＝普段は伏せておく（シート一覧から表示で戻せる）
+  }
+  // 列の後付け（末尾追加のみ）。既存シートに新しい列を足しても壊れないように毎回そろえる
+  const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(v => String(v).trim());
+  HAKEN_ID_COLS_.forEach(function (c) {
+    if (head.indexOf(c) < 0) { sh.getRange(1, sh.getLastColumn() + 1).setValue(c); head.push(c); }
+  });
+  return sh;
+}
+
+function hakenIdColMap_(sh) {
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const m = {};
+  head.forEach(function (h, i) { m[String(h).trim()] = i; });
+  return m;
+}
+
+// 生年月日(yyyy-MM-dd)→満年齢。取れなければ null
+function hakenAgeFromBirth_(birth) {
+  const s = String(birth || '').trim().replace(/[／.]/g, '-').replace(/\//g, '-');
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  const passed = (now.getMonth() + 1 > mo) || (now.getMonth() + 1 === mo && now.getDate() >= d);
+  if (!passed) age--;
+  return (age >= 0 && age < 120) ? age : null;
+}
+// 保存する生年月日は必ず 'yyyy-MM-dd' の文字列に正規化（Date値化＝1899年流出の罠を避ける）
+function hakenNormBirth_(birth) {
+  const s = String(birth || '').trim().replace(/[／.]/g, '-').replace(/\//g, '-');
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  return m ? (m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2)) : '';
+}
+
+// Drive: ラウンジ家康_派遣身分証 / yyyy-MM / <登録ID>
+function getOrCreateHakenIdFolder_(id) {
+  const root = DriveApp.getRootFolder();
+  const it = root.getFoldersByName(HAKEN_ID_FOLDER_);
+  const base = it.hasNext() ? it.next() : root.createFolder(HAKEN_ID_FOLDER_);
+  const mk = Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  const mit = base.getFoldersByName(mk);
+  const mf = mit.hasNext() ? mit.next() : base.createFolder(mk);
+  const iit = mf.getFoldersByName(id);
+  return iit.hasNext() ? iit.next() : mf.createFolder(id);
+}
+// ⚠️setSharing しない＝制限付き。閲覧は gunshiGetHakenPhoto（KIOSK_KEY必須）経由のみ
+function saveHakenIdPhoto_(id, name, kind, dataUrl) {
+  const b64 = String(dataUrl).replace(/^data:[^;]+;base64,/, '');
+  const blob = Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg',
+    (name || id).replace(/[\/\\:*?"<>|]/g, '_') + '_' + kind + '.jpg');
+  return getOrCreateHakenIdFolder_(id).createFile(blob).getId();
+}
+function hakenPhotoUrl_(fid) { return fid ? ('https://drive.google.com/file/d/' + fid + '/view') : ''; }
+
+// 台帳1行 → フロントに渡すレコード
+function hakenIdRecFromRow_(row, c) {
+  const g = k => (c[k] == null ? '' : row[c[k]]);
+  const birth = fmtStamp_(g('生年月日')).slice(0, 10);
+  return {
+    id:       String(g('登録ID')),
+    at:       fmtStamp_(g('登録日時')),
+    by:       String(g('登録者')),
+    name:     String(g('氏名')),
+    realName: String(g('本名')),
+    kana:     String(g('フリガナ')),
+    agency:   String(g('派遣会社')),
+    birth:    birth,
+    age:      hakenAgeFromBirth_(birth),
+    facePhoto:   String(g('顔写真')),
+    idPhoto:     String(g('身分証表')),
+    idPhotoBack: String(g('身分証裏')),
+    idType:   String(g('身分証の種類')),
+    memo:     String(g('メモ')),
+    lastAt:   fmtStamp_(g('最終確認日時')),
+    lastBy:   String(g('最終確認者')),
+    times:    Number(g('確認回数') || 0),
+    status:   String(g('状態') || '有効')
+  };
+}
+
+/* 軍師 🪪派遣スタッフ登録 の初期データ。
+ * today = 本日シフト表の派遣行に台帳のヒットを付けたもの／ledger = 台帳全件（新しい順） */
+function gunshiGetHakenRoster(login) {
+  try {
+    const sh = getOrCreateHakenIdSheet_();
+    const c = hakenIdColMap_(sh);
+    const last = sh.getLastRow();
+    const rows = last > 1 ? sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues() : [];
+    const ledger = [], byKey = {};
+    rows.forEach(function (r) {
+      if (!String(r[c['登録ID']] || '').trim()) return;
+      const rec = hakenIdRecFromRow_(r, c);
+      ledger.push(rec);
+      [rec.name, rec.realName].forEach(function (n) {
+        const k = hakenIdKey_(n);
+        if (k && !byKey[k]) byKey[k] = rec;      // 先勝ち（同名は古い方＝最初の登録を代表にする）
+      });
+    });
+    ledger.sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+
+    const d = getTodayShiftDetail_();
+    const today = (d.haken || []).map(function (s) {
+      const rec = byKey[hakenIdKey_(s.name)] || byKey[hakenIdKey_(s.origName)] || null;
+      return { name: s.name, origName: s.origName, shift: s.shift, rec: rec, registered: !!rec };
+    });
+    return { ok: true, today: today, ledger: ledger, unregistered: today.filter(t => !t.registered).length };
+  } catch (e) {
+    console.error('gunshiGetHakenRoster', e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+/* 新規登録／再撮影。payload = {id?, name, realName, kana, agency, birth, idType, memo,
+ *                             facePhoto, idPhoto, idPhotoBack}  写真は dataURL（未撮影は空＝据え置き） */
+function gunshiSaveHakenId(login, payload) {
+  try {
+    const p = payload || {};
+    const name = String(p.name || '').trim();
+    if (!name) return { ok: false, error: '氏名を入れてください' };
+
+    const birth = hakenNormBirth_(p.birth);
+    if (!birth) return { ok: false, error: '生年月日を「1998-04-01」の形で入れてください（年齢確認の記録に必要です）' };
+    const age = hakenAgeFromBirth_(birth);
+    if (age == null) return { ok: false, error: '生年月日が正しくありません' };
+    // ⛔18歳未満は接客させられない＝台帳に載せない。身分証の読み違いなら入力し直し、本当に18歳未満なら派遣会社へ連絡
+    if (age < 18) return { ok: false, error: '⛔18歳未満です（満' + age + '歳）。接客業務に就かせられません。身分証を再確認のうえ、派遣会社へ連絡してください。' };
+
+    const sh = getOrCreateHakenIdSheet_();
+    const c = hakenIdColMap_(sh);
+    const last = sh.getLastRow();
+    const rows = last > 1 ? sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues() : [];
+
+    // 更新対象を決める：idが来ていればその行／無ければ氏名・本名の一致行（＝二重登録を作らない）
+    let rowIdx = -1, id = String(p.id || '').trim();
+    const keys = [hakenIdKey_(name), hakenIdKey_(p.realName)].filter(Boolean);
+    for (let i = 0; i < rows.length; i++) {
+      const rid = String(rows[i][c['登録ID']] || '').trim();
+      if (id && rid === id) { rowIdx = i + 2; break; }
+      if (!id && (keys.indexOf(hakenIdKey_(rows[i][c['氏名']])) >= 0 || keys.indexOf(hakenIdKey_(rows[i][c['本名']])) >= 0)) {
+        rowIdx = i + 2; id = rid; break;
+      }
+    }
+    const isNew = rowIdx < 0;
+    if (isNew) {
+      const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+      id = 'H' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd') + '-' + rnd;
+    }
+
+    // 新規は 顔＋身分証(表) を必須にする（片方だけの台帳は本人確認の役に立たない）
+    const prev = isNew ? null : hakenIdRecFromRow_(rows[rowIdx - 2], c);
+    const haveFace = !!p.facePhoto || !!(prev && prev.facePhoto);
+    const haveId   = !!p.idPhoto   || !!(prev && prev.idPhoto);
+    if (!haveFace) return { ok: false, error: '顔写真を撮ってください' };
+    if (!haveId)   return { ok: false, error: '身分証（表）を撮ってください' };
+
+    const face = p.facePhoto   ? hakenPhotoUrl_(saveHakenIdPhoto_(id, name, 'face',   p.facePhoto))   : (prev ? prev.facePhoto : '');
+    const idf  = p.idPhoto     ? hakenPhotoUrl_(saveHakenIdPhoto_(id, name, 'id',     p.idPhoto))     : (prev ? prev.idPhoto : '');
+    const idb  = p.idPhotoBack ? hakenPhotoUrl_(saveHakenIdPhoto_(id, name, 'idback', p.idPhotoBack)) : (prev ? prev.idPhotoBack : '');
+
+    const stamp = nowStamp_();
+    const who = String(login || '').trim() || '軍師';
+    const vals = {};
+    vals['登録ID'] = id;
+    vals['登録日時'] = isNew ? stamp : (prev ? prev.at : stamp);
+    vals['登録者'] = isNew ? who : (prev && prev.by ? prev.by : who);
+    vals['氏名'] = name;
+    vals['本名'] = String(p.realName || '').trim();
+    vals['フリガナ'] = String(p.kana || '').trim();
+    vals['派遣会社'] = String(p.agency || '').trim();
+    vals['生年月日'] = birth;
+    vals['顔写真'] = face;
+    vals['身分証表'] = idf;
+    vals['身分証裏'] = idb;
+    vals['身分証の種類'] = String(p.idType || '').trim();
+    vals['メモ'] = String(p.memo || '').trim();
+    vals['最終確認日時'] = stamp;
+    vals['最終確認者'] = who;
+    vals['確認回数'] = isNew ? 1 : ((prev ? prev.times : 0) + 1);
+    vals['状態'] = '有効';
+
+    const width = sh.getLastColumn();
+    if (isNew) {
+      const row = new Array(width).fill('');
+      Object.keys(vals).forEach(function (k) { if (c[k] != null) row[c[k]] = vals[k]; });
+      sh.appendRow(row);
+    } else {
+      const row = rows[rowIdx - 2].slice();
+      Object.keys(vals).forEach(function (k) { if (c[k] != null) row[c[k]] = vals[k]; });
+      sh.getRange(rowIdx, 1, 1, width).setValues([row]);
+    }
+    return {
+      ok: true, id: id, isNew: isNew, age: age,
+      minor: age < 20,                                   // 20歳未満＝酒類提供不可。画面に⚠️を出す
+      noBack: !idb,                                      // 裏面が無いまま保存された（パスポート等なら正常）
+      msg: (isNew ? '登録しました' : '更新しました') + '（満' + age + '歳）'
+    };
+  } catch (e) {
+    console.error('gunshiSaveHakenId', e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+// 2回目以降＝照合のみ。写真を見比べて本人だと確認したら押す（確認回数と最終確認を積む）
+function gunshiConfirmHaken(login, id) {
+  try {
+    const sh = getOrCreateHakenIdSheet_();
+    const c = hakenIdColMap_(sh);
+    const last = sh.getLastRow();
+    if (last < 2) return { ok: false, error: '台帳が空です' };
+    const rows = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][c['登録ID']] || '').trim() !== String(id || '').trim()) continue;
+      const times = Number(rows[i][c['確認回数']] || 0) + 1;
+      const stamp = nowStamp_(), who = String(login || '').trim() || '軍師';
+      if (c['最終確認日時'] != null) sh.getRange(i + 2, c['最終確認日時'] + 1).setValue(stamp);
+      if (c['最終確認者'] != null)   sh.getRange(i + 2, c['最終確認者'] + 1).setValue(who);
+      if (c['確認回数'] != null)     sh.getRange(i + 2, c['確認回数'] + 1).setValue(times);
+      return { ok: true, times: times, at: stamp, by: who };
+    }
+    return { ok: false, error: '台帳に見つかりません' };
+  } catch (e) {
+    console.error('gunshiConfirmHaken', e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+// 台帳の写真を base64 で返す（制限付きDriveをGASオーナー権限で読む。KIOSK_KEY必須＝GUNSHI_API_FNS経由のみ）
+function gunshiGetHakenPhoto(ref) { return drivePhotoAsDataUrl_(String(ref || ''), 'hakenid'); }
