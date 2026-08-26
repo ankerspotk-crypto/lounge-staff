@@ -2024,6 +2024,55 @@ function normTable_(s) {
     .replace(/離れ|はなれ|ハナレ/g, '5f');
 }
 
+// 営業中画像（伝票ではない業務連絡・確認用の写真）の一時保管フォルダ（親「営業中画像_一時保管」→ 営業日サブフォルダ）。
+//   ⚠️ここに入った写真は OPS_IMG_KEEP_DAYS_ 日で自動削除される（purgeOpsImages_ が営業日フォルダごとゴミ箱へ）。
+//   ⛔PHOTO_ROOTS_.groupimg / seikyuCopyGroupPhoto_ の pools には足さないこと＝請求書の写真ピッカーに
+//     業務連絡の写真を並べないため。溜まり場は今までどおり「売上伝票」「受領書・伝票・営業中画像」の2つ。
+var OPS_IMG_PARENT_ = '営業中画像_一時保管';
+var OPS_IMG_KEEP_DAYS_ = 14;
+function getOpsImageDayFolder_(bizDate) {
+  const root = DriveApp.getRootFolder();
+  const pIt = root.getFoldersByName(OPS_IMG_PARENT_);
+  const parent = pIt.hasNext() ? pIt.next() : root.createFolder(OPS_IMG_PARENT_);
+  const dIt = parent.getFoldersByName(bizDate);
+  return dIt.hasNext() ? dIt.next() : parent.createFolder(bizDate);
+}
+
+// OCRの判定が「残すべき伝票」かどうか（ホワイトリスト方式・ボス確定 2026-08-26）。
+//   伝票系＝会計伝票/日払い受領書/月払い受領書/領収書/公共料金/納品書 だけを本保存し、
+//   それ以外（店内の様子・スクショ・忘れ物など業務連絡の写真）は一時保管へ回して14日で消す。
+//   ★ai が無い（Geminiが落ちた・キー未設定・レート制限）ときは true ＝「判定できないものは消える側に倒さない」。
+//     ここを false にすると、OCRが落ちた日の伝票が黙って14日後に消える。絶対に反転させないこと。
+function isDenpyoDoc_(ai) {
+  if (!ai) return true;
+  const dt = String(ai.doc_type || '');
+  if (dt === '会計伝票' || dt === '日払い受領書' || dt === '月払い受領書' || dt === '領収書' || dt === '公共料金' || dt === '納品書') return true;
+  // doc_type が「その他」でも、金額・発行元・明細を持つなら伝票の可能性がある＝残す。
+  // ⚠️handleReceiptImage_ の日払いフォールスルー（ai.payee || ai.amount で日払い記録に書く条件）と必ず揃えること。
+  //   ここだけ狭めると「日払い記録には書いたのに画像は14日で消える」というねじれが起きる。
+  if (ai.payee || ai.amount || ai.issuer || (Array.isArray(ai.items) && ai.items.length)) return true;
+  return false;
+}
+
+// 一時保管の古い営業日フォルダをゴミ箱へ（★完全削除ではない＝Driveのゴミ箱からさらに30日戻せる二重の安全網）。
+//   日付形式(yyyy-MM-dd)のフォルダだけを対象にする＝人が手で作った別名フォルダは触らない。
+function purgeOpsImages_() {
+  const root = DriveApp.getRootFolder();
+  const pIt = root.getFoldersByName(OPS_IMG_PARENT_);
+  if (!pIt.hasNext()) return { trashed: 0, limit: '' };
+  const parent = pIt.next();
+  const limit = Utilities.formatDate(new Date(Date.now() - OPS_IMG_KEEP_DAYS_ * 86400000), TZ, 'yyyy-MM-dd');
+  const it = parent.getFolders();
+  let n = 0, names = [];
+  while (it.hasNext()) {
+    const f = it.next(), nm = f.getName();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nm)) continue;   // 日付フォルダ以外は対象外
+    if (nm < limit) { f.setTrashed(true); n++; names.push(nm); }   // yyyy-MM-dd は辞書順＝日付順
+  }
+  console.log('purgeOpsImages_: ' + n + '件をゴミ箱へ（' + limit + 'より前）' + (names.length ? ' ' + names.join(',') : ''));
+  return { trashed: n, limit: limit };
+}
+
 // 会計伝票の突合メッセージを組み立てる（純関数：Drive保存やLINE送信はしない。テスト可能）
 function kaikeiCheckMessage_(ai, bizDate, tstamp) {
   const custRaw = String(ai.customer || '').trim();
@@ -2154,12 +2203,23 @@ function handleReceiptImage_(event) {
       return;
     }
 
-    // それ以外（受領書/領収書/納品書/日払い/その他）→ 従来どおり受領書フォルダ＋シート記録
-    blob.setName('受領書_' + bizDate + '_' + tstamp + '.' + fileExt);
-    const folder = getReceiptDayFolder_(bizDate);
+    // 伝票系（領収書/日払い/月払い/納品書/公共料金/判定不能）→ 受領書フォルダへ本保存＋シート記録。
+    // 伝票でない業務連絡・確認用の写真 → 「営業中画像_一時保管」へ振り分けて14日で自動削除（ボス確定 2026-08-26）。
+    const isDen = isDenpyoDoc_(ai);
+    blob.setName((isDen ? '受領書_' : '営業中_') + bizDate + '_' + tstamp + '.' + fileExt);
+    const folder = isDen ? getReceiptDayFolder_(bizDate) : getOpsImageDayFolder_(bizDate);
     const file = folder.createFile(blob);
     markImgMsgProcessed_(msgId); // 画像を保存できた時点で「処理済み」＝以降の再送はOCR/記録を走らせない（保存後なので画像は失わない）
     let count = 0; const fit = folder.getFiles(); while (fit.hasNext()) { fit.next(); count++; }
+
+    // 伝票でない写真はここで打ち切る＝シートにも書かない（伝票フォルダと台帳を汚さない）。
+    // ⚠️誤判定の救済導線を必ず文面に残すこと（14日は猶予であって、黙って消える仕様にはしない）。
+    if (!isDen) {
+      reply(event.replyToken, '🗂 業務連絡の画像として一時保管しました。\n（' + bizDate + ' / 本日 ' + count + '件目）'
+        + '\n伝票ではないため記録はしていません。' + OPS_IMG_KEEP_DAYS_ + '日で自動削除されます。'
+        + '\n⚠️伝票だった場合はDriveの「' + OPS_IMG_PARENT_ + '」から移してください。');
+      return;
+    }
 
     let extraLine = '';
     try {
@@ -4664,7 +4724,12 @@ function extractReceiptWithGemini_(blob) {
     '■品薄伝票（仕入先が在庫の「品薄」「欠品」「品切れ」「入荷未定」「次回入荷」等を知らせる連絡票。商品名の表があり納品書と紛らわしいが、実際に納品された商品ではない）:\n' +
     '{"doc_type":"品薄伝票"}\n' +
     '（★重要: 見出し・余白・備考に「品薄」「欠品」「品切れ」「在庫切れ」「入荷未定」「入荷予定」「次回入荷」等の記載があり、実際の納品ではなく在庫状況の連絡であれば、商品明細の表があっても必ず "納品書" ではなく "品薄伝票" にすること。）\n\n' +
-    '■その他: {"doc_type":"その他"}\n\nJSON以外は出力しないこと。';
+    '■その他（伝票ではない、業務中の確認・連絡のために撮った写真。例：店内や席の様子、忘れ物・落とし物、設備の故障や汚れ、在庫棚やボトルの写真、軍師・TRUST・LINEなど画面のスクリーンショット、現金の金種メモや数えた紙幣だけの写真、手書きのメモ書き、商品やメニューの写真）:\n' +
+    '{"doc_type":"その他"}\n' +
+    '（★重要: 金額らしき数字が写っていても、上の各■に当てはまる書類の体裁――見出し・宛名・明細の表・「受領」「領収」「納品」の文言――が無ければ必ず "その他" にすること。'
+      + '特に、画面のスクリーンショットや、紙幣だけ／数字の走り書きだけの写真を伝票や受領書として読み取ってはいけない。'
+      + 'ただし受領書と紙幣が一緒に写っている写真は受領書が主役＝"日払い受領書"（または"月払い受領書"）にする。）\n\n' +
+    'JSON以外は出力しないこと。';
   const payload = {
     contents: [{ parts: [ { text: prompt }, { inline_data: { mime_type: mime, data: b64 } } ] }],
     generationConfig: { temperature: 0, response_mime_type: 'application/json' }
@@ -7607,6 +7672,11 @@ function scheduledJobs() {
 
   // 毎日05:00: 古いプロパティ削除（日曜も継続）
   if (hhmm === '05:00') once('CLEANUP', cleanOldProperties);
+  // 営業中画像の一時保管を14日で自動削除。⚠️scheduledJobs は途中の例外で以降のジョブが全滅する
+  //   （→ reference_scheduled_jobs_silent_death）ので必ず try/catch で隔離する。幅を持たせてトリガーの取りこぼしを防ぐ。
+  if (hhmm >= '05:00' && hhmm <= '05:09') once('PURGE_OPS_IMG', function () {
+    try { purgeOpsImages_(); } catch (e) { console.error('purgeOpsImages_', e); }
+  });
 
   // （通知設定 ns_ は関数冒頭で読み込み済み＝毎分ジョブのガードより前。ここでは再宣言しない）
 
