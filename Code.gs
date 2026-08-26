@@ -17524,7 +17524,7 @@ function getCashApproverNames() {
  *   ログイン済みブラウザからのリレー（ブックマークレット）でしか入らない。ここは前提。
  */
 const TRUST_DAYPAY_TAB  = 'TRUST日払い日次';
-const TRUST_DAYPAY_HEAD = ['営業日', '名前', '金額', '取得時刻', '取得元'];
+const TRUST_DAYPAY_HEAD = ['営業日', '名前', '金額', '取得時刻', '取得元', 'マイナス'];
 const CC_GATE_LOOKBACK_ = 30;   // 未照合日をさかのぼって探す日数
 
 // ── 📷 日報スクショから取れる「出金（経費）」の受け皿 ───────────────────────
@@ -17582,6 +17582,11 @@ function ensureTrustDayPaySheet_(ss) {
     sh.setFrozenRows(1);
   } else if (String(sh.getRange(1, 1).getValue()).trim() !== TRUST_DAYPAY_HEAD[0]) {
     sh.getRange(1, 1, 1, TRUST_DAYPAY_HEAD.length).setValues([TRUST_DAYPAY_HEAD]);
+  } else if (sh.getLastColumn() < TRUST_DAYPAY_HEAD.length) {
+    // ⚠️末尾に列を足しただけでは既存シートに見出しが生えない（見出し名で引く箇所が-1→黙って0）。
+    if (sh.getMaxColumns() < TRUST_DAYPAY_HEAD.length) sh.insertColumnsAfter(sh.getMaxColumns(), TRUST_DAYPAY_HEAD.length - sh.getMaxColumns());
+    const _from = sh.getLastColumn() + 1;
+    sh.getRange(1, _from, 1, TRUST_DAYPAY_HEAD.length - _from + 1).setValues([TRUST_DAYPAY_HEAD.slice(_from - 1)]);
   }
   return sh;
 }
@@ -17600,7 +17605,7 @@ function saveTrustDayPayRows_(dateKey, rows, source) {
   }
   const stamp = now_();
   const out = (rows || []).filter(function (r) { return r && Number(r.amount) > 0; })
-    .map(function (r) { return [d, String(r.name || '').trim() || '(名前なし)', Number(r.amount) || 0, stamp, source || '']; });
+    .map(function (r) { return [d, String(r.name || '').trim() || '(名前なし)', Number(r.amount) || 0, stamp, source || '', Number(r.minus) || 0]; });
   if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_DAYPAY_HEAD.length).setValues(out);
   return { ok: true, saved: out.length };
 }
@@ -17633,7 +17638,7 @@ function mergeTrustDayPayRows_(dateKey, seen, rows, source) {
 
   const stamp = now_();
   const out = (rows || []).filter(function (r) { return r && Number(r.amount) > 0; })
-    .map(function (r) { return [d, String(r.name || '').trim() || '(名前なし)', Number(r.amount) || 0, stamp, source || '日報スクショ']; });
+    .map(function (r) { return [d, String(r.name || '').trim() || '(名前なし)', Number(r.amount) || 0, stamp, source || '日報スクショ', Number(r.minus) || 0]; });
   if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, TRUST_DAYPAY_HEAD.length).setValues(out);
   return { ok: true, saved: out.length, seen: Object.keys(seenKey).length };
 }
@@ -17650,7 +17655,7 @@ function getTrustDayPay_(dateKey) {
     const rd = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
     if (rd !== d) continue;
     const nm = String(vals[i][1] || '').trim();
-    res.rows.push({ name: nm, amount: Number(vals[i][2]) || 0 });
+    res.rows.push({ name: nm, amount: Number(vals[i][2]) || 0, minus: Number(vals[i][5]) || 0 });
     res.total += Number(vals[i][2]) || 0;
     res.fetchedAt = fmtStamp_(vals[i][3]);
     res.source = String(vals[i][4] || '');
@@ -17688,8 +17693,8 @@ function extractTrustReportWithGemini_(blob) {
     '"hasStaff":スタッフの表の見出しか行が写っているか true/false,\n' +
     '"hasNyukin":入金の表が写っているか true/false,\n' +
     '"hasShukkin":出金の表が写っているか true/false,\n' +
-    '"cast":[{"name":"キャスト名（表示どおり。源氏名でも本名でも）","hibarai":「日払い」列の整数（空欄なら0）,"total":「支給額合計」の整数,"nokori":「残り支給額」の整数}],\n' +
-    '"staff":[{"name":"スタッフ名","hibarai":「日払い」列の整数（空欄なら0）}],\n' +
+    '"cast":[{"name":"キャスト名（表示どおり。源氏名でも本名でも）","hibarai":「日払い」列の整数（空欄なら0）,"minus":「送り代＋個人支払い＋宿泊代＋早上がり」の合計整数（＝マイナス欄の計。空欄なら0）,"total":「支給額合計」の整数,"nokori":「残り支給額」の整数}],\n' +
+    '"staff":[{"name":"スタッフ名","hibarai":「日払い」列の整数（空欄なら0）,"minus":「マイナス」欄の計の整数（送り代・個人支払い・宿泊代・早上がり。空欄なら0）}],\n' +
     '"nyukin":[{"label":"入金の項目名","amount":金額整数}],\n' +
     '"shukkin":[{"label":"出金の項目名","amount":金額整数}]}\n' +
     '\n' +
@@ -17697,7 +17702,8 @@ function extractTrustReportWithGemini_(blob) {
     '① 入力欄が黒く塗りつぶされて見えるのは「空欄（未入力）」。0として返す。★黒い枠から数字を想像してはいけない。この画面は日払いを受け取っていない人の方が多く、日払い列はほとんどが空欄になる。\n' +
     '② ★表の見出しだけが写っていて行が1件も無いことがよくある（その日にスタッフの日払い・入金・出金が無かった場合）。そのときは has… を true にしたうえで、配列は必ず空 [] を返す。★見出しから行を作り出してはいけない。\n' +
     '③ 金額は¥やカンマを除いた整数。「¥33,500」→33500。\n' +
-    '④ ★検算：キャストの各行は「支給額合計 −（日払い＋送り代＋個人支払い＋宿泊代＋早上がり）＝ 残り支給額」になる。日払いを読んだら必ずこの引き算が合うか確かめ、合わなければ桁を読み直すこと。\n' +
+    '④ ★検算：各行は「支給額合計 −（日払い ＋ マイナス欄の計）＝ 残り支給額」になる。日払いとマイナスを読んだら必ずこの引き算が合うか確かめ、合わなければ桁を読み直すこと。\n' +
+    '　　★日払いの一部が「マイナス」側（送り代など）に振り分けられていることがある。差が出たら日払いを増やすのではなく、マイナス欄に数字が入っていないか必ず見ること。\n' +
     '　　例：支給額合計 ¥21,000 ／ 残り支給額 ¥3,000 なら 日払いは 18000。\n' +
     '　　日払いが空欄の人は「支給額合計 ＝ 残り支給額」になる。この2つが同額なら日払いは必ず0。\n' +
     '⑤ 表の途中で画面が切れている行、名前が読めない行は含めない。\n' +
@@ -17743,17 +17749,20 @@ function importTrustReportShot(payload) {
     const staff = Array.isArray(ai.staff) ? ai.staff : [];
     const people = cast.concat(staff).filter(function (r) { return r && String(r.name || '').trim(); });
     const seen = people.map(function (r) { return String(r.name).trim(); });
-    const pay = people.filter(function (r) { return Number(r.hibarai) > 0; })
-      .map(function (r) { return { name: String(r.name).trim(), amount: Number(r.hibarai) || 0 }; });
+    // ⚠️マイナス（送り代など）も一緒に持つ。現金で渡した額の一部がマイナス側に振られることがあり、
+    //   日払い列だけで伝票と比べると、送りを使った人は必ずズレて締めが止まる（2026-08-27 ボス指摘で判明）。
+    const pay = people.filter(function (r) { return Number(r.hibarai) > 0 || Number(r.minus) > 0; })
+      .map(function (r) { return { name: String(r.name).trim(), amount: Number(r.hibarai) || 0, minus: Number(r.minus) || 0 }; });
 
     // ★検算：支給額合計 − 日払い = 残り支給額。合わない行は読み違いの疑いとして返す（保存はする＝人が見て直す）
     const suspect = [];
     cast.forEach(function (r) {
-      const t = Number(r.total) || 0, n = Number(r.nokori) || 0, h = Number(r.hibarai) || 0;
+      const t = Number(r.total) || 0, n = Number(r.nokori) || 0, h = Number(r.hibarai) || 0, mi = Number(r.minus) || 0;
       if (!t || !h) return;                     // 支給額合計か日払いが無い行は検算の対象外
-      // ⚠️expect は「日払いの正しい値」＝支給額合計 − 残り支給額。
-      //   t - h（残り支給額の期待値）と取り違えないこと。フロントは「正しくは ¥◯◯」と金額を名指しで出す。
-      if (t - h !== n) suspect.push({ name: String(r.name || ''), total: t, hibarai: h, nokori: n, expect: t - n });
+      // ⚠️正しい式は「支給額合計 −（日払い＋マイナス）＝ 残り支給額」。
+      //   マイナス（送り代など）を無視して t-h だけで見ると、送りを使った人が毎回「読み違い」に化ける。
+      //   expect＝日払いとして期待される値＝支給額合計 − 残り支給額 − マイナス。
+      if (t - h - mi !== n) suspect.push({ name: String(r.name || ''), total: t, hibarai: h, minus: mi, nokori: n, expect: t - n - mi });
     });
 
     const m = mergeTrustDayPayRows_(d, seen, pay, '日報スクショ');
@@ -17840,23 +17849,30 @@ function ccReconcileDay_(dateKey, slipDetails) {
     const n = (m && m.trust) ? m.trust : (String(s.payee || '').trim() || '(受取人不明)');
     byName[n] = (byName[n] || 0) + (Number(s.amount) || 0);
   });
-  const tByName = {};
+  const tByName = {}, tMinus = {};
   t.rows.forEach(function (r) {
     const k = hbKey_(r.name);
     const m = k ? map[k] : null;
     const n = (m && m.trust) ? m.trust : (r.name || '(名前なし)');
     tByName[n] = (tByName[n] || 0) + (Number(r.amount) || 0);
+    tMinus[n]  = (tMinus[n]  || 0) + (Number(r.minus)  || 0);
   });
   const names = {};
   Object.keys(byName).forEach(function (n) { names[n] = true; });
   Object.keys(tByName).forEach(function (n) { names[n] = true; });
   const lines = [];
   Object.keys(names).sort().forEach(function (n) {
-    const a = byName[n] || 0, b = tByName[n] || 0;
+    const a = byName[n] || 0, b = tByName[n] || 0, mi = tMinus[n] || 0;
     if (a === b) return;
-    if (b === 0)      lines.push(n + '：現金で ¥' + a.toLocaleString() + ' 渡したのに TRUST が 0（未入力）');
-    else if (a === 0) lines.push(n + '：TRUST に ¥' + b.toLocaleString() + ' あるが伝票が無い');
-    else              lines.push(n + '：伝票 ¥' + a.toLocaleString() + ' ／ TRUST ¥' + b.toLocaleString());
+    /* ⚠️現金で渡した額の一部が TRUST の「マイナス」（送り代・個人支払い・宿泊代・早上がり）に
+       振り分けられていることがある（ボス確定 2026-08-27）。例＝現金¥10,000／日払い¥9,500＋送り代¥500。
+       控除の合計は合っているので、これは食い違いではない。日払い列だけで比べると送りを使った人が
+       毎晩ズレて締めが止まる（実際にゆきの¥500で起きた）。マイナスぶんまでは差を認める。 */
+    if (mi > 0 && a > b && a <= b + mi) return;
+    if (b === 0 && mi === 0) lines.push(n + '：現金で ¥' + a.toLocaleString() + ' 渡したのに TRUST が 0（未入力）');
+    else if (a === 0)        lines.push(n + '：TRUST に ¥' + b.toLocaleString() + ' あるが伝票が無い');
+    else                     lines.push(n + '：伝票 ¥' + a.toLocaleString() + ' ／ TRUST ¥' + b.toLocaleString()
+                                          + (mi > 0 ? '（＋マイナス ¥' + mi.toLocaleString() + '）' : ''));
   });
   return {
     hasTrust: true, perPerson: true, matched: lines.length === 0,
