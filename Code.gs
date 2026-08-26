@@ -2369,8 +2369,17 @@ function handleReceiptImage_(event) {
         extraLine = '\n📗 月払い受領書（給与）として読み取りました: ' + (ai.payee || '（受取人不明）') + ' / ' + mAmt + (ai.note ? ' / ' + ai.note : '') + (ai.date ? ' / ' + ai.date : '')
           + '\n→ 日払いではないため「日払い記録」には記録していません（画像は保存済み）。';
       } else if (ai && (ai.payee || ai.amount)) { // 日払い受領書
-        recordDailyPayment_(bizDate, ai, file.getUrl());
+        const dpRes = recordDailyPayment_(bizDate, ai, file.getUrl());
         const amtStr = (ai.amount != null && ai.amount !== '') ? '¥' + yenComma_(ai.amount) : '（金額不明）';
+        if (dpRes && dpRes.added === false) {
+          // 同じ日・同じ人・同じ額が既にある＝再送/撮り直しとみなして記録しない（画像は保存済み）
+          reply(event.replyToken, '🧾 画像は保存しました。\n（' + bizDate + ' / 本日 ' + count + '件目）'
+            + '\n\n🔁 同じ伝票として、記録を見送りました'
+            + '\n' + dpRes.dup.payee + ' 様 / ¥' + yenComma_(dpRes.dup.amount) + ' は、すでに ' + (dpRes.dup.at || '本日') + ' に記録済みです。'
+            + '\n本当に2回お渡ししたのなら、軍師の「🧾伝票管理」→「手入力で追加」から入れてください。');
+          markImgMsgProcessed_(msgId);
+          return;
+        }
         extraLine = '\n📝 読み取り: ' + (ai.payee || '（受取人不明）') + ' 様 / ' + amtStr + (ai.note ? ' / ' + ai.note : '') + (ai.date ? ' / ' + ai.date : '');
         if (ai.cash_total != null && ai.cash_total !== '') {
           const cashStr = '¥' + yenComma_(ai.cash_total) + (ai.cash_detail ? '（' + ai.cash_detail + '）' : '');
@@ -2388,6 +2397,14 @@ function handleReceiptImage_(event) {
 function yenComma_(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 
 // 日払い記録シートに追記（営業日・受取人・金額・但し書き・伝票日付・読取日時・画像リンク）
+// 戻り値 {added:true} / 重複で見送った時は {added:false, dup:{payee,amount,at}}
+/* ⚠️二重登録ガード（ボス指示 2026-08-27）。通信エラーの再送や撮り直しで、同じ受領書が2行入る。
+   実例＝りょうすけ 2026-08-26 ¥10,000 が 0:19 と 1:02 の2行（紙幣の記番号まで同一の同じ写真）。
+   台帳が¥20,000に膨らみ、TRUST照合が食い違って締めが止まる。
+   判定＝同じ営業日 × 同じ受取人 × 同じ伝票金額。全160行を実査して、この形の重複は今回の1件だけ＝
+   正当な「同じ人へ同額を1日2回」の実績はゼロなので、営業日まるごとを窓にしてよい。
+   ⚠️受取人が空欄の行は弾かない。署名を読めなかった別人どうしが同額で並ぶことが実在する
+   （2026-07-17 の ¥9,000 ×2＝さくととかい。同じ分に記録されていた）。 */
 function recordDailyPayment_(bizDate, ai, fileUrl) {
   const ss = getOrOpenSS_();
   const HDR = ['営業日', '受取人', '伝票金額', '現金合計', '照合', '但し書き', '伝票日付', '読取日時', '画像リンク'];
@@ -2396,7 +2413,22 @@ function recordDailyPayment_(bizDate, ai, fileUrl) {
   else if (sh.getLastColumn() < HDR.length) { sh.getRange(1, 1, 1, HDR.length).setValues([HDR]); } // 旧ヘッダーを更新
   const hasAmt = (ai.amount != null && ai.amount !== ''), hasCash = (ai.cash_total != null && ai.cash_total !== '');
   const match = (hasAmt && hasCash) ? (Number(ai.amount) === Number(ai.cash_total) ? '一致' : '不一致') : '';
-  sh.appendRow([bizDate, String(ai.payee || ''), (hasAmt ? Number(ai.amount) : ''), (hasCash ? Number(ai.cash_total) : ''), match, String(ai.note || ''), String(ai.date || ''), new Date(), fileUrl || '']);
+
+  const payee = String(ai.payee || '').trim();
+  const amt = hasAmt ? Number(ai.amount) : null;
+  if (payee && amt) {
+    const key = hbKey_(payee);
+    const vals = sh.getDataRange().getValues();
+    for (let i = vals.length - 1; i >= 1; i--) {
+      const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
+      if (d !== String(bizDate)) continue;
+      if (hbKey_(vals[i][1]) !== key) continue;
+      if ((Number(vals[i][2]) || 0) !== amt) continue;
+      return { added: false, dup: { payee: payee, amount: amt, at: fmtStamp_(vals[i][7]) } };
+    }
+  }
+  sh.appendRow([bizDate, payee, (hasAmt ? Number(ai.amount) : ''), (hasCash ? Number(ai.cash_total) : ''), match, String(ai.note || ''), String(ai.date || ''), new Date(), fileUrl || '']);
+  return { added: true };
 }
 
 // 領収書記録シートに追記
