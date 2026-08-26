@@ -17748,7 +17748,7 @@ function extractTrustReportWithGemini_(blob) {
     '"hasNyukin":入金の表が写っているか true/false,\n' +
     '"hasShukkin":出金の表が写っているか true/false,\n' +
     '"cast":[{"name":"キャスト名（表示どおり。源氏名でも本名でも）","hibarai":「日払い」列の整数（空欄なら0）,"minus":「送り代＋個人支払い＋宿泊代＋早上がり」の合計整数（＝マイナス欄の計。空欄なら0）,"total":「支給額合計」の整数,"nokori":「残り支給額」の整数}],\n' +
-    '"staff":[{"name":"スタッフ名","hibarai":「日払い」列の整数（空欄なら0）,"minus":「マイナス」欄の計の整数（送り代・個人支払い・宿泊代・早上がり。空欄なら0）}],\n' +
+    '"staff":[{"name":"スタッフ名","hibarai":「日払い」列の整数（空欄なら0）,"minus":「マイナス」欄の計の整数（送り代・個人支払い・宿泊代・早上がり。空欄なら0）,"total":「支給額合計」があればその整数（無ければ0）,"nokori":「残り支給額」があればその整数（無ければ0）,"bonus":「ボーナス」欄（送迎手当・残業代・売り半など）の合計整数（空欄なら0）}],\n' +
     '"nyukin":[{"label":"入金の項目名","amount":金額整数}],\n' +
     '"shukkin":[{"label":"出金の項目名","amount":金額整数}]}\n' +
     '\n' +
@@ -17763,6 +17763,11 @@ function extractTrustReportWithGemini_(blob) {
     '⑤ 表の途中で画面が切れている行、名前が読めない行は含めない。\n' +
     '⑥ 画面に他のアプリやブラウザのウィンドウ、メニューバー、Dockが写り込んでいても、TRUSTの表だけを読む。\n' +
     '⑦ 日払いが0（空欄）の人も、名前が読めるなら cast / staff に必ず含める（何人ぶん写っていたかを数えるのに使う）。\n' +
+    '⑨ ★★列の取り違えが最も多い間違い。hibarai に入れてよいのは「日払い」という見出しのちょうど真下にある列の数字だけ。\n' +
+    '　　支給額合計・残り支給額・時間給与単価・労働時間・ボーナス・送迎手当・残業代・売り半・計 の数字を hibarai に入れては絶対にいけない。\n' +
+    '　　★その行に数字が見えても、それが日払い列でないなら hibarai は 0 のままにすること。行のどこかにある数字を流用しない。\n' +
+    '　　★見出しの文字と数字の左右の位置を必ず目で合わせてから書き写すこと。\n' +
+    '⑩ ★minus（マイナス欄の計）は必ず0以上の整数。マイナス記号が付いた数字や、支給額合計をここに入れてはいけない。該当が無ければ0。\n' +
     '⑧ ★date は「画面上部の大きな見出しの年月日」だけを読む。日付を選ぶカレンダー、前日／翌日の送りリンク、一覧に並ぶ他の日付、\n' +
     '　　OSの時計やブラウザのUIは絶対に使わない。見出しが写っていない・最後まで読み切れないなら空文字を返す（推測禁止）。\n' +
     '　　★日にちの一の位（5と6、3と8、1と7）を読み違えやすい。少しでも自信が無ければ空文字にすること（空文字の方が安全な作りになっている）。\n' +
@@ -17810,6 +17815,43 @@ function extractTrustReportDateWithGemini_(blob) {
   } catch (e) { console.error('trust report date 2nd', e); return null; }
 }
 
+// 日報1行ぶんの「日払い／マイナス」を算数で正す。
+// ⚠️なぜ必要か（2026-08-27 ボス指摘の実害）：TRUSTの表は細い金額列が横に並んでいて、OCRは
+//   【日払いを受け取っていない人】の支給額合計や給与の数字を日払い列として拾ってしまう。
+//   実例：あゆみ¥23,000／かい¥3,567／さくと¥2,350／なち¥11,167 が「TRUSTにあるが伝票が無い」に化けた。
+//   日払いは現金手渡しなので端数は普通は出ない＝端数はまず列の取り違え。
+//   ゆきの「マイナス ¥-14,833」も同じで、支給額合計14,833が符号付きでマイナス欄に入っていた。
+// ⚠️拠り所は「支給額合計 −（日払い＋マイナス）＝ 残り支給額」。支給額合計と残り支給額は離れた大きい2列で
+//   読み違いが少ないので、この2つから【実際に差し引かれた額 cut】を出し、日払い列の読みを検算する。
+// ⚠️prompt側でも同じことを言っているが、言っても守られないので【コードで担保する】。
+//   OCRへの指示は当たり外れがある。金額はコードで閉じること。
+function trustFixDayPayRow_(r) {
+  const t = Number(r.total) || 0, n = Number(r.nokori) || 0;
+  let h = Number(r.hibarai) || 0, mi = Number(r.minus) || 0;
+  const note = [];
+  if (h < 0) { note.push('日払いが負の値'); h = 0; }
+  if (mi < 0) { note.push('マイナス欄が負の値（支給額合計を拾った疑い）'); mi = 0; }
+  // 支給額合計か残り支給額が無い行（スタッフ表など）は検算できない＝読んだ値をそのまま使う
+  if (!t || !n) return { hibarai: h, minus: mi, note: note, checked: false, ok: true };
+
+  const cut = t - n;                       // その人からこの日に差し引かれた総額＝日払い＋マイナス
+  if (cut <= 0) {                          // 支給額合計＝残り支給額 ⇒ 何も引かれていない＝日払いは必ず0
+    if (h || mi) note.push('支給額合計と残り支給額が同額＝この人は日払いを受けていないので0にした');
+    return { hibarai: 0, minus: 0, note: note, checked: true, ok: true, cut: cut };
+  }
+  if (h + mi === cut) return { hibarai: h, minus: mi, note: note, checked: true, ok: true, cut: cut };
+  // ⚠️日払いとマイナスが同額でどちらも差引総額と一致＝同じ数字を2つの列で読んでいる。どちらの列かは決められない。
+  //   ここは【マイナス側を採る】。理由：どちらでも残り支給額は同じだけ引かれていて金額の実害は無いが、
+  //   日払い側に倒すと「伝票の無い日払い」を毎回作って締めを止めるから。
+  if (h && h === mi && h === cut) { note.push('日払いとマイナスに同じ数字が入っていたのでマイナス側として扱った'); return { hibarai: 0, minus: mi, note: note, checked: true, ok: true, cut: cut }; }
+  if (h === cut) { if (mi) note.push('マイナス欄が余分だったので0にした'); return { hibarai: h, minus: 0, note: note, checked: true, ok: true, cut: cut }; }
+  if (mi === cut) { if (h) note.push('全額がマイナス側（送り代等）だったので日払いを0にした'); return { hibarai: 0, minus: mi, note: note, checked: true, ok: true, cut: cut }; }
+  // 日払いが差引総額に収まっている＝残りはマイナス側。差額で補う（送り代を読み落とした形）
+  if (h > 0 && h < cut) { note.push('マイナス欄を差額 ¥' + (cut - h).toLocaleString() + ' で補った'); return { hibarai: h, minus: cut - h, note: note, checked: true, ok: true, cut: cut }; }
+  // ここまで来たら日払いが差引総額を超えている等＝算数で決められない。読んだ値のまま人に見せる
+  return { hibarai: h, minus: mi, note: note, checked: true, ok: false, cut: cut };
+}
+
 // 軍師：日報スクショを1枚取り込む。payload={base64, mime, dateKey}
 // ⚠️GUNSHI_API_FNS登録必須。
 // ⚠️実測で1枚あたり6〜12秒かかる（Gemini往復）。フロントは必ず1枚ずつ順に投げて進捗を出すこと。
@@ -17836,20 +17878,28 @@ function importTrustReportShot(payload) {
     const staff = Array.isArray(ai.staff) ? ai.staff : [];
     const people = cast.concat(staff).filter(function (r) { return r && String(r.name || '').trim(); });
     const seen = people.map(function (r) { return String(r.name).trim(); });
-    // ⚠️マイナス（送り代など）も一緒に持つ。現金で渡した額の一部がマイナス側に振られることがあり、
-    //   日払い列だけで伝票と比べると、送りを使った人は必ずズレて締めが止まる（2026-08-27 ボス指摘で判明）。
-    const pay = people.filter(function (r) { return Number(r.hibarai) > 0 || Number(r.minus) > 0; })
-      .map(function (r) { return { name: String(r.name).trim(), amount: Number(r.hibarai) || 0, minus: Number(r.minus) || 0 }; });
 
-    // ★検算：支給額合計 − 日払い = 残り支給額。合わない行は読み違いの疑いとして返す（保存はする＝人が見て直す）
-    const suspect = [];
-    cast.forEach(function (r) {
-      const t = Number(r.total) || 0, n = Number(r.nokori) || 0, h = Number(r.hibarai) || 0, mi = Number(r.minus) || 0;
-      if (!t || !h) return;                     // 支給額合計か日払いが無い行は検算の対象外
-      // ⚠️正しい式は「支給額合計 −（日払い＋マイナス）＝ 残り支給額」。
-      //   マイナス（送り代など）を無視して t-h だけで見ると、送りを使った人が毎回「読み違い」に化ける。
-      //   expect＝日払いとして期待される値＝支給額合計 − 残り支給額 − マイナス。
-      if (t - h - mi !== n) suspect.push({ name: String(r.name || ''), total: t, hibarai: h, minus: mi, nokori: n, expect: t - n - mi });
+    // ★OCRが読んだ値をそのまま信じない。1行ずつ算数で正す（trustFixDayPayRow_ 参照）。
+    //   ここを通さないと「日払いを受けていない人」が伝票の無い日払いとして締めを止める。
+    const suspect = [], fixed = [], odd = [];
+    const pay = [];
+    people.forEach(function (r) {
+      const f = trustFixDayPayRow_(r);
+      const nm = String(r.name).trim();
+      if (f.note.length) fixed.push({ name: nm, note: f.note.join('／'), was: Number(r.hibarai) || 0, now: f.hibarai });
+      // ⚠️スタッフ（黒服）の表には支給額合計・残り支給額が無く算数で検算できない。
+      //   その代わり「日払いは現金手渡し＝百円未満の端数は出ない」を手がかりにする。
+      //   端数＝日払い列ではなく給与や手当の列を読んでいる疑い。勝手に消さず人に見せる（消すと本物の日払いを落とす）。
+      if (!f.checked && f.hibarai > 0 && f.hibarai % 100 !== 0) odd.push({ name: nm, amount: f.hibarai });
+      if (!f.ok) {
+        suspect.push({
+          name: nm, total: Number(r.total) || 0, nokori: Number(r.nokori) || 0,
+          hibarai: f.hibarai, minus: f.minus, expect: (Number(r.total) || 0) - (Number(r.nokori) || 0) - f.minus
+        });
+      }
+      // ⚠️マイナス（送り代など）も一緒に持つ。現金で渡した額の一部がマイナス側に振られることがあり、
+      //   日払い列だけで伝票と比べると、送りを使った人は必ずズレて締めが止まる。
+      if (f.hibarai > 0 || f.minus > 0) pay.push({ name: nm, amount: f.hibarai, minus: f.minus });
     });
 
     // ⚠️どちらの日付が正しいかは人しか決められない。決まるまで1行も書かない（書いてから直すのは至難）。
@@ -17883,7 +17933,7 @@ function importTrustReportShot(payload) {
       ok: true, dateKey: d, dateOnShot: shot, dateMismatch: dateMismatch,
       readPeople: people.length, readPay: pay.length,
       hasShukkin: !!ai.hasShukkin, savedCost: savedCost, costTotal: costTotal,
-      suspect: suspect,
+      suspect: suspect, fixed: fixed, odd: odd,
       dayPeople: after.rows.length, dayTotal: after.total, dayRows: after.rows
     };
   } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }

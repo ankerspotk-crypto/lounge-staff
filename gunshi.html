@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1852,12 +1852,15 @@ function trustEntryHtml(){
     h+='<div class="cc-slip" style="margin-top:8px">'+TRS.log.map(function(x){
       var s='<div style="padding:6px 0;border-bottom:1px solid var(--line2)">'
         +'<div style="font-size:12.5px;color:'+(x.ok?'var(--txt)':'#ff9a9a')+'">'+(x.ok?'✅ ':'⛔ ')+esc(x.text)+'</div>';
-      (x.warn||[]).forEach(function(w){ s+='<div style="font-size:11.5px;color:#e6c14a;margin-top:3px">'+esc(w)+'</div>'; });
+      (x.warn||[]).forEach(function(w){ s+='<div style="font-size:11.5px;color:#e6c14a;margin-top:3px">⚠️ '+esc(w)+'</div>'; });
+      /* 自動で直したぶん＝警告ではないので色を落とす。ただし必ず出す（黙って直さない） */
+      (x.info||[]).forEach(function(w){ s+='<div style="font-size:11px;color:var(--dim);margin-top:3px">🛠 '+esc(w)+'</div>'; });
       return s+'</div>';
     }).join('')+'</div>';
     var last=TRS.log[TRS.log.length-1];
     if(last&&last.day) h+='<div style="font-size:13px;font-weight:800;color:var(--gold);margin-top:8px">'
-      +'いまTRUST側に取り込めている日払い　'+last.day.people+'名 / ¥'+Number(last.day.total||0).toLocaleString()+'</div>';
+      +(last.day.dateKey?last.day.dateKey+' の':'いま')+'TRUST側に取り込めている日払い　'
+      +last.day.people+'名 / ¥'+Number(last.day.total||0).toLocaleString()+'</div>';
   }
   /* ⚠️やり直しの出口。取り込みは「写っていた人だけ入れ替える」ので、別の日の日報を混ぜてしまうと
      その日に居ない人の行が残り、締めの「TRUSTにあるが伝票が無い」が消せなくなる。人が消せるようにする。 */
@@ -1870,7 +1873,8 @@ function trustEntryHtml(){
   }else if(t&&t.hasTrust){
     h+='<div class="ck-banner warn" style="margin-top:14px">⚠️ TRUSTと合っていません'
       +'<div style="font-size:12px;margin-top:5px;line-height:1.6">'+(t.lines||[]).map(esc).join('<br>')+'</div>'
-      +'<div style="font-size:11.5px;color:var(--dim);margin-top:5px">TRUSTを直したら「🔄 取り直す」で再確認してください</div></div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-top:5px">TRUSTを直したら「🔄 取り直す」で再確認してください。'
+      +'読み取りがどうしても合わないときは「🗑 この日の取り込みを消してやり直す」で、自己申告に戻せます</div></div>'
       +'<div class="act" style="margin-top:8px" onclick="loadClosingFlow(true);setTimeout(trustEntryRefresh_,1200)">🔄 取り直す</div>';
   }else{
     var on=trustSelfGet_();
@@ -2025,12 +2029,19 @@ function trustShotLine_(n,r){
   if(!r||r.ok===false) return {ok:false,text:n+'枚目 … '+((r&&r.error)||'読み取れませんでした')};
   var t=n+'枚目 … '+r.readPeople+'名を読み取り（日払いあり '+r.readPay+'名）';
   if(r.hasShukkin) t+='／出金 '+r.savedCost+'件';
-  var warn=[];
-  /* ⚠️別の日の日報を撮った時に黙って混ぜない＝必ず人に見せる */
+  var warn=[], info=[];
   /* ここに来るのは人が日付を決めた後。読み取りが違っていた事実だけ残す（判断はもう済んでいる） */
   if(r.dateMismatch) warn.push('この画像の日付は '+r.dateOnShot+' と読めましたが、'+(r.dateKey||'')+' ぶんとして取り込みました');
-  /* ⚠️検算が合わない行＝OCRの桁読み違いの疑い。保存はしてあるので、TRUSTの現物と見比べる */
-  /* ⚠️検算が合わない＝どこかを読み違えている。ただし【日払いが誤りとは限らない】。
+  /* ①算数で直した行＝黙って直さない。何をどう直したかは必ず出す（あとで説明できないと信用されない） */
+  (r.fixed||[]).forEach(function(x){
+    info.push(x.name+'：'+x.note+(Number(x.was)!==Number(x.now)?'（日払い ¥'+Number(x.was).toLocaleString()+' → ¥'+Number(x.now).toLocaleString()+'）':''));
+  });
+  /* ②端数のある日払い＝黒服の表は支給額合計が無く検算できないので、現金らしくない額を人に見せるだけにする */
+  (r.odd||[]).forEach(function(x){
+    warn.push(x.name+'：日払い ¥'+Number(x.amount).toLocaleString()+' に端数があります。'
+      +'日払いは現金手渡しなので端数は出ないはずです。日払い列ではなく給与や手当の列を読んでいる可能性があるので、TRUSTの現物をご確認ください');
+  });
+  /* ③算数でも決められなかった行。⚠️【日払いが誤りとは限らない】。
      伝票と同じ額が読めているなら、読み違えているのは支給額合計か残り支給額の側。
      そこで「正しくは ¥X」と日払いの数字だけ言うと、合っている日払いを直させて二重控除になる
      （2026-08-27 ゆきの件：伝票¥10,000と一致していたのに¥8,500に直せと出ていた）。
@@ -2052,7 +2063,7 @@ function trustShotLine_(n,r){
         +'。TRUSTの現物と見比べてから直してください');
     }
   });
-  return {ok:!warn.length, text:t, warn:warn, day:{people:r.dayPeople, total:r.dayTotal}};
+  return {ok:!warn.length, text:t, warn:warn, info:info, day:{people:r.dayPeople, total:r.dayTotal, dateKey:r.dateKey}};
 }
 
 function trustShotClear_(){
