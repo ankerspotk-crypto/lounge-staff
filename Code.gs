@@ -23242,17 +23242,24 @@ function getSeikyuGroupPhotos(days) {
 // 軍師：グループ写真を base64 で返す（groupimg 溜まり場に限定）。ピッカーのサムネイル用。
 function kioskGetGroupPhoto(ref) { return drivePhotoAsDataUrl_(String(ref || ''), 'groupimg'); }
 
-// 対象伝票の写真から「利用日（来店日）」だけを Gemini で読み取る（日付専用の軽いプロンプト）。
-//   会計伝票のスキーマには date が無いので、汎用の extractReceiptWithGemini_ ではなくこれを使う。
+// 対象伝票の写真から「利用日（来店日）」と「お会計の合計（税込）」を Gemini で読み取る（請求書入力の自動化用）。
+//   会計伝票のスキーマには date が無い＆当店の「お会計伝票」には金額が印字されない（金額はレジ(POS)レシート側）ので、
+//   汎用の extractReceiptWithGemini_ ではなくこの軽いプロンプトを使う。返り値 { date:'yyyy-MM-dd'|'' , amount:整数 }。
+//   ⚠️関数名は date のままだが金額も返す＝軍師ホワイトリスト(GUNSHI_API_FNS)の登録名を変えないため（[[reference_gunshi_code_map]]）。
 function extractSlipDateWithGemini_(blob) {
-  var key = prop('GEMINI_API_KEY'); if (!key) return '';
+  var key = prop('GEMINI_API_KEY'); if (!key) return { date: '', amount: 0 };
   var model = prop('GEMINI_MODEL') || 'gemini-2.5-flash';
   var b64 = Utilities.base64Encode(blob.getBytes());
   var mime = blob.getContentType() || 'image/jpeg';
   var thisYear = Utilities.formatDate(new Date(), TZ, 'yyyy');
-  var prompt = 'これはお店の伝票（お客様の会計伝票・お会計伝票・レシート等）の写真です。この伝票に印字または記入された「利用日・来店日・日付」を1つだけ返してください。'
-    + '複数の日付があればお客様が来店・利用した日付を優先。年が書かれていなければ ' + thisYear + ' を使う。和暦（令和等）は西暦に直す。読み取れなければ空文字。'
-    + 'JSON以外は出力しない（説明・コードブロック不要）: {"date":"yyyy-MM-dd もしくは 空文字"}';
+  var prompt = 'これはお店の伝票（お客様の会計伝票・お会計伝票・レジ(POS)レシート等）の写真です。次の2つを読み取ってJSONだけで返してください。\n'
+    + '【date＝利用日・来店日】複数の日付があればお客様が来店・利用した日付を優先。年が書かれていなければ ' + thisYear + ' を使う。和暦（令和等）は西暦に直す。読み取れなければ空文字。\n'
+    + '【amount＝お会計の合計（税込）】¥やカンマ、末尾の「-」「也」を除いた整数。\n'
+    + '　・当店の「お会計伝票」（幅80mmのサーマル紙・品名/数量/備考の表）には金額が印字されない。金額はレジ(POS)レシート側にあり、同じ写真に一緒に写っていることが多い＝レジレシートの合計を最優先で読む。\n'
+    + '　・「合計」「お会計」「ご請求額」「総計」などの税込総額を使う。★「小計」「消費税」「サービス料」「お預り」「預り金」「お釣り」「現金」「カード」「ポイント」は使わない。\n'
+    + '　・お会計伝票とレジレシートは同じ会計の表と裏なので二重に足さない。別々の会計のレシートが2枚以上写っている時だけ合算する。\n'
+    + '　・手書きの金額しか無ければそれを読む。どうしても読み取れなければ 0。\n'
+    + 'JSON以外は出力しない（説明・コードブロック不要）: {"date":"yyyy-MM-dd もしくは 空文字","amount":整数}';
   var payload = { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }], generationConfig: { temperature: 0, response_mime_type: 'application/json' } };
   var res = null;
   for (var attempt = 0; attempt < 3; attempt++) {
@@ -23260,15 +23267,18 @@ function extractSlipDateWithGemini_(blob) {
     if (res.getResponseCode() === 429 && attempt < 2) { Utilities.sleep(2500); continue; }
     break;
   }
-  if (res.getResponseCode() !== 200) { console.error('slip date gemini http', res.getResponseCode()); return ''; }
+  if (res.getResponseCode() !== 200) { console.error('slip ocr gemini http', res.getResponseCode()); return { date: '', amount: 0 }; }
   try {
     var d = JSON.parse(res.getContentText());
     var o = JSON.parse(d.candidates[0].content.parts[0].text);
     var dt = String(o.date || '').trim();
-    return /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : '';
-  } catch (e) { console.error('slip date parse', e); return ''; }
+    var amt = Math.round(Number(String(o.amount === null || o.amount === undefined ? '' : o.amount).replace(/[^0-9.\-]/g, '')) || 0);
+    if (!(amt > 0) || amt > 10000000) amt = 0;   // 桁化けは採らない（黒服が手で入れ直せる）
+    return { date: /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : '', amount: amt };
+  } catch (e) { console.error('slip ocr parse', e); return { date: '', amount: 0 }; }
 }
-// 軍師：対象伝票の写真から利用日を読み取って返す。payload={base64,mime}（その場撮影）or {fileId}（グループ写真）。
+// 軍師：対象伝票の写真から利用日とお会計の合計（税込）を読み取って返す。payload={base64,mime}（その場撮影）or {fileId}（グループ写真）。
+//   ⚠️関数名は据え置き＝GUNSHI_API_FNS の登録名を変えないため。返りは {ok,date,amount}。
 function extractSeikyuSlipDate(payload) {
   try {
     payload = payload || {};
@@ -23281,7 +23291,8 @@ function extractSeikyuSlipDate(payload) {
       if (!photoUnderAllowedRoot_(f, 'groupimg') && !photoUnderAllowedRoot_(f, 'seikyu')) return { ok: false, error: '対象外の画像です' };
       blob = f.getBlob();
     } else return { ok: false, error: '画像がありません' };
-    return { ok: true, date: extractSlipDateWithGemini_(blob) };
+    var got = extractSlipDateWithGemini_(blob) || { date: '', amount: 0 };
+    return { ok: true, date: got.date || '', amount: Number(got.amount) || 0 };
   } catch (e) { return { ok: false, error: String(e) }; }
 }
 
