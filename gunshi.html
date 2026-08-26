@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1821,7 +1821,6 @@ function trustEntryHtml(){
   var hib=all.filter(function(x){return /日払/.test(String(x.category||''));});
   var kei=all.filter(function(x){return !/日払/.test(String(x.category||''));});
   var sum=function(a){ return a.reduce(function(t,x){return t+Number(x.amount||0);},0); };
-  var t=F.gate&&F.gate.today;
   var rows=function(list,empty){
     if(!list.length) return '<div style="font-size:12px;color:var(--dim);padding:4px 0">'+empty+'</div>';
     return list.map(function(x){
@@ -1839,52 +1838,18 @@ function trustEntryHtml(){
     +'<div class="cc-slip">'+rows(kei,'今日の経費はありません')+'</div>';
   h+='<div class="act pri" style="margin-top:14px" onclick="openTrustSite()">🔗 TRUSTを開く</div>';
 
-  /* 📷 日報スクショの取り込み。TRUSTはGASから直接読めない（403）ので、画面を撮って読ませる。 */
-  h+='<div class="flabel" style="margin-top:16px">📷 日報のスクショから取り込む</div>';
-  h+='<div style="font-size:11.5px;color:var(--dim);line-height:1.65;margin-bottom:7px">'
-    +'TRUSTの日報画面を上から順にスクショして、まとめて選んでください。1枚に全員入らなくても<b>何枚でも合成します</b>（同じ人が2枚に写っても二重になりません）。'
-    +'<b style="color:#ffcf7a">1枚あたり10秒ほどかかります。</b></div>';
-  h+='<input type="file" accept="image/*" multiple id="trs-file" style="display:none" onchange="trustShotPick(this)">';
-  h+=TRS.busy
-    ? '<div class="act" style="opacity:.65">⏳ 読み取り中… '+TRS.done+' / '+TRS.total+' 枚</div>'
-    : '<div class="act pri" onclick="document.getElementById(\'trs-file\').click()">📷 日報のスクショを選ぶ</div>';
-  if(TRS.log.length){
-    h+='<div class="cc-slip" style="margin-top:8px">'+TRS.log.map(function(x){
-      var s='<div style="padding:6px 0;border-bottom:1px solid var(--line2)">'
-        +'<div style="font-size:12.5px;color:'+(x.ok?'var(--txt)':'#ff9a9a')+'">'+(x.ok?'✅ ':'⛔ ')+esc(x.text)+'</div>';
-      (x.warn||[]).forEach(function(w){ s+='<div style="font-size:11.5px;color:#e6c14a;margin-top:3px">⚠️ '+esc(w)+'</div>'; });
-      /* 自動で直したぶん＝警告ではないので色を落とす。ただし必ず出す（黙って直さない） */
-      (x.info||[]).forEach(function(w){ s+='<div style="font-size:11px;color:var(--dim);margin-top:3px">🛠 '+esc(w)+'</div>'; });
-      return s+'</div>';
-    }).join('')+'</div>';
-    var last=TRS.log[TRS.log.length-1];
-    if(last&&last.day) h+='<div style="font-size:13px;font-weight:800;color:var(--gold);margin-top:8px">'
-      +(last.day.dateKey?last.day.dateKey+' の':'いま')+'TRUST側に取り込めている日払い　'
-      +last.day.people+'名 / ¥'+Number(last.day.total||0).toLocaleString()+'</div>';
-  }
-  /* ⚠️やり直しの出口。取り込みは「写っていた人だけ入れ替える」ので、別の日の日報を混ぜてしまうと
-     その日に居ない人の行が残り、締めの「TRUSTにあるが伝票が無い」が消せなくなる。人が消せるようにする。 */
-  h+='<div class="act" style="margin-top:8px;font-size:12.5px" onclick="trustShotClear_()">🗑 この日の取り込みを消してやり直す</div>';
-
-  // 突合の状態
-  if(t&&t.hasTrust&&t.matched){
-    h+='<div class="ck-banner ok" style="margin-top:14px">✅ TRUSTと一致しています'+(t.perPerson?'（人別）':'（合計）')
-      +'<div style="font-size:11.5px;color:var(--dim);margin-top:3px">この工程は完了です</div></div>';
-  }else if(t&&t.hasTrust){
-    h+='<div class="ck-banner warn" style="margin-top:14px">⚠️ TRUSTと合っていません'
-      +'<div style="font-size:12px;margin-top:5px;line-height:1.6">'+(t.lines||[]).map(esc).join('<br>')+'</div>'
-      +'<div style="font-size:11.5px;color:var(--dim);margin-top:5px">TRUSTを直したら「🔄 取り直す」で再確認してください。'
-      +'読み取りがどうしても合わないときは「🗑 この日の取り込みを消してやり直す」で、自己申告に戻せます</div></div>'
-      +'<div class="act" style="margin-top:8px" onclick="loadClosingFlow(true);setTimeout(trustEntryRefresh_,1200)">🔄 取り直す</div>';
-  }else{
-    var on=trustSelfGet_();
-    h+='<div style="border:2px solid '+(on?'#3ea06a':'#e05050')+';background:'+(on?'rgba(62,160,106,.12)':'rgba(224,80,80,.10)')+';border-radius:12px;padding:12px 14px;margin-top:14px">'
-      +'<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer">'
-      +'<input type="checkbox" '+(on?'checked':'')+' style="width:22px;height:22px;margin-top:1px;flex:0 0 auto;accent-color:#3ea06a" onchange="trustSelfSet_(this.checked);trustEntryRefresh_()">'
-      +'<span style="font-size:14.5px;font-weight:700;color:var(--txt);line-height:1.45">TRUSTに入力しました'
-      +'<div style="font-size:11.5px;font-weight:400;color:var(--dim);margin-top:3px">TRUSTの数字はまだ取り込めていません。今夜はこの申告で進めますが、<b style="color:#ffcf7a">翌日の取り込みで必ず突き合わせます</b>（合わなければ翌日の閉店が止まります）。</div></span>'
-      +'</label></div>';
-  }
+  /* ⚠️ここは【自己申告だけ】。日報スクショの自動突合は 2026-08-27 に撤去した（上のコメント参照）。
+     機械の照合が無くなったぶん、二重払いを止めるのは月次の 💴日払い照合（コンソール）＋給与明細の赤バナー。
+     だから画面でも「今夜これで終わりではない」と正直に書く。嘘を書くと申告が形骸化する。 */
+  var on=trustSelfGet_();
+  h+='<div style="border:2px solid '+(on?'#3ea06a':'#e05050')+';background:'+(on?'rgba(62,160,106,.12)':'rgba(224,80,80,.10)')+';border-radius:12px;padding:12px 14px;margin-top:16px">'
+    +'<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer">'
+    +'<input type="checkbox" '+(on?'checked':'')+' style="width:22px;height:22px;margin-top:1px;flex:0 0 auto;accent-color:#3ea06a" onchange="trustSelfSet_(this.checked);trustEntryRefresh_()">'
+    +'<span style="font-size:14.5px;font-weight:700;color:var(--txt);line-height:1.45">上の金額をTRUSTに入力しました'
+    +'<div style="font-size:11.5px;font-weight:400;color:var(--dim);margin-top:3px">'
+    +'<b style="color:#ffcf7a">TRUSTに入れ忘れると、給与計算で日払いが引かれず二重払いになります。</b>'
+    +'画面を閉じる前に、上の一覧とTRUSTの数字が同じか目で確かめてください。</div></span>'
+    +'</label></div>';
   h+='<div class="act" style="margin-top:10px" onclick="closeSheet()">閉じる</div>';
   return h;
 }
@@ -1892,192 +1857,14 @@ function trustEntryRefresh_(){
   var b=document.getElementById('sheetBody'); if(b)b.innerHTML=trustEntryHtml();
   if(viewMode==='home')renderHome();
 }
-/* 📷 日報スクショの取り込み ------------------------------------------------
-   ⚠️⚠️原寸のまま送る＝skImgResize_(長辺1200/JPEG75%)を通してはいけない。
-      精度検証は原寸PNGで全項目一致を確認したもので、縮小すると細かい数字の再現が保証できない。
-      金額の読み取りなので、確認済みの条件を崩さない（ボス確定 2026-08-26「Aでいこう」）。
-   ⚠️1枚6〜12秒かかる（Gemini往復の実測）。必ず1枚ずつ順に投げ、終わった枚から結果を出す。
-      まとめて投げると30秒沈黙して「固まった」と誤解される。 */
-/* ⚠️TRS.date＝この取り込み一式の営業日。1枚目から最後の1枚まで【必ず同じ日付】で送る。
-   ここを枚ごとに決めさせると、同じ日報が2つの営業日に割れて保存される
-   （2026-08-26の実害：1枚目→8/25、2〜3枚目→8/26。前日の人が今日のTRUST側に現れて
-   「伝票が無い」と出続け、締めが通らなくなった）。
-   ⚠️既定はスクショの日付ではなく【軍師で開いている営業日】。スクショの見出しはOCRが読み違える
-   （8/26の日報を8/25と読んだ実例）ので、正にしてはいけない。食い違ったときだけ人に決めさせる。
-   TRS.dateOk＝人が日付を決めた（以後は聞き直さない・サーバにもこの旗を送る）。 */
-var TRS={busy:false, log:[], done:0, total:0, date:'', dateOk:false};
-function trustShotPick(input){
-  var files=[].slice.call(input.files||[]);
-  input.value='';                                  // 同じファイルを選び直せるようにする
-  if(!files.length) return;
-  if(TRS.busy){ alert('取り込み中です。終わるまでお待ちください'); return; }
-  TRS.busy=true; TRS.log=[]; TRS.done=0; TRS.total=files.length; TRS.date=''; TRS.dateOk=false;
-  trustEntryRefresh_();
-  trustShotNext_(files,0);
-}
-function trustShotNext_(files,i){
-  if(i>=files.length){
-    TRS.busy=false;
-    trustEntryRefresh_();
-    loadClosingFlow(true);                         // 締めの工程③の判定を取り直す
-    setTimeout(trustEntryRefresh_,1800);
-    return;
-  }
-  var f=files[i];
-  /* ⚠️原本のまま送らない。iPadで撮った写真は数MBあり、アップロードだけでタイムアウトを食い潰す
-     （閉店チェックの伝票写真 ccPhoto は昔から縮めてから送っている＝同じ file 内に先例あり）。
-     ただし日報は数字が詰まった表なので、伝票写真の1000pxまで縮めると桁が潰れる。長辺2200px・JPEG0.85で送る。 */
-  trustShotShrink_(f).then(function(o){
-    var dk=TRS.date||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';   /* ⚠️一式で1つの営業日に固める */
-    gsr('importTrustReportShot',{base64:o.base64,mime:o.mime,dateKey:dk,dateOk:TRS.dateOk})
-      .then(function(r){ trustShotDone_(files,i,r); })
-      .catch(function(err){
-        /* タイムアウトと本当の通信断は原因も対処も違う＝言い分ける */
-        var msg = (err && err.__gsrAbort) ? '時間切れ（回線が遅いようです。1枚ずつ選び直してもう一度）'
-                : (err && err.__gsrKind==='server') ? ((err.message)||'サーバーエラー')
-                : '通信エラー（電波を確かめてもう一度）';
-        trustShotDone_(files,i,{ok:false,error:msg});
-      });
-  }).catch(function(){ trustShotDone_(files,i,{ok:false,error:'画像を読めませんでした'}); });
-}
-/* 日報スクショを送信用に縮める。長辺2200px・JPEG0.85（表の数字が読める下限を実測で決めた上限側）。
-   元が小さい画像は拡大しない。canvasが使えない等で失敗したら原本のまま送る（読めないより送る方がまし）。 */
-function trustShotShrink_(file){
-  return new Promise(function(resolve,reject){
-    var rd=new FileReader();
-    rd.onerror=function(){ reject(new Error('read')); };
-    rd.onload=function(e){
-      var du=String((e.target&&e.target.result)||'');
-      var img=new Image();
-      img.onerror=function(){ resolve({base64:du.split(',')[1],mime:file.type||'image/png'}); };
-      img.onload=function(){
-        try{
-          var MAX=2200,w=img.width,h=img.height;
-          if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;} else {w=Math.round(w*MAX/h);h=MAX;} }
-          var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-          cv.getContext('2d').drawImage(img,0,0,w,h);
-          var out=cv.toDataURL('image/jpeg',0.85);
-          if(!out||out.length<100){ resolve({base64:du.split(',')[1],mime:file.type||'image/png'}); return; }
-          resolve({base64:out.split(',')[1],mime:'image/jpeg'});
-        }catch(_){ resolve({base64:du.split(',')[1],mime:file.type||'image/png'}); }
-      };
-      img.src=du;
-    };
-    rd.readAsDataURL(file);
-  });
-}
-function trustShotDone_(files,i,r){
-  /* ⚠️日付が食い違った＝サーバはまだ1行も保存していない。人が決めてから【同じ枚をやり直す】。
-     先に保存してから聞くと、間違った日に入った行を後から取り除くのが実質できない。 */
-  if(r&&r.needDateConfirm&&!TRS.dateOk){
-    TRS.date=trustAskDate_(r);
-    TRS.dateOk=true;
-    TRS.log.push({ok:true,text:'この取り込みは '+TRS.date+' ぶんとして進めます',warn:[]});
-    trustEntryRefresh_();
-    trustShotNext_(files,i);        /* 保存していないので同じ枚から入れ直す */
-    return;
-  }
-  TRS.done=i+1;
-  TRS.log.push(trustShotLine_(i+1,r));
-  trustEntryRefresh_();
-  trustShotNext_(files,i+1);
-}
-/* 日付が食い違ったときに、証拠を見せて人に決めさせる。
-   ⚠️スクショの日付と軍師の営業日は【どちらも証拠】。片方を機械的に勝たせない。
-     ・2つの目が一致（dateConfident）＝スクショの日付は信用できる → スクショ側をおすすめにする
-     ・食い違う／読めない＝OCRが日付で迷っている → 軍師の営業日をおすすめにする
-   ⚠️おすすめは必ず confirm の【OK】側に置く。押しやすい方が正解になるようにする。
-   ⚠️見出しの生テキスト（dateRaw）を必ず見せる。数字だけ見せても人には確かめようがない。 */
-function trustAskDate_(r){
-  var mine=r.dateKey||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
-  var shot=r.dateOnShot||'';
-  var L=['日報の日付が、いま締めている営業日と違います。','',
-         'スクショの見出し … '+shot+(r.dateRaw?'（「'+r.dateRaw+'」と読めました）':'')];
-  if(r.dateSecond) L.push('　もう一度読ませた結果 … '+r.dateSecond+(r.dateSecondRaw?'（「'+r.dateSecondRaw+'」）':''));
-  else L.push('　もう一度読ませた結果 … 読み取れず');
-  L.push('軍師で開いている営業日 … '+mine,'');
-  var rec,other;
-  if(r.dateConfident){
-    L.push('▶ 2回とも '+shot+' と読めました。スクショの日付は確かそうです。');
-    rec=shot; other=mine;
-    L.push('','OK … '+shot+' ぶんとして取り込む（おすすめ）',
-           '　　TRUSTで前の日の日報を開いたままだった可能性が高いです。','',
-           'キャンセル … '+mine+' ぶんとして取り込む');
-  }else{
-    L.push('▶ 2回の読み取りが揃いませんでした。日付の読み取り違いの可能性があります。');
-    rec=mine; other=shot;
-    L.push('','OK … '+mine+' ぶんとして取り込む（おすすめ）',
-           '　　TRUSTで '+mine+' の日報を開いているならこちらです。','',
-           'キャンセル … '+shot+' ぶんとして取り込む');
-  }
-  return confirm(L.join('\n'))?rec:other;
-}
-
-/* 今日の伝票から、この名前の日払い額を引く。表記が完全に一致する時だけ言い切る（名寄せまではしない）。 */
-function trustSlipAmount_(name){
-  var k=String(name||'').replace(/[\s　]/g,'');
-  if(!k) return 0;
-  var t=0;
-  readSlipsFromDenpyo((CLOSE_FLOW||{}).denpyo).forEach(function(x){
-    if(!/日払/.test(String(x.category||''))) return;
-    if(String(x.payee||'').replace(/[\s　]/g,'')!==k) return;
-    t+=Number(x.amount||0);
-  });
-  return t;
-}
-function trustShotLine_(n,r){
-  if(!r||r.ok===false) return {ok:false,text:n+'枚目 … '+((r&&r.error)||'読み取れませんでした')};
-  var t=n+'枚目 … '+r.readPeople+'名を読み取り（日払いあり '+r.readPay+'名）';
-  if(r.hasShukkin) t+='／出金 '+r.savedCost+'件';
-  var warn=[], info=[];
-  /* ここに来るのは人が日付を決めた後。読み取りが違っていた事実だけ残す（判断はもう済んでいる） */
-  if(r.dateMismatch) warn.push('この画像の日付は '+r.dateOnShot+' と読めましたが、'+(r.dateKey||'')+' ぶんとして取り込みました');
-  /* ①算数で直した行＝黙って直さない。何をどう直したかは必ず出す（あとで説明できないと信用されない） */
-  (r.fixed||[]).forEach(function(x){
-    info.push(x.name+'：'+x.note+(Number(x.was)!==Number(x.now)?'（日払い ¥'+Number(x.was).toLocaleString()+' → ¥'+Number(x.now).toLocaleString()+'）':''));
-  });
-  /* ②端数のある日払い＝黒服の表は支給額合計が無く検算できないので、現金らしくない額を人に見せるだけにする */
-  (r.odd||[]).forEach(function(x){
-    warn.push(x.name+'：日払い ¥'+Number(x.amount).toLocaleString()+' に端数があります。'
-      +'日払いは現金手渡しなので端数は出ないはずです。日払い列ではなく給与や手当の列を読んでいる可能性があるので、TRUSTの現物をご確認ください');
-  });
-  /* ③算数でも決められなかった行。⚠️【日払いが誤りとは限らない】。
-     伝票と同じ額が読めているなら、読み違えているのは支給額合計か残り支給額の側。
-     そこで「正しくは ¥X」と日払いの数字だけ言うと、合っている日払いを直させて二重控除になる
-     （2026-08-27 ゆきの件：伝票¥10,000と一致していたのに¥8,500に直せと出ていた）。
-     ⚠️式にマイナス（送り代等）を必ず出す。出さないと引き算が画面上で合わず、黒服が混乱する。 */
-  (r.suspect||[]).forEach(function(s){
-    var f='支給額合計 ¥'+Number(s.total).toLocaleString()
-      +' −（日払い ¥'+Number(s.hibarai).toLocaleString()
-      +(Number(s.minus)?' ＋ マイナス ¥'+Number(s.minus).toLocaleString():'')
-      +'）≠ 残り ¥'+Number(s.nokori).toLocaleString();
-    var sa=trustSlipAmount_(s.name);
-    if(sa&&sa===Number(s.hibarai)){
-      warn.push(s.name+'：TRUSTの数字が揃いません（'+f+'）。日払い ¥'+sa.toLocaleString()
-        +' は伝票と同じです。読み違えているのは支給額合計か残り支給額の側なので、'
-        +'日払いは触らずTRUSTの現物をご確認ください');
-    }else{
-      warn.push(s.name+'：TRUSTの数字が揃いません（'+f+'）。この検算どおりなら日払いは ¥'
-        +Number(s.expect).toLocaleString()+' です'
-        +(sa?'（伝票は ¥'+sa.toLocaleString()+'）':'（今日の伝票にこの人の日払いはありません）')
-        +'。TRUSTの現物と見比べてから直してください');
-    }
-  });
-  return {ok:!warn.length, text:t, warn:warn, info:info, day:{people:r.dayPeople, total:r.dayTotal, dateKey:r.dateKey}};
-}
-
-function trustShotClear_(){
-  if(TRS.busy){ alert('取り込み中です。終わるまでお待ちください'); return; }
-  var d=(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
-  if(!d){ alert('営業日が分かりません'); return; }
-  if(!confirm(d+' ぶんのTRUST取り込みを全部消します。\nこのあと日報をもう一度撮り直してください。\n\nよろしいですか？')) return;
-  gsr('clearTrustDayPay',d).then(function(r){
-    if(!r||r.ok===false){ alert((r&&r.error)||'消せませんでした'); return; }
-    TRS.log=[]; TRS.date=''; TRS.dateOk=false;
-    if(typeof toast==='function')toast('🗑 '+r.deleted+'件消しました');
-    trustEntryRefresh_(); loadClosingFlow(true); setTimeout(trustEntryRefresh_,1800);
-  }).catch(function(){ alert('通信エラー'); });
-}
+/* 📷 日報スクショの取り込みは 2026-08-27 に撤去（ボス判断「全然うまく動かない。TRUSTに登録したという申告だけにする」）。
+   ⚠️復活させるなら、撤去の理由＝OCRが【列を取り違える】ことに勝てなかった、を先に解くこと：
+     ・日払いを受けていない人の支給額合計を日払い列として拾う（端数の出る金額が出たらこれ）
+     ・支給額合計をマイナス欄に符号付きで入れる／日付の見出しを1日ずれて読む
+   算数での補正（trustFixDayPayRow_）とプロンプト強化まではやったが、現場で通せる精度に届かなかった。
+   ⚠️二重払いの関所は無くなっていない。月次の 💴日払い照合（コンソール）と給与明細の赤バナーが本命で、
+     日次のこれは早期警戒にすぎない。撤去して困るのは「気づくのが給与前になる」だけ。
+   GAS側の importTrustReportShot / clearTrustDayPay は残してあるが GUNSHI_API_FNS から外して封じてある。 */
 
 /* TRUSTは外部システム（別オリジン）。軍師からは開くだけ＝中身は触らない。 */
 function openTrustSite(){
@@ -2248,23 +2035,17 @@ function cfSteps_(){
     s:slipOk?(slips.length?('日払い '+slips.length+'件 すべて受取人あり'):'今日の日払いはありません')
       :((noName.length?'受取人が空欄 '+noName.length+'件':'')+(noName.length&&unknown.length?' / ':'')+(unknown.length?'名簿に無い名前 '+unknown.length+'件':'')),
     state:slipOk?'done':'todo',act:'openCashCheck()'});
-  // ③ TRUSTへの入力と突合
-  /* ⚠️閉店チェック側のゲートと判定を必ず揃えること。あちらは「TRUSTが取れない夜は自己申告で通す」ので、
-     ここだけ hasTrust&&matched を要求すると【送信は通ったのに工程が✅にならず永久に帰れない】が起きる。
-     ただし送信後にTRUSTを取り込んで不一致が出た時は、承認前に直させたいので✅に戻さない。
-     ⚠️照合しているのは日払いだけ（経費はTRUST側の内訳と突合していない）＝文言で嘘をつかない。 */
-  var t=gate&&gate.today;
-  var trustHit=!!(t&&t.hasTrust&&t.matched);
-  var trustBad=!!(t&&t.hasTrust&&!t.matched);
+  // ③ TRUSTへの入力（自己申告のみ。自動突合は 2026-08-27 に撤去）
+  /* ⚠️閉店チェック側のゲート(ccGateConds_)と判定を必ず揃えること。同じ条件を2箇所に書いて食い違わせ、
+     【送信は通ったのに工程が✅にならず永久に帰れない】を2026-08-25に2回踏んでいる。
+     いまはどちらも「submitted || 自己申告」だけ。片方だけ条件を足さないこと。 */
   /* ⚠️自己申告(trustSelfGet_)も「この工程は終わった」に数える。黒服は送信より先に入力してチェックする＝
      送信を条件にすると、やったのに❌のままで「まだ帰れません」と言われる（実測で踏んだ）。 */
   var selfOk=trustSelfGet_();
-  var trustOk=trustHit||((submitted||selfOk)&&!trustBad);
+  var trustOk=submitted||selfOk;
   var trustS;
-  if(trustBad) trustS=(t.lines||[]).join(' / ')||'日払いが伝票とTRUSTで合っていません';
-  else if(trustHit) trustS='日払いが伝票と一致'+(t.perPerson?'（人別）':'（合計）');
-  else if(submitted) trustS='入力済みとして送信しました（TRUSTを取り込めていないので翌日に照合します）';
-  else if(selfOk) trustS='入力したと申告済み（TRUSTを取り込めていないので翌日に照合します）';
+  if(submitted) trustS='入力済みとして送信しました';
+  else if(selfOk) trustS='入力したと申告済み';
   else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
   S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
   // ④ 手作業（端末チェック）
@@ -7929,24 +7710,15 @@ function ccGateConds_(){
   C.push({key:'amount', hard:true, ok:bad.length===0,
     label:'金額とお金が合わない伝票を確認した',
     detail: bad.length?('未確認 '+bad.length+'件 — 受領書の写真を開いて、正しい金額に直すか「確認しました」を押してください。'):'' });
-  // ③ TRUSTとの突合
-  var t=CC_GATE&&CC_GATE.today;
-  if(t&&t.hasTrust){
-    C.push({key:'trust', hard:true, ok:!!t.matched,
-      label:'TRUSTの日払いと一致している'+(t.perPerson?'（人別）':'（合計）'),
-      detail: t.matched?'' : ((t.lines||[]).join(' / ')||('伝票 ¥'+Number(t.slipTotal||0).toLocaleString()+' ／ TRUST ¥'+Number(t.trustTotal||0).toLocaleString()))
-        +' — TRUSTを直してから「TRUSTを取り直す」を押してください。' });
-  }else{
-    C.push({key:'trust', hard:true, ok:!!st.trustConfirmed, selfDeclare:true,
-      label:'日払い・経費を TRUST に入力した',
-      detail:'TRUSTの数字をまだ取り込めていません。今夜は自己申告で送信できますが、<b style="color:#ffcf7a">「未照合」として記録され、翌日の取り込みで必ず突き合わせます</b>（合わなければ翌日の閉店チェックが止まります）。' });
-  }
-  // ④ 過去の未照合日
-  var un=(CC_GATE&&CC_GATE.unresolved)||[];
-  C.push({key:'past', hard:true, ok:un.length===0,
-    label:'過去に未照合の日が残っていない',
-    detail: un.length?(un.map(function(u){ return u.dateKey.slice(5)+'（'+((u.lines&&u.lines.length)?u.lines.join(' / '):(u.hasTrust?('差 ¥'+Number(u.diff||0).toLocaleString()):'TRUST未取得'))+'）'; }).join('　')
-      +' — 管理者にコンソール「📥TRUST取込」で日払いを取り直してもらってください。合えば自動で解けます。'):'' });
+  /* ③ TRUSTへの入力＝【自己申告のみ】。
+     ⛔日報スクショによる自動突合は 2026-08-27 に撤去（OCRの列取り違えに勝てなかった）。
+     ⛔同時に「過去に未照合の日が残っていない」条件も外した。日次の照合が無くなった以上、全ての夜が
+        未照合として積み上がり、誰にも解けない条件になって毎晩の締めが永久に止まるため。
+     ⚠️二重払いの関所は月次に移った＝コンソールの 💴日払い照合 と 給与明細の赤バナー。
+        日次で止められなくなったぶん、給与を作る前に必ず月次照合を通すこと。 */
+  C.push({key:'trust', hard:true, ok:!!st.trustConfirmed, selfDeclare:true,
+    label:'日払い・経費を TRUST に入力した',
+    detail:'<b style="color:#ffcf7a">TRUSTに入れ忘れると給与計算で日払いが引かれず、二重払いになります。</b>伝票の一覧とTRUSTの数字が同じか目で確かめてからチェックしてください。' });
   return C;
 }
 function ccGateReady_(){ return ccGateConds_().every(function(c){ return !c.hard||c.ok; }); }
@@ -7973,11 +7745,10 @@ function ccGateHtml(){
     if(c.detail) h+='<div style="font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.55">'+c.detail+'</div>';
     if(c.selfDeclare) h+='<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer">'
       +'<input type="checkbox" '+(cashState&&cashState.trustConfirmed?'checked':'')+' style="width:20px;height:20px;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;trustSelfSet_(this.checked);ccGateRefresh()">'
-      +'<span style="font-size:12.5px;color:var(--txt)">TRUSTに入力しました（今夜は自己申告で通します）</span></label>';
-    if(c.key==='trust') h+='<div style="margin-top:6px"><button class="bm-btn sm" onclick="ccGateLoad()">🔄 TRUSTを取り直す</button></div>';
+      +'<span style="font-size:12.5px;color:var(--txt)">TRUSTに入力しました</span></label>';
     return h+'</div></div>';
   }).join('');
-  var err=(!CC_GATE&&CC_GATE_ERR)?'<div style="font-size:11.5px;color:#e0a060;margin-top:8px">⚠️ '+esc(CC_GATE_ERR)+'（TRUSTと過去日の確認ができていません。今夜は自己申告で通します）</div>':'';
+  var err=(!CC_GATE&&CC_GATE_ERR)?'<div style="font-size:11.5px;color:#e0a060;margin-top:8px">⚠️ '+esc(CC_GATE_ERR)+'</div>':'';
   var color=ngN?'#e05050':'#3ea06a', bg=ngN?'rgba(224,80,80,.10)':'rgba(62,160,106,.12)';
   return '<div id="cc-trust-gate" style="border:2px solid '+color+';background:'+bg+';border-radius:12px;padding:12px 14px;margin-top:16px">'+head+rows+err+'</div>';
 }
@@ -8071,12 +7842,9 @@ function submitCash(){
   }
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
   var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
-  /* 🔒 締め条件の結果を一緒に送る。TRUSTと突合できていない夜は「未照合」で残し、翌日の取込で必ず突き合わせる
-     （＝その日の逃げ道は残すが、翌日の閉店チェックが止まるので溜められない） */
-  var _t=CC_GATE&&CC_GATE.today;
-  var _gate=(_t&&_t.hasTrust&&_t.matched)
-    ? {trustStatus:'照合済み',trustDiff:0,note:(_t.perPerson?'人別':'合計')+'で一致'}
-    : {trustStatus:'未照合',trustDiff:(_t&&_t.hasTrust)?Number(_t.diff||0):0,note:(_t&&_t.hasTrust)?'差異あり':'TRUST未取得（黒服の自己申告で送信）'};
+  /* 🔒 締め条件の結果を一緒に送る。日次の自動突合は撤去したので、記録に残るのは黒服の申告そのもの。
+     ⚠️「照合済み」とは絶対に書かない＝誰も照合していない。突き合わせるのは月次の 💴日払い照合。 */
+  var _gate={trustStatus:'未照合',trustDiff:0,note:'黒服の自己申告で送信（日次の自動照合なし）'};
   /* 🌙 締め作業の要約用。LINEに「何をやって帰ったか」を出すための材料（金額計算には使わない） */
   var _cf=(typeof CLOSE_FLOW!=='undefined'&&CLOSE_FLOW)?CLOSE_FLOW:null;
   var _sum={posOk:(_cf&&_cf.pos)?(!_cf.pos.enforce||!!_cf.pos.ready):null};
@@ -9215,7 +8983,7 @@ var GSR_TIMEOUT_MS = 20000;
    日報スクショの取り込みは Gemini往復で実測6〜12秒＋画像アップロード＋GASの起動(約1.9秒)。
    20秒だとアボートして「通信エラー」になり、しかも書込み系なのでリトライもされない（二重登録を防ぐため正しい）。
    実際に3枚とも失敗した（2026-08-27 ボス報告）。 */
-var GSR_TIMEOUT_OVERRIDE = { importTrustReportShot: 90000 };
+var GSR_TIMEOUT_OVERRIDE = {};   /* 日報スクショ(90秒)を撤去したので現在は空。長くかかる呼び出しを足す時はここ */
 /* 高頻度ポーリングの読取り＝二重実行しても無害。ここに載る関数だけ1回リトライする。 */
 var GSR_RETRY_SAFE = {
   getKioskHall2:1, getKioskReservations:1, getKioskTsukemawashi:1, getKioskShiftBoard:1,
