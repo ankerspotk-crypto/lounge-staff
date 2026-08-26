@@ -1289,6 +1289,36 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .hv-pbar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent),#3a80e0);}
 .hv-cd{font-size:13px;font-weight:800;color:var(--gold);white-space:nowrap;}
 .hv-quick{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
+/* 🗂 業務メニュー（2階層／2026-08-26）＝.menu-* とは別クラス。旧☰オーバーレイに副作用を出さない */
+.bm-nowlbl{font-size:12px;color:var(--dim);font-weight:800;letter-spacing:.5px;margin:2px 2px 9px;}
+.bm-nowlbl span{color:var(--accent);}
+.bm-now{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;}
+.bm-cats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.bm-cat{position:relative;display:flex;align-items:center;gap:12px;min-height:96px;padding:14px 16px;background:var(--panel);border:1px solid var(--line2);border-radius:16px;cursor:pointer;transition:.1s;}
+.bm-cat:active{transform:scale(.98);}
+.bm-cat:hover{border-color:var(--accent-line);background:var(--accent-bg);}
+.bm-cat .ic{font-size:34px;line-height:1;flex:none;}
+.bm-cat .bd{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+.bm-cat .t{font-size:16px;font-weight:900;}
+.bm-cat .pv{font-size:11px;color:var(--dim);line-height:1.5;}
+.bm-cat .n{font-size:12px;color:var(--dim);font-weight:800;flex:none;align-self:flex-end;}
+.bm-cat .bg{position:absolute;top:10px;right:12px;background:var(--over);color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 8px;}
+.bm-back{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;padding:0 18px;margin-bottom:12px;background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:13px;color:var(--accent);font-weight:800;font-size:14px;cursor:pointer;}
+.bm-back .bk{flex:none;}
+.bm-back .cur{color:var(--txt);flex:1;}
+.bm-back .sw{display:flex;gap:6px;flex:none;}
+.bm-back .cc{width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:19px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;}
+.bm-back .cc.on{border-color:var(--accent);background:var(--accent-bg);}
+.bm-back .cc:active{transform:scale(.94);}
+.bm-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.bm-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:110px;padding:16px 10px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;cursor:pointer;text-align:center;transition:.1s;}
+.bm-tile:active{transform:scale(.97);}
+.bm-tile:hover{border-color:var(--accent-line);background:var(--accent-bg);}
+.bm-tile .ic{font-size:30px;line-height:1;}
+.bm-tile .t{font-size:14px;font-weight:800;}
+.bm-tile .s{font-size:11px;color:var(--dim);line-height:1.4;}
+.bm-tile.warn{border-color:var(--warn-line);}
+.bm-now .bm-tile{min-height:96px;background:var(--panel2);}
 .hv-qbtn{padding:16px 8px;border-radius:14px;border:1px solid var(--line2);background:var(--panel2);text-align:center;cursor:pointer;}
 .hv-qbtn:active{background:var(--accent-bg);}
 .hv-qbtn .em{font-size:26px;display:block;}
@@ -1759,6 +1789,7 @@ function homeItemDone(it){return !!((it.status&&HOME_STATUS[it.status])||homeChe
 
 function setViewMode(m){
   viewMode=m;
+  if(m==='home')hvCat='';   /* 業務メニューは必ず第1階層から。前の人が開いた階層を残さない */
   document.body.classList.toggle('home-on',m==='home');
   document.body.classList.toggle('bill-on',m==='bill');
   var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash'),b=document.getElementById('vt-bill');
@@ -2231,14 +2262,73 @@ function renderHomeChecklist(phase){
   }
   return h;
 }
-/* 業務メニュー（旧☰メニューを黒服業務に集約・全フェーズ常時表示） */
+/* ===== 🗂 業務メニュー（2階層）＝黒服業務タブの下段 =====
+   ⭐入口は2つだけ：①🧰いま使う（フェーズ連動・4枚）②6カテゴリ。全機能はカテゴリの中にある。
+   ⚠️「いま使う」に工程カードと同じ入口を入れない＝同じものを2回並べない。
+     （閉店は cfSteps_ が 閉店チェック/送り/金庫/POS/日払い を出す。開店前は HOME_LISTS.pre が 開店チェック/在庫 を出す）
+   ⚠️hvCat はメモリ変数＝localStorageに入れない。端末共有なので、前の黒服が開いた階層を次の人に残さない。 */
+var hvCat='';   /* ''=第1階層 / カテゴリid=第2階層 */
+var BM_NOW={
+  pre:  ['openSafeWithdrawal()','openHandoverEdit()','openHakenId()','openCustomer()'],
+  mid:  ['openTableSlip()','menuGoPos()','openReceipt()','openCustomer()'],
+  post: ['openHandoverEdit()','openDenpyoManager()','openReceipt()','openStockManager()']
+};
+function hvOpenCat(id){
+  hvCat=(hvCat===id)?'':id;
+  renderHome();
+  var e=document.getElementById('bmTop'); if(e&&e.scrollIntoView)e.scrollIntoView({block:'start'});
+}
+/* 在庫の未着・欠品だけバッジを出す。⛔バッジのために新しいgsrを足すな（GASは応答の床が1.9秒・ホームは30秒ごとに再描画される） */
+function bmCatBadge_(id){
+  if(id!=='mono') return 0;
+  var a=ORDER_ALERTS||{};
+  return (a.overdueCount||0)+(a.vendorOverdueCount||0)+(a.shortageCount||0)+(a.vendorShortageCount||0);
+}
+function bmTileHtml_(it){
+  return '<div class="bm-tile'+(it.warn?' warn':'')+'" onclick="'+it.act+'">'
+    +'<span class="ic">'+it.ic+'</span>'
+    +'<span class="t">'+esc(it.t)+'</span>'
+    +(it.s?'<span class="s">'+esc(it.s)+'</span>':'')
+    +'</div>';
+}
+/* 「いま使う」＝BM_NOWのactに一致する項目をMENU_CATSから引く（項目の正本は1つ＝二重定義しない） */
+function bmNowItems_(phase){
+  var want=BM_NOW[phase]||BM_NOW.mid, out=[];
+  want.forEach(function(act){
+    MENU_CATS.forEach(function(c){ menuCatItems_(c).forEach(function(it){ if(it.act===act) out.push(it); }); });
+  });
+  return out;
+}
 function hvToolsSection(){
-  return '<div class="hv-sec q" style="margin-top:24px"><span class="st">🗂 業務メニュー</span></div>'
-    +'<div class="hv-tools">'+MENU_TILES.map(function(g){
-      return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
-        return '<div class="menu-tile" onclick="'+it.act+'"><span class="mt-ic">'+it.ic+'</span><span class="mt-t">'+esc(it.t)+'</span></div>';
-      }).join('')+'</div>';
-    }).join('')+'</div>';
+  var h='<div id="bmTop" class="hv-sec q" style="margin-top:24px"><span class="st">🗂 業務メニュー</span></div>';
+  if(hvCat){
+    var cur=null; MENU_CATS.forEach(function(c){ if(c.id===hvCat)cur=c; });
+    if(!cur){ hvCat=''; return hvToolsSection(); }
+    /* 戻るだけでなく、他カテゴリへ横に1タップで移れるようにする（戻る→選び直しの2タップを避ける） */
+    var sw=MENU_CATS.map(function(c){
+      if(!menuCatItems_(c).length) return '';
+      return '<span class="cc'+(c.id===hvCat?' on':'')+'" onclick="hvOpenCat(\''+c.id+'\')">'+c.ic+'</span>';
+    }).join('');
+    return h
+      +'<div class="bm-back">'
+        +'<span class="bk" onclick="hvOpenCat(\''+hvCat+'\')">← 業務メニューへ戻る</span>'
+        +'<span class="cur">'+cur.ic+' '+esc(cur.t)+'</span>'
+        +'<span class="sw">'+sw+'</span></div>'
+      +'<div class="bm-tiles">'+menuCatItems_(cur).map(bmTileHtml_).join('')+'</div>';
+  }
+  var ph=curPhase(), phLbl=({pre:'🌅 開店前',mid:'🔥 営業中',post:'🌙 閉店'})[ph]||'';
+  h+='<div class="bm-nowlbl">🧰 いま使う　<span>'+phLbl+'</span></div>'
+    +'<div class="bm-now">'+bmNowItems_(ph).map(bmTileHtml_).join('')+'</div>';
+  h+='<div class="bm-cats">'+MENU_CATS.map(function(c){
+    var items=menuCatItems_(c); if(!items.length) return '';
+    var bg=bmCatBadge_(c.id);
+    return '<div class="bm-cat" onclick="hvOpenCat(\''+c.id+'\')">'
+      +(bg?'<span class="bg">'+bg+'</span>':'')
+      +'<span class="ic">'+c.ic+'</span>'
+      +'<span class="bd"><span class="t">'+esc(c.t)+'</span><span class="pv">'+esc(c.pv)+'</span></span>'
+      +'<span class="n">'+items.length+'</span></div>';
+  }).join('')+'</div>';
+  return h;
 }
 function renderHome(){
   if(viewMode!=='home')return;
@@ -6046,37 +6136,71 @@ function manOpenCh(i){ var chs=(MANUAL&&MANUAL.chapters)||[]; if(!chs[i])return;
 function manBack(){ MAN_CH=null; manRenderList(); var b=document.getElementById('sheetBody'); if(b)b.scrollTop=0; }
 function manToggle(id){ MAN_OPEN[id]=!MAN_OPEN[id]; manRenderList(); }
 
-var MENU_TILES=[
-  {group:'新人・マニュアル', items:[
-    {ic:'📖', t:'新人マニュアル',   act:"openManual()"}
+/* ===== 🗂 業務メニュー（2階層・対象物グルーピング／2026-08-26 再設計） =====
+   ⭐第1階層＝6カテゴリ固定。項目が増えても増えるのは第2階層だけ＝第1階層は永久に6枚のまま。
+   ⚠️名前は原則いじっていない（黒服の空間記憶を壊さないため）。意味は s（補助テキスト）で補う方針。
+     例外＝「対象伝票・名刺を登録」だけ改名した＝中身が請求書発行で、名前が実体を指していなかった。
+   ⚠️act の先頭関数がその環境に無い項目は自動で落とす（menuItemOk_）。
+     ＝本番だけの機能(黒服面談)とテストだけの機能(表彰投票)を1つのテーブルで両立させるため。
+     ⛔環境ごとに MENU_CATS を分岐させるな。昇格のたびに差分が生まれて必ず腐る。
+   ⚠️棚卸・納品反映・おみやげ在庫は openStockManager の内側に埋もれていた＝ここで初めて表に出す。 */
+var MENU_CATS=[
+  {id:'cust', ic:'👤', t:'お客様', pv:'探す・誕生日・年会費・ボトル', items:[
+    {ic:'👤', t:'顧客管理',       s:'名前・会員番号で探す',     act:"openCustomer()"},
+    {ic:'🎂', t:'今月誕生日',     s:'ご案内の漏れを防ぐ',       act:"openBirthdays()"},
+    {ic:'💳', t:'会費更新',       s:'期限切れ・今月の更新',     act:"openFeeRenew()"},
+    {ic:'🍶', t:'ボトル棚マップ', s:'棚の写真から置き場所',     act:"openBottleShelfMap()"}
   ]},
-  {group:'開店・閉店 / 現金', items:[
-    {ic:'🌅', t:'開店チェック',   act:"openOpeningCheck()"},
-    {ic:'🔓', t:'金庫出金',       act:"openSafeWithdrawal()"},
-    {ic:'🌙', t:'閉店チェック',   act:"openCashCheck()"},
-    {ic:'💴', t:'日払いの不明分', act:"openHibaraiUnknown()"}
+  {id:'money', ic:'💰', t:'お金・レジ', pv:'開店・閉店・金庫・会計', items:[
+    {ic:'🌅', t:'開店チェック',   s:'4袋を数えてスタート',      act:"openOpeningCheck()"},
+    {ic:'🌙', t:'閉店チェック',   s:'売上入力・4袋カウント',    act:"openCashCheck()"},
+    {ic:'🔓', t:'金庫出金',       s:'臨時出金・残金の収納',     act:"openSafeWithdrawal()"},
+    {ic:'💴', t:'日払いの不明分', s:'受取人が不明な分を直す',   act:"openHibaraiUnknown()"},
+    {ic:'🍽', t:'POS会計',        s:'オーダー→お会計',          act:"menuGoPos()"}
   ]},
-  {group:'管理', items:[
-    {ic:'🏆', t:'表彰投票',           act:"openAwardVote()"},
-    {ic:'📝', t:'面談を開始',         act:"startMendanFlow()"},
-    {ic:'📋', t:'面談表',         act:"openMendanManager()"},
-    {ic:'🪪', t:'派遣スタッフ登録',   act:"openHakenId()"},
-    {ic:'👤', t:'顧客管理',           act:"openCustomer()"},
-    {ic:'🍶', t:'ボトル棚マップ',     act:"openBottleShelfMap()"},
-    {ic:'🎂', t:'今月誕生日',         act:"openBirthdays()"},
-    {ic:'💳', t:'会費更新',           act:"openFeeRenew()"},
-    {ic:'📋', t:'申し送りを書く',     act:"openHandoverEdit()"},
-    {ic:'📋', t:'在庫発注管理',       act:"openStockManager()"},
-    {ic:'🧾', t:'伝票管理',           act:"openDenpyoManager()"},
-    {ic:'🖨', t:'領収書・受領書',     act:"openReceipt()"},
-    {ic:'🖊', t:'テーブル伝票',       act:"openTableSlip()"},
-    {ic:'📄', t:'対象伝票・名刺を登録', act:"openSeikyu()"},
-    {ic:'🚗', t:'送り管理',           act:"openOkuriManager()"},
-    {ic:'📣', t:'キャストリクエスト', act:"openAllRequests()"},
-    {ic:'📢', t:'お知らせ配信',       act:"openBroadcast()"},
-    {ic:'🍽', t:'POS（会計）',        act:"openPos()"}
+  {id:'mono', ic:'📦', t:'モノ', pv:'在庫・発注・棚卸・納品', items:[
+    {ic:'📦', t:'在庫発注管理',   s:'残数・発注点・未着',       act:"openStockManager()"},
+    {ic:'📊', t:'棚卸をする',     s:'現物と台帳を合わせる',     act:"openStocktake()"},
+    {ic:'🚚', t:'納品を反映',     s:'届いた分を在庫へ足す',     act:"openDeliveryReflect()"},
+    {ic:'🎁', t:'おみやげ在庫',   s:'2F/5F の残数と推移',       act:"openSouvenirLog()"}
+  ]},
+  {id:'hito', ic:'👥', t:'ヒト', pv:'面談・派遣・送り・マニュアル', items:[
+    {ic:'📝', t:'面談を開始',       s:'応募者をiPadで入力',     act:"startMendanFlow()"},
+    {ic:'📋', t:'面談表',           s:'過去の面談を見る',       act:"openMendanManager()"},
+    {ic:'🤵', t:'黒服の面談を開始', s:'黒服の応募者',           act:"startKurofukuMendanFlow()"},
+    {ic:'🗂', t:'黒服の面談表',     s:'過去の面談を見る',       act:"openKurofukuMendanManager()"},
+    {ic:'🪪', t:'派遣スタッフ登録', s:'顔＋身分証・初回のみ',   act:"openHakenId()"},
+    {ic:'🚗', t:'送り管理',         s:'行き先・ドライバー',     act:"openOkuriManager()"},
+    {ic:'📖', t:'新人マニュアル',   s:'13章・テストつき',       act:"openManual()"},
+    {ic:'🏆', t:'表彰投票',         s:'匿名のピア投票',         act:"openAwardVote()"}
+  ]},
+  {id:'kami', ic:'🧾', t:'紙モノ', pv:'伝票・領収書・請求書', items:[
+    {ic:'🖊', t:'テーブル伝票',   s:'席に置く手書き用を刷る',   act:"openTableSlip()"},
+    {ic:'🖨', t:'領収書・受領書', s:'お客様用・日払い受領書',   act:"openReceipt()"},
+    {ic:'🧾', t:'伝票管理',       s:'今日の伝票の束を見返す',   act:"openDenpyoManager()"},
+    {ic:'📄', t:'請求書をつくる', s:'請求書払いのお客様へ',     act:"openSeikyu()"}
+  ]},
+  {id:'renraku', ic:'📣', t:'連絡', pv:'申し送り・要望・お知らせ', items:[
+    {ic:'📋', t:'申し送りを書く',     s:'次のシフトへ引き継ぐ', act:"openHandoverEdit()"},
+    {ic:'📣', t:'キャストリクエスト', s:'つきたい・NG',         act:"openAllRequests()"},
+    {ic:'📢', t:'お知らせ配信',       s:'⚠️キャストへLINE',     act:"openBroadcast()", warn:true}
   ]}
 ];
+/* POSの入口は環境で違う（テスト=openPos／本番=伝票管理ビュー）。項目を2つに割らずここで吸収する。 */
+function menuGoPos(){ if(typeof openPos==='function'){ openPos(); return; } closeMenu(); setViewMode('bill'); }
+/* act の先頭の関数が実在する項目だけ通す＝環境差の自動吸収。⚠️必ず描画時に呼ぶ（読み込み時に評価すると定義前で落ちる） */
+function menuItemOk_(it){
+  var m=String(it.act||'').match(/^([A-Za-z_$][\w$]*)\s*\(/);
+  if(!m) return true;
+  try{ return typeof window[m[1]]==='function'; }catch(e){ return true; }
+}
+function menuCatItems_(c){ return (c.items||[]).filter(menuItemOk_); }
+/* ☰オーバーレイ(renderMenu)は旧形状[{group,items}]を読む＝MENU_CATSから遅延導出して二重メンテを避ける */
+var MENU_TILES=null;
+function menuTilesLegacy_(){
+  if(!MENU_TILES) MENU_TILES=MENU_CATS.map(function(c){ return {group:c.ic+' '+c.t, items:menuCatItems_(c)}; });
+  return MENU_TILES;
+}
 var menuView='grid', custFromTop=false, custTantou='';
 var custF={expired:false,noline:false,bottle:false,pos:''}; // 顧客ブラウズの複数条件（AND・会員切れ/LINE未登録/ボトルあり/ボトル位置）
 function custResetFilters_(){ custF={expired:false,noline:false,bottle:false,pos:''}; custTantou=''; }
@@ -7021,7 +7145,7 @@ function renderMenu(){
   if(menuView==='tslip'){ tslipRenderMenu_(el); return; }
   if(menuView==='seikyu'){ seikyuRenderMenu_(el); return; }
   if(menuView==='hakenid'){ hknRenderMenu_(el); return; }
-  el.innerHTML=MENU_TILES.map(function(g){
+  el.innerHTML=menuTilesLegacy_().map(function(g){
     return '<div class="menu-grp">'+esc(g.group)+'</div><div class="menu-grid">'+g.items.map(function(it){
       return '<div class="menu-tile" onclick="'+it.act+'"><span class="mt-ic">'+it.ic+'</span><span class="mt-t">'+esc(it.t)+'</span></div>';
     }).join('')+'</div>';
