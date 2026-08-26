@@ -687,7 +687,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown',
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck',
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
   // 📖 新人マニュアル（manual.gs）＝軍師は読み取りのみ。編集はコンソール(handleApiRequest_のmanual*)。
@@ -2137,15 +2137,116 @@ function kaikeiCheckMessage_(ai, bizDate, tstamp) {
   if (issues.length) msg += '─ 要確認 ─\n' + issues.map(x => '・' + x).join('\n') + '\n';
   msg += '📁 売上伝票（' + bizDate + '）に保存: ' + tstamp + '_' + label;
 
-  return { cust: label, msg: msg };
+  return { cust: label, msg: msg, issues: issues, ok: issues.length === 0 };
 }
 
 // 会計伝票(お客様の会計)の画像処理：売上伝票フォルダへ「時刻_客名」で保存＋突合結果をLINE返信（シート記録なし）
 function handleKaikeiCheck_(event, blob, bizDate, tstamp, fileExt, ai) {
   const r = kaikeiCheckMessage_(ai, bizDate, tstamp);
   blob.setName(tstamp + '_' + r.cust + '.' + fileExt); // 時系列で並ぶ「時刻_客名.jpg」
-  getSalesDenpyoDayFolder_(bizDate).createFile(blob);
+  const f = getSalesDenpyoDayFolder_(bizDate).createFile(blob);
+  // ⚠️従来はLINEに流して終わり＝誰も対応しなくても締められた。締めで拾えるよう台帳に残す（2026-08-26）。
+  //   記録に失敗しても突合の返信は必ず返す（現場の手を止めない）。
+  try { recordKaikeiCheck_(bizDate, tstamp, ai, r.issues || [], f.getUrl()); } catch (e) { console.error('recordKaikeiCheck_', e); }
   reply(event.replyToken, r.msg);
+}
+
+// 会計伝票の突合結果を台帳に残す（⚠️が出た伝票を締めで拾うため）。判定OKの行も残す＝当日の枚数が見える。
+var KAIKEI_CHECK_TAB_ = '会計伝票チェック';
+var KAIKEI_CHECK_HDR_ = ['営業日', '時刻', 'お客様', 'テーブル', '判定', '要確認', '対応', '対応者', '対応日時', '画像リンク'];
+function recordKaikeiCheck_(bizDate, tstamp, ai, issues, fileUrl) {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(KAIKEI_CHECK_TAB_);
+  if (!sh) { sh = ss.insertSheet(KAIKEI_CHECK_TAB_); sh.appendRow(KAIKEI_CHECK_HDR_); }
+  const t = String(tstamp || '');
+  const hhmm = t.length >= 4 ? (t.slice(0, 2) + ':' + t.slice(2, 4)) : '';
+  const bad = (issues || []).length > 0;
+  // 「対応」列＝OKの行は最初から「—」で埋める（未対応として締めに出さない）
+  sh.appendRow([bizDate, hhmm, String(ai.customer || ''), String(ai.table || ''),
+    bad ? '要確認' : 'OK', (issues || []).join(' / '), bad ? '' : '—', '', '', fileUrl || '']);
+}
+
+// 当日ぶんの「要確認のまま未対応」を返す（締めの警告ブロック用）
+function kaikeiIssuesOpen_(dateKey) {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName(KAIKEI_CHECK_TAB_);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const vals = sh.getDataRange().getValues();
+  const out = [];
+  for (let i = 1; i < vals.length; i++) {
+    const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0] || '').trim();
+    if (d !== dateKey) continue;
+    if (String(vals[i][4] || '').trim() !== '要確認') continue;
+    if (String(vals[i][6] || '').trim()) continue;   // 対応済み・持ち越し済みは出さない
+    out.push({ rowIdx: i + 1, time: String(vals[i][1] || ''), cust: String(vals[i][2] || ''), table: String(vals[i][3] || ''), issues: String(vals[i][5] || '') });
+  }
+  return out;
+}
+
+// 会計伝票の要確認を1件「対応した」にする。⚠️GUNSHI_API_FNS登録必須。
+function resolveKaikeiCheck(rowIdx, by) {
+  try {
+    const ss = getOrOpenSS_();
+    const sh = ss.getSheetByName(KAIKEI_CHECK_TAB_);
+    if (!sh) return { ok: false, error: '会計伝票チェックのシートがありません' };
+    const ri = Number(rowIdx) || 0;
+    if (ri < 2 || ri > sh.getLastRow()) return { ok: false, error: '行が不正です' };
+    // ⚠️日時は nowStamp_（生Dateをセルに書くと日付値化して 1899年 が流出する → reference_sheet_date_tostring_trap）
+    sh.getRange(ri, 7, 1, 3).setValues([['対応済み', String(by || ''), nowStamp_()]]);
+    return { ok: true, rowIdx: ri };
+  } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
+}
+
+// 在庫へ反映していない納品を伝票単位でまとめる（軽量版）。
+// ⚠️kioskGetPendingDeliveries は在庫マスタ全件＋あいまい照合まで走る重い関数＝締めの表示にはこちらを使う。
+function pendingDeliverySlips_() {
+  const ss = getOrOpenSS_();
+  const sh = ss.getSheetByName('納品記録');
+  if (!sh || sh.getLastRow() < 2) return [];
+  const vals = sh.getDataRange().getValues();
+  const groups = {}, order = [];
+  for (let i = 1; i < vals.length; i++) {
+    const r = vals[i];
+    if (String(r[12] || '').trim()) continue;      // 13列目=在庫反映済み
+    if (!String(r[4] || '').trim()) continue;      // 品名の無い行は数えない
+    const slipNo = String(r[3] || '').trim() || '(伝票No不明)';
+    const sup = String(r[1] || '');
+    const bd = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0] || '').trim();
+    const key = slipNo + '|' + sup;
+    if (!groups[key]) { groups[key] = { slipNo: slipNo, supplier: sup, bizDate: bd, items: 0 }; order.push(key); }
+    groups[key].items++;
+    if (bd && (!groups[key].bizDate || bd < groups[key].bizDate)) groups[key].bizDate = bd;
+  }
+  return order.map(function (k) { return groups[k]; })
+    .sort(function (a, b) { return String(a.bizDate) < String(b.bizDate) ? -1 : 1; });
+}
+
+// ── 軍師: 締めの「今日中に片付けたいこと」＝警告ブロック（⚠️GUNSHI_API_FNS登録必須）──────
+// ボス確定 2026-08-26「まずは警告表示から」＝ここに出るものは退勤をブロックしない。
+// ⚠️1回の呼び出しで全部返す＝GASの床1.9秒を種類ぶん払わない（→ reference_gas_performance_floor）。
+// ⚠️どれか1つが落ちても残りを返す＝締めの画面を道連れにしない。
+function getClosingExtras(dateKey) {
+  const d = String(dateKey || '').trim() || bizDateStr_();
+  const out = { ok: true, dateKey: d, hibaraiPast: [], hibaraiPastN: 0, delivery: [], deliveryN: 0, kaikei: [], errs: [] };
+  // ① 過去の営業日に残ったままの日払い未仕訳（受取人が空欄／名簿にも名寄せにも無い表記）
+  //    ⚠️当日ぶんは締めゲートの条件①が既にブロックしている＝ここでは「過去日」だけを出す（二重に言わない）。
+  try {
+    const u = getHibaraiUnknown('');
+    if (u && u.ok) {
+      const past = (u.rows || []).filter(function (r) { return String(r.date) < d; });
+      out.hibaraiPastN = past.length;
+      out.hibaraiPast = past.slice(-10).reverse();   // 新しい順に最大10件
+    }
+  } catch (e) { out.errs.push('hibarai: ' + e); }
+  // ② 撮ったのに在庫へ反映していない納品
+  try {
+    const g = pendingDeliverySlips_();
+    out.deliveryN = g.length;
+    out.delivery = g.slice(0, 10);
+  } catch (e) { out.errs.push('delivery: ' + e); }
+  // ④ 会計伝票の突合で⚠️が出たまま未対応のもの（当日）
+  try { out.kaikei = kaikeiIssuesOpen_(d); } catch (e) { out.errs.push('kaikei: ' + e); }
+  return out;
 }
 
 // LINE画像メッセージの二重処理を防止する。処理済み message.id を最新300件だけ保持し照合する。
