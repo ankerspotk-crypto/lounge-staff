@@ -1393,7 +1393,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-26c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-26d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1778,6 +1778,27 @@ function trustEntryHtml(){
     +'<div class="cc-slip">'+rows(kei,'今日の経費はありません')+'</div>';
   h+='<div class="act pri" style="margin-top:14px" onclick="openTrustSite()">🔗 TRUSTを開く</div>';
 
+  /* 📷 日報スクショの取り込み。TRUSTはGASから直接読めない（403）ので、画面を撮って読ませる。 */
+  h+='<div class="flabel" style="margin-top:16px">📷 日報のスクショから取り込む</div>';
+  h+='<div style="font-size:11.5px;color:var(--dim);line-height:1.65;margin-bottom:7px">'
+    +'TRUSTの日報画面を上から順にスクショして、まとめて選んでください。1枚に全員入らなくても<b>何枚でも合成します</b>（同じ人が2枚に写っても二重になりません）。'
+    +'<b style="color:#ffcf7a">1枚あたり10秒ほどかかります。</b></div>';
+  h+='<input type="file" accept="image/*" multiple id="trs-file" style="display:none" onchange="trustShotPick(this)">';
+  h+=TRS.busy
+    ? '<div class="act" style="opacity:.65">⏳ 読み取り中… '+TRS.done+' / '+TRS.total+' 枚</div>'
+    : '<div class="act pri" onclick="document.getElementById(\'trs-file\').click()">📷 日報のスクショを選ぶ</div>';
+  if(TRS.log.length){
+    h+='<div class="cc-slip" style="margin-top:8px">'+TRS.log.map(function(x){
+      var s='<div style="padding:6px 0;border-bottom:1px solid var(--line2)">'
+        +'<div style="font-size:12.5px;color:'+(x.ok?'var(--txt)':'#ff9a9a')+'">'+(x.ok?'✅ ':'⛔ ')+esc(x.text)+'</div>';
+      (x.warn||[]).forEach(function(w){ s+='<div style="font-size:11.5px;color:#e6c14a;margin-top:3px">'+esc(w)+'</div>'; });
+      return s+'</div>';
+    }).join('')+'</div>';
+    var last=TRS.log[TRS.log.length-1];
+    if(last&&last.day) h+='<div style="font-size:13px;font-weight:800;color:var(--gold);margin-top:8px">'
+      +'いまTRUST側に取り込めている日払い　'+last.day.people+'名 / ¥'+Number(last.day.total||0).toLocaleString()+'</div>';
+  }
+
   // 突合の状態
   if(t&&t.hasTrust&&t.matched){
     h+='<div class="ck-banner ok" style="margin-top:14px">✅ TRUSTと一致しています'+(t.perPerson?'（人別）':'（合計）')
@@ -1803,6 +1824,63 @@ function trustEntryRefresh_(){
   var b=document.getElementById('sheetBody'); if(b)b.innerHTML=trustEntryHtml();
   if(viewMode==='home')renderHome();
 }
+/* 📷 日報スクショの取り込み ------------------------------------------------
+   ⚠️⚠️原寸のまま送る＝skImgResize_(長辺1200/JPEG75%)を通してはいけない。
+      精度検証は原寸PNGで全項目一致を確認したもので、縮小すると細かい数字の再現が保証できない。
+      金額の読み取りなので、確認済みの条件を崩さない（ボス確定 2026-08-26「Aでいこう」）。
+   ⚠️1枚6〜12秒かかる（Gemini往復の実測）。必ず1枚ずつ順に投げ、終わった枚から結果を出す。
+      まとめて投げると30秒沈黙して「固まった」と誤解される。 */
+var TRS={busy:false, log:[], done:0, total:0};
+function trustShotPick(input){
+  var files=[].slice.call(input.files||[]);
+  input.value='';                                  // 同じファイルを選び直せるようにする
+  if(!files.length) return;
+  if(TRS.busy){ alert('取り込み中です。終わるまでお待ちください'); return; }
+  TRS.busy=true; TRS.log=[]; TRS.done=0; TRS.total=files.length;
+  trustEntryRefresh_();
+  trustShotNext_(files,0);
+}
+function trustShotNext_(files,i){
+  if(i>=files.length){
+    TRS.busy=false;
+    trustEntryRefresh_();
+    loadClosingFlow(true);                         // 締めの工程③の判定を取り直す
+    setTimeout(trustEntryRefresh_,1800);
+    return;
+  }
+  var f=files[i], rd=new FileReader();
+  rd.onerror=function(){ trustShotDone_(files,i,{ok:false,error:'画像を読めませんでした'}); };
+  rd.onload=function(e){
+    var du=String((e.target&&e.target.result)||'');
+    var dk=(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
+    gsr('importTrustReportShot',{base64:du.split(',')[1],mime:f.type||'image/png',dateKey:dk})
+      .then(function(r){ trustShotDone_(files,i,r); })
+      .catch(function(){ trustShotDone_(files,i,{ok:false,error:'通信エラー'}); });
+  };
+  rd.readAsDataURL(f);
+}
+function trustShotDone_(files,i,r){
+  TRS.done=i+1;
+  TRS.log.push(trustShotLine_(i+1,r));
+  trustEntryRefresh_();
+  trustShotNext_(files,i+1);
+}
+function trustShotLine_(n,r){
+  if(!r||r.ok===false) return {ok:false,text:n+'枚目 … '+((r&&r.error)||'読み取れませんでした')};
+  var t=n+'枚目 … '+r.readPeople+'名を読み取り（日払いあり '+r.readPay+'名）';
+  if(r.hasShukkin) t+='／出金 '+r.savedCost+'件';
+  var warn=[];
+  /* ⚠️別の日の日報を撮った時に黙って混ぜない＝必ず人に見せる */
+  if(r.dateMismatch) warn.push('この画像の日付は '+r.dateOnShot+' です。今日ぶんでなければTRUSTで日付を確認してください');
+  /* ⚠️検算が合わない行＝OCRの桁読み違いの疑い。保存はしてあるので、TRUSTの現物と見比べる */
+  (r.suspect||[]).forEach(function(s){
+    warn.push(s.name+' の日払いが計算と合いません（支給額合計 ¥'+Number(s.total).toLocaleString()
+      +' − 日払い ¥'+Number(s.hibarai).toLocaleString()+' ≠ 残り ¥'+Number(s.nokori).toLocaleString()
+      +'）。正しくは ¥'+Number(s.expect).toLocaleString()+' かもしれません');
+  });
+  return {ok:!warn.length, text:t, warn:warn, day:{people:r.dayPeople, total:r.dayTotal}};
+}
+
 /* TRUSTは外部システム（別オリジン）。軍師からは開くだけ＝中身は触らない。 */
 function openTrustSite(){
   try{ window.open('https://admin.trust-operation.com/','_blank','noopener'); }
