@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27g';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -7445,7 +7445,8 @@ function renderOpening(init){
   openState={reporterName:'',safeMode:'manual',prevSafe:(prev&&prev.bags?(Number(prev.bags.safe)||0):null),bags:{f5:{m10000:0,m5000:0,m1000:0},f2:{m10000:0,m5000:0,m1000:0},keihi:{m10000:0,m5000:0,m1000:0},safe:{m10000:0,m5000:0,m1000:0}}};
   gsr('getKioskStaffList').then(function(names){
     var b2=document.getElementById('sheetBody'); if(!b2)return;
-    var h='<div class="ck-note">対象日 '+esc(init.dateKey)+'</div><div class="flabel">報告者（黒服）</div><div class="chips" id="op-rep">'+(names||[]).map(function(n){return '<div class="chip" onclick="opRep(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>';}).join('')+'</div>';
+    openState.reporterName=repDefault_(names);
+    var h='<div class="ck-note">対象日 '+esc(init.dateKey)+'</div><div class="flabel">報告者（記録した人）</div><div class="chips" id="op-rep">'+chipsHtml(repNames_(names),'opRep',openState.reporterName)+'</div>';
     h+='<div class="flabel">各袋の現金（お札の枚数）</div>';
     OPEN_BAGS.forEach(function(bg){ var pr=prev?(Number((prev.bags||{})[bg.k])||0):null; h+=(bg.k==='safe')?opSafeBlock(openState.prevSafe):ckBagBlock(bg.k,bg.label,pr); });
     h+='<div style="font-size:11px;color:#e0a060;margin-top:10px">⚠️ 送信後は修正できません。内容を確認してから送信してください。</div>';
@@ -7479,7 +7480,7 @@ function opSafeMode(m){
   var el=document.getElementById('op-safe-block'); if(el) el.outerHTML=opSafeBlock(openState.prevSafe);
 }
 function submitOpening(){
-  if(!openState.reporterName){ alert('報告者を選択してください'); return; }
+  if(!openState.reporterName){ repFocus_('op-rep'); alert('報告者を選んでください（画面いちばん上の「報告者」）'); return; }
   if(!confirm('開店チェックを送信します。送信後は修正できません。よろしいですか？'))return;
   var s=document.getElementById('op-status'); if(s)s.textContent='送信中…';
   gsr('submitOpeningCheck',{reporterName:openState.reporterName,bags:openState.bags,safeUnchecked:openState.safeMode==='auto'}).then(function(res){
@@ -7498,7 +7499,8 @@ function renderSafeWithdrawal(){
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）金庫出金は本番のみ</div>'; return; }
   gsr('getKioskStaffList').then(function(names){
     var b=document.getElementById('sheetBody'); if(!b)return;
-    var h='<div class="flabel">報告者（黒服）</div><div class="chips">'+(names||[]).map(function(n){return '<div class="chip" onclick="swRep(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>';}).join('')+'</div>';
+    swState.reporterName=repDefault_(names);
+    var h='<div class="flabel">報告者（出金した人）</div><div class="chips" id="sw-rep">'+chipsHtml(repNames_(names),'swRep',swState.reporterName)+'</div>';
     h+='<div class="flabel">対象フロア</div><div class="chips"><div class="chip sel" onclick="swFloor(this,\'f5\')">5F</div><div class="chip" onclick="swFloor(this,\'f2\')">2F</div></div>';
     h+='<div class="flabel">出金する枚数</div>'+swDenom('out');
     h+='<div class="flabel">出金後の金庫内残り枚数</div>'+swDenom('remain');
@@ -7511,7 +7513,7 @@ function swRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(functio
 function swFloor(el,f){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); swState.floor=f; }
 function swInput(inp){ swState[inp.dataset.k][inp.dataset.d]=Number(inp.value)||0; }
 function submitSW(){
-  if(!swState.reporterName){ alert('報告者を選択してください'); return; }
+  if(!swState.reporterName){ repFocus_('sw-rep'); alert('報告者を選んでください（画面いちばん上の「報告者」）'); return; }
   var s=document.getElementById('sw-status'); if(s)s.textContent='送信中…';
   gsr('submitSafeWithdrawal',{reporterName:swState.reporterName,floor:swState.floor,out:swState.out,remain:swState.remain}).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
@@ -7529,7 +7531,21 @@ function newBag(){ return {m10000:0,m5000:0,m1000:0}; }
 function newBags(){ var o={}; CASH_BAGS.forEach(function(b){ o[b.k]=newBag(); }); return o; }
 function bagYen(o){ o=o||{}; return (o.m10000||0)*10000+(o.m5000||0)*5000+(o.m1000||0)*1000; }
 function bagsYen(bags){ return CASH_BAGS.reduce(function(s,b){ return s+bagYen(bags[b.k]); },0); }
-function chipsHtml(names,fn){ return (names||[]).map(function(n){ return '<div class="chip" onclick="'+fn+'(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>'; }).join(''); }
+function chipsHtml(names,fn,sel){ return (names||[]).map(function(n){ return '<div class="chip'+((sel&&String(n)===String(sel))?' sel':'')+'" onclick="'+fn+'(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>'; }).join(''); }
+/* 報告者の候補と既定値を作る。
+   ⚠️ログイン中の人を既定で選んでおく＝管理者が代行する時に、名前を選ぶためだけにフォームの一番上まで
+      戻らされる（ボス指摘 2026-08-27「報告者を入力してくださいってダイアログが出る」）。黒服の自分ぶんも1タップ減る。
+   ⚠️ログイン名が一覧に無くても候補に足す。足さないと【選べる名前が無いのに必須】＝誰も送信できない詰みになる。
+   ⚠️既定は上書き可能。代行で「実際に締めた黒服」を選び直せる（誰が締めたかの記録を人が決められる）。 */
+function repNames_(names){ var a=(names||[]).slice(); if(LOGIN&&a.indexOf(LOGIN)<0) a.unshift(LOGIN); return a; }
+function repDefault_(names){ return (LOGIN&&repNames_(names).indexOf(LOGIN)>=0)?LOGIN:''; }
+/* 未選択で送ろうとした時に、その場所まで連れて行って赤く光らせる。alertだけだと画面のどこの話か分からない。 */
+function repFocus_(id){
+  var el=document.getElementById(id); if(!el) return;
+  try{ el.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_){ el.scrollIntoView(); }
+  el.style.outline='2px solid #e05050'; el.style.outlineOffset='3px'; el.style.borderRadius='8px';
+  setTimeout(function(){ el.style.outline=''; },2600);
+}
 function bagDenomInputs(bagKey,state,oninput){ var o=state[bagKey]||{}; return '<div class="ck-row" style="border:0;padding:0">'+CASH_DENOMS.map(function(d){ return '<label class="ck-denom"><span>'+d.label+'</span><input type="number" min="0" inputmode="numeric" data-b="'+bagKey+'" data-d="'+d.k+'" value="'+(o[d.k]||'')+'" oninput="'+oninput+'(this)"></label>'; }).join('')+'</div>'; }
 function readSlipsFromDenpyo(dp){
   if(!dp) return [];
@@ -7562,7 +7578,7 @@ function openCashCheck(){
 }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
-  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
+  cashState={dateKey:init.dateKey,init:init,staff:repNames_(staff),reporterName:repDefault_(staff),cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
   renderCashCheck();
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
   CC_GATE=null; CC_GATE_ERR=''; ccGateLoad();   // 🔒 締めの条件（TRUST突合・過去の未照合日・受取人の候補）
@@ -7778,7 +7794,7 @@ function renderCashCheck(){
   var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
   if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店の現金が未提出です（残るはずが計算できません）</div>';
   else h+='<div class="cc-info"><div>🌅 今夜のスタート　¥'+Number(init.openingTotal||0).toLocaleString()+'</div></div>';
-  h+='<div class="flabel">報告者（黒服）</div><div class="chips">'+chipsHtml(st.staff,'ccRep')+'</div>';
+  h+='<div class="flabel">報告者（締めた人）</div><div class="chips" id="cc-rep">'+chipsHtml(st.staff,'ccRep',st.reporterName)+'</div>';
   h+='<div class="flabel">現金売上（数字ひとつ）</div><input class="finput" type="number" inputmode="numeric" min="0" placeholder="0" style="text-align:right" value="'+(st.cashSalesInput||'')+'" oninput="cashState.cashSalesInput=Number(this.value)||0;ccRefresh()">';
   h+='<div id="cc-slips"></div>';
   h+='<div class="flabel">閉店時の現金を数える（4袋・紙幣の枚数）</div><div id="cc-bags">'+CASH_BAGS.map(ccBagCard).join('')+'</div>';
@@ -7832,7 +7848,8 @@ function ccPhoto(idx,file){
   reader.readAsDataURL(file);
 }
 function submitCash(){
-  var st=cashState; if(!st.reporterName){ alert('報告者を選択してください'); return; }
+  var st=cashState;
+  if(!st.reporterName){ repFocus_('cc-rep'); alert('報告者を選んでください（画面いちばん上の「報告者」）'); return; }
   if(!ccGateReady_()){ alert(ccGateBlockMsg_()); var g=document.getElementById('cc-trust-gate'); if(g&&g.scrollIntoView)g.scrollIntoView({behavior:'smooth',block:'center'}); return; }
   /* 🔒 設計ベース＝**閉店報告までに全部終わっていること**。未会計/請求書依頼漏れは翌日には誰も気づけない */
   if(!ccPosReady_()){
