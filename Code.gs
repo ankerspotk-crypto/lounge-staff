@@ -1784,6 +1784,7 @@ function getNotifSettings_() {
     stocktake_reminder: { label: '📋 棚卸しリマインド',   type: 'auto', enabled: true, group: '黒服',       desc: '毎週月曜19:00に黒服グループへ棚卸し通知' },
     trust_cash_notice:  { label: '💴 TRUST日次現金の参照通知', type: 'auto', enabled: false, group: '黒服', desc: 'TRUST取得（日払い・経費）実行時に黒服グループへ合計¥を通知。¥0でも流れるため既定OFF（コンソール取込履歴には残る）' },
     notice_reminder:    { label: '📢 お知らせ未読リマインド', time: '19:00', enabled: true, group: 'スタッフ', days: [1,2,3,4,5,6,7], msgEditable: false, defaultMsg: null, desc: '未読のお知らせがある人へ毎日この時刻に1通まとめてDM（既読になれば止まる／投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了）' },
+    kyukin_early_dm:    { label: '🌅 当欠経験者への朝リマインド（本人DM）', time: '09:00', enabled: true, group: 'キャスト', days: [1,2,3,4,5,6,7], msgEditable: false, defaultMsg: null, desc: '過去に当日欠勤の実績があるキャストへ、その人のシフトが入っている日の朝この時刻に「今日休むなら早めに欠勤申請を」と本人へ個別DM。⚠️回数やフラグは本人には出さない（黒服ブリーフの当欠フラグとは別物）。予約出勤・LINE未登録・📉当欠注意OFF・既に本日の欠勤申請を出している人は対象外' },
     shift_open:         { label: '📅 来週シフト号令（月）',   time: '13:00', enabled: true, group: 'キャスト・黒服', days: [1], msgEditable: false, defaultMsg: null, desc: '毎週月曜13:00に対象者（キャスト/体験/黒服）へ来週分シフトの提出を号令（締切=木曜）。店休日でも配信' },
     shift_remind:       { label: '⏰ 来週シフト催促（木）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [4], msgEditable: false, defaultMsg: null, desc: '毎週木曜19:00に来週分が未提出＆来週なし未報告の人へ個別DM＋黒服グループへ提出状況一覧' },
     shift_remind2:      { label: '⏰ 来週シフト催促（金）',   time: '19:00', enabled: true, group: 'キャスト・黒服', days: [5], msgEditable: false, defaultMsg: null, desc: '毎週金曜19:00にまだ未提出の人へ再度個別DM＋黒服グループへ一覧（無反応防止の追撃）' },
@@ -1881,6 +1882,7 @@ function notifMetaDefs_() {
     kinsen_go:          { category:'scheduled', targetKind:'multi',  target:null },      // 黒服＋スタッフ（+退勤リセット副作用あり＝地雷1）
     oshibori:           { category:'scheduled', targetKind:'group',  target:'kurofuku', wired:true },
     notice_reminder:    { category:'scheduled', targetKind:'roster', target:null },      // 未読者名簿へ個別DM
+    kyukin_early_dm:    { category:'scheduled', targetKind:'roster', target:null },      // 当欠経験者の本人へ個別DM（宛先は本人固定＝切替不可）
     shift_open:         { category:'scheduled', targetKind:'roster', target:null },
     shift_remind:       { category:'scheduled', targetKind:'roster', target:null },
     shift_remind2:      { category:'scheduled', targetKind:'roster', target:null },
@@ -1962,6 +1964,9 @@ function notifPartsDefs_() {
     notice_reminder: [
       { part:'header', label:'ヘッダー（件数の案内）', ph:[{t:'count',d:'未読件数'}], def:'📢【未読のお知らせが{count}件あります】\nまだ確認していないお知らせがあります。ご確認をお願いします。' },
       { part:'footer', label:'フッター（確認導線）', ph:[{t:'url',d:'ポータルURL'}], def:'▼ポータルで確認\n{url}' }
+    ],
+    kyukin_early_dm: [
+      { part:'body', label:'本人へのリマインド本文', ph:[{t:'name',d:'本人の名前'},{t:'date',d:'本日の日付'},{t:'shift',d:'本日のシフト'},{t:'url',d:'ポータルURL(改行込)'}], def:'おはようございます、{name}さん☀️\n本日 {date} は {shift} で出勤予定です。\n\nもし体調不良などで今日どうしてもお休みしたい場合は、できるだけ早めに欠勤の連絡をお願いします🙏\n直前になるほど、お客様のご案内や席の割り振りが難しくなってしまいます。\n\n▼欠勤の申請\nマイページ →「シフト」→ 本日の日付をタップ →「欠勤申請」{url}\n\nこのトークに「今日は休みたいです」と送ってもらっても大丈夫です。\n出勤される場合は、この連絡への返信は不要です。今日もよろしくお願いします。' }
     ]
   };
 }
@@ -7816,6 +7821,11 @@ function scheduledJobs() {
   // 既読になれば当然対象外、投稿からNOTICE_REMINDER_MAX_DAYS日で自動終了。店休日(お盆等)でも周知したいので isClosed 判定より前に置く。
   notif_('notice_reminder', () => { sendNoticeUnreadReminders_(); });
 
+  // 09:00 当欠経験者へ「今日休むなら早めに欠勤申請を」の本人DM（2026-08-26 ボス依頼）
+  // ⚠️本日シフトがある当欠経験者だけ＝該当者ゼロなら1通も出ない。回数やフラグは本人には出さない。
+  //   例外は関数内で握って握りつぶす（ここで投げると scheduledJobs の以降が全部死ぬ）。
+  notif_('kyukin_early_dm', () => { sendKyukinEarlyReminderDM_(ns_); });
+
   // 来週シフト提出: 月曜号令 / 木・金の未提出者リマインド。提出は営業有無と独立なので店休日でも回す＝isClosed 判定より前に置く。
   notif_('shift_open',    () => { broadcastShiftSubmitOpen_(); });
   notif_('shift_remind',  () => { remindShiftSubmitMissing_(1); });
@@ -10566,6 +10576,129 @@ function sendKurofukuDailyBrief_(ns_) {
 
 // LINEに飛ばさず本文だけ確認する（GASエディタから実行）
 function testKurofukuBrief() { Logger.log('=== 黒服ブリーフ プレビュー ===\n' + buildKurofukuBriefText_()); }
+
+/* ============================================================
+ * 🌅 当欠経験者への朝リマインド（本人DM・2026-08-26 ボス依頼）
+ *  「過去に一度でも当日欠勤をしたキャスト」に、その人のシフトが入っている日の朝（既定09:00）、
+ *  『今日どうしても休むなら、できるだけ早く欠勤申請を』と本人へ1:1 DMする。
+ *  ⚠️回数・🚨フラグは本人には絶対に出さない。当欠フラグは黒服の判断材料であって本人への評価ではない
+ *    （kuro_brief の原則をここでも守る）。本文は"所作のお願い"だけで、責める語を入れない。
+ *  対象＝本日シフト(確定出勤)のキャスト/体験 ∩ 当欠実績が min 回以上 ∩ 📉当欠注意ON ∩ LINE登録済み。
+ *  除外＝退職者(getTodayShiftDetail_ が既に落とす)／予約出勤(待機枠＝呼ばれて初めて出勤)／
+ *        本日分の欠勤申請を既に出している人（催促の二度打ちをしない）。
+ * ============================================================ */
+// 「過去に1度でも」＝既定10年遡り（実質全期間）。しきい値は KYUKIN_ 系プロパティ＝KEEP_PREFIX 済みで設定リセットに耐える。
+function kyukinDmDays_()     { return Number(prop('KYUKIN_DM_DAYS')      || 3650) || 3650; }
+function kyukinDmMinCount_() { return Number(prop('KYUKIN_DM_MIN_COUNT') || 1)    || 1; }
+
+// 本日分の欠勤申請を既に出している人の正規化名セット。承諾も pending も「もう出ている」＝催促しない。
+// 却下/クリア/重複＝申請が生きていないので対象に戻す。列は kyukinStatsMap_ と同じ（0:提出日時 1:名前 2:対象日 3:種別 4:ステータス）。
+function kyukinTodayRequestedSet_() {
+  var out = {};
+  try {
+    var sh = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+    if (!sh || sh.getLastRow() < 2) return out;
+    var todayMd = Utilities.formatDate(new Date(), TZ, 'M/d');
+    var rows = sh.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][3] == null ? '' : rows[i][3]).trim() !== '欠勤') continue;
+      var st = String(rows[i][4] == null ? '' : rows[i][4]).trim();
+      if (st === '却下' || st === 'クリア' || st === '重複') continue;
+      var dc = rows[i][2];
+      var ds = (dc instanceof Date && !isNaN(dc)) ? Utilities.formatDate(dc, TZ, 'M/d') : String(dc == null ? '' : dc).trim();
+      if (ds !== todayMd) continue;
+      var k = shConNorm_(String(rows[i][1] == null ? '' : rows[i][1]).trim());
+      if (k) out[k] = true;
+    }
+  } catch (e) { console.error('kyukinTodayRequestedSet_', e); }
+  return out;
+}
+
+// 送信対象の抽出 → [{ name, origName, shift, count, lineId }]（lineId 空＝LINE未登録＝送れない）
+function kyukinEarlyDmTargets_() {
+  var detail = getTodayShiftDetail_();
+  var cast = splitYoyakuShift_((detail && detail.cast) || []).active;   // 予約出勤(待機枠)は対象外
+  if (!cast.length) return [];
+  var stats     = kyukinStatsMap_(kyukinDmDays_());
+  var alertOff  = kyukinAlertOffSet_();          // 📉当欠注意OFF＝この人には触れない（黒服表示と同じ意思決定に揃える）
+  var requested = kyukinTodayRequestedSet_();
+  var min = kyukinDmMinCount_();
+
+  // 名前→lineId（スタッフマスタ A:lineId / B:氏名）。sendKurofukuHandoverDM_ と同じ引き方。
+  var byName = {};
+  try {
+    var stf = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (stf) stf.getDataRange().getValues().slice(1).forEach(function (r) {
+      var nm = normalizeName_(String(r[1] == null ? '' : r[1]).trim());
+      if (nm) byName[nm] = String(r[0] == null ? '' : r[0]).trim();
+    });
+  } catch (e) { console.error('kyukinEarlyDmTargets_ staff', e); }
+
+  var out = [];
+  cast.forEach(function (s) {
+    if (!kyukinAlertOnFor_(s, alertOff)) return;
+    var c = kyukinCountForStaff_(s, stats);      // 源氏名・元名の両方で引く
+    if (c < min) return;                         // 当欠実績なし＝そもそも送らない
+    var keys = [s.name, s.origName].map(function (n) { return shConNorm_(String(n || '')); });
+    var already = keys.some(function (k) { return k && requested[k]; });
+    if (already) return;
+    var lid = byName[normalizeName_(String(s.origName || '').trim())]
+           || byName[normalizeName_(String(s.name || '').trim())] || '';
+    out.push({ name: s.name, origName: s.origName || '', shift: s.shift, count: c, lineId: lid });
+  });
+  return out;
+}
+
+// 本文。固定文はコンソール🔔通知で編集可（partsDef 'body'）。{name}{date}{shift}{url} を差し込む。
+function buildKyukinEarlyDmText_(t, ns) {
+  ns = ns || getNotifSettings_();
+  var d = new Date();
+  var md  = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  var dow = ['日','月','火','水','木','金','土'][d.getDay()];
+  var url = prop('PORTAL_URL') || '';
+  return fillTpl_(notifTpl_(ns, 'kyukin_early_dm', 'body'), {
+    name: t.name, date: md + '(' + dow + ')', shift: t.shift, url: url ? ('\n' + url) : ''
+  });
+}
+
+// 09:00 送信本体。scheduledJobs の notif_('kyukin_early_dm') から。force=true でON/OFFを無視（コンソールの手動再送用）。
+// ⚠️例外はここで握る＝毎分トリガーの以降のジョブを道連れにしない。
+function sendKyukinEarlyReminderDM_(ns_, force) {
+  try {
+    ns_ = ns_ || getNotifSettings_();
+    if (!force && !notifEnabled_('kyukin_early_dm', ns_)) return { ok: true, skipped: 'off', targets: 0, sent: 0 };
+    var list = kyukinEarlyDmTargets_();
+    if (!list.length) return { ok: true, skipped: 'no_target', targets: 0, sent: 0 };
+    var sent = 0, noLine = [];
+    list.forEach(function (t) {
+      if (!t.lineId) { noLine.push(t.name); return; }
+      push_(t.lineId, buildKyukinEarlyDmText_(t, ns_));
+      sent++;
+    });
+    console.log('kyukin early dm: targets=' + list.length + ' sent=' + sent + ' noLine=' + noLine.length);
+    return { ok: true, targets: list.length, sent: sent, skippedNoLine: noLine };
+  } catch (e) {
+    console.error('sendKyukinEarlyReminderDM_', e);
+    return { ok: false, error: String(e), targets: 0, sent: 0 };
+  }
+}
+
+// LINEに飛ばさず、対象者と本文だけ確認する（GASエディタから実行）
+function testKyukinEarlyDM() {
+  var ns = getNotifSettings_();
+  var list = kyukinEarlyDmTargets_();
+  var out = ['=== 当欠経験者への朝リマインド プレビュー ===',
+             '条件: 直近' + kyukinDmDays_() + '日で当欠' + kyukinDmMinCount_() + '回以上／本日シフトあり（予約出勤を除く）',
+             '対象 ' + list.length + '名'];
+  list.forEach(function (t) {
+    out.push('---- ' + t.name + '（当欠' + t.count + '回／' + t.shift + '／LINE' + (t.lineId ? 'OK' : '未登録=送れません') + '）');
+    out.push(buildKyukinEarlyDmText_(t, ns));
+  });
+  if (!list.length) out.push('（本日は該当者なし＝1通も送りません）');
+  var txt = out.join('\n');
+  Logger.log(txt);
+  return txt;
+}
 
 // コンソール用: 当日欠勤の集計一覧（多い順）。名簿から役割・在籍を相乗りさせる。
 function kyukinStatsView_(days) {
@@ -21872,6 +22005,13 @@ function resendRegistry_(today, ns) {
       run: function () { return resendGroupText_(KF(), '📋【棚卸しの日】\n本日は週次棚卸しの日です。軍師システムの「在庫発注管理」→「棚卸し」から実数の登録をお願いします。'); } },
 
     // ---- 黒服・キャスト個別DM ----
+    { id: 'kyukin_early_dm', label: '当欠経験者への朝リマインド（本人DM）', cat: 'dm', time: '09:00', schedId: 'N_kyukin_early_dm', dynamic: true,
+      run: function () {
+        var r = sendKyukinEarlyReminderDM_(null, true) || {};   // 手動再送は通知OFFでも本文を確かめられるよう force
+        if (r.skipped) return { sent: 0, note: 'スキップ（本日シフトのある当欠経験者なし）', skipped: true };
+        return { sent: (r.sent || 0), note: '対象' + (r.targets || 0) + '名へ' + (r.sent || 0) + '通'
+          + ((r.skippedNoLine && r.skippedNoLine.length) ? ('（LINE未登録' + r.skippedNoLine.length + '名スキップ）') : '') };
+      } },
     { id: 'notice_reminder', label: 'お知らせ未読リマインド', cat: 'dm', time: '19:00', schedId: 'N_notice_reminder', dynamic: true,
       run: function () { var r = sendNoticeUnreadReminders_() || {}; return { sent: (r.sent || 0), note: '未読者' + (r.staff || 0) + '名へ' + (r.sent || 0) + '通' + (r.failed ? ('（失敗' + r.failed + '）') : ''), skipped: !(r.staff) }; } },
     { id: 'kuro_handover', label: '黒服 申し送りDM', cat: 'dm', time: '17:00', schedId: 'KURO_HANDOVER', dynamic: true,
