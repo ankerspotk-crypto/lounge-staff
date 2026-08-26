@@ -17762,6 +17762,9 @@ function extractTrustReportWithGemini_(blob) {
     '⑤ 表の途中で画面が切れている行、名前が読めない行は含めない。\n' +
     '⑥ 画面に他のアプリやブラウザのウィンドウ、メニューバー、Dockが写り込んでいても、TRUSTの表だけを読む。\n' +
     '⑦ 日払いが0（空欄）の人も、名前が読めるなら cast / staff に必ず含める（何人ぶん写っていたかを数えるのに使う）。\n' +
+    '⑧ ★date は「画面上部の大きな見出しの年月日」だけを読む。日付を選ぶカレンダー、前日／翌日の送りリンク、一覧に並ぶ他の日付、\n' +
+    '　　OSの時計やブラウザのUIは絶対に使わない。見出しが写っていない・最後まで読み切れないなら空文字を返す（推測禁止）。\n' +
+    '　　★日にちの一の位（5と6、3と8、1と7）を読み違えやすい。少しでも自信が無ければ空文字にすること（空文字の方が安全な作りになっている）。\n' +
     '\n' +
     'JSON以外は出力しないこと。';
   const payload = {
@@ -17792,11 +17795,15 @@ function importTrustReportShot(payload) {
     const ai = extractTrustReportWithGemini_(blob);
     if (!ai) return { ok: false, error: '読み取れませんでした（少し時間をおいてもう一度お試しください）' };
 
-    // 日付は画面の見出しを最優先。2枚目以降は見出しが写らないので、画面が開いている営業日にフォールバック
+    // ⚠️日付の正はスクショではなく【軍師で開いている営業日】。
+    //   スクショ優先にしていて実害が2つ出た（2026-08-26）：
+    //     ①見出しは1枚目にしか写らない → 2枚目以降が画面の営業日に落ち、同じ日報が2日に割れた
+    //     ②見出し自体をOCRが読み違える（8/26の日報を8/25と読んだ実例）→ 前日ぶんが丸ごと書き換わる
+    //   スクショ側の日付は「照合用」に格下げし、食い違ったら保存せずに人へ返して決めさせる。
     const shot = /^\d{4}-\d{2}-\d{2}$/.test(String(ai.date || '')) ? String(ai.date) : '';
-    const d = shot || String(payload.dateKey || '').trim() || bizDateStr_();
-    // ⚠️別の日の日報を撮ってしまった時に黙って混ぜない＝呼び出し側に伝えて確認させる
-    const dateMismatch = !!(shot && payload.dateKey && shot !== String(payload.dateKey).trim());
+    const dk = /^\d{4}-\d{2}-\d{2}$/.test(String(payload.dateKey || '').trim()) ? String(payload.dateKey).trim() : '';
+    const d = dk || shot || bizDateStr_();
+    const dateMismatch = !!(shot && dk && shot !== dk);
 
     const cast = Array.isArray(ai.cast) ? ai.cast : [];
     const staff = Array.isArray(ai.staff) ? ai.staff : [];
@@ -17817,6 +17824,15 @@ function importTrustReportShot(payload) {
       //   expect＝日払いとして期待される値＝支給額合計 − 残り支給額 − マイナス。
       if (t - h - mi !== n) suspect.push({ name: String(r.name || ''), total: t, hibarai: h, minus: mi, nokori: n, expect: t - n - mi });
     });
+
+    // ⚠️どちらの日付が正しいかは人しか決められない。決まるまで1行も書かない（書いてから直すのは至難）。
+    //   payload.dateOk=true ＝この取り込み一式の日付は人が決めた、の意。以後は聞き直さない。
+    if (dateMismatch && !payload.dateOk) {
+      return {
+        ok: true, needDateConfirm: true, dateOnShot: shot, dateKey: dk,
+        readPeople: people.length, readPay: pay.length
+      };
+    }
 
     const m = mergeTrustDayPayRows_(d, seen, pay, '日報スクショ');
     if (!m.ok) return { ok: false, error: m.error };

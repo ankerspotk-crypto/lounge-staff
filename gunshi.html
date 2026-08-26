@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1894,10 +1894,13 @@ function trustEntryRefresh_(){
       金額の読み取りなので、確認済みの条件を崩さない（ボス確定 2026-08-26「Aでいこう」）。
    ⚠️1枚6〜12秒かかる（Gemini往復の実測）。必ず1枚ずつ順に投げ、終わった枚から結果を出す。
       まとめて投げると30秒沈黙して「固まった」と誤解される。 */
-/* ⚠️TRS.date＝この取り込み一式の営業日。日報の日付見出しは1枚目にしか写らないので、2枚目以降は
-   【1枚目で読めた日付】に寄せる。ここを「画面の営業日」にフォールバックさせると、同じ日報が
-   2つの営業日に割れて保存される（2026-08-26の実害：1枚目→8/25、2〜3枚目→8/26。前日の人が
-   今日のTRUST側に現れて「伝票が無い」と出続け、締めが通らなくなった）。 */
+/* ⚠️TRS.date＝この取り込み一式の営業日。1枚目から最後の1枚まで【必ず同じ日付】で送る。
+   ここを枚ごとに決めさせると、同じ日報が2つの営業日に割れて保存される
+   （2026-08-26の実害：1枚目→8/25、2〜3枚目→8/26。前日の人が今日のTRUST側に現れて
+   「伝票が無い」と出続け、締めが通らなくなった）。
+   ⚠️既定はスクショの日付ではなく【軍師で開いている営業日】。スクショの見出しはOCRが読み違える
+   （8/26の日報を8/25と読んだ実例）ので、正にしてはいけない。食い違ったときだけ人に決めさせる。
+   TRS.dateOk＝人が日付を決めた（以後は聞き直さない・サーバにもこの旗を送る）。 */
 var TRS={busy:false, log:[], done:0, total:0, date:'', dateOk:false};
 function trustShotPick(input){
   var files=[].slice.call(input.files||[]);
@@ -1921,8 +1924,8 @@ function trustShotNext_(files,i){
      （閉店チェックの伝票写真 ccPhoto は昔から縮めてから送っている＝同じ file 内に先例あり）。
      ただし日報は数字が詰まった表なので、伝票写真の1000pxまで縮めると桁が潰れる。長辺2200px・JPEG0.85で送る。 */
   trustShotShrink_(f).then(function(o){
-    var dk=TRS.date||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';   /* ⚠️一式で1つの営業日に固める（TRS.date参照） */
-    gsr('importTrustReportShot',{base64:o.base64,mime:o.mime,dateKey:dk})
+    var dk=TRS.date||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';   /* ⚠️一式で1つの営業日に固める */
+    gsr('importTrustReportShot',{base64:o.base64,mime:o.mime,dateKey:dk,dateOk:TRS.dateOk})
       .then(function(r){ trustShotDone_(files,i,r); })
       .catch(function(err){
         /* タイムアウトと本当の通信断は原因も対処も違う＝言い分ける */
@@ -1960,27 +1963,26 @@ function trustShotShrink_(file){
   });
 }
 function trustShotDone_(files,i,r){
+  /* ⚠️日付が食い違った＝サーバはまだ1行も保存していない。人が決めてから【同じ枚をやり直す】。
+     先に保存してから聞くと、間違った日に入った行を後から取り除くのが実質できない。 */
+  if(r&&r.needDateConfirm&&!TRS.dateOk){
+    var mine=r.dateKey||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
+    var keep=confirm('スクショから読み取れた日付は '+r.dateOnShot+' でした。\n'
+      +'いま締めているのは '+mine+' です。\n\n'
+      +'OK … '+mine+' ぶんとして取り込む\n'
+      +'　（日付の読み取り違い。TRUSTで '+mine+' の日報を開いているならこちら）\n\n'
+      +'キャンセル … '+r.dateOnShot+' ぶんとして取り込む\n'
+      +'　（前の日の日報を撮っていた場合はこちら）');
+    TRS.date=keep?mine:r.dateOnShot;
+    TRS.dateOk=true;
+    TRS.log.push({ok:true,text:'この取り込みは '+TRS.date+' ぶんとして進めます',warn:[]});
+    trustEntryRefresh_();
+    trustShotNext_(files,i);        /* 保存していないので同じ枚から入れ直す */
+    return;
+  }
   TRS.done=i+1;
   TRS.log.push(trustShotLine_(i+1,r));
   trustEntryRefresh_();
-  /* 1枚目で読めた日付＝この一式の営業日。以後の枚は全部ここへ入れる（割れ防止） */
-  if(r&&r.ok!==false&&r.dateOnShot&&!TRS.date) TRS.date=r.dateOnShot;
-  /* ⚠️締めている営業日と日報の日付が違う＝撮り間違いか、TRUSTが前日の日報を開いたまま。
-     黙って続けると前日ぶんを書き換えたまま今日が空のままになる。ここで人に決めさせて止める。 */
-  if(r&&r.ok!==false&&r.dateMismatch&&!TRS.dateOk){
-    var mine=(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
-    var go=confirm('このスクショは TRUST の '+r.dateOnShot+' の日報です。\n'
-      +'いま締めているのは '+mine+' です。\n\n'
-      +'OK … '+r.dateOnShot+' ぶんとして残りも取り込む\n'
-      +'キャンセル … 取り込みをやめる（TRUSTで '+mine+' の日報を開き直して撮り直す）');
-    if(!go){
-      TRS.busy=false;
-      TRS.log.push({ok:false,text:'取り込みを中止しました。TRUSTで '+mine+' の日報を開いてから撮り直してください',warn:[]});
-      trustEntryRefresh_();
-      return;
-    }
-    TRS.dateOk=true;
-  }
   trustShotNext_(files,i+1);
 }
 /* 今日の伝票から、この名前の日払い額を引く。表記が完全に一致する時だけ言い切る（名寄せまではしない）。 */
@@ -2001,7 +2003,8 @@ function trustShotLine_(n,r){
   if(r.hasShukkin) t+='／出金 '+r.savedCost+'件';
   var warn=[];
   /* ⚠️別の日の日報を撮った時に黙って混ぜない＝必ず人に見せる */
-  if(r.dateMismatch) warn.push('この画像の日付は '+r.dateOnShot+' です。今日ぶんでなければTRUSTで日付を確認してください');
+  /* ここに来るのは人が日付を決めた後。読み取りが違っていた事実だけ残す（判断はもう済んでいる） */
+  if(r.dateMismatch) warn.push('この画像の日付は '+r.dateOnShot+' と読めましたが、'+(r.dateKey||'')+' ぶんとして取り込みました');
   /* ⚠️検算が合わない行＝OCRの桁読み違いの疑い。保存はしてあるので、TRUSTの現物と見比べる */
   /* ⚠️検算が合わない＝どこかを読み違えている。ただし【日払いが誤りとは限らない】。
      伝票と同じ額が読めているなら、読み違えているのは支給額合計か残り支給額の側。
