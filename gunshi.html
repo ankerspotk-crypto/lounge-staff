@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-26f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1909,16 +1909,48 @@ function trustShotNext_(files,i){
     setTimeout(trustEntryRefresh_,1800);
     return;
   }
-  var f=files[i], rd=new FileReader();
-  rd.onerror=function(){ trustShotDone_(files,i,{ok:false,error:'画像を読めませんでした'}); };
-  rd.onload=function(e){
-    var du=String((e.target&&e.target.result)||'');
+  var f=files[i];
+  /* ⚠️原本のまま送らない。iPadで撮った写真は数MBあり、アップロードだけでタイムアウトを食い潰す
+     （閉店チェックの伝票写真 ccPhoto は昔から縮めてから送っている＝同じ file 内に先例あり）。
+     ただし日報は数字が詰まった表なので、伝票写真の1000pxまで縮めると桁が潰れる。長辺2200px・JPEG0.85で送る。 */
+  trustShotShrink_(f).then(function(o){
     var dk=(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||'';
-    gsr('importTrustReportShot',{base64:du.split(',')[1],mime:f.type||'image/png',dateKey:dk})
+    gsr('importTrustReportShot',{base64:o.base64,mime:o.mime,dateKey:dk})
       .then(function(r){ trustShotDone_(files,i,r); })
-      .catch(function(){ trustShotDone_(files,i,{ok:false,error:'通信エラー'}); });
-  };
-  rd.readAsDataURL(f);
+      .catch(function(err){
+        /* タイムアウトと本当の通信断は原因も対処も違う＝言い分ける */
+        var msg = (err && err.__gsrAbort) ? '時間切れ（回線が遅いようです。1枚ずつ選び直してもう一度）'
+                : (err && err.__gsrKind==='server') ? ((err.message)||'サーバーエラー')
+                : '通信エラー（電波を確かめてもう一度）';
+        trustShotDone_(files,i,{ok:false,error:msg});
+      });
+  }).catch(function(){ trustShotDone_(files,i,{ok:false,error:'画像を読めませんでした'}); });
+}
+/* 日報スクショを送信用に縮める。長辺2200px・JPEG0.85（表の数字が読める下限を実測で決めた上限側）。
+   元が小さい画像は拡大しない。canvasが使えない等で失敗したら原本のまま送る（読めないより送る方がまし）。 */
+function trustShotShrink_(file){
+  return new Promise(function(resolve,reject){
+    var rd=new FileReader();
+    rd.onerror=function(){ reject(new Error('read')); };
+    rd.onload=function(e){
+      var du=String((e.target&&e.target.result)||'');
+      var img=new Image();
+      img.onerror=function(){ resolve({base64:du.split(',')[1],mime:file.type||'image/png'}); };
+      img.onload=function(){
+        try{
+          var MAX=2200,w=img.width,h=img.height;
+          if(w>MAX||h>MAX){ if(w>h){h=Math.round(h*MAX/w);w=MAX;} else {w=Math.round(w*MAX/h);h=MAX;} }
+          var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+          cv.getContext('2d').drawImage(img,0,0,w,h);
+          var out=cv.toDataURL('image/jpeg',0.85);
+          if(!out||out.length<100){ resolve({base64:du.split(',')[1],mime:file.type||'image/png'}); return; }
+          resolve({base64:out.split(',')[1],mime:'image/jpeg'});
+        }catch(_){ resolve({base64:du.split(',')[1],mime:file.type||'image/png'}); }
+      };
+      img.src=du;
+    };
+    rd.readAsDataURL(file);
+  });
 }
 function trustShotDone_(files,i,r){
   TRS.done=i+1;
@@ -9074,6 +9106,11 @@ function okCancel(name){
    ⚠️リトライは冪等な読取り関数(GSR_RETRY_SAFE)だけ。書込みは二重送信を避けるため絶対に再送しない。
    ⚠️serverはリトライしても同じ＝再送しない（安全側）。 */
 var GSR_TIMEOUT_MS = 20000;
+/* ⚠️この関数だけ20秒では足りない、を明示する表。共通の20秒は触らない（他の全画面に効いてしまう）。
+   日報スクショの取り込みは Gemini往復で実測6〜12秒＋画像アップロード＋GASの起動(約1.9秒)。
+   20秒だとアボートして「通信エラー」になり、しかも書込み系なのでリトライもされない（二重登録を防ぐため正しい）。
+   実際に3枚とも失敗した（2026-08-27 ボス報告）。 */
+var GSR_TIMEOUT_OVERRIDE = { importTrustReportShot: 90000 };
 /* 高頻度ポーリングの読取り＝二重実行しても無害。ここに載る関数だけ1回リトライする。 */
 var GSR_RETRY_SAFE = {
   getKioskHall2:1, getKioskReservations:1, getKioskTsukemawashi:1, getKioskShiftBoard:1,
@@ -9093,7 +9130,8 @@ function gsrLog_(fn, kind, status, ms, msg){
 function gsrOnce_(fn, args){
   var t0 = Date.now();
   var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
-  var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(_){}}, GSR_TIMEOUT_MS) : null;
+  var tmo = GSR_TIMEOUT_OVERRIDE[fn] || GSR_TIMEOUT_MS;
+  var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(_){}}, tmo) : null;
   var opt = { method:'POST', body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:args}) };
   if(ctrl) opt.signal = ctrl.signal;
   return fetch(GAS_URL, opt).then(function(r){
