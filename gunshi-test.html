@@ -2184,6 +2184,15 @@ function cfSteps_(){
      ⛔ここに在庫の判定（発注点割れ等）を足さないこと。必須工程は cfSteps_・気づかせる系は cfWarnItems_ で分ける
         （同じ条件を2箇所で判定して締めが詰む事故を2026-08-25に2回踏んでいる）。品目を見るなら業務メニュー📋在庫発注管理。 */
   var sakeOk=!!homeChecks()['cf_sake'];
+  // 📦 届いていない発注＝1件ずつ何かを選ばせる（見えているだけでは片付かなかった）
+  var oaAll=oaList_(), oaPend=oaPending_();
+  S.push({id:'cf_order',em:'📦',t:'届いていない発注を片付ける',
+    s:(ORDER_ALERTS==null)?'確認中…'
+      :(oaAll.length
+        ? (oaPend.length? oaPend.length+'件が未対応（催促したか、明日へ持ち越すか決めてください）' : '全'+oaAll.length+'件に対応しました')
+        : '未着はありません'),
+    state:(ORDER_ALERTS==null)?'wait':(oaPend.length?'todo':'done'),
+    act:'openOrderTriage()'});
   S.push({id:'cf_sake',em:'🍶',t:'酒屋へ発注する',
     s:sakeOk?'確認しました':'足りない酒を確かめて発注（発注が要らない日もチェック）',
     state:sakeOk?'done':'todo',act:"toggleHomeCheck('cf_sake')",manual:true});
@@ -2432,8 +2441,73 @@ function loadOrderAlerts(){
     overdueCount:1,shortageCount:1,vendorOverdueCount:3,vendorShortageCount:1}; if(viewMode==='home')renderHome(); return; }
   if(_oaLoading)return; _oaLoading=true;
   gsr('getOrderAlerts').then(function(r){ _oaLoading=false; ORDER_ALERTS=r||{overdue:[],shortage:[]}; if(viewMode==='home')renderHome(); })
-    .catch(function(){ _oaLoading=false; });   // 未デプロイ等で落ちてもホームは壊さない（カード非表示のまま）
+    .catch(function(){ _oaLoading=false;
+      /* ⚠️取れなかった夜に閉店ゲートを塞がない＝安全側に倒して「未着なし」で通す。
+         nullのままだと cf_order が永久に wait になり、GASが不調な夜は誰も帰れなくなる。 */
+      if(ORDER_ALERTS==null) ORDER_ALERTS={overdue:[],shortage:[],vendorOverdue:[],vendorShortage:[],err:true};
+      if(viewMode==='home')renderHome();
+    });   // 未デプロイ等で落ちてもホームは壊さない（カード非表示のまま）
 }
+/* ===== 📦 届いていない発注の始末（放置させない・2026-08-27 ボス指示） =====
+   痛み＝「発注したのに届いていない物が放置され気味」。赤カードでホームに出してはいたが、
+   ⭐見えているだけでは片付かなかった。閉店の必須工程に入れて「1件ずつ何かを選ぶ」ことを求める。
+   ⚠️逃げ道は残す＝「明日でいい」。逃げ道を塞ぐと現場が詰まり、もっと悪い抜け道を作られる。
+     ただし超過が OA_LATE_LIMIT_ 日を超えたものは持ち越させない＝催促するか、欠品/終売に落とすか選ばせる。
+   ⚠️状態変更(納品✓/欠品/終売)はここに作らない＝在庫発注管理へ飛ばす。
+     同じ操作を2箇所に置くと必ず片方が腐る。実際に状態が変われば getOrderAlerts から消えて自動で片付く。
+   ⚠️記録はその日限り(homeChecks)＝翌日また訊く。「何日超過か」で圧をかける
+     （連続持ち越し日数はbackendが要るので今回は持たない）。
+   ⛔新しいGAS関数を作っていない＝版を消費しない。読むのは既ロードの ORDER_ALERTS だけ。 */
+var OA_LATE_LIMIT_=7;   /* これを超えたら「明日でいい」を出さない */
+function oaKey_(kind,rowIdx){ return 'oa_'+kind+rowIdx; }
+/* 未着＝業者発注(V)＋手タップ発注ログ(M)。欠品・終売は「把握済み」なので対象にしない */
+function oaList_(){
+  var a=ORDER_ALERTS||{};
+  return (a.vendorOverdue||[]).map(function(it){ return {kind:'V',it:it}; })
+    .concat((a.overdue||[]).map(function(it){ return {kind:'M',it:it}; }));
+}
+function oaPending_(){
+  var c=homeChecks();
+  return oaList_().filter(function(x){ return !c[oaKey_(x.kind,x.it.rowIdx)]; });
+}
+function oaMark(kind,rowIdx,how){
+  var c=homeChecks(); c[oaKey_(kind,rowIdx)]=how;
+  try{ localStorage.setItem(homeCheckKey(),JSON.stringify(c)); }catch(e){}
+  var b=document.getElementById('sheetBody'); if(b)b.innerHTML=oaTriageHtml();
+  renderHome();
+  toast(how==='push'?'📞 催促したと記録しました':'➡️ 明日へ持ち越しました');
+}
+function oaTriageHtml(){
+  var list=oaList_();
+  if(!list.length) return '<div class="empty-msg">届いていない発注はありません</div>';
+  var c=homeChecks();
+  var h='<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:11px">'
+    +'届いた物は「在庫発注管理」で納品✓を入れれば、この一覧から自動で消えます。<br>'
+    +'今夜どうにもならない物は <b>催促した</b> か <b>明日でいい</b> を選んでください。'
+    +'</div>';
+  return h+list.map(function(x){
+    var it=x.it, st=c[oaKey_(x.kind,it.rowIdx)], late=Number(it.overdueDays||0);
+    var canTomo=late<=OA_LATE_LIMIT_;
+    var tag=(x.kind==='V')
+      ? '<span class="oa-vtag">🏭'+esc(it.supplier||'業者')+'</span>'
+      : (it.floor?'<span class="oa-fl">['+esc(it.floor)+']</span>':'');
+    var stLbl=(st==='push')?'📞 催促したと記録しました':((st==='tomo')?'➡️ 明日へ持ち越しました':'');
+    return '<div class="cc-slip">'
+      +'<div style="font-size:13.5px;font-weight:700;color:var(--txt)">'
+        +esc(it.name)+(it.qty?' ×'+esc(it.qty)+esc(it.unit||''):'')+' '+tag+'</div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-top:3px">予定 '+esc(it.eta||'—')
+        +'　<b style="color:'+(late>OA_LATE_LIMIT_?'#ff9a9a':'var(--gold)')+'">'+late+'日超過</b></div>'
+      +(stLbl?'<div style="font-size:12px;color:var(--green);margin-top:6px">'+stLbl+'</div>':'')
+      +'<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;align-items:center">'
+        +'<button class="bm-btn sm" onclick="closeSheet();openStockManager()">📦 在庫発注管理で直す</button>'
+        +'<button class="bm-btn sm" onclick="oaMark(\''+x.kind+'\','+it.rowIdx+',\'push\')">📞 催促した</button>'
+        +(canTomo
+          ? '<button class="bm-btn sm" onclick="oaMark(\''+x.kind+'\','+it.rowIdx+',\'tomo\')">➡️ 明日でいい</button>'
+          : '<span style="font-size:11.5px;color:#ff9a9a;line-height:1.5">'+OA_LATE_LIMIT_+'日超過＝持ち越せません。<br>催促するか、在庫発注管理で欠品・終売にしてください</span>')
+      +'</div></div>';
+  }).join('');
+}
+function openOrderTriage(){ closeMenu(); showSheet('📦 届いていない発注', oaTriageHtml(), true); }   /* wide=true＝ボタン3つが狭いシートで見切れる */
 function orderAlertCardHtml(){
   var a=ORDER_ALERTS; if(!a)return '';
   var od=a.overdue||[], sh=a.shortage||[], vod=a.vendorOverdue||[], vsh=a.vendorShortage||[];
