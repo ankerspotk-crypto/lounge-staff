@@ -487,6 +487,7 @@ const TRUST_TAB        = 'TRUST報酬';
 const CASH_CHECK_TAB     = '現金管理';
 const OPENING_CHECK_TAB  = '現金管理_開店';
 const SAFE_WITHDRAWAL_TAB = '金庫出金ログ';
+const SAFE_DEPOSIT_TAB    = '金庫入金ログ';   // 🏦 管理者が金庫へ入れた現金（黒服LINE「金庫追加」）
 const CASH_THRESHOLDS_PROP_ = 'CASH_THRESHOLDS_JSON';
 const HOLIDAYS_PROP_        = 'HOLIDAYS_JSON'; // 店休日リスト [{date:'yyyy-MM-dd', label:'お盆休み'}]
 const HAKEN_NAME_MAP_TAB = '派遣名マッピング';
@@ -2600,7 +2601,8 @@ function adminGetDenpyoDay(userId, dateKey) {
       { key: 'delivery',  title: '📦 納品記録',        data: read('納品記録', '金額') },
       { key: 'cashClose', title: '🔒 閉店現金チェック', data: read(CASH_CHECK_TAB, '差額') },
       { key: 'cashOpen',  title: '🌅 開店現金',        data: read(OPENING_CHECK_TAB, null) },
-      { key: 'safe',      title: '🏦 金庫出金',        data: read(SAFE_WITHDRAWAL_TAB, '出金金額') }
+      { key: 'safe',      title: '🏦 金庫出金',        data: read(SAFE_WITHDRAWAL_TAB, '出金金額') },
+      { key: 'safeIn',    title: '🏦 金庫追加',        data: read(SAFE_DEPOSIT_TAB, '入金金額') }
     ]
   };
 }
@@ -5200,6 +5202,10 @@ function setShiftTimeToday_(name, time){
 function handleKurofuku(event, text, userId) {
   if (text === 'ping') { reply(event.replyToken, 'pong ✅ v62-req20'); return; }
 
+  // 🏦 金庫追加（管理者のみ）: 「金庫追加」→ 万/五千/千の枚数を1問ずつ→確認→記録。
+  //    会話状態は発言者ごと＝他メンバーの発言は素通り。数字以外が来たら false で通常処理へ落ちる。
+  if (handleSafeDeposit_(event, text, userId)) return;
+
   // 当日相談の承認/却下（AI家康くん経由）: #相談承認 名前 / #相談却下 名前 [メモ]
   var conM = text.match(/^[#＃]相談(承認|却下)[\s　]+(.+)$/);
   if (conM) { handleShiftConsultDecision_(event, userId, conM[1], conM[2]); return; }
@@ -5222,6 +5228,12 @@ function handleKurofuku(event, text, userId) {
       '検索 ◯◯様　　　→ 会員情報を表示',
       '#席状況　　　　→ 全席の状況を確認',
       '在庫確認 獺祭　→ 在庫を2F/5F別に本数表示',
+      '',
+      '【金庫（管理者のみ）】',
+      '金庫追加　　　→ 金庫に入れた札の枚数を聞いて残高に反映',
+      '　　（「金庫追加 万3 千5」の一括入力も可）',
+      '金庫追加 確認　→ 金庫の見込み残高を表示',
+      '金庫追加 取消　→ 直前の金庫追加を取り消す',
       '',
       '【派遣】',
       '#派遣 田中 鈴木　→ 派遣スタッフを手動登録',
@@ -17376,7 +17388,17 @@ function getOpeningCheckInit() {
   const sh = getOpeningCheckSheet_();
   const rowIdx = findOpeningCheckRow_(sh, dateKey);
   const prevClose = getPrevClosingCheck_();
-  if (rowIdx < 0) return { dateKey, locked: false, prevClose };
+  // 🏦 管理者の金庫追加（黒服LINE「金庫追加」）。未提出なら「前日残額の自動入力」に上乗せする
+  //    ＝金庫を開けずに開店チェックを通しても、追加した分だけ金庫が増えた状態で繰り越される。
+  const safeDep = (function () { try { return safeDepositSummary_(dateKey); } catch (e) { return { total: 0, before: 0, after: 0, list: [] }; } })();
+  if (rowIdx < 0) {
+    if (prevClose && safeDep.total) {
+      prevClose.bags.safeRaw = prevClose.bags.safe;          // 前日締めの生値（表示用に残す）
+      prevClose.bags.safe    = prevClose.bags.safe + safeDep.total;
+      prevClose.safeAdded    = safeDep.total;
+    }
+    return { dateKey, locked: false, prevClose, safeDeposit: safeDep };
+  }
   const row = sh.getRange(rowIdx, 1, 1, OPENING_CHECK_HEADERS_.length).getValues()[0];
   let safeUnchecked = false;
   try { safeUnchecked = !!JSON.parse(String(row[3]))._safeUnchecked; } catch (e) {}
@@ -17387,7 +17409,10 @@ function getOpeningCheckInit() {
     total: Number(row[8]) || 0,
     safeAdjust: Number(row[9]) || 0,
     safeUnchecked,
-    prevClose
+    prevClose,
+    safeDeposit: safeDep,
+    // 開店カウント後に足された金庫追加を載せた「今あるはずの金庫」。閉店の「数えない」はこれを使う
+    safeNow: (Number(row[7]) || 0) + safeDep.after
   };
 }
 
@@ -17418,9 +17443,16 @@ function submitOpeningCheck(payload) {
     ]);
 
     const lines = ['【開店の現金】' + dateKey, '報告者　' + reporterName, formatBagsShort_(bags), 'スタート合計　¥' + total.toLocaleString()];
+    // 🏦 前日比の差は「管理者の金庫追加」で説明がつく分を先に差し引き、残りだけを"抜き差し?"として出す
+    const _dep = (function () { try { return safeDepositSummary_(dateKey); } catch (e) { return { total: 0, before: 0, after: 0 }; } })();
     if (prev && safeAdjust !== 0) {
       lines.push('', '金庫　前日¥' + prevSafe.toLocaleString() + ' → ¥' + safeNow.toLocaleString()
-        + '（' + (safeAdjust > 0 ? '+' : '') + safeAdjust.toLocaleString() + '円・営業時間外の運営者の抜き差し）');
+        + '（' + (safeAdjust > 0 ? '+' : '') + safeAdjust.toLocaleString() + '円）');
+      if (_dep.before) lines.push('　うち 管理者の金庫追加　+¥' + _dep.before.toLocaleString());
+      const _unexp = safeAdjust - _dep.before;
+      if (_unexp !== 0) lines.push('　説明のつかない差　' + (_unexp > 0 ? '+' : '') + _unexp.toLocaleString() + '円（営業時間外の抜き差し?）');
+    } else if (_dep.before) {
+      lines.push('', '🏦 本日の金庫追加（管理者）　+¥' + _dep.before.toLocaleString() + ' を含みます');
     }
     if (safeUnchecked) {
       lines.push('', '🔒 金庫は未確認（前日の残額 ¥' + safeNow.toLocaleString() + ' をそのまま使用）');
@@ -17614,6 +17646,308 @@ function getSafeAdminNames_() {
     if (name && String(rows[i][4]).trim() === '○' && names.indexOf(name) < 0) names.push(name);
   }
   return names;
+}
+
+// ============================================================
+// 🏦 金庫追加（管理者が金庫へ現金を入れた記録）＝黒服LINE「金庫追加」の会話フロー
+//  ⚠️ 金庫出金(submitSafeWithdrawal)との決定的な違い：
+//     金庫出金＝金庫→レジの「移動」なので4袋合計は変わらない（照合式に影響しない）。
+//     金庫追加＝店の外から入ってくる現金なので4袋合計が増える＝閉店の「残るはず」が変わる。
+//  二重計上を防ぐため、記録時点で開店チェックが提出済みかを列に焼いておく：
+//     ・開店チェック提出前の追加 … 開店の金庫カウント（＝手で数える／前日残額の自動入力）に含まれる
+//                                   → getOpeningCheckInit の繰越に上乗せする。閉店では加算しない。
+//     ・開店チェック提出後の追加 … 開店のカウントには入っていない
+//                                   → 閉店の「残るはず」に加算する。
+// ============================================================
+const SAFE_DEPOSIT_HEADERS_ = ['日付', '時刻', '報告者', '入金内訳', '入金金額', '開店提出後', '状態', 'メモ'];
+
+// 金庫入金ログシートを取得（なければ作成）
+function getSafeDepositSheet_() {
+  const ss = getOrOpenSS_();
+  let sh = ss.getSheetByName(SAFE_DEPOSIT_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(SAFE_DEPOSIT_TAB);
+    sh.appendRow(SAFE_DEPOSIT_HEADERS_);
+  }
+  return sh;
+}
+
+// 指定営業日の金庫追加（取消を除く）: {total, before, after, list}
+//   before = 開店チェック提出前の追加 ／ after = 提出後の追加
+function safeDepositSummary_(dateKey) {
+  const d = String(dateKey || bizDateStr_());
+  const sh = getSafeDepositSheet_();
+  const rows = sh.getDataRange().getValues();
+  let total = 0, before = 0, after = 0;
+  const list = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const dk = r[0] instanceof Date ? Utilities.formatDate(r[0], TZ, 'yyyy-MM-dd') : String(r[0]).trim();
+    if (dk !== d) continue;
+    if (String(r[6] || '').trim() === '取消') continue;
+    const yen = Number(r[4]) || 0;
+    const isAfter = !!String(r[5] || '').trim();
+    total += yen;
+    if (isAfter) after += yen; else before += yen;
+    list.push({
+      rowNum: i + 1, time: fmtStamp_(r[1]), name: String(r[2] || ''),
+      detail: String(r[3] || ''), yen: yen, afterOpening: isAfter
+    });
+  }
+  return { total: total, before: before, after: after, list: list };
+}
+
+// 金庫の見込み残高。基準＝開店提出済みならその金庫カウント／未提出なら前日締めの金庫。
+//   そこへ「本日の金庫追加」を足し、「本日の金庫出金」を引く。人が検算できるよう内訳ごと返す。
+function safeBalanceEstimate_(dateKey) {
+  const d = String(dateKey || bizDateStr_());
+  const dep = safeDepositSummary_(d);
+  let out = 0;
+  try { out = getSafeWithdrawalTotalToday_(d) || 0; } catch (e) {}
+  const sh = getOpeningCheckSheet_();
+  const rowIdx = findOpeningCheckRow_(sh, d);
+  let base = 0, baseLabel = '', add = 0;
+  if (rowIdx > 0) {
+    base = Number(sh.getRange(rowIdx, 8).getValue()) || 0; // 8列目＝金庫合計
+    baseLabel = '開店の金庫';
+    add = dep.after;                                       // 提出前の分は既に開店カウントに入っている
+  } else {
+    const pv = getPrevClosingCheck_();
+    base = pv ? (Number(pv.bags.safe) || 0) : 0;
+    baseLabel = pv ? '前日締めの金庫' : '基準なし';
+    add = dep.total;
+  }
+  return {
+    openLocked: rowIdx > 0, base: base, baseLabel: baseLabel,
+    deposit: add, depositAll: dep.total, withdrawal: out,
+    now: base + add - out
+  };
+}
+
+// 金庫追加を1件記録する。denom = {m10000,m5000,m1000}
+function submitSafeDeposit_(reporterName, denom, memo) {
+  try {
+    const name = String(reporterName || '').trim();
+    if (!name) return { ok: false, error: '報告者が特定できません' };
+    const yen = denomYen_(denom);
+    if (!yen) return { ok: false, error: '追加する金額が¥0です' };
+
+    const dateKey = bizDateStr_();
+    let openLocked = false;
+    try { openLocked = findOpeningCheckRow_(getOpeningCheckSheet_(), dateKey) > 0; } catch (e) {}
+
+    const sh = getSafeDepositSheet_();
+    sh.appendRow([dateKey, new Date(), name, formatDenom_(denom), yen, openLocked ? '○' : '', '', String(memo || '')]);
+
+    return {
+      ok: true, dateKey: dateKey, yen: yen, detail: formatDenom_(denom),
+      afterOpening: openLocked, reporterName: name, est: safeBalanceEstimate_(dateKey)
+    };
+  } catch (e) {
+    console.error('submitSafeDeposit_ error:', e);
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
+// 本日の金庫追加のうち、最後の1件を取り消す（打ち間違いの救済。行は消さず「取消」で残す）
+function cancelLastSafeDeposit_(byName) {
+  const dateKey = bizDateStr_();
+  const dep = safeDepositSummary_(dateKey);
+  if (!dep.list.length) return { ok: false, error: '本日の金庫追加の記録がありません' };
+  const last = dep.list[dep.list.length - 1];
+  const sh = getSafeDepositSheet_();
+  sh.getRange(last.rowNum, 7).setValue('取消');
+  sh.getRange(last.rowNum, 8).setValue('取消: ' + String(byName || '') + ' ' + nowStamp_());
+  return { ok: true, target: last, est: safeBalanceEstimate_(dateKey) };
+}
+
+// ── 黒服LINE「金庫追加」の2〜4ターン会話 ───────────────────────────
+//  状態は ScriptProperty 'SAFEADD_<userId>'（発言者ごと＝他のメンバーの発言は一切飲み込まない）。
+//  15分で期限切れ。数字として読めない発言が来たら会話を畳んで false を返す
+//  ＝「承認」等の通常コマンドをグループで塞がない（ここを塞ぐと店が止まる）。
+const SAFE_ADD_STEPS_ = [
+  { k: 'm10000', label: '10,000円札', no: '①' },
+  { k: 'm5000',  label: '5,000円札',  no: '②' },
+  { k: 'm1000',  label: '1,000円札',  no: '③' }
+];
+function safeAddKey_(userId) { return 'SAFEADD_' + userId; }
+function safeAddClear_(userId) { try { PropertiesService.getScriptProperties().deleteProperty(safeAddKey_(userId)); } catch (e) {} }
+function safeAddGet_(userId) {
+  const raw = prop(safeAddKey_(userId));
+  if (!raw) return null;
+  let st = null;
+  try { st = JSON.parse(raw); } catch (e) { st = null; }
+  if (!st || !st.at || (Date.now() - Number(st.at)) > 15 * 60 * 1000) { safeAddClear_(userId); return null; }
+  return st;
+}
+function safeAddPut_(userId, st) { st.at = Date.now(); setProp(safeAddKey_(userId), JSON.stringify(st)); }
+
+// 「3」「3枚」「なし」「0」→ 枚数。読めなければ null
+function safeAddParseCount_(t) {
+  const s = String(t || '').trim().replace(/[０-９]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0xFEE0); });
+  if (!s) return null;
+  if (/^(なし|無し|ない|ゼロ|zero)$/i.test(s)) return 0;
+  const m = s.match(/^\D{0,3}(\d{1,4})\s*(枚|まい)?\D{0,3}$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return (isFinite(n) && n >= 0 && n <= 9999) ? n : null;
+}
+
+// 一括入力: 「金庫追加 万3 千5」「金庫追加 3 0 5」。読めなければ null → 1問ずつの会話に落ちる
+function safeAddParseQuick_(str) {
+  let t = String(str || '').trim().replace(/[０-９]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0xFEE0); });
+  if (!t) return null;
+  const out = { m10000: 0, m5000: 0, m1000: 0 };
+  let hit = false;
+  // ⚠️ 「10000」は「1000」を含む＝長い額面から順に取り、当たった部分は必ず消してから次を見る
+  [
+    { k: 'm10000', re: /(?:1万|一万|10,?000|万)\s*円?\s*札?\s*[×xX*]?\s*(\d{1,4})\s*(?:枚)?/ },
+    { k: 'm5000',  re: /(?:5千|五千|5,?000)\s*円?\s*札?\s*[×xX*]?\s*(\d{1,4})\s*(?:枚)?/ },
+    { k: 'm1000',  re: /(?:1千|一千|千|1,?000)\s*円?\s*札?\s*[×xX*]?\s*(\d{1,4})\s*(?:枚)?/ }
+  ].forEach(function (p) {
+    const m = t.match(p.re);
+    if (m) { out[p.k] = parseInt(m[1], 10) || 0; t = t.replace(m[0], ' '); hit = true; }
+  });
+  if (hit) return (out.m10000 + out.m5000 + out.m1000) ? out : null;
+  // ラベル無し「3 0 5」＝万・五千・千の順
+  const nums = t.split(/[\s　,、\/]+/).filter(String);
+  if (nums.length >= 2 && nums.length <= 3 && nums.every(function (n) { return /^\d{1,4}$/.test(n); })) {
+    out.m10000 = parseInt(nums[0], 10) || 0;
+    out.m5000  = parseInt(nums[1], 10) || 0;
+    out.m1000  = nums[2] ? (parseInt(nums[2], 10) || 0) : 0;
+    return (out.m10000 + out.m5000 + out.m1000) ? out : null;
+  }
+  return null;
+}
+
+// 確認画面の本文（確定前に「いくらになるか」を必ず見せる＝これが金庫追加の目的）
+function safeAddConfirmText_(st) {
+  const denom = { m10000: st.m10000 || 0, m5000: st.m5000 || 0, m1000: st.m1000 || 0 };
+  const yen = denomYen_(denom);
+  const est = safeBalanceEstimate_(bizDateStr_());
+  const lines = ['🏦【金庫追加の確認】', '報告者　' + st.name, ''];
+  lines.push('追加　' + (formatDenom_(denom) || '（なし）'));
+  lines.push('合計　¥' + yen.toLocaleString());
+  lines.push('');
+  lines.push('金庫　¥' + est.now.toLocaleString() + ' → ¥' + (est.now + yen).toLocaleString());
+  lines.push('（' + est.baseLabel + ' ¥' + est.base.toLocaleString()
+    + (est.deposit ? ' ＋本日の追加 ¥' + est.deposit.toLocaleString() : '')
+    + (est.withdrawal ? ' －本日の金庫出金 ¥' + est.withdrawal.toLocaleString() : '') + '）');
+  if (est.openLocked) lines.push('', '⚠️ 開店チェックは提出済みです。この追加分は本日の締めの「残るはず」に加算します。');
+  lines.push('', 'これでよければ「はい」、やめるなら「取消」と送ってください。');
+  return lines.join('\n');
+}
+
+// 記録完了の本文
+function safeAddDoneText_(r) {
+  const lines = ['🏦【金庫追加 完了】' + r.dateKey, '報告者　' + r.reporterName, ''];
+  lines.push('追加　' + r.detail + '（¥' + r.yen.toLocaleString() + '）');
+  lines.push('金庫の残高　¥' + r.est.now.toLocaleString());
+  lines.push('（' + r.est.baseLabel + ' ¥' + r.est.base.toLocaleString()
+    + (r.est.deposit ? ' ＋本日の追加 ¥' + r.est.deposit.toLocaleString() : '')
+    + (r.est.withdrawal ? ' －本日の金庫出金 ¥' + r.est.withdrawal.toLocaleString() : '') + '）');
+  if (r.afterOpening) lines.push('', '※ 開店チェック提出後の追加＝本日の締めの「残るはず」に加算します');
+  else lines.push('', '※ 開店チェックの金庫（前日残額の自動入力）にこの分を反映済みです');
+  lines.push('', '打ち間違いは「金庫追加 取消」で直前の1件を取り消せます。');
+  return lines.join('\n');
+}
+
+// 戻り値 true=このメッセージを処理した / false=通常処理へ流す
+function handleSafeDeposit_(event, text, userId) {
+  if (!userId) return false;
+  const t = String(text || '').trim();
+  const st = safeAddGet_(userId);
+
+  // ① 会話の途中（この発言者だけが対象）
+  if (st) {
+    if (/^(取消|取り消し|取消し|キャンセル|中止|やめ|やめる|やっぱりやめ)/.test(t)) {
+      safeAddClear_(userId);
+      reply(event.replyToken, '🏦 金庫追加を中止しました。');
+      return true;
+    }
+    if (st.step === 'confirm') {
+      if (/^(はい|ハイ|うん|ok|OK|Ok|了解|確定|登録|送信|yes|Y)$/i.test(t)) {
+        safeAddClear_(userId);
+        const r = submitSafeDeposit_(st.name, { m10000: st.m10000 || 0, m5000: st.m5000 || 0, m1000: st.m1000 || 0 });
+        reply(event.replyToken, r.ok ? safeAddDoneText_(r) : '⚠️ 記録できませんでした: ' + r.error);
+        return true;
+      }
+      if (/^(いいえ|違う|ちがう|やり直|訂正|no)$/i.test(t)) {
+        safeAddPut_(userId, { name: st.name, step: 'm10000' });
+        reply(event.replyToken, '🏦 最初からやり直します。\n① 10,000円札は何枚追加しましたか？（数字だけ／無ければ 0・中止は「取消」）');
+        return true;
+      }
+      safeAddClear_(userId);
+      return false; // 関係ない発言＝会話を畳んで通常処理へ（グループを塞がない）
+    }
+    const n = safeAddParseCount_(t);
+    if (n == null) { safeAddClear_(userId); return false; }
+    const idx = SAFE_ADD_STEPS_.map(function (x) { return x.k; }).indexOf(st.step);
+    if (idx < 0) { safeAddClear_(userId); return false; }
+    st[st.step] = n;
+    if (idx + 1 < SAFE_ADD_STEPS_.length) {
+      const nx = SAFE_ADD_STEPS_[idx + 1];
+      st.step = nx.k;
+      safeAddPut_(userId, st);
+      reply(event.replyToken, nx.no + ' ' + nx.label + 'は何枚追加しましたか？（数字だけ／無ければ 0・中止は「取消」）');
+      return true;
+    }
+    st.step = 'confirm';
+    if (!denomYen_({ m10000: st.m10000 || 0, m5000: st.m5000 || 0, m1000: st.m1000 || 0 })) {
+      safeAddClear_(userId);
+      reply(event.replyToken, '🏦 追加額が¥0のため記録しませんでした。やり直す場合は「金庫追加」と送ってください。');
+      return true;
+    }
+    safeAddPut_(userId, st);
+    reply(event.replyToken, safeAddConfirmText_(st));
+    return true;
+  }
+
+  // ② 起動: 「金庫追加」「金庫入金」「金庫に追加」
+  const trig = t.match(/^金庫(?:に|へ)?(?:追加|入金|補充)[\s　]*(.*)$/);
+  if (!trig) return false;
+
+  const name = getStaffName(userId) || '';
+  if (!isAdmin_(name)) {
+    reply(event.replyToken, '⚠️ 金庫追加は管理者のみが記録できます。' + (name ? '' : '\n（先に「#登録 名前」でスタッフ登録をしてください）'));
+    return true;
+  }
+
+  const rest = String(trig[1] || '').trim();
+  if (/^(取消|取り消し|取消し|キャンセル)$/.test(rest)) {
+    const c = cancelLastSafeDeposit_(name);
+    reply(event.replyToken, c.ok
+      ? ['🏦【金庫追加 取消】', '取り消し　' + c.target.detail + '（¥' + c.target.yen.toLocaleString() + '・' + c.target.name + '）',
+         '金庫の残高　¥' + c.est.now.toLocaleString()].join('\n')
+      : '⚠️ ' + c.error);
+    return true;
+  }
+  if (/^(確認|残高|いくら)$/.test(rest)) {
+    const e2 = safeBalanceEstimate_(bizDateStr_());
+    reply(event.replyToken, ['🏦【金庫の残高（見込み）】', '¥' + e2.now.toLocaleString(),
+      '（' + e2.baseLabel + ' ¥' + e2.base.toLocaleString()
+      + (e2.deposit ? ' ＋本日の追加 ¥' + e2.deposit.toLocaleString() : '')
+      + (e2.withdrawal ? ' －本日の金庫出金 ¥' + e2.withdrawal.toLocaleString() : '') + '）'].join('\n'));
+    return true;
+  }
+
+  const quick = safeAddParseQuick_(rest);
+  if (quick) {
+    const st2 = { name: name, step: 'confirm', m10000: quick.m10000, m5000: quick.m5000, m1000: quick.m1000 };
+    safeAddPut_(userId, st2);
+    reply(event.replyToken, safeAddConfirmText_(st2));
+    return true;
+  }
+
+  safeAddPut_(userId, { name: name, step: 'm10000' });
+  reply(event.replyToken, [
+    '🏦【金庫追加】' + name + 'さん',
+    '金庫に入れたお札の枚数を教えてください。',
+    '',
+    '① 10,000円札は何枚追加しましたか？',
+    '（数字だけ／無ければ 0・中止は「取消」）'
+  ].join('\n'));
+  return true;
 }
 
 // 当日の現金チェックが承認済みか（黒服の退勤ゲートに使用。りく/管理者の承認で解除）
@@ -18341,6 +18675,10 @@ function getCashCheckInit() {
     approver: '',
     approvedAt: '',
     safeUnchecked: false,
+    // 🏦 開店チェック後に管理者が足した金庫追加。閉店の「金庫を数えない」はこれを載せた額を使う
+    safeDepositAfterOpening: (openingInit.safeDeposit ? (openingInit.safeDeposit.after || 0) : 0),
+    openingSafe: openingInit.locked ? (Number((openingInit.bags || {}).safe) || 0) : null,
+    openingSafeNow: openingInit.locked ? (Number(openingInit.safeNow != null ? openingInit.safeNow : (openingInit.bags || {}).safe) || 0) : null,
     souvenirStock: getSouvenirStock_()
   };
   if (rowIdx > 0) {
@@ -18409,10 +18747,14 @@ function submitCashCheck(payload) {
     const actual = bagsTotalYen_(bags);
     const openingInit = getOpeningCheckInit();
 
-    // 残るはず = スタート(開店4袋) + 現金売上 - 伝票合計 ／ 実測 = 閉店4袋合計 ／ 差額の±許容内で「合」
+    // 🏦 開店チェック提出「後」に管理者が金庫へ入れた現金＝開店カウントに入っていない外部からの増加。
+    //    提出「前」の分は開店の金庫カウントに既に含まれるのでここでは足さない（二重計上の防止）。
+    const safeAddAfter = (function () { try { return safeDepositSummary_(dateKey).after; } catch (e) { return 0; } })();
+
+    // 残るはず = スタート(開店4袋) + 現金売上 + 金庫追加(開店後) - 伝票合計 ／ 実測 = 閉店4袋合計 ／ 差額の±許容内で「合」
     let expected = '', diff = '', judg = '';
     if (openingInit.locked) {
-      expected = openingInit.total + cashSalesInput - slipTotal;
+      expected = openingInit.total + cashSalesInput + safeAddAfter - slipTotal;
       diff = expected - actual;
       judg = Math.abs(diff) <= CASH_TOLERANCE_ ? '合' : '要確認';
     }
@@ -18453,6 +18795,7 @@ function submitCashCheck(payload) {
     } else {
       lines.push('🌅 スタート　¥' + openingInit.total.toLocaleString());
       lines.push('＋ 現金売上　¥' + cashSalesInput.toLocaleString());
+      if (safeAddAfter) lines.push('＋ 金庫追加（開店後）¥' + safeAddAfter.toLocaleString());
       lines.push('－ 伝票 出金　¥' + slipTotal.toLocaleString());
       lines.push('＝ 残るはず　¥' + expected.toLocaleString());
       lines.push('　実測（4袋）¥' + actual.toLocaleString());
