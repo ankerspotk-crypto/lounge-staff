@@ -1525,7 +1525,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27a-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28a-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -5259,8 +5259,10 @@ function bmSlipLines_(d,c,bill,mode){
   L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
   L.push({t:'',a:'l'});
   /* ⚠️ボス指示＝**未領収金は出さない**（合計が分かれば足りる）。
-     会計伝票（会計前）は支払欄も出さない＝まだ払っていないため。控え2枚には出す。 */
-  if(c.paid>0){
+     会計伝票（会計前）は支払欄も出さない＝まだ払っていないため。控え2枚には出す。
+     ⚠️2026-08-28修正＝`c.paid>0`だけで判定していたので、**⑧に支払を入れた後に会計伝票を出し直すと
+       お客様に見せる紙にお預り／お釣りが載っていた**。判定は必ず**mode**で切る（金額の状態で切らない）。 */
+  if((guest||store)&&c.paid>0){
     if(d.pay.cash)   L.push({t:bmPadR_('お預り（現金）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.cash),14),a:'l'});
     if(d.pay.card)   L.push({t:bmPadR_('カード',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
     if(d.pay.credit) L.push({t:bmPadR_('請求書払い',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
