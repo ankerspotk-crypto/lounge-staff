@@ -2185,7 +2185,10 @@ function cfSteps_(){
   S.push({id:'cf_order',em:'📦',t:'届いていない発注を片付ける',
     s:(ORDER_ALERTS==null)?'確認中…'
       :(oaAll.length
-        ? (oaPend.length? oaPend.length+'件が未対応（催促したか、明日へ持ち越すか決めてください）' : '全'+oaAll.length+'件に対応しました')
+        ? (oaPend.length
+            ? oaPend.length+'件が未対応（催促・社員不在・持ち越しから選んでください）'
+            : '全'+oaAll.length+'件に対応しました'
+              +(oaCountBy_('nostaff')?'（うち'+oaCountBy_('nostaff')+'件は社員不在で翌日へ）':''))
         : '未着はありません'),
     state:(ORDER_ALERTS==null)?'wait':(oaPend.length?'todo':'done'),
     act:'openOrderTriage()'});
@@ -2469,12 +2472,20 @@ function oaPending_(){
   var c=homeChecks();
   return oaList_().filter(function(x){ return !c[oaKey_(x.kind,x.it.rowIdx)]; });
 }
+/* 対応の内訳（どう片付けたか）。⚠️'nostaff' と 'tomo' はどちらも翌日へ持ち越すが、意味が違うので分けて数える。
+   社員不在＝やりたくてもできない／明日でいい＝黒服の判断。閉店の文言でも分けて出す。 */
+function oaCountBy_(how){
+  var c=homeChecks(), n=0;
+  oaList_().forEach(function(x){ if(c[oaKey_(x.kind,x.it.rowIdx)]===how) n++; });
+  return n;
+}
 function oaMark(kind,rowIdx,how){
   var c=homeChecks(); c[oaKey_(kind,rowIdx)]=how;
   try{ localStorage.setItem(homeCheckKey(),JSON.stringify(c)); }catch(e){}
   var b=document.getElementById('sheetBody'); if(b)b.innerHTML=oaTriageHtml();
   renderHome();
-  toast(how==='push'?'📞 催促したと記録しました':'➡️ 明日へ持ち越しました');
+  toast(how==='push'?'📞 催促したと記録しました'
+    :(how==='nostaff'?'🙅 社員不在で翌日へ持ち越しました':'➡️ 明日へ持ち越しました'));
 }
 function oaTriageHtml(){
   var list=oaList_();
@@ -2482,7 +2493,8 @@ function oaTriageHtml(){
   var c=homeChecks();
   var h='<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:11px">'
     +'届いた物は「在庫発注管理」で納品✓を入れれば、この一覧から自動で消えます。<br>'
-    +'今夜どうにもならない物は <b>催促した</b> か <b>明日でいい</b> を選んでください。'
+    +'今夜どうにもならない物は <b>催促した</b> か <b>明日でいい</b> を選んでください。<br>'
+    +'社員がいなくて判断できない時は <b>🙅 社員がいない</b>。翌日の対応に持ち越します。'
     +'</div>';
   return h+list.map(function(x){
     var it=x.it, st=c[oaKey_(x.kind,it.rowIdx)], late=Number(it.overdueDays||0);
@@ -2490,7 +2502,9 @@ function oaTriageHtml(){
     var tag=(x.kind==='V')
       ? '<span class="oa-vtag">🏭'+esc(it.supplier||'業者')+'</span>'
       : (it.floor?'<span class="oa-fl">['+esc(it.floor)+']</span>':'');
-    var stLbl=(st==='push')?'📞 催促したと記録しました':((st==='tomo')?'➡️ 明日へ持ち越しました':'');
+    var stLbl=(st==='push')?'📞 催促したと記録しました'
+      :((st==='nostaff')?'🙅 社員がいないため翌日へ持ち越しました'
+      :((st==='tomo')?'➡️ 明日へ持ち越しました':''));
     return '<div class="cc-slip">'
       +'<div style="font-size:13.5px;font-weight:700;color:var(--txt)">'
         +esc(it.name)+(it.qty?' ×'+esc(it.qty)+esc(it.unit||''):'')+' '+tag+'</div>'
@@ -2500,9 +2514,12 @@ function oaTriageHtml(){
       +'<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;align-items:center">'
         +'<button class="bm-btn sm" onclick="closeSheet();openStockManager()">📦 在庫発注管理で直す</button>'
         +'<button class="bm-btn sm" onclick="oaMark(\''+x.kind+'\','+it.rowIdx+',\'push\')">📞 催促した</button>'
+        /* ⭐社員不在は超過日数に関わらず常に出す＝バイトだけの夜は催促も欠品判断もできない。
+           ここを塞ぐと「7日超過で逃げ道なし」の夜に現場が詰んで、閉店そのものが回らなくなる。 */
+        +'<button class="bm-btn sm" onclick="oaMark(\''+x.kind+'\','+it.rowIdx+',\'nostaff\')">🙅 社員がいない</button>'
         +(canTomo
           ? '<button class="bm-btn sm" onclick="oaMark(\''+x.kind+'\','+it.rowIdx+',\'tomo\')">➡️ 明日でいい</button>'
-          : '<span style="font-size:11.5px;color:#ff9a9a;line-height:1.5">'+OA_LATE_LIMIT_+'日超過＝持ち越せません。<br>催促するか、在庫発注管理で欠品・終売にしてください</span>')
+          : '<span style="font-size:11.5px;color:#ff9a9a;line-height:1.5">'+OA_LATE_LIMIT_+'日超過＝「明日でいい」では送れません。<br>催促するか、在庫発注管理で欠品・終売に。社員がいない夜は「🙅 社員がいない」を。</span>')
       +'</div></div>';
   }).join('');
 }
