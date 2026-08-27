@@ -1837,7 +1837,7 @@ function hvChk(it){
 var PHASE_DEF=[
   {p:'pre', em:'🌅', t:'開店前', job:'現金セット・仕込み'},
   {p:'mid', em:'🔥', t:'営業中', job:'付け回し・会計'},
-  {p:'post',em:'🌙', t:'閉店',   job:'締め・送り・申し送り'}
+  {p:'post',em:'🌙', t:'閉店',   job:'現金・日払い・締め'}   /* ⛔ここに「送り」を書くな＝送りは締めの工程から外れている（ボス確定 2026-08-26。締めの時点で送りはもう終わっている） */
 ];
 /* 時間帯の文字は PH_OPEN_MIN/PH_CLOSE_MIN から出す＝定数を変えたら表示も自動で追従する（二重管理しない）。
    24時超えはそのまま「24:30」と出す＝営業日の感覚に合わせる（0:30と書くと前夜か翌夜か迷う）。 */
@@ -2156,27 +2156,23 @@ function cfSteps_(){
     s:slipOk?(slips.length?('日払い '+slips.length+'件 すべて受取人あり'):'今日の日払いはありません')
       :((noName.length?'受取人が空欄 '+noName.length+'件':'')+(noName.length&&unknown.length?' / ':'')+(unknown.length?'名簿に無い名前 '+unknown.length+'件':'')),
     state:slipOk?'done':'todo',act:'openCashCheck()'});
-  // ③ TRUSTへの入力と突合
-  /* ⚠️閉店チェック側のゲートと判定を必ず揃えること。あちらは「TRUSTが取れない夜は自己申告で通す」ので、
-     ここだけ hasTrust&&matched を要求すると【送信は通ったのに工程が✅にならず永久に帰れない】が起きる。
-     ただし送信後にTRUSTを取り込んで不一致が出た時は、承認前に直させたいので✅に戻さない。
-     ⚠️照合しているのは日払いだけ（経費はTRUST側の内訳と突合していない）＝文言で嘘をつかない。 */
-  var t=gate&&gate.today;
-  var trustHit=!!(t&&t.hasTrust&&t.matched);
-  var trustBad=!!(t&&t.hasTrust&&!t.matched);
+  // ③ TRUSTへの入力（自己申告のみ。自動突合は 2026-08-27 に撤去）
+  /* ⚠️閉店チェック側のゲート(ccGateConds_)と判定を必ず揃えること。同じ条件を2箇所に書いて食い違わせ、
+     【送信は通ったのに工程が✅にならず永久に帰れない】を2026-08-25に2回踏んでいる。
+     いまはどちらも「submitted || 自己申告」だけ。片方だけ条件を足さないこと。 */
   /* ⚠️自己申告(trustSelfGet_)も「この工程は終わった」に数える。黒服は送信より先に入力してチェックする＝
      送信を条件にすると、やったのに❌のままで「まだ帰れません」と言われる（実測で踏んだ）。 */
   var selfOk=trustSelfGet_();
-  var trustOk=trustHit||((submitted||selfOk)&&!trustBad);
+  var trustOk=submitted||selfOk;
   var trustS;
-  if(trustBad) trustS=(t.lines||[]).join(' / ')||'日払いが伝票とTRUSTで合っていません';
-  else if(trustHit) trustS='日払いが伝票と一致'+(t.perPerson?'（人別）':'（合計）');
-  else if(submitted) trustS='入力済みとして送信しました（TRUSTを取り込めていないので翌日に照合します）';
-  else if(selfOk) trustS='入力したと申告済み（TRUSTを取り込めていないので翌日に照合します）';
+  if(submitted) trustS='入力済みとして送信しました';
+  else if(selfOk) trustS='入力したと申告済み';
   else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
   S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
-  // ④⑤ 手作業（端末チェック）
-  S.push({id:'okuri',em:'🚗',t:'送りを確定する',s:'本日の送りを締める',state:homeChecks()['okuri']?'done':'todo',act:'openOkuriManager()',manual:true});
+  // ④ 手作業（端末チェック）
+  // ⛔送りは締めの工程に置かない（ボス確定 2026-08-26）＝締めの時点で送りはもう終わっている。
+  //   終わっている作業をチェックさせると「あと N 件」が実態とズレて、警告そのものが読まれなくなる。
+  //   画面は業務メニュー「🚗 送り管理」から常時開ける＝導線は消えていない。
   S.push({id:'safe', em:'🔐',t:'金庫へ収納・出金確認',s:'残金の収納と臨時出金',state:homeChecks()['safe']?'done':'todo',act:'openSafeWithdrawal()',manual:true});
   /* 🍶 酒屋への発注（ボス指示 2026-08-27）。ボス確定＝①必須工程（帰れない）②毎日出す③画面は持たずチェックだけ。
      ⚠️「今日は発注する日か」の判断を黒服に任せて出し分けると必ず抜ける＝日払い0件の日も常時出す既存方針と同じく毎晩出す。
@@ -2350,7 +2346,10 @@ function renderHomeChecklist(phase){
 /* ===== 🗂 業務メニュー（2階層）＝黒服業務タブの下段 =====
    ⭐入口は2つだけ：①🧰いま使う（フェーズ連動・4枚）②6カテゴリ。全機能はカテゴリの中にある。
    ⚠️「いま使う」に工程カードと同じ入口を入れない＝同じものを2回並べない。
-     （閉店は cfSteps_ が 閉店チェック/送り/金庫/POS/日払い を出す。開店前は HOME_LISTS.pre が 開店チェック/在庫 を出す）
+     （閉店は cfSteps_ が POS/日払い伝票/TRUST/金庫/酒屋/タスク/現金 を出す。開店前は renderOpeningPre が 開店チェック＋開店前やること を出す）
+     ⚠️cfSteps_ に「送り」は無い＝2026-08-26に締めの工程から外れた。⛔ここにも書き戻すな。
+     ⚠️HOME_LISTS / renderHomeChecklist は現在デッドコード（renderHome は pre→renderOpeningPre・post→renderClosingFlow）。
+       中に古い「送り確認」が残っているが画面には出ない＝それを見て仕様を判断しないこと。
    ⚠️hvCat はメモリ変数＝localStorageに入れない。端末共有なので、前の黒服が開いた階層を次の人に残さない。 */
 var hvCat='';   /* ''=第1階層 / カテゴリid=第2階層 */
 var WM_NOW={
