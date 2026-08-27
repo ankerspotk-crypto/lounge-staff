@@ -1493,7 +1493,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27i';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27j';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -1805,7 +1805,7 @@ function hvChk(it){
 var PHASE_DEF=[
   {p:'pre', em:'🌅', t:'開店前', job:'現金セット・仕込み'},
   {p:'mid', em:'🔥', t:'営業中', job:'付け回し・会計'},
-  {p:'post',em:'🌙', t:'閉店',   job:'締め・送り・申し送り'}
+  {p:'post',em:'🌙', t:'閉店',   job:'現金・日払い・締め'}   /* ⛔ここに「送り」を書くな＝送りは締めの工程から外れている（ボス確定 2026-08-26。締めの時点で送りはもう終わっている） */
 ];
 /* 時間帯の文字は PH_OPEN_MIN/PH_CLOSE_MIN から出す＝定数を変えたら表示も自動で追従する（二重管理しない）。
    24時超えはそのまま「24:30」と出す＝営業日の感覚に合わせる（0:30と書くと前夜か翌夜か迷う）。 */
@@ -2157,6 +2157,25 @@ function cfSteps_(){
      ⛔ここに在庫の判定（発注点割れ等）を足さないこと。必須工程は cfSteps_・気づかせる系は cfWarnItems_ で分ける
         （同じ条件を2箇所で判定して締めが詰む事故を2026-08-25に2回踏んでいる）。品目を見るなら業務メニュー📋在庫発注管理。 */
   var sakeOk=!!homeChecks()['cf_sake'];
+  /* 📦 届いていない発注＝1件ずつ何かを選ばせる（見えているだけでは片付かなかった）
+     ⚠️未ロードは done にせず wait ＝勝手に通さない。通信失敗時は loadOrderAlerts の catch が
+       空を入れて通す（GASが不調な夜に誰も帰れなくなるのを防ぐ）。 */
+  var oaRows=oaRows_(), oaPend=triPending_(oaRows,'oa');
+  S.push({id:'cf_order',em:'📦',t:'届いていない発注を片付ける',
+    s:(ORDER_ALERTS==null)?'確認中…':triSummary_(oaRows,'oa','未着はありません'),
+    state:(ORDER_ALERTS==null)?'wait':(oaPend.length?'todo':'done'),
+    act:'openOrderTriage()'});
+  /* ⚠️今日中に片付けること＝旧「警告ブロック」を必須へ格上げ（ボス指示 2026-08-27
+     「基本すべてのタスクを放置できないようにしてほしい」）。
+     ⛔ここに出す条件を自前で書き直すな＝正本は cfWarnItems_ の1箇所。
+       同じ条件を2箇所で判定すると必ずズレて「送信済みなのに永久に帰れない」が起きる。
+     ⚠️CLOSE_FLOW.extra が未取得のうちは cfWarnItems_ が経費ぶんしか返さない＝件数が後から増える。
+       それでも done で固定しない（毎回作り直す）ので、取れた時点で正しく todo に戻る。 */
+  var waRows=waRows_(), waPend=triPending_(waRows,'wa');
+  S.push({id:'cf_warn',em:'⚠️',t:'今日中に片付けることを決める',
+    s:triSummary_(waRows,'wa','片付けるものはありません'),
+    state:waPend.length?'todo':'done',
+    act:'openWarnTriage()'});
   S.push({id:'cf_sake',em:'🍶',t:'酒屋へ発注する',
     s:sakeOk?'確認しました':'足りない酒を確かめて発注（発注が要らない日もチェック）',
     state:sakeOk?'done':'todo',act:"toggleHomeCheck('cf_sake')",manual:true});
@@ -2191,18 +2210,18 @@ function cfWarnItems_(){
   var keihi=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&!/日払/.test(String(x.category||''));});
   var kNo=keihi.filter(function(x){return !String(x.payee||'').trim();});
   var kMis=keihi.filter(function(x){return !!x.mismatch;});
-  if(kNo.length||kMis.length) W.push({em:'🧾',t:'経費の伝票を整える',
+  if(kNo.length||kMis.length) W.push({key:'keihi',em:'🧾',t:'経費の伝票を整える',
     s:[kNo.length?('発行元が空欄 '+kNo.length+'件'):'',kMis.length?('金額とお金が合わない '+kMis.length+'件'):''].filter(Boolean).join(' / '),
     act:'openCashCheck()'});
   if(!ex) return W;
   /* ④ お客様の伝票で人数・注文の食い違いが出たまま（従来はLINEに流れて終わりだった） */
-  if((ex.kaikei||[]).length) W.push({em:'🧾',t:'お客様の伝票に要確認があります',
+  if((ex.kaikei||[]).length) W.push({key:'kaikei',em:'🧾',t:'お客様の伝票に要確認があります',
     s:ex.kaikei.length+'件　人数や注文の食い違い', act:'openKaikeiIssues()'});
   /* ② 納品書を撮ったのに在庫へ反映していない */
-  if(ex.deliveryN) W.push({em:'📦',t:'納品が在庫に反映されていません',
+  if(ex.deliveryN) W.push({key:'delivery',em:'📦',t:'納品が在庫に反映されていません',
     s:ex.deliveryN+'伝票'+((ex.delivery||[])[0]?('　'+(ex.delivery[0].supplier||'')+' ほか'):''), act:'openDeliveryReflect()'});
   /* ① 過去の営業日に残ったままの日払い未仕訳（当日ぶんはゲートが既に止めている） */
-  if(ex.hibaraiPastN) W.push({em:'💴',t:'前の日の日払い伝票が仕訳されていません',
+  if(ex.hibaraiPastN) W.push({key:'hibaraiPast',em:'💴',t:'前の日の日払い伝票が仕訳されていません',
     s:ex.hibaraiPastN+'件　受取人が不明のまま（給与の前に片付けてください）', act:'openHibaraiUnknown()'});
   return W;
 }
@@ -2250,12 +2269,8 @@ function renderClosingFlow(){
   }
   /* ⚠️退勤をブロックする「やること」と、ブロックしない「今日中に片付けたいこと」を必ず分けて出す。
      混ぜると『あと N 件』が何を指すのか分からなくなる＝締めの目的がぼやける。 */
-  var Wn=cfWarnItems_();
-  if(Wn.length){
-    h+='<div class="hv-sec todo" style="border-color:#e6c14a"><span class="st" style="color:#e6c14a">⚠️ 今日中に片付けたいこと</span><span class="cnt">'+Wn.length+'</span></div>';
-    h+='<div style="font-size:11px;color:var(--dim);margin:0 2px 6px">退勤は止めません。ただし溜めると後で必ず面倒になります</div>';
-    h+=Wn.map(cfWarnHtml_).join('');
-  }
+  /* ⚠️警告ブロックは 2026-08-27 に必須工程 cf_warn へ格上げ＝ここには出さない（同じものを2箇所に出さない） */
+
   if(fin.length){
     h+='<div class="hv-sec done"><span class="st">✓ 完了</span><span class="cnt">'+fin.length+'</span></div>';
     h+=fin.map(cfStepHtml_).join('');
@@ -2384,7 +2399,10 @@ function renderHomeChecklist(phase){
 /* ===== 🗂 業務メニュー（2階層）＝黒服業務タブの下段 =====
    ⭐入口は2つだけ：①🧰いま使う（フェーズ連動・4枚）②6カテゴリ。全機能はカテゴリの中にある。
    ⚠️「いま使う」に工程カードと同じ入口を入れない＝同じものを2回並べない。
-     （閉店は cfSteps_ が 閉店チェック/送り/金庫/POS/日払い を出す。開店前は HOME_LISTS.pre が 開店チェック/在庫 を出す）
+     （閉店は cfSteps_ が POS/日払い伝票/TRUST/金庫/酒屋/タスク/現金 を出す。開店前は renderOpeningPre が 開店チェック＋開店前やること を出す）
+     ⚠️cfSteps_ に「送り」は無い＝2026-08-26に締めの工程から外れた。⛔ここにも書き戻すな。
+     ⚠️HOME_LISTS / renderHomeChecklist は現在デッドコード（renderHome は pre→renderOpeningPre・post→renderClosingFlow）。
+       中に古い「送り確認」が残っているが画面には出ない＝それを見て仕様を判断しないこと。
    ⚠️hvCat はメモリ変数＝localStorageに入れない。端末共有なので、前の黒服が開いた階層を次の人に残さない。 */
 var hvCat='';   /* ''=第1階層 / カテゴリid=第2階層 */
 var WM_NOW={
@@ -2477,8 +2495,125 @@ function loadOrderAlerts(){
     overdueCount:1,shortageCount:1,vendorOverdueCount:3,vendorShortageCount:1}; if(viewMode==='home')renderHome(); return; }
   if(_oaLoading)return; _oaLoading=true;
   gsr('getOrderAlerts').then(function(r){ _oaLoading=false; ORDER_ALERTS=r||{overdue:[],shortage:[]}; if(viewMode==='home')renderHome(); })
-    .catch(function(){ _oaLoading=false; });   // 未デプロイ等で落ちてもホームは壊さない（カード非表示のまま）
+    .catch(function(){ _oaLoading=false;
+      /* ⚠️取れなかった夜に閉店ゲートを塞がない＝安全側に倒して「未着なし」で通す。
+         nullのままだと cf_order が永久に wait になり、GASが不調な夜は誰も帰れなくなる。 */
+      if(ORDER_ALERTS==null) ORDER_ALERTS={overdue:[],shortage:[],vendorOverdue:[],vendorShortage:[],err:true};
+      if(viewMode==='home')renderHome();
+    });   // 未デプロイ等で落ちてもホームは壊さない（カード非表示のまま）
 }
+/* ===== 🧹 放置させない＝「片付け方を選ばせる」共通のしくみ（2026-08-27 ボス指示） =====
+   ボスの言葉＝「発注して届いていない物が放置され気味」「基本すべてのタスクを放置できないようにしてほしい」。
+   ⭐見せるだけでは片付かなかった。閉店の必須工程に入れて、1件ずつ「どうしたか」を選ばせる。
+   ⚠️⚠️同じUIを2つ作るな＝未着用と警告用に別々に書くと、必ず片方だけ直して食い違う。
+     行の作り方(oaRows_ / waRows_)だけ差し替えて、描画と記録はここ1箇所に集約する。
+   ⚠️逃げ道は必ず残す＝[🙅 社員がいない][➡️ 明日でいい]。塞ぐと現場が詰み、閉店そのものが回らなくなる。
+     ⭐「社員がいない」は超過日数に関わらず常に出す＝バイトだけの夜は催促も欠品判断もできない。
+   ⚠️記録はその日限り(homeChecks)＝翌日また訊く。だから「持ち越し」は消滅ではない。
+   ⛔新しいGAS関数を作らない＝既にロード済みの ORDER_ALERTS / CLOSE_FLOW だけを読む
+     （GASは応答の床が1.9秒・ホームは30秒ごとに再描画される）。 */
+var TRI_LATE_LIMIT_=7;   /* これを超えた未着は「明日でいい」を出さない */
+var TRI_OPEN='';         /* いま開いているトリアージ（'oa'=未着 / 'wa'=今日中に片付けること） */
+function triKey_(pfx,id){ return 'tri_'+pfx+'_'+id; }
+function triGet_(pfx,id){ return homeChecks()[triKey_(pfx,id)]||''; }
+function triPending_(rows,pfx){ return (rows||[]).filter(function(r){ return !triGet_(pfx,r.id); }); }
+/* 内訳（社員不在／明日でいい）を分けて数える＝どちらも翌日へ持ち越すが意味が違う。
+   社員不在＝やりたくてもできない／明日でいい＝黒服が判断した。 */
+function triCountBy_(rows,pfx,how){
+  var n=0; (rows||[]).forEach(function(r){ if(triGet_(pfx,r.id)===how) n++; }); return n;
+}
+function triMark(pfx,id,how){
+  var c=homeChecks(); c[triKey_(pfx,id)]=how;
+  try{ localStorage.setItem(homeCheckKey(),JSON.stringify(c)); }catch(e){}
+  /* ⚠️描き直すのは「いま開いているシート」＝pfxで判断すると、別の一覧を開いている時に
+     中身がすり替わる（タイトルは⚠️なのに中身が📦になる）。開いた側を TRI_OPEN で覚える。 */
+  var b=document.getElementById('sheetBody');
+  if(b&&TRI_OPEN) b.innerHTML=(TRI_OPEN==='oa')?oaTriageHtml():waTriageHtml();
+  renderHome();
+  toast(how==='push'?'📞 催促したと記録しました'
+    :(how==='fixed'?'✅ 片付けたと記録しました'
+    :(how==='nostaff'?'🙅 社員不在で翌日へ持ち越しました':'➡️ 明日へ持ち越しました')));
+}
+function triLbl_(how){
+  return how==='push'?'📞 催促したと記録しました'
+    :(how==='fixed'?'✅ 片付けたと記録しました'
+    :(how==='nostaff'?'🙅 社員がいないため翌日へ持ち越しました'
+    :(how==='tomo'?'➡️ 明日へ持ち越しました':'')));
+}
+/* 行の共通描画。r={id,em,t,s,act,actLabel,mainHow,canTomo} */
+function triRowHtml_(r,pfx){
+  var st=triGet_(pfx,r.id), lbl=triLbl_(st);
+  return '<div class="cc-slip">'
+    +'<div style="font-size:13.5px;font-weight:700;color:var(--txt)">'+r.em+' '+r.t+'</div>'
+    +(r.s?'<div style="font-size:11.5px;color:var(--dim);margin-top:3px">'+r.s+'</div>':'')
+    +(lbl?'<div style="font-size:12px;color:var(--green);margin-top:6px">'+lbl+'</div>':'')
+    +'<div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap;align-items:center">'
+      +'<button class="bm-btn sm" onclick="'+r.act+'">'+r.actLabel+'</button>'
+      +(r.mainHow?'<button class="bm-btn sm" onclick="triMark(\''+pfx+'\',\''+r.id+'\',\''+r.mainHow+'\')">'
+         +(r.mainHow==='push'?'📞 催促した':'✅ 片付けた')+'</button>':'')
+      /* ⭐社員不在は常に出す＝ここを塞ぐと対応不能な夜に逃げ道がゼロになる */
+      +'<button class="bm-btn sm" onclick="triMark(\''+pfx+'\',\''+r.id+'\',\'nostaff\')">🙅 社員がいない</button>'
+      +(r.canTomo
+        ? '<button class="bm-btn sm" onclick="triMark(\''+pfx+'\',\''+r.id+'\',\'tomo\')">➡️ 明日でいい</button>'
+        : '<span style="font-size:11.5px;color:#ff9a9a;line-height:1.5">'+TRI_LATE_LIMIT_+'日超過＝「明日でいい」では送れません。<br>催促するか、在庫発注管理で欠品・終売に。社員がいない夜は「🙅 社員がいない」を。</span>')
+    +'</div></div>';
+}
+function triSummary_(rows,pfx,noneMsg){
+  var pend=triPending_(rows,pfx), ns=triCountBy_(rows,pfx,'nostaff');
+  if(!rows.length) return noneMsg;
+  if(pend.length) return pend.length+'件が未対応（片付けるか、翌日へ持ち越すか決めてください）';
+  return '全'+rows.length+'件に対応しました'+(ns?'（うち'+ns+'件は社員不在で翌日へ）':'');
+}
+
+/* ---- 📦 届いていない発注 ---- */
+function oaList_(){
+  var a=ORDER_ALERTS||{};
+  return (a.vendorOverdue||[]).map(function(it){ return {kind:'V',it:it}; })
+    .concat((a.overdue||[]).map(function(it){ return {kind:'M',it:it}; }));
+}
+function oaRows_(){
+  return oaList_().map(function(x){
+    var it=x.it, late=Number(it.overdueDays||0);
+    var tag=(x.kind==='V')
+      ? '<span class="oa-vtag">🏭'+esc(it.supplier||'業者')+'</span>'
+      : (it.floor?'<span class="oa-fl">['+esc(it.floor)+']</span>':'');
+    return {
+      id:x.kind+it.rowIdx, em:'📦',
+      t:esc(it.name)+(it.qty?' ×'+esc(it.qty)+esc(it.unit||''):'')+' '+tag,
+      s:'予定 '+esc(it.eta||'—')+'　<b style="color:'+(late>TRI_LATE_LIMIT_?'#ff9a9a':'var(--gold)')+'">'+late+'日超過</b>',
+      act:'closeSheet();openStockManager()', actLabel:'📦 在庫発注管理で直す',
+      mainHow:'push', canTomo:late<=TRI_LATE_LIMIT_
+    };
+  });
+}
+function oaTriageHtml(){
+  var rows=oaRows_();
+  if(!rows.length) return '<div class="empty-msg">届いていない発注はありません</div>';
+  return '<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:11px">'
+    +'届いた物は「在庫発注管理」で納品✓を入れれば、この一覧から自動で消えます。<br>'
+    +'今夜どうにもならない物は <b>催促した</b> か <b>明日でいい</b>。'
+    +'社員がいなくて判断できない時は <b>🙅 社員がいない</b>＝翌日の対応に持ち越します。'
+    +'</div>'+rows.map(function(r){ return triRowHtml_(r,'oa'); }).join('');
+}
+function openOrderTriage(){ closeMenu(); TRI_OPEN='oa'; showSheet('📦 届いていない発注', oaTriageHtml(), true); }
+
+/* ---- ⚠️ 今日中に片付けたいこと（旧・警告ブロック。2026-08-27に必須へ格上げ） ---- */
+function waRows_(){
+  return cfWarnItems_().map(function(w,i){
+    return { id:w.key||('w'+i), em:w.em, t:esc(w.t), s:esc(w.s),
+      act:'closeSheet();'+w.act, actLabel:'▶ 開いて片付ける',
+      mainHow:'fixed', canTomo:true };
+  });
+}
+function waTriageHtml(){
+  var rows=waRows_();
+  if(!rows.length) return '<div class="empty-msg">今日中に片付けることはありません</div>';
+  return '<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:11px">'
+    +'退勤は止まります。片付けるか、翌日へ持ち越すかを1件ずつ決めてください。<br>'
+    +'社員がいなくて判断できない時は <b>🙅 社員がいない</b>＝翌日の対応に持ち越します。'
+    +'</div>'+rows.map(function(r){ return triRowHtml_(r,'wa'); }).join('');
+}
+function openWarnTriage(){ closeMenu(); TRI_OPEN='wa'; showSheet('⚠️ 今日中に片付けること', waTriageHtml(), true); }
 function orderAlertCardHtml(){
   var a=ORDER_ALERTS; if(!a)return '';
   var od=a.overdue||[], sh=a.shortage||[], vod=a.vendorOverdue||[], vsh=a.vendorShortage||[];
