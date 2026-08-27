@@ -11286,6 +11286,18 @@ function handlePortalApi_(e) {
     return out({ ok: false, error: 'onleave', message: '休職中のため、この機能はご利用いただけません。' });
   }
 
+  // ゴースト在籍（今日以降の出勤予定ゼロ）は店の予約状況・空席を見られない（2026-08-27）。
+  // ⚠️遅延評価＝対象タブに来た時だけシフトを読む（他タブの応答時間を1msも増やさない）。
+  // ※管理者は isAdmin で素通し＝代理閲覧(viewAs)も従来どおり全部見える。
+  let _ghostChecked = null;
+  const isGhostUser = () => {
+    if (_ghostChecked === null) _ghostChecked = !isAdmin && !hasUpcomingShift_(name);
+    return _ghostChecked;
+  };
+  if (PORTAL_GHOST_DENY_TABS_.indexOf(tab) >= 0 && isGhostUser()) {
+    return out({ ok: false, error: 'noshift', message: '出勤予定が登録されていないため、この機能はご利用いただけません。' });
+  }
+
   // 申請管理（管理者のみ・viewAs不要）
   if (isAdmin && tab === 'requests') {
     return out({ ok: true, name, isAdmin, requests: getShiftRequests_() });
@@ -11490,6 +11502,10 @@ function handlePortalApi_(e) {
     const lookupNameH = normalizeName_(isAdmin ? viewAs : name);
     const staffRoleH = getStaffRoleByName_(lookupNameH);                                          _lap('staffRole');
     const payloadH = { ok: true, name, isAdmin, viewAs: lookupNameH, staffRole: staffRoleH, onLeave };
+    // ゴースト在籍（今日以降の出勤ゼロ）＝予約/空席は取得も送信もしない。フロントはこのフラグで畳む。
+    // ⚠️シフト表は下の rawShiftCell/portalShifts_ と同じメモを使うので、追加のシート読みは実質ゼロ。
+    const ghostH = !isAdmin && !hasUpcomingShift_(lookupNameH);                                   _lap('ghost');
+    payloadH.ghost = ghostH;
 
     // ---- 軽い側（シフト系）: 実測 約1.3秒。ここだけで「次の出勤」まで描ける ----
     if (wantLite) {
@@ -11519,8 +11535,8 @@ function handlePortalApi_(e) {
     if (wantRest) {
       payloadH.seats = castCurrentSeats_(lookupNameH);                                            _lap('seats');
       payloadH.working = onLeave ? false : (isOnShiftToday_(lookupNameH) || isWorkingToday_(lookupNameH) || isAdmin); _lap('working');
-      let reservationsH = []; if (!onLeave) { try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {} } _lap('reservations');
-      let vacancyH = null; if (!onLeave) { try { vacancyH = getPortalVacancy_(); } catch (e) {} }  _lap('vacancy');
+      let reservationsH = []; if (!onLeave && !ghostH) { try { reservationsH = getYoyakuReservations_(todayStr()); } catch (e) {} } _lap('reservations');
+      let vacancyH = null; if (!onLeave && !ghostH) { try { vacancyH = getPortalVacancy_(); } catch (e) {} }  _lap('vacancy');
       payloadH.reservations = reservationsH;
       payloadH.vacancy = vacancyH;
       payloadH.notices = getNoticesFor_(lookupNameH, staffRoleH, userId);                         _lap('notices');
@@ -11924,6 +11940,122 @@ function isOnLeaveName_(name) {
 // ⚠️'stats'は含めない：給与明細(renderPay)が同じペイロードのsalesを土台に組み立てるため。
 // 売上明細/伝票/ランキングのサブタブ抑止はフロント側(renderStats)で行う。
 var PORTAL_LEAVE_DENY_TABS_ = ['yoyaku', 'yoyakuMonth', 'yoyakuCustomers', 'customers', 'customerVisits', 'vacancy', 'ranking', 'hair', 'bills', 'billdetail', 'kyuritsu'];
+
+// ===================== ゴースト在籍ガード（2026-08-27 ボス指示） =====================
+// 今日（営業日）以降に1日も出勤予定が無いスタッフには、店の予約状況・空席を一切見せない。
+// 退職フラグが立たないまま名簿に残る「幽霊在籍」対策。⚠️管理者だけ対象外（代理閲覧を壊さないため）。
+// ⚠️これがゲートの本体（フロントは表示制御だけ）＝tab=home で予約/空席を渡さず、下のタブも弾く。
+var PORTAL_GHOST_DENY_TABS_ = ['yoyaku', 'yoyakuMonth', 'yoyakuCustomers', 'vacancy'];
+
+// 「今日以降」と認める前方ウィンドウ（日）。
+// ⚠️シフト表の見出しは 'M/d' で年が無い。「古い日付は翌年」と単純に倒すと、6月の列が残ったまま12月を迎えた
+//   瞬間に 6/1 が"翌年6/1＝未来"へ化けて、関所が誰にも掛からなくなる（実データに6月からの列が現存）。
+//   そこで「今日〜+120日に収まる日付だけを未来と認める」窓で判定する（シフトは翌月分までしか作らない）。
+var GHOST_FUTURE_WINDOW_DAYS_ = 120;
+
+// 営業日基準の今日0時（0〜6時は前日扱い＝深夜勤務中の子をゴーストにしない。bizShiftColKey_ と同じ規則）
+function ghostToday0_() {
+  const n = new Date();
+  if (n.getHours() < 6) n.setDate(n.getDate() - 1);
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+}
+
+// シフト表の見出し / シフト申請の日付セル → 未来ウィンドウ内の Date。過去・窓外・判定不能は null。
+function upcomingShiftDate_(v, today0, limit) {
+  let d = null;
+  if (v instanceof Date && !isNaN(v)) {
+    d = new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  } else {
+    const str = String(v == null ? '' : v).trim();
+    if (!str) return null;
+    const p = str.split(/[\/\-]/);
+    if (p.length === 3 && /^\d{4}$/.test(p[0])) {
+      d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    } else if (p.length === 2) {
+      const mo = parseInt(p[0], 10), da = parseInt(p[1], 10);
+      if (!mo || !da || mo > 12 || da > 31) return null;
+      d = new Date(today0.getFullYear(), mo - 1, da);
+      if (d < today0) {                                   // 年跨ぎは「窓に収まる時だけ」翌年扱い
+        const d2 = new Date(today0.getFullYear() + 1, mo - 1, da);
+        if (d2 <= limit) d = d2;
+      }
+    } else return null;
+  }
+  if (!d || isNaN(d)) return null;
+  return (d >= today0 && d <= limit) ? d : null;
+}
+
+// セルの値が「出勤」か（'休み'/'欠勤'/空白は出勤に数えない）
+function isUpcomingShiftValue_(v) {
+  const t = String(v == null ? '' : v).trim();
+  return !!t && t !== '休み' && t !== '欠勤';
+}
+
+// 氏名の突合キー。⚠️normalizeName_ は内部スペースを消さない＝名簿「鈴木海」とシフト表「鈴木 海」が
+// 別人になる（reference_name_normalization の罠）。実在スタッフを誤ってゴースト扱いしないよう空白を落とす。
+function ghostNameKey_(n) {
+  return normalizeName_(String(n == null ? '' : n).trim()).replace(/[\s\u3000]/g, '');
+}
+
+// シフト申請(SHIFT_REQUEST_TAB)の全値。homeブランチ中はメモ化（shiftSheetValuesMemo_ と同型）。
+function shiftRequestValuesMemo_() {
+  if (_portalHomeMemo) {
+    if (_portalHomeMemo.reqValues === undefined) {
+      const sh = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+      _portalHomeMemo.reqValues = sh ? sh.getDataRange().getValues() : null;
+    }
+    return _portalHomeMemo.reqValues;
+  }
+  const sh2 = getOrOpenSS_().getSheetByName(SHIFT_REQUEST_TAB);
+  return sh2 ? sh2.getDataRange().getValues() : null;
+}
+
+// 今日（営業日）以降に出勤予定が1日でもあるか。シフト表 →（無ければ）シフト申請の承諾分、の順に見る。
+// ⚠️読めなかった時は true（＝在籍あり）に倒す。誤ブロックで実働キャストを締め出す方が事故が重い。
+// ⚠️5分キャッシュ＝予約管理タブを開くたびにシフト表(300〜600ms)を読み直させないため。
+//   黒服がシフトを入れた直後は最大5分だけ反映が遅れる（関所が開く方向なので実害は軽い）。
+function hasUpcomingShift_(name) {
+  const key = ghostNameKey_(name);
+  if (!key) return true;
+  const cache = (function () { try { return CacheService.getScriptCache(); } catch (e) { return null; } })();
+  const ckey = 'UPSHIFT_v1_' + key;
+  if (cache) { const hit = cache.get(ckey); if (hit === '1') return true; if (hit === '0') return false; }
+  const ans = hasUpcomingShiftUncached_(key);
+  if (cache) { try { cache.put(ckey, ans ? '1' : '0', 300); } catch (e) {} }
+  return ans;
+}
+
+// 実体（キャッシュを挟まない生判定）。key は ghostNameKey_ 済みの突合キー。
+function hasUpcomingShiftUncached_(key) {
+  const today0 = ghostToday0_();
+  const limit = new Date(today0.getTime() + GHOST_FUTURE_WINDOW_DAYS_ * 86400000);
+  try {
+    const data = shiftSheetValuesMemo_();
+    if (data && data.length) {
+      const hdr = data[0];
+      for (let i = 1; i < data.length; i++) {
+        if (ghostNameKey_(data[i][0]) !== key) continue;
+        for (let j = 2; j < hdr.length; j++) {
+          if (!isUpcomingShiftValue_(data[i][j])) continue;
+          if (upcomingShiftDate_(hdr[j], today0, limit)) return true;
+        }
+        break;   // 同名は先頭行のみ（portalShifts_ と同じ規則）
+      }
+    }
+  } catch (e) { return true; }
+  try {
+    const rows = shiftRequestValuesMemo_();   // シフト表に列が無い日/行が無い人の承諾済み申請を拾う
+    if (rows) {
+      for (let i = 1; i < rows.length; i++) {
+        if (ghostNameKey_(rows[i][1]) !== key) continue;
+        if (String(rows[i][4]).trim() !== '承諾') continue;
+        if (!isUpcomingShiftValue_(rows[i][3])) continue;
+        if (upcomingShiftDate_(rows[i][2], today0, limit)) return true;
+      }
+    }
+  } catch (e) { return true; }
+  return false;
+}
 
 // 管理コンソール：休職中/復帰の切替（動的「休職中」「休職開始日」列）。属性・履歴は非破壊。
 function adminSetOnLeave(userId, targetName, onLeave) {
