@@ -1299,35 +1299,35 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 .hv-cd{font-size:13px;font-weight:800;color:var(--gold);white-space:nowrap;}
 .hv-quick{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
 /* 🗂 業務メニュー（2階層／2026-08-26）＝.menu-* とは別クラス。旧☰オーバーレイに副作用を出さない */
-.bm-nowlbl{font-size:12px;color:var(--dim);font-weight:800;letter-spacing:.5px;margin:2px 2px 9px;}
-.bm-nowlbl span{color:var(--accent);}
-.bm-now{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;}
-.bm-cats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.bm-cat{position:relative;display:flex;align-items:center;gap:12px;min-height:96px;padding:14px 16px;background:var(--panel);border:1px solid var(--line2);border-radius:16px;cursor:pointer;transition:.1s;}
-.bm-cat:active{transform:scale(.98);}
-.bm-cat:hover{border-color:var(--accent-line);background:var(--accent-bg);}
-.bm-cat .ic{font-size:34px;line-height:1;flex:none;}
-.bm-cat .bd{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
-.bm-cat .t{font-size:16px;font-weight:900;}
-.bm-cat .pv{font-size:11px;color:var(--dim);line-height:1.5;}
-.bm-cat .n{font-size:12px;color:var(--dim);font-weight:800;flex:none;align-self:flex-end;}
-.bm-cat .bg{position:absolute;top:10px;right:12px;background:var(--over);color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 8px;}
-.bm-back{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;padding:0 18px;margin-bottom:12px;background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:13px;color:var(--accent);font-weight:800;font-size:14px;cursor:pointer;}
-.bm-back .bk{flex:none;}
-.bm-back .cur{color:var(--txt);flex:1;}
-.bm-back .sw{display:flex;gap:6px;flex:none;}
-.bm-back .cc{width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:19px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;}
-.bm-back .cc.on{border-color:var(--accent);background:var(--accent-bg);}
-.bm-back .cc:active{transform:scale(.94);}
-.bm-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
-.bm-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:110px;padding:16px 10px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;cursor:pointer;text-align:center;transition:.1s;}
-.bm-tile:active{transform:scale(.97);}
-.bm-tile:hover{border-color:var(--accent-line);background:var(--accent-bg);}
-.bm-tile .ic{font-size:30px;line-height:1;}
-.bm-tile .t{font-size:14px;font-weight:800;}
-.bm-tile .s{font-size:11px;color:var(--dim);line-height:1.4;}
-.bm-tile.warn{border-color:var(--warn-line);}
-.bm-now .bm-tile{min-height:96px;background:var(--panel2);}
+.wm-nowlbl{font-size:12px;color:var(--dim);font-weight:800;letter-spacing:.5px;margin:2px 2px 9px;}
+.wm-nowlbl span{color:var(--accent);}
+.wm-now{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;}
+.wm-cats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.wm-cat{position:relative;display:flex;align-items:center;gap:12px;min-height:96px;padding:14px 16px;background:var(--panel);border:1px solid var(--line2);border-radius:16px;cursor:pointer;transition:.1s;}
+.wm-cat:active{transform:scale(.98);}
+.wm-cat:hover{border-color:var(--accent-line);background:var(--accent-bg);}
+.wm-cat .ic{font-size:34px;line-height:1;flex:none;}
+.wm-cat .bd{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1;}
+.wm-cat .t{font-size:16px;font-weight:900;}
+.wm-cat .pv{font-size:11px;color:var(--dim);line-height:1.5;}
+.wm-cat .n{font-size:12px;color:var(--dim);font-weight:800;flex:none;align-self:flex-end;}
+.wm-cat .bg{position:absolute;top:10px;right:12px;background:var(--over);color:#fff;font-size:11px;font-weight:800;border-radius:10px;padding:1px 8px;}
+.wm-back{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;padding:0 18px;margin-bottom:12px;background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:13px;color:var(--accent);font-weight:800;font-size:14px;cursor:pointer;}
+.wm-back .bk{flex:none;}
+.wm-back .cur{color:var(--txt);flex:1;}
+.wm-back .sw{display:flex;gap:6px;flex:none;}
+.wm-back .cc{width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:19px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;}
+.wm-back .cc.on{border-color:var(--accent);background:var(--accent-bg);}
+.wm-back .cc:active{transform:scale(.94);}
+.wm-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.wm-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:110px;padding:16px 10px;background:var(--panel);border:1px solid var(--line2);border-radius:14px;cursor:pointer;text-align:center;transition:.1s;}
+.wm-tile:active{transform:scale(.97);}
+.wm-tile:hover{border-color:var(--accent-line);background:var(--accent-bg);}
+.wm-tile .ic{font-size:30px;line-height:1;}
+.wm-tile .t{font-size:14px;font-weight:800;}
+.wm-tile .s{font-size:11px;color:var(--dim);line-height:1.4;}
+.wm-tile.warn{border-color:var(--warn-line);}
+.wm-now .wm-tile{min-height:96px;background:var(--panel2);}
 .hv-qbtn{padding:16px 8px;border-radius:14px;border:1px solid var(--line2);background:var(--panel2);text-align:center;cursor:pointer;}
 .hv-qbtn:active{background:var(--accent-bg);}
 .hv-qbtn .em{font-size:26px;display:block;}
@@ -2344,7 +2344,7 @@ function renderHomeChecklist(phase){
      （閉店は cfSteps_ が 閉店チェック/送り/金庫/POS/日払い を出す。開店前は HOME_LISTS.pre が 開店チェック/在庫 を出す）
    ⚠️hvCat はメモリ変数＝localStorageに入れない。端末共有なので、前の黒服が開いた階層を次の人に残さない。 */
 var hvCat='';   /* ''=第1階層 / カテゴリid=第2階層 */
-var BM_NOW={
+var WM_NOW={
   pre:  ['openSafeWithdrawal()','openHandoverEdit()','openHakenId()','openCustomer()'],
   mid:  ['openTableSlip()','menuGoPos()','openReceipt()','openCustomer()'],
   post: ['openHandoverEdit()','openDenpyoManager()','openReceipt()','openStockManager()']
@@ -2355,21 +2355,21 @@ function hvOpenCat(id){
   var e=document.getElementById('bmTop'); if(e&&e.scrollIntoView)e.scrollIntoView({block:'start'});
 }
 /* 在庫の未着・欠品だけバッジを出す。⛔バッジのために新しいgsrを足すな（GASは応答の床が1.9秒・ホームは30秒ごとに再描画される） */
-function bmCatBadge_(id){
+function wmCatBadge_(id){
   if(id!=='mono') return 0;
   var a=ORDER_ALERTS||{};
   return (a.overdueCount||0)+(a.vendorOverdueCount||0)+(a.shortageCount||0)+(a.vendorShortageCount||0);
 }
-function bmTileHtml_(it){
-  return '<div class="bm-tile'+(it.warn?' warn':'')+'" onclick="'+it.act+'">'
+function wmTileHtml_(it){
+  return '<div class="wm-tile'+(it.warn?' warn':'')+'" onclick="'+it.act+'">'
     +'<span class="ic">'+it.ic+'</span>'
     +'<span class="t">'+esc(it.t)+'</span>'
     +(it.s?'<span class="s">'+esc(it.s)+'</span>':'')
     +'</div>';
 }
-/* 「いま使う」＝BM_NOWのactに一致する項目をMENU_CATSから引く（項目の正本は1つ＝二重定義しない） */
-function bmNowItems_(phase){
-  var want=BM_NOW[phase]||BM_NOW.mid, out=[];
+/* 「いま使う」＝WM_NOWのactに一致する項目をMENU_CATSから引く（項目の正本は1つ＝二重定義しない） */
+function wmNowItems_(phase){
+  var want=WM_NOW[phase]||WM_NOW.mid, out=[];
   want.forEach(function(act){
     MENU_CATS.forEach(function(c){ menuCatItems_(c).forEach(function(it){ if(it.act===act) out.push(it); }); });
   });
@@ -2386,19 +2386,19 @@ function hvToolsSection(){
       return '<span class="cc'+(c.id===hvCat?' on':'')+'" onclick="hvOpenCat(\''+c.id+'\')">'+c.ic+'</span>';
     }).join('');
     return h
-      +'<div class="bm-back">'
+      +'<div class="wm-back">'
         +'<span class="bk" onclick="hvOpenCat(\''+hvCat+'\')">← 業務メニューへ戻る</span>'
         +'<span class="cur">'+cur.ic+' '+esc(cur.t)+'</span>'
         +'<span class="sw">'+sw+'</span></div>'
-      +'<div class="bm-tiles">'+menuCatItems_(cur).map(bmTileHtml_).join('')+'</div>';
+      +'<div class="wm-tiles">'+menuCatItems_(cur).map(wmTileHtml_).join('')+'</div>';
   }
   var ph=curPhase(), phLbl=({pre:'🌅 開店前',mid:'🔥 営業中',post:'🌙 閉店'})[ph]||'';
-  h+='<div class="bm-nowlbl">🧰 いま使う　<span>'+phLbl+'</span></div>'
-    +'<div class="bm-now">'+bmNowItems_(ph).map(bmTileHtml_).join('')+'</div>';
-  h+='<div class="bm-cats">'+MENU_CATS.map(function(c){
+  h+='<div class="wm-nowlbl">🧰 いま使う　<span>'+phLbl+'</span></div>'
+    +'<div class="wm-now">'+wmNowItems_(ph).map(wmTileHtml_).join('')+'</div>';
+  h+='<div class="wm-cats">'+MENU_CATS.map(function(c){
     var items=menuCatItems_(c); if(!items.length) return '';
-    var bg=bmCatBadge_(c.id);
-    return '<div class="bm-cat" onclick="hvOpenCat(\''+c.id+'\')">'
+    var bg=wmCatBadge_(c.id);
+    return '<div class="wm-cat" onclick="hvOpenCat(\''+c.id+'\')">'
       +(bg?'<span class="bg">'+bg+'</span>':'')
       +'<span class="ic">'+c.ic+'</span>'
       +'<span class="bd"><span class="t">'+esc(c.t)+'</span><span class="pv">'+esc(c.pv)+'</span></span>'
