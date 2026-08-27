@@ -710,7 +710,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-08-25c'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var PORTAL_BUILD = '2026-08-27a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -731,6 +731,23 @@ var staffRole = 'キャスト';
 // ⚠️これは表示制御。実データの遮断はサーバー側（PORTAL_LEAVE_DENY_TABS_ ＋ tab=homeで予約/空席を渡さない）が本体。
 var onLeave = false;
 var LEAVE_KEYS = ['board', 'shift', 'stats']; // 休職中に出すメニュー（statsは給与明細サブタブのみに制限）
+
+// ゴースト在籍＝今日（営業日）以降に出勤予定が1日も無い人。サーバが ghost フラグで教える（2026-08-27 ボス指示）。
+// 退職フラグが立たないまま名簿に残る子に、店の予約状況・空席を見せないための関所。
+// ⚠️ここは表示制御にすぎない。実データの遮断はサーバー側（PORTAL_GHOST_DENY_TABS_ ＋ tab=home で予約/空席を渡さない）が本体。
+// ⚠️管理者は対象外（サーバが isAdmin を素通し）＝代理閲覧も従来どおり全部見える。
+var ghost = false;
+var GHOST_DENY_KEYS = ['yoyaku', 'seatreq'];   // 席リクエストは「本日の予約一覧」を出す画面なのでこちらも閉じる
+
+// ゴーストにはペイロードから予約/空席を落とす（端末localStorageの古いホームキャッシュから復活させないため）
+function stripGhostData_(d) {
+  if (!d || !d.ghost) return d;
+  delete d.reservations;
+  delete d.vacancy;
+  return d;
+}
+// ゴーストが触れる画面か（ボタンを消すだけでなく、直接呼ばれても通さない）
+function ghostAllows_(tab) { return !ghost || GHOST_DENY_KEYS.indexOf(tab) < 0; }
 var pendingShifts = {};
 
 function fmt(n) {
@@ -973,6 +990,9 @@ function applyHomePayload_(d) {
   if (d.staffRole) staffRole = d.staffRole;
   onLeave = !!d.onLeave; // 休職中＝メニューを シフト提出／お知らせ／給与明細 に絞る
   if (onLeave && currentTab !== 'home' && LEAVE_KEYS.indexOf(currentTab) < 0) currentTab = 'home';
+  ghost = !!d.ghost;     // 今日以降の出勤ゼロ＝予約管理／席リクエスト／今日の予約／空席を出さない
+  stripGhostData_(d);    // 古いキャッシュ由来の予約/空席が画面に残らないよう毎回落とす
+  if (ghost && GHOST_DENY_KEYS.indexOf(currentTab) >= 0) currentTab = 'home';
   if (isAdmin) showAdminTab();
   if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
   portalData = d;
@@ -1029,6 +1049,7 @@ function loadPortal(month) {
       return;
     }
     for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
+    stripGhostData_(merged);   // ゴーストは予約/空席をホームキャッシュにも残さない
     if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }
     // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
     if (gotLite && gotRest) writeHomeCache_(merged); // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
@@ -1217,6 +1238,8 @@ function homeMenu() {
   var castKeys = ['board','awards','kassen','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
+  // ゴースト在籍（今日以降の出勤ゼロ）は 予約管理／席リクエスト を出さない。理由は画面に一切書かない（休職中と同じ流儀）
+  if (ghost) castKeys = castKeys.filter(function(k){ return GHOST_DENY_KEYS.indexOf(k) < 0; });
   // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
   //   ⚠️キャスト表示中は adminPriv()=false ＝ プレビュー対象が黒服のときだけ出る（本人と同じ挙動）
   if (!onLeave && (adminPriv() || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === '黒服')) castKeys.push('skill');
@@ -1250,7 +1273,7 @@ function leaveAllows_(tab) { return !onLeave || tab === 'home' || LEAVE_KEYS.ind
 
 function switchTab(tab) {
   contentTargetId = 'content';
-  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  if (!leaveAllows_(tab) || !ghostAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
   switchTabActive(tab);
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'board') { loadBoard(); return; }
@@ -1280,7 +1303,7 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
-  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  if (!leaveAllows_(tab) || !ghostAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'awards') { loadAwards(); return; }
@@ -1916,7 +1939,8 @@ function renderHome(){
   // ＝本人が「予約が消えた」と黒服に問い合わせてくる可能性がある点は承知の上での判断。
   var html = homeGreetHero() + awHomeBanner() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard
     + (onLeave ? '' : homeCallCard()
-    + '<div class="card">'
+    // ゴースト在籍は「今日の予約」「空席状況」カードごと出さない（呼び出しカードは残す）
+    + (ghost ? '' : '<div class="card">'
     +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +     '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">今日の予約</span>'
     +     '<span id="home-rsv-count" style="font-size:11px;color:#94886a"></span>'
@@ -1930,7 +1954,7 @@ function renderHome(){
     +     '<span id="home-vac-at" style="font-size:11px;color:#94886a"></span>'
     +   '</div>'
     +   '<div id="home-vac-list"><div style="color:#94886a;font-size:13px;padding:14px 0;text-align:center">読み込み中...</div></div>'
-    + '</div>')
+    + '</div>'))
     // --- メニュー（全機能ボタン） ---
     + homeMenu();
   setContent(html);
@@ -1950,8 +1974,9 @@ function renderHome(){
     loadMySeat();
   }
 
-  // --- 今日の予約: 同梱済みなら即描画、無ければ従来取得 ---
-  if (portalData && portalData.reservations !== undefined) {
+  // --- 今日の予約: 同梱済みなら即描画、無ければ従来取得（ゴーストはカードが無い＝取得もしない） ---
+  if (ghost) { /* 予約カードを出していないので何もしない */ }
+  else if (portalData && portalData.reservations !== undefined) {
     renderHomeRsv(portalData.reservations || []);
   } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ
     var now = new Date();
@@ -1962,11 +1987,13 @@ function renderHome(){
       .catch(function(){ var el=document.getElementById('home-rsv-list'); if(el) el.innerHTML='<div style="color:#cc5555;font-size:13px;padding:10px 0">予約の取得に失敗しました</div>'; });
   }
 
-  // --- 空席状況: 同梱済みの初回分を即描画し、以降60秒ごとに自動更新 ---
-  if (portalData && portalData.vacancy) renderHomeVacancy(portalData.vacancy);
-  else if (!homeRestPending) fetchVacancy();   // rest待ち中は個別取得せず、届くのを待つ
-  if(window._vacTimer) clearInterval(window._vacTimer);
-  window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } if(document.hidden) return; fetchVacancy(); }, 60000);
+  // --- 空席状況: 同梱済みの初回分を即描画し、以降60秒ごとに自動更新（ゴーストはカードごと無いので回さない） ---
+  if (window._vacTimer) clearInterval(window._vacTimer);
+  if (!ghost) {
+    if (portalData && portalData.vacancy) renderHomeVacancy(portalData.vacancy);
+    else if (!homeRestPending) fetchVacancy();   // rest待ち中は個別取得せず、届くのを待つ
+    window._vacTimer = setInterval(function(){ if(!document.getElementById('home-vac-list')){ clearInterval(window._vacTimer); return; } if(document.hidden) return; fetchVacancy(); }, 60000);
+  }
 
   // 呼び出しの有効時間帯(19:45〜1:00)は時計で変わるため、席表示とボタンゲートを定期的に貼り直して自己修復する
   // （例: 19:40にホームを開いた人も、19:45になれば再読込せずボタンが有効化される）
