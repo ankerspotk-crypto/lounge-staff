@@ -7755,7 +7755,13 @@ function renderOpening(init){
       var pr=prev?(Number((prev.bags||{})[bg.k])||0):null;
       var prLabel=(pr!=null)?' <span style="color:#8a9ac0;font-size:11px">前日¥'+pr.toLocaleString()+'</span>':'';
       var extra='';
-      if(bg.k==='safe' && Number(init.safeAdjust)){ var sa=Number(init.safeAdjust); extra='<div style="font-size:11px;color:'+(sa>0?'#e6c060':'#ff9a9a')+';text-align:right">'+(sa>0?'+':'')+sa.toLocaleString()+'円　運営者が金庫を出し入れ?</div>'; }
+      if(bg.k==='safe'){
+        /* 🏦 管理者の「金庫追加」で説明がつく分は先に差し引く＝残りだけを"抜き差し?"として警告する */
+        var dep=init.safeDeposit||{}, depBefore=Number(dep.before)||0, sa=Number(init.safeAdjust)||0, unexp=sa-depBefore;
+        if(depBefore) extra+='<div style="font-size:11px;color:#e6c060;text-align:right">🏦 管理者の金庫追加 +'+depBefore.toLocaleString()+'円</div>';
+        if(unexp) extra+='<div style="font-size:11px;color:'+(unexp>0?'#e6c060':'#ff9a9a')+';text-align:right">'+(unexp>0?'+':'')+unexp.toLocaleString()+'円　運営者が金庫を出し入れ?</div>';
+        if(Number(dep.after)) extra+='<div style="font-size:11px;color:#e6c060;text-align:right">🏦 開店後の金庫追加 +'+Number(dep.after).toLocaleString()+'円（締めの「残るはず」に加算）</div>';
+      }
       h+='<div class="kv"><span class="k">'+bg.label+prLabel+'</span><span class="v">¥'+cur.toLocaleString()+'</span></div>'+extra;
     });
     h+='<div class="ck-total">スタート合計 ¥'+Number(init.total||0).toLocaleString()+'</div>';
@@ -7763,7 +7769,7 @@ function renderOpening(init){
     h+='<div class="savebtn" style="background:#1a2030" onclick="closeSheet()">閉じる</div>';
     b.innerHTML=h; return;
   }
-  openState={reporterName:'',safeMode:'manual',prevSafe:(prev&&prev.bags?(Number(prev.bags.safe)||0):null),bags:{f5:{m10000:0,m5000:0,m1000:0},f2:{m10000:0,m5000:0,m1000:0},keihi:{m10000:0,m5000:0,m1000:0},safe:{m10000:0,m5000:0,m1000:0}}};
+  openState={reporterName:'',safeMode:'manual',prevSafe:(prev&&prev.bags?(Number(prev.bags.safe)||0):null),prevSafeRaw:(prev&&prev.bags&&prev.bags.safeRaw!=null?Number(prev.bags.safeRaw):null),safeAdded:(prev&&prev.safeAdded?Number(prev.safeAdded):0),bags:{f5:{m10000:0,m5000:0,m1000:0},f2:{m10000:0,m5000:0,m1000:0},keihi:{m10000:0,m5000:0,m1000:0},safe:{m10000:0,m5000:0,m1000:0}}};
   gsr('getKioskStaffList').then(function(names){
     var b2=document.getElementById('sheetBody'); if(!b2)return;
     var h='<div class="ck-note">対象日 '+esc(init.dateKey)+'</div><div class="flabel">報告者（黒服）</div><div class="chips" id="op-rep">'+(names||[]).map(function(n){return '<div class="chip" onclick="opRep(this,\''+esc(String(n).replace(/'/g,"\\'"))+'\')">'+esc(n)+'</div>';}).join('')+'</div>';
@@ -7782,17 +7788,22 @@ function safeDecompose(yen){ yen=Number(yen)||0; var m10=Math.floor(yen/10000); 
 /* 開店の金庫ブロック：確認する（数える）／確認しない（前日残額を自動入力） */
 function opSafeBlock(prevSafe){
   var hasPrev=prevSafe!=null, auto=openState.safeMode==='auto';
-  var pv=hasPrev?'<span style="color:#8a9ac0;font-size:11px;margin-left:6px">前日 ¥'+Number(prevSafe).toLocaleString()+'</span>':'';
+  /* 🏦 管理者が黒服LINE「金庫追加」で入れた分は繰越(prevSafe)に含まれている。
+     「前日¥○○」とだけ出すと数字が合わなく見えるので、生の前日額と追加額を割って見せる。 */
+  var added=Number(openState.safeAdded)||0, raw=(openState.prevSafeRaw!=null)?Number(openState.prevSafeRaw):null;
+  var addNote=(added&&raw!=null)?'<div style="font-size:11px;color:#e6c060;margin:2px 0 6px">🏦 前日 ¥'+raw.toLocaleString()+' ＋ 本日の金庫追加 ¥'+added.toLocaleString()+' ＝ <b>¥'+Number(prevSafe).toLocaleString()+'</b></div>':'';
+  var pvLabel=added?'繰越':'前日';
+  var pv=hasPrev?'<span style="color:#8a9ac0;font-size:11px;margin-left:6px">'+pvLabel+' ¥'+Number(prevSafe).toLocaleString()+'</span>':'';
   var seg=hasPrev?('<div class="safe-seg"><button class="'+(!auto?'on':'')+'" onclick="opSafeMode(\'manual\')">数える</button>'
-    +'<button class="'+(auto?'on':'')+'" onclick="opSafeMode(\'auto\')">確認しない（前日 ¥'+Number(prevSafe).toLocaleString()+'）</button></div>')
+    +'<button class="'+(auto?'on':'')+'" onclick="opSafeMode(\'auto\')">確認しない（'+pvLabel+' ¥'+Number(prevSafe).toLocaleString()+'）</button></div>')
     :'<div style="font-size:11px;color:#8a9ac0;margin:2px 0 6px">前日の締めデータが無いため手動で数えてください</div>';
   var inner;
   if(auto&&hasPrev){
-    inner='<div class="safe-auto-note">🔒 金庫を開けられないため <b>前日の残額 ¥'+Number(prevSafe).toLocaleString()+'</b> をそのまま使用します（金庫は未確認）</div>';
+    inner='<div class="safe-auto-note">🔒 金庫を開けられないため <b>'+pvLabel+'の残額 ¥'+Number(prevSafe).toLocaleString()+'</b> をそのまま使用します（金庫は未確認）</div>';
   }else{
     inner='<div class="ck-row" style="margin:0">'+CASH_DENOMS.map(function(d){return '<label class="ck-denom"><span>'+d.label+'</span><input type="number" min="0" inputmode="numeric" data-bag="safe" data-d="'+d.k+'" value="'+(openState.bags.safe[d.k]||'')+'" oninput="opInput(this)"></label>';}).join('')+'</div>';
   }
-  return '<div id="op-safe-block" style="margin-bottom:8px"><div class="ck-flabel" style="width:auto;margin-bottom:6px">🟣 金庫'+pv+'</div>'+seg+inner+'</div>';
+  return '<div id="op-safe-block" style="margin-bottom:8px"><div class="ck-flabel" style="width:auto;margin-bottom:6px">🟣 金庫'+pv+'</div>'+addNote+seg+inner+'</div>';
 }
 function opSafeMode(m){
   openState.safeMode=m;
@@ -7882,7 +7893,10 @@ function openCashCheck(){
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
-  var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
+  /* 🏦 開店カウント後に管理者が足した「金庫追加」を載せた額。これが今あるはずの金庫。
+     safeNow が無い旧バックエンドでは従来どおり開店のカウントにフォールバックする。 */
+  var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)
+    ?(Number(openingInit.safeNow!=null?openingInit.safeNow:openingInit.bags.safe)||0):null;
   cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
   renderCashCheck();
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
