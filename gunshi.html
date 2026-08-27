@@ -1454,7 +1454,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27g';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-27h';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2053,6 +2053,15 @@ function cfSteps_(){
   //   終わっている作業をチェックさせると「あと N 件」が実態とズレて、警告そのものが読まれなくなる。
   //   画面は業務メニュー「🚗 送り管理」から常時開ける＝導線は消えていない。
   S.push({id:'safe', em:'🔐',t:'金庫へ収納・出金確認',s:'残金の収納と臨時出金',state:homeChecks()['safe']?'done':'todo',act:'openSafeWithdrawal()',manual:true});
+  /* 🍶 酒屋への発注（ボス指示 2026-08-27）。ボス確定＝①必須工程（帰れない）②毎日出す③画面は持たずチェックだけ。
+     ⚠️「今日は発注する日か」の判断を黒服に任せて出し分けると必ず抜ける＝日払い0件の日も常時出す既存方針と同じく毎晩出す。
+        発注が要らない夜も同じチェックで閉じる＝「確かめた」の記録であって「発注した」の記録ではない。
+     ⛔ここに在庫の判定（発注点割れ等）を足さないこと。必須工程は cfSteps_・気づかせる系は cfWarnItems_ で分ける
+        （同じ条件を2箇所で判定して締めが詰む事故を2026-08-25に2回踏んでいる）。品目を見るなら業務メニュー📋在庫発注管理。 */
+  var sakeOk=!!homeChecks()['cf_sake'];
+  S.push({id:'cf_sake',em:'🍶',t:'酒屋へ発注する',
+    s:sakeOk?'確認しました':'足りない酒を確かめて発注（発注が要らない日もチェック）',
+    state:sakeOk?'done':'todo',act:"toggleHomeCheck('cf_sake')",manual:true});
   // ⑥ 残っているタスクを決める（対応した or 明日へ持ち越す）
   var pend=(TASKS||[]).filter(function(x){return !x.deferred;});
   S.push({id:'cf_task',em:'📋',t:'残っているタスクを決める',
