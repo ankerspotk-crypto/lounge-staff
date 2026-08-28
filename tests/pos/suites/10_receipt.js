@@ -3,14 +3,18 @@
    全額で判定すると要らない印紙を貼り、カード扱いにすると貼るべき印紙を貼らない（過怠税）。 */
 const t = require('../lib/tiny');
 const { loadPieces } = require('../lib/frontend');
+const ex = require('../lib/extract');
 
 const FNS = ['rcptInshi_', 'rcptYen_', 'rcptToday_', 'rcptJp_', 'rcptDateStr_', 'rcptNo_',
              'rcptLandscapeCanvas_', 'rcptBuildXml_', 'rcptCalc', 'esc'];
 const VARS = ['RCPT_TAX', 'RCPT_CASH', 'RCPT_SPLIT', 'RCPT_MODE', 'RCPT_ISSUER', 'RCPT_DATEMODE', 'RCPT_SEL'];
 /* 複数枚の発行（発行キュー）。⚠️rcptRerender_ は menu-body を作り直すのでテストでは殺す */
-const QFNS = ['rcptQSum_', 'rcptQPayLabel_', 'rcptQAmtNow_', 'rcptQAtenaNow_', 'rcptRerender_',
-              'rcptQSeedPay_', 'rcptQSplit', 'rcptQOff', 'rcptQAdd', 'rcptQDel', 'rcptQPick',
-              'rcptQSet', 'rcptQApply_', 'rcptQDone_', 'rcptQPayWarn_', 'rcptQueueHtml_', 'rcptYen_', 'esc'];
+/* ⚠️rcptQRefresh_（キューの箱だけ差し替え＋入力欄への書き戻し）も**実物を通す**。
+   ここを殺したまま検査していたので「全再描画で入力欄が飛ぶ」を実ブラウザまで見逃した。 */
+const QFNS = ['rcptQSum_', 'rcptQPayLabel_', 'rcptQAmtNow_', 'rcptQAtenaNow_',
+              'rcptQRefresh_', 'rcptQFill_', 'rcptQSeedPay_', 'rcptQSplit', 'rcptQOff', 'rcptQAdd',
+              'rcptQDel', 'rcptQPick', 'rcptQSet', 'rcptQApply_', 'rcptQDone_', 'rcptQPayWarn_',
+              'rcptQueueHtml_', 'rcptYen_', 'esc'];
 const QVARS = ['RCPT_QUEUE', 'RCPT_QIDX', 'RCPT_BASE', 'RCPT_BASEPAY', 'RCPT_SPLIT', 'RCPT_CASH'];
 
 module.exports = function () {
@@ -91,7 +95,6 @@ module.exports = function () {
   t.section('🧾 複数枚の発行 ─ B：金額を割る（割り勘）');
   function q(base, pay) {
     const p = loadPieces(QFNS, { vars: QVARS, globals: {} });
-    p.fn.rcptRerender_ = function () {};
     p.fn.RCPT_BASE = base;
     p.fn.RCPT_BASEPAY = pay || null;
     p.fn.document.els['rcpt-amt'] = { value: String(base) };
@@ -183,6 +186,95 @@ module.exports = function () {
     t.eq(p.fn.RCPT_QIDX, 1, '次の未発行へ進む');
     p.fn.rcptQDone_(); p.fn.rcptQDone_();
     t.ok(p.fn.RCPT_QUEUE.every(r => r.done === 1), '全部刷り終わる');
+  }
+
+  t.section('💰会計した金額を既定で入れる（ボス指示 2026-08-28）');
+  const PFNS = ['rcptPosFor_', 'rcptDenAmtHtml_', 'rcptDenListHtml_', 'rcptPick', 'rcptSetCash',
+                'rcptQRefresh_', 'rcptQFill_', 'rcptQueueHtml_', 'rcptQSum_', 'rcptQApply_',
+                'rcptQPayWarn_', 'rcptQPayLabel_', 'rcptYen_', 'esc'];
+  const PVARS = ['RCPT_POS', 'RCPT_DENPYO', 'RCPT_SEL', 'RCPT_BASE', 'RCPT_BASEPAY',
+                 'RCPT_SPLIT', 'RCPT_CASH', 'RCPT_QUEUE', 'RCPT_QIDX', 'RCPT_ATENA'];
+  const bill = (rowIdx, cust, total, pay, closed) => ({
+    rowIdx: String(rowIdx), total: total,
+    data: { _cust: cust, _table: '2F BOX1', pay: pay || { cash: total, card: 0, credit: 0 },
+            closed: closed ? { ts: 'x' } : undefined }
+  });
+  function pick(bills, denpyo) {
+    const p = loadPieces(PFNS, { vars: PVARS, globals: {} });
+    p.fn.RCPT_POS = bills;
+    p.fn.RCPT_DENPYO = denpyo;
+    p.fn.document.els['rcpt-amt'] = { value: '' };
+    p.fn.document.els['rcpt-atena'] = { value: '' };
+    return p;
+  }
+  {
+    const p = pick([bill(2, '田中', 67200, { cash: 30000, card: 37200, credit: 0 }, true)],
+                   [{ name: '田中', seat: '2F BOX1', time: '20:00', no: '0139', ryoshuName: '' }]);
+    const m = p.fn.rcptPosFor_(p.fn.RCPT_DENPYO[0]);
+    t.eq(m.total, 67200, '客名で会計済みの伝票と結べる');
+    t.eq(m.pay, { cash: 30000, card: 37200, other: 0 }, '支払の内訳も持ってくる（印紙の判定に効く）');
+    t.eq(m.closed, true, '会計済みかどうかも分かる');
+    t.ok(/会計済み/.test(p.fn.rcptDenAmtHtml_(p.fn.RCPT_DENPYO[0])), '一覧に「会計済み」と金額が出る');
+
+    p.fn.rcptPick(0);
+    t.eq(p.fn.document.els['rcpt-amt'].value, 67200, '⭐選ぶと金額が入る（毎回の手打ちが要らない）');
+    t.eq(p.fn.document.els['rcpt-atena'].value, '田中 様', '宛名も従来どおり入る');
+    t.eq(p.fn.RCPT_BASE, 67200, '複数枚に割るときの基準になる');
+    t.eq(p.fn.RCPT_BASEPAY, { cash: 30000, card: 37200, other: 0 }, '内訳のズレ警告も効くようになる');
+    t.eq(p.fn.RCPT_SPLIT, { cash: 30000, card: 37200, other: 0 }, '印紙は現金分で判定される');
+    t.eq(p.fn.RCPT_CASH, true, '現金があるので現金扱い');
+  }
+  {
+    /* ⚠️同名が2件＝他人の金額を入れる方が手打ちより悪い */
+    const p = pick([bill(2, '田中', 67200), bill(3, '田中', 15600)],
+                   [{ name: '田中', seat: '2F BOX1' }]);
+    t.eq(p.fn.rcptPosFor_(p.fn.RCPT_DENPYO[0]), null, '⚠️同じお名前が2件あるときは結ばない');
+    t.eq(p.fn.rcptDenAmtHtml_(p.fn.RCPT_DENPYO[0]), '選ぶ ▸', '一覧にも金額を出さない');
+    p.fn.rcptPick(0);
+    t.eq(p.fn.document.els['rcpt-amt'].value, '', '金額は空のまま＝手打ちに任せる（黙って他人の金額を入れない）');
+    t.eq(p.fn.RCPT_BASE, 0, '基準も置かない');
+  }
+  {
+    const p = pick([bill(2, '鈴木', 15600)], [{ name: '田中', seat: '2F BOX1' }]);
+    t.eq(p.fn.rcptPosFor_(p.fn.RCPT_DENPYO[0]), null, '伝票が無い客は結ばない');
+  }
+  {
+    const p = pick([bill('demo', '田中', 99999)], [{ name: '田中', seat: '2F BOX1' }]);
+    t.eq(p.fn.rcptPosFor_(p.fn.RCPT_DENPYO[0]), null, '🧪お試し伝票とは結ばない');
+  }
+  {
+    const p = pick([bill(2, '田中', 31200, { cash: 0, card: 31200, credit: 0 }, true)],
+                   [{ name: '田中', seat: '2F BOX1' }]);
+    p.fn.rcptPick(0);
+    t.eq(p.fn.RCPT_CASH, false, '全額カードの会計なら領収書もカード扱い（印紙なし）');
+  }
+  {
+    const p = pick([bill(2, '田中', 67200, null, false)], [{ name: '田中', seat: '2F BOX1' }]);
+    t.ok(/未会計/.test(p.fn.rcptDenAmtHtml_(p.fn.RCPT_DENPYO[0])), 'まだ会計していない伝票は「未会計」と分かる');
+  }
+  {
+    const p = pick([bill(2, '田中', 67200, null, true)], [{ name: '田中', seat: '2F BOX1' }]);
+    p.fn.RCPT_QUEUE = [{ atena: 'x', amount: 1, pay: 'cash', done: 0 }]; p.fn.RCPT_QIDX = 0;
+    p.fn.rcptPick(0);
+    t.eq(p.fn.RCPT_QUEUE, null, '伝票を選び直したら枚数の割り方はやり直す（前の客の割り方を持ち越さない）');
+  }
+
+  t.section('⚠️全部描き直しても宛名と金額が残る（実ブラウザで踏んだ）');
+  {
+    /* 発行店を変える等でフォームを丸ごと作り直すと、入力欄の中だけに持っていた値は消える。
+       だから状態（RCPT_ATENA / RCPT_BASE）を初期値に使う。ここは組み立て文字列で検査する。 */
+    const form = ex.pluckFn(ex.frontPath(process.env.POS_TARGET === 'live' ? 'live' : 'test'), ['rcptRenderMenu_']);
+    t.ok(/RCPT_ATENA/.test(form), '宛名の初期値に状態を使っている');
+    t.ok(/R&&RCPT_BASE>0/.test(form), '金額の初期値に会計金額を使っている');
+    const pickFn = ex.pluckFn(ex.frontPath(process.env.POS_TARGET === 'live' ? 'live' : 'test'), ['rcptPick']);
+    t.ok(!/rcptRerender_/.test(pickFn), '⚠️伝票を選んだ時に全再描画しない（入れた値が消える）');
+    t.ok(/rcptQRefresh_/.test(pickFn), 'キューの箱だけ差し替える');
+  }
+  {
+    const p = pick([bill(2, '田中', 67200, null, true)], [{ name: '田中', seat: '2F BOX1' }]);
+    p.fn.rcptPick(0);
+    t.eq(p.fn.RCPT_ATENA, '田中 様', '宛名を状態として持つ');
+    t.eq(p.fn.document.els['rcpt-amt'].value, 67200, '入力欄にも金額が入る（実物のrcptQRefresh_を通して）');
   }
 
   t.section('発行日の指定');

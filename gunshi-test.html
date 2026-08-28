@@ -1543,7 +1543,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28j-test';
+var BUILD='2026-08-28k-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -5507,7 +5507,7 @@ function bmOpenReceipt(){
   var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
   setTimeout(function(){
     var a=document.getElementById('rcpt-atena'), m=document.getElementById('rcpt-amt');
-    if(a&&nm) a.value=nm+' 様';
+    if(a&&nm){ a.value=nm+' 様'; if(typeof RCPT_ATENA!=='undefined') RCPT_ATENA=nm+' 様'; }
     if(m) m.value=c.total;
     if(typeof rcptSetCash==='function') rcptSetCash(cashApplied>0, true, true);  // 描画後にトグルの見た目を合わせる
     if(typeof rcptCalc==='function') rcptCalc();
@@ -6834,6 +6834,42 @@ function rcptCss_(){ if(document.getElementById('rcpt-css'))return; var s=docume
   '.rcpt-sign{border:1px solid #333;border-radius:4px;height:56px;margin-top:6px;position:relative}',
   '.rcpt-sign span{position:absolute;top:3px;left:6px;font-size:9px;color:#999}'
   ].join(''); document.head.appendChild(s); }
+/* ============================================================================
+   💰 会計金額を領収書に既定で入れる（ボス指示 2026-08-28）
+   ----------------------------------------------------------------------------
+   ■ 伝票の⑧から開いた時は元から入る。**メニューから開いて「予約伝票を選ぶ」で選んだ時**が
+     宛名だけで金額が空だった＝毎回手打ちしていた。
+   ■ 金額の正は**その日のPOS伝票**（`getPosBills`＝会計済みなら締めた金額）。
+   ⚠️予約伝票の行はPOSの伝票行(rowIdx)を持っていない＝**客名の完全一致でしか結べない**。
+     だから**同名が2件以上あるときは結ばない**（他人の金額を入れる方が手打ちより悪い）。
+     [[reference_visit_attribution_matching]]＝名字フォールバックで同名別人を混線させた前科がある。
+   ■ 画面には結んだ金額を必ず出す＝黒服が押す前に目で確かめられる。
+============================================================================ */
+var RCPT_POS=null;   // その日のPOS伝票（null=未取得）
+/* ⚠️宛名と金額は**入力欄の中だけ**に持っていたので、発行店を変える等の全再描画で消えていた。
+   状態として持ち、初期値に使う＝何度描き直しても同じ物が出る。 */
+var RCPT_ATENA='';
+function rcptLoadPosBills_(){
+  if(!IS_GAS){ RCPT_POS=[]; return; }
+  var dk=(typeof bmDateKey==='function')?bmDateKey():'';
+  gsr('getPosBills',dk).then(function(r){
+    RCPT_POS=(r&&r.bills)?r.bills:[];
+    if(menuView==='receipt'){ var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML=rcptDenListHtml_(); }
+  }).catch(function(){ RCPT_POS=[]; });
+}
+/* 予約伝票の行 → POS伝票。⚠️客名の完全一致・かつ1件だけの時しか結ばない */
+function rcptPosFor_(d){
+  if(!RCPT_POS||!RCPT_POS.length||!d) return null;
+  var nm=String(d.name||'').trim(); if(!nm) return null;
+  var hit=RCPT_POS.filter(function(b){
+    return b&&b.data&&String(b.data._cust||'').trim()===nm&&String(b.rowIdx)!=='demo';
+  });
+  if(hit.length!==1) return null;                 // 0件＝結べない／2件以上＝同名で危険
+  var b=hit[0], pay=(b.data&&b.data.pay)||{}, total=Number(b.total)||0;
+  var card=Number(pay.card)||0, credit=Number(pay.credit)||0;
+  return { rowIdx:b.rowIdx, total:total, closed:!!(b.data&&b.data.closed),
+           pay:{ cash:Math.max(0,total-card-credit), card:card, other:credit } };
+}
 function rcptDenListHtml_(){
   if(RCPT_DENPYO===null) return '<div class="rcpt-den-loading">読み込み中…</div>';
   if(!RCPT_DENPYO.length) return '<div class="rcpt-den-empty">本日の予約伝票はありません（宛名は手入力で発行できます）</div>';
@@ -6842,8 +6878,15 @@ function rcptDenListHtml_(){
     return '<div class="rcpt-den'+(i===RCPT_SEL?' on':'')+'" onclick="rcptPick('+i+')">'
       +'<div><div class="rcpt-den-nm">'+(d.time?'<span class="rcpt-den-no">'+esc(d.time)+'</span> ':'')+esc(d.seat||'')+'　'+esc(d.name||'')+(d.no?' <span class="rcpt-den-no">#'+esc(d.no)+'</span>':'')+'</div>'
       +'<div class="rcpt-den-sub">領収書名：'+esc(rn)+'</div></div>'
-      +'<div class="rcpt-den-amt" style="font-size:12px;color:var(--sub)">選ぶ ▸</div></div>';
+      +'<div class="rcpt-den-amt" style="font-size:12px;color:var(--sub)">'+rcptDenAmtHtml_(d)+'</div></div>';
   }).join('');
+}
+/* 行の右肩＝結べた会計金額。⚠️結べない時は「選ぶ▸」のまま＝手打ちに任せる（黙って0を入れない） */
+function rcptDenAmtHtml_(d){
+  var p=rcptPosFor_(d);
+  if(!p||!(p.total>0)) return '選ぶ ▸';
+  return '<b style="color:'+(p.closed?'var(--gold)':'#8aa8c8')+';font-size:13px">'+rcptYen_(p.total)+'</b>'
+    +'<div style="font-size:10px;color:var(--sub)">'+(p.closed?'会計済み':'未会計')+'</div>';
 }
 /* ===== 📜 発行履歴（発行済み領収書/受領書の控え一覧・軍師） ===== */
 var RCPT_TAB='form';       // 'form'=発行 | 'history'=発行履歴
@@ -6909,7 +6952,21 @@ function rcptQSum_(){ return (RCPT_QUEUE||[]).reduce(function(a,r){ return a+(Nu
 function rcptQPayLabel_(p){ return (p==='card')?'カード':((p==='other')?'請求書':'現金'); }
 function rcptQAmtNow_(){ return parseInt((((document.getElementById('rcpt-amt')||{}).value)||'0').replace(/[^0-9]/g,''),10)||0; }
 function rcptQAtenaNow_(){ return (((document.getElementById('rcpt-atena')||{}).value)||'').trim(); }
-function rcptRerender_(){ var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+/* ⚠️キューを触るたびに全再描画すると、**宛名と金額の入力欄が作り直されて中身が飛ぶ**
+   （実ブラウザで踏んだ。単体テストはrcptRerender_を殺していたので通ってしまった）。
+   キューの箱だけ差し替え、入力欄には値を書き戻す。 */
+function rcptQRefresh_(){
+  var el=document.getElementById('rcpt-queue'); if(el)el.innerHTML=rcptQueueHtml_();
+  rcptQFill_(); rcptQApply_();
+  if(typeof rcptCalc==='function') rcptCalc();
+}
+/* いま載っている行の宛名・金額を入力欄へ書き戻す */
+function rcptQFill_(){
+  if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]) return;
+  var r=RCPT_QUEUE[RCPT_QIDX];
+  var ae=document.getElementById('rcpt-atena'); if(ae)ae.value=r.atena||'';
+  var me=document.getElementById('rcpt-amt');   if(me)me.value=Number(r.amount)||0;
+}
 
 /* 会計の内訳から行ごとの支払種別を埋める（現金→カード→請求書の順に充当）。
    ⚠️1行が2つの方法にまたがる場合は先に埋まる方を採る＝黒服が直せる（既定を置くだけ） */
@@ -6933,27 +6990,27 @@ function rcptQSplit(n){
   var each=Math.floor(base/n), rem=base-each*n;
   RCPT_QUEUE=[];
   for(var i=0;i<n;i++) RCPT_QUEUE.push({atena:atena, amount:each+(i===0?rem:0), pay:'cash', done:0});
-  rcptQSeedPay_(); RCPT_QIDX=0; rcptRerender_();
+  rcptQSeedPay_(); RCPT_QIDX=0; rcptQRefresh_();
 }
-function rcptQOff(){ RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_SPLIT=null; rcptRerender_(); }
+function rcptQOff(){ RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_SPLIT=null; rcptQRefresh_(); }
 /* C＝1行足す。金額0で置いて黒服が書く */
 function rcptQAdd(){
   if(!RCPT_QUEUE) RCPT_QUEUE=[{atena:rcptQAtenaNow_(), amount:rcptQAmtNow_(), pay:'cash', done:0}];
   RCPT_QUEUE.push({atena:rcptQAtenaNow_(), amount:0, pay:'cash', done:0});
-  RCPT_QIDX=RCPT_QUEUE.length-1; rcptRerender_();
+  RCPT_QIDX=RCPT_QUEUE.length-1; rcptQRefresh_();
 }
 function rcptQDel(i){
   if(!RCPT_QUEUE) return;
   RCPT_QUEUE.splice(i,1);
   if(!RCPT_QUEUE.length){ rcptQOff(); return; }
   if(RCPT_QIDX>=RCPT_QUEUE.length) RCPT_QIDX=RCPT_QUEUE.length-1;
-  rcptRerender_();
+  rcptQRefresh_();
 }
-function rcptQPick(i){ RCPT_QIDX=i; rcptRerender_(); }
+function rcptQPick(i){ RCPT_QIDX=i; rcptQRefresh_(); }
 function rcptQSet(i,k,v){
   if(!RCPT_QUEUE||!RCPT_QUEUE[i]) return;
   RCPT_QUEUE[i][k]=(k==='amount')?Math.max(0,parseInt(String(v).replace(/[^0-9]/g,''),10)||0):v;
-  rcptRerender_();
+  rcptQRefresh_();
 }
 /* いま載っている行を発行画面へ流し込む。⚠️印紙は**その1枚の支払種別**で判定する */
 function rcptQApply_(){
@@ -6967,7 +7024,7 @@ function rcptQDone_(){
   if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]) return;
   RCPT_QUEUE[RCPT_QIDX].done=1;
   for(var i=0;i<RCPT_QUEUE.length;i++){ if(!RCPT_QUEUE[i].done){ RCPT_QIDX=i; break; } }
-  setTimeout(rcptRerender_,60);
+  setTimeout(rcptQRefresh_,60);
 }
 /* ⚠️行ごとの支払種別の合計が、会計の内訳とズレていないか。
    ズレたまま刷ると**収入印紙を多く貼る／貼り忘れる**（印紙は現金分に掛かるため）。 */
@@ -7043,7 +7100,8 @@ function rcptRenderMenu_(el){
   if(R){
     h+='<div class="rcpt-h">予約伝票を選ぶ（領収書名を自動で呼び出し）</div>';
     h+='<div id="rcpt-denlist" class="rcpt-denlist">'+rcptDenListHtml_()+'</div>';
-    h+='<div class="rcpt-note">選ぶと領収書名（宛名）が入ります。宛名は自由入力も可。金額は手入力してください。</div>';
+    h+='<div class="rcpt-note">選ぶと<b>領収書名（宛名）と会計金額</b>が入ります。'
+      +'金額が出ていない行は伝票と結べていません（同じお名前が2件ある等）＝金額は手入力してください。</div>';
   }
   var mSelCast=null; if(M&&RCPT_PAYCAST){ (RCPT_PAYCASTS[RCPT_PAYMONTH]||[]).forEach(function(c){ if(c.name===RCPT_PAYCAST)mSelCast=c; }); }
   if(M){
@@ -7054,14 +7112,14 @@ function rcptRenderMenu_(el){
       +'<select id="rcpt-paycast" class="finput" onchange="rcptPickCast(this.value)">'+rcptCastOpts_()+'</select>';
     h+='<div class="rcpt-note">金額は先月までの給与計算の「最終支給額」を自動で挿入します（手入力不可）。給与が締まっていない当月は選べません。</div>';
   }
-  if(R){ rcptQApply_(); h+=rcptQueueHtml_(); }   /* 🧾複数枚の発行（キュー）。⚠️印紙判定のため宛名より前で行を確定させる */
+  if(R){ rcptQApply_(); h+='<div id="rcpt-queue">'+rcptQueueHtml_()+'</div>'; }   /* 🧾複数枚の発行（キュー）。⚠️印紙判定のため宛名より前で行を確定させる */
   var atenaLabel=R?'宛名（領収書名）':(M?'受取人（キャスト・自動入力／修正可）':'受取人（今日の出勤スタッフ・派遣含む／自由入力可）');
   h+='<div class="flabel">'+atenaLabel+'</div>';
   if(J){ h+='<select id="rcpt-payee" class="finput" onchange="rcptPickPayee(this.value)" style="margin-bottom:6px"><option value="">▼ 出勤スタッフから選ぶ</option>'+rcptPayeeOpts_()+'<option value="__free">（自由入力）</option></select>'; }
   var qRow=(R&&RCPT_QUEUE&&RCPT_QIDX>=0)?RCPT_QUEUE[RCPT_QIDX]:null;
-  h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+(qRow?(' value="'+esc(qRow.atena||'')+'"'):((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):''))+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
+  h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+(qRow?(' value="'+esc(qRow.atena||'')+'"'):((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):(RCPT_ATENA?(' value="'+esc(RCPT_ATENA)+'"'):'')))+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
   h+='<div class="flabel">'+(R?'領収金額（税込・円）':'受領金額（円）')+(M?' <span style="color:var(--sub);font-weight:400">＝給与計算の最終支給額（自動）</span>':'')+'</div>'
-    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+(qRow?(' value="'+(Number(qRow.amount)||0)+'"'):((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):''))+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
+    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+(qRow?(' value="'+(Number(qRow.amount)||0)+'"'):((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):((R&&RCPT_BASE>0)?(' value="'+RCPT_BASE+'"'):'')))+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
   if(R){
     h+='<div class="flabel">支払方法（収入印紙の判定に使用）</div>'
       +'<div class="rcpt-seg"><button id="rcpt-cash" class="'+(RCPT_CASH?'on':'')+'" onclick="rcptSetCash(true)">現金</button>'
@@ -7101,9 +7159,21 @@ function rcptSetCash(v,quiet,keepSplit){ RCPT_CASH=v;
 function rcptPick(i){
   RCPT_SEL=i; var d=RCPT_DENPYO[i]; if(!d)return;
   var atena=d.ryoshuName?d.ryoshuName:(d.company?d.company+' 御中':((d.name&&d.name!=='ご新規')?d.name+' 様':''));
-  var ae=document.getElementById('rcpt-atena'); if(ae)ae.value=atena;   // 宛名(領収書名)のみ自動。金額は手入力。
+  RCPT_ATENA=atena;
+  var ae=document.getElementById('rcpt-atena'); if(ae)ae.value=atena;
+  /* ⚠️2026-08-28ボス指示＝**会計した金額を既定で入れる**（それまで宛名だけで毎回手打ちだった）。
+     結べた時だけ入れる。結べない時は空のまま＝黙って0や他人の金額を入れない。
+     複数枚に割るときの基準(RCPT_BASE)と支払内訳(印紙の判定)も一緒に渡す。 */
+  var p=rcptPosFor_(d);
+  if(p&&p.total>0){
+    var me=document.getElementById('rcpt-amt'); if(me)me.value=p.total;
+    RCPT_BASE=p.total; RCPT_BASEPAY=p.pay;
+    RCPT_SPLIT={cash:p.pay.cash, card:p.pay.card, other:p.pay.other};
+    if(typeof rcptSetCash==='function') rcptSetCash(p.pay.cash>0,true,true);
+    RCPT_QUEUE=null; RCPT_QIDX=-1;      // 伝票を選び直したら枚数の割り方はやり直す
+  }
   var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML=rcptDenListHtml_();
-  rcptCalc();
+  rcptQRefresh_();   /* ⚠️全再描画にすると、いま入れた宛名と金額が作り直されて消える */
 }
 function rcptCalc(){
   var amount=parseInt((((document.getElementById('rcpt-amt')||{}).value)||'0').replace(/[^0-9]/g,''),10)||0;
@@ -7370,12 +7440,13 @@ function rcptLogIssue_(reissue){
   }catch(e){}
 }
 function openReceipt(){
-  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_BASE=0; RCPT_BASEPAY=null; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
+  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_BASE=0; RCPT_BASEPAY=null; RCPT_ATENA=''; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
   RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
   RCPT_TAB='form'; RCPT_HIST=null; RCPT_HIST_F=''; RCPT_HIST_Q='';
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
   rcptLoadIssuers_();   // 発行店マスタを取得→既定を初期選択（!IS_GAS はモック）
+  RCPT_POS=null; rcptLoadPosBills_();   // 💰会計金額を既定で入れるため、その日のPOS伝票も取る
   if(!IS_GAS){ RCPT_DENPYO=rcptDenpyoMock_(); RCPT_PAYEES=rcptPayeeMock_(); var dl0=document.getElementById('rcpt-denlist'); if(dl0)dl0.innerHTML=rcptDenListHtml_(); return; }
   gsr('getReceiptPayees').then(function(r){ RCPT_PAYEES=(r&&r.rows)?r.rows:[]; if(menuView==='receipt'&&RCPT_MODE==='J'){ var el2=document.getElementById('menu-body'); if(el2)rcptRenderMenu_(el2); } }).catch(function(){ RCPT_PAYEES=[]; });
   gsr('getReceiptReservationsToday').then(function(r){
