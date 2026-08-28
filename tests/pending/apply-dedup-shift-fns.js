@@ -22,10 +22,17 @@
      ② node tests/pending/apply-dedup-shift-fns.js /tmp/kioskdeploy/コード.js
      ③ clasp push -f → 二度打ちで "already up to date" → clasp deploy -i AKfycbxG4IdW…
      ④ repo 側の鏡も揃える: node tests/pending/apply-dedup-shift-fns.js Code.gs
-     ⑤ **押した「後」にも生存確認**（押す前だけだと、押す瞬間に誰かが書き込んだ分を見逃す）:
-        grep -c '^function getShiftMgmtData_' コード.js   → 1（掃除が載った）
-        grep -c 'getPosNextPay' コード.js                  → 2（cloud-21のPOS集計 生存）
-        grep -c "'NIPPO_'" コード.js ／ nippo.js の日報4関数 → 生存（cloud-25の日報）
+     ⑤ **押した「後」にも生存確認**（押す前だけだと、押す瞬間に誰かが書き込んだ分を見逃す）。
+        ⚠️**見る対象はローカルの /tmp ではない。** /tmp は「送った物」であって「配られている物」ではない。
+          ローカルへのgrepは "HEADに入った" 証明ですらない（pushしたつもり／別セッションの上書き の窓がある）。
+          空dirに .clasp.json だけ置いて `clasp pull` し、**降りてきた実体**に対して見る:
+            grep -c '^function getShiftMgmtData_' <pulled>/コード.js   → 1（掃除が載った）
+            grep -c '^function addShiftStaff_'    <pulled>/コード.js   → 1（5引数版だけ）
+            grep -c 'getPosNextPay'               <pulled>/コード.js   → 2（cloud-21のPOS集計 生存）
+            grep -c "'NIPPO_'" <pulled>/コード.js ／ <pulled>/nippo.js の日報4関数 → 生存（cloud-25の日報）
+        ⚠️これでも証明できるのは**サーバ@HEAD**まで。**本番反映の証明は別**＝`clasp list-deployments` で
+          `AKfycbxG4IdW…` の版が自分の出した版に上がっていること（＋GASエディタ「実行数」の「導入」列）。
+        ⚠️この変更はGASのみ＝`gunshi.html` の `BUILD` バッジは進めない（Pagesは無関係）。
    ⚠️Code.gs は別セッションのWIPが同居する＝**git add しない**。
 ============================================================================ */
 const fs = require('fs');
