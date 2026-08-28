@@ -1525,7 +1525,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28d-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28e-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -10250,6 +10250,29 @@ function checkClockDrift(){
   var t0=Date.now();
   gsr('getServerTime').then(function(st){
     if(!st||!st.epoch)return;
+    /* ⚠️2026-08-28追加＝**営業日の自動切替**。
+       TODAY/curDate は起動時に1回決めたきりで、朝6時をまたいでも更新されていなかった。
+       軍師のiPadは開きっぱなし＝日付が変わっても前の営業日のまま動き続け、
+         ①予約一覧が前日のまま（ボス報告：28日のホール状況なのに予約が27日）
+         ②**その日の伝票が前日の営業日に保存される**（bmDateKey()=TODAY）
+         ③閉店ゲートはサーバーの営業日を見るので、今日の伝票が1件も見えない
+       が同時に起きる。3時のセッション失効でreloadは掛かるが、その時刻はまだ前の営業日。
+       ⭐日付の正は**サーバー**（getServerTimeのbizDate）。端末の時計は領収書の日付戻しで
+         過去にされている場合がある＝端末時計で切り替えてはいけない。
+       ⚠️この then は末尾の .catch(function(){}) で握り潰される＝ここで例外を出すと
+         時刻監視ごと黙って死ぬ。必ず try で囲み、typeofで存在を確かめてから呼ぶ。 */
+    try{
+      if(st.bizDate&&typeof TODAY!=='undefined'&&st.bizDate!==TODAY){
+        var wasToday=(curDate===TODAY);
+        TODAY=st.bizDate;
+        if(wasToday) curDate=TODAY;        // ◀で過去を調べている人の画面は奪わない
+        if(typeof bmLoad==='function') bmLoad();   // 下書きは営業日ごとのキー＝新しい日に持ち替える
+        if(typeof bmPull==='function') bmPull();
+        if(typeof toast==='function') toast('営業日が '+TODAY+' に変わりました');
+        if(wasToday&&typeof loadAll==='function') loadAll();
+        else if(typeof renderAll==='function') renderAll();
+      }
+    }catch(e){}
     var t1=Date.now();
     var offsetSec=Math.round(((t0+t1)/2 - st.epoch)/1000); // 端末 - サーバー（往復遅延を相殺）
     if(Math.abs(offsetSec)>=CLOCK_DRIFT_SEC){

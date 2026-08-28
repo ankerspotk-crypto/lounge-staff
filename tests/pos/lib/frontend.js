@@ -106,4 +106,34 @@ function loadFront(opts) {
     meta: { file: block.file, startLine: block.startLine, lines: block.lines, build: ex.frontBuild(opts.which) }
   };
 }
-module.exports = { loadFront, makeLocalStorage };
+/* BMブロックの**外**にある関数を名前指定で切り出して走らせる（日付の切替など）。
+   ⚠️ここも写経しない＝gunshi-test.html の実物を pluckFn で抜く。 */
+function loadPieces(names, seed) {
+  const which = (seed && seed.which) || (process.env.POS_TARGET === 'live' ? 'live' : 'test');
+  const log = { toast: [], gsr: [], calls: [] };
+  const plan = (seed && seed.gsr) || {};
+  const sandbox = Object.assign({
+    console, document: makeDoc(), localStorage: makeLocalStorage(),
+    alert: m => log.toast.push('[alert]' + String(m)),
+    toast: m => log.toast.push(String(m)),
+    setTimeout: () => 1, clearTimeout: () => {}, setInterval: () => 1, clearInterval: () => {},
+    gsr: function (fn) {
+      const args = Array.prototype.slice.call(arguments, 1);
+      log.gsr.push({ fn, args });
+      const p = plan[fn];
+      const v = (typeof p === 'function') ? p.apply(null, args) : (p === undefined ? { ok: true } : p);
+      return (v instanceof Error) ? Promise.reject(v) : Promise.resolve(v);
+    },
+    IS_GAS: true, LOGIN: 'テスト黒服',
+    loadAll: () => log.calls.push('loadAll'),
+    renderAll: () => log.calls.push('renderAll'),
+    bmLoad: () => log.calls.push('bmLoad'),
+    bmPull: () => { log.calls.push('bmPull'); return null; }
+  }, (seed && seed.globals) || {});
+  vm.createContext(sandbox);
+  const vars = (seed && seed.vars) || [];
+  if (vars.length) vm.runInContext(ex.pluckVar(ex.frontPath(which), vars), sandbox, { filename: '軍師 実物(変数)' });
+  vm.runInContext(ex.pluckFn(ex.frontPath(which), names), sandbox, { filename: '軍師 実物(部分)' });
+  return { fn: sandbox, log };
+}
+module.exports = { loadFront, loadPieces, makeLocalStorage };

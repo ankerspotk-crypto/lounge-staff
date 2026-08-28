@@ -81,4 +81,15 @@ function pluckFn(file, names) {
   }).join('\n');
 }
 
-module.exports = { REPO, backendPath, frontPath, frontBillBlock, backendPosBlock, apiWhitelist, keepList, frontBuild, slice, pluckFn };
+/* 1行の変数宣言を名前で切り出す（しきい値などを写経しないため） */
+function pluckVar(file, names) {
+  const src = fs.readFileSync(file, 'utf8');
+  return names.map(name => {
+    const re = new RegExp('^(var|let|const) ' + name.replace(/[$]/g, '\\$&') + '\\s*=.*$', 'm');
+    const m = src.match(re);
+    if (!m) throw new Error('変数が見つかりません: ' + name + ' (' + file + ')');
+    return m[0];
+  }).join('\n');
+}
+
+module.exports = { REPO, backendPath, frontPath, frontBillBlock, backendPosBlock, apiWhitelist, keepList, frontBuild, slice, pluckFn, pluckVar };
