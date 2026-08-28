@@ -20,6 +20,22 @@ module.exports = function (load, t) {
     const dep = F.deployedInSync(['getNippo', 'saveNippo', 'confirmNippo', 'reopenNippo']);
     if (dep === true) t.ok(true, '本番GAS(/tmp/kioskdeploy/コード.js)にも登録済み＝デプロイ反映ずみ');
     else if (dep === false) t.note('本番GASにはまだ出していない（テスト環境ファースト＝正常）');
+
+    /* ⛔封印済みの登録を「登録済み」と読んではいけない。
+       ここが素通りすると、封印された関数を呼ぶコードを書いても緑のまま通り、本番で100%失敗する。
+       ⚠️配列を切り出すだけでは足りない＝封印コメントは配列リテラルの**内側**に在る。
+       （別セッション cloud-21 側では実害が出て 1a59f8e で修正済み。stripComments_ を共有している） */
+    const sealed = ['importTrustReportShot', 'clearTrustDayPay'];
+    sealed.forEach(fn => {
+      t.ok(wl.indexOf(fn) < 0, '⭐封印済みの ' + fn + ' を「登録済み」と誤判定しない');
+      t.ok(F.deployedInSync([fn]) !== true, '⭐deployedInSync も封印済みを「出ている」と言わない');
+    });
+    /* 落としすぎの検出＝コメント除去で生きている登録まで消していないか */
+    t.ok(wl.length > 150, '生きている登録は残っている（' + wl.length + '本）');
+    t.ok(wl.indexOf('getPosDayStatus') >= 0, 'コメントに近い位置の生きた登録も残る');
+    /* 前提の確認＝そもそもソース上に封印コメントが在ること（無ければこの検査自体が無意味） */
+    const raw = require('fs').readFileSync(F.CODE, 'utf8');
+    t.ok(raw.indexOf('importTrustReportShot') >= 0, '前提：ソースには封印コメントとして残っている');
   }
 
   t.section('② フロントとbackendの計算が一致する（写経した式が腐っていないか）');

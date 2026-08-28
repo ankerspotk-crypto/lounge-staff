@@ -81,21 +81,34 @@ function loadFront(opts) {
      デプロイ前は必ず食い違う＝そこを赤くしても「まだ出していない」としか言っていない。
      デプロイ済みかどうかは deployedInSync() で別に見る。 */
 const CODE = path.join(REPO, 'Code.gs');
+/* ⚠️配列リテラルの**中のコメントを落としてから**名前を拾う。
+   `GUNSHI_API_FNS` には封印済みの登録がコメントとして残っている
+   （⛔'importTrustReportShot','clearTrustDayPay' は2026-08-27に封印）。
+   素の文字列一致だと**封印済みを「登録済み」と誤判定**する＝「登録されているか」の検査が
+   封印されても緑のままになる＝本番で100%失敗する物を通す。
+   ⛔配列を切り出すだけでは足りない（封印コメントは配列リテラルの内側に在る）。
+   stripComments_ は tests/pos/lib/extract.js の**同じ1本**を借りる（写経しない）。 */
 function listOf(file, re, pick) {
   const src = fs.readFileSync(file, 'utf8');
   const m = src.match(re);
   if (!m) throw new Error('見つかりません（構造が変わった）: ' + re + ' in ' + file);
-  return (m[0].match(pick) || []).map(s => s.slice(1, -1));
+  return (ex.stripComments_(m[0]).match(pick) || []).map(s => s.slice(1, -1));
 }
-function apiWhitelist()    { return listOf(CODE, /var GUNSHI_API_FNS = \[[\s\S]*?\];/, /'([A-Za-z_][A-Za-z0-9_]*)'/g); }
-function keepPrefixList()  { return listOf(CODE, /const KEEP_PREFIX = \[[\s\S]*?\];/, /'([A-Za-z_]+)'/g); }
+function apiWhitelistOf(file) { return listOf(file, /var GUNSHI_API_FNS = \[[\s\S]*?\];/, /'([A-Za-z_][A-Za-z0-9_]*)'/g); }
+function apiWhitelist()       { return apiWhitelistOf(CODE); }
+function keepPrefixList()     { return listOf(CODE, /const KEEP_PREFIX = \[[\s\S]*?\];/, /'([A-Za-z_]+)'/g); }
 
-/* 本番GASの実体に、この機能がもう出ているか（出ていなくても正常＝テスト環境ファースト） */
+/* 本番GASの実体に、この機能がもう出ているか（出ていなくても正常＝テスト環境ファースト）。
+   ⚠️ファイル全体の文字列一致にしない＝コメントや別の場所に名前があるだけで true になる。
+     repo側と同じ「ホワイトリストを切り出してコメントを落とす」経路を通す。 */
 function deployedInSync(names) {
-  const live = ex.backendPath();
-  if (live === CODE) return null;                       // clasp dir が無い環境
-  const src = fs.readFileSync(live, 'utf8');
-  return names.every(n => src.indexOf("'" + n + "'") >= 0);
+  /* ⚠️`backendPath()` の既定は **repoのCode.gs**（＝作業中の側）。ここで引数無しに呼ぶと
+     自分自身を見て必ず true になる＝「出ている」の誤報。**必ず 'live' を明示する**
+     （2026-08-28にcloud-21が --live 対応で既定を切り替えたときに実際に踏んだ）。 */
+  const live = ex.backendPath('live');
+  if (live === CODE) return null;                       // clasp dir が無い環境＝判定不能
+  const wl = apiWhitelistOf(live);
+  return names.every(n => wl.indexOf(n) >= 0);
 }
 
-module.exports = { loadFront, apiWhitelist, keepPrefixList, deployedInSync, FNS };
+module.exports = { loadFront, apiWhitelist, apiWhitelistOf, keepPrefixList, deployedInSync, FNS, CODE };

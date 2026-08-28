@@ -113,4 +113,6 @@ function pluckVar(file, names, opts) {
   }).filter(Boolean).join('\n');
 }
 
-module.exports = { REPO, backendPath, frontPath, frontBillBlock, backendPosBlock, apiWhitelist, keepList, frontBuild, slice, pluckFn, pluckVar };
+/* ⚠️stripComments_ は日報側(tests/nippo/lib/front.js)からも使う＝同じ1本を共有する。
+   ここを2箇所に書き写すと、片方だけ直したときにまた封印済みを拾い始める。 */
+module.exports = { REPO, backendPath, frontPath, frontBillBlock, backendPosBlock, apiWhitelist, keepList, frontBuild, slice, pluckFn, pluckVar, stripComments_ };
