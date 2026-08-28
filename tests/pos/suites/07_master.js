@@ -94,6 +94,100 @@ module.exports = function (front) {
     t.ok(bad.length === 0, 'ホワイトリストは「ジャンルで救えない品」だけ（二重管理になっていない）', bad.join(', '));
   }
 
+  t.section('➕ 営業中にメニューを足す（ボス指示 2026-08-28）');
+  {
+    /* ⚠️🧪お試し伝票はボトル集計から除外する仕様なので、ここは**実席の伝票**で確かめる */
+    const { seats } = require('../patterns');
+    const f = require('../lib/frontend').loadFront({
+      seats: seats([{ rowIdx: 2, table: 'BOX1', floor: '2F', cust: '田中', pax: 1 }]) });
+    const F2 = f.fn;
+    F2.BM.key = '2'; F2.bmGet('2', 1); F2.bmSave();
+    const before = F2.bmItems_().length;
+    F2.document.els['bmNewNm'] = { value: '獺祭 純米大吟醸' };
+    F2.document.els['bmNewPr'] = { value: '18000' };
+    F2.document.els['bmNewGn'] = { value: '焼酎' };
+    F2.bmAddMenu();
+    t.eq(F2.bmItems_().length, before + 1, 'メニューが1件増える');
+    t.eq(F2.bmItem_('獺祭 純米大吟醸'), ['獺祭 純米大吟醸', 18000, 'ボトル系', '焼酎'],
+         '⚠️bmItem_ から引ける＝ボトル判定・在庫照合にも効く');
+    t.ok(F2.bmIsAdded_('獺祭 純米大吟醸'), '手で足した品と分かる');
+    t.eq(F2.BM.kind, '焼酎', '足したジャンルに切り替わる＝その場で見える');
+    t.ok(/★ 獺祭/.test(F2.bmGridHtml()), 'グリッドに★付きで出る');
+    t.ok(/この端末で追加/.test(F2.bmEditorHtml()), '何件足したか画面に出る');
+
+    /* ⭐結線の確認＝足したボトルが🍾今日出たボトルに乗るか（BM_ITEMSだけ見ていると乗らない） */
+    F2.bmPick('獺祭 純米大吟醸', 18000); F2.bmPickAttr('お客様'); F2.bmPickConfirm();
+    const b = F2.bmBottlesToday();
+    t.ok(b.list.some(x => x.name === '獺祭 純米大吟醸'), '⭐足したボトルが🍾今日出たボトルに乗る');
+    t.eq(b.amount, 18000, '金額も乗る');
+
+    /* 端末に残る＝次に開いた時も在る */
+    const f2 = require('../lib/frontend').loadFront({ seats: [], storage: f.storage._m });
+    t.ok(f2.fn.bmItem_('獺祭 純米大吟醸'), '端末に保存される（次に開いても在る）');
+
+    F2.bmDelMenu(0);
+    t.eq(F2.bmItems_().length, before, 'メニューから消せる');
+    t.eq(F2.bmGet('2').orders.length, 1, '⚠️消しても打ってしまった注文は残る（金額を勝手に変えない）');
+  }
+  {
+    /* ⚠️会計済みの伝票を開いたままでも足せること＝メニューは伝票の中身ではない。
+       最初ロックを掛けていて実ブラウザで踏んだ（次の卓のために足す場面が普通に在る）。 */
+    const { seats } = require('../patterns');
+    const f0 = require('../lib/frontend').loadFront({
+      seats: seats([{ rowIdx: 2, table: 'BOX1', floor: '2F', cust: '田中', pax: 1 }]) });
+    f0.fn.BM.key = '2';
+    f0.fn.BM.draft['2'] = { guests: [{ price: 13000 }], casts: {}, welcome: [], orders: [],
+      discount: 0, surcharge: 0, pay: { cash: 15600, card: 0, credit: 0 },
+      closed: { ts: '2026-08-27 23:00', by: '黒服', total: 15600 } };
+    f0.fn.bmSave();
+    t.ok(f0.fn.bmLocked(), '前提＝会計済みでロックされている');
+    f0.fn.document.els['bmNewNm'] = { value: '次の卓用ボトル' };
+    f0.fn.document.els['bmNewPr'] = { value: '20000' };
+    f0.fn.document.els['bmNewGn'] = { value: '焼酎' };
+    f0.fn.bmAddMenu();
+    t.ok(f0.fn.bmItem_('次の卓用ボトル'), '⚠️会計済みの伝票を開いていてもメニューは足せる');
+    f0.fn.bmDelMenu(0);
+    t.ok(!f0.fn.bmItem_('次の卓用ボトル'), '消すのも同じく通る');
+  }
+  {
+    const f = require('../lib/frontend').loadFront({ seats: [] });
+    f.fn.bmDemo();
+    f.fn.document.els['bmNewNm'] = { value: '' };
+    f.fn.document.els['bmNewPr'] = { value: '5000' };
+    f.fn.document.els['bmNewGn'] = { value: 'その他' };
+    f.fn.bmAddMenu();
+    t.ok(f.log.alerts.some(a => /品名を入れて/.test(a)), '品名が空なら足さない');
+    f.fn.document.els['bmNewNm'] = { value: 'テスト品' };
+    f.fn.document.els['bmNewPr'] = { value: '0' };
+    f.fn.bmAddMenu();
+    t.ok(f.log.alerts.some(a => /単価を入れて/.test(a)), '⚠️0円では足さない（0円の品は注文で確定できない）');
+    f.fn.document.els['bmNewPr'] = { value: '-500' };
+    f.fn.bmAddMenu();
+    t.eq(f.fn.bmAddLoad().length, 0, 'マイナスでも足さない');
+    f.fn.document.els['bmNewGn'] = { value: 'でたらめ' };
+    f.fn.document.els['bmNewPr'] = { value: '5000' };
+    f.fn.bmAddMenu();
+    t.eq(f.fn.bmItem_('テスト品')[3], 'その他', '知らないジャンルは「その他」に落とす（未知ジャンルを作らない）');
+  }
+  {
+    /* ⚠️同名は禁止しない（出前代のように同名で価格違いが実在する）。ただし一言出す */
+    const f = require('../lib/frontend').loadFront({ seats: [], confirm: false });
+    f.fn.bmDemo();
+    f.fn.document.els['bmNewNm'] = { value: '魔王' };
+    f.fn.document.els['bmNewPr'] = { value: '35000' };
+    f.fn.document.els['bmNewGn'] = { value: '焼酎' };
+    f.fn.bmAddMenu();
+    t.ok(f.log.confirms.some(c => /既にメニューに在ります/.test(c)), '同名なら確認を出す');
+    t.eq(f.fn.bmAddLoad().length, 0, '「いいえ」なら足さない');
+    const g = require('../lib/frontend').loadFront({ seats: [], confirm: true });
+    g.fn.bmDemo();
+    g.fn.document.els['bmNewNm'] = { value: '魔王' };
+    g.fn.document.els['bmNewPr'] = { value: '35000' };
+    g.fn.document.els['bmNewGn'] = { value: '焼酎' };
+    g.fn.bmAddMenu();
+    t.eq(g.fn.bmAddLoad().length, 1, '「はい」なら同名で単価違いとして足せる');
+  }
+
   t.section('セット単価の候補');
   {
     const p = F.BM_SET_PRICES_DEFAULT;

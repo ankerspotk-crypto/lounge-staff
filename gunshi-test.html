@@ -1543,7 +1543,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28m-test';
+var BUILD='2026-08-28o-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -4501,7 +4501,7 @@ function quickRotateGo(toIdx,castName){
    ■ 伝票の単位＝**予約行 rowIdx**（席ではない）。相席でも組ごとに割れる。
 ============================================================================ */
 /* 🍽 TRUSTの商品マスタ（2026-08-08にボスがTRUST管理画面から出力したPDFを転記／全210品）。
-   ⚠️2026-08-22 ボス確定：2部営業の廃止に伴い「2部営業 3,000円」を削除（実件数は BM_ITEMS.length ＝画面に出る）。
+   ⚠️2026-08-22 ボス確定：2部営業の廃止に伴い「2部営業 3,000円」を削除（実件数は bmItems_().length ＝画面に出る。手で足した品もここに合流する）。
    形式＝[品名, 価格, 種類]。種類はTRUSTの「Web集計用分類」＝ボトル系/単品系/つまみ系。
    ⚠️店舗用カテゴリー（ウィスキー/焼酎/シャンパン…）はこの一覧に含まれない＝**検索で引く**のが正。
    ⚠️同名で価格違いが実在する（出前代が1,000〜23,000で7件）。名寄せせずTRUSTの実データのまま持つ。
@@ -5064,7 +5064,63 @@ function bmStockOf(name){
   return { name:hit[0].name, qty:hit.reduce(function(a,x){ return a+(Number(x.qty)||0); },0),
            floors:hit.map(function(x){ return (x.floor||'')+' '+(Number(x.qty)||0); }) };
 }
-function bmItem_(name){ for(var i=0;i<BM_ITEMS.length;i++) if(BM_ITEMS[i][0]===name) return BM_ITEMS[i]; return null; }
+/* ============================================================================
+   ➕ メニューの手動追加（ボス指示 2026-08-28「営業中にメニューを追加することもある」）
+   ----------------------------------------------------------------------------
+   ■ 「臨時商品」はその場限りの一発打ちで**一覧に残らない**＝同じ品を何度も出す夜は毎回打ち直し。
+     ここで足した品は一覧に出て、次から選んで打てる。
+   ⚠️保存先は**この端末のlocalStorage**（セット単価の候補と同じ流儀）。
+     **端末をまたいだ共有はしない**＝5Fで足した品は2Fに出ない。共有・恒久化するにはGASに1本
+     足す必要がある（ボスの号令待ち）。画面にもその旨を出す。
+   ⚠️**品を引く経路は`bmItems_()`一本に揃えること**。`BM_ITEMS`を直接見る場所が1つでも残ると
+     「グリッドには出るのに🍾ボトル集計に出ない」のような食い違いになる。
+   ⚠️同名は禁止しない（出前代のように**同名で価格違いが実在する**）。ただし足す時に一言出す。
+============================================================================ */
+var BM_ADD_KEY='gunshiMenuAdd';
+function bmAddLoad(){ try{ var a=JSON.parse(localStorage.getItem(BM_ADD_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function bmAddSave_(a){ try{ localStorage.setItem(BM_ADD_KEY,JSON.stringify(a.slice(0,200))); }catch(e){} }
+/* 有料メニューの正本＝元の表＋この端末で足した品。⚠️必ずここから引く */
+function bmItems_(){ return BM_ITEMS.concat(bmAddLoad()); }
+function bmIsAdded_(name){ var a=bmAddLoad(); for(var i=0;i<a.length;i++) if(a[i][0]===name) return true; return false; }
+/* ジャンルから種類を決める（ボトルに丸まるジャンルなら「ボトル系」）。⚠️種類は表示にしか使わない */
+function bmKindOf_(genre){ return (BM_GENRE_STOCK[genre]==='ボトル')?'ボトル系':((BM_GENRE_STOCK[genre]==='チャーム')?'つまみ系':'単品系'); }
+/* ⚠️**会計済みロックの対象にしない**。メニューは伝票の中身ではない＝
+   会計の済んだ伝票を開いたまま、次の卓のためにメニューを足すことは普通に起きる。
+   （最初ロックを掛けていて、実ブラウザで「追加できない」を踏んだ） */
+function bmAddMenu(){
+  var nm=((document.getElementById('bmNewNm')||{}).value||'').trim();
+  var pr=Math.max(0,Number((document.getElementById('bmNewPr')||{}).value)||0);
+  var gn=((document.getElementById('bmNewGn')||{}).value||'その他');
+  if(!nm){ alert('品名を入れてください。'); return; }
+  if(!(pr>0)){ alert('単価を入れてください。\n（0円の品は注文で確定できません）'); return; }
+  if(BM_GENRES.indexOf(gn)<0) gn='その他';
+  var dup=bmItems_().filter(function(r){ return r[0]===nm; });
+  if(dup.length&&!confirm('「'+nm+'」は既にメニューに在ります（'+bmYen(dup[0][1])+'）。\n同じ名前で単価違いとして足しますか？')) return;
+  var a=bmAddLoad(); a.push([nm,pr,bmKindOf_(gn),gn]); bmAddSave_(a);
+  var e1=document.getElementById('bmNewNm'); if(e1)e1.value='';
+  var e2=document.getElementById('bmNewPr'); if(e2)e2.value='';
+  BM.kind=gn;                    /* 足したジャンルに切り替える＝足した品がその場で見える */
+  bmRender();
+  if(typeof toast==='function') toast('メニューに追加しました：'+nm+' '+bmYen(pr));
+}
+function bmDelMenu(i){
+  var a=bmAddLoad(); if(!a[i]) return;
+  if(!confirm('メニューから「'+a[i][0]+'」を消します。\n（打ってしまった注文はそのまま残ります）')) return;
+  a.splice(i,1); bmAddSave_(a); bmRender();
+}
+function bmAddedListHtml_(){
+  var a=bmAddLoad();
+  if(!a.length) return '';
+  return '<div class="bm-note" style="margin-top:6px">この端末で足した品 '+a.length+'件</div>'
+    +a.map(function(r,i){
+        return '<div class="bm-row" style="gap:6px;align-items:center;margin-top:3px">'
+          +'<span style="flex:1;font-size:12px">★ '+esc(r[0])+' <span style="color:var(--sub)">'+esc(r[3])+'</span></span>'
+          +'<span style="font-size:12px;color:var(--gold);font-weight:800">'+bmYen(r[1])+'</span>'
+          +'<button class="bm-btn dng sm" onclick="bmDelMenu('+i+')">×</button></div>';
+      }).join('');
+}
+/* 品名からマスタ行を引く。⚠️手で足した品も含めて引く（bmItems_一本） */
+function bmItem_(name){ var L=bmItems_(); for(var i=0;i<L.length;i++) if(L[i][0]===name) return L[i]; return null; }
 /* 🍾今日出たボトル＝端末の全伝票の下書きを横断して「ボトル系」だけ集計する。
    ⚠️在庫の自動マイナスと発注はbackend（GAS）が要る＝ここは**本数の可視化まで**。
       在庫へ流すには POS品名 → 在庫品名 の紐づけが必要（既存の`店舗メニュー`シートの仕組みを使う）。 */
@@ -5214,22 +5270,7 @@ function bmEditorHtml(){
           +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
           +'<span class="amt">'+bmYen(o.price*o.qty)+'</span></div>';
       }).join(''):'<div class="bm-note">まだ注文がありません。下のメニューから選びます</div>')+'</div>'
-    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+BM_ITEMS.length+'品</span></div>'
-
-    +'<span style="color:var(--gold);font-weight:800;font-size:12px">'+d.orders.length+'点 '
-    +bmYen(d.orders.reduce(function(a,o){return a+o.price*o.qty;},0))+'</span></h3>'
-    /* ⚠️入った注文を**最上段・大きめ**に。メニュー選択より読む回数が多い（ボス指示） */
-    +'<div style="margin-bottom:10px">'+(d.orders.length?d.orders.map(function(o,i){
-        var at=bmAttrOf(o), k=(at==='お客様')?'':(at==='スタッフ'?'staff':'cast');
-        return '<div class="bm-ord"><span class="at '+k+'">'+esc(at)+(o.attrs&&o.attrs.length>1?' 折半':'')+'</span>'
-          +'<span class="nm">'+esc(o.name)+'</span>'
-          +'<input type="number" class="bm-in" style="width:84px;padding:5px 7px;font-size:13px" value="'+o.price+'" title="単価（都度変更できる）"'
-          +' oninput="bmOrdPrice('+i+',this.value)" onchange="bmOrdPrice('+i+',this.value,1)">'
-          +'<button class="bm-btn sm" onclick="bmQty('+i+',-1)">−</button><span style="min-width:18px;text-align:center;font-weight:900;font-size:15px">'+o.qty+'</span>'
-          +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
-          +'<span class="amt">'+bmYen(o.price*o.qty)+'</span></div>';
-      }).join(''):'<div class="bm-note">まだ注文がありません。下のメニューから選びます</div>')+'</div>'
-    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+BM_ITEMS.length+'品</span></div>'
+    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+bmItems_().length+'品'+(bmAddLoad().length?'（うち★'+bmAddLoad().length+'件はこの端末で追加）':'')+'</span></div>'
     +'<div class="bm-row"><input type="search" class="bm-in" style="flex:1;text-align:left;min-width:130px" placeholder="品名で検索（山崎 / 炭酸 / グラス …）" value="'+esc(BM.q||'')+'" oninput="bmSearch(this.value)"></div>'
     +'<div class="chips">'+['全部'].concat(BM_GENRES).map(function(k){
         return '<div class="chip'+(k===BM.kind?' sel':'')+'" onclick="bmSetKind(\''+jsStr(k)+'\')">'+esc(k)+'</div>';
@@ -5240,6 +5281,17 @@ function bmEditorHtml(){
     +'<input type="text" id="bmAdNm" placeholder="品名" class="bm-in" style="text-align:left;width:106px">'
     +'<input type="number" id="bmAdPr" placeholder="単価" class="bm-in" style="width:88px" value="0">'
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
+    +'<div class="bm-note">臨時商品＝この1回だけ打つ品（メニューには残りません）。</div>'
+    /* ➕メニューに追加＝一覧に残る（ボス指示 2026-08-28） */
+    +'<div class="bm-row" style="margin-top:10px;flex-wrap:wrap;gap:6px"><span class="lb">メニューに追加</span>'
+    +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;width:120px">'
+    +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:88px">'
+    +'<select id="bmNewGn" class="bm-in" style="width:120px">'
+    +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'"'+((BM.kind===g)?' selected':'')+'>'+esc(g)+'</option>'; }).join('')
+    +'</select>'
+    +'<button class="bm-btn pri sm" onclick="bmAddMenu()">＋ 追加</button></div>'
+    +'<div class="bm-note">次からメニューに出ます。⚠️<b>この端末だけ</b>に保存されます（他の端末には出ません）。</div>'
+    +bmAddedListHtml_()
     +'</div></div>';
   return h;
 }
@@ -5844,7 +5896,7 @@ function bmBump(n,key,delta){ if(bmLockedAlert_()) return;
 /* 210品を「種類」と「品名の部分一致」で絞る。⚠️同名で価格違いが実在するので名寄せしない */
 function bmGridHtml(){
   var q=String(BM.q||'').trim(), kind=BM.kind||'全部';
-  var list=BM_ITEMS.filter(function(m){
+  var list=bmItems_().filter(function(m){
     if(kind!=='全部'&&m[3]!==kind) return false;
     if(q&&m[0].indexOf(q)<0) return false;
     return true;
@@ -5853,7 +5905,8 @@ function bmGridHtml(){
   return list.map(function(m){
     /* ⚠️価格0の品は「要価格」と出す＝タップして単価を入れてから確定させる */
     var pr=(Number(m[1])>0)?bmYen(m[1]):'<span style="color:#ff9a5a">要価格</span>';
-    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+esc(m[0])+'</div><div class="pr">'+pr+'</div></div>';
+    /* ★＝この端末で手で足した品（元の表の品と見分けが付くように） */
+    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+(bmIsAdded_(m[0])?'★ ':'')+esc(m[0])+'</div><div class="pr">'+pr+'</div></div>';
   }).join('');
 }
 function bmSearch(v){ BM.q=v; var g=document.getElementById('bmGrid'); if(g) g.innerHTML=bmGridHtml(); }
