@@ -214,7 +214,29 @@ module.exports = async function (_f, _b, ctx) {
     t.eq(back.fn.getPosDayStatus('2026-08-27').open.length, 1, '閉店ゲートがこの伝票を数えられる');
   }
 
-  t.section('⑩ 会計をやり直す（打ち間違いに気づいた）');
+  t.section('⑩ 2台の端末が同時に会計した（5Fと2Fで同じ組を見ていた）');
+  {
+    const back = ctx.loadBackend({ menu: MENU, now: '2026-08-27T22:00:00+09:00' });
+    const wire = {};
+    WIRED.forEach(fn => { wire[fn] = function () { return back.fn[fn].apply(null, arguments); }; });
+    const S = seats([{ rowIdx: 2, table: 'BOX1', floor: '2F', cust: '田中', pax: 2, tantou: 'まや' }]);
+    const A = ctx.loadFront({ seats: S, gsr: wire, today: '2026-08-27', login: '黒服A' });
+    const B = ctx.loadFront({ seats: S, gsr: wire, today: '2026-08-27', login: '黒服B' });
+    [A, B].forEach(f => { f.fn.BM.key = '2'; f.fn.bmGet('2', 2); f.fn.bmPayMethod('cash'); });
+    A.fn.bmClose(); await tick(); await tick();
+    t.ok(A.fn.bmGet('2').closed, '先に押した端末は会計できる');
+    await sync(A);                                   // Aの「会計済み」がサーバーに載る
+    B.fn.bmClose(); await tick(); await tick();
+    t.ok(!B.fn.bmGet('2').closed, '後から押した端末は会計済みにならない');
+    t.ok(B.log.alerts.some(a => /すでに会計済み/.test(a)), '「すでに会計済みです」と理由が出る', JSON.stringify(B.log.alerts));
+    t.eq(back.closes().getLastRow(), 2, '⚠️会計行は1本だけ（二重計上しない）');
+    B.fn.bmSave(); await sync(B); await tick(); await tick(); await tick();
+    t.ok(/会計済み/.test(B.fn.BM_SYNC_ERR), '⚠️サーバーが拒否した理由が後の端末に出る（黙って共有済みにしない）', B.fn.BM_SYNC_ERR);
+    t.ok(B.fn.bmGet('2').closed, '拒否をきっかけに取り直して「会計済み」に揃う');
+    t.ok(B.fn.bmLocked(), '後の端末でも編集ロックがかかる');
+  }
+
+  t.section('⑪ 会計をやり直す（打ち間違いに気づいた）');
   {
     const s = shop();
     s.F.BM.key = '2'; s.F.bmGet('2', 2); s.F.bmPayMethod('cash');

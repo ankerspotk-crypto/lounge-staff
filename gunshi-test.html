@@ -1525,7 +1525,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28b-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28d-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -4573,7 +4573,6 @@ var BM_ITEMS=[
 ["ガレス リースリング",25000,"ボトル系","シャンパン"],
 ["ガレス エリタージュ ロゼ",30000,"ボトル系","シャンパン"],
 ["茉莉花",5000,"ボトル系","焼酎"],
-["プルシア",15000,"ボトル系","焼酎"],
 ["ウッドフォード",15000,"ボトル系","ウィスキー"],
 ["ガレス エリタージュ",20000,"ボトル系","シャンパン"],
 ["氷結",1000,"単品系","ビール"],
@@ -4705,7 +4704,20 @@ function bmPushNow(){
     if(k==='demo') return;                                   // お試しは共有しない
     var d=BM.draft[k]; if(!d) return;
     gsr('posSaveBill',bmDateKey(),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
-      .then(function(r){ if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); } })
+      .then(function(r){
+        /* ⚠️2026-08-28追加＝サーバーが**受け取りを拒否**しても（会計済み／データが大きすぎ）
+           ここは通信成功として素通りしていた＝端末は「共有できた」と思い込み、
+           別端末で会計された伝票を自分だけ未会計だと信じ続ける。理由を出して状態を取り直す。 */
+        if(r&&r.ok===false){
+          var msg=String(r.error||'この伝票を保存できませんでした');
+          var fk={}; fk[String(k)]=1;
+          var p=bmPull(fk);                          // 会計済みなら他端末の結果を取り込んで画面を正す
+          var show=function(){ BM_SYNC_ERR=msg; bmRenderIfIdle(); };
+          if(p&&p.then) p.then(show,show); else show();
+          return;
+        }
+        if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); }
+      })
       .catch(function(e){
         /* ⚠️2026-08-28追加＝失敗したキーを**捨てていた**。次に何か打つまで再送されず、
            サーバーに一度も載らないまま会計されると**閉店ゲートがその伝票を知らない**
@@ -4718,9 +4730,14 @@ function bmPushNow(){
   });
 }
 /* 他端末の伝票を取り込む。⚠️入力中でも下書き自体は差し替わる（描画はbmRenderIfIdleが守る） */
-function bmPull(){
-  if(typeof gsr!=='function') return;
-  gsr('getPosBills',bmDateKey()).then(function(r){
+/* force={rowIdx:1,…} を渡すと、その伝票だけは**更新日時に関係なくサーバーを採る**。
+   ⚠️通常は「新しい方が勝ち」だが、**サーバーに書き込みを拒否された伝票**は自分の方が
+   新しくても間違い（別端末で会計されている）＝ここで勝たせると会計済みが画面から消える。 */
+function bmPull(force){
+  if(typeof gsr!=='function') return null;
+  /* ⚠️プロミスを返す＝呼び出し側が「取り直しが終わってから」表示を決められる
+     （返さないと、保存拒否のメッセージをこの中の BM_SYNC_ERR='' が先に消してしまう） */
+  return gsr('getPosBills',bmDateKey()).then(function(r){
     if(r&&r.mode) BM_MODE=r.mode;
     BM_SYNC_ERR='';
     bmLoad();
@@ -4729,7 +4746,7 @@ function bmPull(){
       if(!b||!b.data) return;
       var loc=BM.draft[b.rowIdx];
       var st=Number(b.data._t)||0, lt=Number(loc&&loc._t)||0;
-      if(!loc||st>lt){ BM.draft[b.rowIdx]=b.data; changed=true; }
+      if(!loc||st>lt||(force&&force[String(b.rowIdx)])){ BM.draft[b.rowIdx]=b.data; changed=true; }
     });
     if(changed) bmStash_();
     bmRenderIfIdle();
@@ -4945,6 +4962,9 @@ function bmBottlesToday(){
   bmLoad();
   var bills=bmBills(), map={}, order=[], total=0, amount=0;
   Object.keys(BM.draft).forEach(function(key){
+    /* ⚠️2026-08-28追加＝🧪お試し伝票（検算用）のボトルが在庫の出庫集計に乗っていた。
+       締めで実物と合わなくなる＝共有もしない物は数えない。 */
+    if(key==='demo') return;
     var d=BM.draft[key]; if(!d||!d.orders) return;
     var b=null; bills.forEach(function(x){ if(String(x.rowIdx)===String(key)) b=x; });
     var where=b?((b.floor||'')+' '+(b.table||'')):(key==='demo'?'🧪お試し':'伝票'+key);
@@ -5156,7 +5176,8 @@ function bmSeikyuDone_(){
   var k=SK_FROM_POS.key; SK_FROM_POS=null;
   bmLoad();
   var d=BM.draft[k]; if(!d) return;
-  d.seikyuRequested={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:'') };
+  /* ⚠️金額も一緒に覚える＝会計をやり直して金額が変わったら「出し直し」を要求するため */
+  d.seikyuRequested={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:''), total:bmCalc(d).total };
   var keep=BM.key; BM.key=k; bmSave(); BM.key=keep;
   if(typeof POS_DAY!=='undefined'&&document.getElementById('cc-pos-gate')) ccPosLoad();
 }
@@ -5450,6 +5471,13 @@ function bmClose(){
       bmLoad();
       var dd=BM.draft[key]; if(!dd){ bmRender(); return; }
       dd.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
+      /* ⚠️2026-08-28追加＝会計を取り消して**金額を直して締め直した**のに、請求書の依頼済みの印が
+         残っていた＝閉店ゲートが請求依頼を要求しないまま、**古い金額の請求書が出たまま**になる。
+         金額が変わっていたら印を外して出し直させる。変わっていなければ二重請求を作らない。 */
+      if(Number(dd.pay&&dd.pay.credit)>0&&dd.seikyuRequested&&Number(dd.seikyuRequested.total||0)!==c.total){
+        delete dd.seikyuRequested;
+        alert('金額が変わっています（請求書は '+bmYen(dd.closed.total)+'）。\n請求書の発行依頼を出し直してください。');
+      }
       BM.key=key; bmSave(); bmRender();
       bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
     })
@@ -5705,7 +5733,9 @@ function bmGridHtml(){
   });
   if(!list.length) return '<div class="bm-note" style="grid-column:1/-1">該当なし（下の臨時商品で打てます）</div>';
   return list.map(function(m){
-    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+esc(m[0])+'</div><div class="pr">'+bmYen(m[1])+'</div></div>';
+    /* ⚠️価格0の品は「要価格」と出す＝タップして単価を入れてから確定させる */
+    var pr=(Number(m[1])>0)?bmYen(m[1]):'<span style="color:#ff9a5a">要価格</span>';
+    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+esc(m[0])+'</div><div class="pr">'+pr+'</div></div>';
   }).join('');
 }
 function bmSearch(v){ BM.q=v; var g=document.getElementById('bmGrid'); if(g) g.innerHTML=bmGridHtml(); }
@@ -5731,6 +5761,10 @@ function bmPickAttr(a){
 function bmPickConfirm(){ if(bmLockedAlert_()) return;
   var pk=BM.pick; if(!pk) return;
   if(!pk.attrs.length){ alert('誰に付けるかを選んでください。\n（お客様／スタッフ／キャスト名）'); return; }
+  /* ⚠️2026-08-28追加＝マスタに価格0の品が実在する（TRUSTから転記した「出前」）。
+     そのまま確定すると**0円の注文行**が静かに入る＝売上が欠ける。単価を入れさせる。
+     （無料で出す物は⑤🥂ウェルカムに入っている＝有料側に0円は要らない） */
+  if(!(Number(pk.price)>0)){ alert('単価を入れてください。\n（この品はマスタに価格が入っていません）'); return; }
   var d=bmGet(BM.key), key=pk.attrs.join('・'), hit=-1;
   d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
   if(hit>=0) d.orders[hit].qty+=pk.qty;
@@ -5849,8 +5883,28 @@ function bmTouch(){
   if(e=document.getElementById('bmUnpaid')){ e.textContent=bmYen(c.unpaid); e.style.color=(c.unpaid===0?'var(--green)':'var(--red)'); }
   if(e=document.getElementById('bmVerdict')) e.outerHTML=bmVerdictHtml(d,c);
 }
-function bmField(k,v){ if(k!=='trust'&&k!=='trustTax'&&bmLockedAlert_()) return;   /* TRUST照合は会計後も打てる */ var d=bmGet(BM.key); d[k]=(k==='trust')?v:(Number(v)||0); bmSave(); bmTouch(); }
-function bmPay(k,v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay[k]=Number(v)||0; bmSave(); bmTouch(); }
+/* ⚠️2026-08-28修正＝`Number(v)||0`だけだったので**マイナスがそのまま入っていた**。
+   値引に -10,000 を打つと合計が10,000増える（＝お客様への過大請求）。値増も同じ。
+   さらに値引が大きすぎると合計がマイナス（実測 -99,968,700）になり、紙にも出る。
+   ⭐入口で丸める。**計算式(bmCalc)は触らない**＝backendのposCalcTotal_と割れるため。 */
+function bmField(k,v){
+  if(k!=='trust'&&k!=='trustTax'&&bmLockedAlert_()) return;   /* TRUST照合は会計後も打てる */
+  var d=bmGet(BM.key);
+  if(k==='trust'){ d[k]=v; }
+  else{
+    var n=Math.max(0,Number(v)||0);
+    if(k==='discount'){
+      /* 合計がマイナスになる値引は受け付けない＝値引の上限は「税サまで込みの金額」 */
+      var keep=d.discount; d.discount=0; var c0=bmCalc(d); d.discount=keep;
+      n=Math.min(n, c0.base+c0.tax+(Number(d.surcharge)||0));
+    }
+    d[k]=n;
+  }
+  bmSave(); bmTouch();
+}
+/* ⚠️2026-08-28修正＝マイナスのお預りが入っていた。現金-50,000でも会計が通り、
+   会計行の「お預り」列に負の額が残る＝現金の集計が狂う。入口で0以上に丸める。 */
+function bmPay(k,v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay[k]=Math.max(0,Number(v)||0); bmSave(); bmTouch(); }
 function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.cash=bmCalc(d).total; d.pay.card=0; d.pay.credit=0; bmSave(); bmRender(); }
 /* ⚠️サーバーからも消さないと、間違えて作った伝票が閉店ゲートに永久に残る */
 function bmClearServer_(k){
