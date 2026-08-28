@@ -1553,10 +1553,14 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
    ⚠️**新しい印刷を足したら必ず `printGo_` を通すこと**。`location.href` を直に書くと
      このスイッチをすり抜けて、テストでまた流れが止まる。
 ============================================================================ */
-/* 端末の設定があればそれ、無ければビルドで決める（testビルド=ON / 本番=OFF） */
+/* 端末の設定があればそれ、無ければ**配信されているファイル名**で決める。
+   ⚠️2026-08-28修正＝`BUILD` の末尾で判定していた。版バッジは人が手で書く物なので、
+     **本番の版にうっかり `-test` を付けた瞬間、店の伝票が刷られなくなる**（画面には出るが、
+     気づくのは紙が出ない時）。**名前と機能を兼ねさせない**。
+     ファイル名なら、テスト環境=gunshi-test.html / 本番=gunshi.html で構造的に決まる。 */
 function printSimDefault_(){
   try{ var v=localStorage.getItem('gunshi_print_sim'); if(v==='1')return true; if(v==='0')return false; }catch(e){}
-  return /-test$/.test(BUILD);
+  try{ return /gunshi-test\.html/i.test(String(location.pathname||'')); }catch(e){ return false; }
 }
 var PRINT_SIM=printSimDefault_();
 var PRINT_LOG=[];   // 直近の印刷（シミュレーション含む）。テスト中に「何が刷られたか」を見るため
@@ -1596,7 +1600,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}

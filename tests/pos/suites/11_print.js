@@ -15,7 +15,10 @@ module.exports = function () {
   function boot(opt) {
     opt = opt || {};
     const p = loadPieces(FNS, { vars: ['PRINT_LOG'], globals: Object.assign({
-      BUILD: opt.build || '2026-08-28i-test', location: { href: 'about:blank' }
+      BUILD: opt.build || '2026-08-28s-test',
+      /* ⚠️判定は**配信ファイル名**（BUILDではない）。版バッジは人が手で書く物なので、
+         機能スイッチを兼ねさせると「本番の版に-testを付けた瞬間、紙が出ない」が起きる。 */
+      location: { href: 'about:blank', pathname: opt.path || '/lounge-staff/gunshi-test.html' }
     }, opt.globals || {}) });
     if (opt.storage) Object.assign(p.fn.localStorage._m, opt.storage);
     p.fn.PRINT_SIM = (opt.sim !== undefined) ? opt.sim : p.fn.printSimDefault_();
@@ -24,10 +27,18 @@ module.exports = function () {
 
   t.section('既定の決まり方（本番に昇格したら自動でOFF）');
   {
-    t.eq(boot({ build: '2026-08-28i-test' }).fn.PRINT_SIM, true, 'testビルドは既定ON');
-    t.eq(boot({ build: '2026-08-27j' }).fn.PRINT_SIM, false, '⚠️本番ビルドは既定OFF（本番なのに刷ったつもりを構造的に防ぐ）');
-    t.eq(boot({ build: '2026-08-28i-test', storage: { gunshi_print_sim: '0' } }).fn.PRINT_SIM, false, '端末の設定が優先（testでも実機に刷れる）');
-    t.eq(boot({ build: '2026-08-27j', storage: { gunshi_print_sim: '1' } }).fn.PRINT_SIM, true, '本番でも端末ごとにONにできる');
+    t.eq(boot({ path: '/lounge-staff/gunshi-test.html' }).fn.PRINT_SIM, true, 'テスト環境のファイルは既定ON');
+    t.eq(boot({ path: '/lounge-staff/gunshi.html' }).fn.PRINT_SIM, false, '⚠️本番のファイルは既定OFF（本番なのに刷ったつもりを構造的に防ぐ）');
+    t.eq(boot({ path: '/lounge-staff/gunshi-test.html', storage: { gunshi_print_sim: '0' } }).fn.PRINT_SIM, false, '端末の設定が優先（テスト環境でも実機に刷れる）');
+    t.eq(boot({ path: '/lounge-staff/gunshi.html', storage: { gunshi_print_sim: '1' } }).fn.PRINT_SIM, true, '本番でも端末ごとにONにできる');
+    /* ⭐版バッジと切り離したことの確認＝ここが今日の学び */
+    t.eq(boot({ path: '/lounge-staff/gunshi.html', build: '2026-08-28d-test' }).fn.PRINT_SIM, false,
+         '⭐本番の版バッジにうっかり「-test」が付いても、紙は実機に出る（名前と機能を兼ねさせない）');
+    t.eq(boot({ path: '/lounge-staff/gunshi-test.html', build: '2026-08-28d' }).fn.PRINT_SIM, true,
+         '逆にテスト環境の版から-testが落ちても、実機には送らない');
+    const src2 = require('fs').readFileSync(ex.frontPath(which), 'utf8');
+    const dflt = ex.pluckFn(ex.frontPath(which), ['printSimDefault_']);
+    t.ok(!/BUILD/.test(dflt), '⚠️既定の判定に BUILD を使っていない（版バッジは機能スイッチではない）', dflt);
   }
 
   t.section('🧪 刷ったことにする');
