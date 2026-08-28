@@ -13,10 +13,19 @@ const path = require('path');
 const REPO = path.resolve(__dirname, '..', '..', '..');           // /Users/apple/cloudcode/lounge
 const DEPLOY = '/tmp/kioskdeploy';                                 // 本番GASの実体（権威）
 
-/* backendの権威は /tmp/kioskdeploy/コード.js。無ければ repo の Code.gs（鏡）で代用する */
-function backendPath() {
+/* ⚠️2026-08-28変更＝backendも**フロントと同じ「テスト環境が既定」**に揃えた。
+     既定 … repo の `Code.gs`（＝作業中・**GASには出していない**）
+     --live … `/tmp/kioskdeploy/コード.js`（＝本番GASのデプロイ元＝実際に動いている物）
+   ⭐狙い＝**未デプロイの変更をデプロイ元(/tmp)に置かない**。あそこに置いたままだと、
+     同じ端末で作業している別のセッションが `clasp push` した瞬間に**巻き添えで本番に出る**
+     （実際に日報機能を作っている別セッションが同居していた）。
+   ⚠️repoのgit操作はGASに絶対届かない（lounge repoに.clasp.jsonが無い）＝置き場所として安全。 */
+function backendPath(which) {
   const live = path.join(DEPLOY, 'コード.js');
-  return fs.existsSync(live) ? live : path.join(REPO, 'Code.gs');
+  const repo = path.join(REPO, 'Code.gs');
+  const wantLive = (which === 'live') || (process.env.POS_TARGET === 'live');
+  if (wantLive) return fs.existsSync(live) ? live : repo;
+  return fs.existsSync(repo) ? repo : live;
 }
 function frontPath(which) {
   return path.join(REPO, which === 'test' ? 'gunshi-test.html' : 'gunshi.html');
@@ -65,11 +74,14 @@ function frontBuild(which) {
 }
 
 /* 名前で関数1本だけを切り出す（波括弧の対応を数える）。共通ヘルパを写経しないため */
-function pluckFn(file, names) {
+/* opts.optional=true … 無い関数は黙って飛ばす。
+   ⚠️`--live`（本番の検査）では、テスト環境にしか無い関数を注入しようとして落ちるため。
+     本番検査は「何が欠けているか」を見るのが目的＝欠けていても走り切れないと意味がない。 */
+function pluckFn(file, names, opts) {
   const src = fs.readFileSync(file, 'utf8');
   return names.map(name => {
     const at = src.indexOf('\nfunction ' + name + '(');
-    if (at < 0) throw new Error('関数が見つかりません: ' + name + ' (' + file + ')');
+    if (at < 0) { if (opts && opts.optional) return ''; throw new Error('関数が見つかりません: ' + name + ' (' + file + ')'); }
     let i = src.indexOf('{', at), depth = 0, end = -1;
     for (; i < src.length; i++) {
       const ch = src[i];
@@ -82,14 +94,14 @@ function pluckFn(file, names) {
 }
 
 /* 1行の変数宣言を名前で切り出す（しきい値などを写経しないため） */
-function pluckVar(file, names) {
+function pluckVar(file, names, opts) {
   const src = fs.readFileSync(file, 'utf8');
   return names.map(name => {
     const re = new RegExp('^(var|let|const) ' + name.replace(/[$]/g, '\\$&') + '\\s*=.*$', 'm');
     const m = src.match(re);
-    if (!m) throw new Error('変数が見つかりません: ' + name + ' (' + file + ')');
+    if (!m) { if (opts && opts.optional) return ''; throw new Error('変数が見つかりません: ' + name + ' (' + file + ')'); }
     return m[0];
-  }).join('\n');
+  }).filter(Boolean).join('\n');
 }
 
 module.exports = { REPO, backendPath, frontPath, frontBillBlock, backendPosBlock, apiWhitelist, keepList, frontBuild, slice, pluckFn, pluckVar };

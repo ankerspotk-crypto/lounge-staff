@@ -21,7 +21,16 @@ console.log('  backend  ' + back.meta.file + '  (' + back.meta.startLine + '行�
 for (const name of SUITES.filter(s => !only || s.indexOf(only) >= 0)) {
   let mod;
   try { mod = require('./suites/' + name); } catch (e) { if (e.code === 'MODULE_NOT_FOUND' && String(e.message).indexOf(name) >= 0) continue; throw e; }
-  await mod(front, back, { loadFront, loadBackend });
+  /* ⚠️`--live`（本番の検査）では、テスト環境にしか無い機能に当たって落ちるのが正常。
+     落として止めると「本番に何が欠けているか」の一覧が作れない＝未デプロイとして報告し先へ進む。
+     既定（テスト環境）では例外は本物の不具合＝そのまま落とす。 */
+  try {
+    await mod(front, back, { loadFront, loadBackend });
+  } catch (e) {
+    if (process.env.POS_TARGET === 'live') {
+      t.known(name + ' を最後まで走れなかった', '本番にまだ無い機能に当たった＝未反映: ' + (e && e.message));
+    } else throw e;
+  }
 }
 process.exit(t.summary() ? 0 : 1);
 })();

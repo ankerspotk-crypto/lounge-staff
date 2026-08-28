@@ -86,6 +86,13 @@ module.exports = function (_f, _b, ctx) {
   }
 
   t.section('📅次回来店時払いの列と集計（ボス指示 2026-08-28）');
+  /* ⚠️まだGASに出していない＝`--live`（本番の検査）では存在しない。
+     落とさずに「未デプロイ」と報告して先へ進む＝本番検査は何が欠けているかを見るためのもの。 */
+  if (typeof boot().fn.getPosNextPay !== 'function') {
+    t.known('📅次回来店時払いの列と集計が入っている',
+            '検査対象に getPosNextPay が無い＝**まだGASにデプロイしていない**（ボス判断で保留中）。'
+            + '\n       repoの Code.gs には入っている＝既定の検査（--liveなし）では通る。');
+  } else {
   {
     const b = boot();
     const rec = (over) => Object.assign({ floor: '2F', table: 'BOX1', cust: '田中', pax: 1,
@@ -142,6 +149,8 @@ module.exports = function (_f, _b, ctx) {
     t.eq(b.closes().dump()[0][29], '次回来店時払い', '足りない見出しを継ぎ足す');
     t.eq(b.closes().dump()[0][6], 'お客様名', '⚠️既にある見出しは書き換えない');
     t.eq(b.fn.getPosNextPay().outstanding, 15600, '集計も通る');
+  }
+
   }
 
   t.section('⚠️別端末の古い下書きが会計済みを黙って外さない');

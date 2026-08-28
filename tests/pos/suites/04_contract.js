@@ -78,7 +78,18 @@ module.exports = function (front, back) {
       const a = ex.slice(live, 'const POS_ORDER_TAB', '/* ===== 納品書→在庫反映', 'live').code;
       const b = ex.slice(repo, 'const POS_ORDER_TAB', '/* ===== 納品書→在庫反映', 'repo').code;
       if (a === b) t.ok(true, '本番GAS(コード.js)とrepo(Code.gs)のPOSブロックが一致');
-      else t.known('本番GAS(コード.js)とrepo(Code.gs)のPOSブロックが一致', 'ズレている＝どちらかが未デプロイ／未コミット');
+      else {
+        /* repoが先行＝**まだGASに出していない作業**（正常）。
+           ⚠️赤にするのは「**本番にしか無い関数**」＝repoへの取り込み漏れ（別セッションの成果を消す事故）。
+             行の差は修正しただけで出る＝赤にしない。 */
+        const fns = c => new Set((c.match(/\nfunction ([A-Za-z_][A-Za-z0-9_]*)/g) || []).map(x => x.trim()));
+        const inRepo = fns(b);
+        const missing = [...fns(a)].filter(x => !inRepo.has(x));
+        t.ok(missing.length === 0, '⚠️本番GASにしか無いPOS関数が無い（repoへの取り込み漏れ＝他セッションの成果を消す）',
+             missing.join(', '));
+        t.known('本番GAS(コード.js)とrepo(Code.gs)のPOSブロックが一致',
+                'repoが先行＝**未デプロイ**。デプロイ元(/tmp)には置いていない（他セッションのclasp pushで巻き添えにしないため）');
+      }
     } else t.skip('コード.js と Code.gs の突き合わせ', 'ファイルが無い');
   }
 

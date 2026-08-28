@@ -100,11 +100,14 @@ function loadFront(opts) {
   vm.createContext(sandbox);
   /* ⚠️BMブロックは外の共通物も使う（esc/jsStr、印刷モードの PRINT_SIM 等）。
      ここも**実物を切り出して**注入する＝スタブを書くと本物とズレる。 */
-  const shared = ex.pluckFn(ex.frontPath(opts.which),
-    ['esc', 'shortNm', 'jsStr', 'printSimDefault_', 'printGo_', 'setPrintSim', 'printLogHtml_']);
-  vm.runInContext(ex.pluckVar(ex.frontPath(opts.which), ['BUILD', 'PRINT_LOG']), sandbox, { filename: '軍師 共通変数(実物)' });
-  vm.runInContext(shared, sandbox, { filename: '軍師 共通ヘルパ(実物)' });
-  vm.runInContext('var PRINT_SIM=printSimDefault_();', sandbox, { filename: '印刷モードの既定' });
+  const must = ex.pluckFn(ex.frontPath(opts.which), ['esc', 'shortNm', 'jsStr']);
+  /* 印刷モードはテスト環境にしか無い＝本番(--live)の検査では飛ばす */
+  const optional = ex.pluckFn(ex.frontPath(opts.which),
+    ['printSimDefault_', 'printGo_', 'setPrintSim', 'printLogHtml_'], { optional: true });
+  vm.runInContext(ex.pluckVar(ex.frontPath(opts.which), ['BUILD'], { optional: true })
+    + '\n' + ex.pluckVar(ex.frontPath(opts.which), ['PRINT_LOG'], { optional: true }), sandbox, { filename: '軍師 共通変数(実物)' });
+  vm.runInContext(must + '\n' + optional, sandbox, { filename: '軍師 共通ヘルパ(実物)' });
+  vm.runInContext('if(typeof printSimDefault_==="function") var PRINT_SIM=printSimDefault_();', sandbox, { filename: '印刷モードの既定' });
   vm.runInContext(block.code, sandbox, { filename: '軍師 BM_*ブロック(実物)' });
 
   return {
