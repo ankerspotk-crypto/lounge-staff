@@ -255,7 +255,7 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
    金額が出ていれば入力済み＝どの卓が打ててどの卓が空かが一目で分かる */
 .seat .custrow{display:flex;align-items:center;gap:6px;}
 .seat .custrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.seat .bill-btn{flex:0 0 auto;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:7px;
+.seat .bill-btn{flex:0 0 auto;font-size:13px;font-weight:900;padding:9px 14px;border-radius:10px;min-height:38px;letter-spacing:.3px;
   border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;white-space:nowrap;}
 .seat .bill-btn.on{border-color:#6b5a24;background:#2a2210;color:var(--gold);}
 .seat .bill-btn:active{opacity:.6;}
@@ -469,6 +469,20 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
    flex:1 / overflow-y:auto / min-height:0 の3点セットが無いと**画面外にはみ出して触れなくなる**
    （⑥会計・⑦照合が「動かない」の正体だった）。#homeView と同じ作りに揃えてある。 */
 #billView{flex:1;overflow-y:auto;min-height:0;padding:12px 12px 44px;display:none;-webkit-overflow-scrolling:touch;}
+/* 🧾 伝票ポップアップ＝ホール状況の上に重ねる（ボス指示＝押したらすぐ戻れる）。
+   ⚠️z-indexは**80未満**にすること。伝票の中のモーダル（会計伝票の確認/帰属の選択＝.bm-modal-bg 80 / .bm-modal 81）
+     を必ず上に出すため。ここを80以上にすると「会計伝票が出ない」に化ける。 */
+#bmPopBg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:70;}
+body.bill-pop #bmPopBg{display:block;}
+body.bill-pop #billView{display:flex;flex-direction:column;position:fixed;z-index:71;left:50%;top:50%;
+  transform:translate(-50%,-50%);width:min(1180px,96vw);height:min(92dvh,92vh);padding:0;
+  background:var(--bg);border:1px solid var(--line2);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.6);overflow:hidden;}
+body.bill-pop #bmWrap{flex:1;overflow-y:auto;min-height:0;padding:12px 12px 20px;-webkit-overflow-scrolling:touch;}
+#bmPopHd{display:none;}
+body.bill-pop #bmPopHd{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line2);flex:0 0 auto;}
+#bmPopHd .bk{font-size:14px;font-weight:900;padding:10px 16px;border-radius:10px;background:#1b2740;border:1px solid #33507e;color:#cfe0ff;}
+#bmPopHd .bk:active{opacity:.6;}
+#bmPopHd .ttl{font-size:14px;font-weight:800;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bm-wrap{display:grid;grid-template-columns:300px 1fr 1fr;gap:12px;align-items:start;}
 @media(max-width:1200px){.bm-wrap{grid-template-columns:1fr 1fr;}}
 @media(max-width:820px){.bm-wrap{grid-template-columns:1fr;}}
@@ -1463,7 +1477,11 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 
 <!-- 🧾 伝票管理（自社POS）。ホール状況の組を伝票として開き会計を組み立てる
      ⚠️#homeView の「外」に置くこと。中に入れると home-on 以外で親ごと消えて幅0高さ0になる。 -->
-<div id="billView"><div class="bm-wrap" id="bmWrap"></div></div>
+<div id="bmPopBg" onclick="closeBillPopup()"></div>
+<div id="billView">
+  <div id="bmPopHd"><button class="bk" onclick="closeBillPopup()">◀ ホール状況へ戻る</button><span class="ttl" id="bmPopTtl"></span></div>
+  <div class="bm-wrap" id="bmWrap"></div>
+</div>
 
 <!-- 上部 横長アラート帯 -->
 <div class="alertbar" id="alertbar"></div>
@@ -1523,10 +1541,62 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
 var GAS_URL='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
 var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
+/* ============================================================================
+   🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
+   ----------------------------------------------------------------------------
+   ■ 実機印字は `tmprintassistant://` へ画面遷移する＝**プリンターもiPadのアプリも無い場所では
+     そこで流れが止まる**。会計→控え→領収書を通しで試せない。
+   ■ `PRINT_SIM=true` のときは**送らずに「刷った」ことにして**、記録（発行控え・印刷済みフラグ）は
+     実機と同じように残す＝後工程がそのまま試せる。
+   ■ 既定＝**testビルドはON／本番ビルドはOFF**（BUILDの末尾で判定）。端末ごとにlocalStorageで上書き可。
+     ⚠️本番に昇格したとき自動でOFFになる＝「本番なのに刷ったつもり」を構造的に防ぐ。
+   ⚠️**新しい印刷を足したら必ず `printGo_` を通すこと**。`location.href` を直に書くと
+     このスイッチをすり抜けて、テストでまた流れが止まる。
+============================================================================ */
+/* 端末の設定があればそれ、無ければビルドで決める（testビルド=ON / 本番=OFF） */
+function printSimDefault_(){
+  try{ var v=localStorage.getItem('gunshi_print_sim'); if(v==='1')return true; if(v==='0')return false; }catch(e){}
+  return /-test$/.test(BUILD);
+}
+var PRINT_SIM=printSimDefault_();
+var PRINT_LOG=[];   // 直近の印刷（シミュレーション含む）。テスト中に「何が刷られたか」を見るため
+function setPrintSim(v){
+  PRINT_SIM=!!v;
+  try{ localStorage.setItem('gunshi_print_sim', v?'1':'0'); }catch(e){}
+  if(typeof bmRender==='function'&&typeof BM!=='undefined'&&BM.key) bmRender();
+  if(typeof toast==='function') toast(v?'🧪 印刷はシミュレーションになりました':'🖨 実機へ印刷します');
+}
+/* 印刷の唯一の出口。戻り値＝true(実機へ送る)/false(シミュレーション＝遷移させない)
+   aId … <a>のid。実機なら href を差し替え、シミュレーションなら遷移を殺す
+   useLocation … bmSlipPrint のように自分で location.href を叩く経路だけ true */
+function printGo_(url,label,aId,useLocation){
+  var a=aId?document.getElementById(aId):null;
+  if(PRINT_SIM){
+    if(a) a.href='#';
+    PRINT_LOG.unshift({ label:String(label||'印刷'), at:(new Date()), bytes:String(url||'').length, sim:true });
+    PRINT_LOG=PRINT_LOG.slice(0,20);
+    if(typeof toast==='function') toast('🧪 '+label+' を刷ったことにしました（実機には送っていません）');
+    return false;
+  }
+  if(a) a.href=url;
+  PRINT_LOG.unshift({ label:String(label||'印刷'), at:(new Date()), bytes:String(url||'').length, sim:false });
+  PRINT_LOG=PRINT_LOG.slice(0,20);
+  if(useLocation) location.href=url;
+  return true;
+}
+function printLogHtml_(){
+  if(!PRINT_LOG.length) return '';
+  var p2=function(x){return (x<10?'0':'')+x;};
+  return '<div class="bm-note" style="margin-top:6px">直近の印刷'
+    +PRINT_LOG.slice(0,5).map(function(x){
+        return '<div style="font-size:11px;color:var(--sub)">'+(x.sim?'🧪':'🖨')+' '
+          +p2(x.at.getHours())+':'+p2(x.at.getMinutes())+'　'+esc(x.label)+'</div>';
+      }).join('')+'</div>';
+}
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3686,13 +3756,13 @@ function markMapOverflow_(){
     if(r1) r1.insertAdjacentHTML('beforeend','<span class="mini-p mini-more">+'+hid+'</span>');
   });
 }
-/* 表示モード（マップ/リスト）。端末ごとにlocalStorageで保持 */
-var hallView=localStorage.getItem('gunshi_hall_view')||'map';
-function setHallView(v){ hallView=v; try{localStorage.setItem('gunshi_hall_view',v);}catch(e){} renderHall(); }
-function hallViewTglHtml(){
-  return '<span class="hall-vtgl"><b class="'+(hallView==='map'?'on':'')+'" onclick="setHallView(\'map\')">🗺 マップ</b>'
-       + '<b class="'+(hallView==='list'?'on':'')+'" onclick="setHallView(\'list\')">▦ リスト</b></span>';
-}
+/* ⚠️2026-08-28ボス指示＝**ホール状況はリスト表示だけ**にする（マップ/リストの切替をやめる）。
+   マップの描画関数(mapHtml/mapFloorHtml/mapSeatCell_/SEAT_POS)は**残してある**＝
+   ポータルの予約フォームの席選択が同じ座標(SEAT_POS)を見ており、消すと巻き添えになる。
+   戻したくなったら hallView を 'map' にできる状態のまま、入口だけ塞いでいる。 */
+var hallView='list';
+function setHallView(v){ hallView='list'; renderHall(); }   // 切替は封じた（常にリスト）
+function hallViewTglHtml(){ return ''; }
 // 2F・5Fを横並びで同時表示（リストの.floorsと同じ骨格）
 function mapHtml(){ return '<div class="floors">'+mapFloorHtml('2F')+mapFloorHtml('5F')+'</div>'; }
 function mapFloorHtml(fl){
@@ -3729,8 +3799,7 @@ function renderHall(){
   renderHallReqSum();
   var tgl=document.getElementById('hallViewTgl'); if(tgl) tgl.innerHTML=hallViewTglHtml();
   // マップ＝見取り図（既定）／リスト＝従来のカードグリッド。切替はlocalStorageに端末ごとで保持。
-  setHtml('hallArea', hallView==='map' ? mapHtml() : '<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
-  if(hallView==='map') markMapOverflow_();
+  setHtml('hallArea', '<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
 }
 // ホール状況ヘッダーの「📣 リクエスト」サマリ（未対応があればパルス）。タップで本日の全リクエスト一覧。
 function renderHallReqSum(){
@@ -3883,7 +3952,31 @@ function bmPeek_(rowIdx){
 }
 /* ⚠️他端末で打った伝票は、この端末にまだ届いていないことがある（取り込みは非同期）。
    BM.wantに覚えておき、届いた時点で自動的に開く＝「開くを押したのに何も出ない」を防ぐ */
-function openBillFor(rowIdx){ BM.key=String(rowIdx); BM.want=String(rowIdx); setViewMode('bill'); }
+/* 🧾 席の「伝票」ボタンから開く。⚠️2026-08-28ボス指示＝**ポップアップで出してすぐ戻れる**ように。
+   伝票管理タブ(viewMode==='bill')を自分で開いている時は、従来どおりその画面で切り替えるだけ。 */
+function openBillFor(rowIdx){
+  BM.key=String(rowIdx); BM.want=String(rowIdx);
+  if(viewMode==='bill'){ bmRender(); return; }
+  openBillPopup();
+}
+function openBillPopup(){
+  document.body.classList.add('bill-pop');
+  var t=document.getElementById('bmPopTtl');
+  if(t){
+    var b=(typeof bmBills==='function'?bmBills():[]).filter(function(x){return String(x.rowIdx)===String(BM.key);})[0];
+    t.textContent=b?(bmTblLabel_(b.floor,b.table)+'　'+(b.cust||'')+' 様'):'伝票';
+  }
+  bmRender();
+  /* ⚠️共有ポーリング(20秒)はポップアップの間だけ回す＝閉じたら必ず止める（通信を垂れ流さない） */
+  if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmPullStart(); }
+}
+function closeBillPopup(){
+  if(!document.body.classList.contains('bill-pop')) return;
+  document.body.classList.remove('bill-pop');
+  bmPullStop();
+  BM.slip=null; BM.pick=null;        // 開いたままの紙・帰属選びを持ち越さない
+  renderHall();                       // 伝票ボタンの金額表示を最新にする
+}
 // 来店中の席に「次席予約(=後半に入った別の確定予約)」があれば予告する1行。席一覧の接客中/担当不在で共用（マップはmapFlags_の🔜）。
 function nextRsvLine_(s){
   if(!s) return '';
@@ -4783,7 +4876,7 @@ function quickRotateGo(toIdx,castName){
    ■ 伝票の単位＝**予約行 rowIdx**（席ではない）。相席でも組ごとに割れる。
 ============================================================================ */
 /* 🍽 TRUSTの商品マスタ（2026-08-08にボスがTRUST管理画面から出力したPDFを転記／全210品）。
-   ⚠️2026-08-22 ボス確定：2部営業の廃止に伴い「2部営業 3,000円」を削除（実件数は BM_ITEMS.length ＝画面に出る）。
+   ⚠️2026-08-22 ボス確定：2部営業の廃止に伴い「2部営業 3,000円」を削除（実件数は bmItems_().length ＝画面に出る。手で足した品もここに合流する）。
    形式＝[品名, 価格, 種類]。種類はTRUSTの「Web集計用分類」＝ボトル系/単品系/つまみ系。
    ⚠️店舗用カテゴリー（ウィスキー/焼酎/シャンパン…）はこの一覧に含まれない＝**検索で引く**のが正。
    ⚠️同名で価格違いが実在する（出前代が1,000〜23,000で7件）。名寄せせずTRUSTの実データのまま持つ。
@@ -4911,10 +5004,9 @@ var BM_ITEMS=[
 ["中々",13000,"ボトル系","焼酎"],
 ["梅昆布茶",1000,"単品系","ソフトドリンク"],
 ["ジャックダニエル グラス",1000,"単品系","グラス"],
-["キャストドリンク",1000,"単品系","その他"],
+["キャストドリンク",1000,"単品系","キャストドリンク"],
 ["ボンベイサファイア",12000,"ボトル系","スピリッツ"],
 ["ジャックダニエル",13000,"ボトル系","ウィスキー"],
-["同伴",3000,"単品系","その他"],
 ["白州18年",200000,"ボトル系","ウィスキー"],
 ["山崎18年",200000,"ボトル系","ウィスキー"],
 ["ぶどうジュース",1000,"単品系","ソフトドリンク"],
@@ -4948,7 +5040,6 @@ var BM_ITEMS=[
 ["ガレス リースリング",25000,"ボトル系","シャンパン"],
 ["ガレス エリタージュ ロゼ",30000,"ボトル系","シャンパン"],
 ["茉莉花",5000,"ボトル系","焼酎"],
-["プルシア",15000,"ボトル系","焼酎"],
 ["ウッドフォード",15000,"ボトル系","ウィスキー"],
 ["ガレス エリタージュ",20000,"ボトル系","シャンパン"],
 ["氷結",1000,"単品系","ビール"],
@@ -4998,9 +5089,15 @@ var BM_ITEMS=[
 /* 注文画面のジャンル（表示順）。⚠️在庫は6分類(ボトル/割り物/チャーム/果物/消耗品/名刺)しか無く
    シャンパンとワインを区別できない＝画面は酒種で分け、**在庫へ流す時にBM_GENRE_STOCKで丸める**。
    これで「探しやすさ」と「在庫と同じ体系」を両立させる。 */
-var BM_GENRES=['ウィスキー','焼酎','シャンパン','ワイン','ブランデー','スピリッツ','ビール','割り物','ソフトドリンク','グラス','つまみ','その他'];
+/* ⚠️2026-08-28ボス指示＝**キャストドリンクは「その他」に埋めず表に出す**。
+   一晩で一番よく出る品なので、チップは「全部」の次＝指が最初に届く位置に置く。
+   ⚠️並び順がそのまま画面の並び＝ここを触ると黒服の指の動きが変わる。 */
+var BM_GENRES=['キャストドリンク','ウィスキー','焼酎','シャンパン','ワイン','ブランデー','スピリッツ','ビール','割り物','ソフトドリンク','グラス','つまみ','その他'];
 var BM_GENRE_STOCK={ 'ウィスキー':'ボトル','焼酎':'ボトル','シャンパン':'ボトル','ワイン':'ボトル','ブランデー':'ボトル','スピリッツ':'ボトル','ビール':'ボトル',
-                     '割り物':'割り物','ソフトドリンク':'割り物','つまみ':'チャーム','グラス':'','その他':'' };
+                     '割り物':'割り物','ソフトドリンク':'割り物','つまみ':'チャーム','グラス':'','その他':'',
+                     /* ⚠️キャストドリンクはグラス提供＝ボトルを開けない。ここを'ボトル'にすると
+                        1杯出るたびに在庫が1本減る（🍾今日出たボトルにも混ざる） */
+                     'キャストドリンク':'' };
 var BM_KINDS=['ボトル系','単品系','つまみ系'];
 /* 🥂ウェルカムドリンク（ボスのPDF「ウェルカム用メニュー最新」全46品）
    ■ **お金は取らない**＝単価0。会計には1円も乗らないが「何が出たか」は記録する（ファーストオーダーは別に④で取る）。
@@ -5030,6 +5127,9 @@ var BM_WELCOME_GENRES=['ウィスキー','ブランデー','ワイン','ビー�
 /* 🔥有料メニュー(BM_ITEMS)側で「ソフトドリンク」に分類されているが**都度開封する**品。
    ⚠️これが無いと在庫に載らない（実際に踏んだ）。分類だけでは判定できないのでここで救う。
    ボス確定＝コーラ／レッドブル／ジンジャーエール／ビールが都度開封、他（お茶・ジュース類）はパック。
+   ⚠️**「同伴 ¥3,000」は削除**（ボス確定 2026-08-28「同伴っていらないかも」）。
+     ④キャストの「同伴 ×回数」（BM_FEE.dohan=3,000）と**二重に打てて同伴料が2回乗る**ため。
+     同伴の入口は④だけ＝W○○と同じ「一本化」。復活させると二重計上になる。
    ⚠️**W○○（Wビール/Wコーラ/Wジンジャーエール/Wレッドブル＝TRUSTのウェルカム用0円品）は
      2026-08-08にボス指示でメニューから削除**＝ウェルカムは⑤カードに一本化した。復活させないこと
      （同じ物を2ルートで入れられると二重計上する）。TRUSTの209品→**205品**になったのはこのため。 */
@@ -5067,6 +5167,10 @@ function bmSave(){
   bmPushSoon();
 }
 function bmPushSoon(){ if(BM_PUSH_T) clearTimeout(BM_PUSH_T); BM_PUSH_T=setTimeout(bmPushNow,1200); }
+/* 通信が戻るまで自分で送り直す。⚠️打鍵のまとめ保存(1.2秒)とは別のタイマー＝
+   打っている最中の保存を再送で潰さないため。 */
+var BM_RETRY_T=null;
+function bmRetrySoon(){ if(BM_RETRY_T) return; BM_RETRY_T=setTimeout(function(){ BM_RETRY_T=null; bmPushNow(); },15000); }
 function bmPushNow(){
   BM_PUSH_T=null;
   var keys=Object.keys(BM_PUSH_Q); BM_PUSH_Q={};
@@ -5075,14 +5179,40 @@ function bmPushNow(){
     if(k==='demo') return;                                   // お試しは共有しない
     var d=BM.draft[k]; if(!d) return;
     gsr('posSaveBill',bmDateKey(),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
-      .then(function(r){ if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); } })
-      .catch(function(e){ BM_SYNC_ERR='共有できていません（この端末には残っています）'; bmRenderIfIdle(); });
+      .then(function(r){
+        /* ⚠️2026-08-28追加＝サーバーが**受け取りを拒否**しても（会計済み／データが大きすぎ）
+           ここは通信成功として素通りしていた＝端末は「共有できた」と思い込み、
+           別端末で会計された伝票を自分だけ未会計だと信じ続ける。理由を出して状態を取り直す。 */
+        if(r&&r.ok===false){
+          var msg=String(r.error||'この伝票を保存できませんでした');
+          var fk={}; fk[String(k)]=1;
+          var p=bmPull(fk);                          // 会計済みなら他端末の結果を取り込んで画面を正す
+          var show=function(){ BM_SYNC_ERR=msg; bmRenderIfIdle(); };
+          if(p&&p.then) p.then(show,show); else show();
+          return;
+        }
+        if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); }
+      })
+      .catch(function(e){
+        /* ⚠️2026-08-28追加＝失敗したキーを**捨てていた**。次に何か打つまで再送されず、
+           サーバーに一度も載らないまま会計されると**閉店ゲートがその伝票を知らない**
+           （ゲートはサーバーの下書きを見る）＝未会計を素通りさせる穴になっていた。
+           ⭐キューに戻して自分で再送する。間隔は15秒＝GASの床1.9秒とWAFを考えて連投しない。 */
+        BM_PUSH_Q[k]=1;
+        BM_SYNC_ERR='共有できていません（この端末には残っています・再送します）';
+        bmRetrySoon(); bmRenderIfIdle();
+      });
   });
 }
 /* 他端末の伝票を取り込む。⚠️入力中でも下書き自体は差し替わる（描画はbmRenderIfIdleが守る） */
-function bmPull(){
-  if(typeof gsr!=='function') return;
-  gsr('getPosBills',bmDateKey()).then(function(r){
+/* force={rowIdx:1,…} を渡すと、その伝票だけは**更新日時に関係なくサーバーを採る**。
+   ⚠️通常は「新しい方が勝ち」だが、**サーバーに書き込みを拒否された伝票**は自分の方が
+   新しくても間違い（別端末で会計されている）＝ここで勝たせると会計済みが画面から消える。 */
+function bmPull(force){
+  if(typeof gsr!=='function') return null;
+  /* ⚠️プロミスを返す＝呼び出し側が「取り直しが終わってから」表示を決められる
+     （返さないと、保存拒否のメッセージをこの中の BM_SYNC_ERR='' が先に消してしまう） */
+  return gsr('getPosBills',bmDateKey()).then(function(r){
     if(r&&r.mode) BM_MODE=r.mode;
     BM_SYNC_ERR='';
     bmLoad();
@@ -5091,7 +5221,7 @@ function bmPull(){
       if(!b||!b.data) return;
       var loc=BM.draft[b.rowIdx];
       var st=Number(b.data._t)||0, lt=Number(loc&&loc._t)||0;
-      if(!loc||st>lt){ BM.draft[b.rowIdx]=b.data; changed=true; }
+      if(!loc||st>lt||(force&&force[String(b.rowIdx)])){ BM.draft[b.rowIdx]=b.data; changed=true; }
     });
     if(changed) bmStash_();
     bmRenderIfIdle();
@@ -5111,6 +5241,15 @@ function bmModeHtml(){
     +(BM_SYNC_ERR?'<div style="margin-top:4px;color:#ff9a5a;font-weight:700">⚠️ '+esc(BM_SYNC_ERR)+'</div>':'')
     +(m===null?'':'<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm'+(live?'':' dng')+'" onclick="bmModeSwitch()">'
       +(live?'🧪 テストモードに戻す':'🔴 本番モードにする')+'</button></div>')
+    /* 🖨 印刷モード＝プリンターが無い場所で流れを試すためのスイッチ（ボス指示 2026-08-28） */
+    +'<div class="bm-row" style="margin-top:8px;align-items:center">'
+    +'<span class="lb" style="flex:0 0 auto">印刷</span>'
+    +'<button class="bm-btn sm'+(PRINT_SIM?'':' pri')+'" onclick="setPrintSim(false)">🖨 実機に刷る</button>'
+    +'<button class="bm-btn sm'+(PRINT_SIM?' pri':'')+'" onclick="setPrintSim(true)">🧪 刷ったことにする</button></div>'
+    +'<div class="bm-note">'+(PRINT_SIM
+        ?'⚠️<b>実機には送りません</b>。会計→控え→領収書の流れだけ確かめられます（発行控えは実物と同じように記録されます）。'
+        :'TM-M30へ送ります。')+'</div>'
+    +printLogHtml_()
     +'</div>';
 }
 function bmModeSwitch(){
@@ -5128,7 +5267,7 @@ function bmModeSwitch(){
 /* お客様n人ぶんのセット行を作る。⚠️単価は**客ごと**に持つ＝同じ席でも女性が混ざると単価が変わるため（ボス談） */
 function bmNewGuests_(n){ var a=[],k=Math.max(1,Number(n)||1); for(var i=0;i<k;i++) a.push({price:BM_FEE.set}); return a; }
 function bmGet(key,defPax){
-  if(!BM.draft[key]) BM.draft[key]={guests:bmNewGuests_(defPax),casts:{},castSel:[],welcome:[],orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0},trust:''};
+  if(!BM.draft[key]) BM.draft[key]={guests:bmNewGuests_(defPax),casts:{},castSel:[],welcome:[],orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0}};
   var d=BM.draft[key];
   // 端末に残った下書きを壊さないための移行：①sets配列(延長があった頃) → ②setPax/setUnit → ③guests(現行)
   if(d.sets){ d.setPax=d.sets.length||1; d.setUnit=(d.sets[0]&&Number(d.sets[0].price))||BM_FEE.set; delete d.sets; }
@@ -5139,8 +5278,10 @@ function bmGet(key,defPax){
   }
   if(!d.guests||!d.guests.length) d.guests=bmNewGuests_(defPax);
   if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
+  if(d.pay.next==null)d.pay.next=0;
   if(!d.welcome)d.welcome=[];   // 🥂ウェルカム（無料）。古い下書きにも足す
   bmSeedTantou_(key,d);
+  bmSeedCarry_(key,d);
   return d;
 }
 /* お客様に紐づく担当キャストを**伝票の担当に既定で乗せる**（ボス指示）。
@@ -5164,6 +5305,34 @@ function bmSeedTantou_(key,d){
 }
 /* ⚠️席名にフロアが入っていることがある（"2F BOX1"）＝素直に連結すると「2F 2F BOX1」になる。
    伝票一覧・伝票の印字・閉店ゲートで同じ崩れを3回踏んだので**1箇所に寄せる**。 */
+/* 📅前回の未収を伝票へ自動で乗せる（ボス指示＝次回の伝票に自動的に前回分が追加される）。
+   ⚠️出所は**顧客の「次回対応メモ」**に書いた【次回精算】タグ。予約行に nextMemo として届く。
+   ⚠️担当のシードと同じで**1回だけ**（d.carrySeeded）＝黒服が外したら戻らない。
+   ⚠️メモは人が手で編集する場所＝タグが壊れていたら金額を拾わない（黙って0にしない）。 */
+function bmCarryParse_(memo){
+  var m=String(memo||'').match(/【次回精算】\s*¥?\s*([0-9,]+)/);
+  if(!m) return 0;
+  var n=Number(String(m[1]).replace(/,/g,''))||0;
+  return n>0?n:0;
+}
+function bmRsvOf_(key){
+  var L=(typeof RSV!=='undefined'&&RSV)?RSV:[];
+  for(var i=0;i<L.length;i++) if(String(L[i].rowIdx)===String(key)) return L[i];
+  return null;
+}
+function bmSeedCarry_(key,d){
+  if(d.carrySeeded) return;
+  var r=bmRsvOf_(key); if(!r) return;              // 予約行がまだ届いていない＝次の描画で入る
+  d.carrySeeded=1;
+  var amt=bmCarryParse_(r.nextMemo);
+  if(amt>0) d.carry={ amount:amt, memo:String(r.nextMemo||'') };
+}
+function bmCarryDrop(){
+  if(bmLockedAlert_()) return;
+  var d=bmGet(BM.key); if(!d.carry) return;
+  if(!confirm('前回のお預かり '+bmYen(d.carry.amount)+' をこの伝票から外します。\n（顧客メモの記録は残ります＝次回また出ます）')) return;
+  delete d.carry; bmSave(); bmRender();
+}
 function bmTblLabel_(floor,table){
   var t=String(table||''), f=String(floor||'');
   return ((f&&t.indexOf(f)!==0)?(f+' '+t):t).trim();
@@ -5242,8 +5411,18 @@ function bmCalc(d){
   /* ⚠️ボス確定(2026-08-08)＝**値引・値増は税サの後**。税サは値引前の小計に掛ける */
   var raw=base+tax-(Number(d.discount)||0)+(Number(d.surcharge)||0);
   var total=BM_FEE.roundUnit>0?Math.ceil(raw/BM_FEE.roundUnit)*BM_FEE.roundUnit:raw;
-  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0);
-  return {setSum:setSum,tc:tc,yc:yc,dc:dc,ordSum:ordSum,base:base,tax:tax,raw:raw,total:total,paid:paid,unpaid:total-paid};
+  /* ⚠️2026-08-28ボス指示＝**次回来店時払い**。
+     `carry`＝前回の未収。**請求(due)にだけ足し、売上(total)には足さない**。
+     前回の会計で total として既に売上計上しているので、次回また売上に乗せると**二重計上**になる。
+     次回にやるのは「回収」＝お客様が払う額が増えるだけ。
+     `pay.next`＝今回の請求のうち次回に回す額。これも受け取ったものとして unpaid を埋める
+     （締められないと現場が回らない。回収漏れは顧客メモと次回の自動投入で防ぐ）。 */
+  var carry=Math.max(0,Number(d.carry&&d.carry.amount)||0);
+  var next=Math.max(0,Number(d.pay.next)||0);
+  var due=total+carry;
+  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0)+next;
+  return {setSum:setSum,tc:tc,yc:yc,dc:dc,ordSum:ordSum,base:base,tax:tax,raw:raw,total:total,
+          carry:carry,due:due,next:next,paid:paid,unpaid:due-paid};
 }
 
 function bmRender(){
@@ -5264,13 +5443,13 @@ function bmRender(){
           ? '<div class="empty-msg" style="padding:18px 0;font-size:12px">⏳ ホール状況を読み込み中…<div style="font-size:11px;color:var(--sub);margin-top:6px">席のデータが届き次第、ここに伝票が出ます（自動で更新）</div></div>'
           : '<div class="empty-msg" style="padding:18px 0;font-size:12px">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:6px">ホール状況で席にお客様を設定すると、ここに伝票が出ます</div></div>'))
     +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmDemo()">🧪 お試し伝票で今すぐ試す</button></div>'
-    +'<div class="bm-note">席のデータを待たずに金額だけ検算できる伝票。TRUSTとの突き合わせはこれで足ります。</div>'
+    +'<div class="bm-note">席のデータを待たずに金額だけ試せる伝票。操作の練習や検算に使えます。</div>'
     +bmModeHtml()
     +'</div>'+bmBottlesHtml()+'</div>';
   if(!BM.key){
     html+='<div><div class="bm-card"><h3>使い方</h3><div class="bm-note" style="font-size:12px;line-height:1.7">'
-      +'① 左で伝票を選ぶ<br>② セット／キャストの担当・予約・同伴の<b>回数</b>を入れる<br>③ 注文をカテゴリ→商品→<b>誰に付けるか</b>の順で打つ<br>④ 右下に<b>TRUSTの合計</b>を入れて突き合わせる'
-      +'<br><br>計算＝<b>サービス料20%（消費税を含む）／合計は100円単位で切り上げ</b>。TRUSTの実機設定と同じです。</div></div></div>';
+      +'① 左で伝票を選ぶ<br>② セット／キャストの担当・予約・同伴の<b>回数</b>を入れる<br>③ 注文をカテゴリ→商品→<b>誰に付けるか</b>の順で打つ<br>④ ⑧で支払方法を選んで<b>会計する</b>'
+      +'<br><br>計算＝<b>サービス料20%（消費税を含む）／合計は100円単位で切り上げ</b>。</div></div></div>';
   }else{
     html+=bmEditorHtml()+bmDetailHtml();
   }
@@ -5299,7 +5478,63 @@ function bmStockOf(name){
   return { name:hit[0].name, qty:hit.reduce(function(a,x){ return a+(Number(x.qty)||0); },0),
            floors:hit.map(function(x){ return (x.floor||'')+' '+(Number(x.qty)||0); }) };
 }
-function bmItem_(name){ for(var i=0;i<BM_ITEMS.length;i++) if(BM_ITEMS[i][0]===name) return BM_ITEMS[i]; return null; }
+/* ============================================================================
+   ➕ メニューの手動追加（ボス指示 2026-08-28「営業中にメニューを追加することもある」）
+   ----------------------------------------------------------------------------
+   ■ 「臨時商品」はその場限りの一発打ちで**一覧に残らない**＝同じ品を何度も出す夜は毎回打ち直し。
+     ここで足した品は一覧に出て、次から選んで打てる。
+   ⚠️保存先は**この端末のlocalStorage**（セット単価の候補と同じ流儀）。
+     **端末をまたいだ共有はしない**＝5Fで足した品は2Fに出ない。共有・恒久化するにはGASに1本
+     足す必要がある（ボスの号令待ち）。画面にもその旨を出す。
+   ⚠️**品を引く経路は`bmItems_()`一本に揃えること**。`BM_ITEMS`を直接見る場所が1つでも残ると
+     「グリッドには出るのに🍾ボトル集計に出ない」のような食い違いになる。
+   ⚠️同名は禁止しない（出前代のように**同名で価格違いが実在する**）。ただし足す時に一言出す。
+============================================================================ */
+var BM_ADD_KEY='gunshiMenuAdd';
+function bmAddLoad(){ try{ var a=JSON.parse(localStorage.getItem(BM_ADD_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+function bmAddSave_(a){ try{ localStorage.setItem(BM_ADD_KEY,JSON.stringify(a.slice(0,200))); }catch(e){} }
+/* 有料メニューの正本＝元の表＋この端末で足した品。⚠️必ずここから引く */
+function bmItems_(){ return BM_ITEMS.concat(bmAddLoad()); }
+function bmIsAdded_(name){ var a=bmAddLoad(); for(var i=0;i<a.length;i++) if(a[i][0]===name) return true; return false; }
+/* ジャンルから種類を決める（ボトルに丸まるジャンルなら「ボトル系」）。⚠️種類は表示にしか使わない */
+function bmKindOf_(genre){ return (BM_GENRE_STOCK[genre]==='ボトル')?'ボトル系':((BM_GENRE_STOCK[genre]==='チャーム')?'つまみ系':'単品系'); }
+/* ⚠️**会計済みロックの対象にしない**。メニューは伝票の中身ではない＝
+   会計の済んだ伝票を開いたまま、次の卓のためにメニューを足すことは普通に起きる。
+   （最初ロックを掛けていて、実ブラウザで「追加できない」を踏んだ） */
+function bmAddMenu(){
+  var nm=((document.getElementById('bmNewNm')||{}).value||'').trim();
+  var pr=Math.max(0,Number((document.getElementById('bmNewPr')||{}).value)||0);
+  var gn=((document.getElementById('bmNewGn')||{}).value||'その他');
+  if(!nm){ alert('品名を入れてください。'); return; }
+  if(!(pr>0)){ alert('単価を入れてください。\n（0円の品は注文で確定できません）'); return; }
+  if(BM_GENRES.indexOf(gn)<0) gn='その他';
+  var dup=bmItems_().filter(function(r){ return r[0]===nm; });
+  if(dup.length&&!confirm('「'+nm+'」は既にメニューに在ります（'+bmYen(dup[0][1])+'）。\n同じ名前で単価違いとして足しますか？')) return;
+  var a=bmAddLoad(); a.push([nm,pr,bmKindOf_(gn),gn]); bmAddSave_(a);
+  var e1=document.getElementById('bmNewNm'); if(e1)e1.value='';
+  var e2=document.getElementById('bmNewPr'); if(e2)e2.value='';
+  BM.kind=gn;                    /* 足したジャンルに切り替える＝足した品がその場で見える */
+  bmRender();
+  if(typeof toast==='function') toast('メニューに追加しました：'+nm+' '+bmYen(pr));
+}
+function bmDelMenu(i){
+  var a=bmAddLoad(); if(!a[i]) return;
+  if(!confirm('メニューから「'+a[i][0]+'」を消します。\n（打ってしまった注文はそのまま残ります）')) return;
+  a.splice(i,1); bmAddSave_(a); bmRender();
+}
+function bmAddedListHtml_(){
+  var a=bmAddLoad();
+  if(!a.length) return '';
+  return '<div class="bm-note" style="margin-top:6px">この端末で足した品 '+a.length+'件</div>'
+    +a.map(function(r,i){
+        return '<div class="bm-row" style="gap:6px;align-items:center;margin-top:3px">'
+          +'<span style="flex:1;font-size:12px">★ '+esc(r[0])+' <span style="color:var(--sub)">'+esc(r[3])+'</span></span>'
+          +'<span style="font-size:12px;color:var(--gold);font-weight:800">'+bmYen(r[1])+'</span>'
+          +'<button class="bm-btn dng sm" onclick="bmDelMenu('+i+')">×</button></div>';
+      }).join('');
+}
+/* 品名からマスタ行を引く。⚠️手で足した品も含めて引く（bmItems_一本） */
+function bmItem_(name){ var L=bmItems_(); for(var i=0;i<L.length;i++) if(L[i][0]===name) return L[i]; return null; }
 /* 🍾今日出たボトル＝端末の全伝票の下書きを横断して「ボトル系」だけ集計する。
    ⚠️在庫の自動マイナスと発注はbackend（GAS）が要る＝ここは**本数の可視化まで**。
       在庫へ流すには POS品名 → 在庫品名 の紐づけが必要（既存の`店舗メニュー`シートの仕組みを使う）。 */
@@ -5307,6 +5542,9 @@ function bmBottlesToday(){
   bmLoad();
   var bills=bmBills(), map={}, order=[], total=0, amount=0;
   Object.keys(BM.draft).forEach(function(key){
+    /* ⚠️2026-08-28追加＝🧪お試し伝票（検算用）のボトルが在庫の出庫集計に乗っていた。
+       締めで実物と合わなくなる＝共有もしない物は数えない。 */
+    if(key==='demo') return;
     var d=BM.draft[key]; if(!d||!d.orders) return;
     var b=null; bills.forEach(function(x){ if(String(x.rowIdx)===String(key)) b=x; });
     var where=b?((b.floor||'')+' '+(b.table||'')):(key==='demo'?'🧪お試し':'伝票'+key);
@@ -5364,7 +5602,9 @@ function bmDemo(){ bmLoad(); bmGet('demo'); bmSave(); BM.key='demo'; bmRender();
 /* loadAll(30秒ごと)からの再描画。⚠️入力中(値引・TRUST合計など)は触らない＝打っている途中で
    DOMを張り替えるとフォーカスが飛んで入力が中断する（[[reference_async_stale_guard_trap]]と同種の事故）。 */
 function bmRenderIfIdle(){
-  if(viewMode!=='bill') return;
+  /* ⚠️ポップアップで開いている時も更新対象＝ここを viewMode だけで判定すると
+     ホール状況から開いた伝票が20秒ポーリングでも他端末の入力を拾わない */
+  if(viewMode!=='bill'&&!(document.body&&document.body.classList&&document.body.classList.contains('bill-pop'))) return;
   var ae=document.activeElement, wrap=document.getElementById('bmWrap');
   if(ae&&wrap&&wrap.contains(ae)&&/INPUT|TEXTAREA/.test(ae.tagName)) return;
   bmRender();
@@ -5443,7 +5683,7 @@ function bmEditorHtml(){
           +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
           +'<span class="amt">'+bmYen(o.price*o.qty)+'</span></div>';
       }).join(''):'<div class="bm-note">まだ注文がありません。下のメニューから選びます</div>')+'</div>'
-    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">TRUST全'+BM_ITEMS.length+'品</span></div>'
+    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+bmItems_().length+'品'+(bmAddLoad().length?'（うち★'+bmAddLoad().length+'件はこの端末で追加）':'')+'</span></div>'
     +'<div class="bm-row"><input type="search" class="bm-in" style="flex:1;text-align:left;min-width:130px" placeholder="品名で検索（山崎 / 炭酸 / グラス …）" value="'+esc(BM.q||'')+'" oninput="bmSearch(this.value)"></div>'
     +'<div class="chips">'+['全部'].concat(BM_GENRES).map(function(k){
         return '<div class="chip'+(k===BM.kind?' sel':'')+'" onclick="bmSetKind(\''+jsStr(k)+'\')">'+esc(k)+'</div>';
@@ -5454,6 +5694,17 @@ function bmEditorHtml(){
     +'<input type="text" id="bmAdNm" placeholder="品名" class="bm-in" style="text-align:left;width:106px">'
     +'<input type="number" id="bmAdPr" placeholder="単価" class="bm-in" style="width:88px" value="0">'
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
+    +'<div class="bm-note">臨時商品＝この1回だけ打つ品（メニューには残りません）。</div>'
+    /* ➕メニューに追加＝一覧に残る（ボス指示 2026-08-28） */
+    +'<div class="bm-row" style="margin-top:10px;flex-wrap:wrap;gap:6px"><span class="lb">メニューに追加</span>'
+    +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;width:120px">'
+    +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:88px">'
+    +'<select id="bmNewGn" class="bm-in" style="width:120px">'
+    +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'"'+((BM.kind===g)?' selected':'')+'>'+esc(g)+'</option>'; }).join('')
+    +'</select>'
+    +'<button class="bm-btn pri sm" onclick="bmAddMenu()">＋ 追加</button></div>'
+    +'<div class="bm-note">次からメニューに出ます。⚠️<b>この端末だけ</b>に保存されます（他の端末には出ません）。</div>'
+    +bmAddedListHtml_()
     +'</div></div>';
   return h;
 }
@@ -5466,7 +5717,11 @@ function bmEditorHtml(){
 ============================================================================ */
 var SK_FROM_POS=null;      // {key} 請求書画面をPOSから開いた印
 function bmSeikyuHtml(d,c){
-  if(d.payMethod!=='invoice') return '';
+  /* ⚠️2026-08-28修正＝`payMethod==='invoice'`で判定していたので、**分割で一部だけ売掛**のとき
+     このブロックが出なかった。backendの閉店ゲートは`pay.credit>0`で請求依頼を要求する＝
+     「ゲートは要求するのに、依頼を出すボタンが画面に無い」で閉店できなくなる。
+     ⭐判定は必ず**金額(pay.credit)**で行う。payMethodは代表を覚えているだけの飾り。 */
+  if(!(Number((d.pay||{}).credit)>0)) return '';
   if(d.seikyuRequested){
     return '<div class="bm-sum" style="margin-top:8px"><div class="r"><span style="color:var(--green)">✅ 請求書の発行依頼 済み</span>'
       +'<b style="font-size:11px;color:var(--sub)">'+esc(d.seikyuRequested.ts||'')+'</b></div></div>';
@@ -5498,7 +5753,8 @@ function bmSeikyuDone_(){
   var k=SK_FROM_POS.key; SK_FROM_POS=null;
   bmLoad();
   var d=BM.draft[k]; if(!d) return;
-  d.seikyuRequested={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:'') };
+  /* ⚠️金額も一緒に覚える＝会計をやり直して金額が変わったら「出し直し」を要求するため */
+  d.seikyuRequested={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:''), total:bmCalc(d).total };
   var keep=BM.key; BM.key=k; bmSave(); BM.key=keep;
   if(typeof POS_DAY!=='undefined'&&document.getElementById('cc-pos-gate')) ccPosLoad();
 }
@@ -5615,10 +5871,25 @@ function bmSlipLines_(d,c,bill,mode){
      ここを48桁のまま組むと実機で折り返す。 */
   L.push({t:bmPadR_('合計',6)+bmPadL_(bmYen(c.total),10),a:'l',big:2});
   L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
+  /* 📅前回のお預かりは**合計の外**に出す＝今回の売上と混ぜない。紙でもお客様に見える形にする */
+  if(c.carry>0){
+    L.push({t:'',a:'l'});
+    L.push({t:bmPadR_('前回のお預かり',BM_SLIP_COLS-14)+bmPadL_(bmYen(c.carry),14),a:'l'});
+    /* ⚠️3倍角は半角16桁しか入らない＝「ご請求合計」(10桁)＋金額(10桁)で溢れる。
+       大きい行のラベルは「請求」(4桁)にして、説明は下の通常サイズの行に出す。 */
+    L.push({t:bmPadR_('請求',6)+bmPadL_(bmYen(c.due),10),a:'l',big:2});
+    L.push({t:bmPadL_('（前回のお預かりを含むご請求合計）',BM_SLIP_COLS),a:'l'});
+  }
+  if(c.next>0){
+    L.push({t:'',a:'l'});
+    L.push({t:bmPadR_('次回来店時のお支払い',BM_SLIP_COLS-14)+bmPadL_(bmYen(c.next),14),a:'l'});
+  }
   L.push({t:'',a:'l'});
   /* ⚠️ボス指示＝**未領収金は出さない**（合計が分かれば足りる）。
-     会計伝票（会計前）は支払欄も出さない＝まだ払っていないため。控え2枚には出す。 */
-  if(c.paid>0){
+     会計伝票（会計前）は支払欄も出さない＝まだ払っていないため。控え2枚には出す。
+     ⚠️2026-08-28修正＝`c.paid>0`だけで判定していたので、**⑧に支払を入れた後に会計伝票を出し直すと
+       お客様に見せる紙にお預り／お釣りが載っていた**。判定は必ず**mode**で切る（金額の状態で切らない）。 */
+  if((guest||store)&&c.paid>0){
     if(d.pay.cash)   L.push({t:bmPadR_('お預り（現金）',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.cash),14),a:'l'});
     if(d.pay.card)   L.push({t:bmPadR_('カード',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.card),14),a:'l'});
     if(d.pay.credit) L.push({t:bmPadR_('請求書払い',BM_SLIP_COLS-14)+bmPadL_(bmYen(d.pay.credit),14),a:'l'});
@@ -5685,8 +5956,8 @@ function bmSlipXml_(){
 function bmSlipPrint(){
   var xml=bmSlipXml_();
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
-  var a=document.getElementById('bmSlipLink'); if(a) a.href=url;
-  location.href=url;
+  var nm=(BM.slipMode==='store')?'店舗控え':((BM.slipMode==='guest')?'お客様控え':'会計伝票');
+  printGo_(url,nm,'bmSlipLink',true);   /* ⚠️戻り値は常にfalse＝<a>の既定遷移は使わない経路 */
   return false;
 }
 /* 支払方法を選ぶ＝合計をその方法に丸ごと入れる。⚠️分割払いは下の欄で手入力（方法は代表を残す） */
@@ -5694,10 +5965,12 @@ function bmPayMethod(k){
   if(bmLockedAlert_()) return;
   var d=bmGet(BM.key), c=bmCalc(d);
   d.payMethod=k;
-  d.pay={cash:0,card:0,credit:0};
-  if(k==='cash') d.pay.cash=c.total;
-  else if(k==='card') d.pay.card=c.total;
-  else d.pay.credit=c.total;          // 請求書払い＝売掛
+  d.pay={cash:0,card:0,credit:0,next:0};
+  /* ⚠️入れるのは**請求額(due)**＝前回の未収も含めた「お客様が払う額」。totalだと前回分が埋まらない */
+  if(k==='cash') d.pay.cash=c.due;
+  else if(k==='card') d.pay.card=c.due;
+  else if(k==='next') d.pay.next=c.due;   // 📅次回来店時払い＝今回は受け取らない
+  else d.pay.credit=c.due;                // 請求書払い＝売掛
   bmSave(); bmRender();
 }
 /* 領収書＝既存の発行画面を開いて、宛名と金額を入れておく。
@@ -5707,12 +5980,24 @@ function bmOpenReceipt(){
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
   if(typeof openReceipt!=='function'){ alert('領収書の画面が見つかりません'); return; }
   openReceipt();
-  if(typeof RCPT_CASH!=='undefined') RCPT_CASH=(d.payMethod!=='card');
+  /* ⚠️2026-08-28修正＝`payMethod!=='card'` で現金/カードを決めていた。payMethodは**最後に押した
+     チップを覚えているだけ**なので、分割払い（一部現金・一部カード）で必ず狂う。
+       ・現金チップ→金額だけ分けた → 全額が現金扱い＝**要らない印紙を貼る**
+       ・カードチップ→現金も受け取った → 印紙0＝**貼るべき印紙を貼らない**（過怠税）
+     ⭐渡すのは**実際の内訳**。現金は「売上に充当した額」＝お預り(釣り銭込み)ではない。 */
+  var cardAmt=Number(d.pay&&d.pay.card)||0, creditAmt=Number(d.pay&&d.pay.credit)||0;
+  var cashApplied=Math.max(0, c.total-cardAmt-creditAmt);
+  if(typeof RCPT_SPLIT!=='undefined') RCPT_SPLIT={cash:cashApplied, card:cardAmt, other:creditAmt};
+  /* 複数枚に割るときの基準＝この会計の金額と内訳。⚠️超過（二重領収書）を止めるのに使う */
+  if(typeof RCPT_BASE!=='undefined'){ RCPT_BASE=c.total; RCPT_BASEPAY={cash:cashApplied, card:cardAmt, other:creditAmt}; }
+  if(typeof rcptSetCash==='function') rcptSetCash(cashApplied>0, true, true);   // 表示のトグルも合わせる
+  else if(typeof RCPT_CASH!=='undefined') RCPT_CASH=(cashApplied>0);
   var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
   setTimeout(function(){
     var a=document.getElementById('rcpt-atena'), m=document.getElementById('rcpt-amt');
-    if(a&&nm) a.value=nm+' 様';
+    if(a&&nm){ a.value=nm+' 様'; if(typeof RCPT_ATENA!=='undefined') RCPT_ATENA=nm+' 様'; }
     if(m) m.value=c.total;
+    if(typeof rcptSetCash==='function') rcptSetCash(cashApplied>0, true, true);  // 描画後にトグルの見た目を合わせる
     if(typeof rcptCalc==='function') rcptCalc();
   },350);
 }
@@ -5758,13 +6043,48 @@ function bmCloseHtml(d,c){
 }
 /* ⚠️送信中フラグ。会計ボタンは**必ず連打される**（反応が無いともう一度押す）。
    backendは二重会計を弾くが、弾いたエラーが客前で出るのは事故に見える＝手前で止める。 */
+/* ============================================================================
+   📅 次回来店時払いを**顧客の「次回対応メモ」**に残す（ボス指示＝回収漏れをなくす）
+   ----------------------------------------------------------------------------
+   ■ メモは予約一覧に📌として出る＝次に来た時に黒服の目に必ず入る。
+     さらに伝票を開くと bmSeedCarry_ が金額を拾って自動で請求に乗せる。
+   ⚠️`kioskSaveNextVisitMemo` は**上書き**＝既存メモを読んで書き戻すこと（消すと事故）。
+   ⚠️回収し終わったら**古いタグを必ず消す**。残すと次回また請求してしまう。
+   ⚠️タグは人が手で編集できる場所に置く＝壊れていたら金額を拾わない（黙って0にしない）。
+============================================================================ */
+function bmNextTag_(amount,dateKey,where){
+  return '【次回精算】¥'+(Number(amount)||0).toLocaleString('ja-JP')+'（'+(dateKey||'')+' '+(where||'')+'）';
+}
+function bmSaveNextMemo_(key,d,c,bill){
+  try{
+    var r=bmRsvOf_(key)||{};
+    var no=String((bill&&bill.member)||r.mem||'').trim();
+    var nm=String((bill&&bill.cust)||r.cust||'').trim();
+    if(!no&&!nm) return;                                   // 誰の記録か決まらない＝書かない
+    var cur=String(r.nextMemo||(d.carry&&d.carry.memo)||'');
+    /* 古い【次回精算】は消す＝回収済みを残すと次回また請求する */
+    var base=cur.replace(/【次回精算】[^\n]*/g,'').replace(/\n{2,}/g,'\n').trim();
+    var memo=base;
+    if(c.next>0){
+      var where=String((d._table||(bill&&bmTblLabel_(bill.floor,bill.table))||'')).trim();
+      memo=(base?base+'\n':'')+bmNextTag_(c.next,bmDateKey(),where);
+    }
+    if(memo===cur) return;
+    gsr('kioskSaveNextVisitMemo',no,nm,memo).then(function(res){
+      if(res&&res.ok){
+        if(r) r.nextMemo=memo;                             // 手元の予約行にも反映（すぐ📌に出る）
+        if(typeof toast==='function') toast(c.next>0?'📌 次回精算をお客様のメモに記録しました':'📌 前回のお預かりを回収済みにしました');
+      }else if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）');
+    }).catch(function(){ if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）'); });
+  }catch(e){}
+}
 var BM_CLOSING=false;
 function bmClose(){
   if(BM_CLOSING) return;
   var d=bmGet(BM.key),c=bmCalc(d);
   if(bmClosed_(d)) return;
-  if(c.total<=0){ alert('金額が0円です。'); return; }
-  if(c.unpaid>0){ alert('お預りが'+bmYen(c.unpaid)+'不足しています。\n現金／カード／売掛で合計'+bmYen(c.total)+'を埋めてください。'); return; }
+  if(c.due<=0){ alert('金額が0円です。'); return; }
+  if(c.unpaid>0){ alert('お預りが'+bmYen(c.unpaid)+'不足しています。\n現金／カード／売掛／次回来店時で'+bmYen(c.due)+'を埋めてください。'); return; }
   if(BM.key==='demo'){ alert('🧪お試し伝票は会計できません（検算用）。'); return; }
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
   if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
@@ -5777,8 +6097,15 @@ function bmClose(){
             base:c.base, tax:c.tax, total:c.total,
             /* ⚠️現金は**お預り**と**売上に充当した額**を分けて渡す。混ぜると現金売上の集計が釣り銭ぶん過大になる */
             cash:Number(d.pay.cash)||0, card:Number(d.pay.card)||0, credit:Number(d.pay.credit)||0,
-            cashApplied:Math.max(0,c.total-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)),
-            change:Math.max(0,-c.unpaid) };
+            /* ⚠️現金列は「**今回の売上**に充当した現金」。前回のお預かり(carry)の回収分も
+               次回に回した分(next)も入れない＝現金売上の集計が狂う。
+               お釣り＝受け取った現金 −（現金で払うべき額＝請求 − カード − 売掛 − 次回）。 */
+            cashApplied:Math.max(0,Math.min(Number(d.pay.cash)||0,
+                          c.total-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)-c.next)),
+            change:Math.max(0,(Number(d.pay.cash)||0)-(c.due-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)-c.next)),
+            /* backendは今この2つを読まない（列が無い）＝無視される。下書きJSON(POS_伝票)には残るので
+               「合計 −（現金+カード+売掛）＝次回来店時払い」で後から追える。列を足すのは次の段。 */
+            carry:c.carry, nextPay:c.next };
   /* ⚠️`bmRender()`を挟むと`bmLoad()`が下書きを**作り直す**＝ここで掴んでいる`d`は死ぬ。
      成功後は必ずキーから取り直すこと（これで一度「会計済みが記録されない」を踏んだ） */
   var key=String(BM.key);
@@ -5790,6 +6117,16 @@ function bmClose(){
       bmLoad();
       var dd=BM.draft[key]; if(!dd){ bmRender(); return; }
       dd.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
+      /* ⚠️2026-08-28追加＝会計を取り消して**金額を直して締め直した**のに、請求書の依頼済みの印が
+         残っていた＝閉店ゲートが請求依頼を要求しないまま、**古い金額の請求書が出たまま**になる。
+         金額が変わっていたら印を外して出し直させる。変わっていなければ二重請求を作らない。 */
+      if(Number(dd.pay&&dd.pay.credit)>0&&dd.seikyuRequested&&Number(dd.seikyuRequested.total||0)!==c.total){
+        delete dd.seikyuRequested;
+        alert('金額が変わっています（請求書は '+bmYen(dd.closed.total)+'）。\n請求書の発行依頼を出し直してください。');
+      }
+      /* 📅次回来店時払い／前回のお預かりの回収を、お客様のメモに反映する（回収漏れ防止） */
+      if(c.next>0||dd.carry) bmSaveNextMemo_(key,dd,c,b);
+      if(dd.carry) delete dd.carry;      // 回収したので伝票からは落とす（記録は会計行と控えに残る）
       BM.key=key; bmSave(); bmRender();
       bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
     })
@@ -5938,7 +6275,6 @@ function bmDetailHtml(){
   });
   var byName={},order=[];
   d.orders.forEach(function(o){ if(!byName[o.name]){byName[o.name]=[];order.push(o.name);} byName[o.name].push(o); });
-  var tv=bmVerdictHtml(d,c);
   return '<div><div class="bm-card"><h3><span class="n">7</span> ご利用明細 '
     +'<span style="color:var(--sub);font-weight:600;font-size:10.5px">'+esc(bmTblLabel_(bill.floor,bill.table)+' '+(bill.cust||''))+'</span></h3>'
     +'<div class="bm-det">'
@@ -5967,34 +6303,39 @@ function bmDetailHtml(){
     /* 値引・値増は税サの**後**（ボス確定）。行の並びも計算順どおりに置く */
     +((d.discount||0)?bmRow('値引',-(d.discount||0)):'')+((d.surcharge||0)?bmRow('値増',d.surcharge||0):'')
     +(c.total!==c.raw?'<div class="r mut"><span>丸め前</span><b>'+bmYen(c.raw)+'</b></div>':'')
-    +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div></div>'
+    +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div>'
+    /* 📅前回の未収は**売上ではない**＝合計の下に別立てで足す（二重計上を避ける） */
+    +(c.carry>0?'<div class="r" style="margin-top:4px"><span style="color:#ffcf7a">📅 前回のお預かり</span>'
+        +'<b style="color:#ffcf7a">'+bmYen(c.carry)+' <button class="bm-btn dng sm" style="margin-left:6px" onclick="bmCarryDrop()">外す</button></b></div>'
+      +'<div class="r big"><span>ご請求合計</span><b>'+bmYen(c.due)+'</b></div>':'')
+    +'</div>'
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">8</span> 会計（支払）</h3>'
     /* ⚠️まず**支払方法**を選ばせる（ボスの流れ＝伝票を見せる→方法→決済）。
        タップで合計を丸ごとその方法に入れる＝打ち間違いが減る。分割は下の欄で手入力 */
     +'<div class="bm-row"><span class="lb">方法</span><div class="chips" style="margin:0">'
-    +['cash','card','invoice'].map(function(k){
-        var lb={cash:'💴 現金',card:'💳 カード',invoice:'🧾 請求書払い'}[k];
+    +['cash','card','invoice','next'].map(function(k){
+        var lb={cash:'💴 現金',card:'💳 カード',invoice:'🧾 請求書払い',next:'📅 次回来店時'}[k];
         return '<div class="chip'+(d.payMethod===k?' sel':'')+'" onclick="bmPayMethod(\''+k+'\')">'+lb+'</div>';
       }).join('')+'</div></div>'
     +(d.payMethod==='invoice'?'<div class="bm-note">請求書払い＝売掛として記録します。請求書の発行はコンソールの請求書管理から。</div>':'')
+    +(d.payMethod==='next'?'<div class="bm-warn" style="margin:6px 0">📅 <b>次回来店時のお支払い</b>です。会計は締められます。<div style="margin-top:3px">会計と同時に<b>お客様の「次回対応メモ」に記録</b>し、次回ご来店の伝票に自動で乗せます。</div></div>':'')
     +'<div class="bm-row"><span class="lb">現金</span><input type="number" class="bm-in" value="'+(d.pay.cash||0)+'" oninput="bmPay(\'cash\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">カード</span><input type="number" class="bm-in" value="'+(d.pay.card||0)+'" oninput="bmPay(\'card\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">売掛</span><input type="number" class="bm-in" value="'+(d.pay.credit||0)+'" oninput="bmPay(\'credit\',this.value)"></div>'
+    +'<div class="bm-row"><span class="lb">次回来店時</span><input type="number" class="bm-in" value="'+(d.pay.next||0)+'" oninput="bmPay(\'next\',this.value)"></div>'
     +'<div class="bm-row"><button class="bm-btn sm" onclick="bmFillCash()">現金に全額</button></div>'
+    +(c.carry>0?'<div class="bm-sum" style="margin-top:6px"><div class="r"><span>今回のご利用</span><b>'+bmYen(c.total)+'</b></div>'
+      +'<div class="r"><span style="color:#ffcf7a">📅 前回のお預かり</span><b style="color:#ffcf7a">'+bmYen(c.carry)+'</b></div>'
+      +'<div class="r big"><span>ご請求合計</span><b>'+bmYen(c.due)+'</b></div></div>':'')
     +'<div class="bm-sum">'+bmRow('お預り合計',c.paid,'bmPaid')
     +'<div class="r big"><span>未領収金</span><b id="bmUnpaid" style="color:'+(c.unpaid===0?'var(--green)':'var(--red)')+'">'+bmYen(c.unpaid)+'</b></div></div>'
     +bmCloseHtml(d,c)
-    +'</div>'
-    +'<div class="bm-card" style="border-color:var(--accent-line)"><h3><span class="n">9</span> 🔍 TRUSTとの照合</h3>'
-    +'<div class="bm-row"><span class="lb">TRUSTの合計</span><input type="number" class="bm-in" value="'+esc(String(d.trust||''))+'" placeholder="実機の金額" oninput="bmField(\'trust\',this.value)"></div>'
-    +'<div class="bm-row"><span class="lb">TRUSTの税サ</span><input type="number" class="bm-in" value="'+esc(String(d.trustTax||''))+'" placeholder="任意" oninput="bmField(\'trustTax\',this.value)">'
-    +'<span class="bm-note" style="margin:0">※入れるとズレ位置の切り分けが早い</span></div>'
-    +tv
-    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmLogAdd()">✔ この結果を記録</button>'
-    +'<button class="bm-btn dng sm" onclick="bmClear()">下書きを消す</button></div>'
-    +bmLogHtml()
-    +'<div class="bm-note">値引・値増は<b>税サの後</b>に差引（ボス確定）。税サは値引前の小計に掛かる。</div>'
+    /* ⚠️2026-08-28ボス指示＝**TRUSTと切り離した本番**を想定するので⑨TRUST照合は廃止。
+       ただし「下書きを消す」は照合カードの中に同居していた＝一緒に消すと**打ち間違えて作った伝票を
+       取り下げる手段が無くなり、閉店の関所(getPosDayStatus)に永久に残る**。⑧へ移してある。 */
+    +'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmClear()">🗑 この伝票の下書きを消す</button></div>'
+    +'<div class="bm-note">打ち間違えて作った伝票はここで取り下げます。残すと閉店の関所に出続けます。<br>値引・値増は<b>税サの後</b>に差引き、税サは値引前の小計に掛かります。</div>'
     +'</div></div>';
 }
 function bmRow(k,v,id){ return '<div class="r"><span>'+k+'</span><b'+(id?' id="'+id+'"':'')+'>'+bmYen(v)+'</b></div>'; }
@@ -6019,7 +6360,7 @@ function bmDelPrice(num){ if(bmLockedAlert_()) return;
 function bmAddGuest(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.guests.push({price:BM_FEE.set}); bmSave(); bmRender(); }
 function bmDelGuest(i){ if(bmLockedAlert_()) return;
   var d=bmGet(BM.key);
-  if(d.guests.length<=1){ alert('1名より少なくはできません。\n（TRUSTと同じ＝伝票ごと消してください）'); return; }
+  if(d.guests.length<=1){ alert('1名より少なくはできません。\n（0名の伝票は作れません。丸ごと消す場合は⑧の「この伝票の下書きを消す」）'); return; }
   d.guests.splice(i,1); bmSave(); bmRender();
 }
 /* 客ごとの単価。⚠️打っている最中に全再描画するとカーソルが飛ぶので、金額表示だけ差し替える（full=1で全描画） */
@@ -6037,14 +6378,17 @@ function bmBump(n,key,delta){ if(bmLockedAlert_()) return;
 /* 210品を「種類」と「品名の部分一致」で絞る。⚠️同名で価格違いが実在するので名寄せしない */
 function bmGridHtml(){
   var q=String(BM.q||'').trim(), kind=BM.kind||'全部';
-  var list=BM_ITEMS.filter(function(m){
+  var list=bmItems_().filter(function(m){
     if(kind!=='全部'&&m[3]!==kind) return false;
     if(q&&m[0].indexOf(q)<0) return false;
     return true;
   });
   if(!list.length) return '<div class="bm-note" style="grid-column:1/-1">該当なし（下の臨時商品で打てます）</div>';
   return list.map(function(m){
-    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+esc(m[0])+'</div><div class="pr">'+bmYen(m[1])+'</div></div>';
+    /* ⚠️価格0の品は「要価格」と出す＝タップして単価を入れてから確定させる */
+    var pr=(Number(m[1])>0)?bmYen(m[1]):'<span style="color:#ff9a5a">要価格</span>';
+    /* ★＝この端末で手で足した品（元の表の品と見分けが付くように） */
+    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+(bmIsAdded_(m[0])?'★ ':'')+esc(m[0])+'</div><div class="pr">'+pr+'</div></div>';
   }).join('');
 }
 function bmSearch(v){ BM.q=v; var g=document.getElementById('bmGrid'); if(g) g.innerHTML=bmGridHtml(); }
@@ -6070,6 +6414,10 @@ function bmPickAttr(a){
 function bmPickConfirm(){ if(bmLockedAlert_()) return;
   var pk=BM.pick; if(!pk) return;
   if(!pk.attrs.length){ alert('誰に付けるかを選んでください。\n（お客様／スタッフ／キャスト名）'); return; }
+  /* ⚠️2026-08-28追加＝マスタに価格0の品が実在する（TRUSTから転記した「出前」）。
+     そのまま確定すると**0円の注文行**が静かに入る＝売上が欠ける。単価を入れさせる。
+     （無料で出す物は⑤🥂ウェルカムに入っている＝有料側に0円は要らない） */
+  if(!(Number(pk.price)>0)){ alert('単価を入れてください。\n（この品はマスタに価格が入っていません）'); return; }
   var d=bmGet(BM.key), key=pk.attrs.join('・'), hit=-1;
   d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
   if(hit>=0) d.orders[hit].qty+=pk.qty;
@@ -6126,55 +6474,8 @@ function bmQty(i,delta){ if(bmLockedAlert_()) return;
   if(d.orders[i].qty<=0) d.orders.splice(i,1);
   bmSave(); bmRender();
 }
-/* 照合の判定（一致/不一致と差額）。⚠️部分更新で差し替えるのでHTMLを1か所で作る */
-function bmVerdictHtml(d,c){
-  var tt=String(d.trust||''), tx=String(d.trustTax||'');
-  if(tt==='') return '<div class="bm-vd idle" id="bmVerdict">TRUSTの合計を入れると差分を判定します</div>';
-  var diff=c.total-Number(tt), dtax=(tx===''?0:c.tax-Number(tx));
-  var ok=(diff===0)&&(tx===''||dtax===0);
-  if(ok) return '<div class="bm-vd ok" id="bmVerdict">✅ 一致（'+bmYen(c.total)+(tx!==''?' ／ 税サ '+bmYen(c.tax):'')+'）</div>';
-  return '<div class="bm-vd ng" id="bmVerdict">❌ 不一致'
-    +'<div style="font-size:12px;margin-top:4px">合計 こちら '+bmYen(c.total)+' − TRUST '+bmYen(tt)+' = <b>'+(diff>0?'+':'')+bmYen(diff)+'</b></div>'
-    +(tx!==''?'<div style="font-size:12px;margin-top:2px">税サ こちら '+bmYen(c.tax)+' − TRUST '+bmYen(tx)+' = <b>'+(dtax>0?'+':'')+bmYen(dtax)+'</b></div>':'')
-    +'<div style="font-size:11px;margin-top:5px;color:#ffbf6a">'+bmHint_(diff,dtax,c)+'</div></div>';
-}
-/* ズレたとき「どこを疑うか」を出す。原因の当たりが付かないと並行テストが止まるため */
-function bmHint_(diff,dtax,c){
-  if(dtax!==0) return '税サがズレている＝サービス料率(20%)か、税サを掛ける対象が違う可能性';
-  if(diff%100===0&&Math.abs(diff)<1000) return '100円単位のズレ＝端数の丸め方（切り上げ/切り捨て）を疑う';
-  if(c.discount||c.surcharge) return '値引・値増あり＝税サの後に差引く実装。TRUST側が前掛けでないか確認';
-  return 'セット単価・注文の単価/数量・同伴の回数のどれかが違う可能性';
-}
-/* 照合の記録（端末に保存）。何件試して何件合ったかが残らないと検証にならない */
-function bmLogLoad(){ try{ var a=JSON.parse(localStorage.getItem('gunshiTrustLog')||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-function bmLogSave(a){ try{ localStorage.setItem('gunshiTrustLog',JSON.stringify(a.slice(0,60))); }catch(e){} }
-function bmLogAdd(){
-  var d=bmGet(BM.key), c=bmCalc(d);
-  if(String(d.trust||'')===''){ alert('先にTRUSTの合計を入れてください'); return; }
-  var bill=null; bmBills().forEach(function(x){ if(String(x.rowIdx)===String(BM.key)) bill=x; });
-  var a=bmLogLoad();
-  a.unshift({ at:new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}),
-    where: bill?((bill.floor||'')+' '+(bill.table||'')+' '+(bill.cust||'')):(BM.key==='demo'?'🧪お試し':'伝票'+BM.key),
-    mine:c.total, trust:Number(d.trust), mineTax:c.tax, trustTax:(String(d.trustTax||'')===''?null:Number(d.trustTax)) });
-  bmLogSave(a); bmRender();
-}
-function bmLogClear(){ if(confirm('照合の記録を全部消しますか？')){ try{ localStorage.removeItem('gunshiTrustLog'); }catch(e){} bmRender(); } }
-function bmLogHtml(){
-  var a=bmLogLoad();
-  if(!a.length) return '<div class="bm-note">まだ記録がありません。TRUSTの合計を入れて「✔ この結果を記録」。</div>';
-  var ok=a.filter(function(x){ return x.mine===x.trust && (x.trustTax==null||x.mineTax===x.trustTax); }).length;
-  return '<div class="bm-note" style="margin-top:8px"><b style="color:'+(ok===a.length?'var(--green)':'#ffbf6a')+'">'+ok+' / '+a.length+' 件が一致</b>'
-    +' <span onclick="bmLogClear()" style="color:#f08080;cursor:pointer">［記録を消す］</span></div>'
-    +'<div style="max-height:150px;overflow-y:auto">'+a.map(function(x){
-        var hit=(x.mine===x.trust)&&(x.trustTax==null||x.mineTax===x.trustTax);
-        return '<div class="bm-ord" style="font-size:11.5px"><span style="flex:1">'+esc(x.where)
-          +' <span style="color:var(--sub);font-size:10px">'+esc(x.at)+'</span></span>'
-          +'<span style="font-weight:800;color:'+(hit?'var(--green)':'var(--red)')+'">'
-          +(hit?'✅ '+bmYen(x.mine):'❌ '+bmYen(x.mine)+' vs '+bmYen(x.trust))+'</span></div>';
-      }).join('')+'</div>';
-}
-/* 🔧金額表示だけを差し替える部分更新。⚠️入力欄を打っている最中にinnerHTMLを作り直すと
-   カーソル位置とフォーカスが飛んで数字が打てない＝並行テストが成立しない。 */
+/* ⚠️2026-08-28＝TRUSTとの照合（bmVerdictHtml/bmHint_/bmLog*）はボス指示で撤去。
+   TRUSTと切り離した本番を想定するため。復活させるならgit履歴から。 */
 function bmTouch(){
   if(!BM.key) return;
   var d=bmGet(BM.key), c=bmCalc(d), e;
@@ -6186,11 +6487,28 @@ function bmTouch(){
   if(e=document.getElementById('bmGrand'))  e.textContent=bmYen(c.total);
   if(e=document.getElementById('bmPaid'))   e.textContent=bmYen(c.paid);
   if(e=document.getElementById('bmUnpaid')){ e.textContent=bmYen(c.unpaid); e.style.color=(c.unpaid===0?'var(--green)':'var(--red)'); }
-  if(e=document.getElementById('bmVerdict')) e.outerHTML=bmVerdictHtml(d,c);
 }
-function bmField(k,v){ if(k!=='trust'&&k!=='trustTax'&&bmLockedAlert_()) return;   /* TRUST照合は会計後も打てる */ var d=bmGet(BM.key); d[k]=(k==='trust')?v:(Number(v)||0); bmSave(); bmTouch(); }
-function bmPay(k,v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay[k]=Number(v)||0; bmSave(); bmTouch(); }
-function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.cash=bmCalc(d).total; d.pay.card=0; d.pay.credit=0; bmSave(); bmRender(); }
+/* ⚠️2026-08-28修正＝`Number(v)||0`だけだったので**マイナスがそのまま入っていた**。
+   値引に -10,000 を打つと合計が10,000増える（＝お客様への過大請求）。値増も同じ。
+   さらに値引が大きすぎると合計がマイナス（実測 -99,968,700）になり、紙にも出る。
+   ⭐入口で丸める。**計算式(bmCalc)は触らない**＝backendのposCalcTotal_と割れるため。 */
+/* ⚠️2026-08-28＝TRUST照合の撤去に伴い「会計後も打てる例外」は無くなった＝会計済みなら一律ロック。 */
+function bmField(k,v){
+  if(bmLockedAlert_()) return;
+  var d=bmGet(BM.key);
+  var n=Math.max(0,Number(v)||0);
+  if(k==='discount'){
+    /* 合計がマイナスになる値引は受け付けない＝値引の上限は「税サまで込みの金額」 */
+    var keep=d.discount; d.discount=0; var c0=bmCalc(d); d.discount=keep;
+    n=Math.min(n, c0.base+c0.tax+(Number(d.surcharge)||0));
+  }
+  d[k]=n;
+  bmSave(); bmTouch();
+}
+/* ⚠️2026-08-28修正＝マイナスのお預りが入っていた。現金-50,000でも会計が通り、
+   会計行の「お預り」列に負の額が残る＝現金の集計が狂う。入口で0以上に丸める。 */
+function bmPay(k,v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay[k]=Math.max(0,Number(v)||0); bmSave(); bmTouch(); }
+function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.cash=bmCalc(d).due; d.pay.card=0; d.pay.credit=0; d.pay.next=0; bmSave(); bmRender(); }
 /* ⚠️サーバーからも消さないと、間違えて作った伝票が閉店ゲートに永久に残る */
 function bmClearServer_(k){
   if(typeof gsr!=='function'||k==='demo') return;
@@ -6700,6 +7018,13 @@ var RCPT_TAX=0.10;              // 店内飲食＝10%
 var RCPT_DENPYO=null;           // 予約伝票（null=未取得, []=取得済み空）
 var RCPT_MODE='R';              // 'R'=領収書 'J'=日払い受領書
 var RCPT_CASH=true;             // 支払方法（現金/カード）＝印紙判定に使用
+/* ⚠️2026-08-28追加＝**分割払い（一部現金・一部カード）**の内訳。{cash,card,other} 円。
+   null＝内訳なし（従来どおり RCPT_CASH の二択で全額を扱う）。
+   ⭐収入印紙は「**現金で受け取った額**」に掛かる。全額で判定すると
+     現金3万＋カード5万＝8万の会計で、税抜7.2万として印紙200円を貼ってしまう（実際は現金3万＝不要）。
+     逆にカード扱いにすると、現金6万を受け取っているのに印紙を貼らない（貼り忘れ＝過怠税）。
+   ⚠️紙にも内訳を出すこと。「クレジット利用」と書いていない領収書は全額が印紙の対象になる。 */
+var RCPT_SPLIT=null;
 var RCPT_SEL=-1;                // 選択中の予約伝票index
 var RCPT_DATEMODE='today';      // 発行日モード: 'today'|'prev'|'custom'|'blank'（blank=日付なし＝空欄「　年　月　日」で手書き用）
 var RCPT_PAYEES=null;           // 受領書の受取人候補＝今日の出勤スタッフ（派遣含む・null=未取得）
@@ -6826,6 +7151,42 @@ function rcptCss_(){ if(document.getElementById('rcpt-css'))return; var s=docume
   '.rcpt-sign{border:1px solid #333;border-radius:4px;height:56px;margin-top:6px;position:relative}',
   '.rcpt-sign span{position:absolute;top:3px;left:6px;font-size:9px;color:#999}'
   ].join(''); document.head.appendChild(s); }
+/* ============================================================================
+   💰 会計金額を領収書に既定で入れる（ボス指示 2026-08-28）
+   ----------------------------------------------------------------------------
+   ■ 伝票の⑧から開いた時は元から入る。**メニューから開いて「予約伝票を選ぶ」で選んだ時**が
+     宛名だけで金額が空だった＝毎回手打ちしていた。
+   ■ 金額の正は**その日のPOS伝票**（`getPosBills`＝会計済みなら締めた金額）。
+   ⚠️予約伝票の行はPOSの伝票行(rowIdx)を持っていない＝**客名の完全一致でしか結べない**。
+     だから**同名が2件以上あるときは結ばない**（他人の金額を入れる方が手打ちより悪い）。
+     [[reference_visit_attribution_matching]]＝名字フォールバックで同名別人を混線させた前科がある。
+   ■ 画面には結んだ金額を必ず出す＝黒服が押す前に目で確かめられる。
+============================================================================ */
+var RCPT_POS=null;   // その日のPOS伝票（null=未取得）
+/* ⚠️宛名と金額は**入力欄の中だけ**に持っていたので、発行店を変える等の全再描画で消えていた。
+   状態として持ち、初期値に使う＝何度描き直しても同じ物が出る。 */
+var RCPT_ATENA='';
+function rcptLoadPosBills_(){
+  if(!IS_GAS){ RCPT_POS=[]; return; }
+  var dk=(typeof bmDateKey==='function')?bmDateKey():'';
+  gsr('getPosBills',dk).then(function(r){
+    RCPT_POS=(r&&r.bills)?r.bills:[];
+    if(menuView==='receipt'){ var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML=rcptDenListHtml_(); }
+  }).catch(function(){ RCPT_POS=[]; });
+}
+/* 予約伝票の行 → POS伝票。⚠️客名の完全一致・かつ1件だけの時しか結ばない */
+function rcptPosFor_(d){
+  if(!RCPT_POS||!RCPT_POS.length||!d) return null;
+  var nm=String(d.name||'').trim(); if(!nm) return null;
+  var hit=RCPT_POS.filter(function(b){
+    return b&&b.data&&String(b.data._cust||'').trim()===nm&&String(b.rowIdx)!=='demo';
+  });
+  if(hit.length!==1) return null;                 // 0件＝結べない／2件以上＝同名で危険
+  var b=hit[0], pay=(b.data&&b.data.pay)||{}, total=Number(b.total)||0;
+  var card=Number(pay.card)||0, credit=Number(pay.credit)||0;
+  return { rowIdx:b.rowIdx, total:total, closed:!!(b.data&&b.data.closed),
+           pay:{ cash:Math.max(0,total-card-credit), card:card, other:credit } };
+}
 function rcptDenListHtml_(){
   if(RCPT_DENPYO===null) return '<div class="rcpt-den-loading">読み込み中…</div>';
   if(!RCPT_DENPYO.length) return '<div class="rcpt-den-empty">本日の予約伝票はありません（宛名は手入力で発行できます）</div>';
@@ -6834,8 +7195,15 @@ function rcptDenListHtml_(){
     return '<div class="rcpt-den'+(i===RCPT_SEL?' on':'')+'" onclick="rcptPick('+i+')">'
       +'<div><div class="rcpt-den-nm">'+(d.time?'<span class="rcpt-den-no">'+esc(d.time)+'</span> ':'')+esc(d.seat||'')+'　'+esc(d.name||'')+(d.no?' <span class="rcpt-den-no">#'+esc(d.no)+'</span>':'')+'</div>'
       +'<div class="rcpt-den-sub">領収書名：'+esc(rn)+'</div></div>'
-      +'<div class="rcpt-den-amt" style="font-size:12px;color:var(--sub)">選ぶ ▸</div></div>';
+      +'<div class="rcpt-den-amt" style="font-size:12px;color:var(--sub)">'+rcptDenAmtHtml_(d)+'</div></div>';
   }).join('');
+}
+/* 行の右肩＝結べた会計金額。⚠️結べない時は「選ぶ▸」のまま＝手打ちに任せる（黙って0を入れない） */
+function rcptDenAmtHtml_(d){
+  var p=rcptPosFor_(d);
+  if(!p||!(p.total>0)) return '選ぶ ▸';
+  return '<b style="color:'+(p.closed?'var(--gold)':'#8aa8c8')+';font-size:13px">'+rcptYen_(p.total)+'</b>'
+    +'<div style="font-size:10px;color:var(--sub)">'+(p.closed?'会計済み':'未会計')+'</div>';
 }
 /* ===== 📜 発行履歴（発行済み領収書/受領書の控え一覧・軍師） ===== */
 var RCPT_TAB='form';       // 'form'=発行 | 'history'=発行履歴
@@ -6878,6 +7246,153 @@ function rcptHistListHtml_(){
       +'</div>';
   }).join('');
 }
+/* ============================================================================
+   🧾 複数枚の発行＝**発行キュー**（ボス確定 2026-08-28「A・B・C 全部起きる」）
+   ----------------------------------------------------------------------------
+   A 同じ内容をもう1枚（刷り直し＝紙詰まり・紛失）  → 「もう1枚（刷り直し）」ボタン
+   B 金額を割って複数枚（割り勘）                    → 「均等に割る」
+   C 宛名も金額も1枚ずつ（会社と個人で分ける）        → 行を足して1行ずつ書く
+   ■ 作り＝**1枚ずつ既存の発行画面に載せて刷る**。プレビューも印字も1枚用のまま＝
+     ここで作りを増やさない（紙の組み方は実機で検証済みの物を触らない）。
+   ⚠️**合計が会計金額を超える領収書は出さない**＝二重領収書になる。刷る手前で止める。
+     不足は警告だけ（「会社宛に一部だけ」は実務で在る）。
+   ⚠️**収入印紙は1枚ごとに判定する**。割ると1枚あたりが5万円未満になって印紙が不要になることがある
+     ＝枚数と配分は印紙額を動かす。だから行ごとに支払種別（現金/カード/請求書）を持つ。
+     Aの刷り直しは金額を増やさない＝合計には数えない。
+============================================================================ */
+var RCPT_QUEUE=null;      // null=1枚だけ（従来どおり）／[{atena,amount,pay,done}]
+var RCPT_QIDX=-1;         // いま発行画面に載っている行
+var RCPT_BASE=0;          // 元の会計金額（超過チェックの基準。0=基準なし＝手打ち発行）
+var RCPT_BASEPAY=null;    // 会計の内訳 {cash,card,other}
+
+function rcptQSum_(){ return (RCPT_QUEUE||[]).reduce(function(a,r){ return a+(Number(r.amount)||0); },0); }
+function rcptQPayLabel_(p){ return (p==='card')?'カード':((p==='other')?'請求書':'現金'); }
+function rcptQAmtNow_(){ return parseInt((((document.getElementById('rcpt-amt')||{}).value)||'0').replace(/[^0-9]/g,''),10)||0; }
+function rcptQAtenaNow_(){ return (((document.getElementById('rcpt-atena')||{}).value)||'').trim(); }
+/* ⚠️キューを触るたびに全再描画すると、**宛名と金額の入力欄が作り直されて中身が飛ぶ**
+   （実ブラウザで踏んだ。単体テストはrcptRerender_を殺していたので通ってしまった）。
+   キューの箱だけ差し替え、入力欄には値を書き戻す。 */
+function rcptQRefresh_(){
+  var el=document.getElementById('rcpt-queue'); if(el)el.innerHTML=rcptQueueHtml_();
+  rcptQFill_(); rcptQApply_();
+  if(typeof rcptCalc==='function') rcptCalc();
+}
+/* いま載っている行の宛名・金額を入力欄へ書き戻す */
+function rcptQFill_(){
+  if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]) return;
+  var r=RCPT_QUEUE[RCPT_QIDX];
+  var ae=document.getElementById('rcpt-atena'); if(ae)ae.value=r.atena||'';
+  var me=document.getElementById('rcpt-amt');   if(me)me.value=Number(r.amount)||0;
+}
+
+/* 会計の内訳から行ごとの支払種別を埋める（現金→カード→請求書の順に充当）。
+   ⚠️1行が2つの方法にまたがる場合は先に埋まる方を採る＝黒服が直せる（既定を置くだけ） */
+function rcptQSeedPay_(){
+  var bp=RCPT_BASEPAY||{}, left={cash:Number(bp.cash)||0, card:Number(bp.card)||0, other:Number(bp.other)||0};
+  var any=(left.cash+left.card+left.other)>0;
+  (RCPT_QUEUE||[]).forEach(function(r){
+    if(!any){ r.pay=r.pay||'cash'; return; }
+    var a=Number(r.amount)||0;
+    var k=(left.cash>=a&&left.cash>0)?'cash':((left.card>=a&&left.card>0)?'card':((left.other>=a&&left.other>0)?'other'
+         :(left.cash>0?'cash':(left.card>0?'card':(left.other>0?'other':'cash')))));
+    r.pay=k; left[k]=Math.max(0,left[k]-a);
+  });
+}
+/* B＝均等に割る。⚠️端数は1枚目に寄せる＝合計は必ず元の金額とぴったり一致させる */
+function rcptQSplit(n){
+  n=Math.max(1,Math.min(20,Math.floor(Number(n)||0)));
+  var base=RCPT_BASE||rcptQAmtNow_();
+  if(!(base>0)){ alert('先に金額を入れてください。'); return; }
+  var atena=rcptQAtenaNow_();
+  var each=Math.floor(base/n), rem=base-each*n;
+  RCPT_QUEUE=[];
+  for(var i=0;i<n;i++) RCPT_QUEUE.push({atena:atena, amount:each+(i===0?rem:0), pay:'cash', done:0});
+  rcptQSeedPay_(); RCPT_QIDX=0; rcptQRefresh_();
+}
+function rcptQOff(){ RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_SPLIT=null; rcptQRefresh_(); }
+/* C＝1行足す。金額0で置いて黒服が書く */
+function rcptQAdd(){
+  if(!RCPT_QUEUE) RCPT_QUEUE=[{atena:rcptQAtenaNow_(), amount:rcptQAmtNow_(), pay:'cash', done:0}];
+  RCPT_QUEUE.push({atena:rcptQAtenaNow_(), amount:0, pay:'cash', done:0});
+  RCPT_QIDX=RCPT_QUEUE.length-1; rcptQRefresh_();
+}
+function rcptQDel(i){
+  if(!RCPT_QUEUE) return;
+  RCPT_QUEUE.splice(i,1);
+  if(!RCPT_QUEUE.length){ rcptQOff(); return; }
+  if(RCPT_QIDX>=RCPT_QUEUE.length) RCPT_QIDX=RCPT_QUEUE.length-1;
+  rcptQRefresh_();
+}
+function rcptQPick(i){ RCPT_QIDX=i; rcptQRefresh_(); }
+function rcptQSet(i,k,v){
+  if(!RCPT_QUEUE||!RCPT_QUEUE[i]) return;
+  RCPT_QUEUE[i][k]=(k==='amount')?Math.max(0,parseInt(String(v).replace(/[^0-9]/g,''),10)||0):v;
+  rcptQRefresh_();
+}
+/* いま載っている行を発行画面へ流し込む。⚠️印紙は**その1枚の支払種別**で判定する */
+function rcptQApply_(){
+  if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]){ return; }
+  var r=RCPT_QUEUE[RCPT_QIDX], a=Number(r.amount)||0;
+  RCPT_SPLIT={ cash:(r.pay==='cash')?a:0, card:(r.pay==='card')?a:0, other:(r.pay==='other')?a:0 };
+  RCPT_CASH=(r.pay==='cash');
+}
+/* 刷り終わった1枚に印を付けて、次の未発行へ進める */
+function rcptQDone_(){
+  if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]) return;
+  RCPT_QUEUE[RCPT_QIDX].done=1;
+  for(var i=0;i<RCPT_QUEUE.length;i++){ if(!RCPT_QUEUE[i].done){ RCPT_QIDX=i; break; } }
+  setTimeout(rcptQRefresh_,60);
+}
+/* ⚠️行ごとの支払種別の合計が、会計の内訳とズレていないか。
+   ズレたまま刷ると**収入印紙を多く貼る／貼り忘れる**（印紙は現金分に掛かるため）。 */
+function rcptQPayWarn_(){
+  var bp=RCPT_BASEPAY; if(!bp||!RCPT_QUEUE) return '';
+  var q={cash:0,card:0,other:0};
+  RCPT_QUEUE.forEach(function(r){ q[r.pay||'cash']+=(Number(r.amount)||0); });
+  var d=[];
+  ['cash','card','other'].forEach(function(k){
+    var a=Number(bp[k])||0; if(q[k]!==a) d.push(rcptQPayLabel_(k)+' 会計'+rcptYen_(a)+'→領収書'+rcptYen_(q[k]));
+  });
+  if(!d.length) return '';
+  return '<div class="row" style="border-bottom:0"><span style="color:#ffcf7a;font-size:11.5px">⚠️支払方法の内訳が会計と違います（印紙は現金分に掛かります）<br>'+esc(d.join('　／　'))+'</span><span></span></div>';
+}
+function rcptQueueHtml_(){
+  var sum=rcptQSum_(), base=RCPT_BASE||0, over=(base>0&&sum>base), short=(base>0&&sum<base);
+  var h='<div class="flabel">発行する枚数</div>';
+  if(!RCPT_QUEUE){
+    h+='<div class="bm-row" style="gap:6px;flex-wrap:wrap">'
+      +'<button class="bm-btn sm" onclick="rcptQSplit(2)">2枚に割る</button>'
+      +'<button class="bm-btn sm" onclick="rcptQSplit(3)">3枚に割る</button>'
+      +'<button class="bm-btn sm" onclick="rcptQSplit(Number(prompt(\'何枚に割りますか？\',\'4\')||0))">▼ 枚数を指定</button>'
+      +'<button class="bm-btn sm" onclick="rcptQAdd()">＋ 宛名ごとに分ける</button></div>'
+      +'<div class="rcpt-note">1枚のときはこのままでOK。割り勘は「◯枚に割る」、会社と個人で分けるときは「宛名ごとに分ける」。</div>';
+    return h;
+  }
+  h+='<div style="border:1px solid var(--line2);border-radius:10px;padding:8px;margin-bottom:8px">';
+  h+=RCPT_QUEUE.map(function(r,i){
+    var on=(i===RCPT_QIDX);
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:6px;border-radius:8px;'
+      +(on?'background:rgba(224,168,80,.12);border:1px solid var(--accent-line)':'border:1px solid transparent')+'">'
+      +'<span style="flex:0 0 auto;font-weight:800;font-size:12px;color:'+(r.done?'#5fbf7f':'var(--sub)')+'">'+(r.done?'✅':(i+1)+'枚目')+'</span>'
+      +'<input class="finput" style="flex:1;min-width:90px;margin:0;padding:6px 8px;font-size:12px" value="'+esc(r.atena||'')+'" placeholder="宛名" onchange="rcptQSet('+i+',\'atena\',this.value)">'
+      +'<input class="finput" type="tel" inputmode="numeric" style="flex:0 0 92px;margin:0;padding:6px 8px;font-size:12px;text-align:right" value="'+(Number(r.amount)||0)+'" onchange="rcptQSet('+i+',\'amount\',this.value)">'
+      +'<select class="finput" style="flex:0 0 88px;margin:0;padding:6px 4px;font-size:11px" onchange="rcptQSet('+i+',\'pay\',this.value)">'
+      +['cash','card','other'].map(function(k){ return '<option value="'+k+'"'+(r.pay===k?' selected':'')+'>'+rcptQPayLabel_(k)+'</option>'; }).join('')+'</select>'
+      +'<button class="bm-btn sm'+(on?' pri':'')+'" style="flex:0 0 auto" onclick="rcptQPick('+i+')">'+(on?'発行中':'選ぶ')+'</button>'
+      +'<button class="bm-btn dng sm" style="flex:0 0 auto" onclick="rcptQDel('+i+')">×</button>'
+      +'</div>';
+  }).join('');
+  h+='<div class="bm-row" style="margin-top:2px"><button class="bm-btn sm" onclick="rcptQAdd()">＋ 1枚追加</button>'
+    +'<button class="bm-btn sm" onclick="rcptQOff()">↩ 1枚に戻す</button></div>';
+  h+='</div>';
+  h+='<div class="rcpt-bd" style="margin-bottom:8px"><div class="row"><span>'+RCPT_QUEUE.length+'枚の合計</span><span style="color:'
+    +(over?'#ff8a8a':(short?'#ffcf7a':'#7fe0a0'))+';font-weight:800">'+rcptYen_(sum)+(base>0?(' / 会計 '+rcptYen_(base)):'')+'</span></div>'
+    +(over?'<div class="row" style="border-bottom:0"><span style="color:#ff8a8a;font-size:11.5px">⚠️会計より '+rcptYen_(sum-base)+' 多い＝二重領収書になるので刷れません</span><span></span></div>'
+      :(short?'<div class="row" style="border-bottom:0"><span style="color:#ffcf7a;font-size:11.5px">残り '+rcptYen_(base-sum)+' ぶんの領収書がまだです（一部だけ出すならこのままでOK）</span><span></span></div>'
+      :''))
+    +rcptQPayWarn_()+'</div>';
+  return h;
+}
 function rcptRenderMenu_(el){
   rcptCss_();
   document.getElementById('menuTitle').textContent='🖨 領収書・受領書';
@@ -6902,7 +7417,8 @@ function rcptRenderMenu_(el){
   if(R){
     h+='<div class="rcpt-h">予約伝票を選ぶ（領収書名を自動で呼び出し）</div>';
     h+='<div id="rcpt-denlist" class="rcpt-denlist">'+rcptDenListHtml_()+'</div>';
-    h+='<div class="rcpt-note">選ぶと領収書名（宛名）が入ります。宛名は自由入力も可。金額は手入力してください。</div>';
+    h+='<div class="rcpt-note">選ぶと<b>領収書名（宛名）と会計金額</b>が入ります。'
+      +'金額が出ていない行は伝票と結べていません（同じお名前が2件ある等）＝金額は手入力してください。</div>';
   }
   var mSelCast=null; if(M&&RCPT_PAYCAST){ (RCPT_PAYCASTS[RCPT_PAYMONTH]||[]).forEach(function(c){ if(c.name===RCPT_PAYCAST)mSelCast=c; }); }
   if(M){
@@ -6913,12 +7429,14 @@ function rcptRenderMenu_(el){
       +'<select id="rcpt-paycast" class="finput" onchange="rcptPickCast(this.value)">'+rcptCastOpts_()+'</select>';
     h+='<div class="rcpt-note">金額は先月までの給与計算の「最終支給額」を自動で挿入します（手入力不可）。給与が締まっていない当月は選べません。</div>';
   }
+  if(R){ rcptQApply_(); h+='<div id="rcpt-queue">'+rcptQueueHtml_()+'</div>'; }   /* 🧾複数枚の発行（キュー）。⚠️印紙判定のため宛名より前で行を確定させる */
   var atenaLabel=R?'宛名（領収書名）':(M?'受取人（キャスト・自動入力／修正可）':'受取人（今日の出勤スタッフ・派遣含む／自由入力可）');
   h+='<div class="flabel">'+atenaLabel+'</div>';
   if(J){ h+='<select id="rcpt-payee" class="finput" onchange="rcptPickPayee(this.value)" style="margin-bottom:6px"><option value="">▼ 出勤スタッフから選ぶ</option>'+rcptPayeeOpts_()+'<option value="__free">（自由入力）</option></select>'; }
-  h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):'')+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
+  var qRow=(R&&RCPT_QUEUE&&RCPT_QIDX>=0)?RCPT_QUEUE[RCPT_QIDX]:null;
+  h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+(qRow?(' value="'+esc(qRow.atena||'')+'"'):((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):(RCPT_ATENA?(' value="'+esc(RCPT_ATENA)+'"'):'')))+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
   h+='<div class="flabel">'+(R?'領収金額（税込・円）':'受領金額（円）')+(M?' <span style="color:var(--sub);font-weight:400">＝給与計算の最終支給額（自動）</span>':'')+'</div>'
-    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):'')+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
+    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+(qRow?(' value="'+(Number(qRow.amount)||0)+'"'):((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):((R&&RCPT_BASE>0)?(' value="'+RCPT_BASE+'"'):'')))+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
   if(R){
     h+='<div class="flabel">支払方法（収入印紙の判定に使用）</div>'
       +'<div class="rcpt-seg"><button id="rcpt-cash" class="'+(RCPT_CASH?'on':'')+'" onclick="rcptSetCash(true)">現金</button>'
@@ -6937,7 +7455,11 @@ function rcptRenderMenu_(el){
     +'<input id="rcpt-date" class="finput" type="date" onchange="rcptDateManual_()">';
   h+='<div class="rcpt-preview"><div class="rcpt-paper" id="rcpt-paper"></div></div>';
   h+='<div id="rcpt-bd" class="rcpt-bd"></div>';
-  h+='<a class="rcpt-print" id="rcpt-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return rcptPrint()">🖨 印刷する（TM-M30 / Bluetooth）</a>';
+  h+='<a class="rcpt-print" id="rcpt-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return rcptPrint()">🖨 '
+    +((RCPT_QUEUE&&RCPT_QIDX>=0)?('この1枚を刷る（'+(RCPT_QIDX+1)+'/'+RCPT_QUEUE.length+'枚目）'):'印刷する（TM-M30 / Bluetooth）')+'</a>';
+  /* A＝同じ内容をもう1枚（紙詰まり・紛失の刷り直し）。⚠️金額は増やさない＝合計にも枚数にも数えない */
+  h+='<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm" onclick="rcptPrint(1)">🖨 同じ内容をもう1枚（刷り直し）</button></div>'
+    +'<div class="rcpt-note">刷り直しは金額を増やしません。控え台帳には「刷り直し」として残ります。</div>';
   h+='<div class="rcpt-note" id="rcpt-hint"></div>';
   el.innerHTML=h;
   var dEl=document.getElementById('rcpt-date'); if(dEl){ dEl.value=(RCPT_DATEMODE==='custom'?(dEl.value||rcptToday_()):rcptDateFor_(RCPT_DATEMODE)); dEl.style.display=(RCPT_DATEMODE==='blank')?'none':''; }
@@ -6946,16 +7468,29 @@ function rcptRenderMenu_(el){
 function rcptSetMode(m){ RCPT_MODE=m; RCPT_SEL=-1;
   if(m==='M'){ RCPT_PAYCAST=''; if(RCPT_PAYMONTHS===null)rcptLoadMonthly_(''); }
   var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
-function rcptSetCash(v,quiet){ RCPT_CASH=v;
+function rcptSetCash(v,quiet,keepSplit){ RCPT_CASH=v;
+  if(!keepSplit) RCPT_SPLIT=null;   /* 手で選び直したら伝票から来た内訳は捨てる（黒服の指定が優先） */
   var a=document.getElementById('rcpt-cash'),b=document.getElementById('rcpt-card');
   if(a)a.classList.toggle('on',v); if(b)b.classList.toggle('on',!v);
   if(!quiet)rcptCalc(); }
 function rcptPick(i){
   RCPT_SEL=i; var d=RCPT_DENPYO[i]; if(!d)return;
   var atena=d.ryoshuName?d.ryoshuName:(d.company?d.company+' 御中':((d.name&&d.name!=='ご新規')?d.name+' 様':''));
-  var ae=document.getElementById('rcpt-atena'); if(ae)ae.value=atena;   // 宛名(領収書名)のみ自動。金額は手入力。
+  RCPT_ATENA=atena;
+  var ae=document.getElementById('rcpt-atena'); if(ae)ae.value=atena;
+  /* ⚠️2026-08-28ボス指示＝**会計した金額を既定で入れる**（それまで宛名だけで毎回手打ちだった）。
+     結べた時だけ入れる。結べない時は空のまま＝黙って0や他人の金額を入れない。
+     複数枚に割るときの基準(RCPT_BASE)と支払内訳(印紙の判定)も一緒に渡す。 */
+  var p=rcptPosFor_(d);
+  if(p&&p.total>0){
+    var me=document.getElementById('rcpt-amt'); if(me)me.value=p.total;
+    RCPT_BASE=p.total; RCPT_BASEPAY=p.pay;
+    RCPT_SPLIT={cash:p.pay.cash, card:p.pay.card, other:p.pay.other};
+    if(typeof rcptSetCash==='function') rcptSetCash(p.pay.cash>0,true,true);
+    RCPT_QUEUE=null; RCPT_QIDX=-1;      // 伝票を選び直したら枚数の割り方はやり直す
+  }
   var dl=document.getElementById('rcpt-denlist'); if(dl)dl.innerHTML=rcptDenListHtml_();
-  rcptCalc();
+  rcptQRefresh_();   /* ⚠️全再描画にすると、いま入れた宛名と金額が作り直されて消える */
 }
 function rcptCalc(){
   var amount=parseInt((((document.getElementById('rcpt-amt')||{}).value)||'0').replace(/[^0-9]/g,''),10)||0;
@@ -6964,22 +7499,31 @@ function rcptCalc(){
   var iso=(((document.getElementById('rcpt-date')||{}).value))||rcptToday_();
   var taxExcl=Math.round(amount/(1+RCPT_TAX));
   var tax=amount-taxExcl;
-  var inshi=rcptInshi_(taxExcl,RCPT_CASH);
+  /* ⚠️印紙は**現金受取額**で判定する（全額ではない）。内訳が無ければ従来どおり全額×RCPT_CASH */
+  var sp=RCPT_SPLIT;
+  var cashAmt=sp?Math.min(Math.max(0,Number(sp.cash)||0),amount):(RCPT_CASH?amount:0);
+  var cardAmt=sp?Math.max(0,Number(sp.card)||0):(RCPT_CASH?0:amount);
+  var otherAmt=sp?Math.max(0,Number(sp.other)||0):0;
+  var inshi=rcptInshi_(Math.round(cashAmt/(1+RCPT_TAX)),cashAmt>0);
   var paper=document.getElementById('rcpt-paper'), bd=document.getElementById('rcpt-bd');
   if(!paper||!bd)return;
   if(RCPT_MODE==='R'){
     paper.className='rcpt-paper rcpt-land';
     if(paper.parentNode)paper.parentNode.classList.add('land');
-    try{ var _lc=rcptLandscapeCanvas_({atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
+    try{ var _lc=rcptLandscapeCanvas_({atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt});
       paper.innerHTML='<img alt="領収書プレビュー" src="'+_lc.toDataURL()+'" style="width:100%;display:block;background:#fff">';
     }catch(e){ paper.innerHTML='<div class="small" style="color:#900">プレビュー生成エラー: '+esc(e.message)+'</div>'; }
-    var badge=(!RCPT_CASH)?'<span class="rcpt-badge zero">カード＝印紙不要</span>'
-      :(inshi===0)?'<span class="rcpt-badge zero">税抜5万円未満＝非課税</span>'
+    var badge=(cashAmt<=0)?'<span class="rcpt-badge zero">現金なし＝印紙不要</span>'
+      :(inshi===0)?'<span class="rcpt-badge zero">現金分が税抜5万円未満＝非課税</span>'
       :'<span class="rcpt-badge stamp">印紙 '+rcptYen_(inshi)+'</span>';
+    var splitRow=(sp&&(cardAmt>0||otherAmt>0)&&cashAmt>0)
+      ? '<div class="row"><span>内訳（印紙は現金分で判定）</span><span>現金 '+rcptYen_(cashAmt)+' ／ カード '+rcptYen_(cardAmt)+(otherAmt>0?' ／ 請求書 '+rcptYen_(otherAmt):'')+'</span></div>'
+      : '';
     bd.innerHTML='<div class="row"><span>領収金額（税込）</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="row"><span>税抜金額</span><span>'+rcptYen_(taxExcl)+'</span></div>'
       +'<div class="row"><span>消費税（10%）</span><span>'+rcptYen_(tax)+'</span></div>'
-      +'<div class="row"><span>収入印紙（税抜判定）</span><span>'+rcptYen_(inshi)+' '+badge+'</span></div>'
+      +splitRow
+      +'<div class="row"><span>収入印紙（現金分の税抜で判定）</span><span>'+rcptYen_(inshi)+' '+badge+'</span></div>'
       +'<div class="big"><span>お預り</span><span>'+rcptYen_(amount)+'</span></div>';
   } else {
     paper.className='rcpt-paper';
@@ -6997,9 +7541,13 @@ function rcptCalc(){
       +'<div class="big"><span>お渡し</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="row" style="border-bottom:0"><span style="color:var(--sub);font-size:11px">社内書類のため収入印紙・消費税区分なし</span><span></span></div>';
   }
-  window.__rcptData={mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso};
-  window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
-  var _pl=document.getElementById('rcpt-printlink'); if(_pl){ _pl.href='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml); }
+  window.__rcptData={mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt};
+  window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt});
+  /* ⚠️シミュレーション中はここでhrefを貼り直さない＝onclickで止めていても長押し「新規タブで開く」から
+     実機へ飛べてしまう。印刷の出口は printGo_ 一本に保つ。 */
+  var _pl=document.getElementById('rcpt-printlink');
+  if(_pl){ _pl.href=(typeof PRINT_SIM!=='undefined'&&PRINT_SIM)?'#'
+    :('tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml)); }
 }
 function rcptBuildXmlLandscape_(o){
   // 横向き領収証（ePOSページモード・90度回転）。★実機の試し刷りで下の TUNE を微調整（dir/AW/AH/top/left/base/gap）。
@@ -7012,8 +7560,9 @@ function rcptBuildXmlLandscape_(o){
   add(2,true,(o.atena||'')+'　');
   add(4,true,'￥ '+(o.amount||0).toLocaleString('ja-JP')+' 也');
   add(1,false,'但し  '+(o.tada||'')+'  上記正に領収いたしました');
-  if(!RCPT_CASH) add(1,false,'※クレジットカード利用のため収入印紙不要');
-  else if(o.inshi===0) add(1,false,'※税抜5万円未満につき収入印紙不要（非課税）');
+  if(o.cardAmt>0||o.otherAmt>0) add(1,false,'内訳  現金 '+rcptYen_(o.cashAmt)+' ／ クレジット '+rcptYen_(o.cardAmt)+(o.otherAmt>0?' ／ 請求書 '+rcptYen_(o.otherAmt):''));
+  if(!(o.cashAmt>0)) add(1,false,'※クレジットカード利用のため収入印紙不要');
+  else if(o.inshi===0) add(1,false,'※現金受取分が税抜5万円未満につき収入印紙不要（非課税）');
   else add(1,false,'収入印紙 '+rcptYen_(o.inshi)+' 貼付');
   add(1,false,'税抜 '+rcptYen_(o.taxExcl)+'   消費税(10%) '+rcptYen_(o.tax));
   add(1,false,RCPT_ISSUER.name+'   '+(RCPT_ISSUER.addr||''));
@@ -7055,8 +7604,14 @@ function rcptBuildXml_(o){
     L.push(t('--------------------------------'));
     L.push(t('税抜金額     '+rcptYen_(o.taxExcl)));
     L.push(t('消費税(10%)  '+rcptYen_(o.tax)));
-    if(!RCPT_CASH) L.push(t('※カード利用のため印紙不要'));
-    else if(o.inshi===0) L.push(t('※税抜5万円未満につき印紙不要'));
+    /* ⚠️2026-08-28＝内訳を必ず刷る。「クレジット利用」と書いていない領収書は**全額が印紙の対象**。
+       分割で現金分だけ印紙を貼るなら、この行が根拠になる。 */
+    if(Number(o.cardAmt)>0||Number(o.otherAmt)>0){
+      L.push(t('内訳 現金 '+rcptYen_(o.cashAmt)+' / クレジット '+rcptYen_(o.cardAmt)
+        +(Number(o.otherAmt)>0?' / 請求書 '+rcptYen_(o.otherAmt):'')));
+    }
+    if(!(Number(o.cashAmt)>0)) L.push(t('※クレジットカード利用のため収入印紙不要'));
+    else if(o.inshi===0) L.push(t('※現金受取分が税抜5万円未満につき印紙不要'));
     else L.push(t('収入印紙 '+rcptYen_(o.inshi)+' [貼付・消印]'));
     L.push(t('--------------------------------')); L.push('<feed/>');
     L.push(t(RCPT_ISSUER.name));
@@ -7124,7 +7679,11 @@ function rcptLandscapeCanvas_(o){
   // ── 左下：消費税・支払種別 ──
   g.font='bold 21px sans-serif'; g.fillText('内、消費税額(10%)：　'+yen(o.tax), 96, 356);
   g.fillText('支払い種別', 96, 402);
-  var pay=[['現　金', RCPT_CASH?yen(o.amount):''],['カード', RCPT_CASH?'':yen(o.amount)],['その他','']];
+  /* ⚠️支払い種別は**内訳をそのまま出す**。「クレジット利用」と書いていない領収書は
+     全額が印紙の対象になる＝分割で現金分だけ印紙を貼るなら、この欄が根拠になる。 */
+  var pay=[['現　金', (Number(o.cashAmt)>0?yen(o.cashAmt):'')],
+           ['カード', (Number(o.cardAmt)>0?yen(o.cardAmt):'')],
+           ['その他', (Number(o.otherAmt)>0?yen(o.otherAmt):'')]];
   var py=432; g.font='bold 20px sans-serif'; pay.forEach(function(p){ g.fillText(p[0]+' ：'+p[1], 122, py); line(214,py+8,472,py+8,1.2); py+=28; });
   // ── 右：発行者（枠なし・プレーン）──
   g.font='bold 26px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 560, 356);
@@ -7157,18 +7716,29 @@ function rcptLandscapePrintXml_(o){
   rg.translate(r.width,0); rg.rotate(Math.PI/2); rg.drawImage(c,0,0);
   return rcptCanvasToEposXml_(r);
 }
-function rcptPrint(){
+function rcptPrint(reissue){
+  /* ⚠️合計が会計金額を超える領収書は出さない＝二重領収書になる。刷る手前で止める。
+     （不足は止めない＝「会社宛に一部だけ」は実務で在る） */
+  if(RCPT_QUEUE&&RCPT_BASE>0&&rcptQSum_()>RCPT_BASE){
+    alert('領収書の合計が会計金額より '+rcptYen_(rcptQSum_()-RCPT_BASE)+' 多いです。\n二重の領収書になるので、金額を直してください。');
+    return false;
+  }
   var xml;
   if(RCPT_MODE==='R'){ try{ xml=rcptLandscapePrintXml_(window.__rcptData||{amount:0,iso:rcptToday_()}); }catch(e){ xml=window.__rcptXml||''; } }
   else { xml=window.__rcptXml||''; if(!xml){ rcptCalc(); xml=window.__rcptXml||''; } }
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
-  var pl=document.getElementById('rcpt-printlink'); if(pl)pl.href=url;
-  var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（横向きは画像印字のため数秒かかることがあります）';
-  rcptLogIssue_();   // 発行控えを「発行領収書」シートへ記録（3種共通・非同期／印刷は待たない）
-  return true;
+  var lbl=(RCPT_MODE==='R')?'領収書':((RCPT_MODE==='M')?'月払い受領書':'日払い受領書');
+  var go=printGo_(url,lbl,'rcpt-printlink',false);
+  var hint=document.getElementById('rcpt-hint');
+  if(hint) hint.textContent=go?'TM Print Assistant を起動します…（横向きは画像印字のため数秒かかることがあります）'
+                             :'🧪 テスト＝刷ったことにしました。発行控えは実機と同じように記録しています。';
+  rcptLogIssue_(reissue);   // 発行控えを「発行領収書」シートへ記録（3種共通・非同期／印刷は待たない）
+  /* ⚠️A(刷り直し)は金額を増やさない＝キューの進行にも合計にも数えない */
+  if(!reissue) rcptQDone_();
+  return go;         /* ⚠️シミュレーションでは false＝<a>の遷移を殺す */
 }
 /* 発行控えの記録（領収書R・日払いJ・月払いM 共通）。印刷リンク遷移は待たず fire-and-forget。控え台帳＝バックエンド logIssuedReceipt */
-function rcptLogIssue_(){
+function rcptLogIssue_(reissue){
   try{
     var d=window.__rcptData||{}; if(!d.mode) return;
     var docType=(d.mode==='R')?'領収書':((d.mode==='M')?'月払い受領書':'日払い受領書');
@@ -7176,7 +7746,10 @@ function rcptLogIssue_(){
     var payload={ docType:docType, atena:d.atena||'', memberNo:memberNo,
       amount:d.amount||0, taxExcl:(d.mode==='R'?(d.taxExcl||0):0), tax:(d.mode==='R'?(d.tax||0):0), inshi:(d.mode==='R'?(d.inshi||0):0),
       cash:(d.mode==='R'?RCPT_CASH:true), tada:d.tada||'', issueDate:d.iso||rcptToday_(),
-      by:(typeof LOGIN!=='undefined'&&LOGIN)?LOGIN:'' };
+      by:(typeof LOGIN!=='undefined'&&LOGIN)?LOGIN:'',
+      /* ⚠️刷り直し（同じ内容をもう1枚）は控え台帳で見分けが付くようにする＝
+         紙が2枚出ている事実は残しつつ、売上が二重に見えないため */
+      reissue:reissue?1:0 };
     if(!IS_GAS){ try{ if(window.console)console.log('[発行控え(mock)]',payload); }catch(_){} return; }
     gsr('logIssuedReceipt',payload).then(function(r){
       if(r&&r.serial){ var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='発行控えを記録しました（No. '+r.serial+'）。TM Print Assistant を起動します…'; }
@@ -7184,12 +7757,13 @@ function rcptLogIssue_(){
   }catch(e){}
 }
 function openReceipt(){
-  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
+  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_BASE=0; RCPT_BASEPAY=null; RCPT_ATENA=''; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
   RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
   RCPT_TAB='form'; RCPT_HIST=null; RCPT_HIST_F=''; RCPT_HIST_Q='';
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
   rcptLoadIssuers_();   // 発行店マスタを取得→既定を初期選択（!IS_GAS はモック）
+  RCPT_POS=null; rcptLoadPosBills_();   // 💰会計金額を既定で入れるため、その日のPOS伝票も取る
   if(!IS_GAS){ RCPT_DENPYO=rcptDenpyoMock_(); RCPT_PAYEES=rcptPayeeMock_(); var dl0=document.getElementById('rcpt-denlist'); if(dl0)dl0.innerHTML=rcptDenListHtml_(); return; }
   gsr('getReceiptPayees').then(function(r){ RCPT_PAYEES=(r&&r.rows)?r.rows:[]; if(menuView==='receipt'&&RCPT_MODE==='J'){ var el2=document.getElementById('menu-body'); if(el2)rcptRenderMenu_(el2); } }).catch(function(){ RCPT_PAYEES=[]; });
   gsr('getReceiptReservationsToday').then(function(r){
@@ -7515,11 +8089,13 @@ function tslipPick(i){ TSLIP_SEL=(TSLIP_SEL===i?-1:i); renderMenu(); }
 function tslipPrint(){
   var o=tslipSel_();
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(tslipXml_());
-  var a=document.getElementById('ts-printlink'); if(a)a.href=url;
-  var hint=document.getElementById('ts-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）';
+  var go=printGo_(url,'テーブル伝票','ts-printlink',false);
+  var hint=document.getElementById('ts-hint');
+  if(hint) hint.textContent=go?'TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）'
+                             :'🧪 テスト＝刷ったことにしました。「✓刷れた」を押せば印刷済みとして記録されます。';
   // ⚠️ここでは印刷済みにしない＝「確認待ち」を置くだけ。戻ってきて「✓刷れた」を押した時に記録する
   if(o) tslipSetPend_({rowIdx:Number(tslipKey_(o)), cust:String(o.cust||''), at:(new Date()).getTime()});
-  return true;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
+  return go;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
 }
 function openTableSlip(){ menuView='tslip'; TSLIP_MODE='rsv'; TSLIP_SEL=-1; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
 function tslipListHtml_(){
@@ -10619,6 +11195,29 @@ function checkClockDrift(){
   var t0=Date.now();
   gsr('getServerTime').then(function(st){
     if(!st||!st.epoch)return;
+    /* ⚠️2026-08-28追加＝**営業日の自動切替**。
+       TODAY/curDate は起動時に1回決めたきりで、朝6時をまたいでも更新されていなかった。
+       軍師のiPadは開きっぱなし＝日付が変わっても前の営業日のまま動き続け、
+         ①予約一覧が前日のまま（ボス報告：28日のホール状況なのに予約が27日）
+         ②**その日の伝票が前日の営業日に保存される**（bmDateKey()=TODAY）
+         ③閉店ゲートはサーバーの営業日を見るので、今日の伝票が1件も見えない
+       が同時に起きる。3時のセッション失効でreloadは掛かるが、その時刻はまだ前の営業日。
+       ⭐日付の正は**サーバー**（getServerTimeのbizDate）。端末の時計は領収書の日付戻しで
+         過去にされている場合がある＝端末時計で切り替えてはいけない。
+       ⚠️この then は末尾の .catch(function(){}) で握り潰される＝ここで例外を出すと
+         時刻監視ごと黙って死ぬ。必ず try で囲み、typeofで存在を確かめてから呼ぶ。 */
+    try{
+      if(st.bizDate&&typeof TODAY!=='undefined'&&st.bizDate!==TODAY){
+        var wasToday=(curDate===TODAY);
+        TODAY=st.bizDate;
+        if(wasToday) curDate=TODAY;        // ◀で過去を調べている人の画面は奪わない
+        if(typeof bmLoad==='function') bmLoad();   // 下書きは営業日ごとのキー＝新しい日に持ち替える
+        if(typeof bmPull==='function') bmPull();
+        if(typeof toast==='function') toast('営業日が '+TODAY+' に変わりました');
+        if(wasToday&&typeof loadAll==='function') loadAll();
+        else if(typeof renderAll==='function') renderAll();
+      }
+    }catch(e){}
     var t1=Date.now();
     var offsetSec=Math.round(((t0+t1)/2 - st.epoch)/1000); // 端末 - サーバー（往復遅延を相殺）
     if(Math.abs(offsetSec)>=CLOCK_DRIFT_SEC){
