@@ -6168,7 +6168,17 @@ function bmClose(){
   if(bmClosed_(d)) return;
   if(c.due<=0){ alert('金額が0円です。'); return; }
   if(c.unpaid>0){ alert('お預りが'+bmYen(c.unpaid)+'不足しています。\n現金／カード／売掛／次回来店時で'+bmYen(c.due)+'を埋めてください。'); return; }
-  if(BM.key==='demo'){ alert('🧪お試し伝票は会計できません（検算用）。'); return; }
+  /* 🧪お試し伝票も会計を押せるようにする（ボス指示 2026-08-28）＝会計の流れと控えの出方をそのまま試せる。
+     ⛔ただし backend(posCloseBill) には**送らない**。検算の落書きを店の会計記録に混ぜないため
+        （お試しは共有もしていない＝この方針で一貫させる）。画面上だけ会計済みにして控えまで出す。 */
+  if(BM.key==='demo'){
+    if(!confirm('🧪 お試し伝票の会計です。\n合計 '+bmYen(c.total)+'\n\n※検算用なので店の記録には残りません。\nよろしいですか？')) return;
+    var dm=bmGet('demo');
+    dm.closed={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total, demo:true };
+    bmSave(); bmRender();
+    bmSlipPreview('guest');   // 本番と同じ流れ＝会計→お客様控え
+    return;
+  }
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
   if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
       +(c.unpaid<0?('\nお釣り '+bmYen(-c.unpaid)):'')+'\n\nよろしいですか？')) return;
@@ -6218,6 +6228,12 @@ function bmClose(){
 function bmReopen(){
   if(BM_CLOSING) return;
   var d=bmGet(BM.key), rkey=String(BM.key); if(!bmClosed_(d)) return;
+  /* 🧪お試しは backend に会計を送っていない＝取り消しもローカルだけ。
+     ⛔ここでgsrを呼ぶと「その伝票は無い」で失敗し、画面が会計済みのまま詰む。 */
+  if(rkey==='demo'){
+    if(!confirm('🧪 お試し伝票の会計を取り消して、直せる状態に戻します。')) return;
+    delete d.closed; bmSave(); bmRender(); return;
+  }
   if(!confirm('会計を取り消して、伝票を直せる状態に戻します。\n（取り消した記録は残ります）')) return;
   BM_CLOSING=true;
   gsr('posReopenBill',bmDateKey(),BM.key,(typeof LOGIN!=='undefined'?LOGIN:''))
