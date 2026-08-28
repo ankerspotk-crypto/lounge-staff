@@ -12,8 +12,10 @@
        日報入出金 … 1日 × 入金/出金の1件       ＝ 店のお金の出入り
      ⚠️人の行を JSON 1セルに畳まない。給与・照合が「人×日」で引くので、畳むと
        月次のたびに全日をパースし直すことになる。
-   ■ 書き込み先は `posTab_()` で **テスト/本番を分ける**（テスト＝末尾 _TEST）。
-     自社POSと同じスイッチに相乗り＝「POSは本番なのに日報はテスト」を作らない。
+   ■ 書き込み先は **その営業日** で決まる（ボス確定 2026-08-28「日報の書き込みはすべて9月1日から。
+     それまではあくまでテスト」）。`2026-09-01` より前の営業日＝`_TEST` 付きシート、以降＝本番シート。
+     ⛔`POS_MODE` とは**切り離してある**。倒すと自社POSまで一斉に本番へ行くため触ってはいけない。
+     詳細は下の `nippoIsTestDate_` の節。
    ■ 計算はサーバが正。画面から来た計算済みの値は**信用せず必ず再計算して書く**
      （端末に残った古いJSが壊れた合計を正本に入れるのを防ぐ）。
    ■ 保存は**その営業日ぶんを消して入れ直す**（upsert）。取り直しても増えない。
@@ -207,9 +209,35 @@ function nippoTotals_(rows, cashIn, cashOut) {
    ⚠️不足ヘッダは**末尾へ追補**する（途中に挿さない＝既存行がズレない）。
    ⚠️見出しは getMaxColumns まで読む。getLastColumn までだと前回足した列を見落として
      毎回右へ増える（[[project_closing_trust_gate]] で実際に踏んだ形）。 */
-function nippoSheet_(tab, head) {
+/* ============================================================================
+   🗓 テスト／本番の切り替えは「その営業日」で決まる（ボス確定 2026-08-28）
+   ----------------------------------------------------------------------------
+   ボス指示＝**「日報の書き込みはすべて9月1日から。それまではあくまでテスト」**。
+   ⭐日付が決まっているのだから、**人が押す余地を作らない**＝自動で切り替える。
+     スイッチ方式（誰かがその日にプロパティを倒す）は、押し忘れ・早すぎ・二度押しが必ず起きる。
+   ⚠️基準は「今日」ではなく**書き込む対象の営業日**。
+     9/2に8/30の日報を直しても、8/30はテスト期間の日なので `_TEST` に留まる。
+     ここを「今日」で判定すると、同じ営業日のデータが2枚のシートに割れる。
+   ⚠️`POS_MODE` からは**完全に切り離した**。倒すと自社POS(別セッションが作業中)まで
+     一斉に本番シートへ行ってしまうため、日報の都合で触ってはいけない。
+   ⚠️切替日は `NIPPO_LIVE_FROM` で変更可（`NIPPO_` は KEEP_PREFIX 済み＝設定リセットで消えない）。
+============================================================================ */
+const NIPPO_LIVE_FROM_DEFAULT_ = '2026-09-01';
+function nippoLiveFrom_() {
+  const v = String(prop('NIPPO_LIVE_FROM') || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : NIPPO_LIVE_FROM_DEFAULT_;
+}
+/* その営業日はまだテスト期間か。⚠️日付は 'yyyy-MM-dd' なので文字列比較で正しく並ぶ */
+function nippoIsTestDate_(bizDate) {
+  const d = String(bizDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return true;   // 読めない日付は安全側（テスト）へ倒す
+  return d < nippoLiveFrom_();
+}
+function nippoTab_(base, bizDate) { return nippoIsTestDate_(bizDate) ? (base + '_TEST') : base; }
+
+function nippoSheet_(tab, head, bizDate) {
   const ss = getOrOpenSS_();
-  const name = posTab_(tab);
+  const name = nippoTab_(tab, bizDate);
   let sh = ss.getSheetByName(name);
   if (!sh) {
     sh = ss.insertSheet(name);
@@ -228,9 +256,9 @@ function nippoSheet_(tab, head) {
   }
   return sh;
 }
-function nippoDaySheet_()  { return nippoSheet_(NIPPO_TAB, NIPPO_HEAD_); }
-function nippoRowSheet_()  { return nippoSheet_(NIPPO_ROW_TAB, NIPPO_ROW_HEAD_); }
-function nippoCashSheet_() { return nippoSheet_(NIPPO_CASH_TAB, NIPPO_CASH_HEAD_); }
+function nippoDaySheet_(d)  { return nippoSheet_(NIPPO_TAB, NIPPO_HEAD_, d); }
+function nippoRowSheet_(d)  { return nippoSheet_(NIPPO_ROW_TAB, NIPPO_ROW_HEAD_, d); }
+function nippoCashSheet_(d) { return nippoSheet_(NIPPO_CASH_TAB, NIPPO_CASH_HEAD_, d); }
 
 /* 見出し名 → 0-based index。列順に依存しない読み書きの土台 */
 function nippoCols_(sh) {
@@ -519,7 +547,7 @@ function nippoSlipsOfDay_(bizDate) {
 ========================================================================== */
 
 function nippoDayRecord_(bizDate) {
-  const sh = nippoDaySheet_();
+  const sh = nippoDaySheet_(bizDate);
   if (sh.getLastRow() < 2) return null;
   const c = nippoCols_(sh);
   const vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
@@ -540,7 +568,7 @@ function nippoDayRecord_(bizDate) {
 
 function nippoSavedRows_(bizDate) {
   const map = {};
-  const sh = nippoRowSheet_();
+  const sh = nippoRowSheet_(bizDate);
   if (sh.getLastRow() < 2) return map;
   const c = nippoCols_(sh);
   const vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
@@ -569,7 +597,7 @@ function nippoSavedRows_(bizDate) {
 
 function nippoSavedCash_(bizDate) {
   const out = { in: [], out: [] };
-  const sh = nippoCashSheet_();
+  const sh = nippoCashSheet_(bizDate);
   if (sh.getLastRow() < 2) return out;
   const c = nippoCols_(sh);
   const vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
@@ -669,7 +697,8 @@ function getNippo(dateKey) {
 
     return {
       ok: true, date: d,
-      mode: posMode_(), isTest: posMode_() !== 'live',
+      /* ⚠️`isTest` は POS_MODE ではなく**その営業日**で決まる（9/1から本番シート） */
+      isTest: nippoIsTestDate_(d), liveFrom: nippoLiveFrom_(), sheet: nippoTab_(NIPPO_ROW_TAB, d),
       state: rec ? rec.state : NIPPO_ST_OPEN_,
       locked: !!(rec && rec.state === NIPPO_ST_FIXED_),
       memo: rec ? rec.memo : '',
@@ -709,6 +738,14 @@ function saveNippo(payload) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '日付の形式が不正です' };
     const by = String(p.by || '').trim() || '不明';
 
+    /* ⛔まだ来ていない営業日は保存させない。
+       理由＝切替は営業日で決まるので、テスト期間中に未来日(9/1以降)を開いて保存すると
+       **練習のデータが本番シートに入る**。日報は「終わった日を報告する」ものなので、
+       未来日を書けないのは仕様として自然でもある。 */
+    if (d > bizDateStr_()) {
+      return { ok: false, error: 'まだ来ていない営業日は保存できません（' + d + '）。日報は終わった営業日を記録するものです' };
+    }
+
     const rec = nippoDayRecord_(d);
     if (rec && rec.state === NIPPO_ST_FIXED_) {
       return { ok: false, error: 'この日は確定済みです。直すには先に「確定を解除」を押してください' };
@@ -718,7 +755,7 @@ function saveNippo(payload) {
     const stamp = nowStamp_();
 
     /* ① 明細 */
-    const rsh = nippoRowSheet_();
+    const rsh = nippoRowSheet_(d);
     nippoDeleteDay_(rsh, d);
     const rc = nippoCols_(rsh);
     const width = rsh.getLastColumn();
@@ -748,7 +785,7 @@ function saveNippo(payload) {
     }
 
     /* ② 入金・出金 */
-    const csh = nippoCashSheet_();
+    const csh = nippoCashSheet_(d);
     nippoDeleteDay_(csh, d);
     const cc = nippoCols_(csh);
     const cwidth = csh.getLastColumn();
@@ -802,7 +839,7 @@ function nippoDeleteDay_(sh, bizDate) {
 
 /* 日の器を1行upsert（見出し名で書く＝列順に依存しない） */
 function nippoWriteDay_(bizDate, obj) {
-  const sh = nippoDaySheet_();
+  const sh = nippoDaySheet_(bizDate);
   const cols = nippoCols_(sh);
   const rec = nippoDayRecord_(bizDate);
   const rowIdx = rec ? rec.rowIdx : (sh.getLastRow() + 1);

@@ -8,7 +8,7 @@
 const t = require('../pos/lib/tiny');
 const { load } = require('./lib/load');
 
-const SUITES = ['01_calc', '02_prefill', '03_save', '04_lock', '05_back', '06_front'];
+const SUITES = ['01_calc', '02_prefill', '03_save', '04_lock', '05_back', '06_front', '07_cutover'];
 /* 既定＝テスト環境(gunshi-test.html)。`--live` で本番(gunshi.html)を検査する＝**昇格したかの確認用**。
    ⚠️本番に未昇格の機能があっても落とさず「未反映」として記録する（[[feedback_test_env_first]]）。 */
 const args = process.argv.slice(2);

@@ -1526,7 +1526,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2242,7 +2242,11 @@ function npRender(){
     +'<span style="font-size:15px;font-weight:800;color:var(--txt)">'+esc(npDateLabel(NP.date))+'</span>'
     +'<button class="bm-btn sm" onclick="npNext()">翌日 ▶</button>'
     +'<span style="flex:1"></span>'
-    +(NP.isTest?'<span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">🧪 テスト環境に記録</span>':'')
+    /* ⚠️どのシートに書かれるかは黒服にとって一番大事な情報＝必ず出す。
+       ボス確定＝9/1から本番。それまでは練習であることが一目で分かるようにする。 */
+    +(NP.isTest
+       ? '<span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">🧪 練習（'+esc(NP.liveFrom||'2026-09-01')+'から本番記録）</span>'
+       : '<span class="np-chip" style="border-color:#3ea06a;color:#8fe0ac">📗 本番記録</span>')
     +'<span class="np-chip" style="'+(lock?'border-color:#3ea06a;color:#8fe0ac':'')+'">'+(lock?'🔒 確定済み':'✏️ 作成中')+'</span>'
     +'</div>';
 
@@ -2448,6 +2452,11 @@ function npMsg(txt,err){
 /* 保存＝ここだけ二重送信を塞ぐ。⚠️成功でも失敗でも必ずフラグを戻す（塞ぎっぱなしで押せなくなる） */
 function npSave(cb){
   if(!NP||NP.locked) return;
+  /* ⛔まだ来ていない営業日は保存させない（サーバも弾くが、画面で止めた方が親切）。
+     テスト期間中に未来日を開いて保存すると、練習のデータが本番シートに入る。 */
+  if(typeof TODAY!=='undefined' && TODAY && NP.date > TODAY){
+    npMsg('まだ来ていない営業日は保存できません（'+NP.date+'）',true); return;
+  }
   if(NP_BUSY){ npMsg('保存中です。少しお待ちください'); return; }
   NP_BUSY=true;
   var btn=document.getElementById('np-save'); if(btn){ btn.disabled=true; btn.style.opacity='.5'; }
