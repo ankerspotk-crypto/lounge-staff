@@ -5174,6 +5174,12 @@ var BM_ITEMS=[
    一晩で一番よく出る品なので、チップは「全部」の次＝指が最初に届く位置に置く。
    ⚠️並び順がそのまま画面の並び＝ここを触ると黒服の指の動きが変わる。 */
 var BM_GENRES=['キャストドリンク','ウィスキー','焼酎','シャンパン','ワイン','ブランデー','スピリッツ','ビール','割り物','ソフトドリンク','グラス','つまみ','その他'];
+/* 画面に出す時だけ略す（ボス指示 2026-08-28「キャスドリに略していい」）。
+   ⛔BM_GENRES の値そのものを変えるな＝商品マスタのカテゴリ列と一致しなくなり、
+     bmIsCastDrink_（キャストドリンクは1人1杯）も BM_GENRE_STOCK（在庫連携）も黙って壊れる。
+     値は 'キャストドリンク' のまま・表示だけ 'キャスドリ'。 */
+var BM_GENRE_LABEL={ 'キャストドリンク':'キャスドリ' };
+function bmGenreLabel_(g){ return BM_GENRE_LABEL[g]||String(g||''); }
 var BM_GENRE_STOCK={ 'ウィスキー':'ボトル','焼酎':'ボトル','シャンパン':'ボトル','ワイン':'ボトル','ブランデー':'ボトル','スピリッツ':'ボトル','ビール':'ボトル',
                      '割り物':'割り物','ソフトドリンク':'割り物','つまみ':'チャーム','グラス':'','その他':'',
                      /* ⚠️キャストドリンクはグラス提供＝ボトルを開けない。ここを'ボトル'にすると
@@ -5769,7 +5775,7 @@ function bmEditorHtml(){
     +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+bmItems_().length+'品'+(bmAddLoad().length?'（うち★'+bmAddLoad().length+'件はこの端末で追加）':'')+'</span></div>'
     +'<div class="bm-row"><input type="search" class="bm-in" style="flex:1;text-align:left;min-width:130px" placeholder="品名で検索（山崎 / 炭酸 / グラス …）" value="'+esc(BM.q||'')+'" oninput="bmSearch(this.value)"></div>'
     +'<div class="chips">'+['全部'].concat(BM_GENRES).map(function(k){
-        return '<div class="chip'+(k===BM.kind?' sel':'')+'" onclick="bmSetKind(\''+jsStr(k)+'\')">'+esc(k)+'</div>';
+        return '<div class="chip'+(k===BM.kind?' sel':'')+'" onclick="bmSetKind(\''+jsStr(k)+'\')">'+esc(bmGenreLabel_(k))+'</div>';
       }).join('')+'</div>'
     +'<div class="bm-mgrid" id="bmGrid">'+bmGridHtml()+'</div>'
     +'<div class="bm-note" style="margin-top:8px">品をタップ →「誰に付けるか」を選んでから入ります</div>'
@@ -5783,7 +5789,7 @@ function bmEditorHtml(){
     +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;width:120px">'
     +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:88px">'
     +'<select id="bmNewGn" class="bm-in" style="width:120px">'
-    +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'"'+((BM.kind===g)?' selected':'')+'>'+esc(g)+'</option>'; }).join('')
+    +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'"'+((BM.kind===g)?' selected':'')+'>'+esc(bmGenreLabel_(g))+'</option>'; }).join('')
     +'</select>'
     +'<button class="bm-btn pri sm" onclick="bmAddMenu()">＋ 追加</button></div>'
     +'<div class="bm-note">次からメニューに出ます。⚠️<b>この端末だけ</b>に保存されます（他の端末には出ません）。</div>'
@@ -6554,7 +6560,7 @@ function bmPickHtml(){
   var ap=bmAttrPool();
   return '<div class="bm-modal-bg" onclick="bmPickCancel()"></div>'
     +'<div class="bm-modal">'
-    +'<div style="font-size:16px;font-weight:800">'+esc(pk.name)+(pk.genre?' <span style="font-size:10.5px;color:var(--sub);font-weight:600">'+esc(pk.genre)+'</span>':'')+'</div>'
+    +'<div style="font-size:16px;font-weight:800">'+esc(pk.name)+(pk.genre?' <span style="font-size:10.5px;color:var(--sub);font-weight:600">'+esc(bmGenreLabel_(pk.genre))+'</span>':'')+'</div>'
     +'<div class="bm-row" style="margin-top:10px"><span class="lb">単価</span>'
     +'<input type="number" class="bm-in" value="'+pk.price+'" oninput="bmPickPrice(this.value)" onchange="bmPickPrice(this.value,1)">'
     +'<span class="lb" style="min-width:auto">数量</span>'
@@ -6565,7 +6571,7 @@ function bmPickHtml(){
       +(bmPickEach_(pk)?'<span style="font-size:11px;color:var(--sub);font-weight:700">　'+pk.attrs.length+'人分</span>':'')+'</span></div>'
     +'<div class="bm-note" style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:700">'
       +(bmIsCastDrink_(pk.genre)
-        ? '誰に付けますか？（🍹キャストドリンク＝選んだ人それぞれに1杯ずつ入ります）'
+        ? '誰に付けますか？（🍹キャスドリ＝選んだ人それぞれに1杯ずつ入ります）'
         : '誰に付けますか？（複数選ぶと折半）')+'</div>'
     +'<div class="chips" style="margin-top:5px">'
     +'<div class="chip'+(pk.attrs.indexOf('お客様')>=0?' sel':'')+'" onclick="bmPickAttr(\'お客様\')">お客様</div>'
