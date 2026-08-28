@@ -5932,7 +5932,19 @@ function bmSlipLines_(d,c,bill,mode){
         var r2=bmSlipItem_('  '+bmAttrOf(o),bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
         (r2 instanceof Array?r2:[r2]).forEach(function(t){ L.push({t:t,a:'l'}); });
       }else{
-        var r=bmSlipItem_(o.name,bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
+        /* 🍹キャストドリンクだけは、お客様に渡す紙にもキャスト名を出す（ボス指示 2026-08-28）。
+           ⚠️他の品の帰属は従来どおり店舗控えだけ＝お客様に内部の売上配分は見せない。
+             キャストドリンクは「誰に出した1杯か」がお客様にとっても意味のある情報なので例外にする。
+           ⚠️「お客様」に付けた分は名前を出さない（自分の名前を書いても意味がない）。
+           ⚠️genre は注文行に保存済み。古い下書きには入っていないことがある＝その時は従来どおり出ない。 */
+        var onm=o.name;
+        if(bmIsCastDrink_(o.genre)){
+          var who=bmAttrOf(o).split('・').filter(function(x){ return x&&x!=='お客様'; }).join('・');
+          /* 区切りは半角スペース＝品名欄は18桁しかない。全角にすると1桁ぶん余計に食って
+             「カシスソーダ まや」(18桁)ですら金額が次の行に回る。名前が長い品は従来どおり2行に折れる。 */
+          if(who) onm+=' '+who;
+        }
+        var r=bmSlipItem_(onm,bmYen(o.price),o.qty+'点',bmYen(o.price*o.qty));
         (r instanceof Array?r:[r]).forEach(function(t){ L.push({t:t,a:'l'}); });
       }
     });
