@@ -85,6 +85,65 @@ module.exports = function (_f, _b, ctx) {
     t.eq(b.closes().getLastRow(), 3, '締め直しは新しい行として積む');
   }
 
+  t.section('📅次回来店時払いの列と集計（ボス指示 2026-08-28）');
+  {
+    const b = boot();
+    const rec = (over) => Object.assign({ floor: '2F', table: 'BOX1', cust: '田中', pax: 1,
+      setSum: 13000, base: 13000, tax: 2600, total: 15600, cash: 0, card: 0, credit: 0,
+      cashApplied: 0, change: 0, nextPay: 0, carry: 0 }, over || {});
+    b.fn.posSaveBill(KEY, '2', 15600, DRAFT(), '黒服');
+    b.fn.posCloseBill(KEY, '2', rec({ nextPay: 15600 }), '黒服');
+    const head = b.closes().dump()[0];
+    t.eq(head[29], '次回来店時払い', '列29に「次回来店時払い」');
+    t.eq(head[30], '前回回収', '列30に「前回回収」');
+    const row = b.closes().dump()[1];
+    t.eq(row[29], 15600, '次回に回した額が入る');
+    t.eq(row[30], 0, '回収は0');
+    t.eq(row[20], 15600, '⚠️合計（売上）は今回分のまま');
+
+    /* 翌営業日＝回収 */
+    b.fn.posSaveBill('2026-08-28', '5', 20000, DRAFT(), '黒服');
+    b.fn.posCloseBill('2026-08-28', '5', rec({ total: 20000, cash: 35600, cashApplied: 20000, carry: 15600 }), '黒服');
+    const r2 = b.closes().dump()[2];
+    t.eq(r2[30], 15600, '回収した前回分が入る');
+    t.eq(r2[20], 20000, '⚠️回収分は売上に含めない（二重計上しない）');
+
+    const sum = b.fn.getPosNextPay();
+    t.eq(sum.totalNext, 15600, '発生の合計');
+    t.eq(sum.totalBack, 15600, '回収の合計');
+    t.eq(sum.outstanding, 0, '⭐残高＝発生−回収＝0（回収済み）');
+    t.eq(sum.rows.length, 1, 'お客様ごとにまとまる');
+    t.eq(sum.rows[0].cust, '田中', '名前で寄る');
+    t.eq(sum.detail.length, 2, '明細も返す（日付と卓で根拠を追える）');
+
+    const only = b.fn.getPosNextPay(KEY, KEY);
+    t.eq(only.totalBack, 0, '営業日で絞れる（8/27だけなら回収0）');
+    t.eq(only.outstanding, 15600, '8/27時点の残高は15,600');
+  }
+  {
+    /* 取消した会計は数えない */
+    const b = boot();
+    b.fn.posSaveBill(KEY, '2', 15600, DRAFT(), '黒服');
+    b.fn.posCloseBill(KEY, '2', { total: 15600, nextPay: 15600 }, '黒服');
+    t.eq(b.fn.getPosNextPay().outstanding, 15600, '前提＝未収15,600');
+    b.fn.posReopenBill(KEY, '2', '黒服');
+    t.eq(b.fn.getPosNextPay().outstanding, 0, '⚠️会計を取り消したら未収も消える（取消行は数えない）');
+  }
+  {
+    /* ⚠️列が足りない古いシートでも落ちない（既存の29列シートに継ぎ足す） */
+    const b = boot();
+    const old = b.ss.insertSheet('POS_会計_TEST');
+    old.rows = [['営業日', '伝票行', '会計時刻', '担当黒服', 'フロア', 'テーブル', 'お客様名', '人数',
+                 '担当キャスト', '売半', 'セット', '担当料', '予約料', '同伴料', '注文計', 'ウェルカム杯数',
+                 '値引', '値増', '小計', '税サ', '合計', '現金', 'カード', '売掛',
+                 '状態', '取消時刻', '取消者', 'お預り', 'お釣り']];
+    const r = b.fn.posCloseBill(KEY, '9', { total: 15600, nextPay: 15600 }, '黒服');
+    t.ok(r.ok, '⚠️29列のままの古いシートでも会計できる', JSON.stringify(r));
+    t.eq(b.closes().dump()[0][29], '次回来店時払い', '足りない見出しを継ぎ足す');
+    t.eq(b.closes().dump()[0][6], 'お客様名', '⚠️既にある見出しは書き換えない');
+    t.eq(b.fn.getPosNextPay().outstanding, 15600, '集計も通る');
+  }
+
   t.section('⚠️別端末の古い下書きが会計済みを黙って外さない');
   {
     const b = boot();

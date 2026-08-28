@@ -40,18 +40,21 @@ class FakeSheet {
   getName() { return this.name; }
   getLastRow() { return this.rows.length; }
   getLastColumn() { return this.rows.reduce((a, r) => Math.max(a, r.length), 0); }
+  /* ⚠️本物のGASは「シートの列数」と「値の入っている列数」が別物。列を足さずに
+     getRange(…,numColumns) が列数を超えると落ちる＝そこを再現する */
+  getMaxColumns() { return this._max || Math.max(26, this.getLastColumn()); }
+  insertColumnsAfter(after, n) { this._max = this.getMaxColumns() + n; return this; }
   appendRow(v) { this.rows.push(v.slice()); this.log.push(['append', v.slice()]); return this; }
   deleteRow(n) { this.rows.splice(n - 1, 1); this.log.push(['delete', n]); return this; }
   setFrozenRows(n) { this.frozen = n; return this; }
-  /* ⚠️本物のシートは「データの端(getLastColumn)」と「シートの端(getMaxColumns)」が別物。
-     見出しの追補は必ず getMaxColumns まで読む決まりなので、偽物にも用意しておく
-     （既定26列＝本物の新規シートと同じ）。FakeSheet自体は無限に伸びるので insert 系は実質no-op。 */
-  getMaxColumns() { return Math.max(26, this.getLastColumn()); }
+  /* 行は無制限に伸びる偽物なので、行数の上限だけは素直に返す（本物の新規シートは1000行） */
   getMaxRows() { return Math.max(1000, this.rows.length); }
-  insertColumnsAfter() { return this; }
   insertRowsAfter() { return this; }
   getRange(r, c, nr, nc) {
     if (typeof c === 'undefined') throw new Error('getRange(a1) はこの偽物では未対応');
+    if ((c - 1) + (nc === undefined ? 1 : nc) > this.getMaxColumns()) {
+      throw new Error('範囲外：列が足りません（' + this.name + ' 最大' + this.getMaxColumns() + '列に ' + ((c - 1) + (nc || 1)) + '列目を要求）');
+    }
     return new FakeRange(this, r, c, nr === undefined ? 1 : nr, nc === undefined ? 1 : nc);
   }
   getDataRange() { return new FakeRange(this, 1, 1, Math.max(1, this.rows.length), Math.max(1, this.getLastColumn())); }
