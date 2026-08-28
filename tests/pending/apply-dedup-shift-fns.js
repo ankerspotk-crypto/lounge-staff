@@ -22,6 +22,10 @@
      ② node tests/pending/apply-dedup-shift-fns.js /tmp/kioskdeploy/コード.js
      ③ clasp push -f → 二度打ちで "already up to date" → clasp deploy -i AKfycbxG4IdW…
      ④ repo 側の鏡も揃える: node tests/pending/apply-dedup-shift-fns.js Code.gs
+     ⑤ **押した「後」にも生存確認**（押す前だけだと、押す瞬間に誰かが書き込んだ分を見逃す）:
+        grep -c '^function getShiftMgmtData_' コード.js   → 1（掃除が載った）
+        grep -c 'getPosNextPay' コード.js                  → 2（cloud-21のPOS集計 生存）
+        grep -c "'NIPPO_'" コード.js ／ nippo.js の日報4関数 → 生存（cloud-25の日報）
    ⚠️Code.gs は別セッションのWIPが同居する＝**git add しない**。
 ============================================================================ */
 const fs = require('fs');
