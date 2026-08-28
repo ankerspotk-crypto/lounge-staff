@@ -7,6 +7,11 @@ const { loadPieces } = require('../lib/frontend');
 const FNS = ['rcptInshi_', 'rcptYen_', 'rcptToday_', 'rcptJp_', 'rcptDateStr_', 'rcptNo_',
              'rcptLandscapeCanvas_', 'rcptBuildXml_', 'rcptCalc', 'esc'];
 const VARS = ['RCPT_TAX', 'RCPT_CASH', 'RCPT_SPLIT', 'RCPT_MODE', 'RCPT_ISSUER', 'RCPT_DATEMODE', 'RCPT_SEL'];
+/* 複数枚の発行（発行キュー）。⚠️rcptRerender_ は menu-body を作り直すのでテストでは殺す */
+const QFNS = ['rcptQSum_', 'rcptQPayLabel_', 'rcptQAmtNow_', 'rcptQAtenaNow_', 'rcptRerender_',
+              'rcptQSeedPay_', 'rcptQSplit', 'rcptQOff', 'rcptQAdd', 'rcptQDel', 'rcptQPick',
+              'rcptQSet', 'rcptQApply_', 'rcptQDone_', 'rcptQPayWarn_', 'rcptQueueHtml_', 'rcptYen_', 'esc'];
+const QVARS = ['RCPT_QUEUE', 'RCPT_QIDX', 'RCPT_BASE', 'RCPT_BASEPAY', 'RCPT_SPLIT', 'RCPT_CASH'];
 
 module.exports = function () {
   /* 領収書フォームの入力欄を用意して rcptCalc を実走させる */
@@ -81,6 +86,103 @@ module.exports = function () {
     const r = form(80000, { split: { cash: 0, card: 80000, other: 0 } });
     const xml = r.p.fn.window.__rcptXml || '';
     t.ok(/クレジットカード利用のため収入印紙不要/.test(xml), '全額カードなら「印紙不要」と刷る');
+  }
+
+  t.section('🧾 複数枚の発行 ─ B：金額を割る（割り勘）');
+  function q(base, pay) {
+    const p = loadPieces(QFNS, { vars: QVARS, globals: {} });
+    p.fn.rcptRerender_ = function () {};
+    p.fn.RCPT_BASE = base;
+    p.fn.RCPT_BASEPAY = pay || null;
+    p.fn.document.els['rcpt-amt'] = { value: String(base) };
+    p.fn.document.els['rcpt-atena'] = { value: '田中 様' };
+    return p;
+  }
+  {
+    const p = q(70800);
+    p.fn.rcptQSplit(3);
+    t.eq(p.fn.RCPT_QUEUE.length, 3, '3枚に割れる');
+    t.eq(p.fn.RCPT_QUEUE.map(r => r.amount), [23600, 23600, 23600], '均等に割れる');
+    t.eq(p.fn.rcptQSum_(), 70800, '⭐合計が会計金額とぴったり一致する');
+    t.ok(p.fn.RCPT_QUEUE.every(r => r.atena === '田中 様'), '宛名は引き継ぐ（後で1枚ずつ直せる）');
+  }
+  {
+    const p = q(70801);
+    p.fn.rcptQSplit(3);
+    t.eq(p.fn.RCPT_QUEUE.map(r => r.amount), [23601, 23600, 23600], '⚠️端数は1枚目に寄せる');
+    t.eq(p.fn.rcptQSum_(), 70801, '端数が出ても合計はぴったり');
+  }
+  {
+    const p = q(200000, { cash: 200000, card: 0, other: 0 });
+    const one = p.fn.rcptYen_ && loadPieces(['rcptInshi_'], {}).fn.rcptInshi_(Math.round(200000 / 1.1), true);
+    t.eq(one, 200, '1枚なら印紙200円（税抜181,818）');
+    p.fn.rcptQSplit(5);
+    const each = p.fn.RCPT_QUEUE[0].amount;
+    const inshiEach = loadPieces(['rcptInshi_'], {}).fn.rcptInshi_(Math.round(each / 1.1), true);
+    t.eq(each, 40000, '5枚に割ると1枚40,000');
+    t.eq(inshiEach, 0, '⭐割ると1枚あたり税抜36,363＝5万円未満で印紙が不要になる（枚数は印紙額を動かす）');
+  }
+
+  t.section('🧾 複数枚の発行 ─ C：宛名も金額も1枚ずつ');
+  {
+    const p = q(80000);
+    p.fn.rcptQAdd();
+    t.eq(p.fn.RCPT_QUEUE.length, 2, '行を足せる（1行目＝いまの内容／2行目＝空）');
+    p.fn.rcptQSet(0, 'atena', '株式会社ABC 御中'); p.fn.rcptQSet(0, 'amount', '50000');
+    p.fn.rcptQSet(1, 'atena', '田中 太郎 様');     p.fn.rcptQSet(1, 'amount', '30000');
+    t.eq(p.fn.rcptQSum_(), 80000, '会社宛5万＋個人宛3万で合計が一致');
+    t.eq(p.fn.RCPT_QUEUE[0].atena, '株式会社ABC 御中', '宛名を1枚ずつ書ける');
+    p.fn.rcptQSet(1, 'amount', 'あ');
+    t.eq(p.fn.RCPT_QUEUE[1].amount, 0, '数字以外は0（NaNにしない）');
+    p.fn.rcptQDel(1);
+    t.eq(p.fn.RCPT_QUEUE.length, 1, '行を消せる');
+    p.fn.rcptQDel(0);
+    t.eq(p.fn.RCPT_QUEUE, null, '全部消したら1枚モードに戻る');
+  }
+
+  t.section('⚠️二重領収書を作らせない');
+  {
+    const p = q(80000);
+    p.fn.rcptQSplit(2);
+    p.fn.rcptQSet(0, 'amount', '80000');
+    t.eq(p.fn.rcptQSum_(), 120000, '合計が会計を超えた状態を作る');
+    const html = p.fn.rcptQueueHtml_();
+    t.ok(/多い/.test(html) && /刷れません/.test(html), '画面に「刷れません」と出る');
+    p.fn.rcptQSet(0, 'amount', '20000');   // 20,000+40,000=60,000 ＝ 会計80,000に足りない
+    t.ok(/残り/.test(p.fn.rcptQueueHtml_()), '不足のときは「残り」と出す（一部だけ出すのは実務で在る）');
+    p.fn.rcptQSet(0, 'amount', '40000');
+    const okHtml = p.fn.rcptQueueHtml_();
+    t.ok(!/多い/.test(okHtml) && !/残り/.test(okHtml), 'ぴったりなら警告なし');
+  }
+
+  t.section('⚠️支払方法の内訳が会計とズレたら言う（印紙は現金分に掛かる）');
+  {
+    const p = q(80000, { cash: 30000, card: 50000, other: 0 });
+    p.fn.rcptQSplit(2);
+    p.fn.RCPT_QUEUE[0].pay = 'cash'; p.fn.RCPT_QUEUE[1].pay = 'cash';
+    t.ok(/内訳が会計と違います/.test(p.fn.rcptQPayWarn_()), '全部現金にしたら警告が出る', p.fn.rcptQPayWarn_().slice(0, 80));
+    p.fn.RCPT_QUEUE[0].pay = 'card'; p.fn.RCPT_QUEUE[1].pay = 'card';
+    t.ok(/内訳が会計と違います/.test(p.fn.rcptQPayWarn_()), '全部カードにしても警告が出る');
+  }
+  {
+    const p = q(80000, { cash: 40000, card: 40000, other: 0 });
+    p.fn.rcptQSplit(2);
+    t.eq(p.fn.RCPT_QUEUE.map(r => r.pay).sort(), ['card', 'cash'], '会計の内訳から支払種別を自動で埋める');
+    t.eq(p.fn.rcptQPayWarn_(), '', 'ぴったり埋まれば警告なし');
+  }
+
+  t.section('1枚ずつ発行して次へ進む');
+  {
+    const p = q(90000);
+    p.fn.rcptQSplit(3);
+    t.eq(p.fn.RCPT_QIDX, 0, '1枚目から');
+    p.fn.rcptQApply_();
+    t.eq(p.fn.RCPT_SPLIT, { cash: 30000, card: 0, other: 0 }, '⚠️印紙はその1枚の支払種別で判定する');
+    p.fn.rcptQDone_();
+    t.eq(p.fn.RCPT_QUEUE[0].done, 1, '刷った1枚に印が付く');
+    t.eq(p.fn.RCPT_QIDX, 1, '次の未発行へ進む');
+    p.fn.rcptQDone_(); p.fn.rcptQDone_();
+    t.ok(p.fn.RCPT_QUEUE.every(r => r.done === 1), '全部刷り終わる');
   }
 
   t.section('発行日の指定');

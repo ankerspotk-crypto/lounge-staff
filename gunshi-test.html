@@ -1543,7 +1543,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28i-test';
+var BUILD='2026-08-28j-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -5500,6 +5500,8 @@ function bmOpenReceipt(){
   var cardAmt=Number(d.pay&&d.pay.card)||0, creditAmt=Number(d.pay&&d.pay.credit)||0;
   var cashApplied=Math.max(0, c.total-cardAmt-creditAmt);
   if(typeof RCPT_SPLIT!=='undefined') RCPT_SPLIT={cash:cashApplied, card:cardAmt, other:creditAmt};
+  /* 複数枚に割るときの基準＝この会計の金額と内訳。⚠️超過（二重領収書）を止めるのに使う */
+  if(typeof RCPT_BASE!=='undefined'){ RCPT_BASE=c.total; RCPT_BASEPAY={cash:cashApplied, card:cardAmt, other:creditAmt}; }
   if(typeof rcptSetCash==='function') rcptSetCash(cashApplied>0, true, true);   // 表示のトグルも合わせる
   else if(typeof RCPT_CASH!=='undefined') RCPT_CASH=(cashApplied>0);
   var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
@@ -6884,6 +6886,139 @@ function rcptHistListHtml_(){
       +'</div>';
   }).join('');
 }
+/* ============================================================================
+   🧾 複数枚の発行＝**発行キュー**（ボス確定 2026-08-28「A・B・C 全部起きる」）
+   ----------------------------------------------------------------------------
+   A 同じ内容をもう1枚（刷り直し＝紙詰まり・紛失）  → 「もう1枚（刷り直し）」ボタン
+   B 金額を割って複数枚（割り勘）                    → 「均等に割る」
+   C 宛名も金額も1枚ずつ（会社と個人で分ける）        → 行を足して1行ずつ書く
+   ■ 作り＝**1枚ずつ既存の発行画面に載せて刷る**。プレビューも印字も1枚用のまま＝
+     ここで作りを増やさない（紙の組み方は実機で検証済みの物を触らない）。
+   ⚠️**合計が会計金額を超える領収書は出さない**＝二重領収書になる。刷る手前で止める。
+     不足は警告だけ（「会社宛に一部だけ」は実務で在る）。
+   ⚠️**収入印紙は1枚ごとに判定する**。割ると1枚あたりが5万円未満になって印紙が不要になることがある
+     ＝枚数と配分は印紙額を動かす。だから行ごとに支払種別（現金/カード/請求書）を持つ。
+     Aの刷り直しは金額を増やさない＝合計には数えない。
+============================================================================ */
+var RCPT_QUEUE=null;      // null=1枚だけ（従来どおり）／[{atena,amount,pay,done}]
+var RCPT_QIDX=-1;         // いま発行画面に載っている行
+var RCPT_BASE=0;          // 元の会計金額（超過チェックの基準。0=基準なし＝手打ち発行）
+var RCPT_BASEPAY=null;    // 会計の内訳 {cash,card,other}
+
+function rcptQSum_(){ return (RCPT_QUEUE||[]).reduce(function(a,r){ return a+(Number(r.amount)||0); },0); }
+function rcptQPayLabel_(p){ return (p==='card')?'カード':((p==='other')?'請求書':'現金'); }
+function rcptQAmtNow_(){ return parseInt((((document.getElementById('rcpt-amt')||{}).value)||'0').replace(/[^0-9]/g,''),10)||0; }
+function rcptQAtenaNow_(){ return (((document.getElementById('rcpt-atena')||{}).value)||'').trim(); }
+function rcptRerender_(){ var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+
+/* 会計の内訳から行ごとの支払種別を埋める（現金→カード→請求書の順に充当）。
+   ⚠️1行が2つの方法にまたがる場合は先に埋まる方を採る＝黒服が直せる（既定を置くだけ） */
+function rcptQSeedPay_(){
+  var bp=RCPT_BASEPAY||{}, left={cash:Number(bp.cash)||0, card:Number(bp.card)||0, other:Number(bp.other)||0};
+  var any=(left.cash+left.card+left.other)>0;
+  (RCPT_QUEUE||[]).forEach(function(r){
+    if(!any){ r.pay=r.pay||'cash'; return; }
+    var a=Number(r.amount)||0;
+    var k=(left.cash>=a&&left.cash>0)?'cash':((left.card>=a&&left.card>0)?'card':((left.other>=a&&left.other>0)?'other'
+         :(left.cash>0?'cash':(left.card>0?'card':(left.other>0?'other':'cash')))));
+    r.pay=k; left[k]=Math.max(0,left[k]-a);
+  });
+}
+/* B＝均等に割る。⚠️端数は1枚目に寄せる＝合計は必ず元の金額とぴったり一致させる */
+function rcptQSplit(n){
+  n=Math.max(1,Math.min(20,Math.floor(Number(n)||0)));
+  var base=RCPT_BASE||rcptQAmtNow_();
+  if(!(base>0)){ alert('先に金額を入れてください。'); return; }
+  var atena=rcptQAtenaNow_();
+  var each=Math.floor(base/n), rem=base-each*n;
+  RCPT_QUEUE=[];
+  for(var i=0;i<n;i++) RCPT_QUEUE.push({atena:atena, amount:each+(i===0?rem:0), pay:'cash', done:0});
+  rcptQSeedPay_(); RCPT_QIDX=0; rcptRerender_();
+}
+function rcptQOff(){ RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_SPLIT=null; rcptRerender_(); }
+/* C＝1行足す。金額0で置いて黒服が書く */
+function rcptQAdd(){
+  if(!RCPT_QUEUE) RCPT_QUEUE=[{atena:rcptQAtenaNow_(), amount:rcptQAmtNow_(), pay:'cash', done:0}];
+  RCPT_QUEUE.push({atena:rcptQAtenaNow_(), amount:0, pay:'cash', done:0});
+  RCPT_QIDX=RCPT_QUEUE.length-1; rcptRerender_();
+}
+function rcptQDel(i){
+  if(!RCPT_QUEUE) return;
+  RCPT_QUEUE.splice(i,1);
+  if(!RCPT_QUEUE.length){ rcptQOff(); return; }
+  if(RCPT_QIDX>=RCPT_QUEUE.length) RCPT_QIDX=RCPT_QUEUE.length-1;
+  rcptRerender_();
+}
+function rcptQPick(i){ RCPT_QIDX=i; rcptRerender_(); }
+function rcptQSet(i,k,v){
+  if(!RCPT_QUEUE||!RCPT_QUEUE[i]) return;
+  RCPT_QUEUE[i][k]=(k==='amount')?Math.max(0,parseInt(String(v).replace(/[^0-9]/g,''),10)||0):v;
+  rcptRerender_();
+}
+/* いま載っている行を発行画面へ流し込む。⚠️印紙は**その1枚の支払種別**で判定する */
+function rcptQApply_(){
+  if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]){ return; }
+  var r=RCPT_QUEUE[RCPT_QIDX], a=Number(r.amount)||0;
+  RCPT_SPLIT={ cash:(r.pay==='cash')?a:0, card:(r.pay==='card')?a:0, other:(r.pay==='other')?a:0 };
+  RCPT_CASH=(r.pay==='cash');
+}
+/* 刷り終わった1枚に印を付けて、次の未発行へ進める */
+function rcptQDone_(){
+  if(!RCPT_QUEUE||RCPT_QIDX<0||!RCPT_QUEUE[RCPT_QIDX]) return;
+  RCPT_QUEUE[RCPT_QIDX].done=1;
+  for(var i=0;i<RCPT_QUEUE.length;i++){ if(!RCPT_QUEUE[i].done){ RCPT_QIDX=i; break; } }
+  setTimeout(rcptRerender_,60);
+}
+/* ⚠️行ごとの支払種別の合計が、会計の内訳とズレていないか。
+   ズレたまま刷ると**収入印紙を多く貼る／貼り忘れる**（印紙は現金分に掛かるため）。 */
+function rcptQPayWarn_(){
+  var bp=RCPT_BASEPAY; if(!bp||!RCPT_QUEUE) return '';
+  var q={cash:0,card:0,other:0};
+  RCPT_QUEUE.forEach(function(r){ q[r.pay||'cash']+=(Number(r.amount)||0); });
+  var d=[];
+  ['cash','card','other'].forEach(function(k){
+    var a=Number(bp[k])||0; if(q[k]!==a) d.push(rcptQPayLabel_(k)+' 会計'+rcptYen_(a)+'→領収書'+rcptYen_(q[k]));
+  });
+  if(!d.length) return '';
+  return '<div class="row" style="border-bottom:0"><span style="color:#ffcf7a;font-size:11.5px">⚠️支払方法の内訳が会計と違います（印紙は現金分に掛かります）<br>'+esc(d.join('　／　'))+'</span><span></span></div>';
+}
+function rcptQueueHtml_(){
+  var sum=rcptQSum_(), base=RCPT_BASE||0, over=(base>0&&sum>base), short=(base>0&&sum<base);
+  var h='<div class="flabel">発行する枚数</div>';
+  if(!RCPT_QUEUE){
+    h+='<div class="bm-row" style="gap:6px;flex-wrap:wrap">'
+      +'<button class="bm-btn sm" onclick="rcptQSplit(2)">2枚に割る</button>'
+      +'<button class="bm-btn sm" onclick="rcptQSplit(3)">3枚に割る</button>'
+      +'<button class="bm-btn sm" onclick="rcptQSplit(Number(prompt(\'何枚に割りますか？\',\'4\')||0))">▼ 枚数を指定</button>'
+      +'<button class="bm-btn sm" onclick="rcptQAdd()">＋ 宛名ごとに分ける</button></div>'
+      +'<div class="rcpt-note">1枚のときはこのままでOK。割り勘は「◯枚に割る」、会社と個人で分けるときは「宛名ごとに分ける」。</div>';
+    return h;
+  }
+  h+='<div style="border:1px solid var(--line2);border-radius:10px;padding:8px;margin-bottom:8px">';
+  h+=RCPT_QUEUE.map(function(r,i){
+    var on=(i===RCPT_QIDX);
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;padding:6px;border-radius:8px;'
+      +(on?'background:rgba(224,168,80,.12);border:1px solid var(--accent-line)':'border:1px solid transparent')+'">'
+      +'<span style="flex:0 0 auto;font-weight:800;font-size:12px;color:'+(r.done?'#5fbf7f':'var(--sub)')+'">'+(r.done?'✅':(i+1)+'枚目')+'</span>'
+      +'<input class="finput" style="flex:1;min-width:90px;margin:0;padding:6px 8px;font-size:12px" value="'+esc(r.atena||'')+'" placeholder="宛名" onchange="rcptQSet('+i+',\'atena\',this.value)">'
+      +'<input class="finput" type="tel" inputmode="numeric" style="flex:0 0 92px;margin:0;padding:6px 8px;font-size:12px;text-align:right" value="'+(Number(r.amount)||0)+'" onchange="rcptQSet('+i+',\'amount\',this.value)">'
+      +'<select class="finput" style="flex:0 0 88px;margin:0;padding:6px 4px;font-size:11px" onchange="rcptQSet('+i+',\'pay\',this.value)">'
+      +['cash','card','other'].map(function(k){ return '<option value="'+k+'"'+(r.pay===k?' selected':'')+'>'+rcptQPayLabel_(k)+'</option>'; }).join('')+'</select>'
+      +'<button class="bm-btn sm'+(on?' pri':'')+'" style="flex:0 0 auto" onclick="rcptQPick('+i+')">'+(on?'発行中':'選ぶ')+'</button>'
+      +'<button class="bm-btn dng sm" style="flex:0 0 auto" onclick="rcptQDel('+i+')">×</button>'
+      +'</div>';
+  }).join('');
+  h+='<div class="bm-row" style="margin-top:2px"><button class="bm-btn sm" onclick="rcptQAdd()">＋ 1枚追加</button>'
+    +'<button class="bm-btn sm" onclick="rcptQOff()">↩ 1枚に戻す</button></div>';
+  h+='</div>';
+  h+='<div class="rcpt-bd" style="margin-bottom:8px"><div class="row"><span>'+RCPT_QUEUE.length+'枚の合計</span><span style="color:'
+    +(over?'#ff8a8a':(short?'#ffcf7a':'#7fe0a0'))+';font-weight:800">'+rcptYen_(sum)+(base>0?(' / 会計 '+rcptYen_(base)):'')+'</span></div>'
+    +(over?'<div class="row" style="border-bottom:0"><span style="color:#ff8a8a;font-size:11.5px">⚠️会計より '+rcptYen_(sum-base)+' 多い＝二重領収書になるので刷れません</span><span></span></div>'
+      :(short?'<div class="row" style="border-bottom:0"><span style="color:#ffcf7a;font-size:11.5px">残り '+rcptYen_(base-sum)+' ぶんの領収書がまだです（一部だけ出すならこのままでOK）</span><span></span></div>'
+      :''))
+    +rcptQPayWarn_()+'</div>';
+  return h;
+}
 function rcptRenderMenu_(el){
   rcptCss_();
   document.getElementById('menuTitle').textContent='🖨 領収書・受領書';
@@ -6919,12 +7054,14 @@ function rcptRenderMenu_(el){
       +'<select id="rcpt-paycast" class="finput" onchange="rcptPickCast(this.value)">'+rcptCastOpts_()+'</select>';
     h+='<div class="rcpt-note">金額は先月までの給与計算の「最終支給額」を自動で挿入します（手入力不可）。給与が締まっていない当月は選べません。</div>';
   }
+  if(R){ rcptQApply_(); h+=rcptQueueHtml_(); }   /* 🧾複数枚の発行（キュー）。⚠️印紙判定のため宛名より前で行を確定させる */
   var atenaLabel=R?'宛名（領収書名）':(M?'受取人（キャスト・自動入力／修正可）':'受取人（今日の出勤スタッフ・派遣含む／自由入力可）');
   h+='<div class="flabel">'+atenaLabel+'</div>';
   if(J){ h+='<select id="rcpt-payee" class="finput" onchange="rcptPickPayee(this.value)" style="margin-bottom:6px"><option value="">▼ 出勤スタッフから選ぶ</option>'+rcptPayeeOpts_()+'<option value="__free">（自由入力）</option></select>'; }
-  h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):'')+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
+  var qRow=(R&&RCPT_QUEUE&&RCPT_QIDX>=0)?RCPT_QUEUE[RCPT_QIDX]:null;
+  h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+(qRow?(' value="'+esc(qRow.atena||'')+'"'):((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):''))+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
   h+='<div class="flabel">'+(R?'領収金額（税込・円）':'受領金額（円）')+(M?' <span style="color:var(--sub);font-weight:400">＝給与計算の最終支給額（自動）</span>':'')+'</div>'
-    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):'')+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
+    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+(qRow?(' value="'+(Number(qRow.amount)||0)+'"'):((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):''))+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
   if(R){
     h+='<div class="flabel">支払方法（収入印紙の判定に使用）</div>'
       +'<div class="rcpt-seg"><button id="rcpt-cash" class="'+(RCPT_CASH?'on':'')+'" onclick="rcptSetCash(true)">現金</button>'
@@ -6943,7 +7080,11 @@ function rcptRenderMenu_(el){
     +'<input id="rcpt-date" class="finput" type="date" onchange="rcptDateManual_()">';
   h+='<div class="rcpt-preview"><div class="rcpt-paper" id="rcpt-paper"></div></div>';
   h+='<div id="rcpt-bd" class="rcpt-bd"></div>';
-  h+='<a class="rcpt-print" id="rcpt-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return rcptPrint()">🖨 印刷する（TM-M30 / Bluetooth）</a>';
+  h+='<a class="rcpt-print" id="rcpt-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return rcptPrint()">🖨 '
+    +((RCPT_QUEUE&&RCPT_QIDX>=0)?('この1枚を刷る（'+(RCPT_QIDX+1)+'/'+RCPT_QUEUE.length+'枚目）'):'印刷する（TM-M30 / Bluetooth）')+'</a>';
+  /* A＝同じ内容をもう1枚（紙詰まり・紛失の刷り直し）。⚠️金額は増やさない＝合計にも枚数にも数えない */
+  h+='<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm" onclick="rcptPrint(1)">🖨 同じ内容をもう1枚（刷り直し）</button></div>'
+    +'<div class="rcpt-note">刷り直しは金額を増やしません。控え台帳には「刷り直し」として残ります。</div>';
   h+='<div class="rcpt-note" id="rcpt-hint"></div>';
   el.innerHTML=h;
   var dEl=document.getElementById('rcpt-date'); if(dEl){ dEl.value=(RCPT_DATEMODE==='custom'?(dEl.value||rcptToday_()):rcptDateFor_(RCPT_DATEMODE)); dEl.style.display=(RCPT_DATEMODE==='blank')?'none':''; }
@@ -7188,7 +7329,13 @@ function rcptLandscapePrintXml_(o){
   rg.translate(r.width,0); rg.rotate(Math.PI/2); rg.drawImage(c,0,0);
   return rcptCanvasToEposXml_(r);
 }
-function rcptPrint(){
+function rcptPrint(reissue){
+  /* ⚠️合計が会計金額を超える領収書は出さない＝二重領収書になる。刷る手前で止める。
+     （不足は止めない＝「会社宛に一部だけ」は実務で在る） */
+  if(RCPT_QUEUE&&RCPT_BASE>0&&rcptQSum_()>RCPT_BASE){
+    alert('領収書の合計が会計金額より '+rcptYen_(rcptQSum_()-RCPT_BASE)+' 多いです。\n二重の領収書になるので、金額を直してください。');
+    return false;
+  }
   var xml;
   if(RCPT_MODE==='R'){ try{ xml=rcptLandscapePrintXml_(window.__rcptData||{amount:0,iso:rcptToday_()}); }catch(e){ xml=window.__rcptXml||''; } }
   else { xml=window.__rcptXml||''; if(!xml){ rcptCalc(); xml=window.__rcptXml||''; } }
@@ -7198,11 +7345,13 @@ function rcptPrint(){
   var hint=document.getElementById('rcpt-hint');
   if(hint) hint.textContent=go?'TM Print Assistant を起動します…（横向きは画像印字のため数秒かかることがあります）'
                              :'🧪 テスト＝刷ったことにしました。発行控えは実機と同じように記録しています。';
-  rcptLogIssue_();   // 発行控えを「発行領収書」シートへ記録（3種共通・非同期／印刷は待たない）
+  rcptLogIssue_(reissue);   // 発行控えを「発行領収書」シートへ記録（3種共通・非同期／印刷は待たない）
+  /* ⚠️A(刷り直し)は金額を増やさない＝キューの進行にも合計にも数えない */
+  if(!reissue) rcptQDone_();
   return go;         /* ⚠️シミュレーションでは false＝<a>の遷移を殺す */
 }
 /* 発行控えの記録（領収書R・日払いJ・月払いM 共通）。印刷リンク遷移は待たず fire-and-forget。控え台帳＝バックエンド logIssuedReceipt */
-function rcptLogIssue_(){
+function rcptLogIssue_(reissue){
   try{
     var d=window.__rcptData||{}; if(!d.mode) return;
     var docType=(d.mode==='R')?'領収書':((d.mode==='M')?'月払い受領書':'日払い受領書');
@@ -7210,7 +7359,10 @@ function rcptLogIssue_(){
     var payload={ docType:docType, atena:d.atena||'', memberNo:memberNo,
       amount:d.amount||0, taxExcl:(d.mode==='R'?(d.taxExcl||0):0), tax:(d.mode==='R'?(d.tax||0):0), inshi:(d.mode==='R'?(d.inshi||0):0),
       cash:(d.mode==='R'?RCPT_CASH:true), tada:d.tada||'', issueDate:d.iso||rcptToday_(),
-      by:(typeof LOGIN!=='undefined'&&LOGIN)?LOGIN:'' };
+      by:(typeof LOGIN!=='undefined'&&LOGIN)?LOGIN:'',
+      /* ⚠️刷り直し（同じ内容をもう1枚）は控え台帳で見分けが付くようにする＝
+         紙が2枚出ている事実は残しつつ、売上が二重に見えないため */
+      reissue:reissue?1:0 };
     if(!IS_GAS){ try{ if(window.console)console.log('[発行控え(mock)]',payload); }catch(_){} return; }
     gsr('logIssuedReceipt',payload).then(function(r){
       if(r&&r.serial){ var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='発行控えを記録しました（No. '+r.serial+'）。TM Print Assistant を起動します…'; }
@@ -7218,7 +7370,7 @@ function rcptLogIssue_(){
   }catch(e){}
 }
 function openReceipt(){
-  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
+  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_BASE=0; RCPT_BASEPAY=null; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
   RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
   RCPT_TAB='form'; RCPT_HIST=null; RCPT_HIST_F=''; RCPT_HIST_Q='';
