@@ -97,8 +97,13 @@ function loadFront(opts) {
     RCPT_ISSUERS: null, RCPT_ISSUER_ID: '', RCPT_CASH: true
   };
   vm.createContext(sandbox);
-  const shared = ex.pluckFn(ex.frontPath(opts.which), ['esc', 'shortNm', 'jsStr']);
+  /* ⚠️BMブロックは外の共通物も使う（esc/jsStr、印刷モードの PRINT_SIM 等）。
+     ここも**実物を切り出して**注入する＝スタブを書くと本物とズレる。 */
+  const shared = ex.pluckFn(ex.frontPath(opts.which),
+    ['esc', 'shortNm', 'jsStr', 'printSimDefault_', 'printGo_', 'setPrintSim', 'printLogHtml_']);
+  vm.runInContext(ex.pluckVar(ex.frontPath(opts.which), ['BUILD', 'PRINT_LOG']), sandbox, { filename: '軍師 共通変数(実物)' });
   vm.runInContext(shared, sandbox, { filename: '軍師 共通ヘルパ(実物)' });
+  vm.runInContext('var PRINT_SIM=printSimDefault_();', sandbox, { filename: '印刷モードの既定' });
   vm.runInContext(block.code, sandbox, { filename: '軍師 BM_*ブロック(実物)' });
 
   return {

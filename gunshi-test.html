@@ -1543,7 +1543,59 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28h-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28i-test';
+/* ============================================================================
+   🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
+   ----------------------------------------------------------------------------
+   ■ 実機印字は `tmprintassistant://` へ画面遷移する＝**プリンターもiPadのアプリも無い場所では
+     そこで流れが止まる**。会計→控え→領収書を通しで試せない。
+   ■ `PRINT_SIM=true` のときは**送らずに「刷った」ことにして**、記録（発行控え・印刷済みフラグ）は
+     実機と同じように残す＝後工程がそのまま試せる。
+   ■ 既定＝**testビルドはON／本番ビルドはOFF**（BUILDの末尾で判定）。端末ごとにlocalStorageで上書き可。
+     ⚠️本番に昇格したとき自動でOFFになる＝「本番なのに刷ったつもり」を構造的に防ぐ。
+   ⚠️**新しい印刷を足したら必ず `printGo_` を通すこと**。`location.href` を直に書くと
+     このスイッチをすり抜けて、テストでまた流れが止まる。
+============================================================================ */
+/* 端末の設定があればそれ、無ければビルドで決める（testビルド=ON / 本番=OFF） */
+function printSimDefault_(){
+  try{ var v=localStorage.getItem('gunshi_print_sim'); if(v==='1')return true; if(v==='0')return false; }catch(e){}
+  return /-test$/.test(BUILD);
+}
+var PRINT_SIM=printSimDefault_();
+var PRINT_LOG=[];   // 直近の印刷（シミュレーション含む）。テスト中に「何が刷られたか」を見るため
+function setPrintSim(v){
+  PRINT_SIM=!!v;
+  try{ localStorage.setItem('gunshi_print_sim', v?'1':'0'); }catch(e){}
+  if(typeof bmRender==='function'&&typeof BM!=='undefined'&&BM.key) bmRender();
+  if(typeof toast==='function') toast(v?'🧪 印刷はシミュレーションになりました':'🖨 実機へ印刷します');
+}
+/* 印刷の唯一の出口。戻り値＝true(実機へ送る)/false(シミュレーション＝遷移させない)
+   aId … <a>のid。実機なら href を差し替え、シミュレーションなら遷移を殺す
+   useLocation … bmSlipPrint のように自分で location.href を叩く経路だけ true */
+function printGo_(url,label,aId,useLocation){
+  var a=aId?document.getElementById(aId):null;
+  if(PRINT_SIM){
+    if(a) a.href='#';
+    PRINT_LOG.unshift({ label:String(label||'印刷'), at:(new Date()), bytes:String(url||'').length, sim:true });
+    PRINT_LOG=PRINT_LOG.slice(0,20);
+    if(typeof toast==='function') toast('🧪 '+label+' を刷ったことにしました（実機には送っていません）');
+    return false;
+  }
+  if(a) a.href=url;
+  PRINT_LOG.unshift({ label:String(label||'印刷'), at:(new Date()), bytes:String(url||'').length, sim:false });
+  PRINT_LOG=PRINT_LOG.slice(0,20);
+  if(useLocation) location.href=url;
+  return true;
+}
+function printLogHtml_(){
+  if(!PRINT_LOG.length) return '';
+  var p2=function(x){return (x<10?'0':'')+x;};
+  return '<div class="bm-note" style="margin-top:6px">直近の印刷'
+    +PRINT_LOG.slice(0,5).map(function(x){
+        return '<div style="font-size:11px;color:var(--sub)">'+(x.sim?'🧪':'🖨')+' '
+          +p2(x.at.getHours())+':'+p2(x.at.getMinutes())+'　'+esc(x.label)+'</div>';
+      }).join('')+'</div>';
+}  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -4807,6 +4859,15 @@ function bmModeHtml(){
     +(BM_SYNC_ERR?'<div style="margin-top:4px;color:#ff9a5a;font-weight:700">⚠️ '+esc(BM_SYNC_ERR)+'</div>':'')
     +(m===null?'':'<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm'+(live?'':' dng')+'" onclick="bmModeSwitch()">'
       +(live?'🧪 テストモードに戻す':'🔴 本番モードにする')+'</button></div>')
+    /* 🖨 印刷モード＝プリンターが無い場所で流れを試すためのスイッチ（ボス指示 2026-08-28） */
+    +'<div class="bm-row" style="margin-top:8px;align-items:center">'
+    +'<span class="lb" style="flex:0 0 auto">印刷</span>'
+    +'<button class="bm-btn sm'+(PRINT_SIM?'':' pri')+'" onclick="setPrintSim(false)">🖨 実機に刷る</button>'
+    +'<button class="bm-btn sm'+(PRINT_SIM?' pri':'')+'" onclick="setPrintSim(true)">🧪 刷ったことにする</button></div>'
+    +'<div class="bm-note">'+(PRINT_SIM
+        ?'⚠️<b>実機には送りません</b>。会計→控え→領収書の流れだけ確かめられます（発行控えは実物と同じように記録されます）。'
+        :'TM-M30へ送ります。')+'</div>'
+    +printLogHtml_()
     +'</div>';
 }
 function bmModeSwitch(){
@@ -5409,8 +5470,8 @@ function bmSlipXml_(){
 function bmSlipPrint(){
   var xml=bmSlipXml_();
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
-  var a=document.getElementById('bmSlipLink'); if(a) a.href=url;
-  location.href=url;
+  var nm=(BM.slipMode==='store')?'店舗控え':((BM.slipMode==='guest')?'お客様控え':'会計伝票');
+  printGo_(url,nm,'bmSlipLink',true);   /* ⚠️戻り値は常にfalse＝<a>の既定遷移は使わない経路 */
   return false;
 }
 /* 支払方法を選ぶ＝合計をその方法に丸ごと入れる。⚠️分割払いは下の欄で手入力（方法は代表を残す） */
@@ -6954,7 +7015,11 @@ function rcptCalc(){
   }
   window.__rcptData={mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt};
   window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt});
-  var _pl=document.getElementById('rcpt-printlink'); if(_pl){ _pl.href='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml); }
+  /* ⚠️シミュレーション中はここでhrefを貼り直さない＝onclickで止めていても長押し「新規タブで開く」から
+     実機へ飛べてしまう。印刷の出口は printGo_ 一本に保つ。 */
+  var _pl=document.getElementById('rcpt-printlink');
+  if(_pl){ _pl.href=(typeof PRINT_SIM!=='undefined'&&PRINT_SIM)?'#'
+    :('tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml)); }
 }
 function rcptBuildXmlLandscape_(o){
   // 横向き領収証（ePOSページモード・90度回転）。★実機の試し刷りで下の TUNE を微調整（dir/AW/AH/top/left/base/gap）。
@@ -7128,10 +7193,13 @@ function rcptPrint(){
   if(RCPT_MODE==='R'){ try{ xml=rcptLandscapePrintXml_(window.__rcptData||{amount:0,iso:rcptToday_()}); }catch(e){ xml=window.__rcptXml||''; } }
   else { xml=window.__rcptXml||''; if(!xml){ rcptCalc(); xml=window.__rcptXml||''; } }
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(xml);
-  var pl=document.getElementById('rcpt-printlink'); if(pl)pl.href=url;
-  var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（横向きは画像印字のため数秒かかることがあります）';
+  var lbl=(RCPT_MODE==='R')?'領収書':((RCPT_MODE==='M')?'月払い受領書':'日払い受領書');
+  var go=printGo_(url,lbl,'rcpt-printlink',false);
+  var hint=document.getElementById('rcpt-hint');
+  if(hint) hint.textContent=go?'TM Print Assistant を起動します…（横向きは画像印字のため数秒かかることがあります）'
+                             :'🧪 テスト＝刷ったことにしました。発行控えは実機と同じように記録しています。';
   rcptLogIssue_();   // 発行控えを「発行領収書」シートへ記録（3種共通・非同期／印刷は待たない）
-  return true;
+  return go;         /* ⚠️シミュレーションでは false＝<a>の遷移を殺す */
 }
 /* 発行控えの記録（領収書R・日払いJ・月払いM 共通）。印刷リンク遷移は待たず fire-and-forget。控え台帳＝バックエンド logIssuedReceipt */
 function rcptLogIssue_(){
@@ -7481,11 +7549,13 @@ function tslipPick(i){ TSLIP_SEL=(TSLIP_SEL===i?-1:i); renderMenu(); }
 function tslipPrint(){
   var o=tslipSel_();
   var url='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(tslipXml_());
-  var a=document.getElementById('ts-printlink'); if(a)a.href=url;
-  var hint=document.getElementById('ts-hint'); if(hint)hint.textContent='TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）';
+  var go=printGo_(url,'テーブル伝票','ts-printlink',false);
+  var hint=document.getElementById('ts-hint');
+  if(hint) hint.textContent=go?'TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）'
+                             :'🧪 テスト＝刷ったことにしました。「✓刷れた」を押せば印刷済みとして記録されます。';
   // ⚠️ここでは印刷済みにしない＝「確認待ち」を置くだけ。戻ってきて「✓刷れた」を押した時に記録する
   if(o) tslipSetPend_({rowIdx:Number(tslipKey_(o)), cust:String(o.cust||''), at:(new Date()).getTime()});
-  return true;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
+  return go;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
 }
 function openTableSlip(){ menuView='tslip'; TSLIP_MODE='rsv'; TSLIP_SEL=-1; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
 function tslipListHtml_(){
