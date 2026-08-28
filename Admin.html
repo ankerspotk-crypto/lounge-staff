@@ -1121,7 +1121,7 @@ function frSearch(){ var el=document.getElementById('fr-q'); FR_Q=el?el.value:''
  * バック: adminGetCustomers（全件・rowIdx＋全項目）／ adminUpdateCustomer ／ adminAddCustomer（すべて isAdmin_ ゲート）。
  * 編集は「変更した項目だけ」送る＝未変更列（会費更新の和暦テキスト等）を誤って上書きしない。
  * 元値は"描画後DOM値"を基準（type=date のブラウザ正規化と一致＝未変更の誤送信を防ぐ）。ポータルの会員編集と同じ流儀。 */
-var MB_DATA=null, MB_Q='', MB_FILTER='', MB_ORIG={}, MB_ROWIDX=0;
+var MB_DATA=null, MB_Q='', MB_FILTER='', MB_ORIG={}, MB_ROWIDX=0, MB_IME=false, MB_TMR=null;
 var MB_FIELDS=[
   {k:'card',label:'カード記載名',type:'text'},
   {k:'name',label:'氏名',type:'text'},
@@ -1159,27 +1159,55 @@ function mbFiltered_(){
     return [c.name,c.card,c.no,c.company,c.tantou,c.yomigana].some(function(v){return String(v||'').replace(/\s/g,'').indexOf(q)>=0;});
   });
 }
-function mbDrawList(){
-  var shown=mbFiltered_(), total=((MB_DATA&&MB_DATA.customers)||[]).length;
-  var chip=function(key,lbl){ return '<span class="chip'+(MB_FILTER===key?' on':'')+'" onclick="mbFilter(\''+key+'\')">'+lbl+'</span>'; };
-  var bar='<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
-    +'<input class="finput grow" id="mb-q" placeholder="氏名・会員番号・会社・担当で検索" value="'+esc(MB_Q)+'" oninput="mbSearch()">'
-    +'<button class="btn pri" onclick="mbAddForm()">＋ 新規会員を登録</button>'
-    +'<span class="cnt">'+shown.length+' / '+total+' 名</span></div>'
-    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+chip('','すべて')+chip('member','💳 会員番号あり')+chip('bottle','🍶 ボトルあり')+'</div>';
-  var rows=shown.map(function(c){
+/* 一覧の描画は「枠（検索欄・チップ・件数）」と「行」を分ける。
+ * 旧実装は1文字入力ごとに setBody で検索欄ごと作り直していた＝iOSでフォーカスとIME変換が飛び、
+ * 1文字目でキーボードが閉じて名前が打てない（2026-08-28 ボス報告）。以後は行だけ差し替える。 */
+function mbRowsHtml_(shown){
+  return shown.map(function(c){
     var no=c.no?(' <span class="sub">#'+esc(c.no)+'</span>'):'';
     var tantou=c.tantou?('担当 '+esc(c.tantou)):'<span style="color:var(--dim)">担当なし</span>';
     var extra=[c.company?('🏢'+esc(c.company)):'',c.bottle?('🍶'+esc(c.bottle)):'',c.eBday?('🎂'+esc(c.eBday)):''].filter(Boolean).join(' ・ ');
     return '<div class="lrow" style="cursor:pointer" onclick="mbEditForm('+c.rowIdx+')"><div class="main"><div class="nm">'+esc(c.name||c.card)+'様'+no
       +'</div><div class="meta">'+tantou+(extra?' ・ '+extra:'')+'</div></div><div style="color:var(--dim);font-size:12px;font-weight:700">編集 ›</div></div>';
   }).join('')||'<div class="empty" style="padding:14px">該当する会員がいません</div>';
-  var hint='<div class="hint">お客様管理Y3の全会員をフル操作（参照・編集・新規登録）。編集は<b>変更した項目だけ</b>保存されます。会費更新の記録は 伝票検知→軍師ワンタップ か、この編集の「最終会費更新日」で。</div>';
-  setBody(bar+'<div class="sec">'+rows+'</div>'+hint);
-  var el=document.getElementById('mb-q'); if(el&&MB_Q){ el.focus(); try{el.setSelectionRange(el.value.length,el.value.length);}catch(_){} }
 }
-function mbSearch(){ var el=document.getElementById('mb-q'); MB_Q=el?el.value:''; mbDrawList(); }
-function mbFilter(k){ MB_FILTER=k; mbDrawList(); }
+function mbDrawList(){
+  var shown=mbFiltered_(), total=((MB_DATA&&MB_DATA.customers)||[]).length;
+  var chip=function(key,lbl){ return '<span class="chip'+(MB_FILTER===key?' on':'')+'" data-k="'+key+'" onclick="mbFilter(\''+key+'\')">'+lbl+'</span>'; };
+  var bar='<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center">'
+    +'<input class="finput grow" id="mb-q" placeholder="氏名・会員番号・会社・担当で検索" value="'+esc(MB_Q)+'" oninput="mbSearch()"'
+    +' autocomplete="off" autocapitalize="off" spellcheck="false">'
+    +'<button class="btn pri" onclick="mbAddForm()">＋ 新規会員を登録</button>'
+    +'<span class="cnt" id="mb-cnt">'+shown.length+' / '+total+' 名</span></div>'
+    +'<div id="mb-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+chip('','すべて')+chip('member','💳 会員番号あり')+chip('bottle','🍶 ボトルあり')+'</div>';
+  var hint='<div class="hint">お客様管理Y3の全会員をフル操作（参照・編集・新規登録）。編集は<b>変更した項目だけ</b>保存されます。会費更新の記録は 伝票検知→軍師ワンタップ か、この編集の「最終会費更新日」で。</div>';
+  setBody(bar+'<div class="sec" id="mb-list">'+mbRowsHtml_(shown)+'</div>'+hint);
+  var el=document.getElementById('mb-q');
+  if(el){
+    /* composition系はHTML属性では登録できない＝必ず addEventListener で。日本語の変換中に絞り込むと未確定の読み（ローマ字/ひらがな）で0件になる */
+    el.addEventListener('compositionstart',function(){ MB_IME=true; });
+    el.addEventListener('compositionend',function(){ MB_IME=false; mbSearch(); });
+    if(MB_Q){ el.focus(); try{el.setSelectionRange(el.value.length,el.value.length);}catch(_){} }
+  }
+}
+function mbRefreshList_(){
+  var lst=document.getElementById('mb-list');
+  if(!lst){ mbDrawList(); return; }
+  var shown=mbFiltered_(), total=((MB_DATA&&MB_DATA.customers)||[]).length;
+  lst.innerHTML=mbRowsHtml_(shown);
+  var cnt=document.getElementById('mb-cnt'); if(cnt)cnt.textContent=shown.length+' / '+total+' 名';
+}
+function mbSearch(){
+  var el=document.getElementById('mb-q'); MB_Q=el?el.value:'';
+  if(MB_IME)return;                       /* 変換確定前は絞り込まない（未確定の読みで0件になるのを防ぐ） */
+  clearTimeout(MB_TMR); MB_TMR=setTimeout(mbRefreshList_,120);
+}
+function mbFilter(k){
+  MB_FILTER=k;
+  var box=document.getElementById('mb-chips');
+  if(box){ Array.prototype.forEach.call(box.querySelectorAll('.chip'),function(el){ el.className='chip'+(el.getAttribute('data-k')===k?' on':''); }); }
+  mbRefreshList_();
+}
 function mbBack(){ if(MB_DATA)mbDrawList(); else renderMembers(); }
 function mbFieldHtml_(f,isEdit,c){
   var v=isEdit?(f.k==='bday'?(c.eBday||''):(c[f.k]!=null?String(c[f.k]):'')):'';
