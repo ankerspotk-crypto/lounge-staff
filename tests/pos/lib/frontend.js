@@ -33,7 +33,10 @@ function makeDoc() {
     els,
     getElementById: id => els[id] || mk(id),
     createElement: () => mk('tmp'),
-    body: mk('body'),
+    body: (function () { const b = mk('body'); const set = new Set();
+      b.classList = { add: c => set.add(c), remove: c => set.delete(c), toggle: (c, on) => (on ? set.add(c) : set.delete(c)),
+                      contains: c => set.has(c), _set: set };
+      return b; })(),
     activeElement: { tagName: 'BODY' }
   };
 }

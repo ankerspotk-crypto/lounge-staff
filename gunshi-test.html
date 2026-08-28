@@ -255,7 +255,7 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
    金額が出ていれば入力済み＝どの卓が打ててどの卓が空かが一目で分かる */
 .seat .custrow{display:flex;align-items:center;gap:6px;}
 .seat .custrow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.seat .bill-btn{flex:0 0 auto;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:7px;
+.seat .bill-btn{flex:0 0 auto;font-size:13px;font-weight:900;padding:9px 14px;border-radius:10px;min-height:38px;letter-spacing:.3px;
   border:1px solid var(--line2);background:var(--panel2);color:var(--sub);cursor:pointer;white-space:nowrap;}
 .seat .bill-btn.on{border-color:#6b5a24;background:#2a2210;color:var(--gold);}
 .seat .bill-btn:active{opacity:.6;}
@@ -502,6 +502,20 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
    flex:1 / overflow-y:auto / min-height:0 の3点セットが無いと**画面外にはみ出して触れなくなる**
    （⑥会計・⑦照合が「動かない」の正体だった）。#homeView と同じ作りに揃えてある。 */
 #billView{flex:1;overflow-y:auto;min-height:0;padding:12px 12px 44px;display:none;-webkit-overflow-scrolling:touch;}
+/* 🧾 伝票ポップアップ＝ホール状況の上に重ねる（ボス指示＝押したらすぐ戻れる）。
+   ⚠️z-indexは**80未満**にすること。伝票の中のモーダル（会計伝票の確認/帰属の選択＝.bm-modal-bg 80 / .bm-modal 81）
+     を必ず上に出すため。ここを80以上にすると「会計伝票が出ない」に化ける。 */
+#bmPopBg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:70;}
+body.bill-pop #bmPopBg{display:block;}
+body.bill-pop #billView{display:flex;flex-direction:column;position:fixed;z-index:71;left:50%;top:50%;
+  transform:translate(-50%,-50%);width:min(1180px,96vw);height:min(92dvh,92vh);padding:0;
+  background:var(--bg);border:1px solid var(--line2);border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.6);overflow:hidden;}
+body.bill-pop #bmWrap{flex:1;overflow-y:auto;min-height:0;padding:12px 12px 20px;-webkit-overflow-scrolling:touch;}
+#bmPopHd{display:none;}
+body.bill-pop #bmPopHd{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line2);flex:0 0 auto;}
+#bmPopHd .bk{font-size:14px;font-weight:900;padding:10px 16px;border-radius:10px;background:#1b2740;border:1px solid #33507e;color:#cfe0ff;}
+#bmPopHd .bk:active{opacity:.6;}
+#bmPopHd .ttl{font-size:14px;font-weight:800;color:var(--gold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bm-wrap{display:grid;grid-template-columns:300px 1fr 1fr;gap:12px;align-items:start;}
 @media(max-width:1200px){.bm-wrap{grid-template-columns:1fr 1fr;}}
 @media(max-width:820px){.bm-wrap{grid-template-columns:1fr;}}
@@ -1462,7 +1476,11 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 <div id="homeView"><div class="hv-wrap" id="hvWrap"></div></div>
 
 <!-- 🧾 伝票管理（自社POS）。ホール状況の組（occupants）を伝票として開き、会計を組み立てる -->
-<div id="billView"><div class="bm-wrap" id="bmWrap"></div></div>
+<div id="bmPopBg" onclick="closeBillPopup()"></div>
+<div id="billView">
+  <div id="bmPopHd"><button class="bk" onclick="closeBillPopup()">◀ ホール状況へ戻る</button><span class="ttl" id="bmPopTtl"></span></div>
+  <div class="bm-wrap" id="bmWrap"></div>
+</div>
 
 <!-- 上部 横長アラート帯 -->
 <div class="alertbar" id="alertbar"></div>
@@ -1525,7 +1543,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28e-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28f-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3251,13 +3269,13 @@ function markMapOverflow_(){
     if(r1) r1.insertAdjacentHTML('beforeend','<span class="mini-p mini-more">+'+hid+'</span>');
   });
 }
-/* 表示モード（マップ/リスト）。端末ごとにlocalStorageで保持 */
-var hallView=localStorage.getItem('gunshi_hall_view')||'map';
-function setHallView(v){ hallView=v; try{localStorage.setItem('gunshi_hall_view',v);}catch(e){} renderHall(); }
-function hallViewTglHtml(){
-  return '<span class="hall-vtgl"><b class="'+(hallView==='map'?'on':'')+'" onclick="setHallView(\'map\')">🗺 マップ</b>'
-       + '<b class="'+(hallView==='list'?'on':'')+'" onclick="setHallView(\'list\')">▦ リスト</b></span>';
-}
+/* ⚠️2026-08-28ボス指示＝**ホール状況はリスト表示だけ**にする（マップ/リストの切替をやめる）。
+   マップの描画関数(mapHtml/mapFloorHtml/mapSeatCell_/SEAT_POS)は**残してある**＝
+   ポータルの予約フォームの席選択が同じ座標(SEAT_POS)を見ており、消すと巻き添えになる。
+   戻したくなったら hallView を 'map' にできる状態のまま、入口だけ塞いでいる。 */
+var hallView='list';
+function setHallView(v){ hallView='list'; renderHall(); }   // 切替は封じた（常にリスト）
+function hallViewTglHtml(){ return ''; }
 // 2F・5Fを横並びで同時表示（リストの.floorsと同じ骨格）
 function mapHtml(){ return '<div class="floors">'+mapFloorHtml('2F')+mapFloorHtml('5F')+'</div>'; }
 function mapFloorHtml(fl){
@@ -3294,8 +3312,7 @@ function renderHall(){
   renderHallReqSum();
   var tgl=document.getElementById('hallViewTgl'); if(tgl) tgl.innerHTML=hallViewTglHtml();
   // マップ＝見取り図（既定）／リスト＝従来のカードグリッド。切替はlocalStorageに端末ごとで保持。
-  setHtml('hallArea', hallView==='map' ? mapHtml() : '<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
-  if(hallView==='map') markMapOverflow_();
+  setHtml('hallArea', '<div class="floors">'+floorHtml('2F')+floorHtml('5F')+'</div>');
 }
 // ホール状況ヘッダーの「📣 リクエスト」サマリ（未対応があればパルス）。タップで本日の全リクエスト一覧。
 function renderHallReqSum(){
@@ -3448,7 +3465,31 @@ function bmPeek_(rowIdx){
 }
 /* ⚠️他端末で打った伝票は、この端末にまだ届いていないことがある（取り込みは非同期）。
    BM.wantに覚えておき、届いた時点で自動的に開く＝「開くを押したのに何も出ない」を防ぐ */
-function openBillFor(rowIdx){ BM.key=String(rowIdx); BM.want=String(rowIdx); setViewMode('bill'); }
+/* 🧾 席の「伝票」ボタンから開く。⚠️2026-08-28ボス指示＝**ポップアップで出してすぐ戻れる**ように。
+   伝票管理タブ(viewMode==='bill')を自分で開いている時は、従来どおりその画面で切り替えるだけ。 */
+function openBillFor(rowIdx){
+  BM.key=String(rowIdx); BM.want=String(rowIdx);
+  if(viewMode==='bill'){ bmRender(); return; }
+  openBillPopup();
+}
+function openBillPopup(){
+  document.body.classList.add('bill-pop');
+  var t=document.getElementById('bmPopTtl');
+  if(t){
+    var b=(typeof bmBills==='function'?bmBills():[]).filter(function(x){return String(x.rowIdx)===String(BM.key);})[0];
+    t.textContent=b?(bmTblLabel_(b.floor,b.table)+'　'+(b.cust||'')+' 様'):'伝票';
+  }
+  bmRender();
+  /* ⚠️共有ポーリング(20秒)はポップアップの間だけ回す＝閉じたら必ず止める（通信を垂れ流さない） */
+  if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmPullStart(); }
+}
+function closeBillPopup(){
+  if(!document.body.classList.contains('bill-pop')) return;
+  document.body.classList.remove('bill-pop');
+  bmPullStop();
+  BM.slip=null; BM.pick=null;        // 開いたままの紙・帰属選びを持ち越さない
+  renderHall();                       // 伝票ボタンの金額表示を最新にする
+}
 // 来店中の席に「次席予約(=後半に入った別の確定予約)」があれば予告する1行。席一覧の接客中/担当不在で共用（マップはmapFlags_の🔜）。
 function nextRsvLine_(s){
   if(!s) return '';
@@ -5023,7 +5064,9 @@ function bmDemo(){ bmLoad(); bmGet('demo'); bmSave(); BM.key='demo'; bmRender();
 /* loadAll(30秒ごと)からの再描画。⚠️入力中(値引・TRUST合計など)は触らない＝打っている途中で
    DOMを張り替えるとフォーカスが飛んで入力が中断する（[[reference_async_stale_guard_trap]]と同種の事故）。 */
 function bmRenderIfIdle(){
-  if(viewMode!=='bill') return;
+  /* ⚠️ポップアップで開いている時も更新対象＝ここを viewMode だけで判定すると
+     ホール状況から開いた伝票が20秒ポーリングでも他端末の入力を拾わない */
+  if(viewMode!=='bill'&&!(document.body&&document.body.classList&&document.body.classList.contains('bill-pop'))) return;
   var ae=document.activeElement, wrap=document.getElementById('bmWrap');
   if(ae&&wrap&&wrap.contains(ae)&&/INPUT|TEXTAREA/.test(ae.tagName)) return;
   bmRender();
