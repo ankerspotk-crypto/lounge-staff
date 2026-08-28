@@ -4719,7 +4719,7 @@ function renderSeatSession(){
   var h='<div class="kv"><span class="k">設定する席</span><span class="v">🪑 '+esc(ss.seatLabel)+'</span></div>';
   h+=ssCustSection();
   if(ss.mode==='picked'||ss.mode==='new'||ss.customer){
-    h+='<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(String(ss.pax)===String(n)?' sel':'')+'" onclick="ssPax(\''+n+'\')">'+n+'名</div>';}).join('')+'</div>';
+    h+='<div class="flabel">人数</div>'+paxFieldHtml_(ss.pax,'ss-pax-num','ssPaxChip','ssPaxOther','ssPaxNum');
     h+='<div class="flabel">担当キャスト（任意）</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip cast'+(ss.tantou.indexOf(c)>=0?' sel':'')+'" onclick="ssTantou(this,\''+jsStr(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>';
     h+='<div class="savebtn" onclick="submitSeatSession()">この席に設定する</div>';
   }
@@ -4792,6 +4792,45 @@ function ssPickCust(name,member,tantou){
   renderSeatSession();
 }
 function ssPax(n){ seatSel.pax=n; renderSeatSession(); }
+/* ── 人数の入力（予約・席セッション共用）───────────────────────────────
+ * 1〜10名はチップ、11名以上は数値入力（団体・宴会も登録できる）。
+ * ⚠️席の定員は超えてよい＝ここではブロックしない（超過は確認して通す）。
+ * ⚠️数値入力中はフォームを再描画しない＝入力中の欄とフォーカスを飛ばさないため。 */
+function paxFieldHtml_(cur,inpId,fnChip,fnOther,fnNum){
+  var n=parseInt(cur,10)||1, big=n>10;
+  var h='<div class="chips">';
+  for(var v=1;v<=10;v++) h+='<div class="chip'+(!big&&n===v?' sel':'')+'" onclick="'+fnChip+'(this,'+v+')">'+v+'名</div>';
+  h+='<div class="chip'+(big?' sel':'')+'" onclick="'+fnOther+'(this)">'+(10+1)+'名以上</div>'
+   +'<input id="'+inpId+'" class="finput" type="number" inputmode="numeric" min="1" max="99" placeholder="人数を入力" value="'+(big?n:'')+'" onfocus="this.select()" oninput="'+fnNum+'(this.value)" style="width:124px;margin-left:6px'+(big?'':';display:none')+'">'
+   +'</div>';
+  return h;
+}
+/* 「N名以上」チップ＝チップの選択を移して数値入力を出す（再描画しない）。戻り値=採用した人数 */
+function paxOtherPick_(el,inpId){
+  var w=el.parentElement; w.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel');
+  var inp=document.getElementById(inpId); if(!inp) return 11;
+  inp.style.display='';
+  /* ⚠️空欄で出す＝既定の"11"を入れて置くと、タップ後にそのまま打った数字が後ろへ繋がって
+   *   11+4=「114名」に化ける（実ブラウザで踏んだ）。値が既に有る時は選択状態にして上書きさせる。 */
+  var v=parseInt(inp.value,10);
+  if(v>0){ inp.focus(); inp.select(); return Math.min(v,99); }
+  inp.value=''; inp.focus(); return 11;
+}
+function paxNumVal_(v){ var n=parseInt(v,10); return (n>0)?Math.min(n,99):0; }
+/* 同席会員の人数プルダウン（1〜10名。既存が超えていればその値も残す） */
+function paxOptsHtml_(cur){
+  var n=parseInt(cur,10)||1, mx=Math.max(10,n), h='';
+  for(var v=1;v<=mx;v++) h+='<option'+(v===n?' selected':'')+'>'+v+'名</option>';
+  return h;
+}
+/* 席セッション（来店中の席に人数を設定）*/
+function ssPaxChip(el,v){ ssPax(v); }
+function ssPaxOther(el){ seatSel.pax=paxOtherPick_(el,'ss-pax-num'); }
+function ssPaxNum(v){ var n=paxNumVal_(v); if(n) seatSel.pax=n; }
+/* 予約フォーム（追加・編集）*/
+function afPaxChip(el,v){ var i=document.getElementById('af-pax-num'); if(i){i.style.display='none';i.value='';} afToggle('pax',el,v,1); }
+function afPaxOther(el){ addSel.pax=paxOtherPick_(el,'af-pax-num'); }
+function afPaxNum(v){ var n=paxNumVal_(v); if(n) addSel.pax=n; }
 function ssTantou(el,name){ el.classList.toggle('sel'); var i=seatSel.tantou.indexOf(name); if(i>=0)seatSel.tantou.splice(i,1); else seatSel.tantou.push(name); }
 function submitSeatSession(){
   var ss=seatSel; ssSyncName();
@@ -6890,7 +6929,7 @@ function addFormHtml(isEdit){
     +afSubSection()
     +'<div class="flabel">時間</div><div class="chips">'+times.map(function(t){return '<div class="chip'+(st===t?' sel':'')+'" onclick="afToggle(\'time\',this,\''+t+'\',1)">'+t+'</div>';}).join('')+'</div>'
     +'<div class="flabel">チェック予定（退店予定・任意）</div><input type="time" id="af-checktime" class="finput" value="'+esc(addSel.checkTime||'')+'" style="max-width:170px">'
-    +'<div class="flabel">人数</div><div class="chips">'+[1,2,3,4,5,'6+'].map(function(n){return '<div class="chip'+(sp===String(n)?' sel':'')+'" onclick="afToggle(\'pax\',this,\''+n+'\',1)">'+n+'名</div>';}).join('')+'</div>'
+    +'<div class="flabel">人数</div>'+paxFieldHtml_(sp,'af-pax-num','afPaxChip','afPaxOther','afPaxNum')
     +'<div class="flabel">席（複数選択可）</div><div style="font-size:10px;color:#5a6a90;margin-bottom:4px">2F</div><div class="chips">'+TABLES_2F.map(function(t){return '<div class="chip'+(tb.indexOf('2F '+t)>=0?' sel':'')+'" onclick="afToggle(\'tables\',this,\'2F '+t+'\')">'+t+'</div>';}).join('')+'</div>'
     +'<div style="font-size:10px;color:#5a6a90;margin:8px 0 4px">5F</div><div class="chips">'+TABLES_5F.map(function(t){return '<div class="chip'+(tb.indexOf('5F '+t)>=0?' sel':'')+'" onclick="afToggle(\'tables\',this,\'5F '+t+'\')">'+t+'</div>';}).join('')+'</div>'
     +'<div class="flabel">担当キャスト</div><div class="chips">'+CASTS.map(function(c){return '<div class="chip cast'+(tn.indexOf(c)>=0?' sel':'')+'" onclick="afToggle(\'tantou\',this,\''+esc(c)+'\')">'+esc(c)+'</div>';}).join('')+'</div>'
@@ -6955,7 +6994,7 @@ function afSubSection(){
   if(subs.length){
     h+='<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px">';
     subs.forEach(function(s,i){
-      var paxOpts=[1,2,3,4,5].map(function(n){return '<option'+(n===(s.pax||1)?' selected':'')+'>'+n+'名</option>';}).join('');
+      var paxOpts=paxOptsHtml_(s.pax||1);
       var tnOpts='<option value="">担当なし</option>'+CASTS.map(function(c){return '<option value="'+esc(c)+'"'+(c===(s.tantouCast||'')?' selected':'')+'>'+esc(c)+'</option>';}).join('');
       h+='<div class="af-picked" style="flex-direction:column;align-items:stretch;gap:6px">'
         +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><span class="cc-nm">'+esc(s.name||'')+' 様</span> '+(s.memberId?'<span class="cc-mem">'+esc(s.memberId)+'</span>':'')+'</div><button class="af-change" onclick="afSubRemove('+i+')">削除</button></div>'

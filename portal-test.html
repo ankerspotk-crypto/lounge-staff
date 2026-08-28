@@ -6591,8 +6591,10 @@ function renderYoyakuAdd() {
     + '<div class="yform-label">人数</div>'
     + (function(){
         var curPax = yoyakuRsvPax || 1;
-        var opts = [1,2,3,4,5].map(function(n){ return '<option'+(n===curPax?' selected':'')+'>'+n+'名</option>'; }).join('');
-        opts += '<option'+(curPax>5?' selected':'')+'>6名+</option>';
+        /* 1〜20名。団体もそのままの人数で登録できる（旧「6名+」は6名に丸めていた）。
+           既存の予約が20名を超えていたらその値まで伸ばす＝選択が消えないように。 */
+        var opts = '', maxPax = Math.max(20, curPax);
+        for (var pn = 1; pn <= maxPax; pn++) opts += '<option'+(pn===curPax?' selected':'')+'>'+pn+'名</option>';
         /* 人数を変えたら見取り図の「定員が足りない席」ヒントだけ塗り替える（再描画はしない＝入力中の欄が飛ぶ） */
         return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px" onchange="yoyakuMapCapHint_()">'+opts+'</select>';
       })()
@@ -6818,7 +6820,9 @@ function renderYoyakuSubs() {
   if (yoyakuRsvSubs.length) {
     h += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">';
     yoyakuRsvSubs.forEach(function(s, i) {
-      var paxOpts = [1,2,3,4,5].map(function(n){ return '<option'+(n===(s.pax||1)?' selected':'')+'>'+n+'名</option>'; }).join('');
+      var paxOpts = (function(){ var sp = parseInt(s.pax,10)||1, mx = Math.max(10, sp), o = '';
+        for (var pn = 1; pn <= mx; pn++) o += '<option'+(pn===sp?' selected':'')+'>'+pn+'名</option>';
+        return o; })();
       var tantouOpts = '<option value="">担当なし</option>' + yoyakuCastList.map(function(c){ return '<option value="'+esc(c)+'"'+(c===(s.tantouCast||'')?' selected':'')+'>'+esc(c)+'</option>'; }).join('');
       h += '<div style="background:#0a1428;border:1px solid #3a2e18;border-radius:8px;padding:8px 10px">'
         + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">'
