@@ -26,7 +26,7 @@ function makeDoc() {
   const els = {};
   const mk = id => (els[id] = { id, innerHTML: '', textContent: '', value: '', style: {}, disabled: false,
                                 classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-                                setAttribute() {}, removeAttribute() {}, focus() {}, scrollIntoView() {},
+                                setAttribute() {}, removeAttribute() {}, focus() {}, scrollIntoView() {}, contains: () => false,
                                 querySelector: () => null, querySelectorAll: () => [], parentElement: null,
                                 appendChild() {}, addEventListener() {} });
   return {
@@ -85,6 +85,9 @@ function loadFront(opts) {
     WORKING: opts.working || [],
     STAFF: opts.staff || [],
     showSheet: () => {}, closeSheet: () => {}, renderAll: () => {},
+    viewMode: opts.viewMode || 'bill', setViewMode: () => {},
+    openReceipt: () => {}, openSeikyu: () => {}, rcptCalc: () => {}, renderMenu: () => {},
+    SK_FROM_POS: null, SK_ITEMS: [], SK_NOTE: '', SK_NOTE_TOUCHED: false, ccPosLoad: () => {},
     openReceiptFor: () => {}, getStockList: () => ({ ok: true, list: [] }),
     BM_PRINTER: null,
     RCPT_ISSUER: opts.issuer || { name: 'ラウンジいえやす', addr: '愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel: '', invoiceNo: 'T4180302027983' },

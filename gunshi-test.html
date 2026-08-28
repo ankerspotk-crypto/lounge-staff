@@ -1525,7 +1525,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28a-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28b-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -4693,6 +4693,10 @@ function bmSave(){
   bmPushSoon();
 }
 function bmPushSoon(){ if(BM_PUSH_T) clearTimeout(BM_PUSH_T); BM_PUSH_T=setTimeout(bmPushNow,1200); }
+/* 通信が戻るまで自分で送り直す。⚠️打鍵のまとめ保存(1.2秒)とは別のタイマー＝
+   打っている最中の保存を再送で潰さないため。 */
+var BM_RETRY_T=null;
+function bmRetrySoon(){ if(BM_RETRY_T) return; BM_RETRY_T=setTimeout(function(){ BM_RETRY_T=null; bmPushNow(); },15000); }
 function bmPushNow(){
   BM_PUSH_T=null;
   var keys=Object.keys(BM_PUSH_Q); BM_PUSH_Q={};
@@ -4702,7 +4706,15 @@ function bmPushNow(){
     var d=BM.draft[k]; if(!d) return;
     gsr('posSaveBill',bmDateKey(),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
       .then(function(r){ if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); } })
-      .catch(function(e){ BM_SYNC_ERR='共有できていません（この端末には残っています）'; bmRenderIfIdle(); });
+      .catch(function(e){
+        /* ⚠️2026-08-28追加＝失敗したキーを**捨てていた**。次に何か打つまで再送されず、
+           サーバーに一度も載らないまま会計されると**閉店ゲートがその伝票を知らない**
+           （ゲートはサーバーの下書きを見る）＝未会計を素通りさせる穴になっていた。
+           ⭐キューに戻して自分で再送する。間隔は15秒＝GASの床1.9秒とWAFを考えて連投しない。 */
+        BM_PUSH_Q[k]=1;
+        BM_SYNC_ERR='共有できていません（この端末には残っています・再送します）';
+        bmRetrySoon(); bmRenderIfIdle();
+      });
   });
 }
 /* 他端末の伝票を取り込む。⚠️入力中でも下書き自体は差し替わる（描画はbmRenderIfIdleが守る） */
@@ -5108,7 +5120,11 @@ function bmEditorHtml(){
 ============================================================================ */
 var SK_FROM_POS=null;      // {key} 請求書画面をPOSから開いた印
 function bmSeikyuHtml(d,c){
-  if(d.payMethod!=='invoice') return '';
+  /* ⚠️2026-08-28修正＝`payMethod==='invoice'`で判定していたので、**分割で一部だけ売掛**のとき
+     このブロックが出なかった。backendの閉店ゲートは`pay.credit>0`で請求依頼を要求する＝
+     「ゲートは要求するのに、依頼を出すボタンが画面に無い」で閉店できなくなる。
+     ⭐判定は必ず**金額(pay.credit)**で行う。payMethodは代表を覚えているだけの飾り。 */
+  if(!(Number((d.pay||{}).credit)>0)) return '';
   if(d.seikyuRequested){
     return '<div class="bm-sum" style="margin-top:8px"><div class="r"><span style="color:var(--green)">✅ 請求書の発行依頼 済み</span>'
       +'<b style="font-size:11px;color:var(--sub)">'+esc(d.seikyuRequested.ts||'')+'</b></div></div>';
