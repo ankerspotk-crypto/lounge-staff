@@ -520,7 +520,15 @@ body.bill-pop #bmPopHd{display:flex;align-items:center;gap:12px;padding:10px 12p
 /* ⚠️1200pxで切ると iPad(実効1180px) が2カラムに落ちて⑦利用明細と⑧会計が下へ回る（2026-08-28 ボス報告）。
    1180で3カラム=300/416/416 が収まることを実測して 1100px へ下げた。
    ⛔1200に戻すな。⚠️小さい端末(1024x768)は従来どおり2カラムのまま＝ここを跨がせない。 */
-@media(max-width:1100px){.bm-wrap{grid-template-columns:1fr 1fr;}}
+@media(max-width:1100px){
+  .bm-wrap{grid-template-columns:1fr 1fr;}
+  /* ⚠️2カラムに落ちた時、3つ目の列(⑦明細・⑧会計)を素直に流すと「2行目の左」に回り、
+     その上に左列の高さぶんの空白ができる（実測1024px: 左496 / 右1312 → 3つ目は900px下）。
+     左＝①伝票+⑦明細、右＝②〜⑥注文パネル、と明示的に振って空白を潰す。 */
+  .bm-wrap>:nth-child(1){grid-column:1;grid-row:1;}
+  .bm-wrap>:nth-child(2){grid-column:2;grid-row:1 / span 2;}
+  .bm-wrap>:nth-child(3){grid-column:1;grid-row:2;}
+}
 @media(max-width:820px){.bm-wrap{grid-template-columns:1fr;}}
 .bm-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;}
 .bm-card h3{font-size:11.5px;font-weight:800;color:var(--accent);letter-spacing:.4px;margin-bottom:9px;display:flex;align-items:center;gap:7px;}
