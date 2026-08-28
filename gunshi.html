@@ -1611,7 +1611,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28f';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28g';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -6411,7 +6411,12 @@ function bmSetKind(k){ BM.kind=k; bmRender(); }
 function bmSetAttr(a){ BM.attr=a; bmRender(); }
 /* 🔥品をタップ→**すぐカートに入れず**「誰に付けるか」を選ばせる（ボス依頼）。
    帰属を先に選ぶ方式だと、切り替え忘れで**別のキャストの売上に付く事故**が起きるため。
-   ⚠️複数選べる＝1本を複数キャストで折半できる（TRUSTは1行1帰属なのでこれができない）。 */
+   ⚠️複数選べる＝1本を複数キャストで折半できる（TRUSTは1行1帰属なのでこれができない）。
+   ⭐ただし🍹キャストドリンクだけは折半しない（ボス指示 2026-08-28）＝各自が1杯もらう物なので
+     **選んだ人それぞれに1杯ずつ**入れる。⚠️お客様の請求は人数ぶん増える（従来は1杯を分けていた）。 */
+function bmIsCastDrink_(genre){ return String(genre||'')==='キャストドリンク'; }
+/* いま選んでいる内容が「人数ぶん」になるか（＝キャストドリンクを2人以上に付ける時） */
+function bmPickEach_(pk){ return !!(pk && bmIsCastDrink_(pk.genre) && (pk.attrs||[]).length>1); }
 function bmPick(nm,pr){ if(bmLockedAlert_()) return;
   var it=bmItem_(nm);
   BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:'') };
@@ -6433,10 +6438,15 @@ function bmPickConfirm(){ if(bmLockedAlert_()) return;
      そのまま確定すると**0円の注文行**が静かに入る＝売上が欠ける。単価を入れさせる。
      （無料で出す物は⑤🥂ウェルカムに入っている＝有料側に0円は要らない） */
   if(!(Number(pk.price)>0)){ alert('単価を入れてください。\n（この品はマスタに価格が入っていません）'); return; }
-  var d=bmGet(BM.key), key=pk.attrs.join('・'), hit=-1;
-  d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
-  if(hit>=0) d.orders[hit].qty+=pk.qty;
-  else d.orders.push({name:pk.name,genre:pk.genre,price:pk.price,qty:pk.qty,attrs:pk.attrs.slice()});
+  var d=bmGet(BM.key);
+  /* キャストドリンク＝1人1行（それぞれに1杯）／それ以外＝従来どおり1行に複数帰属（折半） */
+  var groups = bmPickEach_(pk) ? pk.attrs.map(function(a){ return [a]; }) : [pk.attrs.slice()];
+  groups.forEach(function(at){
+    var key=at.join('・'), hit=-1;
+    d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
+    if(hit>=0) d.orders[hit].qty+=pk.qty;
+    else d.orders.push({name:pk.name,genre:pk.genre,price:pk.price,qty:pk.qty,attrs:at});
+  });
   BM.pick=null; bmSave(); bmRender();
 }
 /* 旧形式(attr単一文字列)の下書きとの互換。表示・突合はこの関数を通す */
@@ -6454,8 +6464,12 @@ function bmPickHtml(){
     +'<button class="bm-btn" onclick="bmPickQty(-1)">−</button>'
     +'<span style="font-weight:800;min-width:26px;text-align:center;font-size:15px">'+pk.qty+'</span>'
     +'<button class="bm-btn" onclick="bmPickQty(1)">＋</button>'
-    +'<span style="margin-left:auto;color:var(--gold);font-weight:800;font-size:16px">'+bmYen(pk.price*pk.qty)+'</span></div>'
-    +'<div class="bm-note" style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:700">誰に付けますか？（複数選ぶと折半）</div>'
+    +'<span style="margin-left:auto;color:var(--gold);font-weight:800;font-size:16px">'+bmYen(pk.price*pk.qty*(bmPickEach_(pk)?pk.attrs.length:1))
+      +(bmPickEach_(pk)?'<span style="font-size:11px;color:var(--sub);font-weight:700">　'+pk.attrs.length+'人分</span>':'')+'</span></div>'
+    +'<div class="bm-note" style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:700">'
+      +(bmIsCastDrink_(pk.genre)
+        ? '誰に付けますか？（🍹キャストドリンク＝選んだ人それぞれに1杯ずつ入ります）'
+        : '誰に付けますか？（複数選ぶと折半）')+'</div>'
     +'<div class="chips" style="margin-top:5px">'
     +'<div class="chip'+(pk.attrs.indexOf('お客様')>=0?' sel':'')+'" onclick="bmPickAttr(\'お客様\')">お客様</div>'
     +'</div>'
