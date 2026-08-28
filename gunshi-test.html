@@ -1543,7 +1543,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28o-test';
+var BUILD='2026-08-28p-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -4904,8 +4904,10 @@ function bmGet(key,defPax){
   }
   if(!d.guests||!d.guests.length) d.guests=bmNewGuests_(defPax);
   if(!d.casts)d.casts={}; if(!d.orders)d.orders=[]; if(!d.pay)d.pay={cash:0,card:0,credit:0};
+  if(d.pay.next==null)d.pay.next=0;
   if(!d.welcome)d.welcome=[];   // 🥂ウェルカム（無料）。古い下書きにも足す
   bmSeedTantou_(key,d);
+  bmSeedCarry_(key,d);
   return d;
 }
 /* お客様に紐づく担当キャストを**伝票の担当に既定で乗せる**（ボス指示）。
@@ -4929,6 +4931,34 @@ function bmSeedTantou_(key,d){
 }
 /* ⚠️席名にフロアが入っていることがある（"2F BOX1"）＝素直に連結すると「2F 2F BOX1」になる。
    伝票一覧・伝票の印字・閉店ゲートで同じ崩れを3回踏んだので**1箇所に寄せる**。 */
+/* 📅前回の未収を伝票へ自動で乗せる（ボス指示＝次回の伝票に自動的に前回分が追加される）。
+   ⚠️出所は**顧客の「次回対応メモ」**に書いた【次回精算】タグ。予約行に nextMemo として届く。
+   ⚠️担当のシードと同じで**1回だけ**（d.carrySeeded）＝黒服が外したら戻らない。
+   ⚠️メモは人が手で編集する場所＝タグが壊れていたら金額を拾わない（黙って0にしない）。 */
+function bmCarryParse_(memo){
+  var m=String(memo||'').match(/【次回精算】\s*¥?\s*([0-9,]+)/);
+  if(!m) return 0;
+  var n=Number(String(m[1]).replace(/,/g,''))||0;
+  return n>0?n:0;
+}
+function bmRsvOf_(key){
+  var L=(typeof RSV!=='undefined'&&RSV)?RSV:[];
+  for(var i=0;i<L.length;i++) if(String(L[i].rowIdx)===String(key)) return L[i];
+  return null;
+}
+function bmSeedCarry_(key,d){
+  if(d.carrySeeded) return;
+  var r=bmRsvOf_(key); if(!r) return;              // 予約行がまだ届いていない＝次の描画で入る
+  d.carrySeeded=1;
+  var amt=bmCarryParse_(r.nextMemo);
+  if(amt>0) d.carry={ amount:amt, memo:String(r.nextMemo||'') };
+}
+function bmCarryDrop(){
+  if(bmLockedAlert_()) return;
+  var d=bmGet(BM.key); if(!d.carry) return;
+  if(!confirm('前回のお預かり '+bmYen(d.carry.amount)+' をこの伝票から外します。\n（顧客メモの記録は残ります＝次回また出ます）')) return;
+  delete d.carry; bmSave(); bmRender();
+}
 function bmTblLabel_(floor,table){
   var t=String(table||''), f=String(floor||'');
   return ((f&&t.indexOf(f)!==0)?(f+' '+t):t).trim();
@@ -5007,8 +5037,18 @@ function bmCalc(d){
   /* ⚠️ボス確定(2026-08-08)＝**値引・値増は税サの後**。税サは値引前の小計に掛ける */
   var raw=base+tax-(Number(d.discount)||0)+(Number(d.surcharge)||0);
   var total=BM_FEE.roundUnit>0?Math.ceil(raw/BM_FEE.roundUnit)*BM_FEE.roundUnit:raw;
-  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0);
-  return {setSum:setSum,tc:tc,yc:yc,dc:dc,ordSum:ordSum,base:base,tax:tax,raw:raw,total:total,paid:paid,unpaid:total-paid};
+  /* ⚠️2026-08-28ボス指示＝**次回来店時払い**。
+     `carry`＝前回の未収。**請求(due)にだけ足し、売上(total)には足さない**。
+     前回の会計で total として既に売上計上しているので、次回また売上に乗せると**二重計上**になる。
+     次回にやるのは「回収」＝お客様が払う額が増えるだけ。
+     `pay.next`＝今回の請求のうち次回に回す額。これも受け取ったものとして unpaid を埋める
+     （締められないと現場が回らない。回収漏れは顧客メモと次回の自動投入で防ぐ）。 */
+  var carry=Math.max(0,Number(d.carry&&d.carry.amount)||0);
+  var next=Math.max(0,Number(d.pay.next)||0);
+  var due=total+carry;
+  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0)+next;
+  return {setSum:setSum,tc:tc,yc:yc,dc:dc,ordSum:ordSum,base:base,tax:tax,raw:raw,total:total,
+          carry:carry,due:due,next:next,paid:paid,unpaid:due-paid};
 }
 
 function bmRender(){
@@ -5458,6 +5498,19 @@ function bmSlipLines_(d,c,bill,mode){
      ここを48桁のまま組むと実機で折り返す。 */
   L.push({t:bmPadR_('合計',6)+bmPadL_(bmYen(c.total),10),a:'l',big:2});
   L.push({t:bmPadL_('（お一人様 '+bmYen(Math.round(c.total/pax))+'）',BM_SLIP_COLS),a:'l'});
+  /* 📅前回のお預かりは**合計の外**に出す＝今回の売上と混ぜない。紙でもお客様に見える形にする */
+  if(c.carry>0){
+    L.push({t:'',a:'l'});
+    L.push({t:bmPadR_('前回のお預かり',BM_SLIP_COLS-14)+bmPadL_(bmYen(c.carry),14),a:'l'});
+    /* ⚠️3倍角は半角16桁しか入らない＝「ご請求合計」(10桁)＋金額(10桁)で溢れる。
+       大きい行のラベルは「請求」(4桁)にして、説明は下の通常サイズの行に出す。 */
+    L.push({t:bmPadR_('請求',6)+bmPadL_(bmYen(c.due),10),a:'l',big:2});
+    L.push({t:bmPadL_('（前回のお預かりを含むご請求合計）',BM_SLIP_COLS),a:'l'});
+  }
+  if(c.next>0){
+    L.push({t:'',a:'l'});
+    L.push({t:bmPadR_('次回来店時のお支払い',BM_SLIP_COLS-14)+bmPadL_(bmYen(c.next),14),a:'l'});
+  }
   L.push({t:'',a:'l'});
   /* ⚠️ボス指示＝**未領収金は出さない**（合計が分かれば足りる）。
      会計伝票（会計前）は支払欄も出さない＝まだ払っていないため。控え2枚には出す。
@@ -5539,10 +5592,12 @@ function bmPayMethod(k){
   if(bmLockedAlert_()) return;
   var d=bmGet(BM.key), c=bmCalc(d);
   d.payMethod=k;
-  d.pay={cash:0,card:0,credit:0};
-  if(k==='cash') d.pay.cash=c.total;
-  else if(k==='card') d.pay.card=c.total;
-  else d.pay.credit=c.total;          // 請求書払い＝売掛
+  d.pay={cash:0,card:0,credit:0,next:0};
+  /* ⚠️入れるのは**請求額(due)**＝前回の未収も含めた「お客様が払う額」。totalだと前回分が埋まらない */
+  if(k==='cash') d.pay.cash=c.due;
+  else if(k==='card') d.pay.card=c.due;
+  else if(k==='next') d.pay.next=c.due;   // 📅次回来店時払い＝今回は受け取らない
+  else d.pay.credit=c.due;                // 請求書払い＝売掛
   bmSave(); bmRender();
 }
 /* 領収書＝既存の発行画面を開いて、宛名と金額を入れておく。
@@ -5615,13 +5670,48 @@ function bmCloseHtml(d,c){
 }
 /* ⚠️送信中フラグ。会計ボタンは**必ず連打される**（反応が無いともう一度押す）。
    backendは二重会計を弾くが、弾いたエラーが客前で出るのは事故に見える＝手前で止める。 */
+/* ============================================================================
+   📅 次回来店時払いを**顧客の「次回対応メモ」**に残す（ボス指示＝回収漏れをなくす）
+   ----------------------------------------------------------------------------
+   ■ メモは予約一覧に📌として出る＝次に来た時に黒服の目に必ず入る。
+     さらに伝票を開くと bmSeedCarry_ が金額を拾って自動で請求に乗せる。
+   ⚠️`kioskSaveNextVisitMemo` は**上書き**＝既存メモを読んで書き戻すこと（消すと事故）。
+   ⚠️回収し終わったら**古いタグを必ず消す**。残すと次回また請求してしまう。
+   ⚠️タグは人が手で編集できる場所に置く＝壊れていたら金額を拾わない（黙って0にしない）。
+============================================================================ */
+function bmNextTag_(amount,dateKey,where){
+  return '【次回精算】¥'+(Number(amount)||0).toLocaleString('ja-JP')+'（'+(dateKey||'')+' '+(where||'')+'）';
+}
+function bmSaveNextMemo_(key,d,c,bill){
+  try{
+    var r=bmRsvOf_(key)||{};
+    var no=String((bill&&bill.member)||r.mem||'').trim();
+    var nm=String((bill&&bill.cust)||r.cust||'').trim();
+    if(!no&&!nm) return;                                   // 誰の記録か決まらない＝書かない
+    var cur=String(r.nextMemo||(d.carry&&d.carry.memo)||'');
+    /* 古い【次回精算】は消す＝回収済みを残すと次回また請求する */
+    var base=cur.replace(/【次回精算】[^\n]*/g,'').replace(/\n{2,}/g,'\n').trim();
+    var memo=base;
+    if(c.next>0){
+      var where=String((d._table||(bill&&bmTblLabel_(bill.floor,bill.table))||'')).trim();
+      memo=(base?base+'\n':'')+bmNextTag_(c.next,bmDateKey(),where);
+    }
+    if(memo===cur) return;
+    gsr('kioskSaveNextVisitMemo',no,nm,memo).then(function(res){
+      if(res&&res.ok){
+        if(r) r.nextMemo=memo;                             // 手元の予約行にも反映（すぐ📌に出る）
+        if(typeof toast==='function') toast(c.next>0?'📌 次回精算をお客様のメモに記録しました':'📌 前回のお預かりを回収済みにしました');
+      }else if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）');
+    }).catch(function(){ if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）'); });
+  }catch(e){}
+}
 var BM_CLOSING=false;
 function bmClose(){
   if(BM_CLOSING) return;
   var d=bmGet(BM.key),c=bmCalc(d);
   if(bmClosed_(d)) return;
-  if(c.total<=0){ alert('金額が0円です。'); return; }
-  if(c.unpaid>0){ alert('お預りが'+bmYen(c.unpaid)+'不足しています。\n現金／カード／売掛で合計'+bmYen(c.total)+'を埋めてください。'); return; }
+  if(c.due<=0){ alert('金額が0円です。'); return; }
+  if(c.unpaid>0){ alert('お預りが'+bmYen(c.unpaid)+'不足しています。\n現金／カード／売掛／次回来店時で'+bmYen(c.due)+'を埋めてください。'); return; }
   if(BM.key==='demo'){ alert('🧪お試し伝票は会計できません（検算用）。'); return; }
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
   if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
@@ -5634,8 +5724,15 @@ function bmClose(){
             base:c.base, tax:c.tax, total:c.total,
             /* ⚠️現金は**お預り**と**売上に充当した額**を分けて渡す。混ぜると現金売上の集計が釣り銭ぶん過大になる */
             cash:Number(d.pay.cash)||0, card:Number(d.pay.card)||0, credit:Number(d.pay.credit)||0,
-            cashApplied:Math.max(0,c.total-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)),
-            change:Math.max(0,-c.unpaid) };
+            /* ⚠️現金列は「**今回の売上**に充当した現金」。前回のお預かり(carry)の回収分も
+               次回に回した分(next)も入れない＝現金売上の集計が狂う。
+               お釣り＝受け取った現金 −（現金で払うべき額＝請求 − カード − 売掛 − 次回）。 */
+            cashApplied:Math.max(0,Math.min(Number(d.pay.cash)||0,
+                          c.total-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)-c.next)),
+            change:Math.max(0,(Number(d.pay.cash)||0)-(c.due-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)-c.next)),
+            /* backendは今この2つを読まない（列が無い）＝無視される。下書きJSON(POS_伝票)には残るので
+               「合計 −（現金+カード+売掛）＝次回来店時払い」で後から追える。列を足すのは次の段。 */
+            carry:c.carry, nextPay:c.next };
   /* ⚠️`bmRender()`を挟むと`bmLoad()`が下書きを**作り直す**＝ここで掴んでいる`d`は死ぬ。
      成功後は必ずキーから取り直すこと（これで一度「会計済みが記録されない」を踏んだ） */
   var key=String(BM.key);
@@ -5654,6 +5751,9 @@ function bmClose(){
         delete dd.seikyuRequested;
         alert('金額が変わっています（請求書は '+bmYen(dd.closed.total)+'）。\n請求書の発行依頼を出し直してください。');
       }
+      /* 📅次回来店時払い／前回のお預かりの回収を、お客様のメモに反映する（回収漏れ防止） */
+      if(c.next>0||dd.carry) bmSaveNextMemo_(key,dd,c,b);
+      if(dd.carry) delete dd.carry;      // 回収したので伝票からは落とす（記録は会計行と控えに残る）
       BM.key=key; bmSave(); bmRender();
       bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
     })
@@ -5831,21 +5931,31 @@ function bmDetailHtml(){
     /* 値引・値増は税サの**後**（ボス確定）。行の並びも計算順どおりに置く */
     +((d.discount||0)?bmRow('値引',-(d.discount||0)):'')+((d.surcharge||0)?bmRow('値増',d.surcharge||0):'')
     +(c.total!==c.raw?'<div class="r mut"><span>丸め前</span><b>'+bmYen(c.raw)+'</b></div>':'')
-    +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div></div>'
+    +'<div class="r big"><span>合計</span><b id="bmGrand">'+bmYen(c.total)+'</b></div>'
+    /* 📅前回の未収は**売上ではない**＝合計の下に別立てで足す（二重計上を避ける） */
+    +(c.carry>0?'<div class="r" style="margin-top:4px"><span style="color:#ffcf7a">📅 前回のお預かり</span>'
+        +'<b style="color:#ffcf7a">'+bmYen(c.carry)+' <button class="bm-btn dng sm" style="margin-left:6px" onclick="bmCarryDrop()">外す</button></b></div>'
+      +'<div class="r big"><span>ご請求合計</span><b>'+bmYen(c.due)+'</b></div>':'')
+    +'</div>'
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">8</span> 会計（支払）</h3>'
     /* ⚠️まず**支払方法**を選ばせる（ボスの流れ＝伝票を見せる→方法→決済）。
        タップで合計を丸ごとその方法に入れる＝打ち間違いが減る。分割は下の欄で手入力 */
     +'<div class="bm-row"><span class="lb">方法</span><div class="chips" style="margin:0">'
-    +['cash','card','invoice'].map(function(k){
-        var lb={cash:'💴 現金',card:'💳 カード',invoice:'🧾 請求書払い'}[k];
+    +['cash','card','invoice','next'].map(function(k){
+        var lb={cash:'💴 現金',card:'💳 カード',invoice:'🧾 請求書払い',next:'📅 次回来店時'}[k];
         return '<div class="chip'+(d.payMethod===k?' sel':'')+'" onclick="bmPayMethod(\''+k+'\')">'+lb+'</div>';
       }).join('')+'</div></div>'
     +(d.payMethod==='invoice'?'<div class="bm-note">請求書払い＝売掛として記録します。請求書の発行はコンソールの請求書管理から。</div>':'')
+    +(d.payMethod==='next'?'<div class="bm-warn" style="margin:6px 0">📅 <b>次回来店時のお支払い</b>です。会計は締められます。<div style="margin-top:3px">会計と同時に<b>お客様の「次回対応メモ」に記録</b>し、次回ご来店の伝票に自動で乗せます。</div></div>':'')
     +'<div class="bm-row"><span class="lb">現金</span><input type="number" class="bm-in" value="'+(d.pay.cash||0)+'" oninput="bmPay(\'cash\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">カード</span><input type="number" class="bm-in" value="'+(d.pay.card||0)+'" oninput="bmPay(\'card\',this.value)"></div>'
     +'<div class="bm-row"><span class="lb">売掛</span><input type="number" class="bm-in" value="'+(d.pay.credit||0)+'" oninput="bmPay(\'credit\',this.value)"></div>'
+    +'<div class="bm-row"><span class="lb">次回来店時</span><input type="number" class="bm-in" value="'+(d.pay.next||0)+'" oninput="bmPay(\'next\',this.value)"></div>'
     +'<div class="bm-row"><button class="bm-btn sm" onclick="bmFillCash()">現金に全額</button></div>'
+    +(c.carry>0?'<div class="bm-sum" style="margin-top:6px"><div class="r"><span>今回のご利用</span><b>'+bmYen(c.total)+'</b></div>'
+      +'<div class="r"><span style="color:#ffcf7a">📅 前回のお預かり</span><b style="color:#ffcf7a">'+bmYen(c.carry)+'</b></div>'
+      +'<div class="r big"><span>ご請求合計</span><b>'+bmYen(c.due)+'</b></div></div>':'')
     +'<div class="bm-sum">'+bmRow('お預り合計',c.paid,'bmPaid')
     +'<div class="r big"><span>未領収金</span><b id="bmUnpaid" style="color:'+(c.unpaid===0?'var(--green)':'var(--red)')+'">'+bmYen(c.unpaid)+'</b></div></div>'
     +bmCloseHtml(d,c)
@@ -6026,7 +6136,7 @@ function bmField(k,v){
 /* ⚠️2026-08-28修正＝マイナスのお預りが入っていた。現金-50,000でも会計が通り、
    会計行の「お預り」列に負の額が残る＝現金の集計が狂う。入口で0以上に丸める。 */
 function bmPay(k,v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay[k]=Math.max(0,Number(v)||0); bmSave(); bmTouch(); }
-function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.cash=bmCalc(d).total; d.pay.card=0; d.pay.credit=0; bmSave(); bmRender(); }
+function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.cash=bmCalc(d).due; d.pay.card=0; d.pay.credit=0; d.pay.next=0; bmSave(); bmRender(); }
 /* ⚠️サーバーからも消さないと、間違えて作った伝票が閉店ゲートに永久に残る */
 function bmClearServer_(k){
   if(typeof gsr!=='function'||k==='demo') return;

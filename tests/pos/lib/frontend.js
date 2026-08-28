@@ -84,6 +84,7 @@ function loadFront(opts) {
     LOGIN: opts.login || 'テスト黒服',
     BOOTED: opts.booted === undefined ? true : opts.booted,
     SEATS: opts.seats || [],
+    RSV: opts.rsv || [],
     CASTS: opts.casts || ['まや', 'みれい', 'のあ'],
     WORKING: opts.working || [],
     STAFF: opts.staff || [],

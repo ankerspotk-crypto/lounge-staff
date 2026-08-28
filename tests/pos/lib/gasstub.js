@@ -43,6 +43,13 @@ class FakeSheet {
   appendRow(v) { this.rows.push(v.slice()); this.log.push(['append', v.slice()]); return this; }
   deleteRow(n) { this.rows.splice(n - 1, 1); this.log.push(['delete', n]); return this; }
   setFrozenRows(n) { this.frozen = n; return this; }
+  /* ⚠️本物のシートは「データの端(getLastColumn)」と「シートの端(getMaxColumns)」が別物。
+     見出しの追補は必ず getMaxColumns まで読む決まりなので、偽物にも用意しておく
+     （既定26列＝本物の新規シートと同じ）。FakeSheet自体は無限に伸びるので insert 系は実質no-op。 */
+  getMaxColumns() { return Math.max(26, this.getLastColumn()); }
+  getMaxRows() { return Math.max(1000, this.rows.length); }
+  insertColumnsAfter() { return this; }
+  insertRowsAfter() { return this; }
   getRange(r, c, nr, nc) {
     if (typeof c === 'undefined') throw new Error('getRange(a1) はこの偽物では未対応');
     return new FakeRange(this, r, c, nr === undefined ? 1 : nr, nc === undefined ? 1 : nc);
@@ -80,6 +87,9 @@ function makeGas(opts) {
   const LockService = {
     getScriptLock: () => ({
       waitLock: () => { lock.waits++; lock.held++; lock.maxHeld = Math.max(lock.maxHeld, lock.held); if (lock.held > 1) throw new Error('ロックが二重に取られた'); },
+      /* tryLock は「取れたか」を返す＝取れなかった時に握っていない扱いにできる。
+         ⚠️取れなかったのに releaseLock を呼ぶと他人のロックを外す＝呼び側の finally は必ず取得済み判定で守ること */
+      tryLock: () => { if (lock.held > 0) { lock.waits++; return false; } lock.waits++; lock.held++; lock.maxHeld = Math.max(lock.maxHeld, lock.held); return true; },
       releaseLock: () => { lock.held = Math.max(0, lock.held - 1); }
     })
   };
@@ -89,7 +99,9 @@ function makeGas(opts) {
       const x = new Date(d);
       const map = { yyyy: x.getFullYear(), MM: pad(x.getMonth() + 1, 2), dd: pad(x.getDate(), 2),
                     HH: pad(x.getHours(), 2), mm: pad(x.getMinutes(), 2), ss: pad(x.getSeconds(), 2) };
-      return String(fmt).replace(/yyyy|MM|dd|HH|mm|ss/g, m => map[m]);
+      /* ⚠️M/d（ゼロ埋めなし）はシフト表の見出しキーで使う＝MM|dd より後に置く（先に長い方を食わせる） */
+      map.M = x.getMonth() + 1; map.d = x.getDate();
+      return String(fmt).replace(/yyyy|MM|dd|HH|mm|ss|M|d/g, m => map[m]);
     },
     getUuid: () => 'uuid-' + (Utilities._n = (Utilities._n || 0) + 1),
     sleep: () => {}
