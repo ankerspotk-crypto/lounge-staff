@@ -9,7 +9,7 @@ const { loadBackend } = require('./lib/backend');
 const args = process.argv.slice(2);
 if (args.indexOf('--live') >= 0) process.env.POS_TARGET = 'live';
 const only = args.filter(a => a.charAt(0) !== '-')[0] || '';
-const SUITES = ['01_calc', '02_front', '03_backend', '04_contract', '05_flow', '06_edge', '07_master', '08_date', '09_hall'];
+const SUITES = ['01_calc', '02_front', '03_backend', '04_contract', '05_flow', '06_edge', '07_master', '08_date', '09_hall', '10_receipt'];
 
 const front = loadFront();
 const back = loadBackend();

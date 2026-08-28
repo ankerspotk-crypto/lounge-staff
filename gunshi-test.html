@@ -1543,7 +1543,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28g-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28h-test';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -5431,12 +5431,22 @@ function bmOpenReceipt(){
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
   if(typeof openReceipt!=='function'){ alert('領収書の画面が見つかりません'); return; }
   openReceipt();
-  if(typeof RCPT_CASH!=='undefined') RCPT_CASH=(d.payMethod!=='card');
+  /* ⚠️2026-08-28修正＝`payMethod!=='card'` で現金/カードを決めていた。payMethodは**最後に押した
+     チップを覚えているだけ**なので、分割払い（一部現金・一部カード）で必ず狂う。
+       ・現金チップ→金額だけ分けた → 全額が現金扱い＝**要らない印紙を貼る**
+       ・カードチップ→現金も受け取った → 印紙0＝**貼るべき印紙を貼らない**（過怠税）
+     ⭐渡すのは**実際の内訳**。現金は「売上に充当した額」＝お預り(釣り銭込み)ではない。 */
+  var cardAmt=Number(d.pay&&d.pay.card)||0, creditAmt=Number(d.pay&&d.pay.credit)||0;
+  var cashApplied=Math.max(0, c.total-cardAmt-creditAmt);
+  if(typeof RCPT_SPLIT!=='undefined') RCPT_SPLIT={cash:cashApplied, card:cardAmt, other:creditAmt};
+  if(typeof rcptSetCash==='function') rcptSetCash(cashApplied>0, true, true);   // 表示のトグルも合わせる
+  else if(typeof RCPT_CASH!=='undefined') RCPT_CASH=(cashApplied>0);
   var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
   setTimeout(function(){
     var a=document.getElementById('rcpt-atena'), m=document.getElementById('rcpt-amt');
     if(a&&nm) a.value=nm+' 様';
     if(m) m.value=c.total;
+    if(typeof rcptSetCash==='function') rcptSetCash(cashApplied>0, true, true);  // 描画後にトグルの見た目を合わせる
     if(typeof rcptCalc==='function') rcptCalc();
   },350);
 }
@@ -6601,13 +6611,42 @@ function custBrowseHeader_(n){
    ・現金は税抜で収入印紙を自動判定（カードは印紙不要）
    ・印刷はePOS-Print XMLを生成しTM Print Assistant(iOS)へ渡してBT印字
    ★発行者情報(登録番号/住所)はボス確定待ち＝RCPT_ISSUERを差し替え。将来はバックエンド供給に。 */
-var RCPT_ISSUER={ name:'ラウンジいえやす', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel:'', invoiceNo:'T4180302027983' }; // 表示名＋住所＋適格請求書発行事業者 登録番号
+var RCPT_ISSUER={ name:'ラウンジいえやす', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel:'', invoiceNo:'T4180302027983' }; // 選択中の発行店（バックエンド未取得時の既定フォールバック）
+var RCPT_ISSUERS=null;   // 発行店の選択肢（null=未取得）＝コンソール発行店マスタから getReceiptIssuers で取得
+var RCPT_ISSUER_ID='';   // 選択中の発行店ID
+function rcptIssuerMock_(){ return [
+  {id:'IS-a', name:'ラウンジいえやす', zip:'', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル', tel:'', invoiceNo:'T4180302027983', isDefault:true},
+  {id:'IS-b', name:'ラウンジいえやす 5F', zip:'', addr:'愛知県名古屋市中区錦3-9-15 サンロード錦ビル 5F', tel:'', invoiceNo:'T4180302027983', isDefault:false}
+]; }
+function rcptApplyIssuer_(it){ if(!it)return; RCPT_ISSUER={ name:it.name||'', addr:it.addr||'', tel:it.tel||'', invoiceNo:it.invoiceNo||'' }; RCPT_ISSUER_ID=it.id||''; }
+function rcptIssuerDefault_(list){ var d=(list&&list.length)?list[0]:null; (list||[]).forEach(function(x){ if(x.isDefault)d=x; }); return d; }
+function rcptIssuerOpts_(){
+  if(RCPT_ISSUERS===null) return '<option value="">読み込み中…</option>';
+  if(!RCPT_ISSUERS.length) return '<option value="">（発行店が未登録）</option>';
+  return RCPT_ISSUERS.map(function(it){ return '<option value="'+esc(it.id)+'"'+(it.id===RCPT_ISSUER_ID?' selected':'')+'>'+esc(it.name)+(it.isDefault?'（既定）':'')+'</option>'; }).join(''); }
+function rcptPickIssuer(id){ var it=null; (RCPT_ISSUERS||[]).forEach(function(x){ if(x.id===id)it=x; }); if(it){ rcptApplyIssuer_(it); rcptCalc(); } }
+function rcptLoadIssuers_(){
+  var done=function(){ if(menuView==='receipt'){ var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); } };
+  if(!IS_GAS){ RCPT_ISSUERS=rcptIssuerMock_(); rcptApplyIssuer_(rcptIssuerDefault_(RCPT_ISSUERS)); done(); return; }
+  gsr('getReceiptIssuers').then(function(r){
+    RCPT_ISSUERS=(r&&r.rows)?r.rows:[];
+    if(RCPT_ISSUERS.length) rcptApplyIssuer_(rcptIssuerDefault_(RCPT_ISSUERS));
+    done();
+  }).catch(function(){ RCPT_ISSUERS=[]; done(); });
+}
 var RCPT_TAX=0.10;              // 店内飲食＝10%
 var RCPT_DENPYO=null;           // 予約伝票（null=未取得, []=取得済み空）
 var RCPT_MODE='R';              // 'R'=領収書 'J'=日払い受領書
 var RCPT_CASH=true;             // 支払方法（現金/カード）＝印紙判定に使用
+/* ⚠️2026-08-28追加＝**分割払い（一部現金・一部カード）**の内訳。{cash,card,other} 円。
+   null＝内訳なし（従来どおり RCPT_CASH の二択で全額を扱う）。
+   ⭐収入印紙は「**現金で受け取った額**」に掛かる。全額で判定すると
+     現金3万＋カード5万＝8万の会計で、税抜7.2万として印紙200円を貼ってしまう（実際は現金3万＝不要）。
+     逆にカード扱いにすると、現金6万を受け取っているのに印紙を貼らない（貼り忘れ＝過怠税）。
+   ⚠️紙にも内訳を出すこと。「クレジット利用」と書いていない領収書は全額が印紙の対象になる。 */
+var RCPT_SPLIT=null;
 var RCPT_SEL=-1;                // 選択中の予約伝票index
-var RCPT_DATEMODE='today';      // 発行日モード: 'today'|'prev'|'custom'
+var RCPT_DATEMODE='today';      // 発行日モード: 'today'|'prev'|'custom'|'blank'（blank=日付なし＝空欄「　年　月　日」で手書き用）
 var RCPT_PAYEES=null;           // 受領書の受取人候補＝今日の出勤スタッフ（派遣含む・null=未取得）
 function rcptPayeeMock_(){ return ['田中 太郎','佐藤 美咲','鈴木 レイ','派遣 山本','派遣 高橋']; }
 function rcptPayeeOpts_(){ return (RCPT_PAYEES||[]).map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join(''); }
@@ -6661,11 +6700,14 @@ function rcptInshi_(taxExcl,cash){ if(!cash)return 0; var a=taxExcl;
 function rcptYen_(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); }
 function rcptToday_(){ var d=new Date(),p=function(x){return('0'+x).slice(-2);}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
 function rcptJp_(iso){ if(!iso)return''; var a=iso.split('-'); return a[0]+'年'+Number(a[1])+'月'+Number(a[2])+'日'; }
+function rcptDateStr_(iso){ return (RCPT_DATEMODE==='blank') ? '　　　年　　月　　日' : rcptJp_(iso); }   // 日付なし＝空欄「　年　月　日」（手書き用）。No.採番は別途 iso を使う
 function rcptNo_(iso){ return (iso||'').replace(/-/g,'')+'-'+String(RCPT_SEL+1>0?RCPT_SEL+1:1).padStart(3,'0'); }
 function rcptDateFor_(mode){ var d=new Date(); if(mode==='prev')d.setDate(d.getDate()-1); var p=function(x){return('0'+x).slice(-2);}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
-function rcptDHi_(mode){ ['today','prev','custom'].forEach(function(m){ var b=document.getElementById('rcpt-d-'+m); if(b)b.classList.toggle('on',m===mode); }); }
+function rcptDHi_(mode){ ['today','prev','custom','blank'].forEach(function(m){ var b=document.getElementById('rcpt-d-'+m); if(b)b.classList.toggle('on',m===mode); }); }
 function rcptSetDate(mode){ RCPT_DATEMODE=mode; var di=document.getElementById('rcpt-date');
   if((mode==='today'||mode==='prev')&&di){ di.value=rcptDateFor_(mode); }
+  if(mode==='blank'&&di&&!di.value){ di.value=rcptDateFor_('today'); }   // 日付なしでもNo.採番用に日付は保持（表示だけ空欄）
+  if(di){ di.style.display=(mode==='blank')?'none':''; }
   rcptDHi_(mode);
   if(mode==='custom'&&di){ try{ di.showPicker&&di.showPicker(); }catch(e){} }
   rcptCalc(); }
@@ -6740,15 +6782,68 @@ function rcptDenListHtml_(){
       +'<div class="rcpt-den-amt" style="font-size:12px;color:var(--sub)">選ぶ ▸</div></div>';
   }).join('');
 }
+/* ===== 📜 発行履歴（発行済み領収書/受領書の控え一覧・軍師） ===== */
+var RCPT_TAB='form';       // 'form'=発行 | 'history'=発行履歴
+var RCPT_HIST=null;        // 履歴データ（null=未取得）
+var RCPT_HIST_F='';        // 種別フィルタ（''=全部 / '領収書' / '日払い受領書' / '月払い受領書'）
+var RCPT_HIST_Q='';        // 検索語（宛名・通し番号）
+function rcptHistMock_(){ return [
+  {at:'08/05 21:30',docType:'領収書',issueDate:'2026-08-05',serial:'20260805-003',atena:'いえやす 様',memberNo:'0451',amount:15600,taxExcl:14182,tax:1418,inshi:0,pay:'現金',tada:'ご飲食代として',by:'りく'},
+  {at:'08/05 20:10',docType:'日払い受領書',issueDate:'2026-08-05',serial:'20260805-002',atena:'佐藤 美咲',memberNo:'',amount:12000,taxExcl:0,tax:0,inshi:0,pay:'現金',tada:'日払い報酬として',by:'黒服A'},
+  {at:'08/04 23:50',docType:'月払い受領書',issueDate:'2026-07-31',serial:'20260731-001',atena:'鈴木 レイ',memberNo:'',amount:182459,taxExcl:0,tax:0,inshi:0,pay:'現金',tada:'2026年7月分 給与として',by:'りく'}
+]; }
+function rcptShowForm(){ RCPT_TAB='form'; var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+function rcptShowHistory(){ RCPT_TAB='history'; if(RCPT_HIST===null)rcptLoadHistory_(); var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+function rcptLoadHistory_(){
+  var done=function(){ if(menuView==='receipt'&&RCPT_TAB==='history'){ var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); } };
+  if(!IS_GAS){ RCPT_HIST=rcptHistMock_(); done(); return; }
+  gsr('getIssuedReceipts',200).then(function(r){ RCPT_HIST=(r&&r.rows)?r.rows:[]; done(); }).catch(function(){ RCPT_HIST=[]; done(); });
+}
+function rcptHistFilter(f){ RCPT_HIST_F=f; var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
+function rcptHistSearch_(){ RCPT_HIST_Q=((document.getElementById('rcpt-hist-q')||{}).value)||''; var el=document.getElementById('rcpt-hist-list'); if(el)el.innerHTML=rcptHistListHtml_(); }
+function rcptHistBadgeColor_(t){ return t==='領収書'?'#3b6fb0':(t==='月払い受領書'?'#8a5bb0':'#3f8a5a'); }
+function rcptHistListHtml_(){
+  if(RCPT_HIST===null) return '<div class="rcpt-den-loading">読み込み中…</div>';
+  var q=RCPT_HIST_Q.trim();
+  var rows=RCPT_HIST.filter(function(x){
+    if(RCPT_HIST_F && x.docType!==RCPT_HIST_F) return false;
+    if(q && String(x.atena||'').indexOf(q)<0 && String(x.serial||'').indexOf(q)<0) return false;
+    return true;
+  });
+  if(!rows.length) return '<div class="rcpt-den-empty">該当する発行履歴はありません</div>';
+  var head='<div class="small" style="color:var(--sub);margin:2px 0 8px">'+rows.length+' 件（新しい順）</div>';
+  return head+rows.map(function(x){
+    return '<div style="border:1px solid var(--line,#2a3550);border-radius:10px;padding:9px 12px;margin-bottom:8px;background:var(--card,#0e1626)">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'
+        +'<span style="font-weight:800;font-size:13px">'+esc(x.serial||'')+'</span>'
+        +'<span style="background:'+rcptHistBadgeColor_(x.docType)+';color:#fff;font-size:11px;padding:1px 7px;border-radius:6px;font-weight:700">'+esc(x.docType||'')+'</span>'
+        +'<span style="margin-left:auto;font-weight:800;font-size:15px">'+rcptYen_(x.amount)+'</span></div>'
+      +'<div style="font-size:13px;margin-bottom:2px">'+esc(x.atena||'（宛名なし）')+(x.tada?'　<span style="color:var(--sub)">'+esc(x.tada)+'</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--sub)">発行日 '+esc(x.issueDate||'')+'　'+esc(x.pay||'')+(Number(x.inshi)>0?'　印紙'+rcptYen_(x.inshi):'')+'　発行者 '+esc(x.by||'?')+'　'+esc(x.at||'')+'</div>'
+      +'</div>';
+  }).join('');
+}
 function rcptRenderMenu_(el){
   rcptCss_();
   document.getElementById('menuTitle').textContent='🖨 領収書・受領書';
   var R=RCPT_MODE==='R', J=RCPT_MODE==='J', M=RCPT_MODE==='M';
   var h='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
   h+='<div class="rcpt-seg" style="margin-bottom:10px">'
+    +'<button class="'+(RCPT_TAB==='form'?'on':'')+'" onclick="rcptShowForm()">🖨 発行</button>'
+    +'<button class="'+(RCPT_TAB==='history'?'on':'')+'" onclick="rcptShowHistory()">📜 発行履歴</button></div>';
+  if(RCPT_TAB==='history'){
+    h+='<div class="rcpt-seg" style="margin-bottom:8px">'
+      +[['','全部'],['領収書','領収書'],['日払い受領書','日払い'],['月払い受領書','月払い']].map(function(f){ return '<button class="'+(RCPT_HIST_F===f[0]?'on':'')+'" onclick="rcptHistFilter(\''+f[0]+'\')">'+esc(f[1])+'</button>'; }).join('')+'</div>';
+    h+='<input id="rcpt-hist-q" class="finput" autocapitalize="off" placeholder="宛名・通し番号で検索" value="'+esc(RCPT_HIST_Q)+'" oninput="rcptHistSearch_()" style="margin-bottom:8px">';
+    h+='<div id="rcpt-hist-list">'+rcptHistListHtml_()+'</div>';
+    el.innerHTML=h; return;
+  }
+  h+='<div class="rcpt-seg" style="margin-bottom:10px">'
     +'<button class="'+(R?'on':'')+'" onclick="rcptSetMode(\'R\')">領収書</button>'
     +'<button class="'+(J?'on':'')+'" onclick="rcptSetMode(\'J\')">日払い受領書</button>'
     +'<button class="'+(M?'on':'')+'" onclick="rcptSetMode(\'M\')">月払い受領書</button></div>';
+  h+='<div class="flabel">発行店</div>'
+    +'<select id="rcpt-issuer" class="finput" onchange="rcptPickIssuer(this.value)" style="margin-bottom:10px">'+rcptIssuerOpts_()+'</select>';
   if(R){
     h+='<div class="rcpt-h">予約伝票を選ぶ（領収書名を自動で呼び出し）</div>';
     h+='<div id="rcpt-denlist" class="rcpt-denlist">'+rcptDenListHtml_()+'</div>';
@@ -6782,20 +6877,22 @@ function rcptRenderMenu_(el){
     +'<div class="rcpt-seg" style="margin-bottom:6px">'
     +'<button id="rcpt-d-today" class="'+(RCPT_DATEMODE==='today'?'on':'')+'" onclick="rcptSetDate(\'today\')">今日</button>'
     +'<button id="rcpt-d-prev" class="'+(RCPT_DATEMODE==='prev'?'on':'')+'" onclick="rcptSetDate(\'prev\')">前日</button>'
-    +'<button id="rcpt-d-custom" class="'+(RCPT_DATEMODE==='custom'?'on':'')+'" onclick="rcptSetDate(\'custom\')">指定日</button></div>'
+    +'<button id="rcpt-d-custom" class="'+(RCPT_DATEMODE==='custom'?'on':'')+'" onclick="rcptSetDate(\'custom\')">指定日</button>'
+    +'<button id="rcpt-d-blank" class="'+(RCPT_DATEMODE==='blank'?'on':'')+'" onclick="rcptSetDate(\'blank\')">日付なし</button></div>'
     +'<input id="rcpt-date" class="finput" type="date" onchange="rcptDateManual_()">';
   h+='<div class="rcpt-preview"><div class="rcpt-paper" id="rcpt-paper"></div></div>';
   h+='<div id="rcpt-bd" class="rcpt-bd"></div>';
   h+='<a class="rcpt-print" id="rcpt-printlink" href="tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data=" onclick="return rcptPrint()">🖨 印刷する（TM-M30 / Bluetooth）</a>';
   h+='<div class="rcpt-note" id="rcpt-hint"></div>';
   el.innerHTML=h;
-  var dEl=document.getElementById('rcpt-date'); if(dEl)dEl.value=(RCPT_DATEMODE==='custom'?(dEl.value||rcptToday_()):rcptDateFor_(RCPT_DATEMODE));
+  var dEl=document.getElementById('rcpt-date'); if(dEl){ dEl.value=(RCPT_DATEMODE==='custom'?(dEl.value||rcptToday_()):rcptDateFor_(RCPT_DATEMODE)); dEl.style.display=(RCPT_DATEMODE==='blank')?'none':''; }
   rcptCalc();
 }
 function rcptSetMode(m){ RCPT_MODE=m; RCPT_SEL=-1;
   if(m==='M'){ RCPT_PAYCAST=''; if(RCPT_PAYMONTHS===null)rcptLoadMonthly_(''); }
   var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
-function rcptSetCash(v,quiet){ RCPT_CASH=v;
+function rcptSetCash(v,quiet,keepSplit){ RCPT_CASH=v;
+  if(!keepSplit) RCPT_SPLIT=null;   /* 手で選び直したら伝票から来た内訳は捨てる（黒服の指定が優先） */
   var a=document.getElementById('rcpt-cash'),b=document.getElementById('rcpt-card');
   if(a)a.classList.toggle('on',v); if(b)b.classList.toggle('on',!v);
   if(!quiet)rcptCalc(); }
@@ -6813,28 +6910,37 @@ function rcptCalc(){
   var iso=(((document.getElementById('rcpt-date')||{}).value))||rcptToday_();
   var taxExcl=Math.round(amount/(1+RCPT_TAX));
   var tax=amount-taxExcl;
-  var inshi=rcptInshi_(taxExcl,RCPT_CASH);
+  /* ⚠️印紙は**現金受取額**で判定する（全額ではない）。内訳が無ければ従来どおり全額×RCPT_CASH */
+  var sp=RCPT_SPLIT;
+  var cashAmt=sp?Math.min(Math.max(0,Number(sp.cash)||0),amount):(RCPT_CASH?amount:0);
+  var cardAmt=sp?Math.max(0,Number(sp.card)||0):(RCPT_CASH?0:amount);
+  var otherAmt=sp?Math.max(0,Number(sp.other)||0):0;
+  var inshi=rcptInshi_(Math.round(cashAmt/(1+RCPT_TAX)),cashAmt>0);
   var paper=document.getElementById('rcpt-paper'), bd=document.getElementById('rcpt-bd');
   if(!paper||!bd)return;
   if(RCPT_MODE==='R'){
     paper.className='rcpt-paper rcpt-land';
     if(paper.parentNode)paper.parentNode.classList.add('land');
-    try{ var _lc=rcptLandscapeCanvas_({atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
+    try{ var _lc=rcptLandscapeCanvas_({atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt});
       paper.innerHTML='<img alt="領収書プレビュー" src="'+_lc.toDataURL()+'" style="width:100%;display:block;background:#fff">';
     }catch(e){ paper.innerHTML='<div class="small" style="color:#900">プレビュー生成エラー: '+esc(e.message)+'</div>'; }
-    var badge=(!RCPT_CASH)?'<span class="rcpt-badge zero">カード＝印紙不要</span>'
-      :(inshi===0)?'<span class="rcpt-badge zero">税抜5万円未満＝非課税</span>'
+    var badge=(cashAmt<=0)?'<span class="rcpt-badge zero">現金なし＝印紙不要</span>'
+      :(inshi===0)?'<span class="rcpt-badge zero">現金分が税抜5万円未満＝非課税</span>'
       :'<span class="rcpt-badge stamp">印紙 '+rcptYen_(inshi)+'</span>';
+    var splitRow=(sp&&(cardAmt>0||otherAmt>0)&&cashAmt>0)
+      ? '<div class="row"><span>内訳（印紙は現金分で判定）</span><span>現金 '+rcptYen_(cashAmt)+' ／ カード '+rcptYen_(cardAmt)+(otherAmt>0?' ／ 請求書 '+rcptYen_(otherAmt):'')+'</span></div>'
+      : '';
     bd.innerHTML='<div class="row"><span>領収金額（税込）</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="row"><span>税抜金額</span><span>'+rcptYen_(taxExcl)+'</span></div>'
       +'<div class="row"><span>消費税（10%）</span><span>'+rcptYen_(tax)+'</span></div>'
-      +'<div class="row"><span>収入印紙（税抜判定）</span><span>'+rcptYen_(inshi)+' '+badge+'</span></div>'
+      +splitRow
+      +'<div class="row"><span>収入印紙（現金分の税抜で判定）</span><span>'+rcptYen_(inshi)+' '+badge+'</span></div>'
       +'<div class="big"><span>お預り</span><span>'+rcptYen_(amount)+'</span></div>';
   } else {
     paper.className='rcpt-paper';
     if(paper.parentNode)paper.parentNode.classList.remove('land');
     paper.innerHTML='<div class="c title" style="letter-spacing:.45em">受領書</div>'
-      +'<div class="r small">'+esc(rcptJp_(iso))+'</div><hr>'
+      +'<div class="r small">'+esc(rcptDateStr_(iso))+'</div><hr>'
       +'<div class="c amt">'+rcptYen_(amount)+'-</div><hr>'
       +'<div>名目 '+esc(tada||'日払い報酬として')+'</div><div>上記金額を受領いたしました。</div>'
       +'<div style="margin-top:12px;font-size:11px">受取人　'+(atena?esc(atena):'')+'</div>'
@@ -6846,8 +6952,8 @@ function rcptCalc(){
       +'<div class="big"><span>お渡し</span><span>'+rcptYen_(amount)+'</span></div>'
       +'<div class="row" style="border-bottom:0"><span style="color:var(--sub);font-size:11px">社内書類のため収入印紙・消費税区分なし</span><span></span></div>';
   }
-  window.__rcptData={mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso};
-  window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso});
+  window.__rcptData={mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt};
+  window.__rcptXml=rcptBuildXml_({mode:RCPT_MODE,atena:atena,amount:amount,taxExcl:taxExcl,tax:tax,inshi:inshi,tada:tada,iso:iso,cashAmt:cashAmt,cardAmt:cardAmt,otherAmt:otherAmt});
   var _pl=document.getElementById('rcpt-printlink'); if(_pl){ _pl.href='tmprintassistant://tmprintassistant.epson.com/print?ver=1&data-type=eposprintxml&data='+encodeURIComponent(window.__rcptXml); }
 }
 function rcptBuildXmlLandscape_(o){
@@ -6857,16 +6963,17 @@ function rcptBuildXmlLandscape_(o){
   var rows=[];
   var add=function(size,em,text){ rows.push({s:size,em:em,t:text}); };
   add(3,true,'領 収 証');
-  add(1,false,'No. '+rcptNo_(o.iso)+'     '+rcptJp_(o.iso));
+  add(1,false,'No. '+rcptNo_(o.iso)+'     '+rcptDateStr_(o.iso));
   add(2,true,(o.atena||'')+'　');
   add(4,true,'￥ '+(o.amount||0).toLocaleString('ja-JP')+' 也');
   add(1,false,'但し  '+(o.tada||'')+'  上記正に領収いたしました');
-  if(!RCPT_CASH) add(1,false,'※クレジットカード利用のため収入印紙不要');
-  else if(o.inshi===0) add(1,false,'※税抜5万円未満につき収入印紙不要（非課税）');
+  if(o.cardAmt>0||o.otherAmt>0) add(1,false,'内訳  現金 '+rcptYen_(o.cashAmt)+' ／ クレジット '+rcptYen_(o.cardAmt)+(o.otherAmt>0?' ／ 請求書 '+rcptYen_(o.otherAmt):''));
+  if(!(o.cashAmt>0)) add(1,false,'※クレジットカード利用のため収入印紙不要');
+  else if(o.inshi===0) add(1,false,'※現金受取分が税抜5万円未満につき収入印紙不要（非課税）');
   else add(1,false,'収入印紙 '+rcptYen_(o.inshi)+' 貼付');
   add(1,false,'税抜 '+rcptYen_(o.taxExcl)+'   消費税(10%) '+rcptYen_(o.tax));
   add(1,false,RCPT_ISSUER.name+'   '+(RCPT_ISSUER.addr||''));
-  add(1,false,'登録番号 '+RCPT_ISSUER.invoiceNo);
+  if(RCPT_ISSUER.invoiceNo) add(1,false,'登録番号 '+RCPT_ISSUER.invoiceNo);
   var L=[];
   L.push('<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">');
   L.push('<text lang="ja"/>');
@@ -6894,7 +7001,7 @@ function rcptBuildXml_(o){
   if(o.mode==='R'){
     L.push('<text width="3" height="3" em="true"/>'); L.push(t('領 収 証'));
     L.push('<text width="1" height="1" em="false"/>');
-    L.push(t('No.'+rcptNo_(o.iso)+'　'+rcptJp_(o.iso)));
+    L.push(t('No.'+rcptNo_(o.iso)+'　'+rcptDateStr_(o.iso)));
     L.push('<feed/>'); L.push('<text align="left"/>'); L.push(t((o.atena||'')+'　'));
     L.push('<feed/>'); L.push('<text align="center"/>');
     L.push('<text width="3" height="3" em="true"/>'); L.push(t('￥'+(o.amount||0).toLocaleString('ja-JP')+' 也'));
@@ -6904,18 +7011,24 @@ function rcptBuildXml_(o){
     L.push(t('--------------------------------'));
     L.push(t('税抜金額     '+rcptYen_(o.taxExcl)));
     L.push(t('消費税(10%)  '+rcptYen_(o.tax)));
-    if(!RCPT_CASH) L.push(t('※カード利用のため印紙不要'));
-    else if(o.inshi===0) L.push(t('※税抜5万円未満につき印紙不要'));
+    /* ⚠️2026-08-28＝内訳を必ず刷る。「クレジット利用」と書いていない領収書は**全額が印紙の対象**。
+       分割で現金分だけ印紙を貼るなら、この行が根拠になる。 */
+    if(Number(o.cardAmt)>0||Number(o.otherAmt)>0){
+      L.push(t('内訳 現金 '+rcptYen_(o.cashAmt)+' / クレジット '+rcptYen_(o.cardAmt)
+        +(Number(o.otherAmt)>0?' / 請求書 '+rcptYen_(o.otherAmt):'')));
+    }
+    if(!(Number(o.cashAmt)>0)) L.push(t('※クレジットカード利用のため収入印紙不要'));
+    else if(o.inshi===0) L.push(t('※現金受取分が税抜5万円未満につき印紙不要'));
     else L.push(t('収入印紙 '+rcptYen_(o.inshi)+' [貼付・消印]'));
     L.push(t('--------------------------------')); L.push('<feed/>');
     L.push(t(RCPT_ISSUER.name));
     if(RCPT_ISSUER.addr) L.push(t(RCPT_ISSUER.addr));
     if(RCPT_ISSUER.tel) L.push(t('TEL '+RCPT_ISSUER.tel));
-    L.push(t('登録番号 '+RCPT_ISSUER.invoiceNo));
+    if(RCPT_ISSUER.invoiceNo) L.push(t('登録番号 '+RCPT_ISSUER.invoiceNo));
   } else {
     L.push('<text width="2" height="2" em="true"/>'); L.push(t('受領書'));
     L.push('<text width="1" height="1" em="false"/>');
-    L.push('<text align="right"/>'); L.push(t(rcptJp_(o.iso)));
+    L.push('<text align="right"/>'); L.push(t(rcptDateStr_(o.iso)));
     L.push('<text align="center"/>');
     L.push('<text width="2" height="2" em="true"/>'); L.push(t(rcptYen_(o.amount)+'-'));
     L.push('<text width="1" height="1" em="false"/>'); L.push('<text align="left"/>');
@@ -6930,34 +7043,74 @@ function rcptBuildXml_(o){
   return L.join('');
 }
 /* ===== 横向き領収書＝画像印字（プリンターが回転命令を無視するため、横長に組んだ画像を刷る） ===== */
+/* 角の装飾フラリッシュ（4隅）。cx,cyが隅点、sx/syで内向きに反転 */
+function rcptCorner_(g,cx,cy,sx,sy){
+  g.save(); g.translate(cx,cy); g.scale(sx,sy);
+  g.strokeStyle='#000'; g.fillStyle='#000'; g.lineCap='round';
+  g.lineWidth=2.4; g.beginPath(); g.moveTo(6,64); g.bezierCurveTo(6,24,24,6,64,6); g.stroke();
+  g.lineWidth=1.6; g.beginPath(); g.moveTo(16,64); g.bezierCurveTo(16,32,32,16,64,16); g.stroke();
+  g.lineWidth=1.6;
+  g.beginPath(); g.arc(64,11,5.5,-Math.PI/2,Math.PI*0.9,true); g.stroke();     // 水平端の渦
+  g.beginPath(); g.arc(11,64,5.5,0,Math.PI*1.4,true); g.stroke();              // 垂直端の渦
+  g.beginPath(); g.arc(27,27,3,0,Math.PI*2); g.fill();                         // 飾りドット
+  g.beginPath(); g.arc(42,42,2,0,Math.PI*2); g.fill();
+  g.restore();
+}
 function rcptLandscapeCanvas_(o){
-  var W=1000, H=340;                     // 横幅1.5倍・余白詰め。H=紙幅方向→回転後の印字幅(≤512)。URLは約60KB
+  var W=1000, H=500;                     // 紙幅方向Hを大きく取り紙いっぱいに（POS版に寄せたバランス）。URL約84KB
   var c=document.createElement('canvas'); c.width=W; c.height=H;
   var g=c.getContext('2d');
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
-  g.fillStyle='#000'; g.strokeStyle='#000'; g.lineWidth=1.5; g.textBaseline='alphabetic';
+  g.fillStyle='#000'; g.strokeStyle='#000'; g.textBaseline='alphabetic';
   var yen=function(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); };
-  g.font='bold 42px "Hiragino Mincho ProN","YuMincho",serif'; g.fillText('領 収 証', 30, 62);
-  g.font='26px sans-serif'; g.fillText(String(o.atena||''), 280, 56);
-  g.beginPath(); g.moveTo(275,64); g.lineTo(760,64); g.stroke();
-  g.font='14px sans-serif'; g.textAlign='right'; g.fillText('No. '+rcptNo_(o.iso), 988, 28); g.fillText(rcptJp_(o.iso), 988, 48); g.textAlign='left';
-  g.font='bold 44px sans-serif'; g.fillText('￥ '+(Number(o.amount)||0).toLocaleString('ja-JP')+' -', 56, 140);
-  g.font='14px sans-serif'; g.fillText('税抜額   '+yen(o.taxExcl), 770, 118); g.fillText('消費税等 '+yen(o.tax), 770, 142);
-  g.font='17px sans-serif'; g.fillText('但  '+String(o.tada||''), 30, 196);
-  g.fillText(rcptJp_(o.iso)+'　上記正に領収いたしました', 30, 228);
-  g.strokeRect(850, 102, 122, 58); g.textAlign='center'; g.font='13px sans-serif';
-  if(RCPT_CASH && Number(o.inshi)>0){ g.fillText('収入印紙', 911, 128); g.fillText(yen(o.inshi), 911, 148); } else { g.fillText('印紙不要', 911, 136); }
-  g.textAlign='left';
-  g.strokeRect(30, 258, 580, 72);
-  g.font='bold 20px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 46, 288);
-  g.font='14px sans-serif'; g.fillText(String(RCPT_ISSUER.addr||''), 46, 310); g.fillText('登録番号 '+String(RCPT_ISSUER.invoiceNo||''), 46, 330);
-  g.strokeRect(880, 258, 68, 68); g.textAlign='center'; g.font='12px sans-serif'; g.fillText('印', 914, 298); g.textAlign='left';
+  var line=function(x1,y1,x2,y2,w){ g.lineWidth=w||1.4; g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke(); };
+  // ── 4隅の装飾 ──
+  rcptCorner_(g, 22, 22, 1, 1); rcptCorner_(g, W-22, 22, -1, 1);
+  rcptCorner_(g, 22, H-22, 1, -1); rcptCorner_(g, W-22, H-22, -1, -1);
+  // ── 1段目：領収書 ／ 宛名＋様 ／ No.（文字は大きめ・太めでサーマルのかすれ対策）──
+  g.textAlign='left'; g.font='bold 48px "Hiragino Mincho ProN","YuMincho",serif';
+  g.fillText('領収書', 96, 98);
+  g.font='bold 32px sans-serif'; g.fillText(String(o.atena||''), 300, 94); line(296,104,716,104,1.6);
+  g.font='bold 24px sans-serif'; g.fillText('様', 728, 94);
+  g.font='bold 22px "Hiragino Mincho ProN",serif'; g.fillText('No.', 806, 86); line(852,92,952,92,1.6);
+  // ── 2段目：金額 ──
+  g.font='bold 34px serif'; g.fillText('¥', 100, 202);
+  g.font='bold 58px sans-serif'; g.fillText((Number(o.amount)||0).toLocaleString('ja-JP')+'.-', 150, 208); line(150,220,716,220,2.0);
+  // ── 3段目：但し ──
+  g.font='bold 24px sans-serif'; g.fillText('但、'+String(o.tada||'')+' として', 108, 258); line(108,268,716,268,1.4);
+  // ── 4段目：日付 ──
+  g.font='bold 20px sans-serif'; g.fillText(rcptDateStr_(o.iso)+' に上記正に領収いたしました', 200, 306);
+  // ── 収入印紙枠（右上・破線・スタンプ欄）──
+  g.setLineDash([5,4]); g.lineWidth=1.8; g.strokeRect(792,150,150,120); g.setLineDash([]);
+  g.textAlign='center'; g.font='bold 21px "Hiragino Mincho ProN",serif'; g.fillText('収　入',867,198); g.fillText('印　紙',867,236); g.textAlign='left';
+  // ── 左下：消費税・支払種別 ──
+  g.font='bold 21px sans-serif'; g.fillText('内、消費税額(10%)：　'+yen(o.tax), 96, 356);
+  g.fillText('支払い種別', 96, 402);
+  /* ⚠️支払い種別は**内訳をそのまま出す**。「クレジット利用」と書いていない領収書は
+     全額が印紙の対象になる＝分割で現金分だけ印紙を貼るなら、この欄が根拠になる。 */
+  var pay=[['現　金', (Number(o.cashAmt)>0?yen(o.cashAmt):'')],
+           ['カード', (Number(o.cardAmt)>0?yen(o.cardAmt):'')],
+           ['その他', (Number(o.otherAmt)>0?yen(o.otherAmt):'')]];
+  var py=432; g.font='bold 20px sans-serif'; pay.forEach(function(p){ g.fillText(p[0]+' ：'+p[1], 122, py); line(214,py+8,472,py+8,1.2); py+=28; });
+  // ── 右：発行者（枠なし・プレーン）──
+  g.font='bold 26px "Hiragino Mincho ProN",serif'; g.fillText(String(RCPT_ISSUER.name||''), 560, 356);
+  var addr=String(RCPT_ISSUER.addr||''), afs=17; g.font='bold '+afs+'px sans-serif';
+  while(afs>11 && g.measureText(addr).width>430){ afs--; g.font='bold '+afs+'px sans-serif'; }
+  g.fillText(addr, 560, 386);
+  g.font='bold 16px sans-serif';
+  if(RCPT_ISSUER.tel) g.fillText('電話番号 ：'+String(RCPT_ISSUER.tel), 560, 434);
+  if(RCPT_ISSUER.invoiceNo) g.fillText('登録番号 ：'+String(RCPT_ISSUER.invoiceNo), 560, 460);   // 登録番号が無い発行店は行を出さない
   return c;
 }
 function rcptCanvasToEposXml_(c){
   var w=c.width, h=c.height, d=c.getContext('2d').getImageData(0,0,w,h).data;
   var bpr=Math.ceil(w/8), R=new Uint8Array(bpr*h);
-  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>128 && (d[i]+d[i+1]+d[i+2])/3<128) R[y*bpr+(x>>3)] |= (0x80>>(x&7)); } }
+  // サーマルのかすれ対策：①閾値を上げてアンチエイリアスの縁も黒に拾う（濃く）②右・下へ1px太らせる（細り防止）
+  var ink=new Uint8Array(w*h);
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){ var i=(y*w+x)*4; if(d[i+3]>96 && (d[i]+d[i+1]+d[i+2])/3<184) ink[y*w+x]=1; } }
+  for(var y=0;y<h;y++){ for(var x=0;x<w;x++){
+    if(ink[y*w+x] || (x>0&&ink[y*w+x-1]) || (y>0&&ink[(y-1)*w+x])) R[y*bpr+(x>>3)] |= (0x80>>(x&7));
+  } }
   var s=''; for(var k=0;k<R.length;k++) s+=String.fromCharCode(R[k]);
   return '<epos-print xmlns="http://www.epson-pos.com/schemas/2011/03/epos-print">'
     +'<image width="'+w+'" height="'+h+'" color="color_1" mode="mono" align="center">'+btoa(s)+'</image>'
@@ -6997,9 +7150,12 @@ function rcptLogIssue_(){
   }catch(e){}
 }
 function openReceipt(){
-  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
+  menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
+  RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
+  RCPT_TAB='form'; RCPT_HIST=null; RCPT_HIST_F=''; RCPT_HIST_Q='';
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
+  rcptLoadIssuers_();   // 発行店マスタを取得→既定を初期選択（!IS_GAS はモック）
   if(!IS_GAS){ RCPT_DENPYO=rcptDenpyoMock_(); RCPT_PAYEES=rcptPayeeMock_(); var dl0=document.getElementById('rcpt-denlist'); if(dl0)dl0.innerHTML=rcptDenListHtml_(); return; }
   gsr('getReceiptPayees').then(function(r){ RCPT_PAYEES=(r&&r.rows)?r.rows:[]; if(menuView==='receipt'&&RCPT_MODE==='J'){ var el2=document.getElementById('menu-body'); if(el2)rcptRenderMenu_(el2); } }).catch(function(){ RCPT_PAYEES=[]; });
   gsr('getReceiptReservationsToday').then(function(r){

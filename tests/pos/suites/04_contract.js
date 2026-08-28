@@ -52,6 +52,27 @@ module.exports = function (front, back) {
     else t.note('テスト環境と本番の伝票管理は同一');
   }
   {
+    /* ⚠️2026-08-28追加＝**ファイル全体**でも見る。伝票管理のブロックだけ比べていたので、
+       領収書まわりが「本番にはあるがテストには無い」状態になっていたのを1か月以上見落としていた。
+       （発行店の選択＝getReceiptIssuers が本番にしか無かった）
+       テスト環境は本番の上位互換とは限らない＝**昇格前に必ずこの数字を見る**。 */
+    const norm = f => fs.readFileSync(f, 'utf8').split('\n').map(x => x.trim()).filter(Boolean);
+    const count = arr => { const m = new Map(); arr.forEach(l => m.set(l, (m.get(l) || 0) + 1)); return m; };
+    const ma = count(norm(ex.frontPath('live'))), mb = count(norm(ex.frontPath('test')));
+    const onlyLive = []; ma.forEach((v, k) => { if (v > (mb.get(k) || 0)) onlyLive.push(k); });
+    const bucket = l => /RCPT_|rcpt[A-Z]|発行店/.test(l) ? '領収書' : (/^function bm|BM_/.test(l) ? '伝票管理' : 'その他');
+    const g = {}; onlyLive.forEach(l => { const k = bucket(l); (g[k] = g[k] || []).push(l); });
+    const sum = Object.keys(g).map(k => k + ' ' + g[k].length + '行').join(' / ');
+    t.note('ファイル全体で本番のみ ' + onlyLive.length + '行 … ' + (sum || 'なし'));
+    const r = g['領収書'] || [];
+    /* 本番にしか無い領収書の行＝①テストが遅れている（事故）②テストで書き換えた（昇格待ち）。
+       ⚠️「発行店の選択(RCPT_ISSUERS)」のような**機能ごと欠けている**のは①＝ここは赤にする。 */
+    const missingFeature = r.filter(x => /RCPT_ISSUERS|RCPT_ISSUER_ID|getReceiptIssuers|rcptPickIssuer|RCPT_HIST/.test(x));
+    t.ok(missingFeature.length === 0, '⚠️領収書の機能がテスト環境から欠けていない（発行店の選択・発行履歴）',
+         missingFeature.slice(0, 4).map(x => '  本番のみ: ' + x.slice(0, 90)).join('\n'));
+    if (r.length) t.known('領収書まわりが本番と同一', r.length + '行が本番だけに在る（テストで書き換えた分＝昇格待ち）');
+  }
+  {
     const live = '/tmp/kioskdeploy/コード.js', repo = ex.REPO + '/Code.gs';
     if (fs.existsSync(live) && fs.existsSync(repo)) {
       const a = ex.slice(live, 'const POS_ORDER_TAB', '/* ===== 納品書→在庫反映', 'live').code;
