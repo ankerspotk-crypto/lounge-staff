@@ -568,6 +568,39 @@ body.bill-on .alertbar,body.bill-on .dash,body.bill-on #homeView{display:none;}
 .ck-total{font-size:13px;color:var(--sub);font-weight:700;}
 .ck-banner.warn{background:#241a00;color:#ffcf6a;border:1px solid #6a5000;}
 .ck-banner.ng{background:#2a0e0e;color:#ff9a9a;border:1px solid #7a2828;}
+/* 📋 日報（TRUSTの日報登録の置き換え）。⚠️iPad横で1人1枚のカードが2〜3行に収まる幅で設計。
+   入力欄は用途ごとに固定幅（時刻/分/金額/科目）＝行が折り返して読めなくなるのを防ぐ。 */
+.np-chip{font-size:10.5px;font-weight:800;border:1px solid var(--line2);color:var(--sub);border-radius:20px;padding:2px 8px;white-space:nowrap;}
+.np-sum{display:flex;flex-wrap:wrap;gap:1px;background:var(--line);border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin-bottom:8px;}
+.np-sum-c{flex:1 1 110px;background:var(--panel2);padding:8px 10px;}
+.np-sum-l{font-size:10.5px;color:var(--dim);font-weight:700;}
+.np-sum-v{font-size:16px;font-weight:800;color:var(--txt);margin-top:2px;}
+.np-note{font-size:12px;color:var(--sub);background:#0f0f1c;border:1px solid var(--line);border-radius:8px;padding:7px 11px;margin-bottom:8px;line-height:1.6;}
+.np-card{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:9px 11px;margin-bottom:8px;}
+.np-card.lock{opacity:.82;}
+.np-card-h{display:flex;align-items:center;gap:7px;margin-bottom:6px;}
+.np-name{font-size:15px;font-weight:800;color:var(--txt);}
+.np-card-total{font-size:15px;font-weight:800;color:var(--gold);}
+.np-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:3px 0;}
+.np-row.np-sub{border-top:1px dashed var(--line);margin-top:3px;padding-top:6px;}
+.np-lbl{font-size:11.5px;font-weight:800;color:var(--sub);min-width:52px;}
+.np-lbl2{font-size:11px;color:var(--dim);font-weight:700;}
+.np-arrow{color:var(--dim);}
+.np-yen{font-size:12px;color:var(--dim);}
+.np-in{background:var(--panel);border:1px solid var(--line2);border-radius:7px;padding:6px 8px;color:var(--txt);font-size:13.5px;font-family:inherit;outline:none;}
+.np-in:disabled{opacity:.6;}
+.np-time{width:104px;}
+.np-min{width:52px;text-align:right;}
+.np-money{width:88px;text-align:right;}
+.np-cat{width:210px;}
+.np-memo{flex:1;min-width:120px;}
+.np-calc{font-size:11.5px;color:var(--sub);}
+.np-calc.warn{color:#ff9a9a;font-weight:800;}
+.np-back{font-size:13.5px;color:var(--txt);}
+.np-more{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:7px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
+.np-foot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-size:12px;color:var(--sub);}
+.np-sec{border:1px solid var(--line2);border-radius:10px;padding:9px 11px;margin-bottom:8px;background:var(--panel2);}
+.np-sec-h{display:flex;align-items:center;font-size:13px;font-weight:800;color:var(--txt);margin-bottom:6px;}
 .cc-info{background:#0f0f1c;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:3px;}
 .cc-addslip{text-align:center;padding:11px;border:1px dashed var(--line2);border-radius:10px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;}
 .cc-slip{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:10px;margin-bottom:8px;}
@@ -1493,7 +1526,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-27j';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-28a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2066,6 +2099,405 @@ function hbuSend_(id,text,to){
     HBU.rows=(HBU.rows||[]).filter(function(x){return x.rowIdx!==id;});
     if(typeof toast==='function')toast('✅ 仕訳しました');
   }).catch(function(){ delete HBU_BUSY[id]; hbuMsg_(id,'通信エラー。もう一度押してください',true); });
+}
+
+/* ============================================================================
+   📋 日報（TRUSTの「日報登録」を軍師へ持ち直したもの）
+   ----------------------------------------------------------------------------
+   ボス確定 2026-08-28：TRUSTを置き換える**正本**／初回からバック自動計算まで入れる。
+   backend＝nippo.gs（getNippo / saveNippo / confirmNippo / reopenNippo）。
+
+   ⭐設計の芯＝**黒服にゼロから打たせない**。
+     出勤者はシフトから、時刻は打刻から、時給は名簿から、バックは売上から、日払いは伝票から。
+     画面ですることは「確認して、違うところだけ直す」。ここが崩れたら日報は入力作業に戻る。
+   ⚠️TRUSTの27列をそのまま横に並べない（iPadで読めない）。1人1枚のカードに畳んで、
+     マイナス・ボーナスは0のとき閉じておく＝実データではほとんどが0。
+   ⚠️ここの計算は backend の nippoCalcRow_ と**同じ式**。画面は速さのために持っているだけで、
+     正本はサーバが計算し直す。ズレは tests/nippo の契約テストで機械検証している。
+     ⛔片方だけ直すな。直したら必ず `node tests/nippo/run.js` を通すこと。
+   ⚠️読み込みは「最後に投げた1本だけ採用」（連番）。busyフラグで塞ぐと日付を連打したときに
+     永久「読み込み中」になる（[[reference_async_stale_guard_trap]]）。塞ぐのは保存だけ。
+============================================================================ */
+var NP=null, NP_DATE='', NP_SEQ=0, NP_BUSY=false, NP_DIRTY=false, NP_MORE={};
+
+function npYen(n){ return '¥'+(Number(n)||0).toLocaleString(); }
+/* 「¥1,000」「１０００」空欄 に耐える整数パース（backendの nippoYen_ と同じ規則） */
+function npNum(v){
+  if(v==null||v==='') return 0;
+  var s=String(v).replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0);}).replace(/[，,¥￥円\s　]/g,'');
+  var n=parseFloat(s); return isNaN(n)?0:Math.round(n);
+}
+function npHhmmMin(v){
+  var s=String(v==null?'':v).trim().replace(/[０-９：]/g,function(c){return c==='：'?':':String.fromCharCode(c.charCodeAt(0)-0xFEE0);});
+  var m=s.match(/^(\d{1,2})\s*:\s*(\d{1,2})$/); if(!m) return null;
+  var h=parseInt(m[1],10), mi=parseInt(m[2],10);
+  if(h>47||mi>59) return null;
+  return h*60+mi;
+}
+/* ⚠️終了が開始より小さければ翌日跨ぎ。深夜営業なのでここが本線（20:30→00:00 は 3時間30分） */
+function npWorkMin(start,end,adj){
+  var a=npHhmmMin(start), b=npHhmmMin(end);
+  if(a==null||b==null) return 0;
+  var d=b-a; if(d<0) d+=24*60;
+  d+=(Number(adj)||0);
+  return d>0?d:0;
+}
+function npWorkLabel(m){ m=Number(m)||0; return m<=0?'なし':(Math.floor(m/60)+'時間'+(m%60)+'分'); }
+
+function npBackCalc(t,c){
+  var g=function(k){ return Number((t||{})[k])||0; };
+  var parts=[
+    {k:'tantoSub',t:'担当小計',pct:c.tantoPct,base:g('tantoSales'),amt:Math.round(g('tantoSales')*c.tantoPct/100)},
+    {k:'dohanSub',t:'同伴小計',pct:c.dohanPct,base:g('dohanSales'),amt:Math.round(g('dohanSales')*c.dohanPct/100)},
+    {k:'tanto', t:'担当',    cnt:g('tantoCnt'), unit:c.tantoYen, amt:g('tantoCnt')*c.tantoYen},
+    {k:'yoyaku',t:'予約',    cnt:g('yoyakuCnt'),unit:c.yoyakuYen,amt:g('yoyakuCnt')*c.yoyakuYen},
+    {k:'dohan', t:'同伴',    cnt:g('dohanCnt'), unit:c.dohanYen, amt:g('dohanCnt')*c.dohanYen},
+    {k:'drink', t:'ドリンク',cnt:g('drinkCnt'), unit:c.drinkYen, amt:g('drinkCnt')*c.drinkYen},
+    {k:'bottle',t:'ボトル',  cnt:g('bottleCnt'),unit:c.bottleYen,amt:g('bottleCnt')*c.bottleYen},
+    {k:'food',  t:'フード',  cnt:g('foodCnt'),  unit:c.foodYen,  amt:g('foodCnt')*c.foodYen}
+  ];
+  var total=parts.reduce(function(s,p){return s+(Number(p.amt)||0);},0);
+  return {total:total,parts:parts};
+}
+/* 1人ぶんの再計算。⛔backendの nippoCalcRow_ と同じ式にすること（契約テストで検証） */
+function npCalcRow(r,conf){
+  r.workMin=npWorkMin(r.start,r.end,r.adj);
+  r.workText=npWorkLabel(r.workMin);
+  r.jikan=Math.round(npNum(r.wage)*r.workMin/60);
+  var auto=npBackCalc(r.tally,conf);
+  var ov=(r.backOver===''||r.backOver==null)?null:npNum(r.backOver);
+  r.backAuto=auto.total; r.backParts=auto.parts; r.backOver=ov;
+  r.back=(ov==null)?auto.total:ov;
+  r.minus=npNum(r.okuri)+npNum(r.kojin)+npNum(r.shukuhaku)+npNum(r.hayaagari);
+  r.bonus=npNum(r.soge)+npNum(r.zangyo)+npNum(r.urihan)+npNum(r.unei);
+  r.total=r.jikan+r.back+r.bonus;
+  r.nokori=r.total-npNum(r.hibarai)-r.minus;
+  return r;
+}
+function npTotals(){
+  var s=function(f){ return (NP.rows||[]).reduce(function(t,r){return t+(Number(f(r))||0);},0); };
+  var c=function(a){ return (a||[]).reduce(function(t,x){return t+npNum(x.amount);},0); };
+  return { people:(NP.rows||[]).length, jikan:s(function(r){return r.jikan;}), back:s(function(r){return r.back;}),
+           bonus:s(function(r){return r.bonus;}), minus:s(function(r){return r.minus;}),
+           hibarai:s(function(r){return npNum(r.hibarai);}), total:s(function(r){return r.total;}),
+           nokori:s(function(r){return r.nokori;}), cashIn:c(NP.cashIn), cashOut:c(NP.cashOut) };
+}
+
+/* 日付の足し引き（文字列のまま。Dateに通すとタイムゾーンで前日に化ける） */
+function npShiftDate(d,n){
+  var p=String(d).split('-');
+  var x=new Date(+p[0],(+p[1])-1,+p[2]);
+  x.setDate(x.getDate()+n);
+  var mm=x.getMonth()+1, dd=x.getDate();
+  return x.getFullYear()+'-'+(mm<10?'0':'')+mm+'-'+(dd<10?'0':'')+dd;
+}
+function npDateLabel(d){
+  var p=String(d).split('-'); if(p.length<3) return d;
+  var x=new Date(+p[0],(+p[1])-1,+p[2]);
+  return (+p[1])+'月'+(+p[2])+'日('+['日','月','火','水','木','金','土'][x.getDay()]+')';
+}
+
+function openNippo(d){
+  closeMenu();
+  npGo(d||NP_DATE||(typeof TODAY!=='undefined'?TODAY:''),true);
+}
+/* 日付移動。⚠️直しかけを黙って捨てない＝確認してから動く */
+function npGo(d,skipConfirm){
+  if(!skipConfirm&&NP_DIRTY&&!confirm('保存していない変更があります。破棄して移動しますか？')) return;
+  NP_DATE=d; NP_DIRTY=false; NP_MORE={};
+  var seq=++NP_SEQ;
+  showSheet('📋 日報','<div class="empty-msg">読み込み中...</div>','full');
+  if(typeof IS_GAS!=='undefined'&&!IS_GAS){
+    var b0=document.getElementById('sheetBody');
+    if(b0)b0.innerHTML='<div class="empty-msg">（ローカル）本番/テスト環境でご確認ください</div>';
+    return;
+  }
+  gsr('getNippo',d).then(function(r){
+    if(seq!==NP_SEQ) return;                       // 連打された＝古い応答は捨てる（最後の1本だけ採用）
+    var b=document.getElementById('sheetBody'); if(!b) return;
+    if(!r||r.ok===false){ b.innerHTML='<div class="empty-msg">'+esc((r&&r.error)||'読み込みエラー')+'</div>'; return; }
+    NP=r;
+    (NP.rows||[]).forEach(function(x){ npCalcRow(x,NP.backConf); });
+    npRender();
+  }).catch(function(){
+    if(seq!==NP_SEQ) return;
+    var b2=document.getElementById('sheetBody');
+    if(b2)b2.innerHTML='<div class="empty-msg">通信エラー。もう一度開いてください</div>';
+  });
+}
+function npPrev(){ npGo(npShiftDate(NP_DATE,-1)); }
+function npNext(){ npGo(npShiftDate(NP_DATE, 1)); }
+function npPick(v){ if(/^\d{4}-\d{2}-\d{2}$/.test(v)) npGo(v); }
+
+function npRender(){
+  var b=document.getElementById('sheetBody'); if(!b||!NP) return;
+  var t=npTotals();
+  var lock=!!NP.locked;
+  var h='';
+
+  /* ── 日付と状態 ───────────────────────────────────────────── */
+  h+='<div class="toolbar" style="flex-wrap:wrap;gap:8px">'
+    +'<button class="bm-btn sm" onclick="npPrev()">◀ 前日</button>'
+    +'<input type="date" class="finput" style="width:170px;margin:0" value="'+esc(NP.date)+'" onchange="npPick(this.value)">'
+    +'<span style="font-size:15px;font-weight:800;color:var(--txt)">'+esc(npDateLabel(NP.date))+'</span>'
+    +'<button class="bm-btn sm" onclick="npNext()">翌日 ▶</button>'
+    +'<span style="flex:1"></span>'
+    +(NP.isTest?'<span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">🧪 テスト環境に記録</span>':'')
+    +'<span class="np-chip" style="'+(lock?'border-color:#3ea06a;color:#8fe0ac':'')+'">'+(lock?'🔒 確定済み':'✏️ 作成中')+'</span>'
+    +'</div>';
+
+  if(lock){
+    h+='<div class="ck-banner ok" style="margin-bottom:10px">🔒 この日は確定済みです（'+esc(NP.fixedBy||'')+' '+esc(NP.fixedAt||'')+'）。直すには下の「確定を解除」を押してください。</div>';
+  }
+
+  /* ── その日の合計。⭐一番上に置く＝黒服が最後に見るのはこの数字 ── */
+  h+='<div class="np-sum">'
+    +npSumCell('出勤',t.people+'名')
+    +npSumCell('時間報酬',npYen(t.jikan))
+    +npSumCell('バック',npYen(t.back))
+    +npSumCell('ボーナス',npYen(t.bonus))
+    +npSumCell('支給額合計',npYen(t.total),'gold')
+    +npSumCell('日払い',npYen(t.hibarai))
+    +npSumCell('マイナス',npYen(t.minus))
+    +npSumCell('残り支給額',npYen(t.nokori),'gold')
+    +'</div>';
+
+  /* ── バックの出典。⚠️どこから数えたかを必ず出す（混ざっていないことを黒服が見て分かる） ── */
+  var srcTxt = NP.backSrc==='POS' ? '自社POSの会計から自動計算'
+             : NP.backSrc==='TRUST伝票' ? 'TRUST取込の伝票から自動計算'
+             : '売上の材料がまだありません（バックは0のまま。あとで取り込めば自動で入ります）';
+  h+='<div class="np-note">🧮 バックの出典：<b>'+esc(srcTxt)+'</b>　'
+    +'<span style="color:var(--dim)">単価＝予約 '+npYen(NP.backConf.yoyakuYen)+'/回・同伴 '+npYen(NP.backConf.dohanYen)+'/回'
+    +(NP.backConf.tantoPct?'・担当小計 '+NP.backConf.tantoPct+'%':'')+'</span></div>';
+
+  if(NP.slipHibaraiCount){
+    var diff=t.hibarai-(Number(NP.slipHibaraiTotal)||0);
+    h+='<div class="np-note" style="'+(diff?'border-color:#7a3020;color:#ff9a9a':'')+'">'
+      +'💴 閉店チェックの日払い伝票 '+NP.slipHibaraiCount+'件 計'+npYen(NP.slipHibaraiTotal)
+      +'　→　日報の日払い合計 '+npYen(t.hibarai)
+      +(diff?'　⚠️ '+npYen(Math.abs(diff))+'の差があります':'　✅ 一致')+'</div>';
+  }
+
+  /* ── 人 ─────────────────────────────────────────────────── */
+  if(!(NP.rows||[]).length){
+    h+='<div class="empty-msg">この日の出勤者が見つかりません。シフトが入っているか確認してください</div>';
+  }else{
+    h+=(NP.rows||[]).map(npCard).join('');
+  }
+
+  /* ── 入金・出金 ─────────────────────────────────────────── */
+  h+=npCashBlock('in','💰 入金',NP.costInOptions,t.cashIn);
+  h+=npCashBlock('out','🧾 出金（店の経費）',NP.costOutOptions,t.cashOut);
+
+  /* ── メモ ───────────────────────────────────────────────── */
+  h+='<div class="np-sec"><div class="np-sec-h">📝 メモ</div>'
+    +'<textarea class="finput" id="np-memo" rows="2" '+(lock?'disabled':'')
+    +' oninput="npMemo(this.value)" placeholder="申し送り（例：11,857円 涼介 7月給料作成済み）">'+esc(NP.memo||'')+'</textarea></div>';
+
+  /* ── 保存・確定 ─────────────────────────────────────────── */
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 6px;align-items:center;padding:0 2px">'
+    +(lock
+      ? '<button class="bm-btn" onclick="npReopen()">🔓 確定を解除して直す</button>'
+      : '<button class="bm-btn" id="np-save" style="border-color:#3ea06a;color:#8fe0ac" onclick="npSave()">💾 保存する</button>'
+        +'<button class="bm-btn" onclick="npConfirm()">🔒 確定する</button>')
+    /* ⚠️ここに flex:1 のスペーサーを入れて右端へ寄せると、最後の1文字が必ず切れる（実機で確認）。
+       ボタンの隣に置く＝どの幅でも読める。 */
+    +'<span id="np-msg" style="font-size:12px;color:var(--dim)">'
+      +(NP.savedAt?'最終保存 '+esc(NP.savedAt)+'　'+esc(NP.savedBy||''):'まだ保存されていません')+'</span>'
+    +'</div>'
+    +'<div class="np-note" style="color:var(--dim)">「確定」＝この日の給与の素はこれで正しい、の宣言。'
+    +'確定した日は解除するまで書き換えられません。</div>';
+
+  b.innerHTML=h;
+}
+function npSumCell(label,val,tone){
+  return '<div class="np-sum-c"><div class="np-sum-l">'+esc(label)+'</div>'
+    +'<div class="np-sum-v"'+(tone==='gold'?' style="color:var(--gold)"':'')+'>'+esc(val)+'</div></div>';
+}
+
+function npCard(r,i){
+  var lock=!!NP.locked, dis=lock?' disabled':'';
+  var kubunTone={'キャスト':'','黒服':'border-color:#3a5a8a;color:#9ab8e0','派遣':'border-color:#7a3f10;color:#e6a35a','体験':'border-color:#6a3a6a;color:#e08ad0'}[r.kubun]||'';
+  var more=!!NP_MORE[i];
+  var h='<div class="np-card'+(lock?' lock':'')+'">';
+
+  h+='<div class="np-card-h">'
+    +'<span class="np-name">'+esc(r.name||'(名前なし)')+'</span>'
+    +(r.kubun?'<span class="np-chip" style="'+kubunTone+'">'+esc(r.kubun)+'</span>':'<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a">シフト外</span>')
+    +(r.punched?'':'<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a">打刻なし</span>')
+    +'<span style="flex:1"></span>'
+    +'<span class="np-card-total">'+npYen(r.total)+'</span>'
+    +'</div>';
+
+  /* 勤怠＝この画面で一番よく直すところ。iPadは時刻ピッカーで打たせる（キーボードを出さない） */
+  h+='<div class="np-row">'
+    +'<span class="np-lbl">勤怠</span>'
+    +'<input type="time" class="np-in np-time" value="'+esc(r.start||'')+'"'+dis+' onchange="npSet('+i+',\'start\',this.value)">'
+    +'<span class="np-arrow">→</span>'
+    +'<input type="time" class="np-in np-time" value="'+esc(r.end||'')+'"'+dis+' onchange="npSet('+i+',\'end\',this.value)">'
+    +'<span class="np-lbl2">時間外</span>'
+    +'<input type="tel" inputmode="numeric" class="np-in np-min" value="'+(r.adj||'')+'"'+dis+' onchange="npSet('+i+',\'adj\',this.value)">'
+    +'<span class="np-lbl2">分</span>'
+    +'<span class="np-calc">'+esc(r.workText)+' × '+npYen(r.wage)+' ＝ <b>'+npYen(r.jikan)+'</b></span>'
+    +'</div>';
+
+  /* 日払い＝二重払いの入口。伝票と食い違ったらその場で赤く出す */
+  var slip=Number(r.hibaraiSlip)||0, hb=npNum(r.hibarai);
+  h+='<div class="np-row">'
+    +'<span class="np-lbl">日払い</span>'
+    +'<span class="np-yen">¥</span><input type="tel" inputmode="numeric" class="np-in np-money" value="'+(hb||'')+'"'+dis+' onchange="npSet('+i+',\'hibarai\',this.value)">'
+    +(slip?'<span class="np-calc'+(slip===hb?'':' warn')+'">伝票 '+npYen(slip)+(slip===hb?' ✅':' ⚠️ 食い違い')+'</span>':'')
+    +'<span style="flex:1"></span>'
+    +'<span class="np-lbl2">バック</span><b class="np-back">'+npYen(r.back)+'</b>'
+    +(r.backOver!=null?'<span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">手入力</span>':'')
+    +'<button class="np-more" onclick="npMore('+i+')">'+(more?'▲ 閉じる':'▼ 内訳・マイナス・ボーナス')+'</button>'
+    +'</div>';
+
+  /* 0のときは畳んでおく＝実データではほとんどが0。開いた時だけTRUSTと同じ全項目を出す */
+  if(!more&&(r.minus||r.bonus)){
+    h+='<div class="np-row np-sub">'
+      +(r.minus?'<span class="np-lbl2">マイナス</span><b>-'+npYen(r.minus)+'</b>':'')
+      +(r.bonus?'<span class="np-lbl2">ボーナス</span><b>'+npYen(r.bonus)+'</b>':'')
+      +'</div>';
+  }
+  if(more){
+    h+='<div class="np-row np-sub"><span class="np-lbl">マイナス</span>'
+      +npMoney(i,'okuri','送り代',r.okuri,dis)+npMoney(i,'kojin','個人支払い',r.kojin,dis)
+      +npMoney(i,'shukuhaku','宿泊代',r.shukuhaku,dis)+npMoney(i,'hayaagari','早上がり',r.hayaagari,dis)
+      +'<span class="np-calc">計 <b>'+npYen(r.minus)+'</b></span></div>';
+    h+='<div class="np-row np-sub"><span class="np-lbl">ボーナス</span>'
+      +npMoney(i,'soge','送迎手当',r.soge,dis)+npMoney(i,'zangyo','残業代',r.zangyo,dis)
+      +npMoney(i,'urihan','売り半',r.urihan,dis)+npMoney(i,'unei','運営手当',r.unei,dis)
+      +'<span class="np-calc">計 <b>'+npYen(r.bonus)+'</b></span></div>';
+    h+='<div class="np-row np-sub"><span class="np-lbl">バック</span>'
+      +'<span class="np-calc" style="flex:1">'+npBackText(r)+'</span>'
+      +'<span class="np-lbl2">手で入れる</span><span class="np-yen">¥</span>'
+      +'<input type="tel" inputmode="numeric" class="np-in np-money" placeholder="自動 '+(Number(r.backAuto)||0)+'" value="'+(r.backOver==null?'':r.backOver)+'"'+dis
+      +' onchange="npSet('+i+',\'backOver\',this.value)">'
+      +(r.backOver!=null?'<button class="np-more" onclick="npSet('+i+',\'backOver\',\'\')">自動に戻す</button>':'')
+      +'</div>';
+  }
+
+  h+='<div class="np-foot">支給額合計 <b>'+npYen(r.total)+'</b>　−　日払い '+npYen(hb)
+    +'　−　マイナス '+npYen(r.minus)+'　＝　残り支給額 <b style="color:var(--gold)">'+npYen(r.nokori)+'</b></div>';
+  return h+'</div>';
+}
+function npMoney(i,key,label,val,dis){
+  return '<span class="np-lbl2">'+esc(label)+'</span><span class="np-yen">¥</span>'
+    +'<input type="tel" inputmode="numeric" class="np-in np-money" value="'+(npNum(val)||'')+'"'+dis
+    +' onchange="npSet('+i+',\''+key+'\',this.value)">';
+}
+function npBackText(r){
+  var live=(r.backParts||[]).filter(function(p){ return (p.cnt||p.base)&&(p.amt||p.cnt||p.base); });
+  if(!live.length) return '<span style="color:var(--dim)">売上の材料なし</span>';
+  return live.map(function(p){
+    if(p.pct!=null) return esc(p.t)+' '+npYen(p.base)+'×'+p.pct+'% ＝ '+npYen(p.amt);
+    return esc(p.t)+' '+p.cnt+'回×'+npYen(p.unit)+' ＝ '+npYen(p.amt);
+  }).join('　/　')+'　自動計 <b>'+npYen(r.backAuto)+'</b>';
+}
+function npMore(i){ NP_MORE[i]=!NP_MORE[i]; npRender(); }
+
+/* 値を1つ直す。⚠️再計算してから丸ごと描き直す＝合計とカードが食い違う状態を作らない */
+function npSet(i,key,val){
+  if(!NP||NP.locked) return;
+  var r=NP.rows[i]; if(!r) return;
+  if(key==='start'||key==='end') r[key]=String(val||'');
+  else if(key==='adj') r.adj=parseInt(String(val).replace(/[^\d-]/g,''),10)||0;
+  else if(key==='backOver') r.backOver=(String(val).trim()===''?null:npNum(val));
+  else r[key]=Math.max(0,npNum(val));   /* ⚠️金額は0以上に丸める（負号で二重に引かれるのを防ぐ） */
+  npCalcRow(r,NP.backConf);
+  NP_DIRTY=true;
+  npRender();
+}
+function npMemo(v){ if(NP&&!NP.locked){ NP.memo=String(v||''); NP_DIRTY=true; } }
+
+function npCashBlock(kind,title,options,total){
+  var lock=!!NP.locked, dis=lock?' disabled':'';
+  var list=(kind==='in'?NP.cashIn:NP.cashOut)||[];
+  var h='<div class="np-sec"><div class="np-sec-h">'+esc(title)+'<span style="flex:1"></span><b>'+npYen(total)+'</b></div>';
+  if(!list.length) h+='<div style="font-size:12px;color:var(--dim);padding:4px 2px">まだありません</div>';
+  list.forEach(function(x,i){
+    var opts='<option value="">— 科目を選ぶ —</option>'+(options||[]).map(function(o){
+      return '<option value="'+esc(o)+'"'+(o===x.label?' selected':'')+'>'+esc(o)+'</option>';
+    }).join('');
+    h+='<div class="np-row">'
+      +'<select class="np-in np-cat"'+dis+' onchange="npCash(\''+kind+'\','+i+',\'label\',this.value)">'+opts+'</select>'
+      +'<span class="np-yen">¥</span><input type="tel" inputmode="numeric" class="np-in np-money" value="'+(npNum(x.amount)||'')+'"'+dis+' onchange="npCash(\''+kind+'\','+i+',\'amount\',this.value)">'
+      +'<input type="text" class="np-in np-memo" placeholder="メモ" value="'+esc(x.memo||'')+'"'+dis+' onchange="npCash(\''+kind+'\','+i+',\'memo\',this.value)">'
+      +(x.fromSlip?'<span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">伝票から</span>':'')
+      +(lock?'':'<button class="np-more" onclick="npCashDel(\''+kind+'\','+i+')">削除</button>')
+      +'</div>';
+  });
+  if(!lock) h+='<button class="bm-btn sm" style="margin-top:6px" onclick="npCashAdd(\''+kind+'\')">＋ 行を足す</button>';
+  return h+'</div>';
+}
+function npCashArr(kind){ return (kind==='in')?(NP.cashIn=NP.cashIn||[]):(NP.cashOut=NP.cashOut||[]); }
+function npCash(kind,i,key,val){
+  if(!NP||NP.locked) return;
+  var a=npCashArr(kind); if(!a[i]) return;
+  a[i][key]=(key==='amount')?Math.max(0,npNum(val)):String(val||'');
+  NP_DIRTY=true; npRender();
+}
+function npCashAdd(kind){ if(!NP||NP.locked)return; npCashArr(kind).push({label:'',amount:'',memo:''}); NP_DIRTY=true; npRender(); }
+function npCashDel(kind,i){ if(!NP||NP.locked)return; npCashArr(kind).splice(i,1); NP_DIRTY=true; npRender(); }
+
+function npMsg(txt,err){
+  var m=document.getElementById('np-msg');
+  if(m){ m.style.color=err?'#ff9a9a':'#8fe0ac'; m.textContent=txt; }
+}
+/* 保存＝ここだけ二重送信を塞ぐ。⚠️成功でも失敗でも必ずフラグを戻す（塞ぎっぱなしで押せなくなる） */
+function npSave(cb){
+  if(!NP||NP.locked) return;
+  if(NP_BUSY){ npMsg('保存中です。少しお待ちください'); return; }
+  NP_BUSY=true;
+  var btn=document.getElementById('np-save'); if(btn){ btn.disabled=true; btn.style.opacity='.5'; }
+  npMsg('保存中…');
+  var by=(typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):'';
+  var payload={ dateKey:NP.date, by:by, memo:NP.memo||'', backSrc:NP.backSrc||'',
+    rows:(NP.rows||[]).map(function(r){
+      return { name:r.name, kubun:r.kubun, start:r.start, end:r.end, adj:r.adj, wage:r.wage,
+               hibarai:r.hibarai, okuri:r.okuri, kojin:r.kojin, shukuhaku:r.shukuhaku, hayaagari:r.hayaagari,
+               soge:r.soge, zangyo:r.zangyo, urihan:r.urihan, unei:r.unei,
+               backOverride:(r.backOver==null?'':r.backOver), tally:r.tally };
+    }),
+    cashIn:NP.cashIn||[], cashOut:NP.cashOut||[] };
+  gsr('saveNippo',payload).then(function(res){
+    NP_BUSY=false;
+    if(btn){ btn.disabled=false; btn.style.opacity=''; }
+    if(!res||res.ok===false){ npMsg((res&&res.error)||'保存に失敗しました',true); return; }
+    NP_DIRTY=false;
+    NP.savedAt=res.savedAt; NP.savedBy=res.savedBy;
+    npMsg('✅ 保存しました　'+res.savedAt);
+    if(typeof toast==='function') toast('✅ 日報を保存しました');
+    if(cb) cb();
+  }).catch(function(){
+    NP_BUSY=false;
+    if(btn){ btn.disabled=false; btn.style.opacity=''; }
+    npMsg('通信エラー。もう一度押してください',true);
+  });
+}
+/* 確定＝先に必ず保存してから締める（画面の直しかけを置き去りにして締めない） */
+function npConfirm(){
+  if(!NP||NP.locked) return;
+  if(!confirm(npDateLabel(NP.date)+'の日報を確定します。\n確定すると、解除するまで書き換えられません。よろしいですか？')) return;
+  npSave(function(){
+    var by=(typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):'';
+    gsr('confirmNippo',NP.date,by).then(function(r){
+      if(!r||r.ok===false){ npMsg((r&&r.error)||'確定に失敗しました',true); return; }
+      if(typeof toast==='function') toast('🔒 日報を確定しました');
+      npGo(NP.date,true);
+    }).catch(function(){ npMsg('通信エラー。もう一度押してください',true); });
+  });
+}
+function npReopen(){
+  if(!NP||!NP.locked) return;
+  if(!confirm('確定を解除して書き換えられる状態に戻します。よろしいですか？')) return;
+  var by=(typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):'';
+  gsr('reopenNippo',NP.date,by).then(function(r){
+    if(!r||r.ok===false){ npMsg((r&&r.error)||'解除に失敗しました',true); return; }
+    if(typeof toast==='function') toast('🔓 確定を解除しました');
+    npGo(NP.date,true);
+  }).catch(function(){ npMsg('通信エラー。もう一度押してください',true); });
 }
 
 /* --- 🌙 締めワークフロー（閉店の入口をここ1つにする） ------------------------
@@ -6127,6 +6559,7 @@ var MENU_CATS=[
     {ic:'🌙', t:'閉店チェック',   s:'売上入力・4袋カウント',    act:"openCashCheck()"},
     {ic:'🔓', t:'金庫出金',       s:'臨時出金・残金の収納',     act:"openSafeWithdrawal()"},
     {ic:'💴', t:'日払いの不明分', s:'受取人が不明な分を直す',   act:"openHibaraiUnknown()"},
+    {ic:'📋', t:'日報',           s:'勤怠・日払い・入出金',     act:"openNippo()"},
     {ic:'🍽', t:'POS会計',        s:'オーダー→お会計',          act:"menuGoPos()"}
   ]},
   {id:'mono', ic:'📦', t:'モノ', pv:'在庫・発注・棚卸・納品', items:[

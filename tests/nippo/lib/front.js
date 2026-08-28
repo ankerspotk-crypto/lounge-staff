@@ -12,7 +12,13 @@ const vm = require('vm');
 const ex = require('../../pos/lib/extract');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
-const FRONT = path.join(REPO, 'gunshi-test.html');
+/* ⚠️既定は**テスト環境**。本番(gunshi.html)を見るのは `--live` / POS_TARGET=live のときだけ
+   （[[feedback_test_env_first]]）。本番昇格の直後に `node tests/nippo/run.js 06 --live` を通すと、
+   注入した実物がそのまま eval できて、画面とサーバの計算一致まで本番ファイルで確かめられる。 */
+function frontPath(which) {
+  const wantLive = (which === 'live') || (process.env.POS_TARGET === 'live');
+  return path.join(REPO, wantLive ? 'gunshi.html' : 'gunshi-test.html');
+}
 
 /* 日報の画面を構成する関数。⚠️1本でも消えたら切り出しが落ちる＝黙って検査対象が減らない */
 const FNS = ['esc',
@@ -33,6 +39,7 @@ function makeDoc() {
 
 function loadFront(opts) {
   opts = opts || {};
+  const FRONT = frontPath(opts.which);
   const code = ex.pluckFn(FRONT, FNS);   // pluckFn は結合済みの文字列を返す
   const doc = makeDoc();
   const log = { gsr: [], alerts: [], confirms: [], toasts: [], sheets: [] };
@@ -70,7 +77,8 @@ function loadFront(opts) {
   return {
     fn: sandbox, doc, log,
     html() { return doc.getElementById('sheetBody').innerHTML; },
-    build: ex.frontBuild('test'),
+    which: (opts.which === 'live' || process.env.POS_TARGET === 'live') ? 'live' : 'test',
+    build: ex.frontBuild((opts.which === 'live' || process.env.POS_TARGET === 'live') ? 'live' : 'test'),
     lines: code.split('\n').length
   };
 }
@@ -111,4 +119,4 @@ function deployedInSync(names) {
   return names.every(n => wl.indexOf(n) >= 0);
 }
 
-module.exports = { loadFront, apiWhitelist, apiWhitelistOf, keepPrefixList, deployedInSync, FNS, CODE };
+module.exports = { loadFront, frontPath, apiWhitelist, apiWhitelistOf, keepPrefixList, deployedInSync, FNS, CODE };

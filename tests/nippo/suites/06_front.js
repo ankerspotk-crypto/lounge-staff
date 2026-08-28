@@ -7,6 +7,21 @@ const F = require('../lib/front');
 module.exports = function (load, t) {
   const D = '2026-08-27';
   const A = load({ today: D });
+  const isLive = process.env.POS_TARGET === 'live';
+
+  /* ⚠️`--live` で本番(gunshi.html)を見るとき、まだ昇格していなければ切り出しは必ず落ちる。
+     そこで**素の例外で止めず「未反映」として記録し、走り切る**＝そのまま昇格リストになる
+     （cloud-21 が tests/pos で確立した流儀に合わせた）。昇格した日に自動で緑に変わる。 */
+  function front(opts) {
+    try { return F.loadFront(opts); }
+    catch (e) {
+      if (isLive && /関数が見つかりません/.test(String(e.message))) {
+        t.known('本番(gunshi.html)の画面検査', '日報がまだ本番へ昇格していない（' + String(e.message).split('\n')[0] + '）');
+        return null;
+      }
+      throw e;
+    }
+  }
 
   t.section('① 登録漏れ（ここを外すと軍師から100%呼べない）');
   {
@@ -40,7 +55,8 @@ module.exports = function (load, t) {
 
   t.section('② フロントとbackendの計算が一致する（写経した式が腐っていないか）');
   {
-    const f = F.loadFront().fn;
+    const L0 = front(); if (!L0) return;
+    const f = L0.fn;
     const conf = A.fn.nippoBackConf_();
     /* 実データで起きる形を網羅：日跨ぎ・時間外・端数・日払い・マイナス・ボーナス・バック上書き・空欄 */
     const cases = [
@@ -74,7 +90,7 @@ module.exports = function (load, t) {
 
   t.section('③ 画面が描ける');
   {
-    const F1 = F.loadFront();
+    const F1 = front(); if (!F1) return;
     F1.fn.NP = A.fn.getNippo(D);   // 中身は空でも形は本物
     F1.fn.NP.rows = [A.fn.nippoCalcRow_({ name: 'りく', kubun: 'キャスト', start: '20:30', end: '00:00',
       wage: 7500, hibarai: 10000, tally: { yoyakuCnt: 2 } }, A.fn.nippoBackConf_())];
@@ -96,7 +112,7 @@ module.exports = function (load, t) {
 
   t.section('④ 日払いが伝票と食い違ったらその場で赤く出る');
   {
-    const F2 = F.loadFront();
+    const F2 = front(); if (!F2) return;
     F2.fn.NP = A.fn.getNippo(D);
     const mk = hb => {
       const r = A.fn.nippoCalcRow_({ name: 'りく', kubun: 'キャスト', start: '20:30', end: '00:00', wage: 7500, hibarai: hb }, A.fn.nippoBackConf_());
@@ -112,7 +128,7 @@ module.exports = function (load, t) {
 
   t.section('⑤ 確定済みは触れない');
   {
-    const F3 = F.loadFront();
+    const F3 = front(); if (!F3) return;
     F3.fn.NP = A.fn.getNippo(D);
     F3.fn.NP.locked = true; F3.fn.NP.fixedBy = 'ボス'; F3.fn.NP.fixedAt = '2026-08-28 02:00';
     F3.fn.NP.rows = [A.fn.nippoCalcRow_({ name: 'りく', kubun: 'キャスト', wage: 7500 }, A.fn.nippoBackConf_())];
@@ -130,7 +146,7 @@ module.exports = function (load, t) {
 
   t.section('⑥ 入力の丸め');
   {
-    const F4 = F.loadFront();
+    const F4 = front(); if (!F4) return;
     F4.fn.NP = A.fn.getNippo(D);
     F4.fn.NP.rows = [A.fn.nippoCalcRow_({ name: 'りく', kubun: 'キャスト', start: '20:00', end: '00:00', wage: 3000 }, A.fn.nippoBackConf_())];
     F4.fn.npSet(0, 'okuri', '-5000');
@@ -148,7 +164,7 @@ module.exports = function (load, t) {
   t.section('⑦ 保存の連打で二重送信しない');
   {
     let resolve = null;
-    const F5 = F.loadFront({ reply: (fn) => (fn === 'saveNippo' ? new Promise(r => { resolve = r; }) : { ok: true }) });
+    const F5 = front({ reply: (fn) => (fn === 'saveNippo' ? new Promise(r => { resolve = r; }) : { ok: true }) }); if (!F5) return;
     F5.fn.NP = A.fn.getNippo(D);
     F5.fn.NP.rows = [A.fn.nippoCalcRow_({ name: 'りく', kubun: 'キャスト', wage: 7500 }, A.fn.nippoBackConf_())];
     F5.fn.npSave(); F5.fn.npSave(); F5.fn.npSave();
