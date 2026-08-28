@@ -99,8 +99,26 @@ module.exports = function (_front, _back, ctx) {
     t.ok(f.fn.bmLocked(), '会計済みの伝票はロックされる');
     f.fn.bmField('discount', 5000);
     t.eq(f.fn.bmGet('12').discount, 0, '値引を後から打てない');
-    f.fn.bmField('trust', '15600');
-    t.eq(f.fn.bmGet('12').trust, '15600', '⚠️TRUST照合だけは会計後も打てる（並行テストのため）');
+    f.fn.bmField('surcharge', 500);
+    t.eq(f.fn.bmGet('12').surcharge, 0, '⚠️会計済みなら一律ロック（TRUST照合の撤去で「会計後も打てる例外」は無くなった）');
+  }
+
+  t.section('🔍TRUSTとの照合は廃止（TRUSTと切り離した本番を想定・ボス指示 2026-08-28）');
+  {
+    const f = boot();
+    f.fn.BM.key = '12'; const d = f.fn.bmGet('12', 2);
+    const html = f.fn.bmDetailHtml();
+    t.ok(!/TRUST/.test(html), '伝票の画面にTRUSTの文字が出ない', (html.match(/TRUST[^<]{0,30}/) || [''])[0]);
+    t.ok(!/照合/.test(html), '照合の入力欄・判定・記録が無い');
+    ['bmVerdictHtml', 'bmHint_', 'bmLogAdd', 'bmLogHtml', 'bmLogClear'].forEach(n => {
+      t.ok(typeof f.fn[n] === 'undefined', n + ' … 関数ごと撤去されている（死にコードを残さない）');
+    });
+    t.ok(!('trust' in d), '下書きにtrustの項目を持たない');
+    f.fn.bmTouch();
+    t.ok(true, 'bmTouch（部分更新）が照合の差し替えを探しに行かない＝例外で止まらない');
+    /* ⚠️「下書きを消す」は照合カードに同居していた＝一緒に消すと伝票を取り下げられなくなる */
+    t.ok(/この伝票の下書きを消す/.test(html), '⚠️「下書きを消す」は⑧に残っている（閉店の関所から下ろす唯一の手段）');
+    t.ok(/bmClear\(\)/.test(html), 'bmClear が呼べる状態で置かれている');
   }
 
   t.section('下書きを消したらサーバーからも消す（閉店ゲートを塞がない）');
