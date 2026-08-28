@@ -24,6 +24,19 @@ module.exports = function (front, back) {
          missing.length ? ('実体なし: ' + missing.join(', ')) : null);
     t.ok(white.length >= 14, 'POS関数が' + white.length + '本 登録されている');
   }
+  {
+    /* ⚠️封印済みの登録は**コメントとして配列の中に残っている**。素の文字列一致で拾うと
+       「登録済み」と誤判定し、`gsr('封印済み関数')` を書いても検査が素通りする＝本番で100%失敗する物を通す。
+       （別セッション cloud-25 の指摘で発覚。こちらも同じ穴だった） */
+    const white = ex.apiWhitelist();
+    ['importTrustReportShot', 'clearTrustDayPay'].forEach(n => {
+      t.ok(white.indexOf(n) < 0, '⚠️封印済みの「' + n + '」を登録済みと誤判定しない（コメントを落として読む）');
+    });
+    t.ok(white.indexOf('getPosDayStatus') >= 0, '生きている登録はちゃんと拾う（落としすぎていない）');
+    t.ok(white.length >= 160, 'ホワイトリストが ' + white.length + '本（大量に落としていない）');
+    const src = require('fs').readFileSync(ex.backendPath(), 'utf8');
+    t.ok(/'importTrustReportShot'/.test(src), '前提＝封印済みの名前はソース上には残っている（コメントとして）');
+  }
 
   t.section('⚠️設定リセットで消える永続プロパティ');
   {

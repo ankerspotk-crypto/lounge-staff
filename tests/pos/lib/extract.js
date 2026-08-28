@@ -49,12 +49,21 @@ function frontBillBlock(which) {
 function backendPosBlock() {
   return slice(backendPath(), "const POS_ORDER_TAB", '/* ===== 納品書→在庫反映', 'backend POSブロック');
 }
-/* GUNSHI_API_FNS の1行（ホワイトリスト登録漏れの検出用） */
+/* ⚠️配列リテラルの中の**コメントを落としてから**名前を拾う。
+   `GUNSHI_API_FNS` の中には封印済みの登録がコメントとして残っている
+   （⛔'importTrustReportShot','clearTrustDayPay' は2026-08-27に封印）。
+   素の文字列一致だと**封印済みを「登録済み」と誤判定**し、
+   「呼んでいる関数がホワイトリストに載っているか」の検査が素通りする＝本番で100%失敗する物を通してしまう。
+   （別セッション cloud-25 の指摘。向こうの deployedInSync でも同じ穴があった） */
+function stripComments_(code) {
+  return String(code).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+}
+/* GUNSHI_API_FNS の登録名（ホワイトリスト登録漏れの検出用） */
 function apiWhitelist() {
   const src = fs.readFileSync(backendPath(), 'utf8');
   const m = src.match(/var GUNSHI_API_FNS = \[[\s\S]*?\];/);
   if (!m) throw new Error('GUNSHI_API_FNS が見つかりません（構造が変わった）');
-  return (m[0].match(/'([A-Za-z_][A-Za-z0-9_]*)'/g) || []).map(s => s.slice(1, -1));
+  return (stripComments_(m[0]).match(/'([A-Za-z_][A-Za-z0-9_]*)'/g) || []).map(s => s.slice(1, -1));
 }
 /* resetGunshiSettings_ の KEEP 配列（永続プロパティの消え残り検出用） */
 function keepList() {
@@ -64,7 +73,7 @@ function keepList() {
   const j = src.indexOf('const KEEP = [', i);
   if (j < 0) throw new Error('resetGunshiSettings_ の KEEP 配列が見つかりません');
   const k = src.indexOf('];', j);
-  return (src.slice(j, k).match(/'([A-Z_]+)'/g) || []).map(s => s.slice(1, -1));
+  return (stripComments_(src.slice(j, k)).match(/'([A-Z_]+)'/g) || []).map(s => s.slice(1, -1));
 }
 /* 版数バッジ（BUILD）＝どの版を検査したかを結果に出すため */
 function frontBuild(which) {
