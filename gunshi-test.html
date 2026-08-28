@@ -1192,6 +1192,7 @@ body.bill-pop #bmPopHd{display:flex;align-items:center;gap:12px;padding:10px 12p
 /* 写真枠。制限付きDriveの画像はJSがbackground-imageで後から差し込む（loadedが付くまでは枠だけ） */
 .hkn-ph{flex:none;border:1px solid var(--line2);border-radius:10px;background:var(--panel2) center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;cursor:pointer;overflow:hidden;}
 .hkn-ph.loaded{border-color:var(--accent-line);}
+.hkn-ph-e{font-size:10.5px;color:var(--dim);text-align:center;padding:0 5px;line-height:1.35;}
 .hkn-ph.sm{width:100%;height:100%;border:none;border-radius:9px;}
 .hkn-btn{flex:none;min-height:44px;background:var(--panel2);border:1px solid var(--line2);color:var(--txt);border-radius:11px;padding:11px 15px;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;}
 .hkn-btn:active{opacity:.65;}
@@ -10814,7 +10815,12 @@ var HKN_IMG={};                 // {写真URL: dataUrl} 取得済みキャッシ
 var HKN_IDTYPES=['運転免許証','マイナンバーカード','健康保険証','パスポート','在留カード','その他'];
 
 function hknBack_(){ return '<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>'; }
-function hknKey_(s){ return String(s||'').replace(/[\s　]/g,''); }
+function hknKey_(s){
+  s=String(s||'').replace(/[\s　]/g,'');
+  // ひらがな→カタカナに寄せる＝フリガナ列はカタカナなので、ひらがなで打っても当たるようにする
+  s=s.replace(/[\u3041-\u3096]/g,function(c){ return String.fromCharCode(c.charCodeAt(0)+0x60); });
+  return s;
+}
 function hknAge_(birth){
   var m=String(birth||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return null;
   var n=new Date(), a=n.getFullYear()-(+m[1]);
@@ -10851,11 +10857,13 @@ function hknImg_(url,dom){
   if(!url) return;
   if(HKN_IMG[url]){ if(dom)dom.style.backgroundImage='url('+HKN_IMG[url]+')',dom.classList.add('loaded'); return; }
   if(!IS_GAS) return;
+  var fail=function(msg){ var d=document.querySelector('[data-hknimg="'+url+'"]'); if(d&&!d.classList.contains('loaded')) d.innerHTML='<span class="hkn-ph-e">'+esc(msg)+'</span>'; };
   gsr('gunshiGetHakenPhoto',url).then(function(r){
-    if(!r||!r.dataUrl)return; HKN_IMG[url]=r.dataUrl;
+    if(!r||!r.dataUrl){ fail((r&&r.error)||'読み込めません'); return; }   // 黙って空欄にしない＝理由を出す
+    HKN_IMG[url]=r.dataUrl;
     var d=document.querySelector('[data-hknimg="'+url+'"]');
-    if(d){ d.style.backgroundImage='url('+r.dataUrl+')'; d.classList.add('loaded'); }
-  }).catch(function(){});
+    if(d){ d.style.backgroundImage='url('+r.dataUrl+')'; d.classList.add('loaded'); d.innerHTML=''; }
+  }).catch(function(){ fail('通信エラー'); });
 }
 function hknImgBox_(url,size,label){
   var s=size||64;
