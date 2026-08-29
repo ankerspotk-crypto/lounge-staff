@@ -688,14 +688,16 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', /* ⛔ 'importTrustReportShot', 'clearTrustDayPay' は 2026-08-27 に封印（ボス判断：日報スクショの自動突合を撤去）。
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'getPosNextPay', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', 'ccRegisterPayee', /* ⛔ 'importTrustReportShot', 'clearTrustDayPay' は 2026-08-27 に封印（ボス判断：日報スクショの自動突合を撤去）。
    関数本体は残してあるが、ここに戻さない限り軍師からは呼べない。復活の条件は関数側のコメント参照。 */
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
   // 📖 新人マニュアル（manual.gs）＝軍師は読み取りのみ。編集はコンソール(handleApiRequest_のmanual*)。
   'gunshiGetManual',
   // 🪪 派遣スタッフ 本人確認台帳（顔写真＋身分証）＝軍師で登録・照合。画像は制限付きDriveをGAS経由で返す
-  'gunshiGetHakenRoster', 'gunshiSaveHakenId', 'gunshiConfirmHaken', 'gunshiGetHakenPhoto'];
+  'gunshiGetHakenRoster', 'gunshiSaveHakenId', 'gunshiConfirmHaken', 'gunshiGetHakenPhoto',
+  // 📋 日報（nippo.gs）＝TRUSTの「日報登録」を軍師の正本として持ち直したもの。給与の素はここ。
+  'getNippo', 'saveNippo', 'confirmNippo', 'reopenNippo'];
 
 // {action:'gunshi', key, fn, args:[]} → ホワイトリスト関数を実行し {__ok:true,data} / {__ok:false,error} を返す
 function gunshiApi_(body) {
@@ -946,6 +948,27 @@ function handleApiRequest_(body) {
     const month = Number(body.month) || Number(Utilities.formatDate(new Date(), TZ, 'M'));
     const list = customerBirthdaysByMonth_(getOrOpenSS_(), month, admin ? null : who);
     return { ok: true, month: month, admin: admin, list: list };
+  }
+
+  // === 🪪 派遣台帳（管理コンソール・管理者のみ）=====================================
+  //  軍師で登録した派遣スタッフの顔写真・身分証・年齢を管理者が一覧／閲覧／修正する。
+  //  読み取りは gunshiGetHakenRoster をそのまま流用（判定を2箇所に増やさない）。
+  //  ⚠️画像は制限付きDrive＝URLを返しても開けない。adminGetHakenPhoto でbase64にして返す。
+  if (body.action === 'adminGetHakenLedger') {
+    var hkWho = getStaffName(body.userId);
+    if (!hkWho || !isAdmin_(hkWho)) return { ok: false, error: '権限がありません' };
+    return gunshiGetHakenRoster(hkWho);
+  }
+  if (body.action === 'adminGetHakenPhoto') {
+    var hpWho = getStaffName(body.userId);
+    if (!hpWho || !isAdmin_(hpWho)) return { ok: false, error: '権限がありません' };
+    return drivePhotoAsDataUrl_(String(body.ref || ''), 'hakenid');
+  }
+  // 台帳の文字項目の訂正と、状態(有効/無効)の切替。写真の差し替えは軍師の「📷撮り直す」から
+  if (body.action === 'adminUpdateHakenRec') {
+    var huWho = getStaffName(body.userId);
+    if (!huWho || !isAdmin_(huWho)) return { ok: false, error: '権限がありません' };
+    return adminUpdateHakenRec_(huWho, body.id, body.patch || {});
   }
 
   // === 📋 面談表 一覧（管理者のみ・全件。軍師は提出済のみ／こちらは提出済＋面談済の全件） ===
@@ -13613,7 +13636,8 @@ function resetGunshiSettings_() {
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
     'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TASK_DEFERRALS'];
-  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_','KYUKIN_'];
+  // ⚠️'NIPPO_' ＝日報のバック単価（予約¥500/同伴¥3,000 等）。消えると給与の素が黙って変わる
+  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_','KYUKIN_','NIPPO_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
     if (KEEP_PREFIX.some(p => k.startsWith(p))) return;
@@ -18413,6 +18437,9 @@ function ccKnownPayees_() {
   const set = {};
   const add = function (n) { const s = String(n || '').trim(); if (s) set[s] = true; };
   try { (getAllStaff_(ss) || []).forEach(function (s) { add(s.name); }); } catch (e) {}
+  // 名簿（キャスト＋黒服）。⚠️getAllStaff_はLINEで #登録 した人しか返さない＝
+  //   登録していないキャストの署名が「名簿に無い名前」になって閉店が止まる。
+  try { (getCastNamesForYoyaku_(ss, { withKurofuku: true }) || []).forEach(add); } catch (e) {}
   try {
     const msh = ss.getSheetByName(HIBARAI_MAP_TAB);
     if (msh && msh.getLastRow() >= 2) {
@@ -18422,14 +18449,38 @@ function ccKnownPayees_() {
   try {
     const tsh = ss.getSheetByName(TRUST_TAB);
     if (tsh && tsh.getLastRow() >= 2) {
+      // ⚠️全ての月を見る。最新月だけに絞ると、TRUSTの取込は月次なので
+      //   「先月は来たが今月まだ取り込まれていない派遣さん」が名簿に無い名前になり、
+      //   受取人ゲートで閉店が止まる（2026-08-29 実際に発生＝P.沖本成未.ももか.かおり）。
       const v = tsh.getDataRange().getValues();
-      const months = {};
-      for (let i = 1; i < v.length; i++) months[mStr_(v[i][0])] = true;
-      const latest = Object.keys(months).sort().pop();
-      for (let i = 1; i < v.length; i++) if (mStr_(v[i][0]) === latest) add(v[i][1]);
+      for (let i = 1; i < v.length; i++) add(v[i][1]);
     }
   } catch (e) {}
   return Object.keys(set).sort();
+}
+
+/* 🆕 受取人を名寄せ台帳にその場で登録する（軍師の閉店チェックから）。
+   ⭐これが無いと「初めて来た派遣さん」の夜は誰も閉店できない＝逃げ道は必ず残す。
+   ⚠️推測で寄せない＝TRUST表記は空のまま入れる（月次の💴日払い照合でボスが埋める）。
+   ⚠️同じ表記が既にあれば何もしない（重複行を作らない）。 */
+function ccRegisterPayee(payload) {
+  const name = getStaffName(payload && payload.userId);
+  if (!name) return { ok: false, error: '登録されていません。グループLINEで #登録 名前 を送ってください。' };
+  const raw = String((payload && payload.name) || '').trim();
+  if (!raw) return { ok: false, error: '名前が空です' };
+  if (raw.length > 40) return { ok: false, error: '名前が長すぎます' };
+  const ss = getOrOpenSS_();
+  const sh = ensureHibaraiMapSheet_(ss);
+  const key = hbKey_(raw);
+  const last = sh.getLastRow();
+  if (last >= 2) {
+    const ex = sh.getRange(2, 1, last - 1, 2).getValues();
+    for (let i = 0; i < ex.length; i++) {
+      if (hbKey_(ex[i][0]) === key || hbKey_(ex[i][1]) === key) return { ok: true, already: true, name: raw };
+    }
+  }
+  sh.appendRow([raw, '', '日払い', '軍師で現場登録（' + bizDateStr_() + '・' + name + '）／TRUST表記は要確認']);
+  return { ok: true, already: false, name: raw };
 }
 
 // 指定営業日の「伝票の日払い」と「TRUST日払い日次」を突き合わせる。
@@ -21098,10 +21149,14 @@ const POS_CLOSE_TAB   = 'POS_会計';
 /* ⚠️「現金」は**売上に充当した額**であって、お預り額ではない。
    お預り90,000／合計82,800の伝票で現金列に90,000を入れると、現金売上の集計が7,200過大になる。
    お預りとお釣りは末尾に別で持つ（列の追加は末尾のみ＝既存行がズレない）。 */
+/* ⚠️列の追加は**末尾のみ**（既存行がズレない）。2026-08-28に「次回来店時払い」「前回回収」を追加。
+   📅次回来店時払い＝この会計で次回に回した額（未収の発生）。
+   📅前回回収＝この会計で回収した前回分（未収の消込）。⚠️**売上(合計)には含まれない**
+     ＝前回の会計で既に計上済み。ここを合計に足すと売上が二重になる。 */
 const POS_CLOSE_HEAD_ = ['営業日', '伝票行', '会計時刻', '担当黒服', 'フロア', 'テーブル', 'お客様名', '人数',
                          '担当キャスト', '売半', 'セット', '担当料', '予約料', '同伴料', '注文計', 'ウェルカム杯数',
                          '値引', '値増', '小計', '税サ', '合計', '現金', 'カード', '売掛',
-                         '状態', '取消時刻', '取消者', 'お預り', 'お釣り'];
+                         '状態', '取消時刻', '取消者', 'お預り', 'お釣り', '次回来店時払い', '前回回収'];
 const POS_CLOSE_LIVE_ = '会計済み';
 const POS_CLOSE_VOID_ = '取消';
 
@@ -21114,7 +21169,16 @@ function getPosCloseSheet_() {
     sh.appendRow(POS_CLOSE_HEAD_);
     sh.setFrozenRows(1);
   }
+  posEnsureCloseHead_(sh);
   return sh;
+}
+/* 既にあるシートに**足りない列だけ**を継ぎ足す。⚠️見出し行を丸ごと書き換えない（手で直した名前を消さない）。
+   ⚠️列が足りないまま getRange(…, POS_CLOSE_HEAD_.length) を呼ぶと範囲外で落ちるので、先に列を作る。 */
+function posEnsureCloseHead_(sh) {
+  const need = POS_CLOSE_HEAD_.length;
+  if (sh.getMaxColumns() < need) sh.insertColumnsAfter(sh.getMaxColumns(), need - sh.getMaxColumns());
+  const last = sh.getLastColumn();
+  if (last < need) sh.getRange(1, last + 1, 1, need - last).setValues([POS_CLOSE_HEAD_.slice(last)]);
 }
 
 /* その営業日の会計済み伝票行を返す（画面のロック判定に使う） */
@@ -21159,7 +21223,9 @@ function posCloseBill(dateKey, rowIdx, rec, by) {
       Number(r.tanto) || 0, Number(r.yoyaku) || 0, Number(r.dohan) || 0, Number(r.ordSum) || 0, Number(r.welCount) || 0,
       Number(r.discount) || 0, Number(r.surcharge) || 0, Number(r.base) || 0, Number(r.tax) || 0, Number(r.total) || 0,
       Number(r.cashApplied) || 0, Number(r.card) || 0, Number(r.credit) || 0, POS_CLOSE_LIVE_, '', '',
-      Number(r.cash) || 0, Number(r.change) || 0]);
+      Number(r.cash) || 0, Number(r.change) || 0,
+      /* 📅未収の発生と消込。⚠️どちらも「合計」には入っていない＝売上と混ぜない */
+      Number(r.nextPay) || 0, Number(r.carry) || 0]);
     return { ok: true, mode: posMode_(), ts: ts };
   } finally {
     try { lock.releaseLock(); } catch (e) {}
@@ -21221,6 +21287,43 @@ function getPosDayStatus(dateKey) {
   const mode = posMode_();
   return { ok: true, mode: mode, enforce: (mode === 'live'), dateKey: key,
            open: open, invoice: invoice, ready: (open.length === 0 && invoice.length === 0) };
+}
+
+/* ============================================================================
+   📅 次回来店時払いの集計（ボス指示 2026-08-28「集計も必要」）
+   ----------------------------------------------------------------------------
+   ■ 発生＝その会計で次回に回した額／回収＝その会計で消し込んだ前回分。
+     **どちらも売上(合計)には入っていない**＝残高＝発生−回収。
+   ■ 取消(状態≠会計済み)の行は数えない。
+   ⚠️お客様の特定は**会計行のお客様名**（会計シートに会員番号の列が無い）。
+     同名別人は分けられない＝画面には「名前」で出し、金額の根拠は日付と卓で確かめる。
+============================================================================ */
+function getPosNextPay(fromKey, toKey) {
+  const sh = getPosCloseSheet_();
+  const last = sh.getLastRow();
+  const out = { ok: true, mode: posMode_(), from: String(fromKey || ''), to: String(toKey || ''),
+                rows: [], totalNext: 0, totalBack: 0, outstanding: 0, detail: [] };
+  if (last < 2) return out;
+  const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
+  const by = {}, order = [];
+  vals.forEach(r => {
+    if (String(r[24]) !== POS_CLOSE_LIVE_) return;                 // 取消は数えない
+    const key = String(r[0] || '');
+    if (out.from && key < out.from) return;
+    if (out.to && key > out.to) return;
+    const next = Number(r[29]) || 0, back = Number(r[30]) || 0;
+    if (!next && !back) return;
+    const cust = String(r[6] || '（名前なし）');
+    if (!by[cust]) { by[cust] = { cust: cust, next: 0, back: 0, balance: 0, last: '' }; order.push(cust); }
+    by[cust].next += next; by[cust].back += back; by[cust].last = key;
+    out.totalNext += next; out.totalBack += back;
+    out.detail.push({ date: key, rowIdx: String(r[1]), cust: cust, table: String(r[5] || ''),
+                      next: next, back: back, by: String(r[3] || '') });
+  });
+  order.forEach(k => { by[k].balance = by[k].next - by[k].back; out.rows.push(by[k]); });
+  out.rows.sort((a, b) => b.balance - a.balance);
+  out.outstanding = out.totalNext - out.totalBack;
+  return out;
 }
 
 /* 会計を取り消して伝票を編集できる状態に戻す。⚠️行は消さず状態だけ変える */
@@ -24616,3 +24719,59 @@ function gunshiConfirmHaken(login, id) {
 
 // 台帳の写真を base64 で返す（制限付きDriveをGASオーナー権限で読む。KIOSK_KEY必須＝GUNSHI_API_FNS経由のみ）
 function gunshiGetHakenPhoto(ref) { return drivePhotoAsDataUrl_(String(ref || ''), 'hakenid'); }
+
+// 🪪 派遣台帳の訂正（管理コンソール専用）。文字項目の訂正と 有効/無効 の切替だけ。
+// ⚠️写真の差し替えはここでは扱わない＝軍師の「📷 撮り直す／直す」が唯一の経路（撮る人と場所が違う）。
+// ⚠️生年月日を直すと年齢が変わる＝18歳未満になる訂正は拒否する（軍師の登録ゲートと同じ線を引く）。
+function adminUpdateHakenRec_(who, id, patch) {
+  try {
+    id = String(id || '').trim();
+    if (!id) return { ok: false, error: '登録IDがありません' };
+    var sh = getOrCreateHakenIdSheet_();
+    var c = hakenIdColMap_(sh);
+    var last = sh.getLastRow();
+    if (last < 2) return { ok: false, error: '台帳が空です' };
+    var width = sh.getLastColumn();
+    var rows = sh.getRange(2, 1, last - 1, width).getValues();
+
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][c['登録ID']] || '').trim() !== id) continue;
+
+      // 生年月日は正規化＋年齢ゲートを通してから書く
+      var age = null;
+      if (patch['生年月日'] != null) {
+        var b = hakenNormBirth_(patch['生年月日']);
+        if (!b) return { ok: false, error: '生年月日を「1998-04-01」の形で入れてください' };
+        age = hakenAgeFromBirth_(b);
+        if (age == null) return { ok: false, error: '生年月日が正しくありません' };
+        if (age < 18) return { ok: false, error: '⛔18歳未満になります（満' + age + '歳）。接客業務に就かせられません。身分証を再確認してください。' };
+        patch['生年月日'] = b;
+      }
+      if (patch['状態'] != null && ['有効', '無効'].indexOf(String(patch['状態'])) < 0) {
+        return { ok: false, error: '状態は 有効／無効 のどちらかです' };
+      }
+
+      var ALLOW = ['氏名', '本名', 'フリガナ', '派遣会社', '生年月日', '身分証の種類', 'メモ', '状態'];
+      var row = rows[i].slice(), changed = [];
+      ALLOW.forEach(function (k) {
+        if (patch[k] == null || c[k] == null) return;
+        var v = String(patch[k]).trim();
+        if (String(row[c[k]] || '').trim() === v) return;
+        row[c[k]] = v; changed.push(k);
+      });
+      if (!changed.length) return { ok: true, changed: [], msg: '変更はありません' };
+
+      // 誰がいつ直したかを残す（本人確認の台帳＝後から追える形にしておく）
+      if (c['メモ'] != null) {
+        var note = '［' + nowStamp_() + ' ' + who + 'が' + changed.join('・') + 'を訂正］';
+        row[c['メモ']] = (String(row[c['メモ']] || '').trim() + '\n' + note).trim();
+      }
+      sh.getRange(i + 2, 1, 1, width).setValues([row]);
+      return { ok: true, changed: changed, age: age, minor: (age != null && age < 20), msg: '訂正しました' };
+    }
+    return { ok: false, error: '台帳に見つかりません' };
+  } catch (e) {
+    console.error('adminUpdateHakenRec_', e);
+    return { ok: false, error: String(e) };
+  }
+}

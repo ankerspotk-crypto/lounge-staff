@@ -1612,7 +1612,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-29a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-29b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -9024,7 +9024,12 @@ function readSlipsFromDenpyo(dp){
     sec.rows.forEach(function(r){ var c=r.cells||[]; var amt=Number(c[iA])||0; if(!amt)return;
       var cash=(iCash>=0&&String(c[iCash]||'').trim()!=='')?Number(c[iCash]):null;
       var mism=(iChk>=0)?(String(c[iChk]||'').trim()==='不一致'):(cash!=null&&cash!==amt);
-      out.push({source:'read',category:defCat,payee:iP>=0?String(c[iP]||''):'',amount:amt,
+      /* ⭐派遣は派遣として処理する（ボス指示 2026-08-29）。受領伝票の署名に"派遣"が入っていれば
+         在籍ではなく『派遣 日払い』に振る＝会計の内訳が伝票どおりになる。
+         ⚠️ゲート（受取人の確認）は /日払/ で両方を見るので、関所は弱まらない。 */
+      var _py=iP>=0?String(c[iP]||''):'';
+      var _cat=(defCat==='在籍 日払い'&&ccIsHaken_(_py))?'派遣 日払い':defCat;
+      out.push({source:'read',category:_cat,payee:_py,amount:amt,
         imageUrl:iImg>=0?String(c[iImg]||''):'',include:true,rowIdx:r.rowIdx,
         ocrAmount:amt,cashSeen:cash,mismatch:!!mism,amountOk:false}); });
   }
@@ -9165,12 +9170,51 @@ function ccGateLoad(){
   }).catch(function(){ CC_GATE_ERR='締め条件を確認できませんでした'; ccGateRefresh(); });
 }
 function ccDayPaySlips_(){ var st=cashState||{}; return (st.slips||[]).filter(function(x){ return x.include!==false&&Number(x.amount)>0&&/日払/.test(String(x.category||'')); }); }
-/* 受取人が「ちゃんと決まっている」か。空欄と、名簿にも名寄せにも無い名前はNG。
+/* 受取人の照合キー。TRUSTの「P.本名.源氏名」表記はドットで割って各パートも本人として扱う＝
+   伝票に源氏名だけ書いてあっても、TRUST表記のまま書いてあっても同じ人だと分かる。
+   ⚠️あいまい照合はしない（部分一致で別人に寄せない）＝割った上での完全一致だけを見る。
+   ⚠️1文字のパートは捨てる（「P」や偶然の一致で別人を通さない）。 */
+function ccNameKeys_(s){
+  var n=String(s||'').replace(/[\s　]/g,'').trim(); if(!n) return [];
+  var out=[n];   /* 元の表記はそのまま（1文字の源氏名「海」等を落とさない） */
+  var add=function(x){ x=String(x||'').trim(); if(x.length>=2&&x!=='ｐ'&&out.indexOf(x)<0) out.push(x); };
+  /* 受領伝票には「派遣 みな」のように頭に"派遣"を付けて署名する（ボス指示 2026-08-29
+     ＝派遣は派遣として処理する）。外した形でも見る＝「派遣 みな」と「みな」が同じ人だと分かる。 */
+  var bare=n.replace(/^(派遣|派)/,''); if(bare!==n) add(bare);
+  if(/[.．]/.test(n)) n.split(/[.．]/).forEach(add);
+  return out;
+}
+/* 受取人の署名が派遣さんのものか（頭に"派遣"／"派"が付く＝現場の書き方） */
+function ccIsHaken_(s){ var n=String(s||'').replace(/[\s　]/g,'').trim(); return /^(派遣|派)./.test(n); }
+var _ccPayeeSet=null,_ccPayeeSrc=null;
+function ccPayeeSet_(){
+  var list=(CC_GATE&&CC_GATE.payees)||[];
+  if(_ccPayeeSrc===list&&_ccPayeeSet) return _ccPayeeSet;
+  var set={}; list.forEach(function(p){ ccNameKeys_(p).forEach(function(k){ set[k]=1; }); });
+  _ccPayeeSrc=list; _ccPayeeSet=set; return set;
+}
+/* 受取人が「ちゃんと決まっている」か。空欄と、名簿にも名寄せにもTRUSTにも無い名前はNG。
    ⚠️名簿を取れていない時（CC_GATE=null）は空欄だけを見る＝通信不良で全部NGにしない。 */
 function ccPayeeKnown_(name){
-  var n=String(name||'').replace(/[\s　]/g,'').trim(); if(!n) return false;
+  var keys=ccNameKeys_(name); if(!keys.length) return false;
   if(!CC_GATE||!(CC_GATE.payees||[]).length) return true;
-  return CC_GATE.payees.some(function(p){ return String(p||'').replace(/[\s　]/g,'').trim()===n; });
+  var set=ccPayeeSet_();
+  return keys.some(function(k){ return !!set[k]; });
+}
+/* 🆕 名簿にない受取人を、その場で名寄せ台帳に登録する。
+   ⭐初めて来た派遣さんの夜に、誰も閉店できなくなるのを防ぐ唯一の逃げ道。
+   ⚠️寄せ先（TRUSTのどの名前か）は決めない＝月次の💴日払い照合でボスが結び付ける。 */
+function ccRegPayee(i){
+  var s=(cashState.slips||[])[i]; if(!s)return;
+  var nm=String(s.payee||'').trim(); if(!nm){ alert('先に受取人（署名の名前）を入れてください'); return; }
+  if(!confirm('「'+nm+'」を受取人として登録しますか？\n\n初めて来た派遣さんなど、名簿に無い人のための登録です。\n署名のとおりに入っているか、写真をもう一度確かめてください。\n（TRUSTのどの名前と同じ人かは、後でコンソールの💴日払い照合で結び付けます）'))return;
+  gsr('ccRegisterPayee',{userId:KIOSK_USER_ID,name:nm}).then(function(r){
+    if(r&&r.ok){
+      if(CC_GATE){ CC_GATE.payees=(CC_GATE.payees||[]).concat([nm]); _ccPayeeSrc=null; _ccPayeeSet=null; }
+      toast(r.already?'すでに登録されています':'✅ 登録しました');
+      ccRenderSlips(); ccGateRefresh();
+    }else alert('登録できませんでした: '+((r&&r.error)||'不明'));
+  }).catch(function(){ alert('登録に失敗しました（通信エラー）'); });
 }
 /* 締めの条件。hard=true は満たさないと送信できない */
 function ccGateConds_(){
@@ -9284,6 +9328,9 @@ function ccRenderSlips(){
       +'<input type="text" class="finput" list="cc-payees" style="flex:1;margin:0'+(ccPayeeKnown_(s.payee)?'':';border-color:#e05050')+'" placeholder="受取人（署名の名前）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value;ccGateRefresh()" onchange="ccRenderSlips()">'
       +'<input type="number" class="finput" style="width:104px;margin:0" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;cashState.slips['+i+'].amountOk=true;ccRefresh();ccGateRefresh()">'
       +(s.imageUrl&&s.imageUrl!=='#'?'<a href="'+esc(s.imageUrl)+'" target="_blank" class="dp-img">📷</a>':'<span class="dp-img" style="opacity:.45">📷</span>')+'</div>'
+      +((s.include!==false&&String(s.payee||'').trim()&&!ccPayeeKnown_(s.payee))?('<div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11.5px;color:#ffcf7a">'
+        +'<span style="flex:1">⚠️「'+esc(s.payee)+'」は名簿・名寄せ・TRUSTのどれにもありません。源氏名に直すか、署名のとおりなら登録してください。</span>'
+        +'<button class="bm-btn sm" onclick="ccRegPayee('+i+')">🆕 この名前で登録</button></div>'):'')
       +(s.mismatch&&s.include!==false?('<div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11.5px;color:'+(s.amountOk?'#8fe0ac':'#ffcf7a')+'">'
         +'<span style="flex:1">'+(s.amountOk?'✅ 確認しました':'⚠️ 読み取った金額 ¥'+Number(s.ocrAmount||0).toLocaleString()+' と、写真の現金 '+(s.cashSeen==null?'（不明）':'¥'+Number(s.cashSeen).toLocaleString())+' が合いません')+'</span>'
         +(s.amountOk?'':'<button class="bm-btn sm" onclick="cashState.slips['+i+'].amountOk=true;ccRenderSlips();ccGateRefresh()">確認しました</button>')+'</div>'):'')
