@@ -1612,7 +1612,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-29c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-29d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -9073,7 +9073,7 @@ function ccDayBannerHtml(init){
 function ccMd_(d){ var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?(Number(m[2])+'/'+Number(m[3])):String(d||''); }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
-  cashState={dateKey:init.dateKey,init:init,staff:repNames_(staff),reporterName:repDefault_(staff),cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
+  cashState={dateKey:init.dateKey,init:init,staff:repNames_(staff),reporterName:repDefault_(staff),cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:((!init.reportSubmitted||init.expectedRemain==null)&&!init.approved),   /* 照合できていない日は出し直しの形で開く（承認済みは触らせない） */safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
   renderCashCheck();
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
   CC_GATE=null; CC_GATE_ERR=''; ccGateLoad();   // 🔒 締めの条件（TRUST突合・過去の未照合日・受取人の候補）

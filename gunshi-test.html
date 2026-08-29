@@ -1588,7 +1588,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-29c-test';
+var BUILD='2026-08-29d-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -9366,7 +9366,7 @@ function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
      safeNow が無い旧バックエンドでは従来どおり開店のカウントにフォールバックする。 */
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)
     ?(Number(openingInit.safeNow!=null?openingInit.safeNow:openingInit.bags.safe)||0):null;
-  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
+  cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:((!init.reportSubmitted||init.expectedRemain==null)&&!init.approved),   /* 照合できていない日は出し直しの形で開く（承認済みは触らせない） */safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
   renderCashCheck();
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
   CC_GATE=null; CC_GATE_ERR=''; ccGateLoad();   // 🔒 締めの条件（TRUST突合・過去の未照合日・受取人の候補）

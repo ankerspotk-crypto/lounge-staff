@@ -18769,8 +18769,14 @@ function getCashPendingDays() {
     const lim = Utilities.formatDate(limD, TZ, 'yyyy-MM-dd');
     const csh = getCashCheckSheet_(), done = {};
     if (csh.getLastRow() >= 2) {
-      csh.getRange(2, 1, csh.getLastRow() - 1, 2).getValues().forEach(function (r) {
-        const d = dkey(r[0]); if (d && String(r[1] || '').trim()) done[d] = true;   // 報告者が入っている＝提出済み
+      csh.getRange(2, 1, csh.getLastRow() - 1, 16).getValues().forEach(function (r) {
+        const d = dkey(r[0]); if (!d) return;
+        const submitted = !!String(r[1] || '').trim();
+        const judged    = !!String(r[13] || '').trim();   // 判定（合/要確認）＝照合できた
+        const approved  = !!String(r[15] || '').trim();
+        /* ⚠️出してあっても照合できていない日は「片付いていない」＝一覧に残す。
+           開店を取り違えて判定が空のまま入った日を、翌日に直せるようにするため。 */
+        if (approved || (submitted && judged)) done[d] = true;
       });
     }
     const osh = getOpeningCheckSheet_(), seen = {}, out = [];
@@ -18807,9 +18813,8 @@ function submitCashCheck(payload) {
       const _limD = new Date(); _limD.setDate(_limD.getDate() - CASH_BACKFILL_DAYS_);
       const _lim = Utilities.formatDate(_limD, TZ, 'yyyy-MM-dd');
       if (_req < _lim) return { ok: false, error: CASH_BACKFILL_DAYS_ + '日より前の日は締められません（管理者に相談してください）' };
-      const _bsh = getCashCheckSheet_();
-      const _bi = findCashCheckRow_(_bsh, _req);
-      if (_bi > 0 && String(_bsh.getRange(_bi, 2).getValue()).trim()) return { ok: false, error: _req + ' は既に提出済みです' };
+      /* ⚠️止めるのは承認済みだけ（この直後の共通チェックが見る）＝当日ぶんと同じ規律。
+         提出済みでも出し直せる＝照合できないまま入った日を翌日に直せる。 */
       dateKey = _req;
     }
     // 承認済みの再提出をブロック（承認の無音消失・承認後の金額改変を防止）
@@ -18845,7 +18850,10 @@ function submitCashCheck(payload) {
     });
 
     const actual = bagsTotalYen_(bags);
-    const openingInit = getOpeningCheckInit();
+    /* ⚠️必ず対象日ぶんを引く。引数なしにすると、前日ぶんを締めたときに今日の開店を見てしまい
+       「開店の現金が未提出のため照合できません」で判定が空のまま保存され、承認もできなくなる
+       （2026-08-29に実際に踏んだ）。 */
+    const openingInit = getOpeningCheckInit(dateKey);
 
     // 🏦 開店チェック提出「後」に管理者が金庫へ入れた現金＝開店カウントに入っていない外部からの増加。
     //    提出「前」の分は開店の金庫カウントに既に含まれるのでここでは足さない（二重計上の防止）。
