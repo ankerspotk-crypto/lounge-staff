@@ -1612,7 +1612,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-28j';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-29a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -3010,6 +3010,14 @@ function renderHome(){
    ⚠️書き込みなし＝getOrderAlertsは読むだけ。0件なら何も描画しない（クラッタにしない）。
    ⚠️LINE pushは持たない＝定時グループ配信で通数を焼かない（通数の犯人はそこ）。目に入る化はホームで担保。 */
 var ORDER_ALERTS=null,_oaLoading=false;
+/* ⚠️未着を取り直したら「いま開いている一覧」も描き直す。
+   これが無いと、在庫発注管理で納品✓／欠品にした直後もホームの📦は古いまま＝
+   「直したのに消えない」に見える（2026-08-29 ボス報告）。ORDER_ALERTSは起動時と
+   ホーム切替でしか読まず、☰メニュー(在庫発注管理)を閉じても再取得されないため。 */
+function oaAfterLoad_(){
+  if(viewMode==='home')renderHome();
+  var b=document.getElementById('sheetBody'); if(b&&TRI_OPEN==='oa')b.innerHTML=oaTriageHtml();
+}
 function loadOrderAlerts(){
   if(!IS_GAS){ ORDER_ALERTS={overdue:[
       {rowIdx:9,name:'獺祭 純米大吟醸45',floor:'5F',qty:'2',eta:'2026-07-18',overdueDays:5,approver:'りく'}],
@@ -3021,12 +3029,12 @@ function loadOrderAlerts(){
     vendorShortage:[{rowIdx:5,code:'118365',name:'ヴーヴ クリコ ラ グランダム 18',status:'欠品'}],
     overdueCount:1,shortageCount:1,vendorOverdueCount:3,vendorShortageCount:1}; if(viewMode==='home')renderHome(); return; }
   if(_oaLoading)return; _oaLoading=true;
-  gsr('getOrderAlerts').then(function(r){ _oaLoading=false; ORDER_ALERTS=r||{overdue:[],shortage:[]}; if(viewMode==='home')renderHome(); })
+  gsr('getOrderAlerts').then(function(r){ _oaLoading=false; ORDER_ALERTS=r||{overdue:[],shortage:[]}; oaAfterLoad_(); })
     .catch(function(){ _oaLoading=false;
       /* ⚠️取れなかった夜に閉店ゲートを塞がない＝安全側に倒して「未着なし」で通す。
          nullのままだと cf_order が永久に wait になり、GASが不調な夜は誰も帰れなくなる。 */
       if(ORDER_ALERTS==null) ORDER_ALERTS={overdue:[],shortage:[],vendorOverdue:[],vendorShortage:[],err:true};
-      if(viewMode==='home')renderHome();
+      oaAfterLoad_();
     });   // 未デプロイ等で落ちてもホームは壊さない（カード非表示のまま）
 }
 /* ===== 🧹 放置させない＝「片付け方を選ばせる」共通のしくみ（2026-08-27 ボス指示） =====
@@ -9504,6 +9512,11 @@ function undelHtml(items){
       +'<button class="stk-discon" onclick="stkMarkOrder('+it.rowIdx+',\'discon\')">🚫終売</button></span></div>';
   }).join('');
 }
+/* 未納品バーの再描画＝一覧と件数ラベルは必ずセットで直す（片方だけ直すと件数が残る） */
+function stkUndelRedraw_(){
+  var el=document.getElementById('stk-undel'); if(el)el.innerHTML=undelHtml(stockState.undelivered||[]);
+  var bar=document.querySelector('.stk-undel-bar .lbl'); if(bar)bar.textContent='📋 未納品の発注 '+((stockState.undelivered||[]).length)+'件';
+}
 /* 黒服が発注を「欠品・入荷未定」または「終売」として記録する。終売は在庫がメニュー落ちになる（現物は残る）。
    未着リストからは即座に消す（楽観更新）＝再度アラートに出さない。品名はstockState.undeliveredから引く。 */
 function stkMarkOrder(rowIdx,kind){
@@ -9515,11 +9528,10 @@ function stkMarkOrder(rowIdx,kind){
     ?'\n\n🚫 終売にすると、この品は今後「メニュー落ち（仕入れない）」になります。現物の在庫は残ります。'
     :'\n\n📭 入荷未定として記録します。入荷したら「納品✓」で戻せます。';
   if(!confirm('「'+nm+'」を「'+status+'」として記録しますか？'+extra))return;
-  stockState.undelivered=stockState.undelivered.filter(function(x){return x.rowIdx!==rowIdx;});
-  var el=document.getElementById('stk-undel'); if(el)el.innerHTML=undelHtml(stockState.undelivered);
-  var bar=document.querySelector('.stk-undel-bar .lbl'); if(bar)bar.textContent='📋 未納品の発注 '+stockState.undelivered.length+'件';
+  stockState.undelivered=(stockState.undelivered||[]).filter(function(x){return x.rowIdx!==rowIdx;});
+  stkUndelRedraw_();
   gsr('setOrderStatusManual',{userId:KIOSK_USER_ID,rowIdx:rowIdx,status:status}).then(function(r){
-    if(r&&r.ok){ toast('記録しました：'+status+(r.supplyStopped?'（在庫'+r.supplyStopped+'件をメニュー落ちに）':'')); }
+    if(r&&r.ok){ toast('記録しました：'+status+(r.supplyStopped?'（在庫'+r.supplyStopped+'件をメニュー落ちに）':'')); loadOrderAlerts(); }   /* ホームの📦も取り直す */
     else{ alert('エラー: '+((r&&r.error)||'不明')); openStockManager(); }
   }).catch(function(){ alert('記録に失敗'); openStockManager(); });
 }
@@ -9711,9 +9723,14 @@ function stkDelete(rowIdx){
 }
 function stkDelivered(rowIdx){
   if(!confirm('この発注を納品確認済みにしますか？'))return;
-  stockState.undelivered=stockState.undelivered.filter(function(i){return i.rowIdx!==rowIdx;});
-  var el=document.getElementById('stk-undel'); if(el)el.innerHTML=undelHtml(stockState.undelivered);
-  gsr('confirmOrderDelivered',{userId:KIOSK_USER_ID,rowIdx:rowIdx}).catch(function(){});
+  /* ⛔失敗を握り潰すな＝画面から消えたのにシートは未納品のまま、が起きる。戻せるよう控える */
+  var prev=(stockState.undelivered||[]).slice();
+  stockState.undelivered=prev.filter(function(i){return i.rowIdx!==rowIdx;});
+  stkUndelRedraw_();
+  gsr('confirmOrderDelivered',{userId:KIOSK_USER_ID,rowIdx:rowIdx}).then(function(r){
+    if(r&&r.ok){ toast('✅ 納品を記録しました'); loadOrderAlerts(); }   /* ホームの📦も取り直す */
+    else{ alert('記録できませんでした: '+((r&&r.error)||'不明')); stockState.undelivered=prev; stkUndelRedraw_(); }
+  }).catch(function(){ alert('記録に失敗しました（通信エラー）'); stockState.undelivered=prev; stkUndelRedraw_(); });
 }
 function stkPurchaseForm(rowIdx){
   var el=document.getElementById('stk-pf-'+rowIdx); if(!el)return; if(el.innerHTML){el.innerHTML='';return;}
