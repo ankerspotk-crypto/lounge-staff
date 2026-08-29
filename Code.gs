@@ -688,7 +688,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'getPosNextPay', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', 'ccRegisterPayee', /* ⛔ 'importTrustReportShot', 'clearTrustDayPay' は 2026-08-27 に封印（ボス判断：日報スクショの自動突合を撤去）。
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'getPosNextPay', 'markSlipPrinted', 'getSlipPrinted', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', 'ccRegisterPayee', 'getCashPendingDays', /* ⛔ 'importTrustReportShot', 'clearTrustDayPay' は 2026-08-27 に封印（ボス判断：日報スクショの自動突合を撤去）。
    関数本体は残してあるが、ここに戻さない限り軍師からは呼べない。復活の条件は関数側のコメント参照。 */
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
@@ -17386,8 +17386,8 @@ function findOpeningCheckRow_(sh, dateKey) {
 }
 
 // 直前営業日の閉店結果（4袋の各合計）を取得。金庫の抜き差し・前日比較に使う
-function getPrevClosingCheck_() {
-  const todayKey = bizDateStr_();
+function getPrevClosingCheck_(baseKey) {
+  const todayKey = String(baseKey || '').trim() || bizDateStr_();
   const sh = getCashCheckSheet_();
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return null;
@@ -17407,11 +17407,13 @@ function getPrevClosingCheck_() {
 }
 
 // IEYAS軍師「開店の現金」初期表示（提出済みなら内容、未提出はlocked:false＋前日締め）
-function getOpeningCheckInit() {
-  const dateKey = bizDateStr_();
+/* dk＝対象営業日（省略＝今日）。⚠️読み取り専用。提出(submitOpeningCheck)は当日のみのまま。
+   前日ぶんの閉店を翌日に締める（ccBackfill）ために、その日のスタート額を引けるようにした。 */
+function getOpeningCheckInit(dk) {
+  const dateKey = String(dk || '').trim() || bizDateStr_();
   const sh = getOpeningCheckSheet_();
   const rowIdx = findOpeningCheckRow_(sh, dateKey);
-  const prevClose = getPrevClosingCheck_();
+  const prevClose = getPrevClosingCheck_(dateKey);
   // 🏦 管理者の金庫追加（黒服LINE「金庫追加」）。未提出なら「前日残額の自動入力」に上乗せする
   //    ＝金庫を開けずに開店チェックを通しても、追加した分だけ金庫が増えた状態で繰り越される。
   const safeDep = (function () { try { return safeDepositSummary_(dateKey); } catch (e) { return { total: 0, before: 0, after: 0, list: [] }; } })();
@@ -18703,11 +18705,12 @@ function ccGateStatus(dateKey, slips) {
   }
 }
 
-function getCashCheckInit() {
-  const dateKey = bizDateStr_();
+/* dk＝対象営業日（省略＝今日）。前日ぶんを翌日に締めるときに使う。 */
+function getCashCheckInit(dk) {
+  const dateKey = String(dk || '').trim() || bizDateStr_();
   const sh = getCashCheckSheet_();
   const rowIdx = findCashCheckRow_(sh, dateKey);
-  const openingInit = getOpeningCheckInit();
+  const openingInit = getOpeningCheckInit(dateKey);
 
   const result = {
     dateKey,
@@ -18755,6 +18758,36 @@ function getCashCheckInit() {
   return result;
 }
 
+/* 🕛 まだ閉店を出していない過去の営業日を返す（直近 CASH_BACKFILL_DAYS_ 日）。
+   基準＝開店の現金が出ている日＝店を開けた日。開店も閉店も無い日は「休みだった日」なので出さない。 */
+const CASH_BACKFILL_DAYS_ = 7;
+function getCashPendingDays() {
+  try {
+    const today = bizDateStr_();
+    const dkey = function (v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || '').trim(); };
+    const limD = new Date(); limD.setDate(limD.getDate() - CASH_BACKFILL_DAYS_);
+    const lim = Utilities.formatDate(limD, TZ, 'yyyy-MM-dd');
+    const csh = getCashCheckSheet_(), done = {};
+    if (csh.getLastRow() >= 2) {
+      csh.getRange(2, 1, csh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+        const d = dkey(r[0]); if (d && String(r[1] || '').trim()) done[d] = true;   // 報告者が入っている＝提出済み
+      });
+    }
+    const osh = getOpeningCheckSheet_(), seen = {}, out = [];
+    if (osh.getLastRow() >= 2) {
+      osh.getRange(2, 1, osh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+        const d = dkey(r[0]);
+        if (!d || d >= today || d < lim || done[d] || seen[d]) return;
+        seen[d] = true; out.push(d);
+      });
+    }
+    out.sort();
+    return { ok: true, today: today, days: out };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e), days: [] };
+  }
+}
+
 // 黒服「閉店の現金」: 4袋カウント＋現金売上＋伝票（画像読取＋手入力）で流れ照合→保存→LINE
 // payload: { reporterName, cashSalesInput, bags:{f5,f2,keihi,safe 各枚数}, slips:[{category,payee,amount,source,imageUrl,photoBase64,mime}] }
 function submitCashCheck(payload) {
@@ -18762,7 +18795,23 @@ function submitCashCheck(payload) {
     const reporterName = String(payload.reporterName || '').trim();
     if (!reporterName) return { ok: false, error: '報告者を選択してください' };
 
-    const dateKey = bizDateStr_();
+    /* 🕛 前日ぶんの締め（ccBackfill・2026-08-29 ボス指示）。
+       締められなかった夜の翌日に、その日ぶんとして出せる。
+       ⚠️許すのは「まだ誰も出していない過去の日」だけ＝提出済みの日は絶対に上書きしない。 */
+    const _todayKey = bizDateStr_();
+    let dateKey = _todayKey;
+    const _req = String(payload.dateKey || '').trim();
+    if (_req && _req !== _todayKey) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(_req)) return { ok: false, error: '対象日が不正です' };
+      if (_req > _todayKey) return { ok: false, error: 'これから先の日は締められません' };
+      const _limD = new Date(); _limD.setDate(_limD.getDate() - CASH_BACKFILL_DAYS_);
+      const _lim = Utilities.formatDate(_limD, TZ, 'yyyy-MM-dd');
+      if (_req < _lim) return { ok: false, error: CASH_BACKFILL_DAYS_ + '日より前の日は締められません（管理者に相談してください）' };
+      const _bsh = getCashCheckSheet_();
+      const _bi = findCashCheckRow_(_bsh, _req);
+      if (_bi > 0 && String(_bsh.getRange(_bi, 2).getValue()).trim()) return { ok: false, error: _req + ' は既に提出済みです' };
+      dateKey = _req;
+    }
     // 承認済みの再提出をブロック（承認の無音消失・承認後の金額改変を防止）
     const _sh0 = getCashCheckSheet_();
     const _existIdx = findCashCheckRow_(_sh0, dateKey);

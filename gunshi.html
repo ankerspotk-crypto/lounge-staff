@@ -1612,7 +1612,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-29b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-08-29c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -9038,13 +9038,39 @@ function readSlipsFromDenpyo(dp){
   return out;
 }
 var cashState=null;
-function openCashCheck(){
+/* 🕛 前日ぶんの締め（ボス指示 2026-08-29）。締められなかった夜の翌日に、その日ぶんとして出せる。
+   CC_TARGET_DATE='' なら今日ぶん。'YYYY-MM-DD' なら過去日ぶんを締めている＝画面に警告を出す。
+   ⚠️出せるのは「まだ誰も出していない過去の日」だけ（サーバ側 submitCashCheck でも同じ判定をする）。 */
+var CC_TARGET_DATE='', CC_PENDING=null;
+function openCashCheck(dk){
+  CC_TARGET_DATE=String(dk||'');
   closeMenu(); showSheet('🌙 閉店の現金','<div class="empty-msg">読み込み中...</div>',false);
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）閉店チェックは本番のみ</div>'; return; }
-  Promise.all([gsr('getCashCheckInit'),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay').catch(function(){return null;}),gsr('getOpeningCheckInit').catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];})]).then(function(r){
+  var D=CC_TARGET_DATE;
+  Promise.all([gsr('getCashCheckInit',D),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay',D).catch(function(){return null;}),gsr('getOpeningCheckInit',D).catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];}),gsr('getCashPendingDays').catch(function(){return null;})]).then(function(r){
+    CC_PENDING=(r[6]&&r[6].ok)?r[6]:null;
     initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]),r[4],r[5]||[]);
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
+/* 何日ぶんを締めているかの見出し。⚠️過去日は必ず目立たせる＝今日ぶんと間違えて出すのが一番怖い。 */
+function ccDayBannerHtml(init){
+  var d=String((init&&init.dateKey)||'');
+  if(CC_TARGET_DATE&&CC_TARGET_DATE!==((CC_PENDING&&CC_PENDING.today)||'')){
+    return '<div style="border:2px solid #e0a060;background:rgba(224,160,96,.12);border-radius:12px;padding:10px 12px;margin-bottom:10px">'
+      +'<div style="font-size:14px;font-weight:800;color:#ffcf7a">🕛 '+esc(ccMd_(d))+'（締められていなかった日）の分を締めています</div>'
+      +'<div style="font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.6">今日の分ではありません。伝票も現金売上も <b>'+esc(ccMd_(d))+'</b> のものを入れてください。<br>'
+      +'数える現金は<b>いまの4袋</b>＝その日の閉店以降に触っていなければ、それがその日の残です。</div>'
+      +'<div class="bm-btn sm" style="margin-top:8px;display:inline-block" onclick="openCashCheck(\'\')">↩︎ 今日の分に戻る</div></div>';
+  }
+  var pend=(CC_PENDING&&CC_PENDING.days)||[];
+  if(!pend.length) return '';
+  return '<div style="border:1px solid #e0a060;border-radius:12px;padding:10px 12px;margin-bottom:10px">'
+    +'<div style="font-size:13px;font-weight:700;color:#ffcf7a">🕛 締められていない日が '+pend.length+'日あります</div>'
+    +'<div style="font-size:11.5px;color:var(--dim);margin-top:3px">先にそちらを片付けてください（放置すると現金が合わなくなります）</div>'
+    +pend.map(function(x){ return '<div class="bm-btn sm" style="margin-top:8px;margin-right:6px;display:inline-block" onclick="openCashCheck(\''+esc(x)+'\')">📅 '+esc(ccMd_(x))+' の分を締める</div>'; }).join('')
+    +'</div>';
+}
+function ccMd_(d){ var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?(Number(m[2])+'/'+Number(m[3])):String(d||''); }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)?(Number(openingInit.bags.safe)||0):null;
   cashState={dateKey:init.dateKey,init:init,staff:repNames_(staff),reporterName:repDefault_(staff),cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:!init.reportSubmitted,safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
@@ -9299,7 +9325,7 @@ function ccRefresh(){
 function renderCashCheck(){
   var b=document.getElementById('sheetBody'); if(!b)return; var st=cashState, init=st.init;
   if(!st.formMode && init.reportSubmitted){ b.innerHTML=cashResultHtml(init); return; }
-  var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
+  var h=souvenirAlert(init)+ccDayBannerHtml(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
   if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店の現金が未提出です（残るはずが計算できません）</div>';
   else h+='<div class="cc-info"><div>🌅 今夜のスタート　¥'+Number(init.openingTotal||0).toLocaleString()+'</div></div>';
   h+='<div class="flabel">報告者（締めた人）</div><div class="chips" id="cc-rep">'+chipsHtml(st.staff,'ccRep',st.reporterName)+'</div>';
@@ -9368,6 +9394,7 @@ function submitCash(){
     var g2=document.getElementById('cc-pos-gate'); if(g2&&g2.scrollIntoView)g2.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
+  if(CC_TARGET_DATE&&!confirm('⚠️ '+ccMd_(CC_TARGET_DATE)+' の分として送信します。\n\n今日の分ではありません。よろしいですか？'))return;
   var s=document.getElementById('cc-status'); if(s)s.textContent='送信中…';
   var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
   /* 🔒 締め条件の結果を一緒に送る。日次の自動突合は撤去したので、記録に残るのは黒服の申告そのもの。
@@ -9376,10 +9403,10 @@ function submitCash(){
   /* 🌙 締め作業の要約用。LINEに「何をやって帰ったか」を出すための材料（金額計算には使わない） */
   var _cf=(typeof CLOSE_FLOW!=='undefined'&&CLOSE_FLOW)?CLOSE_FLOW:null;
   var _sum={posOk:(_cf&&_cf.pos)?(!_cf.pos.enforce||!!_cf.pos.ready):null};
-  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto',gate:_gate,summary:_sum};
+  var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto',gate:_gate,summary:_sum,dateKey:CC_TARGET_DATE||''};
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
-    gsr('getCashCheckInit').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
+    gsr('getCashCheckInit',CC_TARGET_DATE||'').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
   }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
 }
 function cashResultHtml(init){
