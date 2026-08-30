@@ -1489,7 +1489,7 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 <body>
 <script>
 /* ===== テスト環境リボン（ファイル名 -test.html で判定・本番では何も出力しない） ===== */
-if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a1020;color:#ffd7dd;font:700 12px/1.7 system-ui,-apple-system,sans-serif;text-align:center;padding:4px 8px;letter-spacing:.04em;box-shadow:0 1px 6px rgba(0,0,0,.5);">⚠️ 軍師 テスト環境 — 本番バックエンド接続（実データ）。確定操作は本番に反映されます</div>');}
+if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a1020;color:#ffd7dd;font:700 12px/1.7 system-ui,-apple-system,sans-serif;text-align:center;padding:4px 8px;letter-spacing:.04em;box-shadow:0 1px 6px rgba(0,0,0,.5);">⚠️ テスト環境 — 伝票・会計はテスト用シート／お客様メモ・請求書・領収書控えは本番に書きません。⛔来店・退店・予約・在庫は本番に反映されます</div>');}
 </script>
 
 <div class="hdr">
@@ -1588,7 +1588,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-30a-test';
+var BUILD='2026-08-30b-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -6245,7 +6245,8 @@ function bmSaveNextMemo_(key,d,c,bill){
       if(res&&res.ok){
         if(r) r.nextMemo=memo;                             // 手元の予約行にも反映（すぐ📌に出る）
         if(typeof toast==='function') toast(c.next>0?'📌 次回精算をお客様のメモに記録しました':'📌 前回のお預かりを回収済みにしました');
-      }else if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）');
+      }else if(res&&res.testBlocked){ /* 🧪テスト環境＝止めた理由は gsr 側で既に出している */ }
+      else if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）');
     }).catch(function(){ if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）'); });
   }catch(e){}
 }
@@ -8181,7 +8182,9 @@ function rcptLogIssue_(reissue){
       reissue:reissue?1:0 };
     if(!IS_GAS){ try{ if(window.console)console.log('[発行控え(mock)]',payload); }catch(_){} return; }
     gsr('logIssuedReceipt',payload).then(function(r){
-      if(r&&r.serial){ var hint=document.getElementById('rcpt-hint'); if(hint)hint.textContent='発行控えを記録しました（No. '+r.serial+'）。TM Print Assistant を起動します…'; }
+      var hint=document.getElementById('rcpt-hint');
+      if(r&&r.testBlocked){ if(hint)hint.textContent='🧪 テスト環境：発行控えは本番に記録していません'; return; }
+      if(r&&r.serial){ if(hint)hint.textContent='発行控えを記録しました（No. '+r.serial+'）。TM Print Assistant を起動します…'; }
     }).catch(function(){});
   }catch(e){}
 }
@@ -10588,6 +10591,15 @@ function skSubmit(){
   var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, usageDate:SK_USAGE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
     slips:SK_SLIPS.map(function(s){ return s.copyFileId?{copyFileId:s.copyFileId}:{base64:s.base64,mime:s.mime}; }) };
   if(!IS_GAS){ toast('（ローカルでは登録不可）'); return; }
+  /* 🧪 テスト環境は本番の請求台帳に書かない。ただし**流れは止めない**＝伝票側には
+     「依頼したことにして」印を残す（🖨印刷の「刷ったことにする」と同じ考え方）。
+     ⚠️ここを素通りさせると、請求書払いの伝票が閉店ゲートに永久に残る。 */
+  if(IS_TEST_ENV){
+    if(st){ st.style.color='#e0c070'; st.textContent='🧪 テスト環境：本番の請求には登録していません'; }
+    toast('🧪 請求書の発行を依頼したことにしました（本番には登録していません）');
+    if(typeof bmSeikyuDone_==='function') bmSeikyuDone_();
+    return;
+  }
   gsr('submitSeikyu',payload).then(function(r){
     if(!r||r.ok===false){ if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); } return; }
     var extra=(r&&r.reclassified)?('／経費から'+r.reclassified+'件を対象伝票へ振替'):'';
@@ -10879,8 +10891,36 @@ function okCancel(name){
 
 /* ============ 実データ接続層（GAS本番） ============ */
 /* google.script.run 代替: GAS の fetch API を叩き {__ok,data} を展開（成功で data / 失敗で reject） */
+/* ============================================================================
+   🧪 テスト環境から「お客様の記録」に書かない
+   ----------------------------------------------------------------------------
+   ボス指示 2026-08-30「疑似でお客様情報を引っ張るから、それが本番に影響でないようにして」。
+   ■ 伝票と会計は元からテスト用シート(_TEST)に入る＝安全。危ないのは**伝票から呼ばれる
+     店の記録**＝お客様の次回対応メモ／請求書の発行依頼・請求先の登録／領収書の発行控え。
+     この4本だけを名指しで止める。
+   ■ 判定は**配信ファイル名**(IS_TEST_ENV=gunshi-test.html)。POS_MODEでは判定しない
+     ＝本番軍師は9/1まで伝票をテスト用シートに書くが、そこでの請求書や顧客メモは本物の仕事。
+     本番へ昇格した瞬間に自動で外れる＝「本番なのに書かないつもり」を構造的に防ぐ
+     （🖨印刷モードと同じ考え方＝名前と機能を兼ねさせない）。
+   ⚠️**読み取りは1本も止めない**＝疑似のお客様情報を引っ張る操作はそのまま試せる。
+   ⚠️止めたことは必ず画面に出す（黙って握り潰すと「書けたつもり」で本番が汚れたと誤解する）。
+   ⚠️新しく「店の記録に書く」呼び出しを足したら、ここに名前を足すこと。
+   ⛔来店・退店・予約・在庫は**止めていない**（本番に反映される）。テストで押さない運用で守る。
+============================================================================ */
+var TEST_NO_WRITE_FNS={
+  kioskSaveNextVisitMemo:'お客様の次回対応メモ',
+  submitSeikyu:'請求書の発行依頼',
+  saveSeikyusaki:'請求先の登録',
+  logIssuedReceipt:'領収書の発行控え'
+};
+function testWriteBlocked_(fn){ return !!IS_TEST_ENV && !!TEST_NO_WRITE_FNS[fn]; }
 function gsr(fn){
   var a=Array.prototype.slice.call(arguments,1);
+  if(testWriteBlocked_(fn)){
+    var what=TEST_NO_WRITE_FNS[fn];
+    if(typeof toast==='function') toast('🧪 テスト環境：'+what+'は本番に書きません');
+    return Promise.resolve({ok:false,testBlocked:true,error:'🧪 テスト環境なので'+what+'は本番に書きません'});
+  }
   return fetch(GAS_URL,{method:'POST',body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:a,who:(typeof LOGIN!=='undefined'?(LOGIN||''):''),env:'test'})})   /* who/env=📈機能利用ログ(usage.gs)。テスト環境の操作は本番の統計に混ぜない */
     .then(function(r){return r.json();})
     .then(function(j){ if(j&&j.__ok===false) throw new Error(j.error||'server error'); return j?j.data:j; });
