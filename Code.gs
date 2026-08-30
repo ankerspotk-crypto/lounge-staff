@@ -14491,7 +14491,9 @@ function getKioskReservations(dateKey, includeCancelled) {
     Object.keys(feeMap).forEach(k => { const c = canon(k); if (c) byCanon[c] = feeMap[k]; });
     list.forEach(r => {
       const f = byCanon[canon(r.memberId)];
-      if (f) { r.memberSince = f.memberSince || ''; r.annualFeeDate = f.annualFeeDate || ''; r.nextMemo = f.nextMemo || ''; r.bottle = f.bottle || ''; r.bottlePos = f.bottlePos || ''; }
+      // ⚠️tantouCast は上書きしない（現場が意図して空にする＝店担当・担当なしの客がいる）。
+      //   別項目で渡し、フロントが「予約に担当が無いときだけ」拾う（ボス指示 2026-08-31）。
+      if (f) { r.memberSince = f.memberSince || ''; r.annualFeeDate = f.annualFeeDate || ''; r.nextMemo = f.nextMemo || ''; r.bottle = f.bottle || ''; r.bottlePos = f.bottlePos || ''; r.custTantou = f.tantou || ''; }
     });
   } catch (e) { /* 会費突合失敗時は無印で継続 */ }
   // 📌次回対応メモ ＋ ⚠️注意情報（NG）は「会員番号が入っていない予約」でも必ず出す。
