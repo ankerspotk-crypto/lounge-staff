@@ -104,6 +104,81 @@ module.exports = function (_front, _back, ctx) {
     t.ok(/店担当/.test(html), '⚠️店担当でも⑦明細が「担当なし」に見えない');
   }
 
+  t.section('予約の担当／予約／同伴を伝票へ自動で乗せる（ボス指示 2026-08-31）');
+  {
+    const S = seats([{ rowIdx: 12, table: 'BOX1', floor: '2F', cust: '田中', pax: 2, tantou: '' }]);
+    const f = ctx.loadFront({ seats: S, rsv: [{ rowIdx: 12, id: 12, tantou: '', custTantou: 'りく', yoyaku: 'のあ', dohan: 'みれい' }] });
+    const d = f.fn.bmGet('12', 2);
+    t.eq(d.tantou, 'りく', '⚠️予約に担当が無ければ**顧客管理の担当**が入る');
+    t.eq(d.casts['りく'].tanto, 1, '顧客の担当にも担当×1が積まれる');
+    t.eq(d.casts['のあ'].yoyaku, 1, '予約キャストが④の予約×1に入る');
+    t.eq(d.casts['みれい'].dohan, 1, '同伴キャストが④の同伴×1に入る');
+    t.eq(f.fn.bmCalc(d).dc, 1, '⚠️同伴は金額が立つ（実際に同伴していなければ現場で外す）');
+  }
+  {
+    /* 予約(RSV)が届く前に開いても、届いた後の描画で必ず入る */
+    const S = seats([{ rowIdx: 12, table: 'BOX1', floor: '2F', cust: '田中', pax: 2, tantou: 'まや' }]);
+    const f = ctx.loadFront({ seats: S, rsv: [] });
+    const d = f.fn.bmGet('12', 2);
+    t.eq(d.tantou, 'まや', '席から来た担当は予約が無くても入る');
+    t.ok(!d.roleSeeded, '⚠️予約が未着なら予約／同伴のフラグは立てない');
+    const f2 = ctx.loadFront({ seats: S, rsv: [{ rowIdx: 12, id: 12, tantou: 'まや', yoyaku: 'のあ', dohan: '' }] });
+    f2.fn.BM.draft = f.fn.BM.draft;
+    t.eq(f2.fn.bmGet('12', 2).casts['のあ'].yoyaku, 1, '予約が届いた後の描画で予約キャストが入る');
+  }
+  {
+    const S = seats([{ rowIdx: 12, table: 'BOX1', floor: '2F', cust: '田中', pax: 2, tantou: 'まや' }]);
+    const R = [{ rowIdx: 12, id: 12, tantou: 'まや', yoyaku: '', dohan: 'みれい' }];
+    const f = ctx.loadFront({ seats: S, rsv: R });
+    const d = f.fn.bmGet('12', 2);
+    d.casts['みれい'].dohan = 0;
+    const d2 = f.fn.bmGet('12', 2);
+    t.eq(d2.casts['みれい'].dohan, 0, '⚠️外した同伴が描画のたびに戻ってこない（1回だけ）');
+  }
+
+  t.section('🥂ウェルカムは在庫管理している品だけ（ボス指示 2026-08-31）');
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2); f.fn.BM.welOpen = 1;
+    const all = f.fn.bmWelPickHtml(f.fn.bmGet('12'));
+    t.eq((all.match(/bmWelAdd/g) || []).length, f.fn.BM_WELCOME.length, '⚠️在庫が読めていない間は全部出す（消えて選べない方が事故が大きい）');
+    t.ok(/在庫を読めていないので/.test(all), 'その旨を画面に出す（黙って全部出さない）');
+    f.fn.BM_STOCK = [{ name: '緑茶2L', qty: 3, floor: '2F' }, { name: 'コーラ', qty: 0, floor: '2F' },
+                     { name: '響ジャパニーズハーモニー', qty: 2, floor: '5F' }, { name: '山崎12年', qty: 5, floor: '5F' }];
+    const h = f.fn.bmWelPickHtml(f.fn.bmGet('12'));
+    const shown = (h.match(/bmWelAdd\('([^']+)'/g) || []).map(s => s.replace(/.*\('/, '').replace(/'$/, ''));
+    t.eq(shown.length, 4, '在庫マスタに在る品だけに絞る');
+    t.ok(shown.indexOf('緑茶') >= 0, '⚠️名前のズレ（緑茶→緑茶2L）はエイリアス表で救う');
+    t.ok(shown.indexOf('響') >= 0, '⚠️響→響ジャパニーズハーモニーも救う');
+    t.ok(shown.indexOf('コーラ') >= 0, '⚠️在庫0でも隠さない（在0と出して黒服に判断させる）');
+    t.ok(/在0/.test(h) && /在5/.test(h), '在庫数をチップに出す');
+    t.ok(!/ウーロン茶/.test(h), '在庫マスタに無い品は出さない');
+  }
+  {
+    /* エイリアス表は在庫マスタの実物と突き合わせて作った＝右辺を勝手に変えない */
+    const f = boot();
+    t.eq(f.fn.BM_WEL_ALIAS['センブリ茶《ショット》'], 'せんぶり茶', '⚠️ひらがな/カタカナ違いは正規化では吸収できない');
+    t.eq(f.fn.BM_WEL_ALIAS['テキーラ《1800》'], '1800', '在庫マスタ側の品名は「1800」');
+  }
+
+  t.section('🗂②③④は序盤に設定したら畳む（ボス指示 2026-08-31）');
+  {
+    const f = boot(); f.fn.BM.key = '12'; const d = f.fn.bmGet('12', 2);
+    let h = f.fn.bmEditorHtml();
+    t.ok(/bmSetSum/.test(h), '注文が無いうちは②が開いている（序盤＝設定する時間）');
+    t.ok(/bmTantouOpen/.test(h), '③も開いている');
+    d.orders.push({ name: 'コーラ', price: 1000, qty: 1, attrs: ['お客様'] }); f.fn.bmSave();
+    h = f.fn.bmEditorHtml();
+    t.ok(!/bmSetSum/.test(h), '⚠️注文が入ったら②は畳む（中の入力欄ごと消える）');
+    t.ok(!/bmTantouOpen/.test(h), '③も畳む');
+    t.ok(/2名 ¥26,000/.test(h), '畳んでも②の中身は見出しに出る');
+    t.ok(/▼ 開く/.test(h), '開くボタンが出る');
+    f.fn.bmTouch();
+    t.ok(true, '⚠️畳んだ状態で部分更新しても落ちない（当て先が消えている）');
+    f.fn.bmFoldToggle(3);
+    t.ok(/bmTantouOpen/.test(f.fn.bmEditorHtml()), '手で開いたらそちらが優先');
+    t.ok(!('fold' in f.fn.bmGet('12')), '⚠️畳んだ状態を下書きJSONに混ぜない（他端末へ同期させない）');
+  }
+
   t.section('💰会計のガード（通していい物／止める物）');
   const closeWith = (draft, o) => {
     const f = boot(o);

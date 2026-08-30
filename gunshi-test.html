@@ -530,6 +530,14 @@ body.bill-pop #bmPopHd{display:flex;align-items:center;gap:12px;padding:10px 12p
   .bm-wrap>:nth-child(3){grid-column:1;grid-row:2;}
 }
 @media(max-width:820px){.bm-wrap{grid-template-columns:1fr;}}
+/* ⑦ご利用明細を**常に右に出したまま**にする（ボス指示 2026-08-31）。
+   理由＝②〜⑥を打っている最中に、⑦で反映されているかを目で確かめたい。
+   ⚠️3カラムの時だけ貼り付ける＝≤1100pxでは⑦が「左列の2行目」に回る配置なので効かせない。
+   ⚠️iOSの100vhはヘッダーを飲む＝100dvhを後に書いて上書きする（[[reference_ios_100vh_header_trap]]）。
+   ⚠️grid側の align-items:start が無いと position:sticky は効かない（既に指定済み・外すな）。 */
+@media(min-width:1101px){
+  .bm-wrap>:nth-child(3){position:sticky;top:6px;max-height:calc(100vh - 86px);max-height:calc(100dvh - 86px);overflow-y:auto;}
+}
 .bm-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px;}
 .bm-card h3{font-size:11.5px;font-weight:800;color:var(--accent);letter-spacing:.4px;margin-bottom:9px;display:flex;align-items:center;gap:7px;}
 .bm-card h3 .n{background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:5px;padding:1px 6px;font-size:10px;}
@@ -1588,7 +1596,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-31a-test';
+var BUILD='2026-08-31b-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -5447,17 +5455,45 @@ function bmGet(key,defPax){
    ⚠️席がまだ読めていない間はフラグを立てない＝次の描画で必ず入る。
    ⚠️担当は出勤していない場合もある＝候補が出勤者に限られていてはいけない（bmCastPool参照）。 */
 function bmSeedTantou_(key,d){
-  if(d.tantouSeeded) return;
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(key); })[0];
   if(!b||b.gone) return;               // SEATS未取得／退店済み＝ここで上書きしない
-  d.tantouSeeded=1;
-  d._table=bmTblLabel_(b.floor,b.table);   // 閉店ゲートの一覧で「どの卓か」を出すため
-  d._cust=String(b.cust||'');
-  /* ⚠️予約行の担当は「みれい、ゆき」と**複数入る**＝丸ごと1人のキーにすると居ないキャストが生まれる */
-  var list=bmTantouList_({tantou:b.tantou});
-  if(!list.length) return;
-  if(!String(d.tantou||'').trim()) d.tantou=list.join('、');   // ③担当カードの既定値
-  bmTantouList_(d).forEach(function(nm){ bmTantouAttach_(d,nm); });
+  var r=bmRsvOf_(key);                 // 予約行（まだ届いていなければnull＝次の描画で入る）
+  if(!d.tantouSeeded){
+    d.tantouSeeded=1;
+    d._table=bmTblLabel_(b.floor,b.table);   // 閉店ゲートの一覧で「どの卓か」を出すため
+    d._cust=String(b.cust||'');
+    /* ⚠️予約行の担当は「みれい、ゆき」と**複数入る**＝丸ごと1人のキーにすると居ないキャストが生まれる */
+    var list=bmTantouList_({tantou:b.tantou});
+    if(list.length&&!String(d.tantou||'').trim()) d.tantou=list.join('、');   // ③担当カードの既定値
+    bmTantouList_(d).forEach(function(nm){ bmTantouAttach_(d,nm); });
+  }
+  /* ⭐ボス指示 2026-08-31＝**予約の予約キャスト・同伴キャストも伝票へ自動で乗せる**。
+     ⚠️予約行(RSV)が届くまで待つ＝席(SEATS)だけでは予約/同伴が分からない。フラグは別に持つ
+       （担当のシードは席だけで完了するので、ここで一緒にすると担当が入らない伝票が出る）。
+     ⚠️担当と同じで**1回だけ**＝黒服が外したら戻らない。
+     ⚠️**同伴は金額が立つ**（¥3,000）＝実際に同伴していなければ④で外す。 */
+  if(!d.roleSeeded&&r){
+    d.roleSeeded=1;
+    /* 顧客管理の担当を最後の砦にする（ボス指示 2026-08-31「顧客管理の担当者情報は必ず反映させる」）。
+       ⚠️r.custTantou は backend が顧客マスタから乗せる項目＝**未デプロイの間は空**。空なら何もしない。 */
+    if(!String(d.tantou||'').trim()){
+      var fb=bmTantouList_({tantou:r.tantou||r.custTantou||''});
+      if(fb.length){ d.tantou=fb.join('、'); fb.forEach(function(nm){ bmTantouAttach_(d,nm); }); }
+    }
+    bmSeedCastRole_(d,r.yoyaku,'yoyaku');
+    bmSeedCastRole_(d,r.dohan,'dohan');
+  }
+}
+/* 予約の「予約キャスト」「同伴キャスト」を④の回数へ。⚠️回数は1で置く（複数回は現場で増やす）。
+   ⚠️既に回数が入っている人は触らない＝黒服が0にしたものを描画のたびに戻さない。 */
+function bmSeedCastRole_(d,names,key){
+  String(names||'').split(/[、,]/).forEach(function(n){
+    n=String(n||'').trim(); if(!n||bmIsHouseTantou_(n)) return;
+    if(!d.casts[n]) d.casts[n]={tanto:0,yoyaku:0,dohan:0};
+    if(!(d.casts[n][key]>0)) d.casts[n][key]=1;
+    if(!Array.isArray(d.castSel)) d.castSel=[];
+    if(d.castSel.indexOf(n)<0) d.castSel.push(n);
+  });
 }
 /* ③担当は**複数人**（ボス指示 2026-08-31）。
    ⚠️保存形は予約シートと同じ「、」区切りの**1本の文字列**のまま。配列に変えると
@@ -5787,14 +5823,53 @@ function bmRenderIfIdle(){
 }
 
 /* ---- 中央：入力（セット・キャスト・注文） ---- */
+/* ============================================================================
+   🗂 ②③④は「序盤に設定したら畳んでおく」（ボス指示 2026-08-31）
+   ----------------------------------------------------------------------------
+   ■ 自動で畳む条件は**「注文が入ったか」の1つだけ**。時間や回数で勝手に動かさない
+     ＝黒服が「なぜ畳まれたか」を説明できる状態にする。
+   ■ 手で開閉したら、その伝票ではそちらが優先。
+   ⚠️畳んだ状態は**下書きJSONに入れない**（BM.foldに持つ）＝画面の都合を店の記録に混ぜない・
+     他端末へ同期させない（隣の端末で勝手に畳まれる）。端末をリロードすれば既定に戻る。
+   ⚠️畳んでいる間は中の入力欄がDOMごと消える＝bmTouchの部分更新は全部 if(e=…) で守られている
+     （守られていない当て先を足すと、畳んだ瞬間に例外で止まる）。
+============================================================================ */
+function bmFoldKey_(n){ return String(BM.key)+':'+n; }
+function bmFolded_(n,d){
+  var k=bmFoldKey_(n);
+  if(BM.fold&&BM.fold.hasOwnProperty(k)) return !!BM.fold[k];
+  return !!(d&&d.orders&&d.orders.length);   // 注文が入っている＝序盤は終わった
+}
+function bmFoldToggle(n){
+  if(!BM.fold) BM.fold={};
+  BM.fold[bmFoldKey_(n)]=!bmFolded_(n,bmGet(BM.key));
+  bmRender();
+}
+/* 畳めるカードの見出し。⚠️h3は display:flex ＝ margin-left:auto で右端に寄る */
+function bmCardHead_(n,title,sub,summary,folded){
+  return '<h3 style="cursor:pointer" onclick="bmFoldToggle('+n+')"><span class="n">'+n+'</span> '+esc(title)
+    +(sub?' <span style="color:var(--sub);font-weight:600;font-size:10px">'+esc(sub)+'</span>':'')
+    +'<span style="margin-left:auto;display:flex;align-items:center;gap:7px">'
+    +(folded&&summary?'<span style="color:var(--gold);font-weight:800;font-size:11.5px">'+esc(summary)+'</span>':'')
+    +'<span style="font-size:12px;color:var(--sub)">'+(folded?'▼ 開く':'▲ 畳む')+'</span></span></h3>';
+}
+/* ④を畳んだ時の一行サマリ＝「予約2 同伴1」。0のものは出さない（畳んでも中身が分かる） */
+function bmCastRoleSummary_(d){
+  var y=0,h=0;
+  Object.keys(d.casts||{}).forEach(function(n){ var v=d.casts[n]||{}; y+=v.yoyaku||0; h+=v.dohan||0; });
+  var p=[]; if(y)p.push('予約'+y); if(h)p.push('同伴'+h);
+  return p.length?p.join(' '):'なし';
+}
 function bmEditorHtml(){
   /* ⚠️人数(pax)を渡してから下書きを作る。編集欄は伝票一覧より先に組み立てられるので、
      ここで渡さないと**2名の卓でもセットが1名で始まる**（実際に踏んだ） */
   var b0=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
   var d=bmGet(BM.key,b0.pax),pool=bmCastPool();
   var setSum=(d.guests||[]).reduce(function(a,g){return a+(Number(g.price)||0);},0);
-  var h='<div><div class="bm-card"><h3><span class="n">2</span> セット（お客様ごとに単価）</h3>'
-    +d.guests.map(function(g,i){
+  var f2=bmFolded_(2,d);
+  var h='<div><div class="bm-card">'
+    +bmCardHead_(2,'セット','お客様ごとに単価',d.guests.length+'名 '+bmYen(setSum),f2)
+    +(f2?'':d.guests.map(function(g,i){
         return '<div class="bm-row"><span class="lb">お客様'+(i+1)+'</span>'
           +'<span style="font-size:11.5px;color:var(--sub);min-width:38px">'+BM_FEE.setMinutes+'分</span>'
           +'<input type="number" class="bm-in" value="'+(g.price)+'" oninput="bmGuestPrice('+i+',this.value)" onchange="bmGuestPrice('+i+',this.value,1)">'
@@ -5811,16 +5886,17 @@ function bmEditorHtml(){
     +'<div class="bm-row"><button class="bm-btn acc" onclick="bmAddGuest()">＋ お客様を追加（'+bmYen(BM_FEE.set)+'）</button></div>'
     +'<div class="bm-note">同じ席でも女性が混ざると単価が変わるので、<b>1人ずつ</b>入れる。</div>'
     +'<div class="bm-sum" style="border-top:1px solid var(--line);margin-top:6px;padding-top:7px">'
-    +'<div class="r"><span>'+BM_FEE.setMinutes+'分 × '+d.guests.length+'名</span><b id="bmSetSum">'+bmYen(setSum)+'</b></div></div>'
+    +'<div class="r"><span>'+BM_FEE.setMinutes+'分 × '+d.guests.length+'名</span><b id="bmSetSum">'+bmYen(setSum)+'</b></div></div>')
     +'</div>'
     /* ③担当＝ボス指示でセットの直後に常時表示。お客様に紐づく担当が既定で入る */
     +bmTantouCardHtml(d,pool)
     /* ⚠️ボス指示＝出勤キャスト全員を常時並べない。**選んだ人だけ**出し、追加は開いて選ぶ */
     /* ⚠️担当は③に**一本化**（ボス指示 2026-08-31）＝ここでは触らせない。
        2箇所で担当を動かせると必ず食い違う（③で外したのに④の回数だけ残る等）。 */
-    +'<div class="bm-card"><h3><span class="n">4</span> キャスト '
-    +'<span style="color:var(--sub);font-weight:600;font-size:10px">予約／同伴</span></h3>'
-    +(bmCastShown(d).length?bmCastShown(d).map(function(n){
+    +'<div class="bm-card">'
+    +bmCardHead_(4,'キャスト','予約／同伴',bmCastRoleSummary_(d),bmFolded_(4,d))
+    +(bmFolded_(4,d)?'':
+     (bmCastShown(d).length?bmCastShown(d).map(function(n){
         var v=d.casts[n]||{tanto:0,yoyaku:0,dohan:0};
         return '<div class="bm-cast"><div style="font-weight:700;font-size:13px">'+esc(n)
           +(bmTantouList_(d).indexOf(n)>=0?' <span style="font-size:10px;color:#7be0a8;font-weight:800">担当</span>':'')
@@ -5832,6 +5908,7 @@ function bmEditorHtml(){
     +(BM.castOpen?(pool.all.length?bmCastChips_(d,pool)
        :'<div class="bm-note">キャストが取得できていません</div>'):'')
     +'<div class="bm-note">予約'+bmYen(BM_FEE.yoyaku)+'／同伴'+bmYen(BM_FEE.dohan)+'。<b>回数×単価</b>で積む。<b>担当は③</b>で選びます。</div>'
+    +'<div class="bm-note">予約に入っている<b>予約キャスト・同伴キャスト</b>は開いた時に自動で入ります。⚠️同伴は'+bmYen(BM_FEE.dohan)+'が付くので、実際に同伴していなければ<b>×か−で外す</b>。</div>')
     +'</div>'
     /* 🥂ウェルカムドリンク＝ボス指示で**④（注文の前）**。無料なので金額は出さない */
     +'<div class="bm-card"><h3><span class="n">5</span> 🥂 ウェルカムドリンク '
@@ -6362,10 +6439,12 @@ function bmReopen(){
    ⚠️**売半は会計金額を変えない**＝お客様の請求は同じ。売上を誰に付けるかの区分（バック計算で使う）。
    ⭐2026-08-31ボス指示＝**担当は複数人**選べる／**🏠店担当**も選べる。担当の入口はここ**だけ**（④からは外した）。 */
 function bmTantouCardHtml(d,pool){
-  var list=bmTantouList_(d);
-  return '<div class="bm-card"><h3><span class="n">3</span> 担当 '
-    +'<span style="color:var(--sub);font-weight:600;font-size:10px">お客様の担当キャスト（複数可）</span></h3>'
-    +'<div class="bm-row" style="align-items:flex-start"><span class="lb">担当</span>'
+  var list=bmTantouList_(d), f3=bmFolded_(3,d);
+  return '<div class="bm-card">'
+    +bmCardHead_(3,'担当','お客様の担当キャスト（複数可）',
+        (list.length?list.join('、'):'担当なし')+(d.uriban?'・売半':''),f3)
+    +(f3?'':
+      '<div class="bm-row" style="align-items:flex-start"><span class="lb">担当</span>'
     +(list.length
         ? '<div class="chips" style="margin:0;flex:1">'+list.map(function(n){
             return '<div class="chip cast sel">'+(bmIsHouseTantou_(n)?'🏠 ':'')+esc(n)
@@ -6380,7 +6459,7 @@ function bmTantouCardHtml(d,pool){
     +'<div class="chip'+(d.uriban?' sel':'')+'" onclick="bmUriban(1)">売半</div>'
     +'</div></div>'
     +'<div class="bm-note">担当が複数人いるときは<b>全員</b>選びます。🏠店担当＝キャストの担当が付いていないお客様。</div>'
-    +'<div class="bm-note">売半＝この伝票の売上を半分で付ける区分。<b>お客様の請求額は変わりません</b>（バック計算で使う）。</div>'
+    +'<div class="bm-note">売半＝この伝票の売上を半分で付ける区分。<b>お客様の請求額は変わりません</b>（バック計算で使う）。</div>')
     +'</div>';
 }
 /* 候補チップ。⚠️出勤者だけに絞らない＝担当が出勤していない日にそのお客様が来ることがある（bmCastPool参照） */
@@ -6415,20 +6494,57 @@ function bmTantouToggle(n){ if(bmLockedAlert_()) return;
 }
 function bmUriban(v){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.uriban=v?1:0; bmSave(); bmRender(); }
 /* 🥂ウェルカムの選択パネル。ジャンルごとに畳んで出す（46品を一度に並べると④注文が押し出される） */
+/* ============================================================================
+   📦 ウェルカムは**在庫管理している品だけ**出す（ボス指示 2026-08-31）
+   ----------------------------------------------------------------------------
+   ■ 照合は在庫発注マスタと**完全一致**（`bmStockOf`）。⛔あいまい照合は使わない
+     ＝「山崎」と「山崎12年」を同じ物と誤判定する（[[project_menu_drop_status]]の実測地雷）。
+   ■ 名前のズレは**この表に明示で書く**＝推測させない。左=ウェルカムの品名／右=在庫発注マスタの品名。
+     2026-08-31に本番の在庫発注マスタ(184品)と全46品を突合して作った表。
+   ⚠️在庫がまだ読めていない／取得に失敗した時は**全部出す**。
+     消えて選べない方が事故が大きい（ウェルカムは無料＝出し忘れても金額に出ない＝気づけない）。
+============================================================================ */
+var BM_WEL_ALIAS={
+  '響':'響ジャパニーズハーモニー',
+  '響 ブレンダーズチョイス':'響ブレンダーチョイス',
+  '白州12':'白州 12年',
+  'シーバスリーガル18年':'シーバス18年',
+  'シーバスミズナラ12年':'シーバスミズナラ',
+  'テキーラ《1800》':'1800',
+  '緑茶':'緑茶2L',
+  'ウーロン茶':'ウーロン茶2L',
+  'センブリ茶《ショット》':'せんぶり茶',
+  'コーヒー《HOT,ICE》':'コーヒー(HOT)'
+};
+function bmWelStock_(name){ return bmStockOf(BM_WEL_ALIAS[name]||name); }
+/* 在庫が読めている時だけ絞る。⚠️空配列（取得失敗）でも絞らない */
+function bmWelFiltered_(){
+  if(!BM_STOCK||BM_STOCK==='loading'||!BM_STOCK.length) return { list:BM_WELCOME, filtered:false, hidden:0 };
+  var list=BM_WELCOME.filter(function(x){ return !!bmWelStock_(x[0]); });
+  return { list:list, filtered:true, hidden:BM_WELCOME.length-list.length };
+}
 function bmWelPickHtml(d){
   var on={}; (d.welcome||[]).forEach(function(w){ on[w.name]=w.qty; });
+  var fx=bmWelFiltered_();
   return '<div class="bm-row"><button class="bm-btn acc" onclick="bmWelOpen()">'
     +(BM.welOpen?'✕ 閉じる':'＋ ウェルカムを選ぶ')+'</button></div>'
     +(BM.welOpen?BM_WELCOME_GENRES.map(function(g){
-        var list=BM_WELCOME.filter(function(x){ return x[1]===g; });
+        var list=fx.list.filter(function(x){ return x[1]===g; });
         if(!list.length) return '';
         return '<div class="bm-note" style="margin-top:6px">'+esc(g)+'</div><div class="chips" style="margin-top:3px">'
           +list.map(function(x){
+              /* 在庫数を添える＝在庫0の品を無自覚に出さない（絞っても「今あるか」は別の話） */
+              var st=bmWelStock_(x[0]);
+              var qb=st?('<span style="font-size:10px;font-weight:800;color:'+(st.qty>0?'#79e0a8':'#ff9a5a')+'"> 在'+st.qty+'</span>'):'';
               return '<div class="chip'+(on[x[0]]?' sel':'')+'" onclick="bmWelAdd(\''+jsStr(x[0])+'\')">'
-                +esc(x[0])+(x[2]?' 🍾':'')+(on[x[0]]?' ×'+on[x[0]]:'')+'</div>';
+                +esc(x[0])+(x[2]?' 🍾':'')+qb+(on[x[0]]?' ×'+on[x[0]]:'')+'</div>';
             }).join('')+'</div>';
       }).join('')
-      +'<div class="bm-note" style="margin-top:7px">🍾＝開封があるので「今日出たボトル」に載ります。お金は取りません。</div>':'');
+      +'<div class="bm-note" style="margin-top:7px">🍾＝開封があるので「今日出たボトル」に載ります。お金は取りません。</div>'
+      +(fx.filtered
+          ? '<div class="bm-note">📦<b>在庫管理している品だけ</b>を出しています（'+fx.list.length+'品／在庫発注マスタに無い'+fx.hidden+'品は非表示）。「在○」＝いまの在庫数。</div>'
+          : '<div class="bm-note" style="color:#ff9a5a">📦 在庫を読めていないので<b>全'+BM_WELCOME.length+'品</b>を出しています。</div>')
+      :'');
 }
 function bmWelOpen(){ BM.welOpen=!BM.welOpen; bmRender(); }
 function bmWelAdd(nm){ if(bmLockedAlert_()) return;
@@ -6992,7 +7108,7 @@ function posSubmit(){
 
 var addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1};
 function openAdd(){addSel={tables:[],tantou:[],dohan:[],yoyaku:[],time:'20:00',pax:1,rowIdx:0,name:'',member:'',note:'',custMode:null,newCust:false,subs:[],subMode:null,aggMode:'merge',checkTime:''};showSheet('➕ 予約を追加',addFormHtml(),false);}
-function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):[]),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false,subs:(r.subCustomers||[]).filter(function(s){return s&&String(s.name||'').trim();}).map(function(s){return {name:s.name||'',memberId:s.memberId||'',pax:Number(s.pax)||1,tantouCast:s.tantouCast||'',splitSales:!!s.splitSales};}),subMode:null,aggMode:(r.aggMode==='split'?'split':'merge'),checkTime:(r.checkTime||'')};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
+function editRsv(id){var r=RSV.find(function(x){return x.id===id;});if(!r)return;addSel={tables:(r.table&&r.table!=='未定'?r.table.split('、'):[]),tantou:(r.tantou?r.tantou.split('、'):(r.custTantou?r.custTantou.split('、'):[])),dohan:(r.dohan?r.dohan.split('、'):[]),yoyaku:(r.yoyaku?r.yoyaku.split('、'):[]),time:r.time,pax:r.pax,rowIdx:r.rowIdx||r.id,name:r.cust,member:r.mem||'',note:r.note||'',custMode:'picked',newCust:false,subs:(r.subCustomers||[]).filter(function(s){return s&&String(s.name||'').trim();}).map(function(s){return {name:s.name||'',memberId:s.memberId||'',pax:Number(s.pax)||1,tantouCast:s.tantouCast||'',splitSales:!!s.splitSales};}),subMode:null,aggMode:(r.aggMode==='split'?'split':'merge'),checkTime:(r.checkTime||'')};showSheet('✏️ '+r.cust+'様の予約',addFormHtml(true),false);}
 function afToggle(kind,el,val,single){ if(single){var w=el.parentElement;w.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');});el.classList.add('sel');addSel[kind]=val;} else {el.classList.toggle('sel');var a=addSel[kind];var i=a.indexOf(val);if(i>=0)a.splice(i,1);else a.push(val);} }
 function addFormHtml(isEdit){
   var times=['同伴','20:00','20:30','21:00','21:30','22:00','22:30','23:00'];
@@ -11449,7 +11565,7 @@ function adaptHall(data){
   Object.keys(comb).forEach(function(pc){var pi=byCode[pc]; if(pi==null)return; (comb[pc]||[]).forEach(function(oc){var oi=byCode[oc]; if(oi==null)return; (arr[pi].mergeWith=arr[pi].mergeWith||[]).push(oi); arr[oi].mergedTo=pi;});});
   return arr;
 }
-function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, checkTime:r.checkTime||'', cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', ngInfo:r.ngInfo||null, bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[], regBy:r.regBy||''};});}
+function adaptRsv(list){return (list||[]).map(function(r){return {id:r.rowIdx, rowIdx:r.rowIdx, time:r.time, checkTime:r.checkTime||'', cust:r.customer, mem:r.memberId, pax:r.pax, table:r.table||'未定', tantou:r.tantouCast, dohan:r.dohanCast, yoyaku:r.yoyakuCast, status:r.status, note:r.youbou||'', checkInAt:r.checkInAt||null, joined:r.memberSince||'', feeDate:r.annualFeeDate||'', nextMemo:r.nextMemo||'', ngInfo:r.ngInfo||null, custTantou:r.custTantou||'', bottle:r.bottle||'', bottlePos:r.bottlePos||'', subCustomers:r.subCustomers||[], regBy:r.regBy||''};});}
 // 同じお客様の予約が複数テーブルに跨る場合、その席同士を1組(結合表示)にまとめる。
 // 手動結合が既にある席は尊重してスキップ。キャンセル/退店済み・未定は対象外。
 function applyRsvGrouping(){
