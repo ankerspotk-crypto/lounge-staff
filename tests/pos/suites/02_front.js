@@ -220,23 +220,34 @@ module.exports = function (_front, _back, ctx) {
     t.eq(f.fn.BM_WEL_ALIAS['テキーラ《1800》'], '1800', '在庫マスタ側の品名は「1800」');
   }
 
-  t.section('🗂②③④は序盤に設定したら畳む（ボス指示 2026-08-31）');
+  t.section('🗂2-4「設定」＝セット・担当・キャストを1枠に（ボス指示 2026-08-31）');
   {
     const f = boot(); f.fn.BM.key = '12'; const d = f.fn.bmGet('12', 2);
     let h = f.fn.bmEditorHtml();
-    t.ok(/bmSetSum/.test(h), '注文が無いうちは②が開いている（序盤＝設定する時間）');
-    t.ok(/bmTantouOpen/.test(h), '③も開いている');
-    d.orders.push({ name: 'コーラ', price: 1000, qty: 1, attrs: ['お客様'] }); f.fn.bmSave();
+    t.eq((h.match(/class="n">/g) || []).length, 3, '編集側は3枚に減った（2-4／5ウェルカム／6注文）', h.match(/class="n">[^<]*/g));
+    t.ok(/2-4/.test(h), '⚠️番号は2-4のまま＝⑤⑥⑦⑧を振り直さない（「7番の明細」の言い方がズレる）');
+    t.ok(/bmSetSum/.test(h) && /bmTantouOpen/.test(h) && /bmCastOpen/.test(h), '最初は開いている（セット・担当・キャストが1枠に入る）');
+    t.ok(/設定おわり/.test(h), '「✅設定おわり」で自分から畳める');
+    f.fn.bmFoldToggle(2);
     h = f.fn.bmEditorHtml();
-    t.ok(!/bmSetSum/.test(h), '⚠️注文が入ったら②は畳む（中の入力欄ごと消える）');
-    t.ok(!/bmTantouOpen/.test(h), '③も畳む');
-    t.ok(/2名 ¥26,000/.test(h), '畳んでも②の中身は見出しに出る');
-    t.ok(/▼ 開く/.test(h), '開くボタンが出る');
+    t.ok(!/bmSetSum/.test(h) && !/bmTantouOpen/.test(h) && !/bmCastOpen/.test(h), '畳むと3つとも中身が消える');
+    t.ok(/2名 ¥26,000 ／ 担当 まや/.test(h), '⚠️畳んだ見出しに「人数／担当／予約同伴」を1行で出す');
     f.fn.bmTouch();
     t.ok(true, '⚠️畳んだ状態で部分更新しても落ちない（当て先が消えている）');
-    f.fn.bmFoldToggle(3);
-    t.ok(/bmTantouOpen/.test(f.fn.bmEditorHtml()), '手で開いたらそちらが優先');
+    f.fn.bmFoldToggle(2);
+    t.ok(/bmSetSum/.test(f.fn.bmEditorHtml()), 'もう一度押すと開く');
     t.ok(!('fold' in f.fn.bmGet('12')), '⚠️畳んだ状態を下書きJSONに混ぜない（他端末へ同期させない）');
+  }
+  {
+    /* 注文が入ったら自動で畳む＝序盤は終わった。⛔項目を触るたびには畳まない */
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.bmTantouToggle('のあ');
+    t.ok(/bmSetSum/.test(f.fn.bmEditorHtml()), '⚠️担当を入れただけでは畳まない（続けて予約・同伴を入れる）');
+    /* ⚠️bmRender()を挟むと bmLoad() が下書きを作り直す＝掴んでいた参照は死ぬ。必ず取り直す */
+    f.fn.bmGet('12').orders.push({ name: 'コーラ', price: 1000, qty: 1, attrs: ['お客様'] }); f.fn.bmSave();
+    const h = f.fn.bmEditorHtml();
+    t.ok(!/bmSetSum/.test(h), '注文が入ったら自動で畳む');
+    t.ok(/予約1|同伴1|担当 まや・のあ/.test(h), '畳んだ見出しに担当・予約・同伴が出る');
   }
 
   t.section('💰会計のガード（通していい物／止める物）');
