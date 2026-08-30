@@ -196,6 +196,28 @@ module.exports = function (_front, _back, ctx) {
     t.ok(/売上→/.test(f.fn.bmDetailHtml()), '⑦明細にも振替先を出す');
   }
 
+  t.section('🥂ウェルカムも出しおわったら畳む（ボス指示 2026-08-31）');
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    let h = f.fn.bmEditorHtml();
+    t.ok(/bmWelOpen/.test(h), '最初は開いている');
+    t.ok(!/出しおわり/.test(h), '⚠️まだ1杯も出していなければ畳むボタンは出さない（畳む物が無い）');
+    f.fn.bmWelAdd('コーラ'); f.fn.bmWelAdd('コーラ'); f.fn.bmWelAdd('緑茶');
+    h = f.fn.bmEditorHtml();
+    t.ok(/出しおわり/.test(h), '1杯でも入れたら「✅出しおわり」が出る');
+    t.ok(/bmWelOpen/.test(h), '⚠️1杯選ぶたびには畳まない（続けて何杯も出す）');
+    f.fn.bmFoldToggle(5);
+    h = f.fn.bmEditorHtml();
+    t.ok(!/bmWelOpen/.test(h), '畳むと中身が消える');
+    t.ok(/3杯 コーラ×2・緑茶/.test(h), '⚠️畳んだ見出しに「何を何杯出したか」が出る');
+  }
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.bmWelAdd('コーラ');
+    f.fn.bmGet('12').orders.push({ name: 'ビール', price: 1500, qty: 1, attrs: ['お客様'] }); f.fn.bmSave();
+    t.ok(!/bmWelOpen/.test(f.fn.bmEditorHtml()), '注文が入ったら⑤も自動で畳む（2-4と同じ引き金）');
+  }
+
   t.section('🥂ウェルカムは在庫管理している品だけ（ボス指示 2026-08-31）');
   {
     const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2); f.fn.BM.welOpen = 1;

@@ -1596,7 +1596,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-31f-test';
+var BUILD='2026-08-31g-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -5901,6 +5901,14 @@ function bmCardHead_(n,title,sub,summary,folded){
     +(folded&&summary?'<span style="color:var(--gold);font-weight:800;font-size:11.5px">'+esc(summary)+'</span>':'')
     +'<span style="font-size:12px;color:var(--sub)">'+(folded?'▼ 開く':'▲ 畳む')+'</span></span></h3>';
 }
+/* ⑤を畳んだ時の一行サマリ＝「3杯 コーラ×2・緑茶」。品名まで出す＝何を出したかが畳んでも分かる。
+   ⚠️長くなるので見出し側で…に丸める（bmCardHead_ の summary は1行） */
+function bmWelSummary_(d){
+  var w=d.welcome||[];
+  if(!w.length) return 'なし';
+  var n=w.reduce(function(a,x){ return a+(x.qty||0); },0);
+  return n+'杯 '+w.map(function(x){ return x.name+(x.qty>1?'×'+x.qty:''); }).join('・');
+}
 /* ④を畳んだ時の一行サマリ＝「予約2 同伴1」。0のものは出さない（畳んでも中身が分かる） */
 function bmCastRoleSummary_(d){
   var y=0,h=0;
@@ -5957,12 +5965,13 @@ function bmEditorHtml(){
     /* ⭐「設定おわり」＝畳む引き金を人の手に置く（触るたびに勝手に畳まない） */
     +'<div class="bm-row" style="margin-top:13px"><button class="bm-btn pri" style="flex:1;padding:11px" onclick="bmFoldToggle(2)">✅ 設定おわり（畳む）</button></div>')
     +'</div>'
-    /* 🥂ウェルカムドリンク＝ボス指示で**④（注文の前）**。無料なので金額は出さない */
-    +'<div class="bm-card"><h3><span class="n">5</span> 🥂 ウェルカムドリンク '
-    +'<span style="color:var(--sub);font-weight:600;font-size:10px">無料・出したものの記録</span>'
-    +(d.welcome.length?'<span style="color:var(--gold);font-weight:800;font-size:12px">'
-        +d.welcome.reduce(function(a,w){return a+w.qty;},0)+'杯</span>':'')+'</h3>'
-    +(d.welcome.length?'<div style="margin-bottom:9px">'+d.welcome.map(function(w,i){
+    /* 🥂ウェルカムドリンク＝注文の前。無料なので金額は出さない。
+       ⭐2-4と同じで**出しおわったら畳む**（ボス指示 2026-08-31）＝畳む引き金は
+         ①「✅出しおわり」を押す ②注文が入る の2つだけ。1杯選ぶたびには畳まない。 */
+    +'<div class="bm-card">'
+    +bmCardHead_(5,'🥂 ウェルカムドリンク','無料・出したものの記録',bmWelSummary_(d),bmFolded_(5,d))
+    +(bmFolded_(5,d)?'':
+     (d.welcome.length?'<div style="margin-bottom:9px">'+d.welcome.map(function(w,i){
         return '<div class="bm-ord"><span class="at cast">🥂</span>'
           +'<span class="nm">'+esc(w.name)+(w.stock?' <span style="font-size:10px;color:#79e0a8">🍾在庫</span>':'')+'</span>'
           +'<button class="bm-btn sm" onclick="bmWelQty('+i+',-1)">−</button>'
@@ -5971,6 +5980,7 @@ function bmEditorHtml(){
           +'<span class="amt" style="color:var(--sub);font-size:12px">無料</span></div>';
       }).join('')+'</div>':'<div class="bm-note" style="margin-bottom:6px">まだ出していません</div>')
     +bmWelPickHtml(d)
+    +(d.welcome.length?'<div class="bm-row" style="margin-top:11px"><button class="bm-btn pri" style="flex:1;padding:10px" onclick="bmFoldToggle(5)">✅ 出しおわり（畳む）</button></div>':''))
     +'</div>'
     +'<div class="bm-card"><h3><span class="n">6</span> 注文 '
     +'<span style="color:var(--gold);font-weight:800;font-size:12px">'+d.orders.length+'点 '
