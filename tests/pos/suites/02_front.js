@@ -136,6 +136,31 @@ module.exports = function (_front, _back, ctx) {
     t.eq(d2.casts['みれい'].dohan, 0, '⚠️外した同伴が描画のたびに戻ってこない（1回だけ）');
   }
 
+  t.section('🖨誰かに付けた品はお客様に渡す紙にも名前を出す（ボス指示 2026-08-31）');
+  {
+    /* ボス報告＝「テキーラやビールがのらない」。原因＝判定がジャンル(キャストドリンク)だった */
+    const f = boot();
+    const d = f.fn.bmGet('12', 2);
+    d.orders = [{ name: 'テキーラ', price: 8000, qty: 1, attrs: ['まや'], genre: 'スピリッツ' },
+                { name: 'ビール', price: 1500, qty: 2, attrs: ['のあ'], genre: 'ビール' },
+                { name: 'ウーロン茶', price: 1000, qty: 1, attrs: ['お客様'], genre: 'ソフトドリンク' }];
+    const c = f.fn.bmCalc(d);
+    const bill = { floor: '2F', table: 'BOX1', cust: '田中', member: 'M-0001', inT: '20:00' };
+    ['guest', 'check'].forEach(mode => {
+      const txt = f.fn.bmSlipLines_(d, c, bill, mode).map(x => x.t).join('\n');
+      t.ok(/テキーラ まや/.test(txt), mode + ' … ⚠️テキーラ（スピリッツ）にキャスト名が出る');
+      t.ok(/ビール のあ/.test(txt), mode + ' … ⚠️ビールにもキャスト名が出る');
+      /* ⚠️品名欄は空白で埋まる＝「ウーロン茶 」は必ず当たる。**次に来るのが金額**であることを見る */
+      t.ok(/ウーロン茶\s+¥/.test(txt), mode + ' … 「お客様」に付けた品には名前を出さない');
+    });
+    ['guest', 'check', 'store'].forEach(mode => {
+      const L = f.fn.bmSlipLines_(d, c, bill, mode);
+      const over = L.filter(x => (x.big === 2 ? f.fn.bmW_(x.t) > 16 : f.fn.bmW_(x.t) > 48));
+      t.ok(over.length === 0, mode + ' … 名前を足しても桁内（あふれたら bmSlipItem_ が2行に折る）',
+           over.length ? over.map(x => '[' + f.fn.bmW_(x.t) + '] ' + x.t).join('\n') : null);
+    });
+  }
+
   t.section('🏠店担当の売上は「予約を取った子」に付ける（ボス確定 2026-08-31）');
   {
     const closeRec = draft => {
@@ -348,8 +373,10 @@ module.exports = function (_front, _back, ctx) {
     const check = f.fn.bmSlipLines_(d, c, bill, 'check').map(x => x.t).join('\n');
     t.ok(/M-0001/.test(store), '店舗控えだけ会員番号を出す');
     t.ok(!/M-0001/.test(guest) && !/M-0001/.test(check), 'お客様に渡す紙に会員番号は出さない');
-    t.ok(/まや・みれい/.test(store), '店舗控えだけ注文の帰属を出す');
-    t.ok(!/まや・みれい/.test(guest), 'お客様控えに売上配分は出さない');
+    t.ok(/まや・みれい/.test(store), '店舗控えは注文の帰属を出す');
+    /* ⚠️2026-08-31にボスがルールを変えた＝**誰かに付けた品はお客様に渡す紙にも名前を出す**
+       （それまではキャストドリンクのジャンルだけ＝テキーラ・ビールが載らなかった）。 */
+    t.ok(/まや・みれい/.test(guest) && /まや・みれい/.test(check), '⚠️お客様に渡す紙にも「誰に出した1杯か」を出す（ジャンルで例外を作らない）');
     t.ok(!/未領収/.test(check + guest + store), '未領収金はどの紙にも出さない');
     /* ⚠️支払を**入れた後**に会計伝票を出し直しても、お客様に見せる紙に支払欄が載ってはいけない。
        判定は必ず mode で切る（c.paid>0 のような金額の状態で切ると、この経路で漏れる）。 */
