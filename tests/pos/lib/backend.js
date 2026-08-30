@@ -11,12 +11,19 @@ const ex = require('./extract');
 const { makeGas } = require('./gasstub');
 
 const HELPERS = ['nowStamp_', 'fmtStamp_', 'bizDateStr_', 'visitDateStr_', 'prop'];
+/* 🗓 TRUST運用の終わり（posMode_ が営業日で本番/テストを決めるのに使う）。
+   ⚠️optional＝この仕組みがまだ入っていない Code.gs でも読み込めるようにする（入る前は誰も呼ばない）。
+   ⚠️切替日そのものは**実物から拾う**＝テスト側に日付を書き写さない（写した瞬間にズレる）。 */
+const HELPERS_OPT = ['trustOffFrom_', 'trustIsOff_'];
+const VARS_OPT = ['TRUST_OFF_FROM_DEFAULT_'];
 
 function loadBackend(opts) {
   opts = opts || {};
   const gas = makeGas({ now: opts.now, props: opts.props });
   const pos = ex.backendPosBlock();
-  const helpers = ex.pluckFn(ex.backendPath(), HELPERS);
+  const helpers = ex.pluckFn(ex.backendPath(), HELPERS)
+    + '\n' + ex.pluckVar(ex.backendPath(), VARS_OPT, { optional: true })
+    + '\n' + ex.pluckFn(ex.backendPath(), HELPERS_OPT, { optional: true });
 
   let nowRef = new Date(opts.now || '2026-08-27T22:15:00+09:00');
   const RealDate = Date;

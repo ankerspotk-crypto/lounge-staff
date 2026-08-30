@@ -34,6 +34,11 @@ function load(opts) {
   /* 営業日は朝6時境界（本物の bizDateStr_ と同じ規則）。テストは固定時刻で動かす */
   let today = opts.today || '2026-08-27';
 
+  /* POSが本番シートを見る営業日か（本物の trustIsOff_ と同じ規則）。
+     opts.posMode:'live' は切替日より前を前倒しで本番にする指定＝実物の setPosMode と同じ。 */
+  const posLive_ = bizDate =>
+    (String(bizDate || today) >= (opts.trustOffFrom || '2026-09-01')) || (opts.posMode === 'live');
+
   const sandbox = {
     console: { error: () => {}, log: () => {} },   // 想定内の例外ログでテスト出力を汚さない
     JSON, Math, String, Number, Array, Object, Date, parseInt, parseFloat, isNaN, RegExp,
@@ -45,8 +50,11 @@ function load(opts) {
 
     /* ── 日報が外から借りているもの（すべて薄い偽物） ───────────────────── */
     prop: k => gas.PropertiesService.getScriptProperties().getProperty(k),
-    posMode_: () => (opts.posMode || 'test'),
-    posTab_: base => ((opts.posMode || 'test') === 'live' ? base : base + '_TEST'),
+    /* 🗓 実物と同じく **対象の営業日** で決まる（既定 2026-09-01 から本番シート）。
+       ⚠️引数を無視する偽物にすると「日報が読むPOSシートが今日で決まってしまう」不具合を
+         テストが素通りする（9/1に8/31の日報を作ると本番POSを読む＝バックが0になる）。 */
+    posMode_: bizDate => (posLive_(bizDate) ? 'live' : 'test'),
+    posTab_: (base, bizDate) => (posLive_(bizDate) ? base : base + '_TEST'),
     getOrOpenSS_: () => gas.ss,
     getShiftSS_: () => gas.ss,
     bizDateStr_: () => today,

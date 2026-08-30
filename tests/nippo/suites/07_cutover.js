@@ -76,6 +76,39 @@ module.exports = function (load, t) {
     t.eq(B.fn.nippoLiveFrom_(), '2026-09-01', '壊れた設定は既定に戻す（黙って全部本番にしない）');
   }
 
+  t.section('⑦ 日報が読むPOSは「対象の営業日」のシート（TRUST廃止 2026-09-01 の地雷）');
+  {
+    /* ⚠️ここが噛み合わないと**給与のバックが静かに0になる**。
+       9/1以降にPOSは本番シートへ切り替わるので、8/31の日報を9/1に作ると
+       「今日」でシートを選ぶ実装は本番POS（まだ空）を読み、8/31の売上を1件も見つけられない。 */
+    const fs = require('fs'), path = require('path');
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'nippo.gs'), 'utf8');
+    if (src.indexOf('posTab_(POS_CLOSE_TAB, bizDate)') < 0) {
+      t.known('9/1に8/31の日報を作ってもテスト側のPOSを読む',
+        'tests/pending/apply-trust-cutover.js が当たっていない nippo.gs を見ている');
+    } else {
+      const A = load({ today: '2026-09-01' });          // 今日は9/1、作るのは前日ぶん
+      S.staff(A, [{ name: 'りく', wage: 7500 }]);
+      S.shift(A, ['8/31'], [{ name: 'りく', role: 'キャスト', shifts: { '8/31': '20:30-' } }]);
+      S.posClose(A, '2026-08-31', [{ cast: 'りく', total: 50000, dohan: 3000 }]);
+      const r = A.fn.getNippo('2026-08-31');
+      t.eq(r.backSrc, 'POS', '⭐8/31の日報は8/31のPOS（テスト側）を読む');
+      const riku = r.rows.filter(x => x.name === 'りく')[0];
+      t.eq(riku.backParts.filter(p => p.k === 'tantoSub')[0].base, 50000, '担当小計が拾えている');
+      t.eq(riku.backParts.filter(p => p.k === 'dohan')[0].cnt, 1, '同伴も拾えている');
+    }
+    {
+      const B = load({ today: '2026-09-02' });
+      S.staff(B, [{ name: 'りく', wage: 7500 }]);
+      S.shift(B, ['9/1'], [{ name: 'りく', role: 'キャスト', shifts: { '9/1': '20:30-' } }]);
+      S.posClose(B, '2026-09-01', [{ cast: 'りく', total: 80000 }]);
+      t.ok(!!B.sheet('POS_会計'), '⭐9/1のPOSは本番シートに置かれる（テストシートではない）');
+      t.ok(!B.sheet('POS_会計_TEST'), '9月のデータで _TEST は作られない');
+      const r = B.fn.getNippo('2026-09-01');
+      t.eq(r.backSrc, 'POS', '9/1の日報は本番POSを読む');
+    }
+  }
+
   t.section('⑥ POS_MODE からは切り離されている');
   {
     const A = load({ today: '2026-09-05', posMode: 'test' });   // POSはテストのまま

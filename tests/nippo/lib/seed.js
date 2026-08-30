@@ -75,14 +75,17 @@ function billDetails(A, dateKey, list) {
 }
 
 /* 自社POSの会計。list=[{cast,total,dohan,state}] */
+/* ⚠️書き込み先は**実物と同じ規則**で決める（営業日が切替日以降なら本番タブ）。
+   ここを _TEST 固定にすると、9月の日報テストが「読めるはずのPOS」を読めずに緑になる。 */
+function posTab(A, base, dateKey) { return A.fn.posTab_(base, dateKey); }
 function posClose(A, dateKey, list) {
-  A.seed('POS_会計_TEST', [HEAD.posClose].concat(list.map((x, i) => row(HEAD.posClose, {
+  A.seed(posTab(A, 'POS_会計', dateKey), [HEAD.posClose].concat(list.map((x, i) => row(HEAD.posClose, {
     営業日: dateKey, 伝票行: i + 1, 担当キャスト: x.cast || '', 同伴料: x.dohan || 0,
     合計: x.total || 0, 状態: x.state || '会計済み'
   }))));
 }
 function posOrder(A, dateKey, list) {
-  A.seed('POS_注文_TEST', [HEAD.posOrder].concat(list.map((x, i) => row(HEAD.posOrder, {
+  A.seed(posTab(A, 'POS_注文', dateKey), [HEAD.posOrder].concat(list.map((x, i) => row(HEAD.posOrder, {
     注文ID: 'O' + i, 営業日: dateKey, カテゴリ: x.cat || 'ソフトドリンク', 品名: x.item || 'ウーロン茶',
     数量: x.qty == null ? 1 : x.qty, キャスト: x.cast || '', 状態: x.state || '有効'
   }))));
