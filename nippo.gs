@@ -655,6 +655,8 @@ function getNippo(dateKey) {
     Object.keys(saved).forEach(function (k) { add(k, saved[k].name, saved[k].kubun); });
     Object.keys(hibaraiOf).forEach(function (k) { add(k, hibaraiName[k] || '', ''); });
 
+    /* 名寄せキー→送り代負担。⚠️列が無ければ空マップ＝全員0（機能が無い状態と同じ） */
+    const okuriDef = (typeof castOkuriMap_ === 'function') ? castOkuriMap_(ss) : {};
     const rows = order.map(function (o) {
       const sv = saved[o.key] || null;
       const p  = punch[o.key] || null;
@@ -666,7 +668,9 @@ function getNippo(dateKey) {
         adj:   sv ? sv.adj  : 0,
         wage:  sv ? sv.wage : (wages[o.key] || 0),
         hibarai:   sv ? sv.hibarai   : (hibaraiOf[o.key] || 0),
-        okuri:     sv ? sv.okuri     : 0,
+        /* 🚗 送り代の既定値＝名簿の「送り代負担」（ボス指示 2026-08-31）。
+           ⚠️保存済みの日は sv を優先＝黒服が0にした日を描き直すたびに戻さない。 */
+        okuri:     sv ? sv.okuri     : (okuriDef[o.key] || 0),
         kojin:     sv ? sv.kojin     : 0,
         shukuhaku: sv ? sv.shukuhaku : 0,
         hayaagari: sv ? sv.hayaagari : 0,
@@ -678,6 +682,7 @@ function getNippo(dateKey) {
         tally: tally.map[o.key] || null
       };
       const calc = nippoCalcRow_(base, conf);
+      calc.okuriDefault = okuriDef[o.key] || 0;   // 画面のplaceholder＝「負担 ¥○」
       calc.key = o.key;
       calc.saved = !!sv;
       calc.punched = !!p;

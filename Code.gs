@@ -2919,6 +2919,50 @@ function adminSetCastBackRule(userId, targetName, mode, rate) {
 //   ⚠️遡及ガード: 開始月(kotsuStartMonth_)より前の月は対象外。ボス確定=2026/07から。
 // ══════════════════════════════════════════════════════════════════════════
 var STAFF_KOTSU_HEADERS = ['交通費対象', '片道交通費'];
+/* 🚗 送り代負担＝キャストが自分で負担する送り代の既定額（ボス指示 2026-08-31）。
+   日報のマイナス「送り代」の初期値に使う。⚠️列は**末尾に足すだけ**＝既存列はズレない。 */
+var STAFF_OKURI_HEADER = '送り代負担';
+function getStaffOkuriCol_(sh, create) {
+  var lastCol = sh.getLastColumn();
+  var headers = lastCol > 0 ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); }) : [];
+  var idx = headers.indexOf(STAFF_OKURI_HEADER);
+  if (idx < 0 && create) { lastCol += 1; sh.getRange(1, lastCol).setValue(STAFF_OKURI_HEADER); idx = lastCol - 1; }
+  return idx;
+}
+// 管理者: キャストの送り代負担額をスタッフマスタに保存（0＝負担なし）
+function adminSetCastOkuri(userId, targetName, amount) {
+  if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  var sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+  if (!sh) return { ok: false, error: 'スタッフマスタが見つかりません' };
+  targetName = String(targetName || '').trim();
+  var col = getStaffOkuriCol_(sh, true);
+  var amt = Math.max(0, Math.round(Number(amount) || 0));
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]).trim() === targetName) {
+      sh.getRange(i + 1, col + 1).setValue(amt);
+      return { ok: true, name: targetName, amount: amt };
+    }
+  }
+  return { ok: false, error: targetName + ' が見つかりません' };
+}
+/* 名寄せキー → 送り代負担額。⚠️キーは kotsuNameKey_ と同じ規則（空白除去まで）＝
+   日報側の名寄せと必ず一致させる（[[reference_name_normalization]]） */
+function castOkuriMap_(ss) {
+  var map = {};
+  var sh = (ss || getOrOpenSS_()).getSheetByName(STAFF_TAB);
+  if (!sh) return map;
+  var col = getStaffOkuriCol_(sh, false);
+  if (col < 0) return map;   // 一度も設定していない＝全員0
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    var nm = String(rows[i][1] || '').trim();
+    if (!nm) continue;
+    var v = Math.max(0, Math.round(Number(rows[i][col]) || 0));
+    if (v > 0) map[kotsuNameKey_(nm)] = v;
+  }
+  return map;
+}
 
 // 交通費の開始月（この月より前は交通費を付けない）。ボス確定=2026/07。
 // ScriptProperty KOTSU_START_MONTH（'yyyy/MM'）で変更可（KOTSU_ prefix＝軍師設定リセットで消えない）。
@@ -11787,6 +11831,7 @@ function getAdminConsoleData(userId) {
   const kyukinCols = sh ? getStaffKyukinCols_(sh, false) : {};
   const onboardCol = sh ? getStaffOnboardCol_(sh, false) : -1;
   const kotsuCols  = sh ? getStaffKotsuCols_(sh, false) : {};
+  const okuriCol = sh ? getStaffOkuriCol_(sh, false) : -1;   // 🚗送り代負担（無ければ-1＝全員0）
   const bWeekMap = birthdayWeekStateMap_(ssAdmin); // 誕生日週間の申請状態（正規化名→state）
   const allProps = PropertiesService.getScriptProperties().getProperties();
   const staff = [];
@@ -11827,6 +11872,8 @@ function getAdminConsoleData(userId) {
       // 🚕交通費設定: 対象ON/OFF＋片道額（円）。列が無ければ OFF/0
       kotsuOn: (kotsuCols['交通費対象'] >= 0 && String(rows[i][kotsuCols['交通費対象']]).trim() === '○'),
       kotsuAmount: (kotsuCols['片道交通費'] >= 0 ? (Number(rows[i][kotsuCols['片道交通費']]) || 0) : 0),
+      // 🚗 送り代負担（日報のマイナス「送り代」の既定値）。列が無ければ0
+      okuriFutan: (okuriCol >= 0 ? (Number(rows[i][okuriCol]) || 0) : 0),
       // 入店チェック（新人オンボーディング）: {項目:'対応中'|'完了'}。列が無ければ空
       onboard: (onboardCol >= 0) ? parseOnboard_(rows[i][onboardCol]) : {}
     });
