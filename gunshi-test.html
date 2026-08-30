@@ -1596,7 +1596,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-31g-test';
+var BUILD='2026-08-31h-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -2492,10 +2492,19 @@ function npCard(r,i){
     +'<button class="np-more" onclick="npMore('+i+')">'+(more?'▲ 閉じる':'▼ 内訳・マイナス・ボーナス')+'</button>'
     +'</div>';
 
-  /* 0のときは畳んでおく＝実データではほとんどが0。開いた時だけTRUSTと同じ全項目を出す */
-  if(!more&&(r.minus||r.bonus)){
+  /* 🚗送り代＝**畳んだ表示にも常に出す**（ボス指示 2026-08-31）。
+     理由＝送り代は毎晩ほぼ全員に発生する＝内訳を開かせると打ち漏らす。他の項目（個人支払い・
+     宿泊代・早上がり）は実データでほとんど0なので従来どおり内訳の中。
+     ⚠️既定値は名簿の「送り代負担」から入る（npのokuriDefault）。0のときだけ薄く出す。 */
+  if(!more){
+    var otherMinus=Math.max(0,(Number(r.minus)||0)-npNum(r.okuri));
     h+='<div class="np-row np-sub">'
-      +(r.minus?'<span class="np-lbl2">マイナス</span><b>-'+npYen(r.minus)+'</b>':'')
+      +'<span class="np-lbl">送り代</span>'
+      +'<span class="np-yen">¥</span><input type="tel" inputmode="numeric" class="np-in np-money" value="'+(npNum(r.okuri)||'')+'"'+dis
+      +' placeholder="'+(Number(r.okuriDefault)||0)+'" onchange="npSet('+i+',\'okuri\',this.value)">'
+      +(Number(r.okuriDefault)?'<span class="np-calc">負担 '+npYen(r.okuriDefault)+'</span>':'')
+      +'<span style="flex:1"></span>'
+      +(otherMinus?'<span class="np-lbl2">他マイナス</span><b>-'+npYen(otherMinus)+'</b>':'')
       +(r.bonus?'<span class="np-lbl2">ボーナス</span><b>'+npYen(r.bonus)+'</b>':'')
       +'</div>';
   }
