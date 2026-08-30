@@ -10569,7 +10569,7 @@ function gsrOnce_(fn, args){
   var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
   var tmo = GSR_TIMEOUT_OVERRIDE[fn] || GSR_TIMEOUT_MS;
   var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(_){}}, tmo) : null;
-  var opt = { method:'POST', body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:args}) };
+  var opt = { method:'POST', body:JSON.stringify({action:'gunshi',key:KIOSK_KEY,fn:fn,args:args,who:(typeof LOGIN!=='undefined'?(LOGIN||''):'')}) };   /* who=📈機能利用ログの実行者(usage.gs)。認証には一切使わない */
   if(ctrl) opt.signal = ctrl.signal;
   return fetch(GAS_URL, opt).then(function(r){
     if(to){ clearTimeout(to); to=null; }

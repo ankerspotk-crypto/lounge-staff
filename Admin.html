@@ -473,8 +473,30 @@ var PERM_DESC=[
   {t:'軍師ログイン',d:'軍師（店舗端末）にログインできる。スタッフの「🏯 軍師」トグルで付与。管理者は常に可。未設定の黒服社員/黒服バイトは既定で可。'}
 ];
 
-function gsr(fn){var a=[].slice.call(arguments,1);return new Promise(function(res,rej){google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn].apply(google.script.run,a);});}
-function api(action,extra){var body={action:action,userId:USER_ID};if(extra)for(var k in extra)body[k]=extra[k];if(!IS_GAS)return Promise.resolve(MOCKAPI(action,body));return gsr('adminConsoleApi',body);}
+/* ⚠️GSR_NOLOG_=📈機能利用ログで数えない直呼び。adminConsoleApi は api() 経由でサーバ側が既に数える(二重計上になる)、
+     usageBeacon は自分自身、残りは認証/メンテ監視のポーリング＝人間のタップではない。 */
+var GSR_NOLOG_={adminConsoleApi:1,usageBeacon:1,getFeatureUsage:1,adminAuthStart:1,kioskAuthStatus:1,getGunshiMaintenance:1,getPortalMaintenance:1,getAdminConsoleData:1};
+function gsr(fn){var a=[].slice.call(arguments,1);if(!GSR_NOLOG_[fn]){try{beacon_(fn);}catch(_){}}return new Promise(function(res,rej){google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn].apply(google.script.run,a);});}
+function api(action,extra){var body={action:action,userId:USER_ID,src:'admin'};if(extra)for(var k in extra)body[k]=extra[k];if(!IS_GAS)return Promise.resolve(MOCKAPI(action,body));return gsr('adminConsoleApi',body);}
+/* ── 📈機能利用ログ ビーコン（usage.gs の usageBeacon へ）───────────────────
+   ⚠️コンソールは google.script.run の直呼びが多く handleApiRequest_ を通らない。
+     タブ切替に至ってはフロント内で完結しサーバに飛ばない＝ここで拾わないと計測不能。
+   ⚠️1操作ごとに送るとGAS実行が増える＝配列に溜めて2秒デバウンスで1回にまとめる。
+   ⚠️失敗しても何もしない（統計のためだけ・業務を絶対に止めない）。 */
+var FUSE_Q=[], FUSE_T=null;
+function beacon_(key){
+  try{
+    if(!IS_GAS || !key || !USER_ID) return;
+    FUSE_Q.push(String(key));
+    if(FUSE_Q.length>40) FUSE_Q.shift();
+    if(FUSE_T) clearTimeout(FUSE_T);
+    FUSE_T=setTimeout(function(){
+      var keys=FUSE_Q.splice(0,FUSE_Q.length); FUSE_T=null;
+      if(!keys.length) return;
+      try{ google.script.run.withFailureHandler(function(){}).usageBeacon(USER_ID, keys); }catch(_){}
+    }, 2000);
+  }catch(_){}
+}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function jstr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function toast(m,err){var t=document.getElementById('toast');t.textContent=m;t.className='toast show'+(err?' err':'');setTimeout(function(){t.className='toast';},2100);}
@@ -582,7 +604,7 @@ var TAB_GROUPS=[
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['nenkan','📈 年間集計'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
   {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
-  {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営']]}
+  {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営'],['usage','📈 使われ方']]}
 ];
 var GROUP='top';
 function groupOf_(t){ for(var i=0;i<TAB_GROUPS.length;i++){ if(TAB_GROUPS[i].tabs.some(function(x){return x[0]===t;})) return TAB_GROUPS[i].g; } return TAB_GROUPS[0].g; }
@@ -594,14 +616,150 @@ function renderNav(){
   tEl.innerHTML=curGroup_().tabs.map(function(x){ return '<button class="tab'+(x[0]===TAB?' on':'')+'" data-t="'+x[0]+'" onclick="switchTab(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('');
 }
 function switchGroup(g){ GROUP=g; TAB=curGroup_().tabs[0][0]; renderNav(); render(); }
-function switchTab(t){ TAB=t; GROUP=groupOf_(t); renderNav(); render(); }
+function switchTab(t){ TAB=t; GROUP=groupOf_(t); beacon_('tab:'+t); renderNav(); render(); }   /* beacon_=📈機能利用ログ */
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,haken:renderHaken,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef}[TAB]||renderStaff)();
+  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,haken:renderHaken,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef,usage:renderUsage}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
+
+/* ローカル確認用のダミー（IS_GAS=false のときだけ使う）。本番の描画には一切関与しない。 */
+function MOCKUSAGE(){
+  var used=[
+    {sys:'軍師',key:'kioskRotateCast',label:'付け回し：キャストを別卓へ動かす',cat:'付け回し',count:412,perDay:13.7,days:30,people:4,topPeople:[],last:''},
+    {sys:'軍師',key:'setKioskReservationStatus',label:'予約を来店にする',cat:'予約',count:288,perDay:9.6,days:30,people:4,topPeople:[],last:''},
+    {sys:'軍師',key:'kioskAddDenpyo',label:'会計伝票を登録する',cat:'伝票・POS',count:201,perDay:6.7,days:29,people:3,topPeople:[],last:''},
+    {sys:'ポータル',key:'tab:home',label:'画面: home',cat:'画面(ポータル)',count:1180,perDay:39.3,days:30,people:22,topPeople:[],last:''},
+    {sys:'コンソール',key:'tab:pay',label:'',cat:'未分類',count:38,perDay:1.3,days:14,people:1,topPeople:[],last:''}
+  ];
+  return {ok:true,span:{from:'2026-07-31',to:'2026-08-30',days:30},
+    totals:{hits:2119,usedFeatures:used.length,catalog:365,unused:360},
+    used:used,
+    unused:[{sys:'軍師',key:'gunshiBackfillVisits',label:'来店履歴の遡り取込',cat:'顧客'},{sys:'軍師',key:'getPosNextPay',label:'',cat:'伝票・POS'},{sys:'ポータル/コンソール',key:'kintaiRebuild',label:'',cat:'スタッフ・シフト'}],
+    people:[{name:'太郎',count:900,feats:31},{name:'花子',count:420,feats:19}],
+    byCat:[{cat:'画面(ポータル)',count:1180},{cat:'付け回し',count:412},{cat:'予約',count:288}],
+    byDay:[{day:'2026-08-29',count:120},{day:'2026-08-30',count:98}],
+    systems:['軍師','ポータル','コンソール']};
+}
+
+/* ===== 📈 機能の使われ方（ボス依頼 2026-08-30）=====================================
+ * 判断したいこと＝「作った機能のうち、現場が本当に使っているのはどれで、誰も触っていないのはどれか」。
+ * 分子＝機能利用ログ(usage.gs が3つの入口で数えた実測)。分母＝機能カタログ(実装済み365件)。
+ * ⚠️集計はサーバ(getFeatureUsage)が唯一の持ち主＝ここでは数え直さない。並べ替えて描くだけ。
+ * ⚠️「この期間で0回」は「不要」ではない。棚卸し・給与締めのような月イチ機能は短い期間では必ず0になる。
+ *   期間の長さを必ず併記して、判断は人に残す。
+ * ⚠️検索欄は付けない（付けるなら oninput で全再描画しないこと＝会員検索で踏んだ罠）。 */
+var UZ=null, UZ_VIEW='top', UZ_SPAN=30, UZ_SYS='';
+function renderUsage(){
+  loading();
+  if(!IS_GAS){ UZ=MOCKUSAGE(); drawUsage(); return; }   /* ローカル確認用＝GASを叩かずに画面を押せる（既存のMOCK/MOCKAPIと同じ流儀） */
+  var o={};
+  if(UZ_SPAN>0){ var d=new Date(); d.setDate(d.getDate()-UZ_SPAN); o.from=fmtYmd_(d); }
+  if(UZ_SYS) o.sys=UZ_SYS;
+  gsr('getFeatureUsage',USER_ID,o).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込めませんでした')+'</div>'); return; }
+    UZ=r; drawUsage();
+  }).catch(function(){ setBody('<div class="empty">通信エラー</div>'); });
+}
+function fmtYmd_(d){ var m=('0'+(d.getMonth()+1)).slice(-2), dd=('0'+d.getDate()).slice(-2); return d.getFullYear()+'-'+m+'-'+dd; }
+function uzSpan(n){ UZ_SPAN=n; renderUsage(); }
+function uzSys(s){ UZ_SYS=s; renderUsage(); }
+function uzView(v){ UZ_VIEW=v; drawUsage(); }
+
+function uzBar(n,max){
+  var w=max>0?Math.round(n/max*100):0;
+  return '<div style="background:#1a2740;border-radius:3px;height:6px;width:100%;overflow:hidden"><div style="background:#3d8bfd;height:6px;width:'+w+'%"></div></div>';
+}
+function drawUsage(){
+  if(!UZ) return;
+  var t=UZ.totals||{}, sp=UZ.span||{};
+  var spans=[[7,'直近7日'],[30,'直近30日'],[90,'直近90日'],[0,'全期間']];
+  var syss=[['','すべて']].concat((UZ.systems||[]).map(function(x){return [x,x];}));
+  var h='';
+  h+='<div class="sec compact"><div class="chips">'
+    + spans.map(function(x){return '<button class="chip'+(UZ_SPAN===x[0]?' on':'')+'" onclick="uzSpan('+x[0]+')">'+x[1]+'</button>';}).join('')
+    + '</div><div class="chips" style="margin-top:6px">'
+    + syss.map(function(x){return '<button class="chip'+(UZ_SYS===x[0]?' on':'')+'" onclick="uzSys(\''+jstr(x[0])+'\')">'+esc(x[1])+'</button>';}).join('')
+    + '</div>'
+    + '<div class="sub" style="margin-top:8px">対象期間 '+esc(sp.from||'-')+' 〜 '+esc(sp.to||'-')+'（記録のあった営業日 '+(sp.days||0)+'日）</div>'
+    + '</div>';
+
+  // サマリ
+  h+='<div class="sec"><div class="sec-t">📊 ひと目で</div><div class="mtx-wrap"><table class="mtx sm"><tr>'
+    + '<td>実装済み機能</td><td style="text-align:right"><b>'+(t.catalog||0)+'</b></td>'
+    + '<td>この期間に使われた</td><td style="text-align:right"><b>'+(t.usedFeatures||0)+'</b></td>'
+    + '<td>一度も使われていない</td><td style="text-align:right"><b style="color:#ff8a8a">'+(t.unused||0)+'</b></td>'
+    + '<td>総操作回数</td><td style="text-align:right"><b>'+(t.hits||0)+'</b></td>'
+    + '</tr></table></div>'
+    + '<div class="sub">⚠️「0回」＝不要とは限りません。棚卸しや給与締めのような月イチの機能は、短い期間では必ず0になります。</div></div>';
+
+  var views=[['top','🔥 よく使う'],['dead','🪦 使われていない'],['people','🧑 人別'],['cat','🗂 カテゴリ別'],['day','📅 日別']];
+  h+='<div class="sec compact"><div class="chips">'
+    + views.map(function(v){return '<button class="chip'+(UZ_VIEW===v[0]?' on':'')+'" onclick="uzView(\''+v[0]+'\')">'+v[1]+'</button>';}).join('')
+    + '</div></div>';
+
+  if(UZ_VIEW==='top')       h+=uzTop();
+  else if(UZ_VIEW==='dead') h+=uzDead();
+  else if(UZ_VIEW==='people') h+=uzPeople();
+  else if(UZ_VIEW==='cat')  h+=uzCat();
+  else                      h+=uzDay();
+  setBody(h);
+}
+function uzName(u){ return u.label ? esc(u.label) : '<span style="opacity:.6">'+esc(u.key)+'</span>'; }
+/* 機能名セル。名前が付いている時だけ、下に小さく生キーを添える（名前が無い行でキーを2回出さない）。
+   名前は「機能カタログ」シートで直せる＝空欄が目についたらそこに書き込めばこの表がそのまま読みやすくなる。 */
+function uzCell(u){ return uzName(u) + (u.label ? '<div class="sub" style="opacity:.45">'+esc(u.key)+'</div>' : ''); }
+function uzTop(){
+  var L=(UZ.used||[]); if(!L.length) return '<div class="empty">この期間の記録がまだありません</div>';
+  var max=L[0].count||1;
+  return '<div class="sec"><div class="sec-t">🔥 よく使われている機能（多い順）</div><div class="mtx-wrap"><table class="mtx sm">'
+    + '<tr><th>#</th><th>機能</th><th>カテゴリ</th><th>システム</th><th style="text-align:right">回数</th><th style="text-align:right">1日</th><th style="text-align:right">使った人</th><th style="width:90px"></th></tr>'
+    + L.map(function(u,i){
+        return '<tr><td>'+(i+1)+'</td><td style="text-align:left">'+uzCell(u)+'</td>'
+          + '<td>'+esc(u.cat)+'</td><td>'+esc(u.sys)+'</td>'
+          + '<td style="text-align:right"><b>'+u.count+'</b></td><td style="text-align:right">'+u.perDay+'</td>'
+          + '<td style="text-align:right">'+u.people+'人</td><td>'+uzBar(u.count,max)+'</td></tr>';
+      }).join('')
+    + '</table></div></div>';
+}
+function uzDead(){
+  var L=(UZ.unused||[]); if(!L.length) return '<div class="empty">この期間、すべての機能が1回以上使われています</div>';
+  var g={}; L.forEach(function(u){ (g[u.cat]=g[u.cat]||[]).push(u); });
+  var keys=Object.keys(g).sort(function(a,b){return g[b].length-g[a].length;});
+  return '<div class="sec"><div class="sec-t">🪦 この期間に一度も呼ばれていない機能（'+L.length+'件）</div>'
+    + '<div class="sub">消す前に必ず期間を「全期間」にして確認してください。年イチの機能をここだけ見て消すと事故ります。</div>'
+    + keys.map(function(k){
+        return '<div style="margin-top:10px"><b>'+esc(k)+'</b>（'+g[k].length+'）<div class="mtx-wrap"><table class="mtx sm">'
+          + g[k].map(function(u){ return '<tr><td style="text-align:left">'+uzCell(u)+'</td><td class="sub" style="width:150px;text-align:right">'+esc(u.sys)+'</td></tr>'; }).join('')
+          + '</table></div></div>';
+      }).join('')
+    + '</div>';
+}
+function uzPeople(){
+  var L=(UZ.people||[]); if(!L.length) return '<div class="empty">記録がありません</div>';
+  var max=L[0].count||1;
+  return '<div class="sec"><div class="sec-t">🧑 誰がどれだけ使っているか</div>'
+    + '<div class="sub">操作回数が少ない＝サボりではなく「使い方を知らない」可能性。教える相手を決めるのに使ってください。</div>'
+    + '<div class="mtx-wrap"><table class="mtx sm"><tr><th>#</th><th>名前</th><th style="text-align:right">操作回数</th><th style="text-align:right">使った機能の種類</th><th style="width:110px"></th></tr>'
+    + L.map(function(p,i){ return '<tr><td>'+(i+1)+'</td><td>'+esc(p.name||'(不明)')+'</td><td style="text-align:right"><b>'+p.count+'</b></td><td style="text-align:right">'+p.feats+'種</td><td>'+uzBar(p.count,max)+'</td></tr>'; }).join('')
+    + '</table></div></div>';
+}
+function uzCat(){
+  var L=(UZ.byCat||[]); if(!L.length) return '<div class="empty">記録がありません</div>';
+  var max=L[0].count||1;
+  return '<div class="sec"><div class="sec-t">🗂 どの業務に時間が使われているか</div><div class="mtx-wrap"><table class="mtx sm">'
+    + L.map(function(c){ return '<tr><td>'+esc(c.cat)+'</td><td style="text-align:right"><b>'+c.count+'</b></td><td style="width:180px">'+uzBar(c.count,max)+'</td></tr>'; }).join('')
+    + '</table></div></div>';
+}
+function uzDay(){
+  var L=(UZ.byDay||[]); if(!L.length) return '<div class="empty">記録がありません</div>';
+  var max=L.reduce(function(m,d){return Math.max(m,d.count);},1);
+  return '<div class="sec"><div class="sec-t">📅 日別の操作量</div><div class="mtx-wrap"><table class="mtx sm">'
+    + L.slice().reverse().map(function(d){ return '<tr><td>'+esc(d.day)+'</td><td style="text-align:right"><b>'+d.count+'</b></td><td style="width:200px">'+uzBar(d.count,max)+'</td></tr>'; }).join('')
+    + '</table></div></div>';
+}
 
 /* ===== 🏠 トップ＝店の全容（ボス依頼 2026-08-17）=====================================
  * 判断したいこと＝「今日は何人出ていて、何人来るのか。派遣を追加で頼むか」。

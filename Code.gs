@@ -705,6 +705,8 @@ function gunshiApi_(body) {
   if (kk && String(body.key || '') !== kk) return { __ok: false, error: '認証エラー' };
   const fn = String(body.fn || '');
   if (GUNSHI_API_FNS.indexOf(fn) < 0) return { __ok: false, error: '許可されていない関数: ' + fn };
+  // 📈機能利用ログ(usage.gs)。⚠️typeofガード＝usage.gs未配置のままここだけ反映されても軍師を巻き込まない
+  if (typeof logFeatureUse_ === 'function') logFeatureUse_(String((body && body.env) || '') === 'test' ? '軍師(テスト)' : '軍師', fn, String((body && body.who) || ''));
   const args = Array.isArray(body.args) ? body.args : [];
   try {
     const f = (typeof globalThis !== 'undefined') ? globalThis[fn] : this[fn];
@@ -940,6 +942,8 @@ function clearClockDrift() {
 }
 
 function handleApiRequest_(body) {
+  // 📈機能利用ログ(usage.gs)。src/action から系統を判定して1件数えるだけ。⚠️typeofガードの理由は gunshiApi_ 側のコメント参照
+  if (typeof usageTapApi_ === 'function') usageTapApi_(body);
   // === 🎂 今月誕生日のお客様（管理者/黒服=全件・キャスト=自分の担当客のみ） ===
   if (body.action === 'getCustomerBirthdays') {
     const who = getStaffName(body.userId);
@@ -7829,6 +7833,9 @@ function scheduledJobs() {
   if (notifEnabled_('late_reservation', ns_)) checkLateReservations();
   checkLeaveReservations();
   checkPendingStaffRegistrations_();
+  // 📈機能利用ログの流し残しを回収（usage.gs）。これが無いと、その営業日の最後の30件未満が
+  //   CacheのTTL切れで消える。⚠️try/catchで隔離＝ここで落ちても以降の定時通知を巻き込まない（毎分ジョブ全滅の既知の罠）。
+  try { if (typeof flushFeatureUse_ === 'function') flushFeatureUse_(); } catch (_) { }
 
   // 予約整合(RSRV/YRSRV)の同期をトリガー側で先回りする（2026-07-20）。
   // 従来は getSekiJokyouData 経由で「ユーザーのリクエストが5分に1回この重い同期を肩代わり」していた
@@ -11296,6 +11303,8 @@ function handlePortalApi_(e) {
 
   const name = getStaffName(userId);
   if (!name) return out({ ok: false, error: 'unregistered' });
+  // 📈機能利用ログ(usage.gs)＝キャストがどの画面を開いたか。⚠️typeofガードの理由は gunshiApi_ 側のコメント参照
+  if (typeof logFeatureUse_ === 'function') logFeatureUse_('ポータル', 'tab:' + (tab || 'home'), name);
 
   // 退職済みスタッフはポータル利用不可
   if (isRetiredName_(name)) {
