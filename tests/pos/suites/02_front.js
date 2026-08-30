@@ -136,6 +136,41 @@ module.exports = function (_front, _back, ctx) {
     t.eq(d2.casts['みれい'].dohan, 0, '⚠️外した同伴が描画のたびに戻ってこない（1回だけ）');
   }
 
+  t.section('🏠店担当の売上は「予約を取った子」に付ける（ボス確定 2026-08-31）');
+  {
+    const closeRec = draft => {
+      const f = boot({ gsr: { posCloseBill: { ok: true, ts: '2026-08-31 23:00' } } });
+      f.fn.BM.draft['12'] = Object.assign({ guests: [G(13000)], casts: {}, castSel: [], welcome: [], orders: [],
+        discount: 0, surcharge: 0, pay: { cash: 15600, card: 0, credit: 0 } }, draft);
+      f.fn.BM.key = '12'; f.fn.bmSave();   // ⚠️保存しないと bmClose 内の bmLoad() で下書きが作り直される
+      f.fn.bmClose();
+      const call = f.log.gsr.filter(g => g.fn === 'posCloseBill')[0];
+      return { rec: call && call.args[2], f: f };
+    };
+    let r = closeRec({ tantou: '店担当', casts: { のあ: { tanto: 0, yoyaku: 1, dohan: 0 } } });
+    t.eq(r.rec.tantou, 'のあ', '店担当の売上は④の予約キャストに付く');
+    t.eq(r.f.fn.bmGet('12').tantou, '店担当', '⚠️③の表示は「店担当」のまま＝下書きに事実が残る');
+
+    r = closeRec({ tantou: '店担当', casts: { のあ: { tanto: 0, yoyaku: 1, dohan: 0 }, みれい: { tanto: 0, yoyaku: 1, dohan: 0 } } });
+    t.eq(r.rec.tantou, 'のあ、みれい', '予約が複数なら全員を「、」で並べる');
+
+    r = closeRec({ tantou: '店担当', casts: {} });
+    t.eq(r.rec.tantou, '店担当', '⚠️予約キャストが居なければ振り替えない（黙って誰かに付けない）');
+
+    r = closeRec({ tantou: 'まや', casts: { まや: { tanto: 1, yoyaku: 0, dohan: 0 }, のあ: { tanto: 0, yoyaku: 1, dohan: 0 } } });
+    t.eq(r.rec.tantou, 'まや', '⚠️通常の担当は素通り（予約キャストに横取りされない）');
+  }
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.bmTantouToggle('店担当');
+    let h = f.fn.bmEditorHtml();
+    t.ok(/④に予約キャストがいません/.test(h), '⚠️予約キャスト未設定なら③で警告する（売上が店に残る）');
+    f.fn.bmBump('のあ', 'yoyaku', 1);
+    h = f.fn.bmEditorHtml();
+    t.ok(/予約を取った子/.test(h) && /のあ/.test(h), '③に振替先を出す（会計する前に見える）');
+    t.ok(/売上→/.test(f.fn.bmDetailHtml()), '⑦明細にも振替先を出す');
+  }
+
   t.section('🥂ウェルカムは在庫管理している品だけ（ボス指示 2026-08-31）');
   {
     const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2); f.fn.BM.welOpen = 1;

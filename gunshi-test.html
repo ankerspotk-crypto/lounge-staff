@@ -1596,7 +1596,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-31b-test';
+var BUILD='2026-08-31c-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -5506,6 +5506,23 @@ function bmTantouList_(d){
    ⚠️キャストの担当とは**排他**＝店担当を選んだらキャストの担当は外れる（逆も同じ）。 */
 var BM_TANTOU_HOUSE='店担当';
 function bmIsHouseTantou_(n){ return String(n||'').trim()===BM_TANTOU_HOUSE; }
+/* ④で「予約」の回数が入っている子＝**予約を取った子** */
+function bmYoyakuCasts_(d){
+  var out=[];
+  Object.keys((d&&d.casts)||{}).forEach(function(n){ if(((d.casts[n]||{}).yoyaku||0)>0) out.push(n); });
+  return out;
+}
+/* 🏠店担当の売上は**予約を取った子**に付ける（ボス確定 2026-08-31）。
+   ⚠️店担当＝持ち客ではない＝バックの帰属先が無い。そこで④の予約キャストへ振り替える。
+   ⚠️④に予約キャストが**居なければ振り替えない**＝「店担当」のまま返す（黙って誰かに付けない）。
+   ⚠️振り替えるのは**会計シートに書く帰属先だけ**。③の表示(`d.tantou`)は「店担当」のまま
+     ＝下書きJSON(POS_伝票)には店担当だった事実が必ず残る（後から追える）。 */
+function bmSalesTantou_(d){
+  var list=bmTantouList_(d);
+  if(list.indexOf(BM_TANTOU_HOUSE)<0) return list.join('、');
+  var y=bmYoyakuCasts_(d);
+  return y.length?y.join('、'):BM_TANTOU_HOUSE;
+}
 /* 担当に付ける＝④キャストの担当回数と選択も一緒に立てる（2箇所で食い違わせない） */
 function bmTantouAttach_(d,nm){
   if(!nm||bmIsHouseTantou_(nm)) return;
@@ -6371,7 +6388,9 @@ function bmClose(){
   if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
       +(c.unpaid<0?('\nお釣り '+bmYen(-c.unpaid)):'')+'\n\nよろしいですか？')) return;
   var rec={ floor:b.floor||'', table:b.table||'', cust:b.cust||'', pax:(d.guests||[]).length,
-            tantou:d.tantou||'', uriban:d.uriban?1:0,
+            /* ⚠️会計シートの「担当キャスト」＝**売上の帰属先**。③の表示そのままではない
+               ＝🏠店担当は予約を取った子へ振り替わる（bmSalesTantou_）。 */
+            tantou:bmSalesTantou_(d), uriban:d.uriban?1:0,
             setSum:c.setSum, tanto:c.tc*BM_FEE.tanto, yoyaku:c.yc*BM_FEE.yoyaku, dohan:c.dc*BM_FEE.dohan,
             ordSum:c.ordSum, welCount:(d.welcome||[]).reduce(function(a,w){return a+(w.qty||0);},0),
             discount:Number(d.discount)||0, surcharge:Number(d.surcharge)||0,
@@ -6459,6 +6478,12 @@ function bmTantouCardHtml(d,pool){
     +'<div class="chip'+(d.uriban?' sel':'')+'" onclick="bmUriban(1)">売半</div>'
     +'</div></div>'
     +'<div class="bm-note">担当が複数人いるときは<b>全員</b>選びます。🏠店担当＝キャストの担当が付いていないお客様。</div>'
+    /* 🏠店担当は売上の行き先が変わる＝会計する前に画面で見えていないと確かめられない */
+    +(list.indexOf(BM_TANTOU_HOUSE)>=0
+        ?(bmYoyakuCasts_(d).length
+            ?'<div class="bm-note">🏠店担当なので、この伝票の売上は<b>予約を取った子</b>に付きます → <b style="color:var(--gold)">'+esc(bmYoyakuCasts_(d).join('、'))+'</b>（④の予約）</div>'
+            :'<div class="bm-warn" style="margin-top:6px">🏠店担当ですが、<b>④に予約キャストがいません</b>。このままだと売上は<b>店に付いたまま</b>です。予約を取った子を④の「予約」に入れてください。</div>')
+        :'')
     +'<div class="bm-note">売半＝この伝票の売上を半分で付ける区分。<b>お客様の請求額は変わりません</b>（バック計算で使う）。</div>')
     +'</div>';
 }
@@ -6609,7 +6634,9 @@ function bmDetailHtml(){
   var aH='',tList=bmTantouList_(d);
   /* 🏠店担当はキャストではない＝d.castsに居ない。ここで出さないと明細だけ「担当なし」に見える */
   if(tList.indexOf(BM_TANTOU_HOUSE)>=0)
-    aH+='<div class="li"><span>担当 🏠'+esc(BM_TANTOU_HOUSE)+(d.uriban?' <b style="color:var(--accent)">売半</b>':'')+'</span><span class="a">'+bmYen(BM_FEE.tanto)+'</span></div>';
+    aH+='<div class="li"><span>担当 🏠'+esc(BM_TANTOU_HOUSE)+(d.uriban?' <b style="color:var(--accent)">売半</b>':'')
+      +'<br><span style="font-size:10.5px;color:var(--sub)">売上→ '+(bmYoyakuCasts_(d).length?esc(bmYoyakuCasts_(d).join('、')):'<b style="color:#ff9a5a">予約キャスト未設定＝店</b>')+'</span>'
+      +'</span><span class="a">'+bmYen(BM_FEE.tanto)+'</span></div>';
   Object.keys(d.casts).forEach(function(n){
     var v=d.casts[n]||{};
     /* 売半は金額を変えないので、担当行に区分として出すだけ（見落とすとバック計算で分からなくなる） */
