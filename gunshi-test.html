@@ -1596,7 +1596,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-08-31d-test';
+var BUILD='2026-08-31e-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -6773,8 +6773,25 @@ function bmSetAttr(a){ BM.attr=a; bmRender(); }
    ⭐ただし🍹キャストドリンクだけは折半しない（ボス指示 2026-08-28）＝各自が1杯もらう物なので
      **選んだ人それぞれに1杯ずつ**入れる。⚠️お客様の請求は人数ぶん増える（従来は1杯を分けていた）。 */
 function bmIsCastDrink_(genre){ return String(genre||'')==='キャストドリンク'; }
-/* いま選んでいる内容が「人数ぶん」になるか（＝キャストドリンクを2人以上に付ける時） */
-function bmPickEach_(pk){ return !!(pk && bmIsCastDrink_(pk.genre) && (pk.attrs||[]).length>1); }
+/* ============================================================================
+   🍺 2人以上に付けた時＝「1人1つ」か「折半」か（ボス指示 2026-08-31）
+   ----------------------------------------------------------------------------
+   ボス報告＝「ビールを選んでキャストを2名選ぶと折半になるが、**キャスト1名につき1本**
+   付けているので折半表示はおかしい」。
+   ⭐真因は前回と同じ形＝**ジャンル(キャストドリンク)で場合分けしていた**。ビールやスピリッツは
+     そのジャンルに入らないので、黙って折半に落ちていた。
+   ⛔ジャンルで決めない。**1本を分けるのか、1人1つ出すのかは品ではなく現場の事実**＝
+     同じ「ビール」でも卓で1本を分ける時と、キャストに1本ずつ出す時がある。品名からは決まらない。
+   ⭐だから**黒服に選ばせる**。ただし選択肢そのものに**金額を書く**＝押す物が金額になる。
+   ⚠️既定は「1人1つ」（ボスの指摘＝実際の運用がこちら。折半を既定にすると店が黙って取り損なう）。
+   ⚠️折半＝お客様の請求は1つぶん。売上の帰属だけを複数キャストで分ける（TRUSTには無い概念）。
+============================================================================ */
+function bmPickEach_(pk){
+  if(!pk||(pk.attrs||[]).length<2) return false;
+  if(pk.each===0||pk.each===1) return !!pk.each;   // 黒服が選んだらそれ
+  return true;                                      // 既定＝1人1つ
+}
+function bmPickEachSet(v){ if(!BM.pick) return; BM.pick.each=v?1:0; bmRender(); }
 function bmPick(nm,pr){ if(bmLockedAlert_()) return;
   var it=bmItem_(nm);
   BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:'') };
@@ -6787,6 +6804,8 @@ function bmPickAttr(a){
   if(!BM.pick)return;
   var i=BM.pick.attrs.indexOf(a);
   if(i>=0) BM.pick.attrs.splice(i,1); else BM.pick.attrs.push(a);
+  /* ⚠️1人に戻ったら選択を捨てる＝次に2人にした時に前の選択が残っていると金額が黙って変わる */
+  if(BM.pick.attrs.length<2) delete BM.pick.each;
   bmRender();
 }
 function bmPickConfirm(){ if(bmLockedAlert_()) return;
@@ -6797,7 +6816,7 @@ function bmPickConfirm(){ if(bmLockedAlert_()) return;
      （無料で出す物は⑤🥂ウェルカムに入っている＝有料側に0円は要らない） */
   if(!(Number(pk.price)>0)){ alert('単価を入れてください。\n（この品はマスタに価格が入っていません）'); return; }
   var d=bmGet(BM.key);
-  /* キャストドリンク＝1人1行（それぞれに1杯）／それ以外＝従来どおり1行に複数帰属（折半） */
+  /* 1人1つ＝人数ぶんの行（それぞれに1つ）／折半＝1行に複数帰属（お客様の請求は1つぶん） */
   var groups = bmPickEach_(pk) ? pk.attrs.map(function(a){ return [a]; }) : [pk.attrs.slice()];
   groups.forEach(function(at){
     var key=at.join('・'), hit=-1;
@@ -6825,9 +6844,7 @@ function bmPickHtml(){
     +'<span style="margin-left:auto;color:var(--gold);font-weight:800;font-size:16px">'+bmYen(pk.price*pk.qty*(bmPickEach_(pk)?pk.attrs.length:1))
       +(bmPickEach_(pk)?'<span style="font-size:11px;color:var(--sub);font-weight:700">　'+pk.attrs.length+'人分</span>':'')+'</span></div>'
     +'<div class="bm-note" style="margin-top:10px;font-size:12px;color:var(--accent);font-weight:700">'
-      +(bmIsCastDrink_(pk.genre)
-        ? '誰に付けますか？（🍹キャスドリ＝選んだ人それぞれに1杯ずつ入ります）'
-        : '誰に付けますか？（複数選ぶと折半）')+'</div>'
+      +'誰に付けますか？（2人以上選ぶと、下で<b>1人1つ／折半</b>を選べます）</div>'
     +'<div class="chips" style="margin-top:5px">'
     +'<div class="chip'+(pk.attrs.indexOf('お客様')>=0?' sel':'')+'" onclick="bmPickAttr(\'お客様\')">お客様</div>'
     +'</div>'
@@ -6839,6 +6856,16 @@ function bmPickHtml(){
     +'<div class="chips" style="margin-top:9px">'
     +'<div class="chip cast'+(pk.attrs.indexOf('派遣')>=0?' sel':'')+'" onclick="bmPickAttr(\'派遣\')">派遣</div>'
     +'</div>'
+    /* 🍺2人以上に付けた時だけ出す。⭐**選択肢に金額を書く**＝押す物がそのまま請求額になる
+       （「折半」という言葉だけだと、いくらになるのかが押すまで分からない） */
+    +(pk.attrs.length>1
+      ? '<div class="bm-note" style="margin-top:11px">この品の入れ方（'+pk.attrs.length+'人に付けています）</div>'
+        +'<div class="chips" style="margin-top:3px">'
+        +'<div class="chip'+(bmPickEach_(pk)?' sel':'')+'" onclick="bmPickEachSet(1)">1人1つ　<b>'+bmYen(pk.price*pk.qty*pk.attrs.length)+'</b></div>'
+        +'<div class="chip'+(bmPickEach_(pk)?'':' sel')+'" onclick="bmPickEachSet(0)">折半（1つを'+pk.attrs.length+'人で）　<b>'+bmYen(pk.price*pk.qty)+'</b></div>'
+        +'</div>'
+        +'<div class="bm-note">1人1つ＝'+pk.attrs.length+'つ出した（請求も'+pk.attrs.length+'つぶん）。折半＝1つを分けた（請求は1つぶん・売上だけ分ける）。</div>'
+      : '')
     +'<div class="bm-row" style="margin-top:14px">'
     +'<button class="bm-btn pri" style="flex:1;padding:12px" onclick="bmPickConfirm()">✅ この内容で入れる</button>'
     +'<button class="bm-btn" onclick="bmPickCancel()">キャンセル</button></div>'

@@ -78,8 +78,17 @@ module.exports = async function (_f, _b, ctx) {
   }
   {
     const f = boot();
+    /* ⚠️2026-08-31にボスが既定を変えた＝**2人以上に付けたら「1人1つ」が既定**。
+       理由＝ビールを2人に付けると折半になり、店が黙って1本ぶん取り損なっていた。
+       折半は**明示的に選ぶ**（bmPickEachSet(0)）＝ポップアップに金額つきのチップで出る。 */
     f.fn.bmPick('魔王', 30000); f.fn.bmPickAttr('まや'); f.fn.bmPickAttr('みれい'); f.fn.bmPickConfirm();
-    t.eq(f.fn.bmAttrOf(f.fn.bmGet('2').orders[0]), 'まや・みれい', '1本を2人で折半できる');
+    t.eq(f.fn.bmGet('2').orders.length, 2, '既定＝1人1つ（2人なら2行）');
+    t.eq(f.fn.bmGet('2').orders.map(o => f.fn.bmAttrOf(o)), ['まや', 'みれい'], 'それぞれに1本ずつ入る');
+    f.fn.bmGet('2').orders.length = 0; f.fn.bmSave();   // ⚠️保存しないと次の描画で bmLoad() が下書きを戻す
+    f.fn.bmPick('魔王', 30000); f.fn.bmPickAttr('まや'); f.fn.bmPickAttr('みれい');
+    f.fn.bmPickEachSet(0); f.fn.bmPickConfirm();
+    t.eq(f.fn.bmAttrOf(f.fn.bmGet('2').orders[0]), 'まや・みれい', '折半を選べば1本を2人で分けられる');
+    t.eq(f.fn.bmGet('2').orders.length, 1, '折半は1行（お客様の請求も1本ぶん）');
     f.fn.bmPick('コーラ', 1000); f.fn.bmPickAttr('まや'); f.fn.bmPickAttr('まや'); f.fn.bmPickConfirm();
     t.ok(f.log.alerts.some(a => /誰に付ける/.test(a)), '同じ人を2回押すと外れる（トグル）＝未選択で止まる');
   }
