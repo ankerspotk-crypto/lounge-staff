@@ -49,6 +49,61 @@ module.exports = function (_front, _back, ctx) {
     t.eq(f2.fn.bmGet('12', 2).tantou, 'まや', '席が届いた後の描画で担当が入る');
   }
 
+  t.section('③担当＝複数人＋🏠店担当（ボス指示 2026-08-31）');
+  {
+    /* 予約行の担当は「みれい、ゆき」と複数入る＝丸ごと1人のキーにしない */
+    const f = ctx.loadFront({ seats: seats([{ rowIdx: 12, table: 'BOX1', floor: '2F', cust: '田中', pax: 2, tantou: 'みれい、ゆき' }]) });
+    const d = f.fn.bmGet('12', 2);
+    t.eq(d.tantou, 'みれい、ゆき', '複数の担当がそのまま伝票に乗る');
+    t.eq(f.fn.bmTantouList_(d), ['みれい', 'ゆき'], '「、」で分けて2人になる');
+    t.ok(!d.casts['みれい、ゆき'], '⚠️丸ごとの名前で存在しないキャストを作らない');
+    t.eq(d.casts['みれい'] && d.casts['みれい'].tanto, 1, 'みれいに担当×1');
+    t.eq(d.casts['ゆき'] && d.casts['ゆき'].tanto, 1, 'ゆきに担当×1');
+  }
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.bmTantouToggle('のあ');
+    let d = f.fn.bmGet('12');
+    t.eq(f.fn.bmTantouList_(d), ['まや', 'のあ'], '2人目を足しても1人目は消えない');
+    t.eq(d.casts['のあ'] && d.casts['のあ'].tanto, 1, '足した人に担当×1が積まれる');
+    f.fn.bmTantouToggle('まや');
+    d = f.fn.bmGet('12');
+    t.eq(f.fn.bmTantouList_(d), ['のあ'], 'もう一度押すと外れる');
+    t.eq(d.casts['まや'].tanto, 0, '⚠️外した人の担当料も0に戻る（名前だけ消えて金額が残らない）');
+  }
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.bmTantouToggle('店担当');
+    let d = f.fn.bmGet('12');
+    t.eq(d.tantou, '店担当', '🏠店担当を選ぶとキャストの担当は外れる（排他）');
+    t.eq(d.casts['まや'].tanto, 0, '外れたキャストの担当料も0');
+    t.ok(!d.casts['店担当'], '⚠️店担当はキャストではない＝d.castsに作らない');
+    t.ok((d.castSel || []).indexOf('店担当') < 0, '⚠️④キャストの一覧にも出さない');
+    f.fn.bmTantouToggle('のあ');
+    d = f.fn.bmGet('12');
+    t.eq(d.tantou, 'のあ', 'キャストを選ぶと店担当が外れる（逆向きも排他）');
+  }
+  {
+    /* ④から消したら③の名前も一緒に外す＝「担当なのに担当料が無い」伝票を作らない */
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.bmCastDrop('まや');
+    t.eq(f.fn.bmGet('12').tantou, '', '④で×したキャストは③担当からも外れる');
+  }
+  {
+    const f = boot(); f.fn.BM.key = '12'; f.fn.bmGet('12', 2);
+    f.fn.BM.tantouOpen = 1;
+    const html = f.fn.bmEditorHtml();
+    t.ok(!/'tanto'/.test(html), "⚠️④キャストに担当の増減ボタンが無い（担当の入口は③だけ）");
+    t.ok(/bmTantouToggle/.test(html), '③担当は付け外しできる');
+    t.ok(/店担当/.test(html), '③に🏠店担当の候補が出る');
+  }
+  {
+    const f = boot(); f.fn.BM.key = '12'; const d = f.fn.bmGet('12', 2);
+    f.fn.bmTantouToggle('店担当');
+    const html = f.fn.bmDetailHtml();
+    t.ok(/店担当/.test(html), '⚠️店担当でも⑦明細が「担当なし」に見えない');
+  }
+
   t.section('💰会計のガード（通していい物／止める物）');
   const closeWith = (draft, o) => {
     const f = boot(o);
