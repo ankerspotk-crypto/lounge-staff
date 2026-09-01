@@ -1561,6 +1561,11 @@ function renderStaff(){
   var all=filtered();
   var list=all.filter(function(s){return !s.retired;});      // 在籍
   var retired=all.filter(function(s){return s.retired;});     // 退職済み
+  /* 💴 TRUSTの時給を基本時給の空欄へ（2026-09-01の一度きりの移行）。
+     ⚠️まず下見を出す＝押した瞬間には書かない */
+  var wageTool='<div class="toolbar" style="margin-bottom:10px">'
+    +'<button class="btn" onclick="importTrustWages(false)">💴 TRUSTの時給を取り込む（空欄だけ）</button>'
+    +'<span class="hint" style="margin:0">TRUSTのキャスト設定「時給(1部)」を基本時給の<b>空欄だけ</b>に入れます。既に値がある人は触りません。</span></div>';
   var renameTool='<details class="sec compact" style="margin-bottom:10px"><summary style="cursor:pointer;font-weight:800;color:var(--accent)">✏️ スタッフ改名（名前変更の統一）</summary>'
     +'<div class="hint" style="margin-top:8px">既存スタッフが <b>#登録</b> で名前を変えた時、旧名が残るシフト・シフト申請・勤怠・給与・領収書・顧客担当・予約などを新名に一括統一します。まず🔍プレビューで件数を確認してから実行してください。</div>'
     +'<div class="toolbar">'+rnPick('rn-old','旧名（今シフト等に残る名前）')+'<span style="color:var(--dim);font-weight:800">→</span>'+rnPick('rn-new','新名（#登録した名前）')+'<button class="btn" onclick="renamePreview()">🔍 プレビュー</button></div>'
@@ -1576,7 +1581,7 @@ function renderStaff(){
     +'<div class="hint" style="margin-top:8px">新人（キャスト・体験）の入店時チェック項目。ここで追加・編集した項目が、各スタッフカードの「🆕 入店チェック」に反映されます。<b>1行1項目</b>。</div>'
     +'<textarea class="ta" id="ob-cfg" rows="'+Math.max(4,obItems.length+1)+'" style="width:100%;margin-top:8px" placeholder="名刺発注\nポケパラ登録\n身分証（登録・控え）">'+esc(obItems.join('\n'))+'</textarea>'
     +'<div class="toolbar" style="margin-top:8px"><button class="btn pri" onclick="saveOnboardConfig()">💾 項目を保存</button></div></details>';
-  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+renameTool+obCfg+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">在籍スタッフなし</div>')+retiredHtml);
+  setBody('<div class="toolbar"><input class="finput grow" id="q" placeholder="🔍 名前で検索" oninput="onSearch()" value="'+esc(q)+'"><div class="chips">'+fchips+'</div><span class="cnt">'+list.length+'名</span></div>'+wageTool+renameTool+obCfg+(list.length?'<div class="grid">'+list.map(cardHtml).join('')+'</div>':'<div class="empty">在籍スタッフなし</div>')+retiredHtml);
   var qi=document.getElementById('q'); if(qi){qi.focus();qi.setSelectionRange(qi.value.length,qi.value.length);}
 }
 /* 改名の名前入力＝選択式（登録済み・在籍のスタッフ）＋「一覧にない名前」だけ手入力に落ちる。
@@ -1832,6 +1837,21 @@ function saveOnboardConfig(){
   gsr('adminSaveOnboardConfig',USER_ID,items).then(function(r){ if(res(r,'入店チェック項目を保存しました')){ ST.onboardItems=(r&&r.items)||items; renderStaff(); } }).catch(function(){ toast('通信エラー',true); });
 }
 function toggleTerms(i){ var p=document.getElementById('tmp'+i),a=document.getElementById('tmar'+i); if(!p)return; var open=p.style.display==='none'; p.style.display=open?'block':'none'; if(a)a.textContent=open?'▴':'▾'; }
+/* 💴 TRUSTの時給(1部)を基本時給の**空欄だけ**に入れる（2026-09-01の一度きりの移行）。
+   ⚠️まず**下見**（何が入るかの一覧）を出し、ボスが見てから実行する＝いきなり書かない。 */
+function importTrustWages(apply){
+  if(!IS_GAS){ toast('（ローカルではプレビュー不可）'); return; }
+  gsr('adminImportTrustWages',USER_ID,!!apply).then(function(r){
+    if(!res(r)) return;
+    if(apply){ toast('💴 '+r.summary); load(); return; }
+    var lines=(r.fill||[]).map(function(x){ return '　'+x.name+'　→　¥'+Number(x.wage).toLocaleString(); }).join('\n');
+    var diff=(r.keep||[]).filter(function(x){ return !x.same; })
+      .map(function(x){ return '　'+x.name+'　名簿¥'+x.cur+' / TRUST¥'+x.trust; }).join('\n');
+    var msg='💴 TRUSTの時給(1部)を基本時給の【空欄だけ】に入れます。\n'+r.summary+'\n\n【入る人】\n'+(lines||'　なし')
+      +(diff?('\n\n【値が違う人＝触りません】\n'+diff):'')+'\n\n実行しますか？';
+    if(confirm(msg)) importTrustWages(true);
+  }).catch(function(){ toast('通信エラー',true); });
+}
 function saveTerms(i,name){
   var terms={};
   TERM_FIELDS.forEach(function(f,fi){ var el=document.getElementById('tm'+i+'_'+fi); terms[f.h]=el?(el.value||'').trim():''; });
