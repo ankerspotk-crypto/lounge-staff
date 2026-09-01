@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01k-test';
+var BUILD='2026-09-01l-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -8700,6 +8700,18 @@ function tslipConfirm(ok,rowIdx){
   }
   tslipUpdateChip_(); renderMenu();
 }
+/* 刷ったのに記録が残らなかった分を、刷り直さずに済にする。⚠️「↺未印刷に戻す」で取り消せる */
+function tslipMarkDone(i,ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  var r=tslipList_()[i]; if(!r)return;
+  if(!confirm((r.cust||'')+' 様の伝票を「印刷済み」にします。\n\n⚠️実際に刷った物だけにしてください（刷っていない物を済にすると、刷り漏れが見えなくなります）。'))return;
+  var k=tslipKey_(r);
+  TSLIP_DONE[k]=1;
+  /* 確認待ちに残っていれば一緒に片付ける（二重に確認を出さない） */
+  tslipSetPend_(tslipPend_().filter(function(x){ return String(Number(x.rowIdx))!==k; }));
+  if(IS_GAS) gsr('markSlipPrinted',Number(k)).catch(function(){ toast('印刷済みの記録に失敗'); });
+  tslipUpdateChip_(); renderMenu();
+}
 /* 誤って印刷済みにした／刷り直したい時に未印刷へ戻す */
 function tslipUndo(i,ev){
   if(ev&&ev.stopPropagation)ev.stopPropagation();
@@ -8979,7 +8991,11 @@ function tslipListHtml_(){
     var sub=[]; if(r.tantou)sub.push('担当 '+r.tantou); if(r.dohan)sub.push('同伴 '+r.dohan); if(r.yoyaku)sub.push('予約 '+r.yoyaku);
     var rightCol = done
       ? '<div style="text-align:right"><div class="ts-badge done">✓ 印刷済</div><div class="ts-undo" onclick="tslipUndo('+i+',event)">↺ 未印刷に戻す</div></div>'
-      : '<div class="ts-dim">'+(i===TSLIP_SEL?'選択中':'選ぶ ▸')+'</div>';
+      /* ⭐刷ったのに記録が無い時の逃げ道（2026-09-01）＝もう一度刷らずに済にできる。
+         「↺未印刷に戻す」と対になる操作。⚠️刷っていない物を済にすると刷り漏れが見えなくなるので、
+         文言で「刷った物だけ」と明示する。 */
+      : '<div style="text-align:right"><div class="ts-dim">'+(i===TSLIP_SEL?'選択中':'選ぶ ▸')+'</div>'
+        +'<div class="ts-undo" onclick="tslipMarkDone('+i+',event)">✓ 刷った物を済にする</div></div>';
     return '<div class="ts-rsv'+(i===TSLIP_SEL?' on':'')+(done?' done':'')+'" onclick="tslipPick('+i+')">'
       +'<div><div class="ts-rsv-nm"><span class="ts-dim">'+esc(r.time||'')+'</span>　'+esc(r.cust||'')+' 様'
       +(String(r.mem||'').trim()?' <span class="ts-dim">'+esc(r.mem)+'</span>':'')+b+'</div>'
