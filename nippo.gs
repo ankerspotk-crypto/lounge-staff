@@ -680,7 +680,25 @@ function nippoSavedCash_(bizDate) {
      ⭐黒服がゼロから打つ画面にはしない。**確認して直すだけ**にするのが狙い。
    ■ 確定済みの日は locked=true で返す（画面は読み取り専用になる）。
 ========================================================================== */
-function getNippo(dateKey) {
+/* ⏱遅かった時だけ実測を残す。⚠️速い時は書かない／失敗しても日報は止めない */
+const NIPPO_PERF_TAB_ = '日報計測ログ';
+function nippoPerfLog_(prev) {
+  try {
+    if (!prev || typeof prev !== 'object') return;
+    const wall = Number(prev.wall) || 0;
+    if (wall < 5000) return;                       // 速い日は書かない
+    const ss = getOrOpenSS_();
+    let sh = ss.getSheetByName(NIPPO_PERF_TAB_);
+    if (!sh) { sh = ss.insertSheet(NIPPO_PERF_TAB_); sh.appendRow(['記録時刻','対象営業日','実測ms','サーバms','通信・起動ms','内訳JSON']); sh.setFrozenRows(1); }
+    const srv = Number(prev.server) || 0;
+    sh.appendRow([nowStamp_(), String(prev.date || ''), wall, srv, Math.max(0, wall - srv), JSON.stringify(prev.ms || {})]);
+    /* ⚠️溜め込まない＝2000行を超えたら古い方から500行消す */
+    const last = sh.getLastRow();
+    if (last > 2000) sh.deleteRows(2, 500);
+  } catch (e) { /* 計測のために本業を落とさない */ }
+}
+function getNippo(dateKey, prevPerf) {
+  nippoPerfLog_(prevPerf);
   try {
     const d = String(dateKey || '').trim() || bizDateStr_();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '日付の形式が不正です' };
