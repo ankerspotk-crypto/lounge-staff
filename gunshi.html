@@ -1637,7 +1637,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-01e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2345,12 +2345,20 @@ function npPick(v){ if(/^\d{4}-\d{2}-\d{2}$/.test(v)) npGo(v); }
    ⭐重い時に推測で直さないための計測。⚠️backendが未対応の間は何も出さない（黙って消える）。
    遅い方から2つだけ出す＝全部並べるとヘッダーの横幅を食う（[[reference_gunshi_header_width_budget]]）。 */
 function npMsChip_(){
-  var tot=Number(NP&&NP.msTotal)||0; if(!tot) return '';
-  var ms=(NP&&NP.ms)||{}, top=Object.keys(ms).map(function(k){ return [k,Number(ms[k])||0]; })
-    .sort(function(a,b){ return b[1]-a[1]; }).filter(function(x){ return x[1]>=200; }).slice(0,2)
-    .map(function(x){ return x[0]+(x[1]/1000).toFixed(1); }).join(' ');
-  return '<span class="np-chip" style="border-color:#3a3a4a;color:var(--sub)" title="サーバがこの日報を組み立てるのに使った時間">⏱ '
-    +(tot/1000).toFixed(1)+'秒'+(top?'（'+esc(top)+'）':'')+'</span>';
+  var tot=Number(NP&&NP.msTotal)||0;
+  /* ⚠️backendが計測を返していない＝**古い版を掴んでいる**。黙って消えると「速いのか古いのか」が
+     分からない＝ボスに3回同じことを聞く羽目になった（2026-09-01）。分からない事は分かると出す。 */
+  if(!tot) return '<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a" title="サーバが計測を返していません。端末をリロードしてください">⏱ 計測なし（要リロード）</span>';
+  var ms=(NP&&NP.ms)||{};
+  var all=Object.keys(ms).map(function(k){ return [k,Number(ms[k])||0]; }).sort(function(a,b){ return b[1]-a[1]; });
+  /* 3秒以上かかった時は**全部の内訳**を出す＝どこを削るかはこの数字だけで決める。
+     速い時は上位2つだけ（ヘッダーの横幅を食わない＝[[reference_gunshi_header_width_budget]]）。 */
+  var slow=(tot>=3000);
+  var list=all.filter(function(x){ return x[1]>=(slow?100:200); }).slice(0,slow?9:2)
+    .map(function(x){ return x[0]+' '+(x[1]/1000).toFixed(1); }).join(' / ');
+  var tone=(tot>=5000)?'border-color:#7a3020;color:#ff9a9a':(tot>=3000?'border-color:#7a3f10;color:#e6a35a':'border-color:#3a3a4a;color:var(--sub)');
+  return '<span class="np-chip" style="'+tone+'" title="サーバがこの日報を組み立てるのに使った時間（秒）">⏱ '
+    +(tot/1000).toFixed(1)+'秒'+(list?'（'+esc(list)+'）':'')+'</span>';
 }
 function npRender(){
   var b=document.getElementById('sheetBody'); if(!b||!NP) return;
