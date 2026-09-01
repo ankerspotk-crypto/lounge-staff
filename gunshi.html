@@ -30,6 +30,8 @@ body{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 .term-badge{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);padding:3px 9px;border-radius:20px;white-space:nowrap;}
 /* 🖊テーブル伝票が未印刷の予約が残っている時だけ出る警告チップ（0件なら消える＝残っている時だけ目に入る） */
 .slip-chip{display:none;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#ffd7dd;background:#5a1220;border:1px solid #a33b32;padding:5px 11px;border-radius:20px;white-space:nowrap;cursor:pointer;}
+/* 🖊刷った直後の「確認待ち」＝未印刷(赤)と見分ける（橙）。押すとそのまま確認バーへ */
+.slip-chip.wait{color:#ffe1b8;background:#4a2a08;border-color:#a3762f;}
 .slip-chip.on{display:inline-flex;}
 .datenav{display:flex;align-items:center;gap:6px;margin-left:2px;}
 .dbtn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--accent);font-size:16px;cursor:pointer;line-height:1;}
@@ -1641,7 +1643,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01j';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-01k';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -8337,15 +8339,41 @@ function openTableSlipFor(id){
 /* ホール状況ヘッダの警告チップ。0件なら消える＝残っている時だけ目に入る */
 function tslipUpdateChip_(){
   var el=document.getElementById('slipChip'); if(!el)return;
+  /* ⭐刷った直後の「確認待ち」を**どの画面に居ても**出す（2026-09-01）。
+     印刷アプリから戻ると別の画面に居ることが多く、🖊の画面を開き直さないと確認バーに辿り着けなかった
+     ＝押されないまま未印刷が残り続けた。ここをタップすればそのまま確認バーへ行く。 */
+  var w=tslipPend_().length;
+  if(w){ el.innerHTML='🖊 <span class="sc-l">伝票 </span>刷れた？ '+w; el.className='slip-chip on wait'; return; }
   var n=tslipUnprinted_().length;
   el.innerHTML='🖊 <span class="sc-l">伝票 </span>未印刷 '+n;
   el.className='slip-chip'+(n?' on':'');
 }
-function tslipPend_(){ try{ return JSON.parse(localStorage.getItem(TSLIP_PEND_KEY)||'null'); }catch(e){ return null; } }
-function tslipSetPend_(v){ try{ if(v)localStorage.setItem(TSLIP_PEND_KEY,JSON.stringify(v)); else localStorage.removeItem(TSLIP_PEND_KEY); }catch(e){} }
-/* 「✓刷れた」＝ここで初めてサーバへ記録。失敗しても画面は進める（次のloadAllで正が来る） */
-function tslipConfirm(ok){
-  var p=tslipPend_(); tslipSetPend_(null);
+/* ⚠️2026-09-01の不具合＝**確認待ちを1件しか持てなかった**。
+     2枚続けて刷ると2枚目が1枚目を上書きし、1枚目は二度と「✓刷れた」を押せない
+     ＝刷ったのに未印刷が残り続ける（ボス報告「印刷してるのに未印刷が2」の正体）。
+   ⭐**待ち行列（配列）にする。** 刷った枚数ぶん確認できる。
+   ⚠️古い形（単体オブジェクト）が端末に残っていても拾えるように移行する。 */
+function tslipPend_(){
+  try{
+    var v=JSON.parse(localStorage.getItem(TSLIP_PEND_KEY)||'null');
+    if(!v) return [];
+    if(Array.isArray(v)) return v;
+    return v.rowIdx?[v]:[];              // 旧形式（1件だけ）を配列に移行
+  }catch(e){ return []; }
+}
+function tslipSetPend_(a){ try{ if(a&&a.length)localStorage.setItem(TSLIP_PEND_KEY,JSON.stringify(a)); else localStorage.removeItem(TSLIP_PEND_KEY); }catch(e){} }
+/* 刷った1枚を待ち行列に足す。⚠️同じ伝票を2回刷ったら1件にまとめる（確認が2回出ると押し間違える） */
+function tslipPendAdd_(p){
+  if(!p||!p.rowIdx) return;
+  var a=tslipPend_().filter(function(x){ return Number(x.rowIdx)!==Number(p.rowIdx); });
+  a.push(p); tslipSetPend_(a);
+}
+/* 「✓刷れた」＝ここで初めてサーバへ記録。失敗しても画面は進める（次のloadAllで正が来る）
+   ⚠️rowIdx を渡す＝どの1件を確認したのかを明示（待ち行列の先頭を勝手に消さない） */
+function tslipConfirm(ok,rowIdx){
+  var a=tslipPend_(), n=Number(rowIdx||0);
+  var p=n?a.filter(function(x){ return Number(x.rowIdx)===n; })[0]:a[0];
+  tslipSetPend_(a.filter(function(x){ return Number(x.rowIdx)!==Number(p&&p.rowIdx); }));
   if(ok&&p&&p.rowIdx){
     TSLIP_DONE[String(p.rowIdx)]=1;
     if(IS_GAS) gsr('markSlipPrinted',p.rowIdx).catch(function(){ toast('印刷済みの記録に失敗。もう一度確認してください'); });
@@ -8613,7 +8641,7 @@ function tslipPrint(){
   if(hint) hint.textContent=go?'TM Print Assistant を起動します…（画像印字のため数秒かかることがあります）'
                              :'🧪 テスト＝刷ったことにしました。「✓刷れた」を押せば印刷済みとして記録されます。';
   // ⚠️ここでは印刷済みにしない＝「確認待ち」を置くだけ。戻ってきて「✓刷れた」を押した時に記録する
-  if(o) tslipSetPend_({rowIdx:Number(tslipKey_(o)), cust:String(o.cust||''), at:(new Date()).getTime()});
+  if(o) tslipPendAdd_({rowIdx:Number(tslipKey_(o)), cust:String(o.cust||''), at:(new Date()).getTime()});
   return go;   // ⚠️ここで location.href を書かない＝aタグの遷移に任せる（領収書と同じ流儀）
 }
 function openTableSlip(){ menuView='tslip'; TSLIP_MODE='rsv'; TSLIP_SEL=-1; document.getElementById('menuOverlay').classList.add('show'); renderMenu(); }
@@ -8650,12 +8678,11 @@ function tslipRenderMenu_(el){
     +'<button class="'+(TSLIP_MODE==='rsv'?'on':'')+'" onclick="tslipSetMode(\'rsv\')">予約から刷る</button>'
     +'<button class="'+(TSLIP_MODE==='blank'?'on':'')+'" onclick="tslipSetMode(\'blank\')">白紙で刷る</button></div>';
   // 印刷アプリから戻ってきた直後の確認バー。ここを通らないと「印刷済み」にならない＝刷り漏れが残り続ける
-  var p=tslipPend_();
-  if(p&&p.rowIdx){
+  tslipPend_().forEach(function(p){
     h+='<div class="ts-confirm"><div class="ts-confirm-t">🖊 '+esc(p.cust||'')+' 様の伝票、刷れましたか？</div>'
-      +'<div class="ts-confirm-b"><button class="ok" onclick="tslipConfirm(true)">✓ 刷れた</button>'
-      +'<button onclick="tslipConfirm(false)">まだ／やり直す</button></div></div>';
-  }
+      +'<div class="ts-confirm-b"><button class="ok" onclick="tslipConfirm(true,'+Number(p.rowIdx)+')">✓ 刷れた</button>'
+      +'<button onclick="tslipConfirm(false,'+Number(p.rowIdx)+')">まだ／やり直す</button></div></div>';
+  });
   if(TSLIP_MODE==='rsv'){
     var un=tslipUnprinted_().length;
     h+='<div class="ts-h">本日の予約を選ぶ（お客様・会員番号・担当・年会費が伝票に入ります）'
