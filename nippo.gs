@@ -299,7 +299,23 @@ function nippoEnsureRows_(sh, need) {
    ⚠️シフト表だけでは足りない。黒服はシフト表に行が無い人がいて、主データは
      「シフト申請」の承諾行（kintaiDayPlanMap_ と同じマージ規則）。
      片方だけ見ると黒服が丸ごと消える。 */
+/* ⏱シフトの読みは**別ブックを開く**＝GASでは秒単位。90秒だけ覚える（ボス報告「10秒くらい」2026-09-01）。
+   ⚠️キーに営業日を含める＝別の日に前日の出勤者を出さない。
+   ⚠️実行内メモも持つ＝同じ実行で2回呼ばれても1回で済む。
+   ⚠️入り切らない/失敗したら黙って素通し＝**速さのために落とさない**。 */
+var NIPPO_SHIFT_MEMO_ = {};
 function nippoShiftDetail_(bizDate) {
+  const _k = 'NIPPO_SHIFT_v1_' + String(bizDate);
+  if (NIPPO_SHIFT_MEMO_[_k]) return NIPPO_SHIFT_MEMO_[_k];
+  try {
+    const h = CacheService.getScriptCache().get(_k);
+    if (h) return (NIPPO_SHIFT_MEMO_[_k] = JSON.parse(h));
+  } catch (e) {}
+  const v = nippoShiftDetailRaw_(bizDate);
+  try { CacheService.getScriptCache().put(_k, JSON.stringify(v), 90); } catch (e) {}
+  return (NIPPO_SHIFT_MEMO_[_k] = v);
+}
+function nippoShiftDetailRaw_(bizDate) {
   const out = [], seen = {};
   const p0 = String(bizDate).split('-');
   if (p0.length < 3) return out;

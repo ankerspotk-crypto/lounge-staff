@@ -3308,7 +3308,9 @@ function npaDraw(){
       +'<td style="color:var(--dim);white-space:nowrap">'+esc(x.punchIn||'--:--')+' → '+esc(x.punchOut||'--:--')+'</td>'
       +'<td>'+npaIn(i,'start',x.start,58)+'</td>'
       +'<td>'+npaIn(i,'end',x.end,58)+'</td>'
-      +'<td>'+npaIn(i,'adj',x.adj,46)+'</td>'
+      /* ⏱時間外は入力させない（ボス指示 2026-09-01）。0なら空欄、残っていれば読むだけで出す
+         ＝労働時間に効いているのに見えない、を作らない */
+      +'<td style="color:var(--dim)">'+((Number(x.adj)||0)?((Number(x.adj)>0?'+':'')+x.adj+'分'):'')+'</td>'
       +'<td style="'+g+'">'+esc(x.workText||'')+'</td>'
       +'<td>'+npaIn(i,'wage',x.wage,68)+'</td>'
       +'<td style="'+g+'">'+npaYen(x.jikan)+'</td>'
