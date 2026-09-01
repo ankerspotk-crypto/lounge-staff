@@ -367,7 +367,40 @@ function nippoShiftDetail_(bizDate) {
 /* ── 時給（名簿の「基本時給」）────────────────────────────────────────────
    ⚠️「基本時給」は計算非連動の参照メモとして**文字列**で入っている＝必ずパースする。
    1人ずつ引くと名簿を人数ぶん読む＝1回で全員ぶんの表を作る。 */
-function nippoWageMap_() {
+/* 📒名簿(スタッフマスタ)は1回の getNippo で**2回**全読みしていた（時給／送り代負担）。
+   ここで1回に統合し、90秒キャッシュ＋実行内メモを掛ける。
+   ⚠️実行内メモ(NIPPO_STAFF_MEMO_)はGASの1実行の中だけ生きる＝保存直後の再読込では作り直される。
+   ⚠️名簿を直した直後の90秒は古い値が出る（[[reference_portal_stats_stale_cache]] と同種の性質）。
+     日報は終わった日を記録する画面なので許容する。 */
+var NIPPO_STAFF_MEMO_ = null;
+function nippoStaffMap_() {
+  if (NIPPO_STAFF_MEMO_) return NIPPO_STAFF_MEMO_;
+  try {
+    const h = CacheService.getScriptCache().get('NIPPO_STAFFMAP_v1');
+    if (h) return (NIPPO_STAFF_MEMO_ = JSON.parse(h));
+  } catch (e) {}
+  const out = { wage: {}, okuri: {} };
+  try {
+    const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
+    if (sh && sh.getLastRow() >= 2) {
+      const wc = getStaffTermCols_(sh, false)['基本時給'];
+      const oc = (typeof getStaffOkuriCol_ === 'function') ? getStaffOkuriCol_(sh, false) : -1;
+      const vals = sh.getDataRange().getValues();
+      for (let i = 1; i < vals.length; i++) {
+        const k = nippoKey_(vals[i][1]);          // B列＝名前（固定）
+        if (!k) continue;
+        if (wc != null && wc >= 0 && out.wage[k] == null) out.wage[k] = nippoYen_(vals[i][wc]);
+        if (oc >= 0 && out.okuri[k] == null) {
+          const v = Math.max(0, Math.round(Number(vals[i][oc]) || 0));
+          if (v > 0) out.okuri[k] = v;
+        }
+      }
+    }
+  } catch (e) { console.error('nippoStaffMap_', e); }
+  try { CacheService.getScriptCache().put('NIPPO_STAFFMAP_v1', JSON.stringify(out), 90); } catch (e) {}
+  return (NIPPO_STAFF_MEMO_ = out);
+}
+function nippoWageMapRaw_() {
   const map = {};
   try {
     const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
@@ -380,9 +413,10 @@ function nippoWageMap_() {
       const k = nippoKey_(vals[i][1]);            // B列＝名前（固定）
       if (k && map[k] == null) map[k] = nippoYen_(vals[i][c]);
     }
-  } catch (e) { console.error('nippoWageMap_', e); }
+  } catch (e) { console.error('nippoWageMapRaw_', e); }
   return map;
 }
+function nippoWageMap_() { return nippoStaffMap_().wage; }
 
 /* ── バックの材料を集める ────────────────────────────────────────────────
    出典は2本。**その日にPOSの会計があればPOSを採り、無ければTRUST取込の伝票**を使う。
@@ -626,14 +660,19 @@ function getNippo(dateKey) {
     const d = String(dateKey || '').trim() || bizDateStr_();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '日付の形式が不正です' };
 
-    const conf  = nippoBackConf_();
-    const rec   = nippoDayRecord_(d);
-    const saved = nippoSavedRows_(d);
-    const wages = nippoWageMap_();
-    const punch = kintaiPunchMap_(d);
-    const tally = nippoBackTally_(d);
-    const slips = nippoSlipsOfDay_(d);
-    const shift = nippoShiftDetail_(d);
+    /* ⏱どこで時間を使っているかを必ず返す（ボス報告「すごくおもい」2026-09-01）。
+       ⭐推測で速くしない＝画面の下に内訳を出し、次に重くなった時も1回で当てられるようにする。 */
+    const _t0 = Date.now(); const _ms = {};
+    const _tick = function (name, fn) { const a = Date.now(); const v = fn(); _ms[name] = Date.now() - a; return v; };
+
+    const conf  = _tick('設定',   function () { return nippoBackConf_(); });
+    const rec   = _tick('日報',   function () { return nippoDayRecord_(d); });
+    const saved = _tick('明細',   function () { return nippoSavedRows_(d); });
+    const wages = _tick('名簿',   function () { return nippoWageMap_(); });
+    const punch = _tick('打刻',   function () { return kintaiPunchMap_(d); });
+    const tally = _tick('売上',   function () { return nippoBackTally_(d); });
+    const slips = _tick('伝票',   function () { return nippoSlipsOfDay_(d); });
+    const shift = _tick('シフト', function () { return nippoShiftDetail_(d); });
     const hasSaved = Object.keys(saved).length > 0;
 
     /* 日払いの下ごしらえ＝伝票の受取人を名寄せして人に寄せる（同じ人に2枚あれば合算） */
@@ -658,7 +697,8 @@ function getNippo(dateKey) {
     Object.keys(hibaraiOf).forEach(function (k) { add(k, hibaraiName[k] || '', ''); });
 
     /* 名寄せキー→送り代負担。⚠️列が無ければ空マップ＝全員0（機能が無い状態と同じ） */
-    const okuriDef = (typeof castOkuriMap_ === 'function') ? castOkuriMap_(ss) : {};
+    /* ⚠️castOkuriMap_ は名簿をもう1回全読みする＝nippoStaffMap_ の1回に相乗りさせる */
+    const okuriDef = nippoStaffMap_().okuri;
     const rows = order.map(function (o) {
       const sv = saved[o.key] || null;
       const p  = punch[o.key] || null;
@@ -718,6 +758,8 @@ function getNippo(dateKey) {
       costInOptions: NIPPO_COST_IN_,
       rows: rows, cashIn: cashIn, cashOut: cashOut,
       totals: nippoTotals_(rows, cashIn, cashOut),
+      /* ⏱計測（画面の下に出す）。合計と内訳。単位=ミリ秒 */
+      msTotal: Date.now() - _t0, ms: _ms,
       slipHibaraiTotal: slips.hibarai.reduce(function (s, x) { return s + x.amount; }, 0),
       slipHibaraiCount: slips.hibarai.length
     };
