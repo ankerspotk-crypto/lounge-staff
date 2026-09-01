@@ -13691,7 +13691,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TASK_DEFERRALS'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TRUST_OFF_FROM','TASK_DEFERRALS'];
   // ⚠️'NIPPO_' ＝日報のバック単価（予約¥500/同伴¥3,000 等）。消えると給与の素が黙って変わる
   const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_','KYUKIN_','NIPPO_'];
   Object.keys(all).forEach(k => {
@@ -18110,6 +18110,27 @@ const TRUST_DAYPAY_TAB  = 'TRUST日払い日次';
 const TRUST_DAYPAY_HEAD = ['営業日', '名前', '金額', '取得時刻', '取得元', 'マイナス'];
 const CC_GATE_LOOKBACK_ = 30;   // 未照合日をさかのぼって探す日数
 
+/* ============================================================================
+   🗓 TRUST運用の終わり＝この営業日から先はTRUSTを見ない
+   ----------------------------------------------------------------------------
+   ボス確定 2026-08-30「9月1日からTRUSTを使わない運用にする」。
+   ⭐日報の切替と同じく **営業日という動かせない事実** で決める＝人が倒すフラグにしない。
+     「その日に誰かがスイッチを押す」は押し忘れ・早倒し・二度押しが必ず起きる。
+   ⚠️判定の基準は「今日」ではなく **対象の営業日**。9/2に8/31を締め直しても8/31はTRUST時代の日
+     ＝同じ営業日が二つの流儀に割れない（日報の nippoIsTestDate_ と同じ考え方）。
+   ⚠️切替日は ScriptProperty `TRUST_OFF_FROM` で変更可（KEEPリスト登録済み＝設定リセットで消えない）。
+     壊れた値は既定に戻す＝黙って全部をTRUST運用外に倒さない。
+============================================================================ */
+const TRUST_OFF_FROM_DEFAULT_ = '2026-09-01';
+function trustOffFrom_() {
+  const v = String(prop('TRUST_OFF_FROM') || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : TRUST_OFF_FROM_DEFAULT_;
+}
+function trustIsOff_(bizDate) {
+  const d = String(bizDate == null ? '' : bizDate).trim() || bizDateStr_();
+  return d >= trustOffFrom_();
+}
+
 // ── 📷 日報スクショから取れる「出金（経費）」の受け皿 ───────────────────────
 //   ⚠️出金は名前のような一意キーが無い（同じ項目名が複数行ありうる）ので、
 //     「出金の表が写っていた枚」でその日ぶんを丸ごと置き換える。写っていない枚では触らない。
@@ -18628,6 +18649,9 @@ function cashUnresolvedDays_(todayKey) {
   for (let i = 1; i < vals.length; i++) {
     const d = vals[i][0] instanceof Date ? Utilities.formatDate(vals[i][0], TZ, 'yyyy-MM-dd') : String(vals[i][0]).trim();
     if (!d || d >= todayKey || d < startKey) continue;
+    /* 🗓 TRUSTを使わない営業日はこのゲートの対象外。TRUSTが無いのだから永久に照合できず、
+       外さないと 9/2 から毎晩「未照合」が積み上がって翌日の閉店が永久に止まる。 */
+    if (trustIsOff_(d)) continue;
     if (!String(vals[i][1] || '').trim()) continue;               // 未提出の日は対象外
     const st = String(vals[i][iChk] || '').trim();
     if (st === '照合済み') continue;
@@ -18644,6 +18668,9 @@ function cashUnresolvedDays_(todayKey) {
     }
     out.push({
       dateKey: d, status: st, hasTrust: !!rec.hasTrust,
+      /* TRUST廃止後に残った過去日＝取り込み元が無く黒服では直せない。フロントは必須にせず
+         「管理者へ引き継ぐ」に落とす（帰れないだけの詰みを作らない）。 */
+      legacy: trustIsOff_(todayKey),
       diff: rec.hasTrust ? rec.diff : (iDiff >= 0 ? (Number(vals[i][iDiff]) || 0) : 0),
       lines: rec.lines || []
     });
@@ -18755,6 +18782,10 @@ function ccGateStatus(dateKey, slips) {
       // 今夜ぶんの突合。slips は軍師が画面に持っている伝票（まだ未提出なのでサーバには無い）
       today: ccReconcileDay_(d, slips || []),
       unresolved: cashUnresolvedDays_(d),
+      /* 🗓 TRUST運用の内外はサーバが正本。フロントも同じ日付を持つが、サーバ値があれば必ずそちらを採る。 */
+      trustOff: trustIsOff_(d), trustOffFrom: trustOffFrom_(),
+      /* 📋日報＝TRUSTを捨てた後の給与の素。閉店の関所に出すため状態だけ渡す（nippo.gs が無くても落ちない） */
+      nippo: (typeof nippoGateState_ === 'function') ? nippoGateState_(d) : null,
       payees: ccKnownPayees_()
     };
   } catch (e) {
@@ -18943,7 +18974,9 @@ function submitCashCheck(payload) {
         const _r = (rowIdx > 0) ? rowIdx : findCashCheckRow_(sh, dateKey);
         const _c = ccGateCols_(sh);
         if (_r > 0) {
-          sh.getRange(_r, _c['TRUST照合']).setValue(String(payload.gate.trustStatus || '未照合'));
+          /* 🗓 TRUST運用外の営業日に「未照合」を書くと、翌日以降のゲートに嘘の宿題が積み上がる。 */
+          sh.getRange(_r, _c['TRUST照合']).setValue(
+            trustIsOff_(dateKey) ? 'TRUST運用外' : String(payload.gate.trustStatus || '未照合'));
           sh.getRange(_r, _c['TRUST差額']).setValue(Number(payload.gate.trustDiff) || 0);
           sh.getRange(_r, _c['ゲート備考']).setValue(String(payload.gate.note || ''));
         }
@@ -21191,10 +21224,16 @@ const POS_YOYAKU_FEE_     = 0;      // 予約料金（＝場内指名料）。�
      黙ってテストに戻る＝[[reference_script_property_reset_trap]]）。
 ============================================================================ */
 const POS_MODE_PROP_ = 'POS_MODE';
-function posMode_() {
+/* 🗓 モードは **対象の営業日** で決まる（bizDate 省略＝今日の営業日）。
+   ⚠️9/1に誰かがスイッチを押す運用にしない＝押し忘れると本番の売上が _TEST シートに落ち、
+     さらに日報のバック計算がテストの練習データを読む（日報は日付で本番に切り替わるため）。
+   ⚠️切替前に前倒しで本番へ上げる自由は残す＝setPosMode('live') は従来どおり効く。
+     逆に切替後は 'test' に戻せない（戻せる作りにすると本番売上が静かにテストへ流れる）。 */
+function posMode_(bizDate) {
+  if (trustIsOff_(bizDate)) return 'live';
   return (PropertiesService.getScriptProperties().getProperty(POS_MODE_PROP_) === 'live') ? 'live' : 'test';
 }
-function posTab_(base) { return posMode_() === 'live' ? base : (base + '_TEST'); }
+function posTab_(base, bizDate) { return posMode_(bizDate) === 'live' ? base : (base + '_TEST'); }
 function getPosMode() { return { mode: posMode_(), isTest: posMode_() !== 'live' }; }
 /* モード切替。⚠️本番へ上げる／テストへ戻すのは運用上の大きな分岐なので黒服LINEに必ず流す */
 function setPosMode(mode, by) {
@@ -21212,9 +21251,9 @@ function setPosMode(mode, by) {
   return { ok: true, mode: next };
 }
 
-function getPosOrderSheet_() {
+function getPosOrderSheet_(bizDate) {
   const ss = getOrOpenSS_();
-  const tab = posTab_(POS_ORDER_TAB);
+  const tab = posTab_(POS_ORDER_TAB, bizDate);
   let sh = ss.getSheetByName(tab);
   if (!sh) {
     sh = ss.insertSheet(tab);
@@ -21238,9 +21277,9 @@ function getPosOrderSheet_() {
 const POS_BILL_TAB   = 'POS_伝票';
 const POS_BILL_HEAD_ = ['営業日', '伝票行', '更新日時', '更新者', '合計', 'データ'];
 
-function getPosBillSheet_() {
+function getPosBillSheet_(bizDate) {
   const ss = getOrOpenSS_();
-  const tab = posTab_(POS_BILL_TAB);
+  const tab = posTab_(POS_BILL_TAB, bizDate);
   let sh = ss.getSheetByName(tab);
   if (!sh) {
     sh = ss.insertSheet(tab);
@@ -21275,9 +21314,9 @@ const POS_CLOSE_HEAD_ = ['営業日', '伝票行', '会計時刻', '担当黒服
 const POS_CLOSE_LIVE_ = '会計済み';
 const POS_CLOSE_VOID_ = '取消';
 
-function getPosCloseSheet_() {
+function getPosCloseSheet_(bizDate) {
   const ss = getOrOpenSS_();
-  const tab = posTab_(POS_CLOSE_TAB);
+  const tab = posTab_(POS_CLOSE_TAB, bizDate);
   let sh = ss.getSheetByName(tab);
   if (!sh) {
     sh = ss.insertSheet(tab);
@@ -21299,7 +21338,7 @@ function posEnsureCloseHead_(sh) {
 /* その営業日の会計済み伝票行を返す（画面のロック判定に使う） */
 function getPosClosed(dateKey) {
   const key = String(dateKey || bizDateStr_());
-  const sh = getPosCloseSheet_();
+  const sh = getPosCloseSheet_(key);
   const last = sh.getLastRow();
   const out = [];
   if (last < 2) return { mode: posMode_(), dateKey: key, closed: out };
@@ -21321,7 +21360,7 @@ function posCloseBill(dateKey, rowIdx, rec, by) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(8000); } catch (e) { return { ok: false, error: '混み合っています。もう一度' }; }
   try {
-    const sh = getPosCloseSheet_();
+    const sh = getPosCloseSheet_(key);
     const last = sh.getLastRow();
     // 二重会計の防止＝同じ伝票の'会計済み'が既にあれば拒否（取消してから締め直す）
     if (last >= 2) {
@@ -21355,7 +21394,7 @@ function posDeleteBill(dateKey, rowIdx, by) {
   if (!rid) return { ok: false, error: '伝票行がありません' };
   const cl = getPosClosed(key).closed.filter(c => String(c.rowIdx) === rid);
   if (cl.length) return { ok: false, error: '会計済みです。先に会計を取り消してください' };
-  const sh = getPosBillSheet_();
+  const sh = getPosBillSheet_(key);
   const last = sh.getLastRow();
   if (last < 2) return { ok: true };
   const idx = sh.getRange(2, 1, last - 1, 2).getValues();
@@ -21445,7 +21484,7 @@ function getPosNextPay(fromKey, toKey) {
 function posReopenBill(dateKey, rowIdx, by) {
   const key = String(dateKey || bizDateStr_());
   const rid = String(rowIdx || '');
-  const sh = getPosCloseSheet_();
+  const sh = getPosCloseSheet_(key);
   const last = sh.getLastRow();
   if (last < 2) return { ok: false, error: '会計の記録がありません' };
   const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
@@ -21461,7 +21500,7 @@ function posReopenBill(dateKey, rowIdx, by) {
 /* その営業日の伝票を全部返す（端末はこれで他端末の入力を拾う） */
 function getPosBills(dateKey) {
   const key = String(dateKey || bizDateStr_());
-  const sh = getPosBillSheet_();
+  const sh = getPosBillSheet_(key);
   const last = sh.getLastRow();
   const out = [];
   if (last < 2) return { mode: posMode_(), dateKey: key, bills: out };
@@ -21486,7 +21525,7 @@ function posSaveBill(dateKey, rowIdx, total, data, by) {
   const lock = LockService.getScriptLock();
   try { lock.waitLock(8000); } catch (e) { return { ok: false, error: '混み合っています。もう一度' }; }
   try {
-    const sh = getPosBillSheet_();
+    const sh = getPosBillSheet_(key);
     const last = sh.getLastRow();
     let hit = -1;
     if (last >= 2) {
@@ -21693,7 +21732,7 @@ function getPosOpenBills(dateKey) {
   if (last < 2) return { ok: true, date: biz, bills: [] };
   const rows = sh.getRange(2, 1, last - 1, 18).getValues();
   // 注文合計を伝票行ごとに1回で集計（伝票ごとにシートを舐めない＝行数が増えても重くならない）
-  const osh = getPosOrderSheet_();
+  const osh = getPosOrderSheet_(biz);
   const osum = {};
   const olast = osh.getLastRow();
   if (olast >= 2) {

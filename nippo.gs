@@ -404,7 +404,9 @@ function nippoBackTally_(bizDate) {
 
   /* ① 自社POS（＝本命。会計済みの行だけ。取消は数えない） */
   try {
-    const ps = getOrOpenSS_().getSheetByName(posTab_(POS_CLOSE_TAB));
+    /* 🗓 その日の日報が読むのは **その営業日のPOS**。posTab_ を引数なしで呼ぶと「今日」で決まり、
+       9/1に8/31の日報を作ると本番シートを読んでしまう（8/31の会計はテスト側にある）。 */
+    const ps = getOrOpenSS_().getSheetByName(posTab_(POS_CLOSE_TAB, bizDate));
     if (ps && ps.getLastRow() > 1) {
       const c = nippoCols_(ps);
       const vals = ps.getRange(2, 1, ps.getLastRow() - 1, ps.getLastColumn()).getValues();
@@ -434,7 +436,7 @@ function nippoBackTally_(bizDate) {
   /* ①-b POSのときだけ、注文の帰属からドリンク/ボトル/フードの本数を数える（1注文=1行の正規化済） */
   if (res.src === 'POS') {
     try {
-      const os = getOrOpenSS_().getSheetByName(posTab_(POS_ORDER_TAB));
+      const os = getOrOpenSS_().getSheetByName(posTab_(POS_ORDER_TAB, bizDate));
       if (os && os.getLastRow() > 1) {
         const c = nippoCols_(os);
         const vals = os.getRange(2, 1, os.getLastRow() - 1, os.getLastColumn()).getValues();
@@ -741,7 +743,15 @@ function saveNippo(payload) {
     const p = payload || {};
     const d = String(p.dateKey || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return { ok: false, error: '日付の形式が不正です' };
-    const by = String(p.by || '').trim() || '不明';
+    /* ⭐コンソールから直した時は誰が直したかを名前で残す（監査の足跡）。
+       ⚠️軍師からは従来どおり p.by（ログイン名）が来る＝そちらを優先する。 */
+    let by = String(p.by || '').trim();
+    if (!by && p.byUserId) {
+      let nm = '';
+      try { nm = String(getStaffName(String(p.byUserId)) || '').trim(); } catch (e) {}
+      by = 'コンソール:' + (nm || '管理者');
+    }
+    if (!by) by = '不明';
 
     /* ⛔まだ来ていない営業日は保存させない。
        理由＝切替は営業日で決まるので、テスト期間中に未来日(9/1以降)を開いて保存すると
@@ -860,6 +870,25 @@ function nippoWriteDay_(bizDate, obj) {
    ⚠️確定＝「この日の給与の素はこれで正しい」の宣言。ここから先は解除しないと直せない。
    ⚠️forward-only。行は消さず状態だけ動かす（誰がいつ締めたかを消さない）。
 ========================================================================== */
+/* ============================================================================
+   📋 閉店の関所に出すための「日報の状態」だけを返す軽い読み取り
+   ----------------------------------------------------------------------------
+   ⚠️getNippo は勤怠・伝票・POS・シフトを全部組み立てる＝閉店画面のたびに呼ぶには重い。
+     ここは器の行(nippoDayRecord_)だけを見る。**状態の判定は増やさず既存の正本を使う**
+     ＝同じ条件を2箇所で持たない。
+   ⚠️取れなければ null を返し、フロントは工程を出さない（取れないことを理由に帰れなくしない）。
+============================================================================ */
+function nippoGateState_(dateKey) {
+  try {
+    const d = String(dateKey || '').trim() || bizDateStr_();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+    const rec = nippoDayRecord_(d);
+    return { date: d, exists: !!rec, state: (rec && rec.state) || NIPPO_ST_OPEN_,
+             by: (rec && rec.fixedBy) || '', fixed: !!(rec && rec.state === NIPPO_ST_FIXED_),
+             isTest: nippoIsTestDate_(d) };
+  } catch (e) { console.error('nippoGateState_', e); return null; }
+}
+
 function confirmNippo(dateKey, by) {
   try {
     const d = String(dateKey || '').trim();
