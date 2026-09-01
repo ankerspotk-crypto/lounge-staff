@@ -1385,7 +1385,9 @@ body.home-on .alertbar,body.home-on .dash{display:none;}
 /* 🗂 業務メニュー（2階層／2026-08-26）＝.menu-* とは別クラス。旧☰オーバーレイに副作用を出さない */
 .wm-nowlbl{font-size:12px;color:var(--dim);font-weight:800;letter-spacing:.5px;margin:2px 2px 9px;}
 .wm-nowlbl span{color:var(--accent);}
-.wm-now{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px;}
+/* ⚠️4枚固定をやめた（ボス指示 2026-09-01で📋日報を足して5枚になる）。auto-fitなら
+   4枚のときは従来どおり4等分、5枚なら5等分＝枚数を増やしても1行に収まる。 */
+.wm-now{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin-bottom:22px;}
 .wm-cats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
 .wm-cat{position:relative;display:flex;align-items:center;gap:12px;min-height:96px;padding:14px 16px;background:var(--panel);border:1px solid var(--line2);border-radius:16px;cursor:pointer;transition:.1s;}
 .wm-cat:active{transform:scale(.98);}
@@ -1613,7 +1615,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01e-test';
+var BUILD='2026-09-01f-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -3129,10 +3131,13 @@ function renderHomeChecklist(phase){
        中に古い「送り確認」が残っているが画面には出ない＝それを見て仕様を判断しないこと。
    ⚠️hvCat はメモリ変数＝localStorageに入れない。端末共有なので、前の黒服が開いた階層を次の人に残さない。 */
 var hvCat='';   /* ''=第1階層 / カテゴリid=第2階層 */
+/* ⭐📋日報は**全フェーズに置く**（ボス指示 2026-09-01「営業中にもよく日報は触るから、
+   開店前〜閉店のボタンの下あたりに」）＝1日を通して触る画面はフェーズで出し入れしない。
+   ⚠️閉店は日報が主役なので先頭、開店前・営業中は末尾（その時間の主役を押しのけない）。 */
 var WM_NOW={
-  pre:  ['openSafeWithdrawal()','openHandoverEdit()','openHakenId()','openCustomer()'],
-  mid:  ['openTableSlip()','menuGoPos()','openReceipt()','openCustomer()'],
-  post: ['openHandoverEdit()','openDenpyoManager()','openReceipt()','openStockManager()']
+  pre:  ['openSafeWithdrawal()','openHandoverEdit()','openHakenId()','openCustomer()','openNippo()'],
+  mid:  ['openTableSlip()','menuGoPos()','openReceipt()','openCustomer()','openNippo()'],
+  post: ['openNippo()','openHandoverEdit()','openDenpyoManager()','openReceipt()','openStockManager()']
 };
 function hvOpenCat(id){
   hvCat=(hvCat===id)?'':id;
