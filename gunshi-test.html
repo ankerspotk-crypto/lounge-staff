@@ -1529,7 +1529,9 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
     <button class="dbtn" onclick="shiftDay(1)">›</button>
   </div>
   <div class="vtoggle" id="vtoggle">
-    <button id="vt-home" onclick="setViewMode('home')">👔 <span class="vt-l">黒服業務</span><span class="vt-s">黒服</span></button>
+    <!-- ⚠️表記は「業務」（ボス指示 2026-09-01）。⚠️狭い画面用(vt-s)も同じ語にする＝
+       幅で呼び名が変わると、現場とボスの言い方がズレる（「黒服のとこ」「業務のとこ」が同じ物を指す事故） -->
+    <button id="vt-home" onclick="setViewMode('home')">👔 <span class="vt-l">業務</span><span class="vt-s">業務</span></button>
     <button id="vt-dash" class="on" onclick="setViewMode('dash')">🪑 <span class="vt-l">ホール状況</span><span class="vt-s">ホール</span></button>
     <button id="vt-bill" onclick="setViewMode('bill')">🧾 <span class="vt-l">伝票管理</span><span class="vt-s">伝票</span></button>
   </div>
@@ -1615,7 +1617,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01i-test';
+var BUILD='2026-09-01j-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -1974,7 +1976,7 @@ function hvChk(it){
     +'<div class="bd"><div class="t">'+esc(it.t)+'</div><div class="s">'+esc(it.s)+'</div></div>'
     +'<div class="go">›</div></div>';
 }
-/* ===== 1日の進行バー（🌅開店前 → 🔥営業中 → 🌙閉店）＝黒服業務タブの背骨 =====
+/* ===== 1日の進行バー（🌅開店前 → 🔥営業中 → 🌙閉店）＝「業務」タブの背骨 =====
    ⭐タブを「3つのボタン」ではなく1日の流れとして読ませる＝各タブに 時間帯／そこで何をやるか／残り を載せる。
    ⚠️「選択中のフェーズ」と「いまの時刻のフェーズ」は別物。手動で他を見ている時に迷子にならないよう
      両方を示す（選択中＝色と太枠／いまの時刻＝●いま チップ）。
@@ -3136,7 +3138,7 @@ function renderHomeChecklist(phase){
   }
   return h;
 }
-/* ===== 🗂 業務メニュー（2階層）＝黒服業務タブの下段 =====
+/* ===== 🗂 業務メニュー（2階層）＝「業務」タブの下段 =====
    ⭐入口は2つだけ：①🧰いま使う（フェーズ連動・4枚）②6カテゴリ。全機能はカテゴリの中にある。
    ⚠️「いま使う」に工程カードと同じ入口を入れない＝同じものを2回並べない。
      （閉店は cfSteps_ が POS/日払い伝票/TRUST/金庫/酒屋/タスク/現金 を出す。開店前は renderOpeningPre が 開店チェック＋開店前やること を出す）
