@@ -1615,7 +1615,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01f-test';
+var BUILD='2026-09-01g-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -2272,6 +2272,7 @@ function hbuSend_(id,text,to){
    ⚠️読み込みは「最後に投げた1本だけ採用」（連番）。busyフラグで塞ぐと日付を連打したときに
      永久「読み込み中」になる（[[reference_async_stale_guard_trap]]）。塞ぐのは保存だけ。
 ============================================================================ */
+var NP_LASTWALL=null;   /* ⏱前回の実測（次のgetNippoに相乗りさせてサーバへ記録） */
 var NP=null, NP_DATE='', NP_SEQ=0, NP_BUSY=false, NP_DIRTY=false, NP_MORE={};
 
 function npYen(n){ return '¥'+(Number(n)||0).toLocaleString(); }
@@ -2367,7 +2368,17 @@ function npGo(d,skipConfirm){
     if(b0)b0.innerHTML='<div class="empty-msg">（ローカル）本番/テスト環境でご確認ください</div>';
     return;
   }
-  gsr('getNippo',d).then(function(r){
+  /* ⏱**壁時計**を測る（ボス報告「12秒くらい」2026-09-01）。
+     ⭐サーバが返す msTotal（シートを読んだ時間）と**差**を見れば、時間がどこにあるかが分かる。
+       差が大きい＝GASの起動・通信・doPostの取り回し＝シートを速くしても効かない。
+       ここを測らずにシートだけ削っていたので、2回削ってもボスの体感が変わらなかった。 */
+  var _wall0=Date.now();
+  /* ⭐前回の実測を**次の呼び出しに相乗り**させてサーバに記録させる（往復を増やさない）。
+     ＝遅い日の内訳をこちらでシートから読める＝毎回ボスに数字を聞かなくて済む。
+     ⚠️古いbackendは第2引数を無視するだけ＝先に出しても壊れない。 */
+  gsr('getNippo',d,(typeof NP_LASTWALL!=='undefined'?NP_LASTWALL:null)).then(function(r){
+    if(r&&typeof r==='object'){ r.__wall=Date.now()-_wall0;
+      NP_LASTWALL={ wall:r.__wall, server:Number(r.msTotal)||0, ms:r.ms||null, date:d }; }
     if(seq!==NP_SEQ) return;                       // 連打された＝古い応答は捨てる（最後の1本だけ採用）
     var b=document.getElementById('sheetBody'); if(!b) return;
     if(!r||r.ok===false){ b.innerHTML='<div class="empty-msg">'+esc((r&&r.error)||'読み込みエラー')+'</div>'; return; }
@@ -2388,7 +2399,20 @@ function npPick(v){ if(/^\d{4}-\d{2}-\d{2}$/.test(v)) npGo(v); }
    ⭐重い時に推測で直さないための計測。⚠️backendが未対応の間は何も出さない（黙って消える）。
    遅い方から2つだけ出す＝全部並べるとヘッダーの横幅を食う（[[reference_gunshi_header_width_budget]]）。 */
 function npMsChip_(){
+  var wall=Number(NP&&NP.__wall)||0;
   var tot=Number(NP&&NP.msTotal)||0;
+  /* ⭐壁時計 − サーバ ＝ 通信＋GASの起動。ここが大きいならシートを削っても無駄 */
+  if(wall){
+    var other=Math.max(0,wall-tot);
+    var ms2=(NP&&NP.ms)||{};
+    var det=Object.keys(ms2).map(function(k){ return [k,Number(ms2[k])||0]; }).sort(function(a,b){ return b[1]-a[1]; })
+      .filter(function(x){ return x[1]>=100; }).slice(0,6).map(function(x){ return x[0]+' '+(x[1]/1000).toFixed(1); }).join(' / ');
+    var tone2=(wall>=8000)?'border-color:#7a3020;color:#ff9a9a':(wall>=4000?'border-color:#7a3f10;color:#e6a35a':'border-color:#3a3a4a;color:var(--sub)');
+    return '<span class="np-chip" style="'+tone2+'" title="開くのにかかった実時間／うちサーバがシートを読んだ時間">⏱ '
+      +(wall/1000).toFixed(1)+'秒'
+      +(tot?'（サーバ '+(tot/1000).toFixed(1)+' ＋ 通信・起動 '+(other/1000).toFixed(1)+'）':'（サーバ計測なし＝要リロード）')
+      +(det?'　内訳 '+esc(det):'')+'</span>';
+  }
   /* ⚠️backendが計測を返していない＝**古い版を掴んでいる**。黙って消えると「速いのか古いのか」が
      分からない＝ボスに3回同じことを聞く羽目になった（2026-09-01）。分からない事は分かると出す。 */
   if(!tot) return '<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a" title="サーバが計測を返していません。端末をリロードしてください">⏱ 計測なし（要リロード）</span>';
