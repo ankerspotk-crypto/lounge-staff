@@ -34,7 +34,10 @@ const NIPPO_HEAD_      = ['営業日', '状態', 'メモ', '確定日時', '確�
    バックの内訳は項目が動くので JSON 1列に持つ（列に割ると単価を足すたびに移行が要る）。 */
 const NIPPO_ROW_HEAD_  = ['営業日', '区分', '名前', '開始', '終了', '時間外分', '労働分', '時給', '時間報酬',
   'バック計', 'バック内訳JSON', '日払い', '送り代', '個人支払い', '宿泊代', '早上がり', 'マイナス計',
-  '送迎手当', '残業代', '売り半', '運営手当', 'ボーナス計', '支給額合計', '残り支給額', '更新日時', '更新者'];
+  '送迎手当', '残業代', '売り半', '運営手当', 'ボーナス計', '支給額合計', '残り支給額', '更新日時', '更新者',
+  /* ⏱LINEの打刻＝**記録専用・不変**（ボス指示 2026-09-01）。計算には使わない。
+     開始/終了は「出勤扱い」＝黒服が直す欄。⚠️列は末尾追加＝既存行はズレない。 */
+  '打刻出勤', '打刻退勤'];
 const NIPPO_CASH_HEAD_ = ['営業日', '種別', '項目', '金額', 'メモ', '更新日時', '更新者'];
 
 const NIPPO_ST_OPEN_  = '作成中';
@@ -165,7 +168,10 @@ function nippoCalcRow_(r, conf) {
     zangyo: nippoYen_(r.zangyo),
     urihan: nippoYen_(r.urihan),
     unei:   nippoYen_(r.unei),
-    tally:  r.tally || null
+    tally:  r.tally || null,
+    /* ⏱打刻＝記録専用。計算には**使わない**（労働時間は開始/終了/時間外から出す） */
+    punchIn:  nippoHhmm_(r.punchIn),
+    punchOut: nippoHhmm_(r.punchOut)
   };
   o.workMin  = nippoWorkMin_(o.start, o.end, o.adj);
   o.workText = nippoWorkLabel_(o.workMin);
@@ -625,7 +631,10 @@ function nippoSavedRows_(bizDate) {
       kojin: nippoYen_(r[c['個人支払い']]), shukuhaku: nippoYen_(r[c['宿泊代']]),
       hayaagari: nippoYen_(r[c['早上がり']]), soge: nippoYen_(r[c['送迎手当']]),
       zangyo: nippoYen_(r[c['残業代']]), urihan: nippoYen_(r[c['売り半']]),
-      unei: nippoYen_(r[c['運営手当']]), backOverride: over
+      unei: nippoYen_(r[c['運営手当']]), backOverride: over,
+      /* ⏱記録済みの打刻。⚠️列が無い古い行は空＝生の打刻で埋め直される */
+      punchIn:  c['打刻出勤'] != null ? nippoHhmm_(r[c['打刻出勤']]) : '',
+      punchOut: c['打刻退勤'] != null ? nippoHhmm_(r[c['打刻退勤']]) : ''
     };
   });
   return map;
@@ -708,6 +717,9 @@ function getNippo(dateKey) {
         start: sv ? sv.start : (p ? nippoHhmm_(p.in)  : ''),
         end:   sv ? sv.end   : (p ? nippoHhmm_(p.out) : ''),
         adj:   sv ? sv.adj  : 0,
+        /* ⏱打刻＝記録済みが最優先（不変）。無ければ生の打刻。⚠️開始/終了とは別物 */
+        punchIn:  (sv && sv.punchIn)  || (p ? nippoHhmm_(p.in)  : ''),
+        punchOut: (sv && sv.punchOut) || (p ? nippoHhmm_(p.out) : ''),
         wage:  sv ? sv.wage : (wages[o.key] || 0),
         hibarai:   sv ? sv.hibarai   : (hibaraiOf[o.key] || 0),
         /* 🚗 送り代の既定値＝名簿の「送り代負担」（ボス指示 2026-08-31）。
@@ -812,13 +824,25 @@ function saveNippo(payload) {
     const stamp = nowStamp_();
 
     /* ① 明細 */
+    /* ⚠️保存は「その日の明細を消して書き直す」＝**消す前**に打刻の記録を掴んでおく */
+    const savedBefore = nippoSavedRows_(d);
     const rsh = nippoRowSheet_(d);
     nippoDeleteDay_(rsh, d);
     const rc = nippoCols_(rsh);
     const width = rsh.getLastColumn();
     const calced = [], lines = [];
+    /* ⭐打刻は画面から来た値を**捨てて**、サーバが持っている物で上書きする。
+       ①既に記録済みならそれを使う（打刻ログが後から変わっても日報は動かない＝不変）
+       ②まだ無ければ生の打刻から埋める */
+    const _punchNow  = kintaiPunchMap_(d);
+    const _punchKeep = savedBefore;
     (p.rows || []).forEach(function (r) {
       if (!String(r.name || '').trim()) return;
+      const _k = nippoKey_(r.name);
+      const _kept = _punchKeep[_k] || null;
+      const _live = _punchNow[_k] || null;
+      r.punchIn  = (_kept && _kept.punchIn)  || (_live ? nippoHhmm_(_live.in)  : '');
+      r.punchOut = (_kept && _kept.punchOut) || (_live ? nippoHhmm_(_live.out) : '');
       const o = nippoCalcRow_(r, conf);
       calced.push(o);
       const line = new Array(width).fill('');
@@ -834,6 +858,8 @@ function saveNippo(payload) {
       put('運営手当', o.unei);     put('ボーナス計', o.bonus);
       put('支給額合計', o.total);  put('残り支給額', o.nokori);
       put('更新日時', stamp);      put('更新者', by);
+      /* ⭐打刻は**画面の値を使わない**＝ここでサーバが決めた物だけを書く（不変の担保） */
+      put('打刻出勤', o.punchIn);  put('打刻退勤', o.punchOut);
       lines.push(line);
     });
     if (lines.length) {

@@ -3304,6 +3304,8 @@ function npaDraw(){
   var rows=(r.rows||[]).map(function(x,i){
     return '<tr>'
       +'<td class="nm">'+esc(x.name||'')+(x.kubun?' <span class="chip" style="font-size:10px">'+esc(x.kubun)+'</span>':'')+'</td>'
+      /* ⏱LINEの打刻＝記録専用・不変。ここでは**絶対に入力させない**（ボス指示 2026-09-01） */
+      +'<td style="color:var(--dim);white-space:nowrap">'+esc(x.punchIn||'--:--')+' → '+esc(x.punchOut||'--:--')+'</td>'
       +'<td>'+npaIn(i,'start',x.start,58)+'</td>'
       +'<td>'+npaIn(i,'end',x.end,58)+'</td>'
       +'<td>'+npaIn(i,'adj',x.adj,46)+'</td>'
@@ -3325,9 +3327,9 @@ function npaDraw(){
       +'</tr>';
   }).join('');
   var table='<div style="overflow-x:auto"><table class="mtx sm"><thead><tr>'
-    +['名前','開始','終了','時間外','労働','時給','時間報酬','バック','日払い','送り代','個人','宿泊','早上がり','送迎','残業','売半','運営','支給計','残り']
+    +['名前','📱打刻','開始','終了','時間外','労働','時給','時間報酬','バック','日払い','送り代','個人','宿泊','早上がり','送迎','残業','売半','運営','支給計','残り']
       .map(function(h){ return '<th>'+h+'</th>'; }).join('')
-    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="19" style="text-align:center;padding:14px" class="empty">この日の日報はまだありません</td></tr>')+'</tbody></table></div>';
+    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="20" style="text-align:center;padding:14px" class="empty">この日の日報はまだありません</td></tr>')+'</tbody></table></div>';
   var memo='<div style="margin-top:12px"><div style="font-size:12px;opacity:.8;margin-bottom:4px">メモ（1日1本）</div>'
     +'<textarea class="finput" style="width:100%;min-height:64px"'+(lock?' disabled':'')+' onchange="npaMemo(this.value)">'+esc(r.memo||'')+'</textarea></div>';
   setBody(paySubToggle('nippo')+head+note+table+memo);
