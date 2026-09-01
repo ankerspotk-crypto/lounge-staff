@@ -1639,7 +1639,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01h';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-01i';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2029,24 +2029,12 @@ function renderHomeMid(){
   if(!nowN&&!soon.length){
     h+='<div class="hv-clear"><div class="em">🍸</div><div class="t">対応待ちなし</div><div class="s">順調です。フロアを見ましょう</div></div>';
   }
-  var rotN=ROT.filter(needsAction).length;
-  var undecided=RSV.filter(function(r){return r.status==='確定'&&r.table==='未定';}).length;
-  /* ⚠️見出し「開く」は削除（ボス指示 2026-09-01「いらない」）＝
-     下のボタン3つを見れば何をする所か分かる。見出しは1行ぶん画面を食うだけだった。
-     ⚠️見出しが持っていた上マージン(.hv-sec margin:18px 0 9px)はここで補う＝詰まって見えない。 */
-  h+='<div class="hv-quick" style="margin-top:18px">'
-    +'<div class="hv-qbtn hot" onclick="gotoDash(\'rot\')"><span class="em">🔄</span><div class="t">付け回し'+(rotN?'<span class="bg">'+rotN+'</span>':'')+'</div></div>'
-    +'<div class="hv-qbtn" onclick="gotoDash(\'\')"><span class="em">🪑</span><div class="t">ホール</div></div>'
-    +'<div class="hv-qbtn" onclick="gotoDash(\'rsv\')"><span class="em">📋</span><div class="t">予約'+(undecided?'<span class="bg">'+undecided+'</span>':'')+'</div></div>'
-    +'</div>';
-  var occ=SEATS.filter(function(s){var st=seatStatus(s);return st==='ok'||st==='warn'||st==='over'||st==='nocast';}).length;
-  var emptyN=SEATS.filter(function(s){return seatStatus(s)==='empty';}).length;
-  var working=(WORKCASTS!=null&&WORKCASTS.length!=null)?WORKCASTS.length:(SHIFT?SHIFT.length:0);
-  h+='<div class="hv-mini">'
-    +'<div class="hv-mstat"><div class="n">'+occ+'</div><div class="l">進行中の卓</div></div>'
-    +'<div class="hv-mstat"><div class="n">'+emptyN+'</div><div class="l">空き卓</div></div>'
-    +'<div class="hv-mstat"><div class="n">'+working+'</div><div class="l">出勤</div></div>'
-    +'</div>';
+  /* ⚠️ボス指示 2026-09-01で**まるごと削除**＝
+       ①見出し「開く」 ②付け回し／ホール／予約の3ボタン ③進行中の卓／空き卓／出勤の3数字。
+     ⭐ホームは「いま対応が要ること」だけを出す場所にする。
+       席や予約はヘッダーのタブから1タップで行ける＝同じ入口を2回置かない。
+       数字は見るだけで手が動かない＝対応待ちの下に置くと本命が押し下げられる。
+     ⛔戻すときは「何を見て何をするのか」を先に決めること（数字を並べ直すだけにしない）。 */
   return h;
 }
 /* 🔢 TRUST入力の画面（締めワークフローの「TRUSTに日払い・経費を入力」から開く）
