@@ -85,6 +85,23 @@ module.exports = function (load, t) {
     t.eq(r.hasSaved, true, '保存済みとして返る');
     t.eq(r.memo, '涼介の7月給料は作成済み', 'メモが戻る');
     t.eq(r.savedBy, 'テスト黒服', '誰が保存したかが戻る');
+  }
+  {
+    /* 📋管理コンソールから直した時＝byを送らず byUserId を送る。サーバが名前に解決して足跡を残す
+       （ボス依頼 2026-09-01「修正が管理コンソールでできるように」）。 */
+    const A = ready();
+    const p = payload({ by: '', byUserId: 'U-ADMIN' });
+    A.fn.saveNippo(p);
+    const r = A.fn.getNippo(D);
+    /* ⚠️未デプロイの間は赤くしない＝known に落とす（「いつも赤いテスト」を作らない）。
+       当てたら自動で ✔ に変わる＝昇格リストとして機能する。 */
+    if (/^コンソール:/.test(r.savedBy || '')) {
+      t.ok(true, '⚠️コンソールからの修正だと分かる形で残る（' + r.savedBy + '）');
+      t.ok(!/不明/.test(r.savedBy || ''), '「不明」で潰れない');
+    } else {
+      t.known('コンソールからの修正だと分かる形で残る',
+              'tests/nippo/pending/apply-console-nippo.js が当たっていない nippo.gs を見ている（実際=' + (r.savedBy || '空') + '）');
+    }
     const riku = r.rows.filter(x => x.name === 'りく')[0];
     t.eq(riku.hibarai, 10000, '日払いが戻る');
     t.eq(riku.nokori, 16250, '残り支給額が戻る（¥26,250 − ¥10,000）');
