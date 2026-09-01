@@ -2300,7 +2300,8 @@ function npGo(d,skipConfirm){
   if(!skipConfirm&&NP_DIRTY&&!confirm('保存していない変更があります。破棄して移動しますか？')) return;
   NP_DATE=d; NP_DIRTY=false; NP_MORE={};
   var seq=++NP_SEQ;
-  showSheet('📋 日報','<div class="empty-msg">読み込み中...</div>','full');
+  /* ⚠️初回は10秒前後かかる（シートを10枚以上読む）＝無反応に見せない */
+  showSheet('📋 日報','<div class="empty-msg">読み込み中...<div style="font-size:11px;color:var(--sub);margin-top:6px">シフト・打刻・売上・伝票を読み込んでいます（10秒ほどかかります）</div></div>','full');
   if(typeof IS_GAS!=='undefined'&&!IS_GAS){
     var b0=document.getElementById('sheetBody');
     if(b0)b0.innerHTML='<div class="empty-msg">（ローカル）本番/テスト環境でご確認ください</div>';
@@ -10803,7 +10804,12 @@ var GSR_TIMEOUT_MS = 20000;
    日報スクショの取り込みは Gemini往復で実測6〜12秒＋画像アップロード＋GASの起動(約1.9秒)。
    20秒だとアボートして「通信エラー」になり、しかも書込み系なのでリトライもされない（二重登録を防ぐため正しい）。
    実際に3枚とも失敗した（2026-08-27 ボス報告）。 */
-var GSR_TIMEOUT_OVERRIDE = {};   /* 日報スクショ(90秒)を撤去したので現在は空。長くかかる呼び出しを足す時はここ */
+/* 📋日報＝1回の呼び出しで**シートを10枚以上読む**（名簿・シフト表・シフト申請（別ブック）・打刻・
+   閉店の伝票・売上・日報3枚）。20秒では足りずアボート＝「通信エラー」になっていた（ボス報告 2026-09-01）。
+   ⚠️これは**待たせてよいという意味ではない**＝サーバ側の読み込み回数を減らすのが本筋。
+     ここは「落ちる」を「待てば出る」に変えるだけの応急処置。
+   ⚠️getNippo/saveNippo は再試行しない（GSR_RETRY_SAFEに入れない）＝遅い呼び出しを再送すると倍待つ。 */
+var GSR_TIMEOUT_OVERRIDE = { getNippo:60000, saveNippo:60000 };
 /* 高頻度ポーリングの読取り＝二重実行しても無害。ここに載る関数だけ1回リトライする。 */
 var GSR_RETRY_SAFE = {
   getKioskHall2:1, getKioskReservations:1, getKioskTsukemawashi:1, getKioskShiftBoard:1,

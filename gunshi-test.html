@@ -2341,7 +2341,8 @@ function npGo(d,skipConfirm){
   if(!skipConfirm&&NP_DIRTY&&!confirm('保存していない変更があります。破棄して移動しますか？')) return;
   NP_DATE=d; NP_DIRTY=false; NP_MORE={};
   var seq=++NP_SEQ;
-  showSheet('📋 日報','<div class="empty-msg">読み込み中...</div>','full');
+  /* ⚠️初回は10秒前後かかる（シートを10枚以上読む）＝無反応に見せない */
+  showSheet('📋 日報','<div class="empty-msg">読み込み中...<div style="font-size:11px;color:var(--sub);margin-top:6px">シフト・打刻・売上・伝票を読み込んでいます（10秒ほどかかります）</div></div>','full');
   if(typeof IS_GAS!=='undefined'&&!IS_GAS){
     var b0=document.getElementById('sheetBody');
     if(b0)b0.innerHTML='<div class="empty-msg">（ローカル）本番/テスト環境でご確認ください</div>';
