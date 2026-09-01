@@ -629,6 +629,23 @@ body.bill-pop #bmPopHd{display:flex;align-items:center;gap:12px;padding:10px 12p
 .np-memo{flex:1;min-width:120px;}
 .np-calc{font-size:11.5px;color:var(--sub);}
 .np-calc.warn{color:#ff9a9a;font-weight:800;}
+/* 📋日報＝**管理コンソールと同じ1人1行の表**（ボス確定 2026-09-01「管理コンソールの表示がいいので軍師にうつして」）。
+   ⚠️iPadでは横に収まらない＝**表だけを横スクロールさせる**（ページ全体を横に流さない）。
+   ⚠️名前列は左に貼り付ける＝横に流した時に「誰の行か」を見失わない。ここが無いと打ち間違いが出る。
+   ⚠️行は詰めすぎない（入力欄をタップする画面＝44px前後を確保）。 */
+.np-tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line2);border-radius:10px;}
+table.np-tb{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:12.5px;}
+table.np-tb th,table.np-tb td{padding:5px 7px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:center;}
+table.np-tb thead th{position:sticky;top:0;z-index:3;background:#14142a;color:var(--sub);font-weight:800;font-size:11px;}
+table.np-tb td.nm,table.np-tb th.nm{position:sticky;left:0;z-index:2;background:var(--panel2);text-align:left;font-weight:800;}
+table.np-tb thead th.nm{z-index:4;background:#14142a;}
+table.np-tb tr.lock td{opacity:.7;}
+table.np-tb td.calc{color:var(--sub);}
+table.np-tb td.big{font-weight:800;color:var(--gold);}
+table.np-tb .np-in{padding:5px 6px;font-size:12.5px;}
+table.np-tb .t-time{width:86px;}
+table.np-tb .t-money{width:74px;text-align:right;}
+table.np-tb .t-wage{width:70px;text-align:right;}
 .np-back{font-size:13.5px;color:var(--txt);}
 .np-more{background:none;border:1px solid var(--line2);color:var(--dim);border-radius:7px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
 .np-foot{border-top:1px solid var(--line);margin-top:6px;padding-top:6px;font-size:12px;color:var(--sub);}
@@ -1620,7 +1637,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-01d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2393,7 +2410,7 @@ function npRender(){
   if(!(NP.rows||[]).length){
     h+='<div class="empty-msg">この日の出勤者が見つかりません。シフトが入っているか確認してください</div>';
   }else{
-    h+=(NP.rows||[]).map(npCard).join('');
+    h+=npTableHtml();
   }
 
   /* ── 入金・出金 ─────────────────────────────────────────── */
@@ -2437,6 +2454,64 @@ function npDiffMin_(a,b){
   return d;
 }
 function npSign_(m){ return (m>0?'+':'')+m+'分'; }
+/* 📋1人1行の表＝管理コンソールと同じ形（ボス確定 2026-09-01）。
+   ⭐**新しく作らず、動いているコンソールの列をそのまま持ってきた**。
+   ⚠️軍師はコンソールと違い、打った瞬間に画面側で計算し直す（npSet→npCalcRow→再描画）
+     ＝計算列はその場で更新される。コンソールは保存するまで古い数字（あちらは式を持たせていない）。
+   ⚠️📱打刻は**読むだけ**。出勤扱い（開始・終了）が給与計算に使われる方。 */
+function npTableHtml(){
+  var lock=!!NP.locked;
+  var head=['名前','📱打刻','開始','終了','労働','時給','時間報酬','バック','日払い','送り代','個人','宿泊','早上がり','送迎','残業','売半','運営','支給計','残り'];
+  var h='<div class="np-tw"><table class="np-tb"><thead><tr>'
+    +head.map(function(x,i){ return '<th'+(i===0?' class="nm"':'')+'>'+esc(x)+'</th>'; }).join('')
+    +'</tr></thead><tbody>';
+  (NP.rows||[]).forEach(function(r,i){
+    var dis=lock?' disabled':'';
+    var slip=Number(r.hibaraiSlip)||0, hb=npNum(r.hibarai);
+    var pin=String(r.punchIn||''), pout=String(r.punchOut||'');
+    h+='<tr'+(lock?' class="lock"':'')+'>'
+      +'<td class="nm">'+esc(r.name||'(名前なし)')
+        +(r.kubun?' <span class="np-chip">'+esc(r.kubun)+'</span>':'<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a">シフト外</span>')
+        +((Number(r.adj)||0)?' <span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">時間外'+(Number(r.adj)>0?'+':'')+r.adj+'分'
+            +(lock?'':' <span style="color:#f08080;font-weight:900" onclick="npSet('+i+',\'adj\',0)">×</span>')+'</span>':'')
+        +'</td>'
+      /* ⏱打刻＝記録・不変。入力させない */
+      +'<td class="calc" title="LINEの打刻（記録・変更できません）">'+(pin||pout?(esc(pin||'--:--')+' → '+esc(pout||'--:--')):'<span style="color:#ff9a9a">なし</span>')+'</td>'
+      +'<td><input type="time" class="np-in t-time" value="'+esc(r.start||'')+'"'+dis+' onchange="npSet('+i+',\'start\',this.value)"></td>'
+      +'<td><input type="time" class="np-in t-time" value="'+esc(r.end||'')+'"'+dis+' onchange="npSet('+i+',\'end\',this.value)"></td>'
+      +'<td class="calc">'+esc(r.workText||'')+'</td>'
+      +'<td><input type="tel" inputmode="numeric" class="np-in t-wage" value="'+(r.wage||'')+'"'+dis+' onchange="npSet('+i+',\'wage\',this.value)"></td>'
+      +'<td class="calc">'+npYen(r.jikan)+'</td>'
+      +'<td class="calc"><span title="'+esc(npBackText(r).replace(/<[^>]+>/g,''))+'">'+npYen(r.back)+'</span>'
+        +'<button class="np-more" style="margin-left:4px" onclick="npMore('+i+')">'+(NP_MORE[i]?'▲':'▼')+'</button></td>'
+      +'<td><input type="tel" inputmode="numeric" class="np-in t-money" value="'+(hb||'')+'"'+dis+' onchange="npSet('+i+',\'hibarai\',this.value)">'
+        /* ⚠️伝票との突合＝二重払いの関所。**一致でも必ず出す**（✅が出ない＝見ていない、が分かる）。
+           表にしたとき一度この表示を落として、テストに拾われた（2026-09-01）。消さないこと。 */
+        +(slip?'<div class="np-calc'+(slip===hb?'':' warn')+'" style="font-size:10px">伝票 '+npYen(slip)+(slip===hb?' ✅':' ⚠️ 食い違い')+'</div>':'')+'</td>'
+      +npTd_(i,'okuri',r.okuri,dis)+npTd_(i,'kojin',r.kojin,dis)+npTd_(i,'shukuhaku',r.shukuhaku,dis)
+      +npTd_(i,'hayaagari',r.hayaagari,dis)+npTd_(i,'soge',r.soge,dis)+npTd_(i,'zangyo',r.zangyo,dis)
+      +npTd_(i,'urihan',r.urihan,dis)+npTd_(i,'unei',r.unei,dis)
+      +'<td class="calc">'+npYen(r.total)+'</td>'
+      +'<td class="big">'+npYen(r.nokori)+'</td>'
+      +'</tr>';
+    /* バックの内訳＝行の下に1行ぶち抜きで開く（列を増やさない） */
+    if(NP_MORE[i]){
+      h+='<tr><td class="nm"></td><td colspan="'+(head.length-1)+'" style="text-align:left;white-space:normal">'
+        +'<div class="np-row np-sub" style="border:0;margin:0;padding:2px 0">'
+        +'<span class="np-lbl">バック</span><span class="np-calc" style="flex:1">'+npBackText(r)+'</span>'
+        +'<span class="np-lbl2">手で入れる</span>'
+        +'<input type="tel" inputmode="numeric" class="np-in np-money" placeholder="自動 '+(Number(r.backAuto)||0)+'" value="'+(r.backOver==null?'':r.backOver)+'"'+dis
+        +' onchange="npSet('+i+',\'backOver\',this.value)">'
+        +(r.backOver!=null?'<button class="np-more" onclick="npSet('+i+',\'backOver\',\'\')">自動に戻す</button>':'')
+        +'</div></td></tr>';
+    }
+  });
+  return h+'</tbody></table></div>';
+}
+function npTd_(i,key,val,dis){
+  return '<td><input type="tel" inputmode="numeric" class="np-in t-money" value="'+(npNum(val)||'')+'"'+dis
+    +' onchange="npSet('+i+',\''+key+'\',this.value)"></td>';
+}
 function npCard(r,i){
   var lock=!!NP.locked, dis=lock?' disabled':'';
   var kubunTone={'キャスト':'','黒服':'border-color:#3a5a8a;color:#9ab8e0','派遣':'border-color:#7a3f10;color:#e6a35a','体験':'border-color:#6a3a6a;color:#e08ad0'}[r.kubun]||'';
