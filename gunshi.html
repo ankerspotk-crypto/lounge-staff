@@ -1620,7 +1620,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-01c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2477,9 +2477,12 @@ function npCard(r,i){
     +'<input type="time" class="np-in np-time" value="'+esc(r.start||'')+'"'+dis+' onchange="npSet('+i+',\'start\',this.value)">'
     +'<span class="np-arrow">→</span>'
     +'<input type="time" class="np-in np-time" value="'+esc(r.end||'')+'"'+dis+' onchange="npSet('+i+',\'end\',this.value)">'
-    +'<span class="np-lbl2">時間外</span>'
-    +'<input type="tel" inputmode="numeric" class="np-in np-min" value="'+(r.adj||'')+'"'+dis+' onchange="npSet('+i+',\'adj\',this.value)">'
-    +'<span class="np-lbl2">分</span>'
+    /* ⏱時間外の入力欄は削除（ボス指示 2026-09-01「時間外表示いらない」）。
+       ＝出勤扱いの時刻そのものを直せば足りる＝同じことを2箇所で調整させない。
+       ⚠️ただし**既に値が入っている行では黙って隠さない**＝労働時間に効いたまま見えなくなる。
+         残っている時だけ読むだけで出し、×で0に戻せるようにする（見えない状態を作らない）。 */
+    +((Number(r.adj)||0)?'<span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">時間外 '+(Number(r.adj)>0?'+':'')+r.adj+'分'
+        +(lock?'':' <span style="color:#f08080;font-weight:900;padding-left:3px" onclick="npSet('+i+',\'adj\',0)">×</span>')+'</span>':'')
     +'<span class="np-calc">'+esc(r.workText)+' × '+npYen(r.wage)+' ＝ <b>'+npYen(r.jikan)+'</b></span>'
     +'</div>';
 
