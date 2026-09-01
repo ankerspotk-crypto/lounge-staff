@@ -1615,7 +1615,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01g-test';
+var BUILD='2026-09-01h-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -2063,8 +2063,10 @@ function renderHomeMid(){
   }
   var rotN=ROT.filter(needsAction).length;
   var undecided=RSV.filter(function(r){return r.status==='確定'&&r.table==='未定';}).length;
-  h+='<div class="hv-sec q"><span class="st">開く</span></div>';
-  h+='<div class="hv-quick">'
+  /* ⚠️見出し「開く」は削除（ボス指示 2026-09-01「いらない」）＝
+     下のボタン3つを見れば何をする所か分かる。見出しは1行ぶん画面を食うだけだった。
+     ⚠️見出しが持っていた上マージン(.hv-sec margin:18px 0 9px)はここで補う＝詰まって見えない。 */
+  h+='<div class="hv-quick" style="margin-top:18px">'
     +'<div class="hv-qbtn hot" onclick="gotoDash(\'rot\')"><span class="em">🔄</span><div class="t">付け回し'+(rotN?'<span class="bg">'+rotN+'</span>':'')+'</div></div>'
     +'<div class="hv-qbtn" onclick="gotoDash(\'\')"><span class="em">🪑</span><div class="t">ホール</div></div>'
     +'<div class="hv-qbtn" onclick="gotoDash(\'rsv\')"><span class="em">📋</span><div class="t">予約'+(undecided?'<span class="bg">'+undecided+'</span>':'')+'</div></div>'
