@@ -1620,7 +1620,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-01a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-01b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2426,6 +2426,17 @@ function npSumCell(label,val,tone){
     +'<div class="np-sum-v"'+(tone==='gold'?' style="color:var(--gold)"':'')+'>'+esc(val)+'</div></div>';
 }
 
+/* ⏱打刻と出勤扱いの差（分）。⚠️日跨ぎがあるので素直に引き算しない＝npHhmmMinの分に直してから差を取り、
+   12時間以上離れたら日をまたいだ側に寄せる（20:34 と 00:00 を「-1234分」にしない） */
+function npDiffMin_(a,b){
+  if(!a||!b) return 0;
+  var x=npHhmmMin(a), y=npHhmmMin(b);
+  if(x==null||y==null) return 0;
+  var d=y-x;
+  if(d>720) d-=1440; else if(d<-720) d+=1440;
+  return d;
+}
+function npSign_(m){ return (m>0?'+':'')+m+'分'; }
 function npCard(r,i){
   var lock=!!NP.locked, dis=lock?' disabled':'';
   var kubunTone={'キャスト':'','黒服':'border-color:#3a5a8a;color:#9ab8e0','派遣':'border-color:#7a3f10;color:#e6a35a','体験':'border-color:#6a3a6a;color:#e08ad0'}[r.kubun]||'';
@@ -2440,9 +2451,29 @@ function npCard(r,i){
     +'<span class="np-card-total">'+npYen(r.total)+'</span>'
     +'</div>';
 
-  /* 勤怠＝この画面で一番よく直すところ。iPadは時刻ピッカーで打たせる（キーボードを出さない） */
+  /* ⏱📱LINEの打刻＝**記録専用・不変**（ボス指示 2026-09-01）。ここは触れない。
+     ⚠️打刻は「事実」、下の出勤扱いは「店の判断」＝2つを別々に残すのが目的。混ぜて上書きしない。
+     ⚠️差が出た時だけ差分を出す＝同じなら黙っている（毎行に数字を並べると読まなくなる）。 */
+  var pin=String(r.punchIn||''), pout=String(r.punchOut||'');
+  if(pin||pout||r.punched){
+    var dIn=npDiffMin_(pin,r.start), dOut=npDiffMin_(pout,r.end);
+    h+='<div class="np-row np-sub">'
+      +'<span class="np-lbl">📱打刻</span>'
+      +'<span style="font-weight:800;font-size:13px;letter-spacing:.5px">'+esc(pin||'--:--')+'</span>'
+      +'<span class="np-arrow">→</span>'
+      +'<span style="font-weight:800;font-size:13px;letter-spacing:.5px">'+esc(pout||'--:--')+'</span>'
+      +'<span class="np-chip" style="border-color:#3a3a4a;color:var(--sub)">記録（変更できません）</span>'
+      +((dIn||dOut)?'<span class="np-calc warn">出勤扱いとの差 '+(dIn?('開始'+npSign_(dIn)):'')+(dIn&&dOut?' / ':'')+(dOut?('終了'+npSign_(dOut)):'')+'</span>':'')
+      +'</div>';
+  }else{
+    h+='<div class="np-row np-sub"><span class="np-lbl">📱打刻</span>'
+      +'<span style="color:var(--dim)">なし</span>'
+      +'<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a">LINEの打刻がありません</span></div>';
+  }
+
+  /* 出勤扱い＝黒服が決める時刻。**給与の計算はこちらを使う**。iPadは時刻ピッカー（キーボードを出さない） */
   h+='<div class="np-row">'
-    +'<span class="np-lbl">勤怠</span>'
+    +'<span class="np-lbl">出勤扱い</span>'
     +'<input type="time" class="np-in np-time" value="'+esc(r.start||'')+'"'+dis+' onchange="npSet('+i+',\'start\',this.value)">'
     +'<span class="np-arrow">→</span>'
     +'<input type="time" class="np-in np-time" value="'+esc(r.end||'')+'"'+dis+' onchange="npSet('+i+',\'end\',this.value)">'

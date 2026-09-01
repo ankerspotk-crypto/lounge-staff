@@ -27,7 +27,7 @@ const FNS = ['esc',
   'npRender', 'npSumCell', 'npCard', 'npMoney', 'npBackText', 'npMore', 'npSet', 'npMemo',
   'npCashBlock', 'npCashArr', 'npCash', 'npCashAdd', 'npCashDel',
   'npMsg', 'npSave', 'npConfirm', 'npReopen',
-  'npMsChip_'];   /* ⏱サーバの計測を出すチップ（2026-09-01）。⚠️ここに足し忘れると npRender が ReferenceError で落ちる */
+  'npMsChip_', 'npDiffMin_', 'npSign_'];   /* ⏱サーバの計測を出すチップ（2026-09-01）。⚠️ここに足し忘れると npRender が ReferenceError で落ちる */
 
 function makeDoc() {
   const els = {};
