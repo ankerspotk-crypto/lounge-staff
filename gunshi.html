@@ -1643,7 +1643,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-02c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-02d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -5806,13 +5806,14 @@ function bmAddSave_(a){ try{ localStorage.setItem(BM_ADD_KEY,JSON.stringify(a.sl
    ⚠️取得は**伝票を開いた時の1回だけ**（在庫と同じタイミング）＝描画のたびに通信しない。
    ⚠️backendが未反映／通信が落ちている間は**端末ぶんだけで動く**＝営業は止めない。
    ⚠️端末ローカル(BM_ADD_KEY)は残す＝オフラインで足した品をその夜のうちは使える。 */
-var BM_ADD_SRV=null, BM_ADD_SRV_ERR='';
+var BM_ADD_SRV=null, BM_ADD_SRV_ERR='', BM_ADD_HIDE=[];
 function bmLoadAddShared(){
   if(BM_ADD_SRV!==null||BM_ADD_SRV==='loading') return;
   BM_ADD_SRV='loading';
   gsr('getPosMenuAdds').then(function(r){
     /* ⚠️種類(kind)はサーバに持たせない＝`bmKindOf_` の1箇所で決める（2実装に割らない） */
     BM_ADD_SRV=((r&&r.items)||[]).map(function(x){ return [String(x.name||''),Number(x.price)||0,bmKindOf_(x.genre||'その他'),String(x.genre||'その他')]; });
+    BM_ADD_HIDE=((r&&r.hidden)||[]).map(function(x){ return {name:String(x.name||''),price:Number(x.price)||0}; });
     bmRenderIfIdle();
   }).catch(function(){ BM_ADD_SRV=[]; BM_ADD_SRV_ERR='共有メニューを取得できませんでした'; bmRenderIfIdle(); });
 }
@@ -5826,8 +5827,21 @@ function bmAddAll_(){
   });
   return out;
 }
-/* 有料メニューの正本＝元の表＋足した品（共有＋この端末）。⚠️必ずここから引く */
-function bmItems_(){ return BM_ITEMS.concat(bmAddAll_()); }
+/* 🗑**メニューから外した品**（ボス指示 2026-09-02「削除もできるように」）。
+   ⚠️**消すのではなく「出さない」**＝過去の伝票に打った分と🍾ボトル集計は必ず生かす。
+     そのために引き当て(bmItemsAll_)と、注文で選べる一覧(bmItems_)を分ける。
+     ⛔ここを1本にすると、外した瞬間に**その日のボトル集計から品が消える**（実害が出る）。 */
+function bmHiddenKey_(n,p){ return String(n)+'|'+Number(p); }
+function bmHiddenMap_(){
+  var m={}; (BM_ADD_HIDE||[]).forEach(function(x){ m[bmHiddenKey_(x.name,x.price)]=1; }); return m;
+}
+/* 引き当て用＝**外した品も含む全部**（過去の注文・ボトル判定・在庫照合はこちらを見る） */
+function bmItemsAll_(){ return BM_ITEMS.concat(bmAddAll_()); }
+/* 注文で選べる一覧＝外した品を除く。⚠️画面のグリッドと件数だけがこれを使う */
+function bmItems_(){
+  var hid=bmHiddenMap_();
+  return bmItemsAll_().filter(function(m){ return !hid[bmHiddenKey_(m[0],m[1])]; });
+}
 function bmIsAdded_(name){ var a=bmAddAll_(); for(var i=0;i<a.length;i++) if(a[i][0]===name) return true; return false; }
 /* この端末にしか無い品か（＝共有できていない）。★と⭐を出し分けて、共有漏れを見えるようにする */
 function bmIsLocalOnly_(name){
@@ -5936,7 +5950,9 @@ function bmDelShared(i){
 }
 
 /* 品名からマスタ行を引く。⚠️手で足した品も含めて引く（bmItems_一本） */
-function bmItem_(name){ var L=bmItems_(); for(var i=0;i<L.length;i++) if(L[i][0]===name) return L[i]; return null; }
+/* ⚠️引き当ては**外した品も含めて**探す＝過去の注文の名前が引けなくなると
+   🍾今日出たボトルから消える／在庫照合も外れる（[[project_lounge_pos]]） */
+function bmItem_(name){ var L=bmItemsAll_(); for(var i=0;i<L.length;i++) if(L[i][0]===name) return L[i]; return null; }
 /* 🍾今日出たボトル＝端末の全伝票の下書きを横断して「ボトル系」だけ集計する。
    ⚠️在庫の自動マイナスと発注はbackend（GAS）が要る＝ここは**本数の可視化まで**。
       在庫へ流すには POS品名 → 在庫品名 の紐づけが必要（既存の`店舗メニュー`シートの仕組みを使う）。 */
@@ -6183,16 +6199,12 @@ function bmEditorHtml(){
     +'<input type="number" id="bmAdPr" placeholder="単価" class="bm-in" style="width:88px" value="0">'
     +'<button class="bm-btn sm" onclick="bmAdhoc()">追加</button></div>'
     +'<div class="bm-note">臨時商品＝この1回だけ打つ品（メニューには残りません）。</div>'
-    /* ➕メニューに追加＝一覧に残る（ボス指示 2026-08-28） */
-    +'<div class="bm-row" style="margin-top:10px;flex-wrap:wrap;gap:6px"><span class="lb">メニューに追加</span>'
-    +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;width:120px">'
-    +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:88px">'
-    +'<select id="bmNewGn" class="bm-in" style="width:120px">'
-    +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'"'+((BM.kind===g)?' selected':'')+'>'+esc(bmGenreLabel_(g))+'</option>'; }).join('')
-    +'</select>'
-    +'<button class="bm-btn pri sm" onclick="bmAddMenu()">＋ 追加</button></div>'
-    +'<div class="bm-note">次からメニューに出ます。⚠️<b>この端末だけ</b>に保存されます（他の端末には出ません）。</div>'
-    +bmAddedListHtml_()
+    /* ⚠️メニューの追加・削除は**業務メニューの🍽メニュー管理**へ移した（ボス指示 2026-09-02）。
+       ここに置くと営業中の伝票画面が縦に伸びる＝営業前にやる作業なので入口を分ける。
+       ⛔同じ入口を2箇所に置かない（どちらで足したか分からなくなる）。 */
+    +'<div class="bm-note" style="margin-top:10px">メニューそのものを増やす／減らすのは'
+    +' <b onclick="openMenuEdit()" style="color:var(--accent);text-decoration:underline;cursor:pointer">🍽 メニュー管理</b>'
+    +'（業務メニュー → 📦モノ）でどうぞ。</div>'
     +'</div></div>';
   return h;
 }
@@ -7526,7 +7538,8 @@ var MENU_CATS=[
     {ic:'📦', t:'在庫発注管理',   s:'残数・発注点・未着',       act:"openStockManager()"},
     {ic:'📊', t:'棚卸をする',     s:'現物と台帳を合わせる',     act:"openStocktake()"},
     {ic:'🚚', t:'納品を反映',     s:'届いた分を在庫へ足す',     act:"openDeliveryReflect()"},
-    {ic:'🎁', t:'おみやげ在庫',   s:'2F/5F の残数と推移',       act:"openSouvenirLog()"}
+    {ic:'🎁', t:'おみやげ在庫',   s:'2F/5F の残数と推移',       act:"openSouvenirLog()"},
+    {ic:'🍽', t:'メニュー管理',   s:'品を足す・外す（店で共有）', act:"openMenuEdit()"}
   ]},
   {id:'hito', ic:'👥', t:'ヒト', pv:'面談・派遣・送り・マニュアル', items:[
     {ic:'📝', t:'面談を開始',       s:'応募者をiPadで入力',     act:"startMendanFlow()"},
@@ -8892,6 +8905,104 @@ function gfrHtml_(){
 function gfrSel(v){ GFR_SEL=v; GFR_Q=''; GFR_MODE='due'; renderMenu(); } // 月を変えたら「期限の人」に戻す
 function gfrMode(m){ GFR_MODE=m; renderMenu(); }
 function gfrSearch(){ var el=document.getElementById('gfr-q'); GFR_Q=el?el.value:''; var res=document.getElementById('gfr-results'); if(res)res.innerHTML=gfrRows_(); }
+/* ============================================================================
+   🍽 メニュー管理（業務メニュー → 📦モノ）＝ボス指示 2026-09-02
+   ----------------------------------------------------------------------------
+   ⭐**営業前にやる作業**なので伝票画面から出した。伝票は営業中に触る場所＝縦に伸ばさない。
+   ■ できること＝①足す（店で共有）②外す（注文で選べなくする）③外した品を戻す
+   ⚠️**外す＝消すではない**。過去の伝票に打った分と🍾ボトル集計は生かす（bmItemsAll_ 参照）。
+   ⚠️一覧は**選べる品だけ**を出す（外した品は下に別枠）＝いま何が打てるかを迷わせない。
+============================================================================ */
+var MN_Q='', MN_GN='全部';
+function openMenuEdit(){
+  menuView='menuedit';
+  if(typeof closeSheet==='function'){}
+  document.getElementById('menuOverlay').classList.add('show');
+  if(typeof bmLoadAddShared==='function') bmLoadAddShared();
+  renderMenu();
+}
+function mnSearch(v){ MN_Q=v; var g=document.getElementById('mn-list'); if(g) g.innerHTML=mnListHtml_(); }
+function mnSetGn(g){ MN_GN=g; renderMenu(); }
+function mnListHtml_(){
+  var q=String(MN_Q||'').trim();
+  var list=bmItems_().filter(function(m){
+    if(MN_GN!=='全部'&&m[3]!==MN_GN) return false;
+    if(q&&String(m[0]).indexOf(q)<0) return false;
+    return true;
+  });
+  if(!list.length) return '<div class="bm-note">該当なし</div>';
+  return list.map(function(m){
+    var mk=bmIsAdded_(m[0])?(bmIsLocalOnly_(m[0])?'★ ':'⭐ '):'';
+    return '<div class="bm-row" style="gap:6px;align-items:center;border-bottom:1px solid var(--line);padding:6px 0">'
+      +'<span style="flex:1;font-size:13px">'+mk+esc(m[0])+' <span style="color:var(--sub);font-size:11px">'+esc(bmGenreLabel_(m[3]))+'</span></span>'
+      +'<span style="font-size:13px;color:var(--gold);font-weight:800;min-width:74px;text-align:right">'+bmYen(m[1])+'</span>'
+      +'<button class="bm-btn dng sm" onclick="mnHide(\''+jsStr(m[0])+'\','+m[1]+')">外す</button></div>';
+  }).join('');
+}
+function mnRenderMenu_(el){
+  document.getElementById('menuTitle').textContent='🍽 メニュー管理';
+  var hid=BM_ADD_HIDE||[];
+  var h='<span class="menu-back" onclick="menuView=\'grid\';renderMenu()">← メニューに戻る</span>';
+  h+='<div class="bm-note" style="margin-top:8px">ここで足した品は<b>店の全端末</b>に出ます。外した品は<b>注文で選べなくなる</b>だけで、'
+    +'過去の伝票と🍾ボトル集計はそのまま残ります。</div>';
+  /* 足す */
+  h+='<div class="bm-card" style="margin-top:10px"><h3><span class="n">＋</span> メニューに足す</h3>'
+    +'<div class="bm-row" style="flex-wrap:wrap;gap:6px">'
+    +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;flex:1;min-width:140px">'
+    +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:96px">'
+    +'<select id="bmNewGn" class="bm-in" style="width:130px">'
+    +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'">'+esc(bmGenreLabel_(g))+'</option>'; }).join('')
+    +'</select>'
+    +'<button class="bm-btn pri sm" onclick="bmAddMenu();renderMenu()">＋ 追加</button></div>'
+    +'<div class="bm-note">⭐＝店で共有できた品／★＝この端末にしか無い品（通信が落ちた時）。</div>'
+    +bmAddedListHtml_()
+    +'</div>';
+  /* 一覧 */
+  h+='<div class="bm-card"><h3><span class="n">≡</span> いま注文で選べる品 <span style="color:var(--sub);font-weight:600;font-size:10px">'+bmItems_().length+'品</span></h3>'
+    +'<div class="bm-row"><input type="search" class="bm-in" style="flex:1;text-align:left" placeholder="品名で検索" value="'+esc(MN_Q)+'" oninput="mnSearch(this.value)"></div>'
+    +'<div class="chips">'+['全部'].concat(BM_GENRES).map(function(g){
+        return '<div class="chip'+(g===MN_GN?' sel':'')+'" onclick="mnSetGn(\''+jsStr(g)+'\')">'+esc(bmGenreLabel_(g))+'</div>';
+      }).join('')+'</div>'
+    +'<div id="mn-list">'+mnListHtml_()+'</div></div>';
+  /* 外した品 */
+  if(hid.length){
+    h+='<div class="bm-card"><h3><span class="n">🗑</span> 外した品 <span style="color:var(--sub);font-weight:600;font-size:10px">'+hid.length+'品</span></h3>'
+      +'<div class="bm-note">注文では選べません。過去の伝票と🍾ボトル集計には残っています。</div>'
+      +hid.map(function(x,i){
+          return '<div class="bm-row" style="gap:6px;align-items:center;border-bottom:1px solid var(--line);padding:6px 0">'
+            +'<span style="flex:1;font-size:13px;color:var(--dim)">'+esc(x.name)+'</span>'
+            +'<span style="font-size:13px;color:var(--sub);min-width:74px;text-align:right">'+bmYen(x.price)+'</span>'
+            +'<button class="bm-btn sm acc" onclick="mnUnhide('+i+')">戻す</button></div>';
+        }).join('')
+      +'</div>';
+  }
+  el.innerHTML=h;
+}
+/* 外す＝注文で選べなくする。⭐先に画面へ反映してから送る（失敗したら戻す） */
+function mnHide(name,price){
+  if(!confirm('「'+name+'」をメニューから外します。\n\n・注文で選べなくなります\n・過去の伝票と🍾ボトル集計はそのまま残ります\n・「戻す」でいつでも復活できます')) return;
+  BM_ADD_HIDE.push({name:name,price:Number(price)||0});
+  renderMenu();
+  if(typeof gsr!=='function') return;
+  gsr('posHideMenuItem',name,Number(price)||0,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
+    if(r&&r.ok){ if(typeof toast==='function') toast('外しました：'+name); return; }
+    BM_ADD_HIDE=BM_ADD_HIDE.filter(function(x){ return !(x.name===name&&Number(x.price)===Number(price)); });
+    renderMenu(); if(typeof toast==='function') toast('外せませんでした：'+((r&&r.error)||'不明'));
+  }).catch(function(){
+    BM_ADD_HIDE=BM_ADD_HIDE.filter(function(x){ return !(x.name===name&&Number(x.price)===Number(price)); });
+    renderMenu(); if(typeof toast==='function') toast('通信エラーで外せませんでした');
+  });
+}
+function mnUnhide(i){
+  var x=(BM_ADD_HIDE||[])[i]; if(!x) return;
+  BM_ADD_HIDE=BM_ADD_HIDE.filter(function(y,j){ return j!==i; });
+  renderMenu();
+  if(typeof gsr!=='function') return;
+  gsr('posUnhideMenuItem',x.name,Number(x.price)||0).then(function(r){
+    if(r&&r.ok){ if(typeof toast==='function') toast('戻しました：'+x.name); return; }
+    BM_ADD_HIDE.push(x); renderMenu(); if(typeof toast==='function') toast('戻せませんでした');
+  }).catch(function(){ BM_ADD_HIDE.push(x); renderMenu(); if(typeof toast==='function') toast('通信エラー'); });
+}
 function renderMenu(){
   document.getElementById('menuTitle').textContent = menuView==='customer'?'👤 顧客管理':'☰ 各種メニュー';
   var el=document.getElementById('menu-body');
@@ -8924,6 +9035,7 @@ function renderMenu(){
   }
   if(menuView==='receipt'){ rcptRenderMenu_(el); return; }
   if(menuView==='tslip'){ tslipRenderMenu_(el); return; }
+  if(menuView==='menuedit'){ mnRenderMenu_(el); return; }
   if(menuView==='seikyu'){ seikyuRenderMenu_(el); return; }
   if(menuView==='hakenid'){ hknRenderMenu_(el); return; }
   el.innerHTML=menuTilesLegacy_().map(function(g){

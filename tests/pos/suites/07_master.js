@@ -205,6 +205,39 @@ module.exports = async function (front) {
     t.ok(f.log.alerts.some(x => /この端末にだけ/.test(x)), 'その旨を黒服に伝える');
   }
 
+  t.section('🗑メニューから外す（ボス指示 2026-09-02「削除もできるように」）');
+  {
+    const f = require('../lib/frontend').loadFront({ seats: [] });
+    const n0 = f.fn.bmItems_().length;
+    f.fn.BM_ADD_HIDE = [{ name: '魔王', price: 28000 }];
+    t.eq(f.fn.bmItems_().length, n0 - 1, '外した品は注文で選べる一覧から消える');
+    t.eq(f.fn.bmItems_().filter(x => x[0] === '魔王').length, 0, 'グリッドの元データから消える');
+    /* ⭐ここが肝＝**消すのではなく出さない**。引き当ては生かす */
+    t.ok(f.fn.bmItem_('魔王'), '⚠️引き当て(bmItem_)からは消えない＝過去の注文の名前が引ける');
+    t.eq(f.fn.bmItemsAll_().length, n0, '⚠️引き当て用の一覧は減らない＝🍾ボトル集計が壊れない');
+  }
+  {
+    /* ⚠️同名で価格違いが実在する（出前代）＝外すのは「その単価の1件」だけ */
+    const f = require('../lib/frontend').loadFront({ seats: [] });
+    const before = f.fn.bmItems_().filter(x => x[0] === '出前代').map(x => x[1]).sort((a, b) => a - b);
+    f.fn.BM_ADD_HIDE = [{ name: '出前代', price: 1000 }];
+    const after = f.fn.bmItems_().filter(x => x[0] === '出前代').map(x => x[1]).sort((a, b) => a - b);
+    t.eq(after.length, before.length - 1, '⚠️同名の他の単価は道連れにしない');
+    t.ok(after.indexOf(1000) < 0, '外した単価だけが消える');
+  }
+  {
+    /* 外した品を実際に打っていた日でも🍾ボトル集計に残る（外した瞬間に金額が消えない） */
+    const { seats } = require('../patterns');
+    const f = require('../lib/frontend').loadFront({
+      seats: seats([{ rowIdx: 2, table: 'BOX1', floor: '2F', cust: '田中', pax: 1 }]) });
+    f.fn.BM.key = '2'; f.fn.bmGet('2', 1);
+    f.fn.bmPick('魔王', 28000); f.fn.bmPickAttr('お客様'); f.fn.bmPickConfirm();
+    f.fn.BM_ADD_HIDE = [{ name: '魔王', price: 28000 }];
+    const b = f.fn.bmBottlesToday();
+    t.ok(b.list.some(x => x.name === '魔王'), '⭐外しても、その日に出たボトルには残る');
+    t.eq(b.amount, 28000, '金額も残る（外した瞬間に売上の見え方を変えない）');
+  }
+
   t.section('セット単価の候補');
   {
     const p = F.BM_SET_PRICES_DEFAULT;

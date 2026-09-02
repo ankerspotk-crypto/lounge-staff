@@ -694,7 +694,7 @@ function doPost(e) {
 // 軍師フロント(自社ホスティング版)が fetch で呼べる関数のホワイトリスト
 // ⚠️ 閉店チェックの承認(approveCashCheck)と承認者名(getCashApproverNames)は軍師から除外。
 //    承認は管理コンソール(adminConsoleApi)のみ＝黒服端末では承認できない。管理者ログインでも軍師では特別操作不可。
-var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'getPosNextPay', 'markSlipPrinted', 'getSlipPrinted', 'getPosMenuAdds', 'posAddMenuItem', 'posDelMenuItem', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', 'ccRegisterPayee', 'getCashPendingDays', /* ⛔ 'importTrustReportShot', 'clearTrustDayPay' は 2026-08-27 に封印（ボス判断：日報スクショの自動突合を撤去）。
+var GUNSHI_API_FNS = ['addKioskReservation', 'addOrderDraftItem', 'addStockItem', 'cancelKioskReservation', 'changeStockQty', 'confirmOrderDelivered', 'deleteStockItem', 'getCashCheckInit', 'getCastRequestsToday', 'getKioskCastNames', 'getKioskHall2', 'getKioskReservations', 'getKioskShiftBoard', 'getKioskStaffList', 'getKioskTsukemawashi', 'getKioskWorkingCasts', 'getKioskCastKubun', 'getOpeningCheckInit', 'getStockList', 'getTodayPendingReservations', 'getUndeliveredOrders', 'kioskApplyDelivery', 'kioskAuthStart', 'kioskAuthStatus', 'kioskCancelOkuriEntry', 'kioskChangeTable', 'kioskCombineSeats', 'kioskDeleteDenpyo', 'kioskDeleteDenpyoBulk', 'kioskAddDenpyo', 'kioskEndAtendouAtSeat', 'kioskExtendAtendouAtSeat', 'kioskGetCustomerDetail', 'kioskGetDenpyoDay', 'kioskGetOkuriBoard', 'kioskGetPendingDeliveries', 'kioskLogoutTs', 'kioskRotateCast', 'kioskSaveNextVisitMemo', 'kioskSaveOkuriEntry', 'kioskSetGlobalOkuriMode', 'kioskSetHayaagari', 'kioskSetInterval', 'kioskSetOkuri', 'kioskSetOkuriMode', 'kioskSplitSeat', 'kioskUpdateDenpyo', 'kioskVerifyPin', 'registerStockPurchase', 'searchKioskCustomersV2', 'setCastRequestHandled', 'setKioskReservationStatus', 'setSeatPlanCast', 'setupTableSession', 'submitCashCheck', 'submitOpeningCheck', 'submitSafeWithdrawal', 'updateKioskReservation', 'getKioskBootstrap', 'getKioskLoadAll', 'addCustomer', 'getKioskTasks', 'completeKioskTask', 'applyFeeRenewalTicket', 'getMemberRenewals', 'kioskUpdateCustomer', 'kioskDeleteDelivery', 'kioskGetSouvenirStock', 'kioskSetSouvenirStock', 'kioskAdjustSouvenirStock', 'getSouvenirLog', 'getServerTime', 'reportClockDrift', 'clearClockDrift', 'gunshiGetCastList', 'gunshiBroadcastCast', 'kioskGetCustomerVisits', 'gunshiBackfillVisits', 'gunshiImportTrustVisits', 'kioskSetGenji', 'kioskSetShusen', 'getOpeningPrepInit', 'toggleOpeningPrep', 'getChecklistConfig', 'getStocktakeTargets', 'submitStocktake', 'syncMeishiRowsWithRoster', 'setMeishiLevel', 'setStockSupplyStatus', 'gunshiGetMenuLinks', 'gunshiSetMenuLink', 'gunshiGetBirthdays', 'gunshiGetHandover', 'gunshiSaveHandover', 'getKeihiStaffNames', 'kioskGetSlipImage', 'gunshiStartMendan', 'gunshiGetMendanList', 'gunshiJudgeMendan', 'gunshiStartKurofukuMendan', 'gunshiGetKurofukuMendanList', 'gunshiJudgeKurofukuMendan', 'gunshiGetGenjiShift', 'gunshiPunch', 'gunshiPunchStatus', 'getKioskCustomerRoster', 'getReceiptReservationsToday', 'logIssuedReceipt', 'getIssuedReceipts', 'getReceiptPayees', 'getMonthlyPayReceipts', 'getReceiptIssuers', 'getOrderAlerts', 'setOrderStatusManual', 'gunshiAwardData', 'gunshiAwardVote', 'getWarCouncil', 'getSeikyuBootstrap', 'saveSeikyusaki', 'submitSeikyu', 'kioskGetSeikyuImage', 'getSeikyuListKiosk', 'getSeikyuGroupPhotos', 'kioskGetGroupPhoto', 'getGunshiMaintenance', 'getPosMenu', 'getPosBill', 'posAddOrders', 'posVoidOrder', 'getPosOpenBills', 'getPosMode', 'setPosMode', 'getPosBills', 'posSaveBill', 'posCloseBill', 'posReopenBill', 'getPosClosed', 'getPosDayStatus', 'posDeleteBill', 'getPosNextPay', 'markSlipPrinted', 'getSlipPrinted', 'getPosMenuAdds', 'posAddMenuItem', 'posDelMenuItem', 'posHideMenuItem', 'posUnhideMenuItem', 'ccGateStatus', 'deferKioskTask', 'undeferKioskTask', 'getHibaraiUnknown', 'hibaraiResolveUnknown', 'getClosingExtras', 'resolveKaikeiCheck', 'ccRegisterPayee', 'getCashPendingDays', /* ⛔ 'importTrustReportShot', 'clearTrustDayPay' は 2026-08-27 に封印（ボス判断：日報スクショの自動突合を撤去）。
    関数本体は残してあるが、ここに戻さない限り軍師からは呼べない。復活の条件は関数側のコメント参照。 */
   // ⚠️注意情報（NG）＝ng.gs。付け回し・予約の判定はすべてbackendが正本
   'kioskGetCustomerNote', 'kioskSaveCustomerNote', 'gunshiNgCheckAssign', 'gunshiNgBoard', 'gunshiNgCheckReservation', 'extractSeikyuSlipDate',
@@ -21611,6 +21611,8 @@ const POS_MENU_ADD_TAB   = 'POS_メニュー追加';
 const POS_MENU_ADD_HEAD_ = ['品名', '単価', 'ジャンル', '追加日時', '追加者', '状態'];
 const POS_MENU_ADD_LIVE_ = '有効';
 const POS_MENU_ADD_DEAD_ = '削除';
+const POS_MENU_HIDE_ = '非表示';
+const POS_MENU_SHOW_ = '表示';
 function getPosMenuAddSheet_() {
   const ss = getOrOpenSS_();
   let sh = ss.getSheetByName(POS_MENU_ADD_TAB);
@@ -21632,10 +21634,15 @@ function getPosMenuAdds() {
       const k = nm + '|' + (Number(r[1]) || 0);
       if (!seen[k]) order.push(k);
       seen[k] = { name: nm, price: Number(r[1]) || 0, genre: String(r[2] || 'その他'),
-                  by: String(r[4] || ''), at: fmtStamp_(r[3]), live: String(r[5] || '') !== POS_MENU_ADD_DEAD_ };
+                  by: String(r[4] || ''), at: fmtStamp_(r[3]), state: String(r[5] || '').trim() };
     });
-    const items = order.map(function (k) { return seen[k]; }).filter(function (x) { return x.live; });
-    return { ok: true, items: items };
+    const last = order.map(function (k) { return seen[k]; });
+    /* 追加した品＝最後の状態が「有効」／外した品＝最後の状態が「非表示」
+       ⚠️同じ品に 追加→外す→戻す が積まれても**最後の行が勝つ**（forward-only） */
+    const items  = last.filter(function (x) { return x.state === POS_MENU_ADD_LIVE_; });
+    const hidden = last.filter(function (x) { return x.state === POS_MENU_HIDE_; })
+                       .map(function (x) { return { name: x.name, price: x.price }; });
+    return { ok: true, items: items, hidden: hidden };
   } catch (e) { return { ok: false, error: 'メニューの読み込みに失敗しました：' + e }; }
 }
 function posAddMenuItem(name, price, genre, by) {
@@ -21656,6 +21663,19 @@ function posAddMenuItem(name, price, genre, by) {
   } finally { try { lock.releaseLock(); } catch (e) {} }
 }
 /* 外す＝行を消さず「削除」を1行足す（forward-only）。過去の伝票に打った分には触らない */
+/* 🗑元からある品も「注文で選べなくする」。⚠️消すのではない＝過去の伝票とボトル集計は生きる */
+function posHideMenuItem(name, price, by) {
+  const nm = String(name || '').trim();
+  if (!nm) return { ok: false, error: '品名がありません' };
+  getPosMenuAddSheet_().appendRow([nm, Math.max(0, Math.round(Number(price) || 0)), '', nowStamp_(), String(by || ''), POS_MENU_HIDE_]);
+  return { ok: true, name: nm };
+}
+function posUnhideMenuItem(name, price) {
+  const nm = String(name || '').trim();
+  if (!nm) return { ok: false, error: '品名がありません' };
+  getPosMenuAddSheet_().appendRow([nm, Math.max(0, Math.round(Number(price) || 0)), '', nowStamp_(), '', POS_MENU_SHOW_]);
+  return { ok: true, name: nm };
+}
 function posDelMenuItem(name, price) {
   const nm = String(name || '').trim();
   const pr = Math.max(0, Math.round(Number(price) || 0));
