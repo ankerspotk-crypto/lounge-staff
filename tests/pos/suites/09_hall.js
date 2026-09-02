@@ -57,6 +57,8 @@ module.exports = async function () {
       globals: { viewMode: 'dash', IS_GAS: true, BM: { key: null, want: null, slip: {}, pick: {} },
                  bmRender: () => calls.push('bmRender'), bmBills: () => [{ rowIdx: 2, floor: '2F', table: 'BOX1', cust: '田中' }],
                  bmTblLabel_: (f, tb) => f + ' ' + tb, bmLoadStock: () => calls.push('stock'),
+                 /* ⭐店で共有するメニュー追加の取得（2026-09-02）。伝票を開く時に1回だけ呼ぶ */
+                 bmLoadAddShared: () => calls.push('menuAdds'),
                  bmPullStart: () => calls.push('pullStart'), bmPullStop: () => calls.push('pullStop'),
                  renderHall: () => calls.push('renderHall'), setViewMode: () => calls.push('setViewMode') }
     });

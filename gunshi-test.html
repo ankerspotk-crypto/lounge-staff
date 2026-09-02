@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-02b-test';
+var BUILD='2026-09-02c-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -1953,7 +1953,7 @@ function setViewMode(m){
   document.body.classList.toggle('bill-on',m==='bill');
   var h=document.getElementById('vt-home'),d=document.getElementById('vt-dash'),b=document.getElementById('vt-bill');
   if(h)h.classList.toggle('on',m==='home'); if(d)d.classList.toggle('on',m==='dash'); if(b)b.classList.toggle('on',m==='bill');
-  if(m==='bill'){ bmRender(); if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmPullStart(); } return; }   // 伝票管理は独自描画
+  if(m==='bill'){ bmRender(); if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmLoadAddShared(); bmPullStart(); } return; }   // 伝票管理は独自描画
   bmPullStop();   // 伝票管理から離れたら共有ポーリングを止める
   renderAll();
   // 既定がdashになったので、ホームの提出状況は起動時に読まれない。切替時に取りに行かないと
@@ -4190,7 +4190,7 @@ function openBillPopup(){
   }
   bmRender();
   /* ⚠️共有ポーリング(20秒)はポップアップの間だけ回す＝閉じたら必ず止める（通信を垂れ流さない） */
-  if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmPullStart(); }
+  if(typeof IS_GAS==='undefined'||IS_GAS!==false){ bmLoadStock(); bmLoadAddShared(); bmPullStart(); }
 }
 function closeBillPopup(){
   if(!document.body.classList.contains('bill-pop')) return;
@@ -5889,9 +5889,41 @@ function bmStockOf(name){
 var BM_ADD_KEY='gunshiMenuAdd';
 function bmAddLoad(){ try{ var a=JSON.parse(localStorage.getItem(BM_ADD_KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 function bmAddSave_(a){ try{ localStorage.setItem(BM_ADD_KEY,JSON.stringify(a.slice(0,200))); }catch(e){} }
-/* 有料メニューの正本＝元の表＋この端末で足した品。⚠️必ずここから引く */
-function bmItems_(){ return BM_ITEMS.concat(bmAddLoad()); }
-function bmIsAdded_(name){ var a=bmAddLoad(); for(var i=0;i<a.length;i++) if(a[i][0]===name) return true; return false; }
+/* ⭐**店で共有するメニュー追加**（ボス指示 2026-09-02「営業前に軍師からメニュー追加できるように」）。
+   従来は足した品が**その端末にしか残らなかった**＝5Fで足した品が2Fに出ない・翌日消える端末もある。
+   サーバ(POS_メニュー追加シート)に持たせて全端末・翌日以降も同じ品が出るようにする。
+   ⚠️取得は**伝票を開いた時の1回だけ**（在庫と同じタイミング）＝描画のたびに通信しない。
+   ⚠️backendが未反映／通信が落ちている間は**端末ぶんだけで動く**＝営業は止めない。
+   ⚠️端末ローカル(BM_ADD_KEY)は残す＝オフラインで足した品をその夜のうちは使える。 */
+var BM_ADD_SRV=null, BM_ADD_SRV_ERR='';
+function bmLoadAddShared(){
+  if(BM_ADD_SRV!==null||BM_ADD_SRV==='loading') return;
+  BM_ADD_SRV='loading';
+  gsr('getPosMenuAdds').then(function(r){
+    /* ⚠️種類(kind)はサーバに持たせない＝`bmKindOf_` の1箇所で決める（2実装に割らない） */
+    BM_ADD_SRV=((r&&r.items)||[]).map(function(x){ return [String(x.name||''),Number(x.price)||0,bmKindOf_(x.genre||'その他'),String(x.genre||'その他')]; });
+    bmRenderIfIdle();
+  }).catch(function(){ BM_ADD_SRV=[]; BM_ADD_SRV_ERR='共有メニューを取得できませんでした'; bmRenderIfIdle(); });
+}
+function bmAddShared_(){ return (BM_ADD_SRV&&BM_ADD_SRV!=='loading')?BM_ADD_SRV:[]; }
+/* 共有ぶん＋この端末ぶん。⚠️同じ品名・同じ単価が両方に居たら1件に寄せる（二重に並べない） */
+function bmAddAll_(){
+  var seen={}, out=[];
+  bmAddShared_().concat(bmAddLoad()).forEach(function(r){
+    var k=String(r[0])+'|'+Number(r[1]);
+    if(seen[k]) return; seen[k]=1; out.push(r);
+  });
+  return out;
+}
+/* 有料メニューの正本＝元の表＋足した品（共有＋この端末）。⚠️必ずここから引く */
+function bmItems_(){ return BM_ITEMS.concat(bmAddAll_()); }
+function bmIsAdded_(name){ var a=bmAddAll_(); for(var i=0;i<a.length;i++) if(a[i][0]===name) return true; return false; }
+/* この端末にしか無い品か（＝共有できていない）。★と⭐を出し分けて、共有漏れを見えるようにする */
+function bmIsLocalOnly_(name){
+  var s=bmAddShared_(); for(var i=0;i<s.length;i++) if(s[i][0]===name) return false;
+  var a=bmAddLoad(); for(var j=0;j<a.length;j++) if(a[j][0]===name) return true;
+  return false;
+}
 /* ジャンルから種類を決める（ボトルに丸まるジャンルなら「ボトル系」）。⚠️種類は表示にしか使わない */
 function bmKindOf_(genre){ return (BM_GENRE_STOCK[genre]==='ボトル')?'ボトル系':((BM_GENRE_STOCK[genre]==='チャーム')?'つまみ系':'単品系'); }
 /* ⚠️**会計済みロックの対象にしない**。メニューは伝票の中身ではない＝
@@ -5906,7 +5938,28 @@ function bmAddMenu(){
   if(BM_GENRES.indexOf(gn)<0) gn='その他';
   var dup=bmItems_().filter(function(r){ return r[0]===nm; });
   if(dup.length&&!confirm('「'+nm+'」は既にメニューに在ります（'+bmYen(dup[0][1])+'）。\n同じ名前で単価違いとして足しますか？')) return;
-  var a=bmAddLoad(); a.push([nm,pr,bmKindOf_(gn),gn]); bmAddSave_(a);
+  var row=[nm,pr,bmKindOf_(gn),gn];
+  /* ⭐まずサーバへ（店で共有）。落ちたら端末に残して営業を続ける＝入力を捨てない。
+     ⚠️`IS_GAS` を直に読まない＝この定数が無い環境（テスト・ローカル）で落ちる。
+        通信できるかは **gsr が在るか** で判断する（ファイル内の他の判定と同じ流儀）。 */
+  var srvOk=(typeof gsr==='function')&&(typeof IS_GAS==='undefined'||IS_GAS!==false);
+  /* ⭐**先に画面へ出してから送る**（楽観追加）。GASは応答の床が約1.9秒＝待たせると
+     営業前に何品も足す作業が成立しない。⚠️失敗したら共有から取り消して端末ぶんへ落とす
+     ＝「出たのに他の端末に無い」を黙って作らない（★で見分けられる）。 */
+  if(BM_ADD_SRV===null||BM_ADD_SRV==='loading') BM_ADD_SRV=[];
+  BM_ADD_SRV.push(row);
+  var demote=function(msg){
+    BM_ADD_SRV=bmAddShared_().filter(function(x){ return !(x[0]===nm&&Number(x[1])===pr); });
+    var a=bmAddLoad(); a.push(row); bmAddSave_(a); bmRender();
+    if(typeof toast==='function') toast(msg);
+  };
+  if(srvOk){
+    gsr('posAddMenuItem',nm,pr,gn,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
+      if(!(r&&r.ok)) demote('⚠️共有できませんでした。この端末にだけ足しました');
+    }).catch(function(){ demote('⚠️通信できず。この端末にだけ足しました'); });
+  }else{
+    demote('');
+  }
   var e1=document.getElementById('bmNewNm'); if(e1)e1.value='';
   var e2=document.getElementById('bmNewPr'); if(e2)e2.value='';
   BM.kind=gn;                    /* 足したジャンルに切り替える＝足した品がその場で見える */
@@ -5919,16 +5972,58 @@ function bmDelMenu(i){
   a.splice(i,1); bmAddSave_(a); bmRender();
 }
 function bmAddedListHtml_(){
-  var a=bmAddLoad();
-  if(!a.length) return '';
-  return '<div class="bm-note" style="margin-top:6px">この端末で足した品 '+a.length+'件</div>'
-    +a.map(function(r,i){
-        return '<div class="bm-row" style="gap:6px;align-items:center;margin-top:3px">'
-          +'<span style="flex:1;font-size:12px">★ '+esc(r[0])+' <span style="color:var(--sub)">'+esc(r[3])+'</span></span>'
-          +'<span style="font-size:12px;color:var(--gold);font-weight:800">'+bmYen(r[1])+'</span>'
-          +'<button class="bm-btn dng sm" onclick="bmDelMenu('+i+')">×</button></div>';
-      }).join('');
+  var sh=bmAddShared_(), lo=bmAddLoad();
+  if(!sh.length&&!lo.length) return (BM_ADD_SRV_ERR?'<div class="bm-note" style="color:#ff9a5a">⚠️'+esc(BM_ADD_SRV_ERR)+'</div>':'');
+  var h='';
+  if(sh.length){
+    h+='<div class="bm-note" style="margin-top:6px">⭐店で共有している品 '+sh.length+'件（どの端末でも出ます）</div>'
+      +sh.map(function(r,i){
+          return '<div class="bm-row" style="gap:6px;align-items:center;margin-top:3px">'
+            +'<span style="flex:1;font-size:12px">⭐ '+esc(r[0])+' <span style="color:var(--sub)">'+esc(r[3])+'</span></span>'
+            +'<span style="font-size:12px;color:var(--gold);font-weight:800">'+bmYen(r[1])+'</span>'
+            +'<button class="bm-btn dng sm" onclick="bmDelShared('+i+')">×</button></div>';
+        }).join('');
+  }
+  if(lo.length){
+    h+='<div class="bm-note" style="margin-top:6px;color:#ff9a5a">★ この端末にだけ在る品 '+lo.length+'件'
+      +'（他の端末には出ません。⚠️共有できなかった分です）</div>'
+      +lo.map(function(r,i){
+          return '<div class="bm-row" style="gap:6px;align-items:center;margin-top:3px">'
+            +'<span style="flex:1;font-size:12px">★ '+esc(r[0])+' <span style="color:var(--sub)">'+esc(r[3])+'</span></span>'
+            +'<span style="font-size:12px;color:var(--gold);font-weight:800">'+bmYen(r[1])+'</span>'
+            +'<button class="bm-btn sm acc" onclick="bmShareMenu('+i+')">店で共有</button>'
+            +'<button class="bm-btn dng sm" onclick="bmDelMenu('+i+')">×</button></div>';
+        }).join('');
+  }
+  return h;
 }
+/* 端末にだけ在る品を、あとから店の共有へ上げる（通信が戻った時の受け皿） */
+function bmShareMenu(i){
+  var a=bmAddLoad(), r=a[i]; if(!r) return;
+  if(!IS_GAS){ toast('（ローカルでは共有できません）'); return; }
+  gsr('posAddMenuItem',r[0],r[1],r[3],(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(res){
+    if(!(res&&res.ok)){ toast('共有できませんでした：'+((res&&res.error)||'不明')); return; }
+    if(BM_ADD_SRV&&BM_ADD_SRV!=='loading') BM_ADD_SRV.push(r);
+    a.splice(i,1); bmAddSave_(a); bmRender();
+    if(typeof toast==='function') toast('店のメニューに上げました：'+r[0]);
+  }).catch(function(){ toast('通信エラー'); });
+}
+/* 共有メニューから外す。⚠️行は消さずサーバ側で状態を落とす（誰がいつ足したかを消さない） */
+function bmDelShared(i){
+  var arr=bmAddShared_(), r=arr[i]; if(!r) return;
+  if(!confirm('「'+r[0]+'」を店のメニューから外します。\n（過去の伝票に打った分はそのまま残ります）')) return;
+  /* ⭐先に消してから送る（追加と同じ楽観）。⚠️失敗したら戻す＝消えたのに他の端末に在る、を作らない */
+  BM_ADD_SRV=arr.filter(function(x,j){ return j!==i; });
+  bmRender();
+  var back=function(msg){ if(BM_ADD_SRV&&BM_ADD_SRV!=='loading') BM_ADD_SRV.push(r); bmRender();
+                          if(typeof toast==='function') toast(msg); };
+  if(typeof gsr!=='function'){ return; }
+  gsr('posDelMenuItem',r[0],Number(r[1])).then(function(res){
+    if(!(res&&res.ok)) back('外せませんでした：'+((res&&res.error)||'不明'));
+    else if(typeof toast==='function') toast('外しました：'+r[0]);
+  }).catch(function(){ back('通信エラーで外せませんでした'); });
+}
+
 /* 品名からマスタ行を引く。⚠️手で足した品も含めて引く（bmItems_一本） */
 function bmItem_(name){ var L=bmItems_(); for(var i=0;i<L.length;i++) if(L[i][0]===name) return L[i]; return null; }
 /* 🍾今日出たボトル＝端末の全伝票の下書きを横断して「ボトル系」だけ集計する。
@@ -6164,7 +6259,9 @@ function bmEditorHtml(){
           +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
           +'<span class="amt">'+bmYen(o.price*o.qty)+'</span></div>';
       }).join(''):'<div class="bm-note">まだ注文がありません。下のメニューから選びます</div>')+'</div>'
-    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+bmItems_().length+'品'+(bmAddLoad().length?'（うち★'+bmAddLoad().length+'件はこの端末で追加）':'')+'</span></div>'
+    +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+bmItems_().length+'品'
+      +(bmAddShared_().length?'（うち⭐'+bmAddShared_().length+'件は店で追加）':'')
+      +(bmAddLoad().length?'（★'+bmAddLoad().length+'件はこの端末だけ）':'')+'</span></div>'
     +'<div class="bm-row"><input type="search" class="bm-in" style="flex:1;text-align:left;min-width:130px" placeholder="品名で検索（山崎 / 炭酸 / グラス …）" value="'+esc(BM.q||'')+'" oninput="bmSearch(this.value)"></div>'
     +'<div class="chips">'+['全部'].concat(BM_GENRES).map(function(k){
         return '<div class="chip'+(k===BM.kind?' sel':'')+'" onclick="bmSetKind(\''+jsStr(k)+'\')">'+esc(bmGenreLabel_(k))+'</div>';
@@ -6972,7 +7069,9 @@ function bmGridHtml(){
     /* ⚠️価格0の品は「要価格」と出す＝タップして単価を入れてから確定させる */
     var pr=(Number(m[1])>0)?bmYen(m[1]):'<span style="color:#ff9a5a">要価格</span>';
     /* ★＝この端末で手で足した品（元の表の品と見分けが付くように） */
-    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+(bmIsAdded_(m[0])?'★ ':'')+esc(m[0])+'</div><div class="pr">'+pr+'</div></div>';
+    /* ⭐＝店で共有した品／★＝この端末にしか無い品（共有漏れが目で分かる） */
+    var mk=bmIsAdded_(m[0])?(bmIsLocalOnly_(m[0])?'★ ':'⭐ '):'';
+    return '<div class="bm-mi" onclick="bmPick(\''+jsStr(m[0])+'\','+m[1]+')"><div class="nm">'+mk+esc(m[0])+'</div><div class="pr">'+pr+'</div></div>';
   }).join('');
 }
 function bmSearch(v){ BM.q=v; var g=document.getElementById('bmGrid'); if(g) g.innerHTML=bmGridHtml(); }

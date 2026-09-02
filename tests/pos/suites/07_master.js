@@ -3,7 +3,7 @@
    ここが崩れると金額が静かに変わる（0円で打てる／同じ品が2回出る／ジャンル外れで在庫に流れない）。 */
 const t = require('../lib/tiny');
 
-module.exports = function (front) {
+module.exports = async function (front) {
   const F = front.fn;
   const I = F.BM_ITEMS, W = F.BM_WELCOME, G = F.BM_GENRES, GS = F.BM_GENRE_STOCK, OA = F.BM_OPEN_ALWAYS;
 
@@ -112,8 +112,10 @@ module.exports = function (front) {
          '⚠️bmItem_ から引ける＝ボトル判定・在庫照合にも効く');
     t.ok(F2.bmIsAdded_('獺祭 純米大吟醸'), '手で足した品と分かる');
     t.eq(F2.BM.kind, '焼酎', '足したジャンルに切り替わる＝その場で見える');
-    t.ok(/★ 獺祭/.test(F2.bmGridHtml()), 'グリッドに★付きで出る');
-    t.ok(/この端末で追加/.test(F2.bmEditorHtml()), '何件足したか画面に出る');
+    /* ⚠️2026-09-02にボス指示で**店で共有**に変えた＝⭐が共有／★はこの端末だけ */
+    t.ok(/⭐ 獺祭/.test(F2.bmGridHtml()), 'グリッドに⭐付きで出る（店で共有した品）');
+    t.ok(/店で追加/.test(F2.bmEditorHtml()), '何件足したか画面に出る');
+    t.eq(F2.bmAddLoad().length, 0, '⭐共有できた品は端末ローカルに二重で持たない');
 
     /* ⭐結線の確認＝足したボトルが🍾今日出たボトルに乗るか（BM_ITEMSだけ見ていると乗らない） */
     F2.bmPick('獺祭 純米大吟醸', 18000); F2.bmPickAttr('お客様'); F2.bmPickConfirm();
@@ -121,12 +123,8 @@ module.exports = function (front) {
     t.ok(b.list.some(x => x.name === '獺祭 純米大吟醸'), '⭐足したボトルが🍾今日出たボトルに乗る');
     t.eq(b.amount, 18000, '金額も乗る');
 
-    /* 端末に残る＝次に開いた時も在る */
-    const f2 = require('../lib/frontend').loadFront({ seats: [], storage: f.storage._m });
-    t.ok(f2.fn.bmItem_('獺祭 純米大吟醸'), '端末に保存される（次に開いても在る）');
-
-    F2.bmDelMenu(0);
-    t.eq(F2.bmItems_().length, before, 'メニューから消せる');
+    F2.bmDelShared(0);
+    t.eq(F2.bmItems_().length, before, '店のメニューから外せる');
     t.eq(F2.bmGet('2').orders.length, 1, '⚠️消しても打ってしまった注文は残る（金額を勝手に変えない）');
   }
   {
@@ -146,8 +144,8 @@ module.exports = function (front) {
     f0.fn.document.els['bmNewGn'] = { value: '焼酎' };
     f0.fn.bmAddMenu();
     t.ok(f0.fn.bmItem_('次の卓用ボトル'), '⚠️会計済みの伝票を開いていてもメニューは足せる');
-    f0.fn.bmDelMenu(0);
-    t.ok(!f0.fn.bmItem_('次の卓用ボトル'), '消すのも同じく通る');
+    f0.fn.bmDelShared(0);
+    t.ok(!f0.fn.bmItem_('次の卓用ボトル'), '外すのも同じく通る');
   }
   {
     const f = require('../lib/frontend').loadFront({ seats: [] });
@@ -185,7 +183,26 @@ module.exports = function (front) {
     g.fn.document.els['bmNewPr'] = { value: '35000' };
     g.fn.document.els['bmNewGn'] = { value: '焼酎' };
     g.fn.bmAddMenu();
-    t.eq(g.fn.bmAddLoad().length, 1, '「はい」なら同名で単価違いとして足せる');
+    t.eq(g.fn.bmItems_().filter(x => x[0] === '魔王').length, 2, '「はい」なら同名で単価違いとして足せる');
+  }
+  {
+    /* ⭐通信が落ちた時＝共有できないが**入力は捨てない**。端末ぶんに落として★で見分けられる */
+    const { seats } = require('../patterns');
+    const f = require('../lib/frontend').loadFront({
+      seats: seats([{ rowIdx: 2, table: 'BOX1', floor: '2F', cust: '田中', pax: 1 }]),
+      gsr: { posAddMenuItem: new Error('net') } });
+    f.fn.BM.key = '2'; f.fn.bmGet('2', 1);
+    f.fn.document.els['bmNewNm'] = { value: 'オフライン品' };
+    f.fn.document.els['bmNewPr'] = { value: '3000' };
+    f.fn.document.els['bmNewGn'] = { value: 'つまみ' };
+    f.fn.bmAddMenu();
+    /* ⚠️共有の失敗は非同期＝1tick流してから確かめる */
+    await new Promise(r => setTimeout(r, 0));
+    t.ok(f.fn.bmItem_('オフライン品'), '⚠️共有に失敗しても品は消えない（入力を捨てない）');
+    t.eq(f.fn.bmAddLoad().length, 1, '端末ぶんに落ちる');
+    t.ok(f.fn.bmIsLocalOnly_('オフライン品'), '★＝この端末にしか無いと分かる');
+    /* ⚠️loadFront は toast を alerts に '[toast]' 付きで積む（loadFrontMaster とは別） */
+    t.ok(f.log.alerts.some(x => /この端末にだけ/.test(x)), 'その旨を黒服に伝える');
   }
 
   t.section('セット単価の候補');
