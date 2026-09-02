@@ -6759,15 +6759,24 @@ function recordSeen(userId, groupId) {
 // 出退勤の報告・リマインド対象外の名前キー集合を返す。
 // 対象外＝①管理者（常時管理者ADMIN_NAMES_＋スタッフマスタで管理者「○」タグ）②テストアカウント「徳子」。
 // キーは checkMissingShukkin と同じ「正規化＋内部スペース除去」で保持し、表記ゆれでも一致させる。
+/* 勤怠を記録しない人＝**幽霊アカウントだけ**（ボス報告で修正 2026-09-02）。
+   ⛔**「管理者」かどうかで切らない。** りくは管理者であり、同時に時給7,500円で実働するキャスト。
+      名前(ADMIN_NAMES_)と「管理者○」タグで除外していたため、**2026-07-11以降ずっと
+      りくの出勤が1件も記録されていなかった**（勤怠ログ876行を直読みして確認）。
+   ⭐実働するかどうかは**役割**で決まる。役割で切ること。
+   ⚠️ADMIN_NAMES_ は触らない＝あちらはログインのロックアウト防止用（別の役目）。 */
+const KINTAI_EXEMPT_ROLES_ = ['管理アカウント', 'テストスタッフ'];
+const KINTAI_EXEMPT_NAMES_ = ['管理者', '店管理', '徳子'];
 function kintaiExemptKeys_() {
   const norm = s => normalizeName_(String(s == null ? '' : s)).replace(/[\s　]/g, '');
   const keys = {};
-  ADMIN_NAMES_.concat(['徳子']).forEach(n => { keys[norm(n)] = true; });
+  KINTAI_EXEMPT_NAMES_.forEach(n => { keys[norm(n)] = true; });
   try {
     const sh = getOrOpenSS_().getSheetByName(STAFF_TAB);
     if (sh && sh.getLastRow() > 1) {
       const rows = sh.getRange(2, 2, sh.getLastRow() - 1, 3).getValues(); // B=名前 C=役割 D=管理者
-      rows.forEach(r => { if (String(r[2]).trim() === '○') keys[norm(r[0])] = true; }); // 管理者○タグは除外
+      /* ⚠️見るのは**役割(C)**だけ。管理者タグ(D)では除外しない＝管理者かつ実働の人を落とさない */
+      rows.forEach(r => { if (KINTAI_EXEMPT_ROLES_.indexOf(String(r[1]).trim()) >= 0) keys[norm(r[0])] = true; });
     }
   } catch (e) {}
   return keys;
