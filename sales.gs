@@ -55,12 +55,65 @@ function salesCols_(sh) {
 }
 
 /* ---------------------------------------------------------------------------
+   🙈 共同経営者ビューの「載せない伝票」（[[project_partner_view]]）
+   ----------------------------------------------------------------------------
+   ボス確定 2026-09-02＝**合計からも除く**（一覧から隠すだけ、ではない）。
+   ⭐台帳は専用シート1枚。**`POS_会計` には絶対に列を足さない**
+     ＝伝票の正本と「誰に見せるか」は別の関心事。混ぜると会計の列がUIの都合で動く。
+   ⭐**append-only**（同じ伝票の最後の行が勝つ）＝いつ誰がどの伝票を隠した/戻したかが残る。
+     共同経営者に見せなかった記録そのものが後で効く場面があるので、上書きで消さない。
+   ⚠️キー＝`営業日|伝票行`。伝票行(rowIdx)は予約行に紐づく伝票の一意キー
+     （[[project_lounge_pos]]／会計時刻や客名は変わりうるのでキーにしない）。
+   ⚠️このシートは営業日でテスト/本番を切り替えない（`posTab_` を通さない）
+     ＝「見せ方」は営業日の帳簿ではないので1枚で持つ。
+--------------------------------------------------------------------------- */
+const SALES_HIDE_TAB   = '収支公開除外';
+const SALES_HIDE_HEAD_ = ['営業日', '伝票行', '状態', '更新者', '更新時刻', 'メモ'];
+const SALES_HIDE_ON_   = '除外';
+
+function salesHideKey_(d, rowIdx) { return salesDateStr_(d) + '|' + String(rowIdx == null ? '' : rowIdx).trim(); }
+
+/* 除外台帳を **1回だけ** 読んで {key: {hidden,by,at,memo}} に畳む。
+   ⚠️月次で31回読まない（このファイル冒頭の約束）。無い/壊れていても落とさない＝除外0で通す。 */
+function salesHiddenMap_() {
+  const out = {};
+  try {
+    const sh = getOrOpenSS_().getSheetByName(SALES_HIDE_TAB);
+    if (!sh || sh.getLastRow() < 2) return out;
+    const c = salesCols_(sh);
+    if (c['営業日'] == null || c['伝票行'] == null) return out;
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+    vals.forEach(function (r) {                       // 上から順＝最後の行が勝つ（append-only）
+      const d = salesDateStr_(r[c['営業日']]);
+      if (!d) return;
+      out[salesHideKey_(d, r[c['伝票行']])] = {
+        hidden: String(r[c['状態']] || '').trim() === SALES_HIDE_ON_,
+        by:     c['更新者']   != null ? String(r[c['更新者']] || '') : '',
+        at:     c['更新時刻'] != null ? fmtStamp_(r[c['更新時刻']]) : '',
+        memo:   c['メモ']     != null ? String(r[c['メモ']] || '') : ''
+      };
+    });
+  } catch (e) { /* 収支は読むだけの画面＝台帳が読めなくても止めない（除外0で通す） */ }
+  return out;
+}
+/* 除外中かどうかだけを引く小道具（解除行が最後なら false） */
+function salesIsHidden_(map, d, rowIdx) {
+  const h = map && map[salesHideKey_(d, rowIdx)];
+  return !!(h && h.hidden);
+}
+
+/* ---------------------------------------------------------------------------
    ① POS_会計 …… 現金／カード／売掛／売上計と、伝票1枚ずつ
    ⚠️取消(状態≠会計済み)は数えない。⚠️現金は「売上に充当した額」列（お預りではない）
 --------------------------------------------------------------------------- */
-function salesPosByDay_(days) {
+function salesPosByDay_(days, hide) {
+  /* hide＝{ map: salesHiddenMap_(), filter: true/false }（省略で従来どおり全部数える）
+     ⭐filter:true  … 共同経営者ビュー＝**合計からも伝票一覧からも落とす**（客組数・人数も自動で落ちる）
+     ⭐filter:false … 管理コンソール＝数字は今までどおり全部数え、伝票に `hidden` の印だけ付ける
+     ⚠️**集計の道は1本のまま**＝除外あり/なしで別の関数に分岐させない（数字が2実装で割れる） */
+  const hmap = (hide && hide.map) || null, hfil = !!(hide && hide.filter);
   const out = {};
-  days.forEach(function (d) { out[d] = { cash: 0, card: 0, credit: 0, total: 0, bills: [] }; });
+  days.forEach(function (d) { out[d] = { cash: 0, card: 0, credit: 0, total: 0, bills: [], hiddenN: 0, hiddenTotal: 0 }; });
   const groups = salesTabGroups_(days, function (d) { return posTab_(POS_CLOSE_TAB, d); });
   const ss = getOrOpenSS_();
   Object.keys(groups).forEach(function (tab) {
@@ -73,9 +126,13 @@ function salesPosByDay_(days) {
       if (!want[d]) return;
       if (String(r[24]) !== POS_CLOSE_LIVE_) return;          // 取消は数えない
       const o = out[d];
+      const hid = hmap ? salesIsHidden_(hmap, d, r[1]) : false;
+      if (hid) { o.hiddenN++; o.hiddenTotal += salesNum_(r[20]); }
+      if (hid && hfil) return;   /* 🙈 共同経営者ビュー＝この伝票は最初から無かった扱い */
       o.cash += salesNum_(r[21]); o.card += salesNum_(r[22]); o.credit += salesNum_(r[23]);
       o.total += salesNum_(r[20]);
-      o.bills.push({ ts: fmtStamp_(r[2]), by: String(r[3] || ''), floor: String(r[4] || ''), table: String(r[5] || ''),
+      o.bills.push({ row: String(r[1] || ''), hidden: hid,
+                     ts: fmtStamp_(r[2]), by: String(r[3] || ''), floor: String(r[4] || ''), table: String(r[5] || ''),
                      cust: String(r[6] || ''), pax: salesNum_(r[7]), tantou: String(r[8] || ''),
                      uriban: String(r[9] || ''), setSum: salesNum_(r[10]), dohan: salesNum_(r[13]),
                      ord: salesNum_(r[14]), total: salesNum_(r[20]),
@@ -177,13 +234,16 @@ function salesDayRow_(d, pos, nip, cash) {
     /* 給率＝キャストの給料 ÷ 売上。⚠️分母0は null＝画面は「--」（0除算を0%と出さない） */
     kyuritsu: uriTotal > 0 ? Math.round(joshiPay / uriTotal * 10000) / 100 : null,
     pax: pos.bills.reduce(function (s, b) { return s + b.pax; }, 0),
-    groups: pos.bills.length
+    groups: pos.bills.length,
+    /* 🙈 共同経営者ビューで落としている（落とせる）伝票の件数と金額。
+       ⚠️filter:true のときは上の売上計から**既に引かれている**＝足し戻さないこと。 */
+    hiddenN: pos.hiddenN || 0, hiddenTotal: pos.hiddenTotal || 0
   };
 }
 
 /* 空の1日（材料が無い日でも行を消さない＝カレンダーとして成立させる） */
 function salesEmptyParts_() {
-  return { pos: { cash: 0, card: 0, credit: 0, total: 0, bills: [] },
+  return { pos: { cash: 0, card: 0, credit: 0, total: 0, bills: [], hiddenN: 0, hiddenTotal: 0 },
            nip: { nokori: 0, hibaraiCast: 0, hibaraiStaff: 0, bonus: 0, jikan: 0, back: 0, rows: [] },
            cash: { inTotal: 0, outTotal: 0, inRows: [], outRows: [] } };
 }
@@ -193,16 +253,21 @@ function salesEmptyParts_() {
 --------------------------------------------------------------------------- */
 function adminSalesMonthly(userId, ym) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  /* ⭐コンソールは今までどおり**全部の伝票を数える**。除外は印を付けるだけ（filter:false）
+     ＝共同経営者ビューを作っても管理コンソールの数字は1円も動かない。 */
+  return salesMonthly_(ym, { map: salesHiddenMap_(), filter: false });
+}
+function salesMonthly_(ym, hide) {
   const month = /^\d{4}-\d{2}$/.test(String(ym || '')) ? String(ym) : String(bizDateStr_()).slice(0, 7);
   const days = salesMonthDays_(month);
   if (!days.length) return { ok: false, error: '年月の形式が不正です' };
   const t0 = Date.now();
-  const pos = salesPosByDay_(days), nip = salesNippoByDay_(days), cash = salesCashLogByDay_(days);
+  const pos = salesPosByDay_(days, hide), nip = salesNippoByDay_(days), cash = salesCashLogByDay_(days);
   const e = salesEmptyParts_();
   const rows = days.map(function (d) { return salesDayRow_(d, pos[d] || e.pos, nip[d] || e.nip, cash[d] || e.cash); });
   const sum = { cash: 0, card: 0, credit: 0, total: 0, tantoSub: 0, dohanSub: 0, nokori: 0,
                 hibaraiStaff: 0, hibaraiCast: 0, bonus: 0, bakkin: 0, nyukin: 0, syukkin: 0,
-                keihi: 0, arari: 0, joshiPay: 0, pax: 0, groups: 0 };
+                keihi: 0, arari: 0, joshiPay: 0, pax: 0, groups: 0, hiddenN: 0, hiddenTotal: 0 };
   rows.forEach(function (r) { Object.keys(sum).forEach(function (k) { sum[k] += Number(r[k]) || 0; }); });
   sum.kyuritsu = sum.total > 0 ? Math.round(sum.joshiPay / sum.total * 10000) / 100 : null;
   /* 営業日＝売上か経費が動いた日（TRUSTの「平均（○営業日）」と同じ数え方に寄せる） */
@@ -216,17 +281,21 @@ function adminSalesMonthly(userId, ym) {
 --------------------------------------------------------------------------- */
 function adminSalesDaily(userId, dateKey) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
+  return salesDaily_(dateKey, { map: salesHiddenMap_(), filter: false });
+}
+function salesDaily_(dateKey, hide) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || '')) ? String(dateKey) : bizDateStr_();
   const month = d.slice(0, 7);
   const days = salesMonthDays_(month).filter(function (x) { return x <= d; });
   const t0 = Date.now();
-  const pos = salesPosByDay_(days), nip = salesNippoByDay_(days), cash = salesCashLogByDay_(days);
+  const pos = salesPosByDay_(days, hide), nip = salesNippoByDay_(days), cash = salesCashLogByDay_(days);
   const e = salesEmptyParts_();
   const rows = days.map(function (x) { return salesDayRow_(x, pos[x] || e.pos, nip[x] || e.nip, cash[x] || e.cash); });
   const today = rows[rows.length - 1] || salesDayRow_(d, e.pos, e.nip, e.cash);
   const cum = {};
   ['cash', 'card', 'credit', 'total', 'tantoSub', 'dohanSub', 'nokori', 'hibaraiStaff',
-   'hibaraiCast', 'bonus', 'nyukin', 'syukkin', 'keihi', 'arari', 'joshiPay', 'pax', 'groups']
+   'hibaraiCast', 'bonus', 'nyukin', 'syukkin', 'keihi', 'arari', 'joshiPay', 'pax', 'groups',
+   'hiddenN', 'hiddenTotal']
     .forEach(function (k) { cum[k] = rows.reduce(function (s, r) { return s + (Number(r[k]) || 0); }, 0); });
   const bizDays = rows.filter(function (r) { return r.total > 0 || r.keihi > 0; }).length;
   return { ok: true, date: d, month: month, bizDays: bizDays,

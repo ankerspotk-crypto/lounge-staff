@@ -16,6 +16,7 @@ const { makeGas } = require('../../pos/lib/gasstub');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
 const SALES = path.join(ROOT, 'sales.gs');
+const PARTNER = path.join(ROOT, 'partner.gs');
 
 const TABS = {
   POS_CLOSE_TAB: 'POS_会計',
@@ -64,6 +65,12 @@ function load(opts) {
   const sandbox = {
     console, JSON, Math, String, Number, Array, Object, Date, isNaN, RegExp,
     SpreadsheetApp: gas.SpreadsheetApp, Utilities: gas.Utilities,
+    /* 📊共同経営者ビュー(partner.gs)を同じスコープに乗せるとき用。
+       ⚠️GASは全ファイルが1スコープ＝実物と同じく sales.gs の関数がそのまま見える形で走らせる */
+    PropertiesService: gas.PropertiesService, CacheService: gas.CacheService,
+    prop: k => gas.PropertiesService.getScriptProperties().getProperty(k),
+    setProp: (k, v) => gas.PropertiesService.getScriptProperties().setProperty(k, v),
+    nowStamp_: () => '2026-09-02 10:00:00',
     TZ: 'Asia/Tokyo',
     getOrOpenSS_: () => ss,
     /* 権限は通す（権限そのものは Code.gs の isAdmin_ の責任＝ここでは見ない） */
@@ -78,10 +85,12 @@ function load(opts) {
     NIPPO_ROW_TAB: TABS.NIPPO_ROW_TAB, NIPPO_CASH_TAB: TABS.NIPPO_CASH_TAB,
     CASH_CHECK_TAB: TABS.CASH_CHECK_TAB
   };
+  sandbox.globalThis = sandbox;          // partner.gs の partnerApi_ が globalThis[fn] で引く
   vm.createContext(sandbox);
   vm.runInContext(src, sandbox, { filename: 'sales.gs(実物)' });
+  if (opts.withPartner) vm.runInContext(fs.readFileSync(PARTNER, 'utf8'), sandbox, { filename: 'partner.gs(実物)' });
 
-  return { fn: sandbox, ss, reads, HEAD: { POS_CLOSE_HEAD_, NIPPO_ROW_HEAD_, NIPPO_CASH_HEAD_ }, today };
+  return { fn: sandbox, ss, reads, gas, HEAD: { POS_CLOSE_HEAD_, NIPPO_ROW_HEAD_, NIPPO_CASH_HEAD_ }, today };
 }
 
 /* --- 偽データの種まき（見出し名で書く＝列位置のベタ書きをテストに持ち込まない） --- */
@@ -108,4 +117,16 @@ function nippoCash(A, list, tab) {
   list.forEach(o => sh.appendRow(put(A.HEAD.NIPPO_CASH_HEAD_, o)));
 }
 
-module.exports = { load, posClose, nippoRows, nippoCash, TABS };
+const SALES_HIDE_HEAD_ = ['営業日', '伝票行', '状態', '更新者', '更新時刻', 'メモ'];
+/* 🙈 収支公開除外（append-only＝同じ伝票の最後の行が勝つ）の種まき */
+function hideRows(A, list) {
+  const sh = sheet(A, '収支公開除外', SALES_HIDE_HEAD_);
+  list.forEach(o => sh.appendRow(put(SALES_HIDE_HEAD_, o)));
+}
+const PARTNER_HEAD_ = ['ID', '名前', '状態', '肩書', '作成日', '最終ログイン', 'メモ'];
+function partnerRows(A, list) {
+  const sh = sheet(A, '共同経営者', PARTNER_HEAD_);
+  list.forEach(o => sh.appendRow(put(PARTNER_HEAD_, o)));
+}
+
+module.exports = { load, posClose, nippoRows, nippoCash, hideRows, partnerRows, TABS };

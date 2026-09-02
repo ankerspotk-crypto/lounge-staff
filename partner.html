@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>ラウンジ家康 ── 経営レポート</title>
+<!--
+  ============================================================================
+  📊 共同経営者ビュー（partner.html）＝軍師・ポータル・管理コンソールとは別の第4の入口。
+  ----------------------------------------------------------------------------
+  ボス依頼 2026-09-02。見せるのは **売上と日報だけ**。
+  ⭐この画面は数字を1つも作らない＝backend（partner.gs → sales.gs）が返した物を並べるだけ。
+    ⛔ここで合計を足し直さないこと。足し直した瞬間に「コンソールの粗利」と食い違う。
+  ⭐**見せない物はサーバで落としてある**（partnerStrip_）＝この画面のCSSで隠す作りにしない。
+    通信を覗かれても見えない、が成立している状態を壊さない。
+  ⚠️BUILD を必ず更新すること（iPad/PCのキャッシュ確認の唯一の手がかり）。
+  ============================================================================
+-->
+<style>
+:root{
+  --bg:#0b0c10; --bg2:#12141b; --card:#171a23; --line:#252a36;
+  --ink:#e9edf6; --dim:#8b96ad; --gold:#c8a24a; --gold2:#e6c877;
+  --up:#4ec98a; --dn:#e8656f;
+  --sh:0 8px 28px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  /* ⚠️iOSは 100vh でヘッダーが消える＝dvh を併記する（reference_ios_100vh_header_trap） */
+  min-height:100vh;min-height:100dvh;overscroll-behavior:none;
+  font-size:15px;line-height:1.65;-webkit-text-size-adjust:100%}
+#app{padding-bottom:40px}
+a{color:var(--gold2)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 14px}
+
+/* ── ヘッダー ───────────────────────────────────────────── */
+header{position:sticky;top:0;z-index:40;background:rgba(11,12,16,.94);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.hd{display:flex;align-items:center;gap:12px;min-height:54px;
+  /* ⚠️`padding:11px 0` と書くと .wrap の左右14pxを打ち消して店名とボタンが画面端で切れる。
+     同じ要素に .wrap と .hd が同時に付いているので、縦だけを指定すること。 */
+  padding-top:11px;padding-bottom:11px}
+.brand{display:flex;align-items:baseline;gap:9px;min-width:0}
+.brand b{font-size:16px;letter-spacing:.06em;white-space:nowrap;
+  background:linear-gradient(180deg,var(--gold2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand span{font-size:11px;color:var(--dim);white-space:nowrap}
+.hd .sp{flex:1}
+.who{font-size:12px;color:var(--dim);text-align:right;line-height:1.35;white-space:nowrap}
+.who b{display:block;color:var(--ink);font-size:13px}
+.btn{border:1px solid var(--line);background:var(--bg2);color:var(--ink);
+  border-radius:9px;padding:7px 13px;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.btn:hover{border-color:var(--gold)}
+.btn.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#241c07;border-color:transparent;font-weight:700}
+.btn:disabled{opacity:.45;cursor:default}
+
+/* ── ログイン ───────────────────────────────────────────── */
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px}
+.lg{width:100%;max-width:360px;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:30px 24px;box-shadow:var(--sh)}
+.lg .mark{text-align:center;font-size:30px;margin-bottom:6px}
+.lg h1{font-size:17px;margin:0 0 3px;text-align:center;letter-spacing:.05em}
+.lg p.sub{font-size:11.5px;color:var(--dim);text-align:center;margin:0 0 22px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:11.5px;color:var(--dim);margin-bottom:5px;letter-spacing:.04em}
+.fld select,.fld input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--bg2);color:var(--ink);font-size:16px;font-family:inherit}
+.fld input{letter-spacing:.4em;text-align:center}
+.fld select:focus,.fld input:focus{outline:none;border-color:var(--gold)}
+#lgMsg{min-height:19px;font-size:12.5px;color:var(--dn);text-align:center;margin:2px 0 10px}
+
+/* ── タブ ───────────────────────────────────────────────── */
+.tabs{display:flex;gap:6px;padding:12px 0 0;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:999px;
+  padding:6px 15px;font-size:13px;cursor:pointer;font-family:inherit}
+.tab.on{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#241c07;border-color:transparent;font-weight:700}
+
+/* ── カード・数字 ───────────────────────────────────────── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:14px 0;overflow:hidden}
+.card>h2{font-size:13px;margin:0;padding:12px 15px;border-bottom:1px solid var(--line);
+  letter-spacing:.06em;color:var(--gold2);font-weight:700;display:flex;align-items:center;gap:8px}
+.card>h2 small{color:var(--dim);font-weight:400;letter-spacing:0;font-size:11px}
+.pad{padding:14px 15px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:1px;background:var(--line)}
+.kpi{background:var(--card);padding:13px 15px}
+.kpi .k{font-size:11px;color:var(--dim);letter-spacing:.05em}
+.kpi .v{font-size:23px;font-weight:700;letter-spacing:-.01em;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .v.up{color:var(--up)} .kpi .v.dn{color:var(--dn)} .kpi .v.gold{color:var(--gold2)}
+.kpi .s{font-size:11px;color:var(--dim);margin-top:1px}
+
+/* ── 表（⚠️横スクロールは表の中だけ。ページ本体は絶対に流さない） ── */
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+th,td{padding:8px 11px;border-bottom:1px solid var(--line);text-align:right}
+th{background:var(--bg2);color:var(--dim);font-weight:600;font-size:11px;letter-spacing:.04em;
+  position:sticky;top:0;z-index:2}
+th.l,td.l{text-align:left}
+tbody tr:hover{background:#1b1f2a}
+td.day{cursor:pointer;color:var(--gold2);font-weight:600}
+td.day:hover{text-decoration:underline}
+/* ⭐1列目（日付・名前）を貼り付ける。⚠️行の背景は透明なので**セルに背景を敷く**（敷かないと下の文字が透ける） */
+.tw th:first-child,.tw td:first-child{position:sticky;left:0;z-index:1;background:var(--card)}
+.tw thead th:first-child{z-index:3;background:var(--bg2)}
+tbody tr:hover td:first-child{background:#1b1f2a}
+/* ⚠️見出し行の position:sticky は「縦に流れる箱」の中でしか効かない＝月次だけ高さを与える */
+.tw.tall{max-height:min(70vh,640px)}
+tr.sum td{background:#1c202b;font-weight:700;border-top:2px solid var(--gold);border-bottom:none}
+tr.sum td:first-child{background:#1c202b}
+tr.zero td{color:#5b6478}
+.neg{color:var(--dn)} .pos{color:var(--up)}
+.mut{color:var(--dim)}
+
+/* ── その他 ─────────────────────────────────────────────── */
+.nav{display:flex;align-items:center;gap:10px;padding:12px 0 0}
+.nav .t{font-size:17px;font-weight:700;letter-spacing:.04em;flex:1}
+.empty{padding:34px 16px;text-align:center;color:var(--dim);font-size:13px}
+.err{margin:14px 0;padding:12px 14px;border:1px solid #5a2b30;background:#2a1418;
+  border-radius:11px;color:#ffb3b8;font-size:13px}
+.foot{padding:26px 0 10px;text-align:center;color:#4d5568;font-size:10.5px;letter-spacing:.05em}
+.spin{display:inline-block;width:15px;height:15px;border:2px solid var(--line);
+  border-top-color:var(--gold);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hide{display:none!important}
+@media(max-width:600px){
+  .kpi .v{font-size:19px}
+  th,td{padding:7px 9px;font-size:12px}
+  .brand span{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ════ ログイン ════════════════════════════════════════════ -->
+<div id="login">
+  <form class="lg" id="lgForm" autocomplete="off">
+    <div class="mark">🏯</div>
+    <h1>ラウンジ家康</h1>
+    <p class="sub">経営レポート</p>
+    <div class="fld">
+      <label for="lgName">お名前</label>
+      <select id="lgName"><option value="">読み込み中…</option></select>
+    </div>
+    <div class="fld">
+      <label for="lgPin">PIN</label>
+      <input id="lgPin" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••">
+    </div>
+    <div id="lgMsg"></div>
+    <button class="btn gold" id="lgBtn" style="width:100%;padding:11px" type="submit">ログイン</button>
+  </form>
+</div>
+
+<!-- ════ 本体 ════════════════════════════════════════════════ -->
+<div id="app" class="hide">
+  <header><div class="wrap hd">
+    <div class="brand"><b>ラウンジ家康</b><span>経営レポート</span></div>
+    <div class="sp"></div>
+    <div class="who"><b id="meName">—</b><span id="meTitle"></span></div>
+    <button class="btn" id="btnOut" type="button">ログアウト</button>
+  </div></header>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab on" data-v="month" type="button">💹 月次</button>
+      <button class="tab" data-v="day" type="button">📅 日次</button>
+      <button class="tab hide" id="tabNippo" data-v="nippo" type="button">📋 日報</button>
+    </div>
+    <div id="err"></div>
+    <div id="view"></div>
+    <div class="foot">ラウンジ家康 経営レポート ── BUILD 2026-09-02a</div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   通信層。⛔軍師の KIOSK_KEY は使わない＝この画面専用の入口(action:'partner')。
+   認証はログインで受け取ったトークン1本。URLには絶対に載せない（POSTのbodyだけ）。
+============================================================================ */
+var GAS_URL='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec';
+var TIMEOUT_MS=45000;                 /* ⚠️月次は31日ぶんのシートを畳む＝GASの床1.9秒＋αを見込む */
+var TK_KEY='ieyasu_partner_token';
+var TOKEN='', ME={}, SHOW={}, TODAY='', CURM='', CURD='', BUSY=false;
+
+function api(fn,args){
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var to=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},TIMEOUT_MS):null;
+  var opt={method:'POST',body:JSON.stringify({action:'partner',fn:fn,args:args||[]})};
+  if(ctrl) opt.signal=ctrl.signal;
+  return fetch(GAS_URL,opt).then(function(r){
+    if(to){clearTimeout(to);to=null;}
+    if(!r.ok) throw new Error('通信エラー（HTTP '+r.status+'）');
+    return r.text();
+  },function(e){
+    if(to){clearTimeout(to);to=null;}
+    throw new Error(e&&e.name==='AbortError'?'応答がありません（時間切れ）':'ネットワークに繋がりません');
+  }).then(function(txt){
+    var j; try{ j=JSON.parse(txt); }catch(e){ throw new Error('サーバーの応答を読めませんでした'); }
+    if(j&&j.__ok===false) throw new Error(j.error||'サーバーエラー');
+    var d=j?j.data:null;
+    /* ⭐トークン切れは1箇所で処理する＝各画面が個別にログイン画面を出さない */
+    if(d&&d.needLogin){ logout(true); throw new Error('__relogin'); }
+    return d;
+  });
+}
+
+/* ── 表示の小道具（⭐数字の作り直しはしない。整形だけ）───────── */
+function yen(n){ if(n===null||n===undefined||n==='') return '--';
+  var v=Number(n)||0; return (v<0?'-¥':'¥')+Math.abs(v).toLocaleString('ja-JP'); }
+function num(n){ return (n===null||n===undefined||n==='')?'--':(Number(n)||0).toLocaleString('ja-JP'); }
+function pct(n){ return (n===null||n===undefined)?'--':(Number(n).toFixed(2)+'%'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+var WD=['日','月','火','水','木','金','土'];
+function md(d){ var p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); }
+function wd(d){ var p=String(d).split('-'); return WD[new Date(+p[0],+p[1]-1,+p[2]).getDay()]; }
+function jp(d){ var p=String(d).split('-'); return (+p[1])+'月'+(+p[2])+'日('+wd(d)+')'; }
+function ymAdd(ym,n){ var p=String(ym).split('-'),d=new Date(+p[0],+p[1]-1+n,1);
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
+function sgn(v){ return (Number(v)||0)<0?'neg':((Number(v)||0)>0?'pos':''); }
+function $(id){ return document.getElementById(id); }
+function setErr(m){ $('err').innerHTML = m ? '<div class="err">⚠️ '+esc(m)+'</div>' : ''; }
+function loading(msg){ $('view').innerHTML='<div class="empty"><span class="spin"></span> '+esc(msg||'読み込み中…')+'</div>'; }
+
+/* ============================================================================
+   ログイン
+============================================================================ */
+function loadNames(){
+  api('partnerLoginNames',[]).then(function(list){
+    var s=$('lgName');
+    if(!list||!list.length){ s.innerHTML='<option value="">アカウントがありません</option>'; return; }
+    s.innerHTML='<option value="">選択してください</option>'+
+      list.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('');
+    var last=null; try{ last=localStorage.getItem('ieyasu_partner_name'); }catch(e){}
+    if(last&&list.indexOf(last)>=0) s.value=last;
+  }).catch(function(e){
+    if(e.message==='__relogin') return;
+    $('lgMsg').textContent=e.message;
+  });
+}
+$('lgForm').addEventListener('submit',function(ev){
+  ev.preventDefault();
+  var nm=$('lgName').value, pin=$('lgPin').value.trim();
+  if(!nm){ $('lgMsg').textContent='お名前を選んでください'; return; }
+  if(!pin){ $('lgMsg').textContent='PINを入れてください'; return; }
+  $('lgBtn').disabled=true; $('lgMsg').innerHTML='<span class="spin"></span>';
+  api('partnerLogin',[nm,pin]).then(function(r){
+    $('lgBtn').disabled=false;
+    if(!r||!r.ok){ $('lgMsg').textContent=(r&&r.error)||'ログインできませんでした'; return; }
+    TOKEN=r.token;
+    try{ localStorage.setItem(TK_KEY,TOKEN); localStorage.setItem('ieyasu_partner_name',nm); }catch(e){}
+    $('lgPin').value=''; $('lgMsg').textContent='';
+    boot();
+  }).catch(function(e){
+    $('lgBtn').disabled=false;
+    $('lgMsg').textContent = e.message==='__relogin' ? 'もう一度ログインしてください' : e.message;
+  });
+});
+function logout(silent){
+  var tk=TOKEN; TOKEN='';
+  try{ localStorage.removeItem(TK_KEY); }catch(e){}
+  if(tk&&!silent){ api('partnerLogout',[tk]).catch(function(){}); }
+  $('app').classList.add('hide'); $('login').classList.remove('hide');
+  $('lgPin').value=''; $('lgMsg').textContent = silent?'ログインの有効期限が切れました':'';
+  loadNames();
+}
+$('btnOut').addEventListener('click',function(){ logout(false); });
+
+/* ============================================================================
+   起動
+============================================================================ */
+function boot(){
+  loading('準備しています…');
+  $('login').classList.add('hide'); $('app').classList.remove('hide');
+  api('partnerBootstrap',[TOKEN]).then(function(r){
+    if(!r||!r.ok) throw new Error((r&&r.error)||'読み込めませんでした');
+    ME=r; SHOW=r.show||{}; TODAY=r.today;
+    $('meName').textContent=r.name||''; $('meTitle').textContent=r.title||'';
+    if(SHOW.nippo) $('tabNippo').classList.remove('hide');
+    CURM=String(TODAY).slice(0,7); CURD=TODAY;
+    go('month');
+  }).catch(function(e){ if(e.message!=='__relogin'){ $('view').innerHTML=''; setErr(e.message); } });
+}
+var VIEW='month';
+Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(b){
+  b.addEventListener('click',function(){ go(b.getAttribute('data-v')); });
+});
+function go(v){
+  VIEW=v;
+  Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(b){
+    b.classList.toggle('on', b.getAttribute('data-v')===v); });
+  setErr('');
+  if(v==='month') renderMonth(); else loadDay();
+}
+
+/* ============================================================================
+   💹 月次
+============================================================================ */
+var MCACHE={};
+function renderMonth(){
+  if(MCACHE[CURM]) return paintMonth(MCACHE[CURM]);
+  loading(CURM+' を集計しています…');
+  api('partnerMonthly',[TOKEN,CURM]).then(function(r){
+    if(!r||!r.ok) throw new Error((r&&r.error)||'月次を読めませんでした');
+    MCACHE[CURM]=r; if(VIEW==='month') paintMonth(r);
+  }).catch(function(e){ if(e.message!=='__relogin'){ $('view').innerHTML=''; setErr(e.message); } });
+}
+function paintMonth(r){
+  var s=r.sum, p=String(r.month).split('-');
+  var h='<div class="nav">'
+    + '<button class="btn" onclick="mv(-1)" type="button">‹ 前月</button>'
+    + '<div class="t">'+(+p[0])+'年'+(+p[1])+'月</div>'
+    + '<button class="btn" onclick="mv(1)" type="button">翌月 ›</button></div>';
+
+  h+='<div class="card"><div class="kpis">'
+    + kpi('総売上',yen(s.total),'gold', r.bizDays+'営業日')
+    + kpi('入金',yen(s.nyukin),'')
+    + kpi('経費計',yen(s.keihi),'')
+    + kpi('粗利',yen(s.arari),sgn(s.arari)==='neg'?'dn':'up')
+    + (SHOW.kyuritsu?kpi('給率',pct(s.kyuritsu),''):'')
+    + '</div></div>';
+
+  h+='<div class="card"><h2>💹 日別の収支 <small>日付を押すとその日の詳細</small></h2><div class="tw tall"><table>'
+    + '<thead><tr>'
+    + '<th class="l">日付</th><th>現金</th><th>カード</th><th>売掛</th><th>売上計</th>'
+    + '<th>担当小計</th><th>同伴小計</th>'
+    + '<th>残り支給額</th>'+(SHOW.kyuritsu?'<th>給率</th>':'')
+    + '<th>スタッフ日払</th><th>キャスト日払</th><th>ボーナス</th>'
+    + '<th>入金</th><th>出金</th><th>経費計</th><th>粗利</th>'
+    + '<th>組</th><th>人数</th></tr></thead><tbody>';
+  h+='<tr class="sum"><td class="l">合計</td>'
+    + td(s.cash)+td(s.card)+td(s.credit)+td(s.total)
+    + td(s.tantoSub)+td(s.dohanSub)+td(s.nokori)
+    + (SHOW.kyuritsu?'<td>'+pct(s.kyuritsu)+'</td>':'')
+    + td(s.hibaraiStaff)+td(s.hibaraiCast)+td(s.bonus)
+    + td(s.nyukin)+td(s.syukkin)+td(s.keihi)
+    + '<td class="'+sgn(s.arari)+'">'+yen(s.arari)+'</td>'
+    + '<td>'+num(s.groups)+'</td><td>'+num(s.pax)+'</td></tr>';
+  (r.rows||[]).forEach(function(x){
+    var dead = !x.total && !x.keihi;
+    h+='<tr class="'+(dead?'zero':'')+'">'
+      + '<td class="l day" onclick="openDay(\''+x.date+'\')">'+md(x.date)+' <span class="mut">'+wd(x.date)+'</span></td>'
+      + td(x.cash)+td(x.card)+td(x.credit)+td(x.total)
+      + td(x.tantoSub)+td(x.dohanSub)+td(x.nokori)
+      + (SHOW.kyuritsu?'<td>'+pct(x.kyuritsu)+'</td>':'')
+      + td(x.hibaraiStaff)+td(x.hibaraiCast)+td(x.bonus)
+      + td(x.nyukin)+td(x.syukkin)+td(x.keihi)
+      + '<td class="'+sgn(x.arari)+'">'+(dead?'--':yen(x.arari))+'</td>'
+      + '<td>'+(x.groups||'--')+'</td><td>'+(x.pax||'--')+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  $('view').innerHTML=h;
+}
+function td(v){ return '<td>'+(Number(v)?yen(v):'<span class="mut">--</span>')+'</td>'; }
+function kpi(k,v,cls,sub){ return '<div class="kpi"><div class="k">'+esc(k)+'</div>'
+  + '<div class="v '+(cls||'')+'">'+v+'</div>'+(sub?'<div class="s">'+esc(sub)+'</div>':'')+'</div>'; }
+function mv(n){ CURM=ymAdd(CURM,n); renderMonth(); }
+function openDay(d){ CURD=d; go('day'); }
+
+/* ============================================================================
+   📅 日次 ／ 📋 日報（材料は同じ partnerDaily。タブで見せ方を変えるだけ）
+============================================================================ */
+var DCACHE={};
+function loadDay(){
+  if(DCACHE[CURD]) return paintDay(DCACHE[CURD]);
+  loading(jp(CURD)+' を集計しています…');
+  api('partnerDaily',[TOKEN,CURD]).then(function(r){
+    if(!r||!r.ok) throw new Error((r&&r.error)||'日次を読めませんでした');
+    DCACHE[CURD]=r; paintDay(r);
+  }).catch(function(e){ if(e.message!=='__relogin'){ $('view').innerHTML=''; setErr(e.message); } });
+}
+function dv(n){
+  var p=String(CURD).split('-'), d=new Date(+p[0],+p[1]-1,+p[2]+n);
+  CURD=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  loadDay();
+}
+function paintDay(r){
+  var h='<div class="nav">'
+    + '<button class="btn" onclick="dv(-1)" type="button">‹ 前日</button>'
+    + '<div class="t">'+jp(r.date)+'</div>'
+    + '<button class="btn" onclick="dv(1)" type="button">翌日 ›</button></div>';
+  h += (VIEW==='nippo') ? dayNippo(r) : daySales(r);
+  $('view').innerHTML=h;
+}
+
+function daySales(r){
+  var t=r.today, c=r.cum, n=r.bizDays||0;
+  var avg=function(k){ return n?Math.round(c[k]/n):0; };
+  var h='<div class="card"><div class="kpis">'
+    + kpi('総売上',yen(t.total),'gold','当月累計 '+yen(c.total))
+    + kpi('粗利',yen(t.arari),sgn(t.arari)==='neg'?'dn':'up','当月累計 '+yen(c.arari))
+    + kpi('経費計',yen(t.keihi),'','当月累計 '+yen(c.keihi))
+    + kpi('客組・人数',(t.groups||0)+'組 '+(t.pax||0)+'名','',
+          '客単価 '+(t.pax?yen(Math.round(t.total/t.pax)):'--'))
+    + '</div></div>';
+
+  /* 当日／累計／平均（TRUSTの日次と同じ3列） */
+  h+='<div class="card"><h2>📊 当日・累計・平均 <small>平均は'+n+'営業日</small></h2><div class="tw"><table>'
+    + '<thead><tr><th class="l">項目</th><th>当日</th><th>当月累計</th><th>1日平均</th></tr></thead><tbody>';
+  [['総売上','total'],['現金売上','cash'],['カード売上','card'],['売掛','credit'],
+   ['担当小計','tantoSub'],['同伴小計','dohanSub'],
+   ['キャストの給料','joshiPay'],['残り支給額','nokori'],
+   ['キャスト日払','hibaraiCast'],['スタッフ日払','hibaraiStaff'],
+   ['入金','nyukin'],['出金','syukkin'],['経費計','keihi'],['粗利','arari']
+  ].forEach(function(p){
+    h+='<tr><td class="l">'+p[0]+'</td>'+td(t[p[1]])+td(c[p[1]])+td(avg(p[1]))+'</tr>';
+  });
+  if(SHOW.kyuritsu) h+='<tr><td class="l">給率</td><td>'+pct(t.kyuritsu)+'</td><td>'+pct(c.kyuritsu)+'</td><td class="mut">--</td></tr>';
+  h+='</tbody></table></div></div>';
+
+  if(SHOW.cashCheck && r.cashCheck){
+    var k=r.cashCheck;
+    h+='<div class="card"><h2>💰 現金の締め</h2><div class="kpis">'
+      + kpi('開始金',yen(k.start),'') + kpi('過不足',yen(k.diff),sgn(k.diff)==='neg'?'dn':'')
+      + kpi('預入',yen(k.deposit),'') + kpi('翌日釣銭',yen(k.end),'')
+      + '</div></div>';
+  }
+
+  h+=cashList('📤 出金明細',r.cashOut,'支払金額');
+  h+=cashList('📥 入金明細',r.cashIn,'収入金額');
+
+  if(SHOW.bills){
+    h+='<div class="card"><h2>🧾 伝票一覧 <small>'+((r.bills||[]).length)+'枚</small></h2>';
+    if(!(r.bills||[]).length) h+='<div class="empty">この日の伝票はありません</div>';
+    else{
+      h+='<div class="tw"><table><thead><tr>'
+        + '<th class="l">会計</th><th class="l">卓</th><th class="l">お客様</th><th>人数</th>'
+        + '<th class="l">担当</th><th>セット</th><th>同伴</th><th>注文</th>'
+        + '<th>現金</th><th>カード</th><th>売掛</th><th>合計</th></tr></thead><tbody>';
+      (r.bills||[]).forEach(function(b){
+        h+='<tr><td class="l">'+esc(b.ts)+'</td><td class="l">'+esc(b.floor)+' '+esc(b.table)+'</td>'
+          + '<td class="l">'+esc(b.cust||'—')+'</td><td>'+(b.pax||'--')+'</td>'
+          + '<td class="l">'+esc(b.tantou||'—')+'</td>'
+          + td(b.setSum)+td(b.dohan)+td(b.ord)
+          + td(b.cash)+td(b.card)+td(b.credit)
+          + '<td><b>'+yen(b.total)+'</b></td></tr>';
+      });
+      h+='<tr class="sum"><td class="l" colspan="8">計</td>'
+        + td(r.today.cash)+td(r.today.card)+td(r.today.credit)+'<td>'+yen(r.today.total)+'</td></tr>';
+      h+='</tbody></table></div>';
+    }
+    h+='</div>';
+  }
+  return h;
+}
+function cashList(title,rows,amtLabel){
+  rows=rows||[];
+  var sum=rows.reduce(function(s,x){ return s+(Number(x.amount)||0); },0);
+  var h='<div class="card"><h2>'+title+' <small>'+rows.length+'件</small></h2>';
+  if(!rows.length) return h+'<div class="empty">ありません</div></div>';
+  h+='<div class="tw"><table><thead><tr><th class="l">摘要</th><th>'+amtLabel+'</th><th class="l">備考</th></tr></thead><tbody>';
+  rows.forEach(function(x){
+    h+='<tr><td class="l">'+esc(x.label||'—')+'</td>'+td(x.amount)+'<td class="l mut">'+esc(x.memo||'')+'</td></tr>';
+  });
+  h+='<tr class="sum"><td class="l">合計</td>'+td(sum)+'<td></td></tr></tbody></table></div></div>';
+  return h;
+}
+
+/* 📋 日報＝1人1行（管理コンソール／軍師と同じ並びに揃える。列だけ絞る） */
+function dayNippo(r){
+  var rows=r.casts||[];
+  if(!rows.length) return '<div class="card"><div class="empty">この日の日報はまだありません</div></div>';
+  var money=SHOW.nippoAmount!==false;
+  var cast=rows.filter(function(x){ return x.kubun!=='黒服'; });
+  var staff=rows.filter(function(x){ return x.kubun==='黒服'; });
+  var h='';
+  if(money){
+    var sumJ=rows.reduce(function(s,x){return s+(Number(x.jikan)||0);},0);
+    var sumB=rows.reduce(function(s,x){return s+(Number(x.back)||0);},0);
+    var sumN=rows.reduce(function(s,x){return s+(Number(x.nokori)||0);},0);
+    var sumH=rows.reduce(function(s,x){return s+(Number(x.hibarai)||0);},0);
+    h+='<div class="card"><div class="kpis">'
+      + kpi('出勤',rows.length+'名','','キャスト'+cast.length+' ／ 黒服'+staff.length)
+      + kpi('時間報酬',yen(sumJ),'') + kpi('バック計',yen(sumB),'')
+      + kpi('日払い',yen(sumH),'') + kpi('残り支給額',yen(sumN),'gold')
+      + '</div></div>';
+  }
+  h+=nippoTable('👗 キャスト',cast,money)+nippoTable('🤵 黒服',staff,money);
+  return h;
+}
+function nippoTable(title,rows,money){
+  var h='<div class="card"><h2>'+title+' <small>'+rows.length+'名</small></h2>';
+  if(!rows.length) return h+'<div class="empty">この区分の出勤はありません</div></div>';
+  h+='<div class="tw"><table><thead><tr>'
+    + '<th class="l">名前</th><th class="l">📱打刻</th><th class="l">出勤扱い</th><th>労働</th>'
+    + (money?'<th>時給</th><th>時間報酬</th><th>バック</th><th>マイナス</th><th>ボーナス</th><th>支給計</th><th>日払い</th><th>残り支給額</th>':'')
+    + '</tr></thead><tbody>';
+  rows.forEach(function(x){
+    var wm=Number(x.workMin)||0;
+    h+='<tr><td class="l"><b>'+esc(x.name)+'</b></td>'
+      + '<td class="l mut">'+(x.punchIn||x.punchOut?esc(x.punchIn||'--')+' → '+esc(x.punchOut||'--'):'--')+'</td>'
+      + '<td class="l">'+esc(x.start||'--')+' → '+esc(x.end||'--')+'</td>'
+      + '<td>'+(wm?(Math.floor(wm/60)+':'+('0'+(wm%60)).slice(-2)):'--')+'</td>'
+      + (money?(td(x.wage)+td(x.jikan)+td(x.back)+td(x.minus)+td(x.bonus)+td(x.total)+td(x.hibarai)
+               +'<td><b>'+yen(x.nokori)+'</b></td>'):'')
+      + '</tr>';
+  });
+  if(money){
+    var S=function(k){ return rows.reduce(function(s,x){ return s+(Number(x[k])||0); },0); };
+    h+='<tr class="sum"><td class="l" colspan="4">計</td>'
+      + '<td></td>'+td(S('jikan'))+td(S('back'))+td(S('minus'))+td(S('bonus'))
+      + td(S('total'))+td(S('hibarai'))+'<td>'+yen(S('nokori'))+'</td></tr>';
+  }
+  return h+'</tbody></table></div></div>';
+}
+
+/* ── 起動 ─────────────────────────────────────────────── */
+try{ TOKEN=localStorage.getItem(TK_KEY)||''; }catch(e){ TOKEN=''; }
+if(TOKEN) boot(); else loadNames();
+</script>
+</body>
+</html>

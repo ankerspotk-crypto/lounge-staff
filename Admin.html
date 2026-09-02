@@ -3247,7 +3247,7 @@ var kyuHb=null;
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
 function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('hibarai','💴 日払い照合')+chip('nippo','📋 日報')+chip('sales','💹 収支')+chip('kotsu','🚕 交通費')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
+  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('hibarai','💴 日払い照合')+chip('nippo','📋 日報')+chip('sales','💹 収支')+chip('partner','📊 共同経営者')+chip('kotsu','🚕 交通費')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
 }
 function paySwitch(k){ paySub=k; renderPay(); }
 function renderPay(){
@@ -3260,6 +3260,7 @@ function renderPay(){
   if(paySub==='hibarai') return renderHibarai();
   if(paySub==='nippo')   return renderNippoAdmin();
   if(paySub==='sales')   return renderSalesAdmin();
+  if(paySub==='partner') return renderPartnerAdmin();
   if(paySub==='kotsu')   return renderKotsu();
   if(paySub==='bday')    return renderBday();
   renderPublish();
@@ -3475,6 +3476,8 @@ function slDrawMonth(){
     +'<button class="btn sm" onclick="slShiftMonth(1)">次の月 ▶</button>'
     +'<span class="chip">'+r.bizDays+'営業日</span>'
     +(r.ms?'<span class="chip" style="opacity:.7">⏱ '+(r.ms/1000).toFixed(1)+'秒</span>':'')
+    /* 🙈 共同経営者ビューで落としている伝票。⚠️**この表の数字には入ったまま**＝ここは全部見える */
+    +(r.sum.hiddenN?'<span class="chip" style="background:#4a2a10;border-color:#7a4a18" onclick="paySwitch(\'partner\')">🙈 共同経営者ビューで非表示 '+r.sum.hiddenN+'件 '+slYen(r.sum.hiddenTotal)+'</span>':'')
     +'</div>';
   var hint='<div class="hint" style="margin-bottom:10px">💹 <b>数字はすべて他の画面の実績</b>です（POS会計・日報・日報の入出金・閉店チェック）。ここでは入力しません。'
     +'<br><b>経費計</b>＝残り支給額＋スタッフ日払＋キャスト日払＋罰金＋出金（⚠️ボーナスは残り支給額に入っているので足しません）。'
@@ -3539,19 +3542,31 @@ function slDrawDay(){
         :'<tr><td class="d" colspan="3" style="text-align:center;opacity:.6">なし</td></tr>')
       +'</tbody></table></div>';
   };
-  var bills='<div style="font-weight:800;margin:6px 0 4px">伝票（'+r.bills.length+'枚）</div>'
-    +'<div class="sl-wrap" style="margin-bottom:14px"><table class="sl"><thead><tr>'
-    +'<th class="d">会計</th><th style="text-align:left">卓</th><th style="text-align:left">お客様</th><th>人数</th>'
+  /* 🙈 伝票1枚ずつ「共同経営者ビューに載せる/載せない」。⚠️**この画面の合計からは落とさない**
+     ＝コンソールは常に店の全部が見える。落ちるのは共同経営者ビューの側だけ（[[project_partner_view]]）。 */
+  var nHide=r.bills.filter(function(b){return b.hidden;}).length;
+  var bills='<div style="font-weight:800;margin:6px 0 4px">伝票（'+r.bills.length+'枚'
+    +(nHide?' ／ <span style="color:#e0a050">🙈 共同経営者ビューで非表示 '+nHide+'枚</span>':'')+'）</div>'
+    +'<div class="sl-wrap" style="margin-bottom:6px"><table class="sl"><thead><tr>'
+    +'<th>📊</th><th class="d">会計</th><th style="text-align:left">卓</th><th style="text-align:left">お客様</th><th>人数</th>'
     +'<th style="text-align:left">担当</th><th>セット</th><th>同伴</th><th>注文</th><th>現金</th><th>カード</th><th>売掛</th><th>合計</th></tr></thead><tbody>'
     +(r.bills.length?r.bills.map(function(b){
-        return '<tr><td class="d">'+esc(b.ts||'')+'</td><td style="text-align:left">'+esc((b.floor||'')+' '+(b.table||''))+'</td>'
+        var st=b.hidden?'opacity:.45':'';
+        return '<tr style="'+st+'"><td><span class="chip" style="cursor:pointer;'+(b.hidden?'background:#4a2a10;border-color:#7a4a18':'')+'"'
+          +' onclick="slHideBill(\''+esc(r.date)+'\',\''+esc(b.row)+'\','+(b.hidden?'false':'true')+')"'
+          +' title="'+(b.hidden?'共同経営者ビューに載せる':'共同経営者ビューから外す')+'">'+(b.hidden?'🙈':'👁')+'</span></td>'
+          +'<td class="d">'+esc(b.ts||'')+'</td><td style="text-align:left">'+esc((b.floor||'')+' '+(b.table||''))+'</td>'
           +'<td style="text-align:left">'+esc(b.cust||'')+'</td><td>'+b.pax+'</td>'
           +'<td style="text-align:left">'+esc(b.tantou||'--')+(b.uriban?' <span class="chip">売半</span>':'')+'</td>'
           +'<td>'+slYen(b.setSum,1)+'</td><td>'+slYen(b.dohan,1)+'</td><td>'+slYen(b.ord,1)+'</td>'
           +'<td>'+slYen(b.cash,1)+'</td><td>'+slYen(b.card,1)+'</td><td>'+slYen(b.credit,1)+'</td>'
           +'<td><b>'+slYen(b.total)+'</b></td></tr>';
-      }).join(''):'<tr><td class="d" colspan="12" style="text-align:center;opacity:.6">この日の会計はありません</td></tr>')
-    +'</tbody></table></div>';
+      }).join(''):'<tr><td class="d" colspan="13" style="text-align:center;opacity:.6">この日の会計はありません</td></tr>')
+    +'</tbody></table></div>'
+    +'<div class="hint" style="margin-bottom:14px">📊 <b>👁</b>を押すとその伝票を<b>共同経営者ビューから外します</b>（🙈）。'
+    +'外した伝票は向こうの<b>売上計・粗利・客組数・人数からも消えます</b>（隠すだけではありません）。'
+    +'<br>⚠️<b>この画面の数字は変わりません</b>＝コンソールは常に店の全部が見えます。'
+    +'<br>⚠️<b>経費は外れません</b>（ボス確定）＝売上だけ減るので、向こうの粗利はその分だけ下がります。</div>';
   var casts='<div style="font-weight:800;margin:6px 0 4px">キャスト・黒服（'+r.casts.length+'名）</div>'
     +'<div class="sl-wrap"><table class="sl"><thead><tr>'
     +'<th class="d">名前</th><th style="text-align:left">区分</th><th>📱打刻</th><th>出勤扱い</th><th>労働</th><th>時給</th>'
@@ -3572,6 +3587,127 @@ function slDrawDay(){
   setBody(paySubToggle('sales')+head+sum+cash
     +listTbl('出金明細',r.cashOut,'支払金額')+listTbl('入金明細',r.cashIn,'収入金額')
     +bills+casts+hint);
+}
+
+/* 🙈 伝票1枚の「共同経営者ビューに載せる/載せない」を切り替える。
+   ⚠️台帳は append-only ＝押した記録（誰が・いつ・なぜ）が残る。取り消しても行は消えない。 */
+function slHideBill(d,row,to){
+  if(to){
+    var memo=prompt('この伝票を共同経営者ビューから外します。\n'
+      +'（向こうの売上計・粗利・客組数からも消えます。経費は残ります）\n\n理由（任意・記録に残ります）','');
+    if(memo===null) return;
+    gsr('adminSetBillHidden',USER_ID,d,row,true,memo).then(function(r){
+      if(!res(r,'共同経営者ビューから外しました'))return; slOpenDay(d);
+    }).catch(function(){ toast('通信エラー',true); });
+  }else{
+    if(!confirm('この伝票を共同経営者ビューに載せ直します。よろしいですか？')) return;
+    gsr('adminSetBillHidden',USER_ID,d,row,false,'').then(function(r){
+      if(!res(r,'共同経営者ビューに戻しました'))return; slOpenDay(d);
+    }).catch(function(){ toast('通信エラー',true); });
+  }
+}
+
+/* --- 📊 共同経営者ビューの管理 ---------------------------------------------
+   ⭐**管理者とは別の身分**。ここで作るアカウントは管理コンソールには一切入れない
+     （スタッフマスタの管理者フラグを立てて解決しないこと＝立てると給与も顧客も全部開く）。
+   ⚠️PINは画面にも通信にも出さない（設定済みかどうかだけ分かる）。 */
+var PT_D=null;
+function renderPartnerAdmin(){
+  if(!IS_GAS){ setBody(paySubToggle('partner')+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; }
+  setBody(paySubToggle('partner')+'<div class="empty">読み込み中...</div>');
+  var ym=(SL_MONTH||'')||new Date().toISOString().slice(0,7);
+  Promise.all([gsr('adminPartnerList',USER_ID), gsr('adminHiddenBills',USER_ID,ym)])
+    .then(function(a){
+      if(!a[0]||a[0].ok===false){ setBody(paySubToggle('partner')+'<div class="empty">'+esc((a[0]&&a[0].error)||'読み込みエラー')+'</div>'); return; }
+      PT_D={list:a[0], hidden:a[1]||{rows:[]}, ym:ym}; ptDraw();
+    }).catch(function(){ setBody(paySubToggle('partner')+'<div class="empty">通信エラー</div>'); });
+}
+function ptDraw(){
+  var L=PT_D.list, st=L.settings||{}, H=PT_D.hidden;
+  var sw=function(k,label,note){
+    return '<tr><td class="d" style="text-align:left">'+esc(label)
+      +(note?'<div style="opacity:.65;font-size:11px;font-weight:400">'+note+'</div>':'')+'</td>'
+      +'<td><span class="chip" style="cursor:pointer;'+(st[k]?'background:#1d4a2a;border-color:#2f7a45':'')+'"'
+      +' onclick="ptSet(\''+k+'\','+(st[k]?'false':'true')+')">'+(st[k]?'✅ 見せる':'⛔ 見せない')+'</span></td></tr>';
+  };
+  var settings='<div style="font-weight:800;margin:6px 0 4px">🎛 何を見せるか</div>'
+    +'<div class="sl-wrap" style="margin-bottom:6px"><table class="sl"><tbody>'
+    +sw('bills','🧾 伝票一覧','外した伝票は元から入りません')
+    +sw('nippo','📋 日報タブ','出勤者と勤怠')
+    +sw('nippoAmount','💰 日報の金額','時給・報酬・支給額。⛔OFFにすると金額のキーごと送りません')
+    +sw('cashCheck','💰 現金の締め','釣銭・過不足・預入')
+    +sw('cashMemo','📝 入出金の備考','摘要の右に出る自由記述')
+    +sw('kyuritsu','📊 給率','⚠️伝票を外すほど跳ね上がります（売上だけ減って経費は残るため）。既定は見せない')
+    +'</tbody></table></div>'
+    +'<div class="hint" style="margin-bottom:14px">🎛 ここでOFFにした項目は<b>サーバが送りません</b>（画面で隠しているのではありません）。'
+    +'売上の合計そのものは常に出ます＝合計を消したい場合は<b>💹収支の日次で伝票を1枚ずつ外して</b>ください。</div>';
+
+  var acc='<div style="font-weight:800;margin:6px 0 4px">👤 アカウント（'+L.rows.length+'名）'
+    +'<button class="btn sm" style="margin-left:8px" onclick="ptNew()">＋ 追加</button></div>'
+    +'<div class="sl-wrap" style="margin-bottom:6px"><table class="sl"><thead><tr>'
+    +'<th style="text-align:left">名前</th><th style="text-align:left">肩書</th><th>状態</th><th>PIN</th>'
+    +'<th>最終ログイン</th><th>操作</th></tr></thead><tbody>'
+    +(L.rows.length?L.rows.map(function(x){
+        var live=x.state==='有効';
+        return '<tr'+(live?'':' style="opacity:.5"')+'><td style="text-align:left"><b>'+esc(x.name)+'</b></td>'
+          +'<td style="text-align:left">'+esc(x.title||'--')+'</td>'
+          +'<td><span class="chip" style="cursor:pointer;'+(live?'background:#1d4a2a;border-color:#2f7a45':'')+'"'
+            +' onclick="ptState(\''+x.id+'\',\''+(live?'停止':'有効')+'\')">'+(live?'有効':'停止')+'</span></td>'
+          +'<td>'+(x.hasPin?'設定済み':'<span style="color:#e0a050">未設定</span>')+'</td>'
+          +'<td>'+esc(x.lastLogin||'--')+'</td>'
+          +'<td><button class="btn sm" onclick="ptPin(\''+x.id+'\',\''+esc(x.name)+'\')">🔑 PIN</button> '
+            +'<button class="btn sm" onclick="ptRevoke(\''+x.id+'\',\''+esc(x.name)+'\')">🚪 ログアウトさせる</button></td></tr>';
+      }).join(''):'<tr><td colspan="6" style="text-align:center;opacity:.6">まだ登録がありません</td></tr>')
+    +'</tbody></table></div>'
+    +'<div class="hint" style="margin-bottom:14px">👤 ここのアカウントは<b>管理コンソールには入れません</b>（売上と日報だけの別サイト）。'
+    +'<br>PINを変えても<b>すでにログイン中の端末は生きています</b>＝切りたいときは「🚪ログアウトさせる」も押してください。'
+    +'<br>いま有効なログイン：<b>'+(L.sessions||0)+'件</b>'
+    +'<br>入口のURL＝<code>（Pages）/partner.html</code></div>';
+
+  var hid='<div style="font-weight:800;margin:6px 0 4px">🙈 '+esc(PT_D.ym)+' に外している伝票（'+H.rows.length+'枚）</div>'
+    +'<div class="sl-wrap"><table class="sl"><thead><tr>'
+    +'<th class="d">営業日</th><th>伝票行</th><th style="text-align:left">理由</th><th style="text-align:left">操作した人</th><th>いつ</th><th></th></tr></thead><tbody>'
+    +(H.rows.length?H.rows.map(function(x){
+        return '<tr><td class="d link" onclick="paySwitch(\'sales\');setTimeout(function(){slOpenDay(\''+esc(x.date)+'\')},0)">'+esc(x.date)+'</td>'
+          +'<td>'+esc(x.row)+'</td><td style="text-align:left">'+esc(x.memo||'--')+'</td>'
+          +'<td style="text-align:left">'+esc(x.by||'--')+'</td><td>'+esc(x.at||'--')+'</td>'
+          +'<td><button class="btn sm" onclick="slHideBill(\''+esc(x.date)+'\',\''+esc(x.row)+'\',false)">戻す</button></td></tr>';
+      }).join(''):'<tr><td colspan="6" style="text-align:center;opacity:.6">この月に外している伝票はありません</td></tr>')
+    +'</tbody></table></div>'
+    +'<div class="hint" style="margin:10px 0">🙈 外す操作は<b>💹収支 → 日付をタップ → 伝票一覧の👁</b>から行います。'
+    +'月を変えるには先に💹収支で月を切り替えてください。</div>';
+
+  setBody(paySubToggle('partner')+settings+acc+hid);
+}
+function ptSet(k,v){ var o={}; o[k]=v;
+  gsr('adminPartnerSaveSettings',USER_ID,o).then(function(r){ if(!res(r,'変更しました'))return; renderPartnerAdmin(); })
+    .catch(function(){ toast('通信エラー',true); }); }
+function ptNew(){
+  var nm=prompt('共同経営者のお名前（ログイン画面に出ます）',''); if(!nm) return;
+  var ti=prompt('肩書（任意・画面右上に出ます）','共同経営者'); if(ti===null) ti='';
+  gsr('adminPartnerSave',USER_ID,{name:nm,title:ti}).then(function(r){
+    if(!res(r,'追加しました。続けてPINを設定してください'))return; renderPartnerAdmin();
+  }).catch(function(){ toast('通信エラー',true); });
+}
+function ptState(id,to){
+  if(to==='停止'&&!confirm('このアカウントを停止します。\nログイン中の端末もその場で見られなくなります。')) return;
+  gsr('adminPartnerSave',USER_ID,{id:id,name:ptName_(id),state:to}).then(function(r){
+    if(!res(r,to==='有効'?'有効にしました':'停止しました'))return; renderPartnerAdmin();
+  }).catch(function(){ toast('通信エラー',true); });
+}
+function ptName_(id){ var h=(PT_D.list.rows||[]).filter(function(x){return x.id===id;})[0]; return h?h.name:''; }
+function ptPin(id,name){
+  var v=prompt(name+' さんのPIN（4〜6桁の数字）。\n空にすると削除＝ログインできなくなります。','');
+  if(v===null) return;
+  gsr('adminPartnerSetPin',USER_ID,id,v).then(function(r){
+    if(!res(r,v?'PINを設定しました':'PINを削除しました'))return; renderPartnerAdmin();
+  }).catch(function(){ toast('通信エラー',true); });
+}
+function ptRevoke(id,name){
+  if(!confirm(name+' さんのログインを全部切ります。\n次回は改めてPINでログインが必要になります。')) return;
+  gsr('adminPartnerRevokeAll',USER_ID,id).then(function(r){
+    if(!res(r,(r&&r.revoked?r.revoked:'0')+'件のログインを切りました'))return; renderPartnerAdmin();
+  }).catch(function(){ toast('通信エラー',true); });
 }
 
 /* --- 💴 日払い照合（伝票 × TRUST）＝二重払いの関所 -------------------------

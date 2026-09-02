@@ -110,8 +110,18 @@ function makeGas(opts) {
     sleep: () => {}
   };
   const SpreadsheetApp = { openById: () => ss, getActiveSpreadsheet: () => ss, flush: () => {} };
+  /* CacheService＝失効つきの短命メモ。共同経営者ビューのログイン失敗カウントで使う。
+     ⚠️本物は失効を秒で数える＝テストから時計を進められるように clock を見る */
+  const cache = {};
+  const CacheService = {
+    getScriptCache: () => ({
+      get: k => { const e = cache[k]; if (!e) return null; if (clock.getTime() > e.exp) { delete cache[k]; return null; } return e.v; },
+      put: (k, v, sec) => { cache[k] = { v: String(v), exp: clock.getTime() + (Number(sec) || 600) * 1000 }; },
+      remove: k => { delete cache[k]; }
+    })
+  };
 
-  return { ss, props, lock, clock: () => clock, setNow: d => { clock = new Date(d); },
-           PropertiesService, LockService, Utilities, SpreadsheetApp, Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }) } };
+  return { ss, props, lock, cache, clock: () => clock, setNow: d => { clock = new Date(d); },
+           PropertiesService, LockService, Utilities, SpreadsheetApp, CacheService, Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }) } };
 }
 module.exports = { makeGas, FakeSS, FakeSheet, FakeRange };

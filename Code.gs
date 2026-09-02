@@ -657,6 +657,12 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(gunshiApi_(body)))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    // 📊 共同経営者ビュー（partner.html）。⛔軍師の KIOSK_KEY は使わせない＝専用入口・専用ホワイトリスト。
+    //    認証はログインで配るトークン1本（partner.gs の partnerAuth_）。
+    if (body.action === 'partner') {
+      return ContentService.createTextOutput(JSON.stringify(partnerApi_(body)))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
     // 面談表（応募者フロント mendan.html・使い捨てトークンで認証）
     if (body.action === 'kmendan') {   // 黒服採用の面談表
       return ContentService.createTextOutput(JSON.stringify(kmendanApi_(body)))
@@ -13724,7 +13730,9 @@ function resetGunshiSettings_() {
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
     'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TRUST_OFF_FROM','TASK_DEFERRALS'];
   // ⚠️'NIPPO_' ＝日報のバック単価（予約¥500/同伴¥3,000 等）。消えると給与の素が黙って変わる
-  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_','KYUKIN_','NIPPO_'];
+  // ⚠️'PARTNER_' ＝共同経営者ビューのPINと表示設定。消えると相手がログインできなくなる。
+  //   ⭐一方 'PTK_'（ログイントークン）は**わざと入れない**＝リセットで切れていい（再ログインで済む）。
+  const KEEP_PREFIX = ['KIOSK_PIN','PAY_PUBLISHED_','RANKING_PUBLISHED_','SHIFT_CONFIRMED_','DRIVER_CONFIRMED_','WEEKDECL_','KINTAI_','KYUKIN_','NIPPO_','PARTNER_'];
   Object.keys(all).forEach(k => {
     if (KEEP.includes(k)) return;
     if (KEEP_PREFIX.some(p => k.startsWith(p))) return;
