@@ -95,12 +95,17 @@ function partnerSettings() {
     nippoAmount: o.nippoAmount !== false,  // 日報の金額（時給・支給額）（既定ON＝ボス確定「フル」）
     bills:       o.bills !== false,        // 伝票一覧（既定ON。除外した伝票は最初から入らない）
     cashMemo:    o.cashMemo !== false,     // 出金明細の備考（既定ON）
-    cashCheck:   o.cashCheck !== false     // 釣銭・過不足・預入（既定ON）
+    cashCheck:   o.cashCheck !== false,    // 釣銭・過不足・預入（既定ON）
+    /* 💵**現金が入っている伝票を一括で載せない**（ボス確定 2026-09-02・常時ルール＝過去も未来も）
+       ⚠️「現金の金額だけ引く」ではなく**伝票ごと落とす**＝伝票一覧の合計と売上計が必ず一致する。
+       ⚠️分割払い（現金＋カード）はカード分も一緒に落ちる。⚠️1枚ずつの👁「戻す」より**こちらが強い**
+         （①手動除外の取り消し ≠ ②一括ルールの解除）。既定OFF。 */
+    hideCash:    o.hideCash === true
   };
 }
 function partnerSaveSettings_(obj) {
   const cur = partnerSettings(), next = {};
-  ['kyuritsu', 'nippo', 'nippoAmount', 'bills', 'cashMemo', 'cashCheck'].forEach(function (k) {
+  ['kyuritsu', 'nippo', 'nippoAmount', 'bills', 'cashMemo', 'cashCheck', 'hideCash'].forEach(function (k) {
     next[k] = (obj && obj[k] != null) ? !!obj[k] : cur[k];
   });
   setProp('PARTNER_SHOW', JSON.stringify(next));
@@ -173,7 +178,10 @@ function partnerPurgeTokens_() {
 /* ---------------------------------------------------------------------------
    共同経営者ビューが読むデータ（読むだけ。1行も書き込まない）
 --------------------------------------------------------------------------- */
-function partnerHide_() { return { map: salesHiddenMap_(), filter: true }; }
+function partnerHide_() {
+  const st = partnerSettings();
+  return { map: salesHiddenMap_(), filter: true, cashOff: !!st.hideCash };
+}
 
 /* 表示設定にしたがって、返す前に落とす。⭐**画面で隠さずサーバで落とす**
    ＝画面のCSSで隠しただけでは通信を覗けば見える。見せない物は送らない。 */
@@ -196,13 +204,16 @@ function partnerStrip_(res, st) {
     (res.cashOut || []).forEach(function (r) { r.memo = ''; });
     (res.cashIn  || []).forEach(function (r) { r.memo = ''; });
   }
-  if (!st.cashCheck) res.cashCheck = null;
+  /* ⚠️💵現金の一括ルールがONなら**現金の締めは必ず落とす**（設定に関わらず）。
+     ＝売上の現金が¥0なのに「預入¥100,000」「過不足−¥300」が出ていたら矛盾が一目で分かる。
+     ⛔「見せる項目」の設定より、辻褄のほうが強い。 */
+  if (!st.cashCheck || st.hideCash) res.cashCheck = null;
   /* 🙈 除外の存在そのものを共同経営者に教えない＝件数・金額のフィールドは落とす
         （「非表示3件」と出たら隠していることが分かってしまう） */
-  const dropHidden = function (o) { if (o) { delete o.hiddenN; delete o.hiddenTotal; } };
+  const dropHidden = function (o) { if (o) { delete o.hiddenN; delete o.hiddenTotal; delete o.hiddenCashN; } };
   dropHidden(res.sum); dropHidden(res.today); dropHidden(res.cum);
   (res.rows || []).forEach(dropHidden);
-  (res.bills || []).forEach(function (b) { delete b.hidden; delete b.row; });
+  (res.bills || []).forEach(function (b) { delete b.hidden; delete b.row; delete b.hideBy; });
   return res;
 }
 
@@ -210,9 +221,12 @@ function partnerBootstrap(token) {
   const me = partnerAuth_(token);
   if (!me) return { ok: false, error: 'auth', needLogin: true };
   const st = partnerSettings();
+  /* ⚠️`hideCash` は**わざと送らない**＝共同経営者の画面に「現金を隠している」と伝わる情報を出さない。
+     現金列は素直に¥0（該当の伝票が最初から無いので、それが正しい姿）。 */
   return { ok: true, name: me.name, title: me.title, today: bizDateStr_(),
            show: { kyuritsu: st.kyuritsu, nippo: st.nippo, nippoAmount: st.nippoAmount,
-                   bills: st.bills, cashMemo: st.cashMemo, cashCheck: st.cashCheck } };
+                   bills: st.bills, cashMemo: st.cashMemo,
+                   cashCheck: st.cashCheck && !st.hideCash } };
 }
 function partnerMonthly(token, ym) {
   const me = partnerAuth_(token);

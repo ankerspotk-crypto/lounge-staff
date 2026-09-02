@@ -107,13 +107,16 @@ function salesIsHidden_(map, d, rowIdx) {
    ⚠️取消(状態≠会計済み)は数えない。⚠️現金は「売上に充当した額」列（お預りではない）
 --------------------------------------------------------------------------- */
 function salesPosByDay_(days, hide) {
-  /* hide＝{ map: salesHiddenMap_(), filter: true/false }（省略で従来どおり全部数える）
+  /* hide＝{ map: salesHiddenMap_(), filter: true/false, cashOff: true/false }（省略で従来どおり全部数える）
      ⭐filter:true  … 共同経営者ビュー＝**合計からも伝票一覧からも落とす**（客組数・人数も自動で落ちる）
      ⭐filter:false … 管理コンソール＝数字は今までどおり全部数え、伝票に `hidden` の印だけ付ける
+     ⭐cashOff:true … 💵**現金が1円でも入っている伝票を一括で落とす**（ボス確定 2026-09-02・常時ルール）
+        ⚠️「現金の金額だけ引く」ではない＝伝票ごと落とす。そうしないと伝票一覧の合計と売上計が合わなくなる。
+        ⚠️分割払い（現金＋カード）の伝票はカード分も一緒に落ちる。ボスに説明済み。
      ⚠️**集計の道は1本のまま**＝除外あり/なしで別の関数に分岐させない（数字が2実装で割れる） */
-  const hmap = (hide && hide.map) || null, hfil = !!(hide && hide.filter);
+  const hmap = (hide && hide.map) || null, hfil = !!(hide && hide.filter), hcash = !!(hide && hide.cashOff);
   const out = {};
-  days.forEach(function (d) { out[d] = { cash: 0, card: 0, credit: 0, total: 0, bills: [], hiddenN: 0, hiddenTotal: 0 }; });
+  days.forEach(function (d) { out[d] = { cash: 0, card: 0, credit: 0, total: 0, bills: [], hiddenN: 0, hiddenTotal: 0, hiddenCashN: 0 }; });
   const groups = salesTabGroups_(days, function (d) { return posTab_(POS_CLOSE_TAB, d); });
   const ss = getOrOpenSS_();
   Object.keys(groups).forEach(function (tab) {
@@ -126,12 +129,17 @@ function salesPosByDay_(days, hide) {
       if (!want[d]) return;
       if (String(r[24]) !== POS_CLOSE_LIVE_) return;          // 取消は数えない
       const o = out[d];
-      const hid = hmap ? salesIsHidden_(hmap, d, r[1]) : false;
-      if (hid) { o.hiddenN++; o.hiddenTotal += salesNum_(r[20]); }
+      /* 落ちる理由は2つ＝①1枚ずつ手で外した ②💵現金の一括ルール。**どちらも「伝票ごと」**。
+         ⚠️①の「戻す」は①を取り消すだけ＝②がONなら現金伝票はやはり落ちる（②は全体にかかる栓）。
+            コンソールはそれが分かるように理由を出す（`hideBy`）。 */
+      const hidManual = hmap ? salesIsHidden_(hmap, d, r[1]) : false;
+      const hidCash   = hcash && salesNum_(r[21]) > 0;
+      const hid = hidManual || hidCash;
+      if (hid) { o.hiddenN++; o.hiddenTotal += salesNum_(r[20]); if (hidCash && !hidManual) o.hiddenCashN++; }
       if (hid && hfil) return;   /* 🙈 共同経営者ビュー＝この伝票は最初から無かった扱い */
       o.cash += salesNum_(r[21]); o.card += salesNum_(r[22]); o.credit += salesNum_(r[23]);
       o.total += salesNum_(r[20]);
-      o.bills.push({ row: String(r[1] || ''), hidden: hid,
+      o.bills.push({ row: String(r[1] || ''), hidden: hid, hideBy: hid ? (hidManual ? 'manual' : 'cash') : '',
                      ts: fmtStamp_(r[2]), by: String(r[3] || ''), floor: String(r[4] || ''), table: String(r[5] || ''),
                      cust: String(r[6] || ''), pax: salesNum_(r[7]), tantou: String(r[8] || ''),
                      uriban: String(r[9] || ''), setSum: salesNum_(r[10]), dohan: salesNum_(r[13]),
@@ -237,15 +245,23 @@ function salesDayRow_(d, pos, nip, cash) {
     groups: pos.bills.length,
     /* 🙈 共同経営者ビューで落としている（落とせる）伝票の件数と金額。
        ⚠️filter:true のときは上の売上計から**既に引かれている**＝足し戻さないこと。 */
-    hiddenN: pos.hiddenN || 0, hiddenTotal: pos.hiddenTotal || 0
+    hiddenN: pos.hiddenN || 0, hiddenTotal: pos.hiddenTotal || 0, hiddenCashN: pos.hiddenCashN || 0
   };
 }
 
 /* 空の1日（材料が無い日でも行を消さない＝カレンダーとして成立させる） */
 function salesEmptyParts_() {
-  return { pos: { cash: 0, card: 0, credit: 0, total: 0, bills: [], hiddenN: 0, hiddenTotal: 0 },
+  return { pos: { cash: 0, card: 0, credit: 0, total: 0, bills: [], hiddenN: 0, hiddenTotal: 0, hiddenCashN: 0 },
            nip: { nokori: 0, hibaraiCast: 0, hibaraiStaff: 0, bonus: 0, jikan: 0, back: 0, rows: [] },
            cash: { inTotal: 0, outTotal: 0, inRows: [], outRows: [] } };
+}
+
+/* コンソール用の判定セット。⭐**規則は共同経営者ビューと同じ物を使う**（`partnerHide_` と対）
+   ＝片方だけ直すと「コンソールに出ている非表示件数」と「実際に向こうで落ちている物」がズレる。
+   ⚠️partner.gs が無い環境（テストの sales 単体走行）でも落とさない＝typeofガード。 */
+function salesHideForConsole_() {
+  const st = (typeof partnerSettings === 'function') ? partnerSettings() : null;
+  return { map: salesHiddenMap_(), filter: false, cashOff: !!(st && st.hideCash) };
 }
 
 /* ---------------------------------------------------------------------------
@@ -255,7 +271,7 @@ function adminSalesMonthly(userId, ym) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
   /* ⭐コンソールは今までどおり**全部の伝票を数える**。除外は印を付けるだけ（filter:false）
      ＝共同経営者ビューを作っても管理コンソールの数字は1円も動かない。 */
-  return salesMonthly_(ym, { map: salesHiddenMap_(), filter: false });
+  return salesMonthly_(ym, salesHideForConsole_());
 }
 function salesMonthly_(ym, hide) {
   const month = /^\d{4}-\d{2}$/.test(String(ym || '')) ? String(ym) : String(bizDateStr_()).slice(0, 7);
@@ -267,7 +283,7 @@ function salesMonthly_(ym, hide) {
   const rows = days.map(function (d) { return salesDayRow_(d, pos[d] || e.pos, nip[d] || e.nip, cash[d] || e.cash); });
   const sum = { cash: 0, card: 0, credit: 0, total: 0, tantoSub: 0, dohanSub: 0, nokori: 0,
                 hibaraiStaff: 0, hibaraiCast: 0, bonus: 0, bakkin: 0, nyukin: 0, syukkin: 0,
-                keihi: 0, arari: 0, joshiPay: 0, pax: 0, groups: 0, hiddenN: 0, hiddenTotal: 0 };
+                keihi: 0, arari: 0, joshiPay: 0, pax: 0, groups: 0, hiddenN: 0, hiddenTotal: 0, hiddenCashN: 0 };
   rows.forEach(function (r) { Object.keys(sum).forEach(function (k) { sum[k] += Number(r[k]) || 0; }); });
   sum.kyuritsu = sum.total > 0 ? Math.round(sum.joshiPay / sum.total * 10000) / 100 : null;
   /* 営業日＝売上か経費が動いた日（TRUSTの「平均（○営業日）」と同じ数え方に寄せる） */
@@ -281,7 +297,7 @@ function salesMonthly_(ym, hide) {
 --------------------------------------------------------------------------- */
 function adminSalesDaily(userId, dateKey) {
   if (!isAdmin_(getStaffName(userId))) return { ok: false, error: '権限がありません' };
-  return salesDaily_(dateKey, { map: salesHiddenMap_(), filter: false });
+  return salesDaily_(dateKey, salesHideForConsole_());
 }
 function salesDaily_(dateKey, hide) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || '')) ? String(dateKey) : bizDateStr_();
@@ -295,7 +311,7 @@ function salesDaily_(dateKey, hide) {
   const cum = {};
   ['cash', 'card', 'credit', 'total', 'tantoSub', 'dohanSub', 'nokori', 'hibaraiStaff',
    'hibaraiCast', 'bonus', 'nyukin', 'syukkin', 'keihi', 'arari', 'joshiPay', 'pax', 'groups',
-   'hiddenN', 'hiddenTotal']
+   'hiddenN', 'hiddenTotal', 'hiddenCashN']
     .forEach(function (k) { cum[k] = rows.reduce(function (s, r) { return s + (Number(r[k]) || 0); }, 0); });
   const bizDays = rows.filter(function (r) { return r.total > 0 || r.keihi > 0; }).length;
   return { ok: true, date: d, month: month, bizDays: bizDays,

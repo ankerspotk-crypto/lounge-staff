@@ -3545,16 +3545,25 @@ function slDrawDay(){
   /* 🙈 伝票1枚ずつ「共同経営者ビューに載せる/載せない」。⚠️**この画面の合計からは落とさない**
      ＝コンソールは常に店の全部が見える。落ちるのは共同経営者ビューの側だけ（[[project_partner_view]]）。 */
   var nHide=r.bills.filter(function(b){return b.hidden;}).length;
+  var nCash=r.bills.filter(function(b){return b.hideBy==='cash';}).length;
   var bills='<div style="font-weight:800;margin:6px 0 4px">伝票（'+r.bills.length+'枚'
-    +(nHide?' ／ <span style="color:#e0a050">🙈 共同経営者ビューで非表示 '+nHide+'枚</span>':'')+'）</div>'
+    +(nHide?' ／ <span style="color:#e0a050">🙈 共同経営者ビューで非表示 '+nHide+'枚'
+      +(nCash?'（うち💵現金の一括 '+nCash+'枚）':'')+'</span>':'')+'）</div>'
     +'<div class="sl-wrap" style="margin-bottom:6px"><table class="sl"><thead><tr>'
     +'<th>📊</th><th class="d">会計</th><th style="text-align:left">卓</th><th style="text-align:left">お客様</th><th>人数</th>'
     +'<th style="text-align:left">担当</th><th>セット</th><th>同伴</th><th>注文</th><th>現金</th><th>カード</th><th>売掛</th><th>合計</th></tr></thead><tbody>'
     +(r.bills.length?r.bills.map(function(b){
         var st=b.hidden?'opacity:.45':'';
-        return '<tr style="'+st+'"><td><span class="chip" style="cursor:pointer;'+(b.hidden?'background:#4a2a10;border-color:#7a4a18':'')+'"'
-          +' onclick="slHideBill(\''+esc(r.date)+'\',\''+esc(b.row)+'\','+(b.hidden?'false':'true')+')"'
-          +' title="'+(b.hidden?'共同経営者ビューに載せる':'共同経営者ビューから外す')+'">'+(b.hidden?'🙈':'👁')+'</span></td>'
+        /* 💵一括ルールで落ちている伝票は👁を押しても戻らない＝**押せない見た目**にして理由を出す。
+           ⛔押しても何も起きないボタンを置かない（「壊れている」と思われる）。 */
+        var btn = (b.hideBy==='cash')
+          ? '<span class="chip" style="cursor:help;background:#4a2a10;border-color:#7a4a18"'
+            +' onclick="toast(\'💵現金の一括ルールで落ちています。戻すには📊共同経営者タブのスイッチを切ってください\')"'
+            +' title="💵現金の一括ルールで落ちています（📊共同経営者タブで解除）">💵</span>'
+          : '<span class="chip" style="cursor:pointer;'+(b.hidden?'background:#4a2a10;border-color:#7a4a18':'')+'"'
+            +' onclick="slHideBill(\''+esc(r.date)+'\',\''+esc(b.row)+'\','+(b.hidden?'false':'true')+')"'
+            +' title="'+(b.hidden?'共同経営者ビューに載せる':'共同経営者ビューから外す')+'">'+(b.hidden?'🙈':'👁')+'</span>';
+        return '<tr style="'+st+'"><td>'+btn+'</td>'
           +'<td class="d">'+esc(b.ts||'')+'</td><td style="text-align:left">'+esc((b.floor||'')+' '+(b.table||''))+'</td>'
           +'<td style="text-align:left">'+esc(b.cust||'')+'</td><td>'+b.pax+'</td>'
           +'<td style="text-align:left">'+esc(b.tantou||'--')+(b.uriban?' <span class="chip">売半</span>':'')+'</td>'
@@ -3566,7 +3575,8 @@ function slDrawDay(){
     +'<div class="hint" style="margin-bottom:14px">📊 <b>👁</b>を押すとその伝票を<b>共同経営者ビューから外します</b>（🙈）。'
     +'外した伝票は向こうの<b>売上計・粗利・客組数・人数からも消えます</b>（隠すだけではありません）。'
     +'<br>⚠️<b>この画面の数字は変わりません</b>＝コンソールは常に店の全部が見えます。'
-    +'<br>⚠️<b>経費は外れません</b>（ボス確定）＝売上だけ減るので、向こうの粗利はその分だけ下がります。</div>';
+    +'<br>⚠️<b>経費は外れません</b>（ボス確定）＝売上だけ減るので、向こうの粗利はその分だけ下がります。'
+    +'<br>💵は<b>現金の一括ルール</b>で落ちている伝票です（1枚ずつ戻せません＝📊共同経営者タブのスイッチで解除）。</div>';
   var casts='<div style="font-weight:800;margin:6px 0 4px">キャスト・黒服（'+r.casts.length+'名）</div>'
     +'<div class="sl-wrap"><table class="sl"><thead><tr>'
     +'<th class="d">名前</th><th style="text-align:left">区分</th><th>📱打刻</th><th>出勤扱い</th><th>労働</th><th>時給</th>'
@@ -3635,12 +3645,23 @@ function ptDraw(){
     +sw('bills','🧾 伝票一覧','外した伝票は元から入りません')
     +sw('nippo','📋 日報タブ','出勤者と勤怠')
     +sw('nippoAmount','💰 日報の金額','時給・報酬・支給額。⛔OFFにすると金額のキーごと送りません')
-    +sw('cashCheck','💰 現金の締め','釣銭・過不足・預入')
+    +sw('cashCheck','💰 現金の締め','釣銭・過不足・預入。⚠️下の💵がONの間は、ここがONでも出しません（売上の現金が¥0なのに預入があると矛盾するため）')
     +sw('cashMemo','📝 入出金の備考','摘要の右に出る自由記述')
     +sw('kyuritsu','📊 給率','⚠️伝票を外すほど跳ね上がります（売上だけ減って経費は残るため）。既定は見せない')
+    /* ⚠️この1行だけ**意味が逆**（ONで隠す）＝sw() を使い回さず専用に書く。
+       押し間違いが一番怖い場所なので、色も文言も他と別にしている。 */
+    +'<tr><td class="d" style="text-align:left">💵 現金売上を一括で載せない'
+      +'<div style="opacity:.65;font-size:11px;font-weight:400">'
+      +'現金が1円でも入っている伝票を<b>丸ごと</b>落とします（過去も未来も・ONの間ずっと）。'
+      +'<br>⚠️分割払い（現金＋カード）の伝票は<b>カード分も一緒に落ちます</b>。'
+      +'<br>⚠️これがONの間は、その伝票を1枚ずつ👁で戻しても出てきません</div></td>'
+      +'<td><span class="chip" style="cursor:pointer;'+(st.hideCash?'background:#4a2a10;border-color:#7a4a18':'')+'"'
+      +' onclick="ptCash('+(st.hideCash?'false':'true')+')">'+(st.hideCash?'🙈 一括で落とす':'👁 現金も載せる')+'</span></td></tr>'
     +'</tbody></table></div>'
-    +'<div class="hint" style="margin-bottom:14px">🎛 ここでOFFにした項目は<b>サーバが送りません</b>（画面で隠しているのではありません）。'
-    +'売上の合計そのものは常に出ます＝合計を消したい場合は<b>💹収支の日次で伝票を1枚ずつ外して</b>ください。</div>';
+    +'<div class="hint" style="margin-bottom:14px">🎛 上の6項目でOFFにした物は<b>サーバが送りません</b>（画面で隠しているのではありません）。'
+    +'ただし<b>売上の合計そのものは出ます</b>＝金額を減らすのは伝票を落とす操作だけです。'
+    +'<br>伝票を落とす方法は2つ＝<b>💵の一括スイッチ</b>（現金の伝票をまとめて）と、'
+    +'<b>💹収支の日次で1枚ずつ👁</b>（それ以外の伝票）。どちらも売上計・粗利・客組数・人数が連動して下がります。</div>';
 
   var acc='<div style="font-weight:800;margin:6px 0 4px">👤 アカウント（'+L.rows.length+'名）'
     +'<button class="btn sm" style="margin-left:8px" onclick="ptNew()">＋ 追加</button></div>'
@@ -3678,6 +3699,24 @@ function ptDraw(){
     +'月を変えるには先に💹収支で月を切り替えてください。</div>';
 
   setBody(paySubToggle('partner')+settings+acc+hid);
+}
+/* 💵現金の一括ルール。⚠️他の設定と違い**相手に見える売上の額が大きく動く**ので必ず確認を出す。 */
+function ptCash(to){
+  if(to){
+    if(!confirm('💵 現金売上を一括で載せないようにします。\n\n'
+      +'・現金が1円でも入っている伝票を「丸ごと」落とします\n'
+      +'・過去の月も含めて、ONの間ずっと効きます\n'
+      +'・分割払い（現金＋カード）の伝票は カード分も一緒に落ちます\n'
+      +'・向こうの売上計・粗利・客組数・人数が下がります（経費は残ります）\n\n'
+      +'よろしいですか？')) return;
+  }else{
+    if(!confirm('💵 現金の一括ルールを解除します。\n現金の伝票が共同経営者ビューに出るようになります。\n'
+      +'（1枚ずつ手で外した伝票は外れたままです）\n\nよろしいですか？')) return;
+  }
+  gsr('adminPartnerSaveSettings',USER_ID,{hideCash:to}).then(function(r){
+    if(!res(r,to?'現金の伝票を一括で落とすようにしました':'現金の一括ルールを解除しました'))return;
+    renderPartnerAdmin();
+  }).catch(function(){ toast('通信エラー',true); });
 }
 function ptSet(k,v){ var o={}; o[k]=v;
   gsr('adminPartnerSaveSettings',USER_ID,o).then(function(r){ if(!res(r,'変更しました'))return; renderPartnerAdmin(); })

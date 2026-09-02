@@ -7,7 +7,7 @@
      ② それをやってもコンソールの数字が1円も動かない
    ⛔`sales.gs` を触ったら `node tests/sales/run.js` も必ず通すこと（あちらが本家の45件）。 */
 const t = require('../pos/lib/tiny');
-const suites = ['01_hidden', '02_auth'];
+const suites = ['01_hidden', '02_auth', '03_cashoff'];
 const only = process.argv.slice(2).filter(a => a.charAt(0) !== '-')[0] || '';
 
 (async () => {
