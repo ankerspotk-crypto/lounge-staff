@@ -228,7 +228,11 @@ module.exports = function (_front, _back, ctx) {
                      { name: '響ジャパニーズハーモニー', qty: 2, floor: '5F' }, { name: '山崎12年', qty: 5, floor: '5F' }];
     const h = f.fn.bmWelPickHtml(f.fn.bmGet('12'));
     const shown = (h.match(/bmWelAdd\('([^']+)'/g) || []).map(s => s.replace(/.*\('/, '').replace(/'$/, ''));
-    t.eq(shown.length, 4, '在庫マスタに在る品だけに絞る');
+    /* ⚠️2026-09-02にボスが例外を足した＝グラス提供の赤白ワインは在庫マスタに載らないので
+       絞ると消える。BM_WEL_ALWAYS の分だけ在庫に無くても出る（4品＋ワイン2品）。 */
+    t.eq(shown.length, 6, '在庫マスタに在る品＋常時表示の品だけに絞る');
+    t.ok(shown.indexOf('グラス 赤ワイン') >= 0 && shown.indexOf('グラス 白ワイン') >= 0,
+         '⭐グラス提供の赤白ワインは在庫に無くても出す（ボス指示 2026-09-02）');
     t.ok(shown.indexOf('緑茶') >= 0, '⚠️名前のズレ（緑茶→緑茶2L）はエイリアス表で救う');
     t.ok(shown.indexOf('響') >= 0, '⚠️響→響ジャパニーズハーモニーも救う');
     t.ok(shown.indexOf('コーラ') >= 0, '⚠️在庫0でも隠さない（在0と出して黒服に判断させる）');
