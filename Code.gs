@@ -9703,6 +9703,15 @@ function submitShift(payload) {
   const staffUserId = (rosterEntryByName_(name) || {}).userId || '';
 
   const closedSkipped = [];
+  /* ⚠️2026-09-03改修: 月まとめ提出（約30日）で writeShiftCell_/申請ログappendRowを1日ごとに
+   *   呼んでいたためシートAPI往復が日数に比例して増え、ポータルのPOST（gasFetchは28秒で見切る）が
+   *   タイムアウトする原因になっていた。→ 判定ロジック（店休日/承認要否/二重申請/黒服バイト全承認待ち）
+   *   は完全に同じまま、"シートへ書く場所とタイミング"だけを2箇所（シフト表・申請ログ）に集約する。
+   *   まず判定だけを済ませてメモリ上に積み、書込みは最後にそれぞれ1回のシート往復でまとめる。 */
+  const toWrite = [];   // {date, value} … 自動承諾でシフト表へ即書く分（writeShiftCells_に1回でまとめて渡す）
+  const reqRows = [];   // {vals, writeDate?} … シフト申請シートへ追記する行（最後に1回のsetValuesでまとめる）
+  const kyukinNotify = []; // {date, idx} … 当日欠勤の黒服LINE通知（申請ログの行番号が確定してから送る）
+
   payload.shifts.forEach(s => {
     /* 🏖店休日は受け付けない（ボス指示 2026-08-17）。ポータルのカレンダーは店休日を押せないが、
      * **店休日を設定する前に開いた画面**からは送れてしまうためサーバでも断る。
@@ -9721,42 +9730,57 @@ function submitShift(payload) {
       const dupKey = shConNorm_(name) + '|' + String(s.date == null ? '' : s.date).trim() + '|' + String(s.time == null ? '' : s.time).trim();
       if (pendKeys[dupKey]) { duplicated.push(s.date); written.push(s.date); return; }
       pendKeys[dupKey] = true;
-      const newRow = sh.getLastRow() + 1;
-      sh.getRange(newRow, 3).setNumberFormat('@');
-      sh.getRange(newRow, 1, 1, 7).setValues([[now, name, s.date, s.time, 'pending', '', role]]);
-      if (isSameDayKyukin) {
-        const rowIdx = newRow;
-        const KF = prop('GROUP_KUROFUKU');
-        if (KF) {
-          // ⚡一言承認: このメッセージのあとに「承認」/「却下」と送るだけで確定する（→ handleQuickDecision_）。
-          //   送信したメッセージIDを控えておくと、引用返信されたときに この申請 だと一意に分かる。
-          const mid = push_(KF, '⚠️【当日欠勤申請】\n' + name + 'さんが本日(' + s.date + ')の出勤について欠勤を申請しました。\n\n▼このまま「承認」または「却下」と送信してください\n（他にも承認待ちがある時は「承認 ' + name + '」）');
-          quickDecideRemember_(mid, { t: 'kyukin', row: rowIdx });
-        }
-      }
+      const idx = reqRows.length;
+      reqRows.push({ vals: [now, name, s.date, s.time, 'pending', '', role] });
+      if (isSameDayKyukin) kyukinNotify.push({ date: s.date, idx });
     } else {
       const writeVal = isKyukin ? '休み' : s.time;
-      // ⚠️2026-07-27 修理: 旧版は先に申請を「承諾」で書き、writeShiftCell_ の失敗を errors に積むだけで
-      //   autoApproved に入れていた＝シフト表に書けなくても「承諾」と表示され、通知にもスプシにも出ない幽霊が
-      //   無言で発生していた（例: ちな／きさき）。→ 書き込み結果でステータスを分け、失敗は黒服へ警告する。
-      let r;
-      try { r = writeShiftCell_(name, s.date, writeVal, staffUserId); }
-      catch (e) { r = { ok: false, error: String((e && e.message) || e) }; }
-      const newRow = sh.getLastRow() + 1;
-      sh.getRange(newRow, 3).setNumberFormat('@');
-      sh.getRange(newRow, 1, 1, 7).setValues([[now, name, s.date, s.time, r.ok ? '承諾' : 'シフト表未反映', r.ok ? now : '', role]]);
-      if (r.ok) {
-        autoApproved.push(s.date);
-      } else {
-        errors.push(s.date + ': ' + r.error);
-        try {
-          const KF = prop('GROUP_KUROFUKU');
-          if (KF) push_(KF, '⚠️【シフト未反映】' + name + 'さん ' + s.date + ' の提出をシフト表に書けませんでした。\n理由: ' + r.error + '\n→名簿の登録をご確認ください（軍師「➕派遣/体験を追加」またはコンソールで名簿を修正）。');
-        } catch (e2) {}
-      }
+      toWrite.push({ date: s.date, value: writeVal });
+      reqRows.push({ vals: [now, name, s.date, s.time, null, null, role], writeDate: s.date });
     }
     written.push(s.date);
   });
+
+  // シフト表への書込みをまとめて1回（結果は日付ごとに返る）
+  // ⚠️2026-07-27 修理の意図はそのまま維持: 書き込み結果でステータスを分け、失敗は黒服へ警告する
+  //   （「シフト表未反映」を握り潰して「承諾」扱いにしない＝ちな／きさき事故の再発防止）。
+  let writeResults = {};
+  if (toWrite.length) {
+    try { writeResults = writeShiftCells_(name, toWrite, staffUserId); }
+    catch (e) { const msg = String((e && e.message) || e); toWrite.forEach(w => { writeResults[w.date] = { ok: false, error: msg }; }); }
+  }
+  reqRows.forEach(r => {
+    if (!r.writeDate) return; // pending分はステータス確定済み（'pending'のまま）
+    const wr = writeResults[r.writeDate] || { ok: false, error: '不明なエラー' };
+    r.vals[4] = wr.ok ? '承諾' : 'シフト表未反映';
+    r.vals[5] = wr.ok ? now : '';
+    if (wr.ok) {
+      autoApproved.push(r.writeDate);
+    } else {
+      errors.push(r.writeDate + ': ' + wr.error);
+      try {
+        const KF = prop('GROUP_KUROFUKU');
+        if (KF) push_(KF, '⚠️【シフト未反映】' + name + 'さん ' + r.writeDate + ' の提出をシフト表に書けませんでした。\n理由: ' + wr.error + '\n→名簿の登録をご確認ください（軍師「➕派遣/体験を追加」またはコンソールで名簿を修正）。');
+      } catch (e2) {}
+    }
+  });
+
+  // 申請ログへ1回のバルク書込み（当日欠勤のpush通知はここで行番号が確定してから送る）
+  if (reqRows.length) {
+    const startRow = sh.getLastRow() + 1;
+    sh.getRange(startRow, 3, reqRows.length, 1).setNumberFormat('@');
+    sh.getRange(startRow, 1, reqRows.length, 7).setValues(reqRows.map(r => r.vals));
+    kyukinNotify.forEach(k => {
+      const rowIdx = startRow + k.idx;
+      const KF = prop('GROUP_KUROFUKU');
+      if (KF) {
+        // ⚡一言承認: このメッセージのあとに「承認」/「却下」と送るだけで確定する（→ handleQuickDecision_）。
+        //   送信したメッセージIDを控えておくと、引用返信されたときに この申請 だと一意に分かる。
+        const mid = push_(KF, '⚠️【当日欠勤申請】\n' + name + 'さんが本日(' + k.date + ')の出勤について欠勤を申請しました。\n\n▼このまま「承認」または「却下」と送信してください\n（他にも承認待ちがある時は「承認 ' + name + '」）');
+        quickDecideRemember_(mid, { t: 'kyukin', row: rowIdx });
+      }
+    });
+  }
 
   // 店休日で弾いた分は closedSkipped で返す（errorsに混ぜない＝画面で「店休日なので入れられません」と別に出せる）
   return { ok: true, name, written, autoApproved, pending: written.length - autoApproved.length, errors, duplicated, closedSkipped };
@@ -17129,14 +17153,18 @@ function setCashThresholds_(thresholds) {
 //   Script Properties に [{date:'yyyy-MM-dd', label:'お盆休み'}] のJSON配列で保持。
 //   date は営業日キー(bizDateStr_ と同じ6時境界)で統一 → 日曜定休ロジックと整合。
 // ============================================================
+/* 1リクエスト内のメモ。⚠️書き換えるのは setHolidays_ ただ1箇所＝そこで必ず捨てる。
+   理由: シフトのまとめ提出は日数ぶん shiftClosedReason_ を呼ぶ＝31日で62回もScriptPropertiesを叩いていた。 */
+var _holidaysMemo_ = null;
 function getHolidays_() {
+  if (_holidaysMemo_) return _holidaysMemo_;
   const raw = prop(HOLIDAYS_PROP_);
-  if (!raw) return [];
+  if (!raw) return (_holidaysMemo_ = []);
   try {
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    return (_holidaysMemo_ = (Array.isArray(arr) ? arr : []));
   } catch (e) {
-    return [];
+    return (_holidaysMemo_ = []);
   }
 }
 
@@ -17149,6 +17177,7 @@ function setHolidays_(list) {
     .filter(h => (seen[h.date] ? false : (seen[h.date] = true)))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   setProp(HOLIDAYS_PROP_, JSON.stringify(clean));
+  _holidaysMemo_ = null; // ⚠️保存したらメモを捨てる（同じ実行の中で古い店休日を見せない）
   return clean;
 }
 
@@ -22793,6 +22822,74 @@ function writeShiftCell_(name, date, value, userId, opts) {
   newRow[idCol] = uid || m.userId || ''; // Stage1: IDも一緒に刻む
   sh.appendRow(newRow);
   return { ok: true, created: true, name: m.name, role: m.role, matchedBy: 'created' };
+}
+
+/* シフト表への複数日ぶんの書込みを1回のシート往復にまとめる版（submitShiftの複数日提出専用）。
+ * ⚠️2026-09-03追加。writeShiftCell_ 本体はそのまま残す＝他8箇所の呼び出し元（承認処理・当欠復元・
+ *   コンソール個別編集など）は1日単位のまま完全に無改修・挙動も不変。
+ * ⚠️店休日ガードはここでは持たない＝呼び出し元(submitShift)が shiftClosedReason_ で先に弾いた
+ *   分だけを渡す前提（writeShiftCell_と同じ関所を二重に持たない）。
+ * 戻り値: { [date]: {ok, error?, matchedBy?, created?} }（対象は全項目とも同一人物＝同じ行） */
+function writeShiftCells_(name, items, userId) {
+  const results = {};
+  if (!items || !items.length) return results;
+  tsdCacheClear_(); // シフト表を書き換える＝キャッシュ破棄は1回で足りる（writeShiftCell_と同じ流儀）
+
+  const sh = getShiftSS_().getSheetByName(SHIFT_TAB);
+  if (!sh) { items.forEach(it => { results[it.date] = { ok: false, error: 'シフト表が見つかりません' }; }); return results; }
+  const data = sh.getDataRange().getValues();
+  if (data.length < 2) { items.forEach(it => { results[it.date] = { ok: false, error: 'データなし' }; }); return results; }
+  const headers = data[0].map(v => {
+    if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, TZ, 'M/d');
+    return String(v).trim();
+  });
+  const idCol = ensureShiftIdColumn_(sh); // 0-based。列が無ければここで1回だけ新設
+  const uid = String(userId == null ? '' : userId).trim();
+  const cellAt = (i, c) => String((data[i][c] == null ? '' : data[i][c])).trim();
+  const key = shiftNameKey_(name);
+
+  // 1) 行を先に1回だけ確定する（ID優先→名前キー→無ければ名簿から新設）。以降の全日付はこの1行にしか書かない。
+  let rowIdx = -1;
+  if (uid) {
+    for (let i = 1; i < data.length; i++) { if (cellAt(i, idCol) === uid) { rowIdx = i; break; } }
+  }
+  if (rowIdx < 0 && key) {
+    for (let i = 1; i < data.length; i++) { if (shiftNameKey_(data[i][0]) === key) { rowIdx = i; break; } }
+  }
+  let row, isNewRow = false, matchedBy;
+  if (rowIdx >= 0) {
+    row = data[rowIdx].slice();
+    matchedBy = (uid && cellAt(rowIdx, idCol) === uid) ? 'id' : 'name';
+    if (uid && cellAt(rowIdx, idCol) === '') row[idCol] = uid; // 名前で当たってIDが空なら刻む(self-heal)
+  } else {
+    if (!key && !uid) { items.forEach(it => { results[it.date] = { ok: false, error: '名前が空です' }; }); return results; }
+    const m = rosterEntryByName_(name);
+    if (!m) { const err = 'スタッフが見つかりません: ' + name + '（名簿にも未登録です。先に名簿へ登録してください）'; items.forEach(it => { results[it.date] = { ok: false, error: err }; }); return results; }
+    if (m.retired) { const err = name + ' は退職者です（シフト表に行は作りません）'; items.forEach(it => { results[it.date] = { ok: false, error: err }; }); return results; }
+    row = new Array(Math.max(headers.length, idCol + 1)).fill(''); // 列を新設した直後は headers より広くなる
+    row[0] = m.name; // 表記は名簿(SSOT)に寄せる
+    row[1] = m.role;
+    row[idCol] = uid || m.userId || ''; // Stage1: IDも一緒に刻む
+    isNewRow = true; matchedBy = 'created';
+  }
+
+  // 2) 日付ごとに列を確定（無ければ新設）してから row(メモリ上)に書く。シート往復は列の新規作成ぶんだけ。
+  items.forEach(it => {
+    let colIdx = headers.indexOf(it.date);
+    if (colIdx < 0) {
+      colIdx = ensureShiftDateColumn_(sh, it.date); // 列が無ければ自動生成してから書く
+      if (colIdx < 0) { results[it.date] = { ok: false, error: '日付列を作成できません: ' + it.date }; return; }
+      headers[colIdx] = it.date; // 同じ提出内に同じ新規日付が複数来ても列を二重生成しない
+    }
+    while (row.length <= colIdx) row.push('');
+    row[colIdx] = it.value || '';
+    results[it.date] = { ok: true, matchedBy: matchedBy, created: isNewRow };
+  });
+
+  // 3) 行を1回だけ書き戻す（新規行はappendRow、既存行は1行ぶんのsetValues）。
+  if (isNewRow) sh.appendRow(row);
+  else sh.getRange(rowIdx + 1, 1, 1, row.length).setValues([row]);
+  return results;
 }
 
 function addShiftStaff_(staffName, role, date, timeVal, userId) {
