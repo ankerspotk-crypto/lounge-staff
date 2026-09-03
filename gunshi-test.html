@@ -2450,13 +2450,13 @@ function npRender(){
   /* ── その日の合計。⭐一番上に置く＝黒服が最後に見るのはこの数字 ── */
   h+='<div class="np-sum">'
     +npSumCell('出勤',t.people+'名')
-    +npSumCell('時間報酬',npYen(t.jikan))
+    +npSumCell('時間報酬',npYen(t.jikan),null,'jikan')
     +npSumCell('バック',npYen(t.back))
     +npSumCell('ボーナス',npYen(t.bonus))
-    +npSumCell('支給額合計',npYen(t.total),'gold')
+    +npSumCell('支給額合計',npYen(t.total),'gold','total')
     +npSumCell('日払い',npYen(t.hibarai))
     +npSumCell('マイナス',npYen(t.minus))
-    +npSumCell('残り支給額',npYen(t.nokori),'gold')
+    +npSumCell('残り支給額',npYen(t.nokori),'gold','nokori')
     +'</div>';
 
   /* ── バックの出典。⚠️どこから数えたかを必ず出す（混ざっていないことを黒服が見て分かる） ── */
@@ -2507,9 +2507,9 @@ function npRender(){
 
   b.innerHTML=h;
 }
-function npSumCell(label,val,tone){
+function npSumCell(label,val,tone,key){
   return '<div class="np-sum-c"><div class="np-sum-l">'+esc(label)+'</div>'
-    +'<div class="np-sum-v"'+(tone==='gold'?' style="color:var(--gold)"':'')+'>'+esc(val)+'</div></div>';
+    +'<div class="np-sum-v"'+(key?' data-nk="sum-'+key+'"':'')+(tone==='gold'?' style="color:var(--gold)"':'')+'>'+esc(val)+'</div></div>';
 }
 
 /* ⏱打刻と出勤扱いの差（分）。⚠️日跨ぎがあるので素直に引き算しない＝npHhmmMinの分に直してから差を取り、
@@ -2538,7 +2538,7 @@ function npTableHtml(){
     var dis=lock?' disabled':'';
     var slip=Number(r.hibaraiSlip)||0, hb=npNum(r.hibarai);
     var pin=String(r.punchIn||''), pout=String(r.punchOut||'');
-    h+='<tr'+(lock?' class="lock"':'')+'>'
+    h+='<tr data-i="'+i+'"'+(lock?' class="lock"':'')+'>'
       +'<td class="nm">'+esc(r.name||'(名前なし)')
         +(r.kubun?' <span class="np-chip">'+esc(r.kubun)+'</span>':'<span class="np-chip" style="border-color:#7a3020;color:#ff9a9a">シフト外</span>')
         +((Number(r.adj)||0)?' <span class="np-chip" style="border-color:#7a3f10;color:#e6a35a">時間外'+(Number(r.adj)>0?'+':'')+r.adj+'分'
@@ -2548,9 +2548,9 @@ function npTableHtml(){
       +'<td class="calc" title="LINEの打刻（記録・変更できません）">'+(pin||pout?(esc(pin||'--:--')+' → '+esc(pout||'--:--')):'<span style="color:#ff9a9a">なし</span>')+'</td>'
       +'<td><input type="time" class="np-in t-time" value="'+esc(r.start||'')+'"'+dis+' onchange="npSet('+i+',\'start\',this.value)"></td>'
       +'<td><input type="time" class="np-in t-time" value="'+esc(r.end||'')+'"'+dis+' onchange="npSet('+i+',\'end\',this.value)"></td>'
-      +'<td class="calc">'+esc(r.workText||'')+'</td>'
+      +'<td class="calc" data-nk="workText">'+esc(r.workText||'')+'</td>'
       +'<td><input type="tel" inputmode="numeric" class="np-in t-wage" value="'+(r.wage||'')+'"'+dis+' onchange="npSet('+i+',\'wage\',this.value)"></td>'
-      +'<td class="calc">'+npYen(r.jikan)+'</td>'
+      +'<td class="calc" data-nk="jikan">'+npYen(r.jikan)+'</td>'
       +'<td class="calc"><span title="'+esc(npBackText(r).replace(/<[^>]+>/g,''))+'">'+npYen(r.back)+'</span>'
         +'<button class="np-more" style="margin-left:4px" onclick="npMore('+i+')">'+(NP_MORE[i]?'▲':'▼')+'</button></td>'
       +'<td><input type="tel" inputmode="numeric" class="np-in t-money" value="'+(hb||'')+'"'+dis+' onchange="npSet('+i+',\'hibarai\',this.value)">'
@@ -2560,8 +2560,8 @@ function npTableHtml(){
       +npTd_(i,'okuri',r.okuri,dis)+npTd_(i,'kojin',r.kojin,dis)+npTd_(i,'shukuhaku',r.shukuhaku,dis)
       +npTd_(i,'hayaagari',r.hayaagari,dis)+npTd_(i,'soge',r.soge,dis)+npTd_(i,'zangyo',r.zangyo,dis)
       +npTd_(i,'urihan',r.urihan,dis)+npTd_(i,'unei',r.unei,dis)
-      +'<td class="calc">'+npYen(r.total)+'</td>'
-      +'<td class="big">'+npYen(r.nokori)+'</td>'
+      +'<td class="calc" data-nk="total">'+npYen(r.total)+'</td>'
+      +'<td class="big" data-nk="nokori">'+npYen(r.nokori)+'</td>'
       +'</tr>';
     /* バックの内訳＝行の下に1行ぶち抜きで開く（列を増やさない） */
     if(NP_MORE[i]){
@@ -2699,13 +2699,40 @@ function npMore(i){ NP_MORE[i]=!NP_MORE[i]; npRender(); }
 function npSet(i,key,val){
   if(!NP||NP.locked) return;
   var r=NP.rows[i]; if(!r) return;
-  if(key==='start'||key==='end') r[key]=String(val||'');
+  var isTime=(key==='start'||key==='end');
+  if(isTime) r[key]=String(val||'');
   else if(key==='adj') r.adj=parseInt(String(val).replace(/[^\d-]/g,''),10)||0;
   else if(key==='backOver') r.backOver=(String(val).trim()===''?null:npNum(val));
   else r[key]=Math.max(0,npNum(val));   /* ⚠️金額は0以上に丸める（負号で二重に引かれるのを防ぐ） */
   npCalcRow(r,NP.backConf);
   NP_DIRTY=true;
-  npRender();
+  /* ⚠️2026-09-04修理: 出退勤時間(開始/終了)は入力欄がネイティブの時刻ピッカー（iPadでは
+   *   丸ごとのポップオーバー）＝ここでnpRender()（#sheetBodyを丸ごと作り直す）を呼ぶと、
+   *   ピッカーが確定した"その瞬間"に自分自身のinput要素がDOMごと消えて作り直される。
+   *   ポップオーバーは消えたノードを掴んだまま浮いてしまい、続けて時刻を直そうとしても
+   *   値が反映されない/消えたように見える（ボス報告2026-09-04・動画で連打時に実際に発生）。
+   *   → 開始/終了はこの行の計算列(労働・時間報酬・支給計・残り)と上の合計欄だけを
+   *     ピンポイントで書き換え、input要素そのものには一切触らない。
+   *   ⚠️行や合計欄がDOMに見つからない（想定外の状態）時だけ、保険として従来のnpRender()に戻す。 */
+  if(!isTime || !npPatchTime_(i)) npRender();
+}
+/* npSetの部分更新版（開始/終了専用）。書き換えるのは計算結果の文字だけ＝<input>には触らない。
+   対象のtd/合計欄が見つかれば true（=npRender()を呼ばず終わってよい）、見つからなければ false。 */
+function npPatchTime_(i){
+  var body=document.getElementById('sheetBody'); if(!body) return false;
+  var tr=body.querySelector('tr[data-i="'+i+'"]'); if(!tr) return false;
+  var r=NP.rows[i]; if(!r) return false;
+  var wt=tr.querySelector('[data-nk="workText"]'), jk=tr.querySelector('[data-nk="jikan"]'),
+      tt=tr.querySelector('[data-nk="total"]'), nk=tr.querySelector('[data-nk="nokori"]');
+  if(!wt||!jk||!tt||!nk) return false;
+  wt.textContent=r.workText||''; jk.textContent=npYen(r.jikan); tt.textContent=npYen(r.total); nk.textContent=npYen(r.nokori);
+  var t=npTotals();
+  /* 合計欄も#sheetBodyの中（npRenderが.np-sumを先頭付近に書く） */
+  var sj=body.querySelector('[data-nk="sum-jikan"]'),
+      st=body.querySelector('[data-nk="sum-total"]'), sn=body.querySelector('[data-nk="sum-nokori"]');
+  if(!sj||!st||!sn) return false;
+  sj.textContent=npYen(t.jikan); st.textContent=npYen(t.total); sn.textContent=npYen(t.nokori);
+  return true;
 }
 function npMemo(v){ if(NP&&!NP.locked){ NP.memo=String(v||''); NP_DIRTY=true; } }
 
