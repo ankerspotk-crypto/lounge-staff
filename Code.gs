@@ -1278,6 +1278,23 @@ function handleApiRequest_(body) {
     PropertiesService.getScriptProperties().setProperty('NOTIF_SETTINGS', JSON.stringify(clean));
     return { ok: true };
   }
+  // 📣 呼びかけ（📢連絡→📣呼びかけ）: 本日出勤のグループLINEへ手で流す2種のお知らせ
+  if (body.action === 'getYobikakeInfo') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return getYobikakeInfo();
+  }
+  if (body.action === 'sendYobikake') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return sendYobikake(body.kind, body.text, !!body.saveDefault, adminName);
+  }
+  if (body.action === 'saveYobikakeTpl') { // 送らずに文面だけ保存
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    yobikakeSaveTpl_(body.kind, body.text);
+    return { ok: true, tpl: yobikakeTpl_() };
+  }
   if (body.action === 'getResendableNotices') { // 自動通知の再送パネル：一覧＋配信枠
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
@@ -13737,7 +13754,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TRUST_OFF_FROM','TASK_DEFERRALS'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TRUST_OFF_FROM','TASK_DEFERRALS','YOBIKAKE_TPL'];
   // ⚠️'NIPPO_' ＝日報のバック単価（予約¥500/同伴¥3,000 等）。消えると給与の素が黙って変わる
   // ⚠️'PARTNER_' ＝共同経営者ビューのPINと表示設定。消えると相手がログインできなくなる。
   //   ⭐一方 'PTK_'（ログイントークン）は**わざと入れない**＝リセットで切れていい（再ログインで済む）。
@@ -25064,4 +25081,139 @@ function adminUpdateHakenRec_(who, id, patch) {
     console.error('adminUpdateHakenRec_', e);
     return { ok: false, error: String(e) };
   }
+}
+
+// ============================================================
+// 📣 呼びかけ（管理コンソール 📢連絡 → 📣 呼びかけ）
+//   本日出勤のグループLINE = GROUP_STAFF（14:00「本日出勤ラインナップ」と同じ宛先）へ、
+//   管理者が手で流す2種類のお知らせ。
+//     ① 営業の呼びかけ（本日ご予約がない日にお客様へ声がけを依頼）
+//     ② 早上がりの可能性がある日のお知らせ
+//   ⭐自動送信はしない（ボス確定 2026-09-03）＝押した人が本日の予約状況を見て決める。
+//     予約0件でも同伴や飛び込みが読める日はある＝機械に判定させると誤爆する。
+//   文面は画面でその場編集して送れる。「次回からこの文で開く」を付けて送れば YOBIKAKE_TPL に残る
+//   （⚠️resetGunshiSettings_ の KEEP に 'YOBIKAKE_TPL' を入れてある＝軍師設定リセットで消えない）。
+//   送信履歴 YOBIKAKE_SENT は当日分だけを1プロパティに持つ（日付が変わったら空扱い＝肥大化しない）。
+// ============================================================
+var YOBIKAKE_KINDS_ = {
+  eigyo: {
+    label: '📣 営業の呼びかけ',
+    hint: '本日ご予約がない日に、お客様へお声がけをお願いする',
+    defaultMsg: '【本日の営業について】\n\n本日はまだご予約が入っておりません。\nお客様へのお声がけ・ご連絡をお願いします🙏\n\nご来店が決まりましたら、早めに黒服まで共有してください。'
+  },
+  hayaagari: {
+    label: '🕐 早上がりの可能性',
+    hint: '状況により早く上がってもらう可能性があることを先に伝える',
+    defaultMsg: '【本日の営業について】\n\n本日は状況により早上がりになる可能性があります。\n確定しましたら改めてご連絡しますので、少々お待ちください🙏'
+  }
+};
+
+// 保存済み文面（無ければ既定文）。custom=管理者が書き換えて保存した状態
+function yobikakeTpl_() {
+  var saved = {};
+  try { saved = JSON.parse(prop('YOBIKAKE_TPL') || '{}') || {}; } catch (e) { saved = {}; }
+  var out = {};
+  Object.keys(YOBIKAKE_KINDS_).forEach(function (k) {
+    var v = String(saved[k] == null ? '' : saved[k]).trim();
+    out[k] = {
+      label: YOBIKAKE_KINDS_[k].label,
+      hint: YOBIKAKE_KINDS_[k].hint,
+      defaultMsg: YOBIKAKE_KINDS_[k].defaultMsg,
+      message: v || YOBIKAKE_KINDS_[k].defaultMsg,
+      custom: !!v
+    };
+  });
+  return out;
+}
+
+function yobikakeSaveTpl_(kind, text) {
+  if (!YOBIKAKE_KINDS_[kind]) return;
+  var saved = {};
+  try { saved = JSON.parse(prop('YOBIKAKE_TPL') || '{}') || {}; } catch (e) { saved = {}; }
+  var v = String(text == null ? '' : text).trim();
+  // 既定文そのままなら保存しない＝既定文を後から直した時に古い写しが凍りつくのを防ぐ
+  if (v && v !== YOBIKAKE_KINDS_[kind].defaultMsg) saved[kind] = v; else delete saved[kind];
+  setProp('YOBIKAKE_TPL', JSON.stringify(saved));
+}
+
+// 当日（営業日）の送信履歴。日付が変わったら空を返す
+function yobikakeSentToday_() {
+  try {
+    var o = JSON.parse(prop('YOBIKAKE_SENT') || '{}') || {};
+    if (o.date !== bizDateStr_()) return [];
+    return o.items || [];
+  } catch (e) { return []; }
+}
+function yobikakeRecordSent_(kind, who) {
+  var items = yobikakeSentToday_();
+  items.push({ kind: kind, at: nowStamp_(), by: String(who || '') });
+  setProp('YOBIKAKE_SENT', JSON.stringify({ date: bizDateStr_(), items: items }));
+}
+
+// 画面の材料：本日の予約件数・出勤人数・宛先・文面・本日の送信済み・配信枠
+function getYobikakeInfo() {
+  var date = bizDateStr_();
+  var rsvCount = 0, rsvPax = 0, rsvError = '';
+  try {
+    var rsv = (getYoyakuReservations_(date) || []).filter(function (r) { return r.status !== 'キャンセル'; });
+    rsvCount = rsv.length;
+    rsv.forEach(function (r) { rsvPax += rsvPaxOf_(r); });
+  } catch (e) { rsvError = String(e); }
+
+  var castCount = 0, kuroCount = 0, shiftError = '';
+  try {
+    var d = getTodayShiftDetail_();
+    castCount = splitYoyakuShift_(d.cast).active.length;
+    kuroCount = splitYoyakuShift_(d.kurofuku).active.length;
+  } catch (e) { shiftError = String(e); }
+
+  var q = { ok: false, error: '未取得' };
+  try { q = lineQuotaStatus_(); } catch (e) { q = { ok: false, error: String(e) }; }
+
+  return {
+    ok: true,
+    date: date,
+    rsvCount: rsvCount, rsvPax: rsvPax, rsvError: rsvError,
+    castCount: castCount, kuroCount: kuroCount, shiftError: shiftError,
+    targetLabel: 'スタッフグループ（14:00「本日出勤ラインナップ」と同じ宛先）',
+    targetSet: !!prop('GROUP_STAFF'),
+    tpl: yobikakeTpl_(),
+    sentToday: yobikakeSentToday_(),
+    quota: q
+  };
+}
+
+// 送信本体。⭐送る前に配信枠を確認する（残0で撃つと429を「送った」と誤報告する＝forceResendToday_と同じ作法）
+function sendYobikake(kind, text, saveDefault, who) {
+  if (!YOBIKAKE_KINDS_[kind]) return { ok: false, error: '通知の種別が不正です' };
+  var msg = String(text == null ? '' : text).trim();
+  if (!msg) return { ok: false, error: '本文が空です' };
+  if (msg.length > 1900) return { ok: false, error: '本文が長すぎます（' + msg.length + '文字／1900文字まで）' };
+
+  var to = prop('GROUP_STAFF');
+  if (!to) return { ok: false, error: 'スタッフグループ（GROUP_STAFF）が未設定です。1通も送っていません。' };
+
+  var q = null;
+  try { q = lineQuotaStatus_(); } catch (e) { q = { ok: false, error: String(e) }; }
+  if (q && q.ok && q.type === 'limited' && q.remain !== null && q.remain <= 0) {
+    return { ok: false, quota: q,
+      error: '⛔ 配信枠が残っていません（上限' + q.limit + '通／使用' + q.used + '通）。1通も送っていません。' };
+  }
+
+  var r = pushChecked_(to, msg);
+  if (!r.ok) {
+    return { ok: false, quota: q, error: '⛔ LINE送信に失敗しました（HTTP' + r.code + '）' + (r.body ? ' ' + r.body : '') };
+  }
+
+  if (saveDefault) { try { yobikakeSaveTpl_(kind, msg); } catch (e) {} }  // 保存の失敗で送信結果を巻き戻さない
+  try { yobikakeRecordSent_(kind, who); } catch (e) {}
+
+  return {
+    ok: true,
+    note: '✅ スタッフグループへ送信しました（1通消費）',
+    kind: kind,
+    tpl: yobikakeTpl_(),
+    sentToday: yobikakeSentToday_(),
+    quota: q
+  };
 }

@@ -619,7 +619,7 @@ var TAB_GROUPS=[
   {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kyukin','📉 当欠'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['haken','🪪 派遣台帳'],['awards','🏆 表彰'],['manual','📖 マニュアル'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
   {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
   {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['nenkan','📈 年間集計'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
-  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
+  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['yobikake','📣 呼びかけ'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
   {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営'],['usage','📈 使われ方']]}
 ];
 var GROUP='top';
@@ -636,7 +636,7 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); beacon_('tab:'+t); renderNav();
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,haken:renderHaken,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef,usage:renderUsage}[TAB]||renderStaff)();
+  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,haken:renderHaken,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,yobikake:renderYobikake,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef,usage:renderUsage}[TAB]||renderStaff)();
 }
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
@@ -2364,6 +2364,101 @@ function drawResendResult(){
   setBody('<div class="toolbar"><span class="cnt">再送結果</span><span class="sp" style="flex:1"></span><button class="btn pri" onclick="renderResend()">↻ 一覧に戻る</button></div>'+head+(rows||'<div class="empty">結果なし</div>'));
 }
 
+
+/* ===== 📣 呼びかけ（本日出勤のグループLINE＝スタッフグループへ手で流す）=====
+ * ① 営業の呼びかけ（予約がない日）② 早上がりの可能性。どちらも押した人が決めて送る＝自動判定はしない。
+ * ⚠️textareaを持つ画面＝入力のたびに再描画してはいけない（打った字が消える／iOSでキーボードが閉じる）。
+ *   再描画の前は必ず ybStash_() で今の入力値をDOMから退避してから描く。 */
+var ybState=null, ybText={}, ybSaveDef={}, ybConfirm=null, ybBusy=false;
+function renderYobikake(){
+  loading(); ybConfirm=null; ybBusy=false;
+  api('getYobikakeInfo').then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込みエラー')+'</div>'); return; }
+    ybState=r; ybText={}; ybSaveDef={};
+    Object.keys(r.tpl||{}).forEach(function(k){ ybText[k]=(r.tpl[k].message||''); });
+    drawYobikake();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+function ybStash_(){ Object.keys(ybText).forEach(function(k){ var el=document.getElementById('yb-ta-'+k); if(el) ybText[k]=el.value; }); }
+function ybQuotaLine_(){
+  var q=(ybState&&ybState.quota)||{};
+  if(!q.ok) return '<span style="color:#e0564a">配信枠を確認できません</span>';
+  if(q.type!=='limited') return '配信枠：無制限プラン';
+  var danger=(q.remain!=null&&q.remain<=0);
+  return '配信枠：残り <b style="color:'+(danger?'#e0564a':'var(--accent)')+'">'+(q.remain!=null?q.remain.toLocaleString():'?')+'</b> 通'+(danger?' <b style="color:#e0564a">⛔上限到達＝送信不可</b>':'');
+}
+function ybSentOf_(kind){ return ((ybState&&ybState.sentToday)||[]).filter(function(x){return x.kind===kind;}); }
+function ybHead_(){
+  var s=ybState||{};
+  var d=String(s.date||'').split('-'), dl=(d.length===3)?(Number(d[1])+'月'+Number(d[2])+'日'):(s.date||'');
+  var noRsv=(s.rsvCount===0);
+  var rsv=s.rsvError
+    ? '<span style="color:#e0564a">予約を取得できませんでした</span>'
+    : ('本日の予約 <b style="color:'+(noRsv?'#e0564a':'var(--accent)')+'">'+s.rsvCount+'件</b>（合計'+s.rsvPax+'名）');
+  var shift=s.shiftError?'<span style="color:#e0564a">シフト取得エラー</span>':('出勤 キャスト'+s.castCount+'名・黒服'+s.kuroCount+'名');
+  var tgt=s.targetSet?esc(s.targetLabel||''):'<span style="color:#e0564a">⛔ スタッフグループ未設定＝送信できません</span>';
+  return '<div style="border:1px solid #2a3140;background:#161b26;border-radius:10px;padding:12px 14px;margin:4px 2px 14px;line-height:1.9;font-size:13px">'
+    +'<div style="font-weight:800;font-size:15px;margin-bottom:4px">'+esc(dl)+'（営業日）</div>'
+    +'<div>'+rsv+'　／　'+shift+'</div>'
+    +'<div style="color:#9aa0aa">宛先：'+tgt+'</div>'
+    +(noRsv&&!s.rsvError?'<div style="margin-top:6px;color:#ffcf6a;font-weight:700">📣 本日はご予約が入っていません。営業の呼びかけどきです。</div>':'')
+    +'</div>';
+}
+function ybCard_(kind){
+  var t=((ybState&&ybState.tpl)||{})[kind]; if(!t) return '';
+  var sent=ybSentOf_(kind), busy=ybBusy;
+  var badge=sent.length
+    ? '<span class="badge" style="background:#15321f;color:#4ad07a">✅ 本日 '+esc(String(sent[sent.length-1].at||'').slice(-5))+' 送信済み'+(sent.length>1?('（'+sent.length+'回）'):'')+'</span>'
+    : '<span class="badge" style="background:#2a2350;color:#b7a6ff">⚪ 本日未送信</span>';
+  var body='';
+  if(ybConfirm===kind){
+    var prev=String(ybText[kind]||'').trim();
+    body='<div style="border:1px solid var(--accent-line,#7a3f10);background:var(--accent-bg,#241a10);border-radius:10px;padding:14px;margin-top:10px">'
+      +'<div style="font-weight:800;margin-bottom:8px">📨 この内容でスタッフグループへ送ります。よろしいですか？</div>'
+      +'<div style="white-space:pre-wrap;font-size:13px;line-height:1.8;background:#0f131c;border:1px solid #2a3140;border-radius:8px;padding:12px;margin-bottom:10px">'+esc(prev)+'</div>'
+      +(sent.length?'<div style="color:#ffcf6a;font-size:12px;margin-bottom:10px">⚠️ この通知は本日すでに'+sent.length+'回送っています。同じ内容が二重で届きます。</div>':'')
+      +'<div style="font-size:12px;color:#9aa0aa;margin-bottom:12px">この操作でLINEを1通消費します。'+(ybSaveDef[kind]?'送信後、この文面を次回からの既定にします。':'')+'</div>'
+      +'<button class="btn pri" '+(busy?'disabled':'')+' onclick="ybGo(\''+kind+'\')">'+(busy?'送信中…':'送信する')+'</button> '
+      +'<button class="btn" '+(busy?'disabled':'')+' onclick="ybCancel()">キャンセル</button></div>';
+  }else{
+    body='<textarea class="ta" id="yb-ta-'+kind+'" rows="7" style="width:100%;margin-top:10px;line-height:1.8">'+esc(ybText[kind]||'')+'</textarea>'
+      +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">'
+      +'<button class="btn" onclick="ybReset(\''+kind+'\')">既定文に戻す</button>'
+      +'<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9aa0aa;cursor:pointer">'
+      +'<input type="checkbox" '+(ybSaveDef[kind]?'checked':'')+' onchange="ybToggleSave(\''+kind+'\')"> 次回からこの文面で開く</label>'
+      +'<span style="flex:1"></span>'
+      +'<button class="btn pri" onclick="ybAsk(\''+kind+'\')">📨 この内容で送る</button></div>'
+      +(t.custom?'<div style="font-size:11px;color:#9aa0aa;margin-top:6px">※ 保存済みの文面を表示しています</div>':'');
+  }
+  return '<div style="border:1px solid #2a3140;border-radius:12px;padding:14px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="font-weight:800;font-size:15px">'+esc(t.label)+'</div>'+badge+'</div>'
+    +'<div style="font-size:12px;color:#9aa0aa;margin-top:4px">'+esc(t.hint||'')+'</div>'
+    +body+'</div>';
+}
+function drawYobikake(){
+  var note='<div style="font-size:12px;color:#9aa0aa;line-height:1.6;margin:0 2px 12px">押した時だけ送ります（自動送信はしません）。文面はその場で書き換えてから送れます。</div>';
+  var tools='<div class="toolbar"><span class="cnt">'+ybQuotaLine_()+'</span><span class="sp" style="flex:1"></span><button class="btn" onclick="renderYobikake()">↻ 最新に更新</button></div>';
+  setBody(tools+ybHead_()+note+ybCard_('eigyo')+ybCard_('hayaagari'));
+}
+function ybReset(kind){ ybStash_(); var t=((ybState&&ybState.tpl)||{})[kind]; ybText[kind]=(t&&t.defaultMsg)||''; ybSaveDef[kind]=false; drawYobikake(); }
+function ybToggleSave(kind){ ybStash_(); ybSaveDef[kind]=!ybSaveDef[kind]; drawYobikake(); }
+function ybAsk(kind){
+  ybStash_();
+  if(!String(ybText[kind]||'').trim()){ toast('本文が空です',true); return; }
+  if(ybState&&ybState.targetSet===false){ toast('スタッフグループが未設定です',true); return; }
+  ybConfirm=kind; drawYobikake();
+}
+function ybCancel(){ ybConfirm=null; drawYobikake(); }
+function ybGo(kind){
+  if(ybBusy) return;
+  ybBusy=true; drawYobikake();
+  api('sendYobikake',{kind:kind,text:ybText[kind],saveDefault:!!ybSaveDef[kind]}).then(function(r){
+    ybBusy=false;
+    if(!r||r.ok===false){ toast((r&&r.error)||'送信に失敗しました',true); ybConfirm=null; drawYobikake(); return; }
+    toast(r.note||'送信しました');
+    renderYobikake();   /* 送信済みバッジ・配信枠を実データで引き直す */
+  }).catch(function(){ ybBusy=false; ybConfirm=null; toast('送信に失敗しました',true); drawYobikake(); });
+}
 /* ===== ✅ チェックリスト（開店前・閉店後のやること編集） ===== */
 var chk=null;
 function newChkId(){ return 'c'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
@@ -6620,6 +6715,24 @@ function MOCKAPI(action,body){
   if(action==='getShiftSubmitStatus')return {ok:true,weekLabel:'7/14〜7/20',weekKey8:'20260714',total:5,submitted:['まや','たかし'],declined:['ゆうた'],missing:[{name:'鈴木海',registered:true},{name:'あや',registered:false}]};
   if(action==='runShiftOpenNow')return {ok:true,sent:4,total:5,label:'7/14〜7/20'};
   if(action==='getNotifSettings')return {ok:true,settings:{kaiten_check:{label:'開店チェック誘導',time:'18:30',enabled:true,group:'黒服',msgEditable:true,message:'開店チェックをお願いします'},rain_alert:{label:'☂️雨アラート',type:'auto',enabled:true,group:'黒服',desc:'雨前に通知'}}};
+  /* 📣 呼びかけ（ローカル確認用。GASを叩かずに画面を押せる） */
+  if(action==='getYobikakeInfo'||action==='sendYobikake'||action==='saveYobikakeTpl'){
+    var YBD={eigyo:{label:'📣 営業の呼びかけ',hint:'本日ご予約がない日に、お客様へお声がけをお願いする',defaultMsg:'【本日の営業について】\n\n本日はまだご予約が入っておりません。\nお客様へのお声がけ・ご連絡をお願いします🙏\n\nご来店が決まりましたら、早めに黒服まで共有してください。'},
+             hayaagari:{label:'🕐 早上がりの可能性',hint:'状況により早く上がってもらう可能性があることを先に伝える',defaultMsg:'【本日の営業について】\n\n本日は状況により早上がりになる可能性があります。\n確定しましたら改めてご連絡しますので、少々お待ちください🙏'}};
+    if(typeof MOCK_YB_SENT==='undefined') MOCK_YB_SENT=[];
+    if(typeof MOCK_YB_TPL==='undefined') MOCK_YB_TPL={};
+    var ybTpl=function(){var o={};Object.keys(YBD).forEach(function(k){var v=String(MOCK_YB_TPL[k]||'').trim();o[k]={label:YBD[k].label,hint:YBD[k].hint,defaultMsg:YBD[k].defaultMsg,message:v||YBD[k].defaultMsg,custom:!!v};});return o;};
+    if(action==='saveYobikakeTpl'){ MOCK_YB_TPL[body.kind]=body.text; return {ok:true,tpl:ybTpl()}; }
+    if(action==='sendYobikake'){
+      if(!String(body.text||'').trim()) return {ok:false,error:'本文が空です'};
+      if(body.saveDefault) MOCK_YB_TPL[body.kind]=body.text;
+      MOCK_YB_SENT.push({kind:body.kind,at:'2026-09-03 15:20',by:'りく'});
+      return {ok:true,note:'✅ スタッフグループへ送信しました（1通消費）',kind:body.kind,tpl:ybTpl(),sentToday:MOCK_YB_SENT.slice(),quota:{ok:true,type:'limited',limit:30000,used:8201,remain:21799}};
+    }
+    return {ok:true,date:'2026-09-03',rsvCount:0,rsvPax:0,rsvError:'',castCount:7,kuroCount:3,shiftError:'',
+            targetLabel:'スタッフグループ（14:00「本日出勤ラインナップ」と同じ宛先）',targetSet:true,
+            tpl:ybTpl(),sentToday:MOCK_YB_SENT.slice(),quota:{ok:true,type:'limited',limit:30000,used:8200,remain:21800}};
+  }
   if(action==='getResendableNotices')return {ok:true,today:'2026-07-23',quota:{ok:true,type:'limited',limit:30000,used:8200,remain:21800},list:[
     {id:'lineup',label:'本日出勤ラインナップ',cat:'group',time:'14:00',dynamic:true,firedToday:true},
     {id:'kinsen_mae',label:'開店準備の号令',cat:'group',time:'19:30',dynamic:true,firedToday:false},
