@@ -24,7 +24,7 @@ const FNS = [
   'submitShift'
 ];
 /* 改修で増える関数（まだ無い状態でも読み込めるように optional） */
-const FNS_OPT = ['writeShiftCells_'];
+const FNS_OPT = ['writeShiftCells_', 'submitShiftImpl_'];
 /* しきい値・メモ変数は改修で増える＝まだ無い状態でも読み込めるように optional */
 /* しきい値・タブ名は**実物から拾う**（テスト側に書き写した瞬間にズレる） */
 const VARS = ['TZ', 'STAFF_TAB', 'SHIFT_TAB', 'SHIFT_REQUEST_TAB', 'HOLIDAYS_PROP_',

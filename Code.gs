@@ -9670,7 +9670,20 @@ function getSekiJokyouData() {
 //   実体は shiftNameKey_ / rosterEntryByName_ と一緒に下側へ集約済み。ここには足さないこと。
 
 // 黒服バイトは全シフト管理者承認制(pending→コンソールで承認)。黒服社員・キャスト等は自動承認。当日の欠勤申請のみ承認待ち(pending)。
+// ⚠️2026-09-04追記: このPOST経路は_staffValuesMemoが既定offのため、getStaffName/getStaffRoleByName_/
+//   rosterEntryByName_がそれぞれ独立に名簿(スタッフマスタ)をフル読みしていた（1回の提出で最大3回）。
+//   home経路(handlePortalApi_)と同じ流儀でこの関数の実行中だけメモを立て、必ずfinallyで解除する
+//   （名簿を書き換える処理ではない＝立てても安全。解除を保証しないと次のリクエストで古い名簿を返す）。
 function submitShift(payload) {
+  _staffValuesMemo = {};
+  try {
+    return submitShiftImpl_(payload);
+  } finally {
+    _staffValuesMemo = null;
+  }
+}
+
+function submitShiftImpl_(payload) {
   const callerName = getStaffName(payload.userId);
   if (!callerName) return { ok: false, error: '登録されていません。グループLINEで #登録 名前 を送ってください。' };
   // 管理者は viewAs 対象(targetName)へ代理提出できる。それ以外は自分自身のみ
@@ -22742,7 +22755,11 @@ function rosterEntryByName_(name) {
   if (!stf) return null;
   let rc = -1;
   try { const c = getStaffRetireCols_(stf, false)['退職']; if (c != null && c >= 0) rc = c; } catch (e) {}
-  const rows = stf.getDataRange().getValues();
+  // ⚠️2026-09-04改修: 以前は stf.getDataRange().getValues() で毎回独自にフル読みしていた。
+  //   staffSheetValues_() は home経路以外(既定)では単に素通しの同等の読み方＝挙動は完全に同じ。
+  //   違いは submitShift が _staffValuesMemo を立てている間だけ他の呼び出し（getStaffName等）と
+  //   1回の読みを共有できる点だけ（それ以外の呼び出し元では従来通り都度フル読み・無改修）。
+  const rows = staffSheetValues_() || [];
   for (let i = 1; i < rows.length; i++) {
     if (shiftNameKey_(rows[i][1]) !== key) continue; // 名簿の名前はB列
     return {
