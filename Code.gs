@@ -22873,20 +22873,38 @@ function writeShiftCells_(name, items, userId) {
     isNewRow = true; matchedBy = 'created';
   }
 
-  // 2) 日付ごとに列を確定（無ければ新設）してから row(メモリ上)に書く。シート往復は列の新規作成ぶんだけ。
+  // 2) 日付列を「足りない分だけ・まとめて1回」で新設する。
+  //    ⚠️2026-09-04追記: ensureShiftDateColumn_（1日単位で毎回シート往復）を項目数ぶん呼ぶと、
+  //      まだ列が無い日が多い月まとめ提出（来週分をまとめて出す＝ほぼ全日が新規列）で往復が
+  //      積み上がり、本番のポータルで実際にタイムアウトが再発した（GAS @876適用後も実測で確認）。
+  //      → 足りない日付をまず洗い出し、1回の setValues でヘッダをまとめて追加する。
+  const missing = [], seenMissing = {};
   items.forEach(it => {
-    let colIdx = headers.indexOf(it.date);
-    if (colIdx < 0) {
-      colIdx = ensureShiftDateColumn_(sh, it.date); // 列が無ければ自動生成してから書く
-      if (colIdx < 0) { results[it.date] = { ok: false, error: '日付列を作成できません: ' + it.date }; return; }
-      headers[colIdx] = it.date; // 同じ提出内に同じ新規日付が複数来ても列を二重生成しない
-    }
+    if (headers.indexOf(it.date) >= 0 || seenMissing[it.date]) return; // 既存 or 同一提出内の重複日付
+    const dt = mdToBizDate_(it.date, new Date());
+    if (dt) { missing.push({ date: it.date, dt: dt }); seenMissing[it.date] = true; }
+    // dtが取れない(不正な日付文字列)場合はmissingに積まない＝下のheaders.indexOf判定で従来通りエラーになる
+  });
+  if (missing.length) {
+    const startCol = sh.getLastColumn() + 1; // ⚠️headers.lengthではなく"今の"実列数を見る（ensureShiftIdColumn_で1列増えている場合がある）
+    // ⚠️シートの「値がある列数」(getLastColumn)と「グリッドの列数」(getMaxColumns)は別物＝
+    //   グリッドに空き列が無いと getRange(...,numColumns) は範囲外で落ちる（元の ensureShiftDateColumn_
+    //   は1列ずつなので空き1列あれば足りていたが、まとめて複数列だと不足しうる）。書く前に必ず広げる。
+    sh.insertColumnsAfter(startCol - 1, missing.length);
+    sh.getRange(1, startCol, 1, missing.length).setValues([missing.map(m => m.dt)]); // Date値で入れる（既存列と同じ型。読取時にM/d化される）
+    missing.forEach((m, i) => { headers[startCol - 1 + i] = m.date; }); // headers配列にも反映（indexOfで引けるように）
+  }
+
+  // 3) 日付ごとに row(メモリ上)へ書く。ここはもうシート往復を起こさない。
+  items.forEach(it => {
+    const colIdx = headers.indexOf(it.date);
+    if (colIdx < 0) { results[it.date] = { ok: false, error: '日付列を作成できません: ' + it.date }; return; }
     while (row.length <= colIdx) row.push('');
     row[colIdx] = it.value || '';
     results[it.date] = { ok: true, matchedBy: matchedBy, created: isNewRow };
   });
 
-  // 3) 行を1回だけ書き戻す（新規行はappendRow、既存行は1行ぶんのsetValues）。
+  // 4) 行を1回だけ書き戻す（新規行はappendRow、既存行は1行ぶんのsetValues）。
   if (isNewRow) sh.appendRow(row);
   else sh.getRange(rowIdx + 1, 1, 1, row.length).setValues([row]);
   return results;
