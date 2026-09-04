@@ -1653,6 +1653,7 @@ var BOOTED=false; /* loadAll() で実データを1度でも取得したか。本
 /* 以下の配列はローカルプレビュー用フォールバック。GAS本番では loadAll() が実データで上書きする。 */
 var CASTS=['まや','みれい','のあ','ゆうか','りお','ゆき','かい','ここ','れな','あん'];
 var WORKCASTS=null; /* 本日出勤＋当日派遣のキャスト。付け回し候補に使用（null=未取得→全キャストにフォールバック） */
+var WORKKURO=null;  /* 本日出勤の黒服。**伝票の「誰に付けますか」の候補にだけ**使う（席には付けない＝付け回し候補には混ぜない）。null=未取得 */
 var CASTKUBUN={}; /* {空白除去実名:'派遣'|'体験'} 当日の非通常キャスト区分。名前の横にバッジ表示 */
 function castKubun(name){ return CASTKUBUN[String(name||'').replace(/\s/g,'')]||''; }
 function castBadge(name){ var k=castKubun(name); if(!k)return ''; return '<span class="kubun-badge '+(k==='派遣'?'haken':'taiken')+'">'+k+'</span>'; }
@@ -5713,6 +5714,14 @@ function bmAttrPool(){
     nm=String(nm||'').trim(); if(!nm||seen[nm]) return;
     if(typeof castKubun==='function'&&castKubun(nm)==='派遣') return;   // 個別名は出さない
     seen[nm]=1; casts.push(nm);
+  });
+  /* 黒服。⭐**本日出勤の黒服を全員**出す（2026-09-04 ボス指示「誰がドリンクをもらったか選ぶところに黒服を入れて」）。
+     ⚠️旧実装は「黒服席(2F-K/5F-K)に手で動かした人」＋「ログイン中の本人」の2つだけ＝黒服席へ動かす運用が
+       無いので、実質**その端末にログインしている1人しか出ていなかった**（他の黒服は選びようが無かった）。
+     ⚠️出勤者を先に、在席・ログイン本人は後ろに足す（重複はseenで落ちる）。
+       WORKKURO が未取得(null)でも旧2経路が残る＝backend未反映でも今までどおり動く。 */
+  ((typeof WORKKURO!=='undefined'&&WORKKURO)?WORKKURO:[]).forEach(function(nm){
+    nm=String(nm||'').trim(); if(nm&&!seen[nm]){ seen[nm]=1; kuro.push(nm); }
   });
   // 在席の黒服（黒服席）＋いま軍師にログインしている本人
   (typeof SEATS!=='undefined'?SEATS:[]).forEach(function(s2){
@@ -11946,6 +11955,7 @@ function applyLoadAll_(r){
   if(r[7]!=null) TASKS=(r[7]&&r[7].tasks)||[];
   if(r[8]&&typeof r[8]==='object') CASTKUBUN=r[8];
   if(r[9]!=null) tslipApplyPrinted_(r[9]);   // 🖊 印刷済みrowIdx（null=取得失敗→前回値を保持）
+  if(r[10]!=null) WORKKURO=r[10];            // 本日出勤の黒服（末尾に足す＝既存の添字をずらさない）
   applyRsvGrouping(); // 同じ予約が複数テーブル → 1組として結合表示
   annotateLeavePlan(); // 占有席に「空く予定」(=在席組の退店予定時刻)を付与
   BOOTED=true; renderAll();
@@ -11963,7 +11973,8 @@ function loadAllLegacy_(){
     gsr('getKioskWorkingCasts').catch(function(){return null;}),
     gsr('getKioskTasks').catch(function(){return null;}),
     gsr('getKioskCastKubun').catch(function(){return null;}),
-    gsr('getSlipPrinted').catch(function(){return null;})   /* 🖊テーブル伝票の印刷済みrowIdx（バンドル未対応版の保険） */
+    gsr('getSlipPrinted').catch(function(){return null;}),   /* 🖊テーブル伝票の印刷済みrowIdx（バンドル未対応版の保険） */
+    gsr('getKioskWorkingKurofuku').catch(function(){return null;})   /* 伝票の帰属候補用の黒服。backend未反映でも null で素通り＝今までどおり動く */
   ]).then(applyLoadAll_);
 }
 var _loadingAll=false, _loadAllPend=false;
@@ -11975,7 +11986,7 @@ function loadAll(){
   /* まず1発バンドル getKioskLoadAll を試す→未デプロイ/失敗なら従来9本へ自動フォールバック（＝backend未反映でも壊れない） */
   gsr('getKioskLoadAll',curDate).then(function(b){
     if(!b || b.ok!==true) throw new Error('nobundle');
-    applyLoadAll_([b.hall2,b.reservations,b.tsukemawashi,b.shiftBoard,b.castRequests,b.castNames,b.workingCasts,b.tasks,b.castKubun,b.slipPrinted]);
+    applyLoadAll_([b.hall2,b.reservations,b.tsukemawashi,b.shiftBoard,b.castRequests,b.castNames,b.workingCasts,b.tasks,b.castKubun,b.slipPrinted,b.workingKuro]);
   }).catch(function(){
     return loadAllLegacy_();
   }).catch(function(e){ if(typeof toast==='function') toast('読込エラー: '+(e&&e.message||e)); })
