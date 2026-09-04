@@ -21626,6 +21626,48 @@ function posReopenBill(dateKey, rowIdx, by) {
   return { ok: true, mode: posMode_() };
 }
 
+/* ── 同じ伝票の「会計済み」が複数ある日の後始末 ─────────────────────────────
+   ⚠️GASエディタから手で流す道具。**GUNSHI_API_FNSに登録しない**＝軍師/外部からは呼べない。
+   ⭐冪等＝2回流しても2回目は0件（重複が無ければ何も書かない）。
+   ⭐残すのは**いちばん古い1行**（最初に成立した会計）。残りを posReopenBill と同じ形で取消にする
+     ＝行は消さない・取消時刻と取消者が残る（forward-only）。
+   経緯＝2026-09-04営業日、営業日をString()で比べていたため二重会計の関所が素通りし、
+     中島様の伝票(296)が4行になった。関所は @882 で修正済み。これは**残ったデータの掃除**。
+   使い方＝エディタで posDedupeClosedDay('2026-09-04') を選んで実行。dryRun=true なら書かずに件数だけ返す。
+--------------------------------------------------------------------------- */
+function posDedupeClosedDay(dateKey, by, dryRun) {
+  const key = String(dateKey || bizDateStr_());
+  const sh = getPosCloseSheet_(key);
+  const last = sh.getLastRow();
+  if (last < 2) return { ok: true, dateKey: key, dup: 0, voided: [], note: '記録なし' };
+  const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
+
+  /* 伝票行ごとに「会計済み」の行番号を、シートの並び順（＝古い順）で集める */
+  const seen = {};
+  for (let i = 0; i < vals.length; i++) {
+    if (visitDateStr_(vals[i][0]) !== key) continue;
+    if (String(vals[i][24]) !== POS_CLOSE_LIVE_) continue;
+    const rid = String(vals[i][1]);
+    (seen[rid] = seen[rid] || []).push({ row: i + 2, ts: fmtStamp_(vals[i][2]), cust: String(vals[i][6] || ''), total: Number(vals[i][20]) || 0 });
+  }
+
+  const voided = [];
+  Object.keys(seen).forEach(function (rid) {
+    const rows = seen[rid];
+    if (rows.length < 2) return;                 // 重複なし＝触らない
+    rows.slice(1).forEach(function (r) {         // 先頭(いちばん古い)だけ残す
+      voided.push({ rowIdx: rid, sheetRow: r.row, ts: r.ts, cust: r.cust, total: r.total });
+      if (!dryRun) sh.getRange(r.row, 25, 1, 3).setValues([[POS_CLOSE_VOID_, nowStamp_(), String(by || '二重計上の修正')]]);
+    });
+  });
+
+  const amount = voided.reduce(function (s, v) { return s + v.total; }, 0);
+  const res = { ok: true, dateKey: key, dryRun: !!dryRun, voided: voided,
+                件数: voided.length, 取り消した金額: amount };
+  console.log(JSON.stringify(res, null, 2));     // エディタの実行ログにそのまま出す
+  return res;
+}
+
 /* その営業日の伝票を全部返す（端末はこれで他端末の入力を拾う） */
 function getPosBills(dateKey) {
   const key = String(dateKey || bizDateStr_());
