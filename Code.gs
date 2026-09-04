@@ -21668,6 +21668,16 @@ function posDedupeClosedDay(dateKey, by, dryRun) {
   return res;
 }
 
+/* ⬇⬇ ボスがGASエディタで「関数を選んで実行」するだけの入口（2026-09-05の後始末用）。
+   引数を打たなくていいように営業日を埋めてある。まず「確認」→中身を見てから「実行」。
+   ⚠️用が済んだら2本とも消してよい（posDedupeClosedDay 本体は道具として残す）。 */
+function 確認_0904の二重計上を数えるだけ() {
+  return posDedupeClosedDay('2026-09-04', '', true);      // true=書かない
+}
+function 実行_0904の二重計上を取り消す() {
+  return posDedupeClosedDay('2026-09-04', '二重計上の修正', false);
+}
+
 /* その営業日の伝票を全部返す（端末はこれで他端末の入力を拾う） */
 function getPosBills(dateKey) {
   const key = String(dateKey || bizDateStr_());
