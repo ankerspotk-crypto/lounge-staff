@@ -21469,7 +21469,7 @@ function getPosClosed(dateKey) {
   if (last < 2) return { mode: posMode_(), dateKey: key, closed: out };
   const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
   vals.forEach(r => {
-    if (String(r[0]) !== key) return;
+    if (visitDateStr_(r[0]) !== key) return;   // ⛔営業日はDate値＝String()で比べない（会計済みが1件も返らなくなる）
     if (String(r[24]) !== POS_CLOSE_LIVE_) return;
     out.push({ rowIdx: String(r[1]), ts: fmtStamp_(r[2]), by: String(r[3] || ''), total: Number(r[20]) || 0 });
   });
@@ -21491,7 +21491,11 @@ function posCloseBill(dateKey, rowIdx, rec, by) {
     if (last >= 2) {
       const idx = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
       for (let i = 0; i < idx.length; i++) {
-        if (String(idx[i][0]) === key && String(idx[i][1]) === rid && String(idx[i][24]) === POS_CLOSE_LIVE_) {
+        /* ⛔営業日は`String()`で比べるな＝シートに書いた'2026-09-04'はSheetsが**日付値に変換する**ので
+           読み戻すと Date になり `String(Date)`='Fri Sep 04 2026 …' で**絶対に一致しない**＝関所が素通りする。
+           2026-09-05に実害（中島様の伝票が4重に会計記録された）。必ず visitDateStr_ で正規化する。
+           [[reference_sheet_date_tostring_trap]] */
+        if (visitDateStr_(idx[i][0]) === key && String(idx[i][1]) === rid && String(idx[i][24]) === POS_CLOSE_LIVE_) {
           return { ok: false, error: 'この伝票はすでに会計済みです（' + fmtStamp_(idx[i][2]) + '）' };
         }
       }
@@ -21524,7 +21528,7 @@ function posDeleteBill(dateKey, rowIdx, by) {
   if (last < 2) return { ok: true };
   const idx = sh.getRange(2, 1, last - 1, 2).getValues();
   for (let i = idx.length - 1; i >= 0; i--) {
-    if (String(idx[i][0]) === key && String(idx[i][1]) === rid) sh.deleteRow(i + 2);
+    if (visitDateStr_(idx[i][0]) === key && String(idx[i][1]) === rid) sh.deleteRow(i + 2);  // ⛔営業日はDate値＝String()で比べない
   }
   return { ok: true };
 }
@@ -21587,7 +21591,7 @@ function getPosNextPay(fromKey, toKey) {
   const by = {}, order = [];
   vals.forEach(r => {
     if (String(r[24]) !== POS_CLOSE_LIVE_) return;                 // 取消は数えない
-    const key = String(r[0] || '');
+    const key = visitDateStr_(r[0]);   // ⛔営業日はDate値＝String()だと期間の大小比較が丸ごと壊れる
     if (out.from && key < out.from) return;
     if (out.to && key > out.to) return;
     const next = Number(r[29]) || 0, back = Number(r[30]) || 0;
@@ -21615,7 +21619,7 @@ function posReopenBill(dateKey, rowIdx, by) {
   const vals = sh.getRange(2, 1, last - 1, POS_CLOSE_HEAD_.length).getValues();
   let hit = -1;
   for (let i = 0; i < vals.length; i++) {
-    if (String(vals[i][0]) === key && String(vals[i][1]) === rid && String(vals[i][24]) === POS_CLOSE_LIVE_) { hit = i + 2; break; }
+    if (visitDateStr_(vals[i][0]) === key && String(vals[i][1]) === rid && String(vals[i][24]) === POS_CLOSE_LIVE_) { hit = i + 2; break; }  // ⛔営業日はDate値＝String()で比べない（会計取消が効かなくなる）
   }
   if (hit < 0) return { ok: false, error: '会計済みの記録が見つかりません' };
   sh.getRange(hit, 25, 1, 3).setValues([[POS_CLOSE_VOID_, nowStamp_(), String(by || '')]]);
@@ -21631,7 +21635,7 @@ function getPosBills(dateKey) {
   if (last < 2) return { mode: posMode_(), dateKey: key, bills: out };
   const vals = sh.getRange(2, 1, last - 1, POS_BILL_HEAD_.length).getValues();
   vals.forEach(r => {
-    if (String(r[0]) !== key) return;
+    if (visitDateStr_(r[0]) !== key) return;   // ⛔営業日はDate値＝String()で比べない（他端末の入力を1件も拾えなくなる）
     let data = null;
     try { data = JSON.parse(String(r[5] || 'null')); } catch (e) { data = null; }
     if (!data) return;
@@ -21656,7 +21660,7 @@ function posSaveBill(dateKey, rowIdx, total, data, by) {
     if (last >= 2) {
       const idx = sh.getRange(2, 1, last - 1, 2).getValues();
       for (let i = 0; i < idx.length; i++) {
-        if (String(idx[i][0]) === key && String(idx[i][1]) === rid) { hit = i + 2; break; }
+        if (visitDateStr_(idx[i][0]) === key && String(idx[i][1]) === rid) { hit = i + 2; break; }  // ⛔営業日はDate値＝String()で比べない（毎回新しい行が積まれる）
       }
     }
     /* ⚠️会計済みの伝票に**closedを持たない下書き**が飛んできたら拒否する。

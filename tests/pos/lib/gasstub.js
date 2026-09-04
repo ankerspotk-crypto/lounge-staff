@@ -26,7 +26,7 @@ class FakeRange {
       const ri = this.r - 1 + i;
       while (this.s.rows.length <= ri) this.s.rows.push([]);
       const row = this.s.rows[ri];
-      for (let j = 0; j < this.nc; j++) row[this.c - 1 + j] = vals[i][j];
+      for (let j = 0; j < this.nc; j++) row[this.c - 1 + j] = FakeSheet.coerce(vals[i][j]);  // ⛔appendRowと同じ＝日付に見える文字列はDate値になる
     }
     return this;
   }
@@ -44,7 +44,22 @@ class FakeSheet {
      getRange(…,numColumns) が列数を超えると落ちる＝そこを再現する */
   getMaxColumns() { return this._max || Math.max(26, this.getLastColumn()); }
   insertColumnsAfter(after, n) { this._max = this.getMaxColumns() + n; return this; }
-  appendRow(v) { this.rows.push(v.slice()); this.log.push(['append', v.slice()]); return this; }
+  /* ⛔本物のSheetsは「日付に見える文字列」を書くと**Date値に変換して保存する**＝読み戻すと Date が返る。
+     偽物が文字列のまま持っていると `String(セル値) === '2026-09-04'` が通ってしまい、
+     **本番だけ落ちる比較を素通しさせる**（2026-09-05に実害＝二重会計の関所が効かず中島様の伝票が4重計上）。
+     ここで本物と同じ変換をするのが、この種のバグをテストで捕まえる唯一の道。
+     [[reference_sheet_date_tostring_trap]] */
+  appendRow(v) { const c = v.map(FakeSheet.coerce); this.rows.push(c); this.log.push(['append', c.slice()]); return this; }
+  /* ⚠️Dateは**vm(sandbox)側のコンストラクタ**で作る。ここでNodeのDateを使うと、被検体の中の
+     `v instanceof Date`（Date=FakeDate）が false になり、**変換したつもりで何も再現できない**。
+     backend.js が setDateCtor(FakeDate) で差し込む。 */
+  static coerce(x) {
+    if (typeof x !== 'string') return x;
+    const D = FakeSheet._D || Date;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(x)) return new D(x + 'T00:00:00+09:00');
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}(:\d{2})?$/.test(x)) return new D(x.replace(' ', 'T') + '+09:00');
+    return x;
+  }
   deleteRow(n) { this.rows.splice(n - 1, 1); this.log.push(['delete', n]); return this; }
   setFrozenRows(n) { this.frozen = n; return this; }
   /* 行は無制限に伸びる偽物なので、行数の上限だけは素直に返す（本物の新規シートは1000行） */
@@ -122,6 +137,7 @@ function makeGas(opts) {
   };
 
   return { ss, props, lock, cache, clock: () => clock, setNow: d => { clock = new Date(d); },
+           setDateCtor: D => { FakeSheet._D = D; },   // vm側のDateを使わせる（instanceof Date を成立させる）
            PropertiesService, LockService, Utilities, SpreadsheetApp, CacheService, Session: { getActiveUser: () => ({ getEmail: () => 'test@example.com' }) } };
 }
 module.exports = { makeGas, FakeSS, FakeSheet, FakeRange };

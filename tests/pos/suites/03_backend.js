@@ -69,6 +69,11 @@ module.exports = function (_f, _b, ctx) {
     t.eq(row[28], 4400, 'お釣りも別列');
     t.eq(row[24], '会計済み', '状態＝会計済み');
 
+    /* ⛔この2行が「二重会計の関所」の本体。営業日は**シートに入るとDate値になる**ので、
+       `String(セル) === '2026-09-04'` で比べる実装は本番でだけ素通りする。
+       2026-09-05に実害（中島様の伝票が4重に会計記録・売上+¥298,800）。偽シートも本物と同じくDateに変換する。 */
+    t.ok(row[0] instanceof Date, '⚠️営業日はシートに入るとDate値になる（String()で比べる実装は本番で必ず落ちる）', typeof row[0]);
+
     const dup = b.fn.posCloseBill(KEY, '2', rec, '黒服');
     t.ok(dup.ok === false && /すでに会計済み/.test(dup.error), '⚠️二重会計を拒否する', JSON.stringify(dup));
     t.eq(b.closes().getLastRow(), 2, '拒否したぶんの行は増えない');

@@ -31,6 +31,9 @@ function loadBackend(opts) {
     constructor(...a) { if (a.length === 0) super(nowRef.getTime()); else super(...a); }
     static now() { return nowRef.getTime(); }
   }
+  /* 偽シートが「日付に見える文字列」をDate値に変換するとき、**このFakeDate**で作らせる。
+     Node側のDateで作ると被検体の `v instanceof Date` が false になり再現にならない。 */
+  gas.setDateCtor(FakeDate);
 
   const calls = { push_: [], menu: 0 };
   /* ⚠️組み込み(Object/Array/JSON…)は注入しない＝vm内の realm を使わせる（instanceof が壊れる）。
