@@ -20,6 +20,15 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"H
 .tab{padding:9px 13px;border-radius:9px 9px 0 0;border:1px solid transparent;background:transparent;color:var(--sub);font-size:14px;font-weight:700;cursor:pointer;}
 .tab.on{background:var(--panel2);border-color:var(--line2);border-bottom-color:var(--panel2);color:var(--accent);}
 /* グループ行（14タブを5グループに束ねた第1階層）＝塗りpillで主役。サブタブ(.tab)は従来の下線タブのまま第2階層 */
+/* ⭐よく使う＝グループより上に固定する近道。ボス指摘 2026-09-05
+   「一番上のタブから直感的にたどり着けない／よく使う物が2段階踏まないと出ない」。
+   ⚠️グループ2階層は**そのまま**＝ここは重ねて置く近道であって、置き場所を動かしてはいない
+     （動かすと「前はここに在った」で毎回迷う）。中身は FAV 配列の1箇所だけ。 */
+.favs{display:flex;gap:7px;padding:10px 14px 0;background:var(--panel);flex-wrap:wrap;align-items:center;}
+.favs .fav-lb{font-size:11px;font-weight:800;color:var(--dim);margin-right:2px;}
+.fav{padding:7px 14px;border-radius:999px;border:1px solid var(--accent-line);background:var(--accent-bg);color:var(--accent);font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;}
+.fav:hover{border-color:var(--accent);}
+.fav.on{background:var(--accent);border-color:var(--accent);color:#0b0b12;}
 .groups{display:flex;gap:7px;padding:12px 14px 6px;background:var(--panel);flex-wrap:wrap;align-items:center;}
 .grp{padding:9px 17px;border-radius:11px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:14px;font-weight:800;cursor:pointer;transition:border-color .12s,background .12s;}
 .grp:hover{border-color:var(--accent);}
@@ -407,6 +416,11 @@ table.mtx tr.tp-off td{color:var(--dim);}
   .body{padding:11px;}
   .hd{padding:10px 12px;gap:8px;}
   .hd .brand{font-size:15px;}
+  /* ⭐よく使うは**1行に収める**＝折り返すとナビだけで画面の半分が埋まる（375pxで実測）。
+     見出し「⭐よく使う」は落とす＝ボタン自体が近道だと分かるので意味は落ちない。 */
+  .favs{padding:8px 11px 0;gap:6px;flex-wrap:nowrap;overflow-x:auto;}
+  .favs .fav-lb{display:none;}
+  .fav{padding:6px 11px;font-size:12px;}
   .groups{padding:9px 11px 5px;gap:6px;}
   .grp{padding:9px 14px;font-size:13px;}
   .tabs{padding:6px 11px 0;gap:5px;}
@@ -437,6 +451,7 @@ table.mtx tr.tp-off td{color:var(--dim);}
     <div class="sp"></div>
     <div class="who" id="who"></div>
   </div>
+  <div class="favs" id="favs" style="display:none"></div>
   <div class="groups" id="groups" style="display:none"></div>
   <div class="tabs" id="tabs" style="display:none"></div>
   <div class="body" id="body"><div class="empty">読み込み中…</div></div>
@@ -660,8 +675,31 @@ var TAB_GROUPS=[
 var GROUP='top';
 function groupOf_(t){ for(var i=0;i<TAB_GROUPS.length;i++){ if(TAB_GROUPS[i].tabs.some(function(x){return x[0]===t;})) return TAB_GROUPS[i].g; } return TAB_GROUPS[0].g; }
 function curGroup_(){ return TAB_GROUPS.filter(function(G){return G.g===GROUP;})[0]||TAB_GROUPS[0]; }
+/* ⭐よく使う（ボス申告 2026-09-05「シフトの一覧と、売上一覧と日報かな」）。
+   ⚠️💹収支と📋日報は `pay` タブの**サブビュー**＝グループ→タブ→サブで3クリック、しかも
+     pay は既定が「立替集計」なので毎回1回よけいに押していた。ここから直接その中身に着地させる。
+   ⚠️置き場所は動かしていない＝人事にも会計にも今までどおり在る（近道を重ねただけ）。
+   ⚠️増やすときはここに1行足すだけ。tab は render() のディスパッチ表に在るキー、sub は paySub の値。 */
+var FAV=[
+  {label:'🗓 シフト一覧', tab:'shift'},
+  {label:'💹 売上（収支）', tab:'pay', sub:'sales'},
+  {label:'📋 日報',        tab:'pay', sub:'nippo'}
+];
+function favOn_(f){ return TAB===f.tab && (!f.sub || paySub===f.sub); }
+function goFav(i){
+  var f=FAV[i]; if(!f) return;
+  if(f.sub) paySub=f.sub;          // ⚠️switchTabより先に。後だとrenderPayが既定(立替)を描いてしまう
+  switchTab(f.tab);
+}
 function renderNav(){
   var gEl=document.getElementById('groups'), tEl=document.getElementById('tabs'); if(!gEl||!tEl) return;
+  var fEl=document.getElementById('favs');
+  if(fEl){
+    fEl.style.display='flex';
+    fEl.innerHTML='<span class="fav-lb">⭐ よく使う</span>'+FAV.map(function(f,i){
+      return '<button class="fav'+(favOn_(f)?' on':'')+'" onclick="goFav('+i+')">'+f.label+'</button>';
+    }).join('');
+  }
   gEl.style.display='flex'; tEl.style.display='flex';
   gEl.innerHTML=TAB_GROUPS.map(function(G){ return '<button class="grp'+(G.g===GROUP?' on':'')+'" onclick="switchGroup(\''+G.g+'\')">'+G.label+'</button>'; }).join('');
   tEl.innerHTML=curGroup_().tabs.map(function(x){ return '<button class="tab'+(x[0]===TAB?' on':'')+'" data-t="'+x[0]+'" onclick="switchTab(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('');
@@ -3379,7 +3417,8 @@ function paySubToggle(which){
   function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
   return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('hibarai','💴 日払い照合')+chip('nippo','📋 日報')+chip('sales','💹 収支')+chip('partner','📊 共同経営者')+chip('kotsu','🚕 交通費')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
 }
-function paySwitch(k){ paySub=k; renderPay(); }
+/* ⚠️renderNavも呼ぶ＝⭐よく使うの点灯がサブ切替に追従する（呼ばないと日報を離れても💹が光ったまま） */
+function paySwitch(k){ paySub=k; renderNav(); renderPay(); }
 function renderPay(){
   if(paySub==='tatekae') return renderTatekae();
   if(paySub==='keihi')   return renderKeihiTatekae();
