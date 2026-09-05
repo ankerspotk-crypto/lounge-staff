@@ -190,6 +190,41 @@ table.mtx tbody tr.rc-kuro   td{background:#2a1e08;}
 .lrow .main{flex:1;min-width:160px;}
 .lrow .nm{font-size:14px;font-weight:800;}
 .lrow .meta{font-size:11px;color:var(--dim);margin-top:2px;}
+/* 📅 予約の時系列ビュー（軍師の予約カードに寄せた見せ方）。
+   ⚠️軍師(gunshi.html)の .rcard 系とは**別のクラス名**にしてある＝コンソールの既存CSSと衝突させないため。
+      見た目を直すときは片方だけ直すと2画面が食い違う。意図して寄せている物どうしだと分かるようにここに書く。 */
+.wkday{display:flex;align-items:center;gap:8px;margin:14px 0 7px;font-weight:800;font-size:13px;color:var(--accent);}
+.wkday .wd-cnt{font-size:11px;font-weight:700;color:var(--dim);}
+.wkday .wd-hol{font-size:11px;color:#c9a8f0;background:#1d1430;border:1px solid #4a3070;border-radius:6px;padding:1px 7px;}
+.wkday.today{color:var(--ok);}
+.wkc{background:var(--panel);border:1px solid var(--line2);border-left:3px solid var(--line2);border-radius:10px;padding:9px 11px;margin-bottom:7px;}
+.wkc.waiting{border-left-color:var(--accent);}
+.wkc.arrived{border-left-color:var(--ok);background:#0d1a14;}
+.wkc.done{opacity:.6;}
+.wkc.cancelled{opacity:.5;border-left-color:#5a2a34;}
+.wkc.cancelled .wkc-name{text-decoration:line-through;color:#9a8f97;}
+.wkc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.wkc-time{font-size:15px;font-weight:800;color:var(--txt);min-width:46px;}
+.wkc-name{font-size:14px;font-weight:800;}
+.wkc-name .mem{font-size:10px;font-weight:700;color:var(--dim);margin-left:5px;}
+.wkc-mem{font-size:10px;font-weight:800;border-radius:6px;padding:1px 7px;border:1px solid transparent;}
+.wkc-mem.ok{background:var(--okbg);color:var(--ok);border-color:var(--okline);}
+.wkc-mem.soon{background:var(--warnbg);color:var(--warn);border-color:var(--warnline);}
+.wkc-mem.exp{background:#2a1014;color:#ff8a8a;border-color:#6a2430;}
+.wkc-mem.none{background:var(--panel2);color:var(--dim);border-color:var(--line2);}
+.wkc-act{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;}
+.wkc-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+.wb{font-size:11px;font-weight:700;background:var(--panel2);border:1px solid var(--line2);color:var(--sub);border-radius:6px;padding:1px 7px;}
+.wb.undef{background:var(--warnbg);color:var(--warn);border-color:var(--warnline);}
+.wb.t{background:#1a1030;color:#bb99ff;border-color:#3a2a5a;}
+.wb.d{background:#2a1800;color:#ffaa44;border-color:#5a3810;}
+.wb.y{background:#0e2440;color:#7ab0f0;border-color:#2a5590;}
+.wkc-line{font-size:11px;color:var(--dim);margin-top:5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.wkc-bottle{font-size:11px;color:#8fd06a;background:#0f1a0c;border:1px solid #2e4a20;border-radius:7px;padding:3px 8px;margin-top:5px;}
+.wkc-memo{font-size:11px;color:#ffc98a;background:#231a08;border:1px solid #5a4010;border-radius:7px;padding:3px 8px;margin-top:5px;}
+.wkc-ng{font-size:11px;color:#ff9a9a;background:#2a1014;border:1px solid #6a2430;border-radius:7px;padding:3px 8px;margin-top:5px;font-weight:700;}
+.wkc-note{font-size:11px;color:var(--sub);margin-top:5px;}
+.wkc-by{font-size:10px;color:var(--dim);margin-top:5px;}
 .sw{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);color:var(--sub);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;}
 .sw.on{background:var(--okbg);border-color:var(--okline);color:var(--ok);}
 .ta{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--txt);padding:8px 10px;font-size:13px;resize:vertical;outline:none;margin-top:6px;font-family:inherit;}
@@ -5139,6 +5174,140 @@ var rsvMx=null, rsvMxFrom='', rsvMxDays=14, rsvMxBusy=false;
 var rsvLog=null, rsvLogOp='', rsvLogQ='', rsvLogBusy=false; // 🕘 予約履歴（変更/削除ログ）
 function rsvCastList(){ return (ST.staff||[]).filter(function(s){ var r=String(s.role||''); return r.indexOf('キャスト')>=0||r.indexOf('体験')>=0; }); }
 function rsvBizToday(){ var n=new Date(); if(n.getHours()<6)n.setDate(n.getDate()-1); return hdFmt(n); } // 営業日(6時境界)＝シフト表と同じ基準
+/* ===== 📅 時系列ビュー（ボス指示 2026-09-05「1週間くらいの予約がまとめて詳細で時系列でわかるように」） =====
+ * ⭐軍師の予約カードと**中身は同じ**（サーバの rsvEnrich_ を共通で通している）＝2画面で出る情報がズレない。
+ * ⚠️軍師は「その日」だけなので時刻の昇順1本。こちらは**日付をまたぐ**ので日付で区切って中を時刻順にする。
+ * ⚠️キャンセルは日ごとに畳む＝件数にも人数にも数えない（軍師と同じ扱い）。 */
+var rsvWk=null, rsvWkFrom='', rsvWkDays=7, rsvWkBusy=false, rsvWkCxl={};
+function loadRsvWk(){
+  if(rsvWkBusy) return;
+  if(!rsvWkFrom) rsvWkFrom=rsvBizToday();
+  rsvWkBusy=true;
+  var want=rsvWkFrom+'/'+rsvWkDays;
+  /* ⚠️窓が動いていたら取り直す。捨てるだけだと「飛んだ要求は古い・新しい要求はbusyで弾かれ」で
+     誰も取りに行かず読み込み中のまま固まる（マトリクス側で踏んだのと同じ罠）。 */
+  var done=function(fn){ return function(a){ rsvWkBusy=false; if(rsvWkFrom+'/'+rsvWkDays!==want){ loadRsvWk(); return; } fn(a); drawRsvWk(); }; };
+  api('getRsvWeek',{from:rsvWkFrom,days:rsvWkDays})
+    .then(done(function(r){ rsvWk=(r&&r.ok===false)?{error:r.error||'読み込みエラー'}:r; }))
+    .catch(done(function(e){ rsvWk={error:(e&&e.message)||'通信エラー'}; }));
+}
+function rsvWkNav(diff){ var d=new Date(rsvWkFrom+'T00:00:00'); d.setDate(d.getDate()+diff*rsvWkDays); rsvWkFrom=hdFmt(d); rsvWk=null; drawRsvWk(); loadRsvWk(); }
+function rsvWkToday(){ rsvWkFrom=rsvBizToday(); rsvWk=null; drawRsvWk(); loadRsvWk(); }
+function rsvWkSetDays(n){ rsvWkDays=parseInt(n,10)||7; rsvWk=null; drawRsvWk(); loadRsvWk(); }
+function rsvWkReload(){ rsvWk=null; drawRsvWk(); loadRsvWk(); }
+
+/* 会員ステータス。⚠️判定式は軍師の membershipInfo と同じ（前回更新から13ヶ月で切れ・12ヶ月で今月更新）。
+   ⛔式を変えるなら両方＝gunshi.html の membershipInfo と揃えること。 */
+function rsvWkMem(joined,feeDate){
+  if(!feeDate) return {cls:'none',label:'未会員'};
+  var p=String(feeDate).split(/[\/\-\.]/);
+  if(p.length<2) return {cls:'none',label:'未会員'};
+  var ry=parseInt(p[0],10), rm=parseInt(p[1],10);
+  if(!(ry>1900&&rm>=1)) return {cls:'none',label:'未会員'};
+  var t=new Date(), ms=(t.getFullYear()*12+(t.getMonth()+1))-(ry*12+rm);
+  if(ms>=13) return {cls:'exp',label:'🔴更新切れ'};
+  if(ms>=12) return {cls:'soon',label:'🟡今月更新'};
+  return {cls:'ok',label:'🟢有効会員'};
+}
+/* 来店/退店を打つ。⭐判定と副作用はサーバの setKioskReservationStatus＝軍師と同じ関数を通る。 */
+function rsvWkSetStatus(rowIdx,status,btn){
+  if(!rowIdx) return;
+  if(status==='退店済み'&&!confirm('退店にします。よろしいですか？')) return;
+  if(btn){ btn.disabled=true; btn.textContent='…'; }               // 連打で二重に飛ばさない
+  api('adminSetRsvStatus',{rowIdx:rowIdx,status:status})
+    .then(function(d){
+      if(d&&d.ok===false){ alert(d.error||'変更できませんでした'); rsvWkReload(); return; }
+      rsvWkReload();
+    })
+    .catch(function(e){ alert('通信エラー：'+((e&&e.message)||'')); rsvWkReload(); });
+}
+function rsvWkActs(x){
+  if(x.status==='キャンセル') return '';
+  var b=[];
+  if(x.status==='確定'||!x.status) b.push('<button class="btn sm" onclick="rsvWkSetStatus('+(x.rowIdx||0)+',\'来店済み\',this)">来店</button>');
+  else if(x.status==='来店済み'){
+    b.push('<button class="btn sm" onclick="rsvWkSetStatus('+(x.rowIdx||0)+',\'退店済み\',this)">退店</button>');
+    /* 来店から10分以内だけ戻せる＝誤タップの取消。サーバ側も同じ制限を持っている（画面だけの親切にしない） */
+    if(!x.checkInAt||(Date.now()-x.checkInAt)<10*60*1000) b.push('<button class="btn sm" onclick="rsvWkSetStatus('+(x.rowIdx||0)+',\'確定\',this)">戻す</button>');
+  } else if(x.status==='退店済み') return '<span class="wb">退店済</span>';
+  return b.join('');
+}
+function rsvWkCard(x){
+  var cxl=x.status==='キャンセル';
+  var cls=cxl?'cancelled':(x.status==='退店済み'?'done':(x.status==='来店済み'?'arrived':'waiting'));
+  var m=rsvWkMem(x.memberSince,x.annualFeeDate);
+  var badges='<span class="wb">'+(x.pax||1)+'名</span><span class="wb'+((!x.table||x.table==='未定')?' undef':'')+'">'+esc(x.table||'未定')+'</span>';
+  /* ⚠️担当が空のときだけ顧客マスタの担当で補う（現場が意図して空にする＝店担当の客がいる。上書きしない） */
+  var tan=x.tantouCast||'';
+  if(tan) badges+='<span class="wb t">担当 '+esc(tan)+'</span>';
+  else if(x.custTantou) badges+='<span class="wb t">担当 '+esc(x.custTantou)+'<span style="opacity:.6">(顧客)</span></span>';
+  if(x.dohanCast) badges+='<span class="wb d">同伴 '+esc(x.dohanCast)+'</span>';
+  if(x.yoyakuCast) badges+='<span class="wb y">予約 '+esc(x.yoyakuCast)+'</span>';
+  var ng='';
+  if(x.ngInfo){
+    var L=[], g=x.ngInfo;
+    var assigned=[x.tantouCast,x.yoyakuCast,x.dohanCast].filter(Boolean).join('、');
+    var hit=(g.ngCasts||[]).filter(function(n){ return assigned.replace(/[\s　]/g,'').indexOf(String(n).replace(/[\s　]/g,''))>=0; });
+    if(hit.length) L.push('<b>⛔ NGキャストが付いています：'+esc(hit.join('・'))+'</b>');
+    else if((g.ngCasts||[]).length) L.push('NGキャスト：'+esc((g.ngCasts||[]).join('・')));
+    if((g.ngTypes||[]).length) L.push('苦手タイプ：'+esc((g.ngTypes||[]).join('・')));
+    if((g.ngActs||[]).length) L.push('NG行為：'+esc((g.ngActs||[]).join('・')));
+    if((g.ngCustomers||[]).length) L.push('同席NG：'+esc((g.ngCustomers||[]).join('・'))+'様');
+    if(L.length) ng='<div class="wkc-ng">⚠️ '+L.join('　／　')+'</div>';
+  }
+  return '<div class="wkc '+cls+'">'
+    +'<div class="wkc-top"><span class="wkc-time">'+esc(x.time||'--:--')+'</span>'
+    +'<span class="wkc-name">'+esc(x.customer||'')+'様'+(x.memberId?'<span class="mem">'+esc(x.memberId)+'</span>':'')+'</span>'
+    +'<span class="wkc-mem '+m.cls+'">'+m.label+'</span>'
+    /* 来店中は色だけでなく**文字でも**出す＝一覧を上から流し読みする管理者に「いま店に居る組」が伝わる */
+    +(x.status==='来店済み'?'<span class="wb" style="background:var(--okbg);color:var(--ok);border-color:var(--okline)">🟢 来店中</span>':'')
+    +(cxl?'<span class="wb" style="color:#d98a96">🚫 削除済</span>':'')
+    +'<span class="wkc-act">'+rsvWkActs(x)+'</span></div>'
+    +'<div class="wkc-badges">'+badges+'</div>'
+    +(cxl?'':'<div class="wkc-line">🕛 チェック予定 <input type="time" value="'+esc(x.checkTime||'')+'" onchange="rsvSaveCheckTime('+(x.rowIdx||0)+',this.value,this)"'+(x.rowIdx?'':' disabled')+' style="background:#0d1526;color:#cfe0f5;border:1px solid #33406a;border-radius:6px;padding:2px 6px;font-size:12px"><span class="rsv-ct-stat" style="font-size:11px;color:var(--dim)"></span></div>')
+    +(x.bottle?'<div class="wkc-bottle">🍶 '+esc(x.bottle)+(x.bottlePos?' 📍<b>'+esc(x.bottlePos)+'</b>':' <span style="opacity:.7">位置未登録</span>')+'</div>':'')
+    +((x.subCustomers&&x.subCustomers.length)?'<div class="wkc-note" style="color:#66cc88">👥 同席 +'+x.subCustomers.length+'名: '+x.subCustomers.map(function(s){return esc(s.name||'')+'様';}).join('、')+'</div>':'')
+    +(x.nextMemo?'<div class="wkc-memo">📌 次回対応: '+esc(x.nextMemo)+'</div>':'')
+    +ng
+    +(x.youbou?'<div class="wkc-note">📝 '+esc(x.youbou)+'</div>':'')
+    +((x.regBy&&x.regBy!=='インポート')?'<div class="wkc-by">✍️ 入力 '+esc(x.regBy)+'</div>':'')
+    +'</div>';
+}
+function rsvWkToggleCxl(d){ rsvWkCxl[d]=!rsvWkCxl[d]; drawRsvWk(); }
+function drawRsvWk(){
+  var el=document.getElementById('rsv-wk'); if(!el) return;
+  var nav='<div class="toolbar" style="margin-bottom:8px">'
+    +'<button class="btn sm" onclick="rsvWkNav(-1)">‹ 前</button>'
+    +'<button class="btn sm" onclick="rsvWkToday()">今日</button>'
+    +'<button class="btn sm" onclick="rsvWkNav(1)">次 ›</button>'
+    +'<select class="finput" style="width:auto" onchange="rsvWkSetDays(this.value)">'
+    +[3,7,14].map(function(n){return '<option value="'+n+'"'+(rsvWkDays===n?' selected':'')+'>'+n+'日</option>';}).join('')
+    +'</select>'
+    +'<button class="btn sm" onclick="rsvWkReload()">🔄</button>'
+    +'<span class="hint" style="margin:0">'+esc(rsvWkFrom||'')+' から'+rsvWkDays+'日</span></div>';
+  var head='<div class="sec-t">📅 予約（時系列）<span class="sub">日付ごとに、時刻の早い順</span></div>';
+  if(!rsvWk){ el.innerHTML='<div class="sec compact">'+head+nav+'<div class="empty" style="padding:18px">読み込み中…</div></div>'; return; }
+  if(rsvWk.error){ el.innerHTML='<div class="sec compact">'+head+nav+'<div class="empty" style="padding:18px">'+esc(rsvWk.error)+'</div></div>'; return; }
+  var today=rsvWk.today||'', tot=rsvWk.total||{groups:0,pax:0};
+  var body=(rsvWk.byDate||[]).map(function(d){
+    var wd=hdWeekday(d.date), isT=(d.date===today);
+    var h='<div class="wkday'+(isT?' today':'')+'"><span>'+esc(rsvWkMd(d.date))+'（'+wd+'）'+(isT?' 今日':'')+'</span>'
+      +'<span class="wd-cnt">'+(d.groups?d.groups+'組 '+d.pax+'名'+(d.arrived?'（'+d.arrived+'組来店済）':''):'予約なし')+'</span>'
+      +(d.closed?'<span class="wd-hol">🏖 '+esc(d.closed)+'</span>':'')+'</div>';
+    /* ⚠️予約が無い日は**カードを置かない**＝1週間ぶん並べると空の日のプレースホルダだけで画面が埋まる。
+       見出しに「予約なし」と出ているので情報は落ちていない。 */
+    var cards=d.list.length?d.list.map(rsvWkCard).join(''):'';
+    /* 🚫キャンセルは日ごとに畳む＝ログとして残すが有効な予約に埋もれさせない */
+    var cx=d.cxl.length?('<div class="wkc-note" style="cursor:pointer;color:#c98a92;font-weight:700" onclick="rsvWkToggleCxl(\''+d.date+'\')">🚫 削除済み '+d.cxl.length+'件 '+(rsvWkCxl[d.date]?'▲':'▼')+'</div>'
+      +(rsvWkCxl[d.date]?d.cxl.map(rsvWkCard).join(''):'')):'';
+    return h+cards+cx;
+  }).join('');
+  el.innerHTML='<div class="sec compact">'+head+nav
+    +'<div class="hint" style="margin-top:0">この期間で <b>'+tot.groups+'組 '+tot.pax+'名</b>。カードから<b>来店・退店</b>とチェック予定を直接打てます。</div>'
+    +body+'</div>';
+}
+function rsvWkMd(ds){ var p=String(ds).split('-'); return parseInt(p[1],10)+'/'+parseInt(p[2],10); }
+
 function renderRsv(){
   var all=rsvCastList();
   var active=all.filter(function(s){return !s.retired;});
@@ -5150,7 +5319,11 @@ function renderRsv(){
     +'<div class="chips" style="margin-top:10px">'+active.map(chip).join('')+'</div>'
     +(retired.length?'<details style="margin-top:10px"><summary style="cursor:pointer;color:var(--dim);font-weight:800;font-size:12px">🗄 退職済み（'+retired.length+'名）の履歴を見る</summary><div class="chips" style="margin-top:8px">'+retired.map(chip).join('')+'</div></details>':'')
     +'</div>';
-  setBody('<div id="rsv-mx"></div>'+picker+'<div id="rsv-body">'+(rsvCast?'<div class="empty">読み込み中…</div>':'<div class="empty">キャストを選んでください</div>')+'</div>');
+  /* ⭐並び順＝①時系列（まずこれを見る）②店全体マトリクス（俯瞰）③キャスト別（掘る）。
+     ボス指示 2026-09-05でこの画面の主役は①になった。②③は用途が違うので消していない。 */
+  setBody('<div id="rsv-wk"></div><div id="rsv-mx"></div>'+picker+'<div id="rsv-body">'+(rsvCast?'<div class="empty">読み込み中…</div>':'<div class="empty">キャストを選んでください</div>')+'</div>');
+  drawRsvWk();
+  if(!rsvWk && !rsvWkBusy) loadRsvWk();
   drawRsvMx();
   if(!rsvMx && !rsvMxBusy) loadRsvMx();
   if(rsvCast) drawRsv();

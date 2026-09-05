@@ -1191,6 +1191,19 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return getRsvMatrix_(body.from, body.days);
   }
+  // 管理コンソール「📅 予約」＝期間ぶん（既定1週間）を日ごと・時系列で
+  if (body.action === 'getRsvWeek') {
+    const weekName = getStaffName(body.userId);
+    if (!weekName || !isAdmin_(weekName)) return { ok: false, error: '権限がありません' };
+    return getRsvWeek_(body.from, body.days);
+  }
+  // 管理コンソール「📅 予約」＝来店/退店/来店前を一覧から打つ。
+  // ⭐判定と副作用（来店記録DB・10分の取消制限）は軍師と**同じ関数**を通す＝現場と食い違わない。
+  if (body.action === 'adminSetRsvStatus') {
+    const stName = getStaffName(body.userId);
+    if (!stName || !isAdmin_(stName)) return { ok: false, error: '権限がありません' };
+    return setKioskReservationStatus(body.rowIdx, body.status);
+  }
   // 管理コンソール「📅 予約」＝退店予定時刻（チェック予定）だけを一覧からインライン編集（予約フォームは持たない）
   if (body.action === 'setReservationCheckTime') {
     const adminName = getStaffName(body.userId);
@@ -14258,6 +14271,33 @@ function getYoyakuMonthSummary_(monthKey) {
 // opts.includeCancelled=true のときだけキャンセル(削除)済みも返す。
 // ⚠️既定(未指定)は従来どおりキャンセル除外＝ホール/定員/在席など多数の呼び出し元の挙動を変えない。
 // キャンセルを混ぜてよいのは「予約一覧をグレーアウト表示する」画面だけ。
+/* 予約管理シートのA列 → 'yyyy-MM-dd'。⚠️日付はDate値で入っている＝String()で直に比べない
+   （[[reference_sheet_date_tostring_trap]]／2026-09-05にPOSで実害）。 */
+function rsvRowDate_(row) {
+  return String(row[0] instanceof Date ? Utilities.formatDate(row[0], TZ, 'yyyy-MM-dd') : row[0]).trim();
+}
+
+/* 予約管理シートの1行 → 予約オブジェクト。
+   ⚠️1日ぶん(getYoyakuReservations_)と期間ぶん(getYoyakuReservationsRange_)の**両方がこれを使う**
+     ＝列の読み方を2箇所に置かない（片方だけ列を足すと黙って食い違う）。 */
+function rsvRowToObj_(row, rowIdx, date, props) {
+  return {
+    rowIdx,
+    date,
+    time: row[1] instanceof Date ? Utilities.formatDate(row[1], TZ, 'HH:mm') : String(row[1]).trim(),
+    customer: String(row[2]), memberId: String(row[3]),
+    pax: Number(row[4]) || 1, table: String(row[5]), tantouCast: String(row[6]),
+    youbou: String(row[7]), status: String(row[8]), regBy: String(row[9]),
+    yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || ''),
+    seatFee: (row[13] !== undefined && row[13] !== '') ? Number(row[13]) : null,
+    dohanFee: (row[14] !== undefined && row[14] !== '') ? Number(row[14]) : null,
+    checkInAt: Number((props || {})['KCHECKIN_' + rowIdx]) || null,
+    subCustomers: (function () { try { return row[15] ? JSON.parse(row[15]) : []; } catch (e) { return []; } })(),
+    aggMode: String(row[16] || '').trim() === 'split' ? 'split' : 'merge',
+    checkTime: String(row[17] || '').trim() // 退店予定時刻（チェック予定）
+  };
+}
+
 function getYoyakuReservations_(dateKey, opts) {
   const includeCancelled = !!(opts && opts.includeCancelled);
   const sh = getYoyakuRsrvSheet_();
@@ -14267,26 +14307,29 @@ function getYoyakuReservations_(dateKey, opts) {
   const result = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const date = String(row[0] instanceof Date ? Utilities.formatDate(row[0], TZ, 'yyyy-MM-dd') : row[0]);
-    if (date !== dateKey) continue;
-    const status = String(row[8]);
-    if (status === 'キャンセル' && !includeCancelled) continue;
-    const rowIdx = i + 2;
-    result.push({
-      rowIdx,
-      date,
-      time: row[1] instanceof Date ? Utilities.formatDate(row[1], TZ, 'HH:mm') : String(row[1]).trim(),
-      customer: String(row[2]), memberId: String(row[3]),
-      pax: Number(row[4]) || 1, table: String(row[5]), tantouCast: String(row[6]),
-      youbou: String(row[7]), status, regBy: String(row[9]),
-      yoyakuCast: String(row[11] || ''), dohanCast: String(row[12] || ''),
-      seatFee: (row[13] !== undefined && row[13] !== '') ? Number(row[13]) : null,
-      dohanFee: (row[14] !== undefined && row[14] !== '') ? Number(row[14]) : null,
-      checkInAt: Number(_props['KCHECKIN_' + rowIdx]) || null,
-      subCustomers: (function() { try { return row[15] ? JSON.parse(row[15]) : []; } catch (e) { return []; } })(),
-      aggMode: String(row[16] || '').trim() === 'split' ? 'split' : 'merge',
-      checkTime: String(row[17] || '').trim() // 退店予定時刻（チェック予定）
-    });
+    if (rsvRowDate_(row) !== dateKey) continue;
+    if (String(row[8]) === 'キャンセル' && !includeCancelled) continue;
+    result.push(rsvRowToObj_(row, i + 2, rsvRowDate_(row), _props));
+  }
+  return result;
+}
+
+/* 期間ぶんの予約を**シート1回読み**で取る（管理コンソールの1週間ビュー用）。
+   ⛔1日ぶんをループで呼ぶと日数ぶんシートを全読みする＝7日で7回。GASは1.9秒の床があるので必ずここを通す。
+   from/to は 'yyyy-MM-dd'（両端を含む）。 */
+function getYoyakuReservationsRange_(fromKey, toKey, opts) {
+  const includeCancelled = !!(opts && opts.includeCancelled);
+  const from = String(fromKey || ''), to = String(toKey || '');
+  const sh = getYoyakuRsrvSheet_();
+  const rows = sh.getDataRange().getValues().slice(1);
+  const _props = PropertiesService.getScriptProperties().getProperties();
+  const result = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const d = rsvRowDate_(row);
+    if (!d || d < from || d > to) continue;               // 'yyyy-MM-dd' は文字列の大小比較で日付順になる
+    if (String(row[8]) === 'キャンセル' && !includeCancelled) continue;
+    result.push(rsvRowToObj_(row, i + 2, d, _props));
   }
   return result;
 }
@@ -14377,6 +14420,53 @@ function rsvMatrixCasts_() {
       return !(retireC >= 0 && String(r[retireC]).trim() === '退職');
     })
     .map(r => ({ name: String(r[1]).trim(), role: String(r[2]).trim() || 'キャスト' }));
+}
+
+/* 管理コンソール「📅 予約」＝**期間ぶんの予約を日ごとにまとめて、時系列で**返す（ボス指示 2026-09-05
+   「1週間くらいの予約がまとめて詳細で時系列でわかるように」）。
+   ⭐軍師の予約カードと**同じ中身**（rsvEnrich_ を通す）＝ボトル/棚位置/📌次回対応/⚠️注意情報/会員ステータスが出る。
+   ⭐シートは1回しか読まない（getYoyakuReservationsRange_）＝日数を増やしても往復は増えない。
+   ⚠️軍師は「その日」だけなので昇順1本だが、こちらは**日付をまたぐ**＝日付→時刻の2段で並べて日ごとに区切る。
+   ⚠️キャンセルは各日の cxl に分ける（件数・人数には数えない＝軍師と同じ扱い）。 */
+function getRsvWeek_(fromDate, days) {
+  const n = Math.min(Math.max(Number(days) || 7, 1), 31);
+  const start = String(fromDate || bizDateStr_()).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return { ok: false, error: '日付の形式が不正です' };
+
+  const dates = [];
+  const d0 = new Date(start + 'T00:00:00+09:00');
+  for (let i = 0; i < n; i++) {
+    const d = new Date(d0.getTime());
+    d.setDate(d.getDate() + i);
+    dates.push(Utilities.formatDate(d, TZ, 'yyyy-MM-dd'));
+  }
+  const to = dates[dates.length - 1];
+
+  const all = rsvEnrich_(getYoyakuReservationsRange_(start, to, { includeCancelled: true }));
+  /* 日付→時刻の昇順。⚠️時刻が空の予約を先頭に寄せない（'' は何より小さい）＝末尾へ送る */
+  all.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const ta = a.time || '99:99', tb = b.time || '99:99';
+    return ta < tb ? -1 : ta > tb ? 1 : 0;
+  });
+
+  const closed = {}; getHolidays_().forEach(h => { closed[h.date] = h.label || '店休日'; });
+  const byDate = {};
+  dates.forEach(function (d) { byDate[d] = { date: d, closed: closed[d] || '', list: [], cxl: [], groups: 0, pax: 0, arrived: 0 }; });
+  all.forEach(function (r) {
+    const b = byDate[r.date];
+    if (!b) return;                               // 範囲外（保険）
+    if (r.status === 'キャンセル') { b.cxl.push(r); return; }
+    b.list.push(r);
+    b.groups += 1;
+    b.pax += Number(r.pax) || 0;
+    if (r.status === '来店済み') b.arrived += 1;
+  });
+
+  const out = dates.map(function (d) { return byDate[d]; });
+  return { ok: true, from: start, to: to, days: n, today: bizDateStr_(),
+           dates: dates, byDate: out,
+           total: { groups: out.reduce((s, x) => s + x.groups, 0), pax: out.reduce((s, x) => s + x.pax, 0) } };
 }
 
 /* 管理コンソール「📅 予約」の店全体マトリクス。縦=キャスト・横=日付・マス=予約件数。
@@ -14602,6 +14692,13 @@ function updateSeatCharges(rowIdx, seatFee, dohanFee) {
 function getKioskReservations(dateKey, includeCancelled) {
   const list = getYoyakuReservations_(dateKey || bizDateStr_(), { includeCancelled: !!includeCancelled })
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  return rsvEnrich_(list);
+}
+
+/* 予約カードに出す付帯情報を**まとめて**足す（会員ステータス／ボトルと棚位置／📌次回対応／⚠️注意情報）。
+   ⭐軍師の1日ぶんと管理コンソールの1週間ぶんが**同じ関数**を通る＝出る情報がズレない。
+   ⭐会費マップも注意情報マップも**1回だけ**引く＝件数が増えても往復は増えない。 */
+function rsvEnrich_(list) {
   // 会員ステータス表示用：会員番号で会費マップを突合し、入会日・前回更新日を付与
   // 予約は「139」、マスタは4桁「0139」など桁揃えの差があるため、先頭ゼロを無視した正規化キーで突合
   try {
