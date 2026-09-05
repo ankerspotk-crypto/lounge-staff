@@ -664,15 +664,22 @@ function pollAdminAuth(token){
 }
 /* ===== ナビ: 14タブを5グループの2階層に束ねる（各画面のrender関数は無変更・入口の見せ方だけ） =====
  * グループ(第1階層)→サブタブ(第2階層)。switchTab/TAB/render のディスパッチ規約は従来のまま。 */
+/* ⭐棚は「業務ドメイン」ではなく**開く頻度と出来事**で切る（ボス指示 2026-09-05）。
+   旧構成＝6グループ34タブ。だが 💰売上給与 の中に**サブが13個**、🧾伝票・領収書 に2個あり、
+   毎日見る 📋日報 と 💹収支 が「グループ→タブ→サブ」の3クリック奥に沈んでいた。
+   ⭐**サブをタブに引き上げて、頻度の棚へ配り直した**＝どの画面も2クリックで着く。
+   ⚠️ここのタブIDは render() のディスパッチ表のキーと1対1。片方だけ足すと白紙の画面が出る。
+   ⚠️💰月末の締めの①〜⑧は**実際の作業順**（取込→照合→立替→給与→公開）。飾りの連番ではないので
+     並べ替えるときは順番の意味も一緒に確かめること。 */
 var TAB_GROUPS=[
-  {g:'top',   label:'🏠 トップ', tabs:[['top','🏠 店の全容']]},
-  {g:'hr',    label:'👥 人事', tabs:[['staff','👥 スタッフ'],['matrix','🔐 権限'],['shift','🗓 シフト'],['kyukin','📉 当欠'],['kintaireg','🗂 出勤簿'],['mendan','📋 面談表'],['haken','🪪 派遣台帳'],['awards','🏆 表彰'],['manual','📖 マニュアル'],['skilltest','📝 スキルテスト'],['ref','📖 説明']]},
-  {g:'rsv',   label:'📅 予約', tabs:[['rsv','📅 予約'],['rsvlog','🕘 予約履歴'],['holiday','🏖 店休日'],['members','👤 会員'],['custbday','🎂 誕生日'],['feerenew','💳 会費更新']]},
-  {g:'money', label:'💰 会計', tabs:[['pay','💰 売上給与'],['nenkan','📈 年間集計'],['denpyo','🧾 伝票・領収書'],['seikyu','📄 請求書'],['issuer','🖨 発行店']]},
-  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['yobikake','📣 呼びかけ'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
-  {g:'shop',  label:'🏪 店舗', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['okuri','🚗 送迎'],['ops','⚙️ 運営'],['usage','📈 使われ方']]}
+  {g:'today', label:'📆 今日', tabs:[['top','🏠 店の全容'],['rsv','📅 予約'],['shift','🗓 シフト'],['nippo','📋 日報'],['sales','💹 収支'],['slip','🧾 伝票'],['yobikake','📣 呼びかけ']]},
+  {g:'shime', label:'💰 月末の締め', tabs:[['trust','① TRUST取込'],['hibarai','② 日払い照合'],['tatekae','③ 立替集計'],['keihi','④ 経費立替'],['kotsu','⑤ 交通費'],['bday','⑥ 誕生日バック'],['kyuyo','⑦ 給与明細'],['publish','⑧ 公開設定']]},
+  {g:'rec',   label:'📈 数字と記録', tabs:[['bills','🧾 売上明細'],['mybills','👤 個人売上明細'],['seikyu','📄 請求書'],['receipt','💇 領収書(月別)'],['kintaireg','🗂 出勤簿'],['kyukin','📉 当欠'],['okuri','🚗 送迎'],['nenkan','📈 年間集計'],['partner','📊 共同経営者']]},
+  {g:'hito',  label:'👤 人とお客様', tabs:[['staff','👥 スタッフ'],['mendan','📋 面談表'],['haken','🪪 派遣台帳'],['awards','🏆 表彰'],['members','👤 会員'],['custbday','🎂 お客様の誕生日'],['feerenew','💳 会費更新']]},
+  {g:'comm',  label:'📢 連絡', tabs:[['notif','🔔 通知'],['resend','🔁 再送'],['notice','📢 お知らせ'],['voice','🗣 現場の声'],['hallreq','🙋 要望ジャッジ']]},
+  {g:'set',   label:'⚙️ 店と設定', tabs:[['menu','🍶 メニュー'],['checklist','✅ チェック'],['holiday','🏖 店休日'],['ops','⚙️ 運営'],['issuer','🖨 発行店'],['matrix','🔐 権限'],['ref','📖 説明'],['manual','📖 マニュアル'],['skilltest','📝 スキルテスト'],['rsvlog','🕘 予約履歴'],['usage','📈 使われ方']]}
 ];
-var GROUP='top';
+var GROUP='today';
 function groupOf_(t){ for(var i=0;i<TAB_GROUPS.length;i++){ if(TAB_GROUPS[i].tabs.some(function(x){return x[0]===t;})) return TAB_GROUPS[i].g; } return TAB_GROUPS[0].g; }
 function curGroup_(){ return TAB_GROUPS.filter(function(G){return G.g===GROUP;})[0]||TAB_GROUPS[0]; }
 /* ⭐よく使う（ボス申告 2026-09-05「シフトの一覧と、売上一覧と日報かな」）。
@@ -682,15 +689,11 @@ function curGroup_(){ return TAB_GROUPS.filter(function(G){return G.g===GROUP;})
    ⚠️増やすときはここに1行足すだけ。tab は render() のディスパッチ表に在るキー、sub は paySub の値。 */
 var FAV=[
   {label:'🗓 シフト一覧', tab:'shift'},
-  {label:'💹 売上（収支）', tab:'pay', sub:'sales'},
-  {label:'📋 日報',        tab:'pay', sub:'nippo'}
+  {label:'💹 売上（収支）', tab:'sales'},
+  {label:'📋 日報',        tab:'nippo'}
 ];
-function favOn_(f){ return TAB===f.tab && (!f.sub || paySub===f.sub); }
-function goFav(i){
-  var f=FAV[i]; if(!f) return;
-  if(f.sub) paySub=f.sub;          // ⚠️switchTabより先に。後だとrenderPayが既定(立替)を描いてしまう
-  switchTab(f.tab);
-}
+function favOn_(f){ return TAB===f.tab; }
+function goFav(i){ var f=FAV[i]; if(f) switchTab(f.tab); }
 function renderNav(){
   var gEl=document.getElementById('groups'), tEl=document.getElementById('tabs'); if(!gEl||!tEl) return;
   var fEl=document.getElementById('favs');
@@ -709,8 +712,31 @@ function switchTab(t){ TAB=t; GROUP=groupOf_(t); beacon_('tab:'+t); renderNav();
 function render(){
   GROUP=groupOf_(TAB);   // TABを直接セットしてrender()を呼ぶ既存経路でもグループ表示を追従させる
   renderNav();
-  ({top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,kintaireg:renderKintaiReg,mendan:renderMendan,haken:renderHaken,rsv:renderRsv,rsvlog:renderRsvLog,notif:renderNotif,resend:renderResend,yobikake:renderYobikake,checklist:renderChecklist,menu:renderMenu,okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,ref:renderRef,usage:renderUsage}[TAB]||renderStaff)();
+  (TAB_RENDER_[TAB]||renderTop)();
 }
+/* 💰売上給与 と 🧾伝票・領収書 の中のサブ画面を、そのままタブとして開けるようにする。
+   ⚠️サブ変数を先にセットしてから本体を呼ぶ＝本体は既定(立替集計/伝票)を描いてしまうので順番が要る。
+   ⚠️'pay'/'denpyo' の親キーも残してある＝古い導線やブックマークが白紙にならないための保険。 */
+function paySubTab_(k){ return function(){ paySub=k; renderPay(); }; }
+function dpSubTab_(k){ return function(){ denpyoSub=k; renderDenpyo(); }; }
+var TAB_RENDER_={
+  top:renderTop,staff:renderStaff,matrix:renderMatrix,shift:renderShift,kyukin:renderKyukin,
+  kintaireg:renderKintaiReg,mendan:renderMendan,haken:renderHaken,rsv:renderRsv,rsvlog:renderRsvLog,
+  notif:renderNotif,resend:renderResend,yobikake:renderYobikake,checklist:renderChecklist,menu:renderMenu,
+  okuri:renderOkuri,pay:renderPay,nenkan:renderNenkan,denpyo:renderDenpyo,ops:renderOps,
+  holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,
+  notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,
+  manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,
+  ref:renderRef,usage:renderUsage,
+  /* 💰売上給与の13サブ → それぞれ独立したタブへ */
+  tatekae:paySubTab_('tatekae'), keihi:paySubTab_('keihi'),   trust:paySubTab_('trust'),
+  bills:paySubTab_('bills'),     mybills:paySubTab_('mybills'),kyuyo:paySubTab_('kyuyo'),
+  hibarai:paySubTab_('hibarai'), nippo:paySubTab_('nippo'),   sales:paySubTab_('sales'),
+  partner:paySubTab_('partner'), kotsu:paySubTab_('kotsu'),   bday:paySubTab_('bday'),
+  publish:paySubTab_('publish'),
+  /* 🧾伝票・領収書の2サブ */
+  slip:dpSubTab_('slip'), receipt:dpSubTab_('receipt')
+};
 function setBody(h){ document.getElementById('body').innerHTML=h; }
 function loading(){ setBody('<div class="empty">読み込み中…</div>'); }
 
@@ -3413,12 +3439,13 @@ var KYU_PAY_MIN=1000, kyuPayOnly=false, kyuLast=null;
 // 💴 日払い照合の結果（給与明細の上に警告バナーを出すためだけに持つ。金額計算には一切使わない）
 var kyuHb=null;
 function nowMonth(){ if(!IS_GAS)return '2026-07'; var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
-function paySubToggle(which){
-  function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="paySwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('tatekae','💳 立替集計')+chip('keihi','💴 経費立替')+chip('trust','📥 TRUST取込')+chip('bills','🧾 売上明細')+chip('mybills','👤 個人売上明細')+chip('kyuyo','🧮 給与明細')+chip('hibarai','💴 日払い照合')+chip('nippo','📋 日報')+chip('sales','💹 収支')+chip('partner','📊 共同経営者')+chip('kotsu','🚕 交通費')+chip('bday','🎂 誕生日バック')+chip('publish','📣 公開設定')+'</div>';
-}
-/* ⚠️renderNavも呼ぶ＝⭐よく使うの点灯がサブ切替に追従する（呼ばないと日報を離れても💹が光ったまま） */
-function paySwitch(k){ paySub=k; renderNav(); renderPay(); }
+/* ⛔13個のチップ列は撤去した（2026-09-05）。同じ13個が**タブとして上に並んでいる**ので、
+   残すと「上のタブ」と「中のチップ」で同じ物への入口が2つになり、どちらが今どこか分からなくなる。
+   ⚠️各サブの描画関数が先頭でこれを呼んでいるので、**関数は消さずに空を返す**（呼び出し13箇所を触らない）。 */
+function paySubToggle(which){ return ''; }
+/* サブ切替は**タブ切替に寄せた**（2026-09-05）＝13サブがタブになったので、
+   ここを通ってもタブ・グループ・⭐の点灯が全部そろう。呼び出し側は書き換えていない。 */
+function paySwitch(k){ switchTab(k); }
 function renderPay(){
   if(paySub==='tatekae') return renderTatekae();
   if(paySub==='keihi')   return renderKeihiTatekae();
@@ -4504,7 +4531,9 @@ function trustDoCommit(){
   if(!trustPreview){ toast('先にプレビューしてください',true); return; }
   if(!confirm(trustPreview.month+' のTRUST報酬データを取込みます（同月の既存データは置き換え）。よろしいですか？'))return;
   gsr('adminImportTrustMonth',USER_ID,trustPreview.month,trustPreview.tsv,true).then(function(r){
-    if(res(r,r&&r.count+'名を取込みました')){ trustPreview=null; paySub='kyuyo'; renderPay(); }
+    /* 取込が終わったら⑦給与明細へ。⚠️switchTabで移る＝タブとグループの点灯も一緒に動く
+       （paySub直書き＋renderPayだと画面だけ変わってナビが①TRUST取込のまま残る） */
+    if(res(r,r&&r.count+'名を取込みました')){ trustPreview=null; switchTab('kyuyo'); }
   }).catch(function(){ toast('取込に失敗しました',true); });
 }
 /* --- 🧮 給与明細（TRUST報酬＋立替代→最終支給） --- */
@@ -4971,12 +5000,11 @@ var denpyoSub='slip', denpyoDate='', receiptMonth='';
 function fmtYen(n){ return '¥'+(Number(n)||0).toLocaleString('ja-JP'); }
 function dpCell(c){ var s=String(c==null?'':c); if(/^https?:\/\//.test(s)) return '<a href="'+esc(s)+'" target="_blank" rel="noopener" style="color:var(--accent)">🖼 開く</a>'; return esc(s); }
 function dpAddDays(ds,n){ var p=(ds||'').split('-'); var dt=(p.length===3)?new Date(+p[0],+p[1]-1,+p[2]):new Date(); dt.setDate(dt.getDate()+n); return dt.getFullYear()+'-'+('0'+(dt.getMonth()+1)).slice(-2)+'-'+('0'+dt.getDate()).slice(-2); }
-function dpSubToggle(which){
-  function chip(k,label){ return '<div class="chip'+(which===k?' on':'')+'" onclick="dpSwitch(\''+k+'\')">'+label+'</div>'; }
-  return '<div class="chips" style="margin-bottom:12px">'+chip('slip','🧾 伝票（日付別）')+chip('receipt','💇 領収書（月別）')+'</div>';
-}
+/* ⛔チップ列は撤去（2026-09-05）。🧾伝票は「今日」、💇領収書は「数字と記録」＝**別の棚のタブ**になった。
+   ⚠️paySubToggle と同じく、呼び出し側を触らないよう関数は残して空を返す。 */
+function dpSubToggle(which){ return ''; }
 function renderDenpyo(){ if(!IS_GAS){ setBody(dpSubToggle(denpyoSub)+'<div class="empty">（ローカルではプレビュー不可・本番でご確認ください）</div>'); return; } if(denpyoSub==='receipt') loadReceipts(); else loadSlips(); }
-function dpSwitch(k){ denpyoSub=k; renderDenpyo(); }
+function dpSwitch(k){ switchTab(k); }   /* サブ切替をタブ切替に寄せた（paySwitchと同じ） */
 /* --- 伝票（日付別） --- */
 function loadSlips(){ loading(); gsr('adminGetDenpyoDay',USER_ID,denpyoDate).then(function(r){ if(!res(r))return; denpyoDate=r.date; drawSlips(r); }).catch(function(){setBody(dpSubToggle('slip')+'<div class="empty">読み込みエラー</div>');}); }
 function drawSlips(r){
