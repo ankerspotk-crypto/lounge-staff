@@ -20,6 +20,21 @@ body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,"H
 .tab{padding:9px 13px;border-radius:9px 9px 0 0;border:1px solid transparent;background:transparent;color:var(--sub);font-size:14px;font-weight:700;cursor:pointer;}
 .tab.on{background:var(--panel2);border-color:var(--line2);border-bottom-color:var(--panel2);color:var(--accent);}
 /* グループ行（14タブを5グループに束ねた第1階層）＝塗りpillで主役。サブタブ(.tab)は従来の下線タブのまま第2階層 */
+/* 💵 現金の推移。⭐色は「合っている/ずれた/出していない」の3状態だけに使う＝
+   金額の大小で色を振ると表が虹色になり、肝心の差額が埋もれる。 */
+.ct-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px;}
+.ct-sum > div{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:10px 12px;}
+.ct-sum b{display:block;font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;}
+.ct-sum span{display:block;font-size:11px;color:var(--dim);margin-top:2px;}
+.ct-ok{color:var(--ok);}
+.ct-warn{color:var(--warn);}
+.ct-bad{color:#ff8a8a;font-weight:800;}
+.ct-na{color:var(--dim);}
+.ct-tbl td{font-variant-numeric:tabular-nums;white-space:nowrap;}
+.ct-tbl .d{text-align:left;font-weight:700;}
+.ct-tbl .ct-wd{font-size:10px;color:var(--dim);margin-left:5px;font-weight:400;}
+.ct-tbl .ct-safe{color:#8fd0c0;}
+.ct-tbl tr.ct-empty td{background:rgba(255,191,106,.04);}
 /* ⭐よく使う＝グループより上に固定する近道。ボス指摘 2026-09-05
    「一番上のタブから直感的にたどり着けない／よく使う物が2段階踏まないと出ない」。
    ⚠️グループ2階層は**そのまま**＝ここは重ねて置く近道であって、置き場所を動かしてはいない
@@ -672,7 +687,7 @@ function pollAdminAuth(token){
    ⚠️💰月末の締めの①〜⑧は**実際の作業順**（取込→照合→立替→給与→公開）。飾りの連番ではないので
      並べ替えるときは順番の意味も一緒に確かめること。 */
 var TAB_GROUPS=[
-  {g:'today', label:'📆 今日', tabs:[['top','🏠 店の全容'],['rsv','📅 予約'],['shift','🗓 シフト'],['nippo','📋 日報'],['sales','💹 収支'],['slip','🧾 伝票'],['yobikake','📣 呼びかけ']]},
+  {g:'today', label:'📆 今日', tabs:[['top','🏠 店の全容'],['rsv','📅 予約'],['shift','🗓 シフト'],['nippo','📋 日報'],['sales','💹 収支'],['cashtrend','💵 現金'],['slip','🧾 伝票'],['yobikake','📣 呼びかけ']]},
   {g:'shime', label:'💰 月末の締め', tabs:[['trust','① TRUST取込'],['hibarai','② 日払い照合'],['tatekae','③ 立替集計'],['keihi','④ 経費立替'],['kotsu','⑤ 交通費'],['bday','⑥ 誕生日バック'],['kyuyo','⑦ 給与明細'],['publish','⑧ 公開設定']]},
   {g:'rec',   label:'📈 数字と記録', tabs:[['bills','🧾 売上明細'],['mybills','👤 個人売上明細'],['seikyu','📄 請求書'],['receipt','💇 領収書(月別)'],['kintaireg','🗂 出勤簿'],['kyukin','📉 当欠'],['okuri','🚗 送迎'],['nenkan','📈 年間集計'],['partner','📊 共同経営者']]},
   {g:'hito',  label:'👤 人とお客様', tabs:[['staff','👥 スタッフ'],['mendan','📋 面談表'],['haken','🪪 派遣台帳'],['awards','🏆 表彰'],['members','👤 会員'],['custbday','🎂 お客様の誕生日'],['feerenew','💳 会費更新']]},
@@ -727,7 +742,7 @@ var TAB_RENDER_={
   holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,
   notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,
   manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,
-  ref:renderRef,usage:renderUsage,
+  ref:renderRef,usage:renderUsage,cashtrend:renderCashTrend,
   /* 💰売上給与の13サブ → それぞれ独立したタブへ */
   tatekae:paySubTab_('tatekae'), keihi:paySubTab_('keihi'),   trust:paySubTab_('trust'),
   bills:paySubTab_('bills'),     mybills:paySubTab_('mybills'),kyuyo:paySubTab_('kyuyo'),
@@ -1635,6 +1650,79 @@ function mbSave(isAdd,force){
 /* 🚗 送迎集計：月ごとの手段内訳（自社便◯件／ドライバー◯件）。バックは getOkuriMeansStats（管理者=全件・閲覧専用）。
    記録＝軍師シフト盤の 🚙ドライバー⇄🚶自便 トグル → 送迎ログの「手段」列に残る。ここはそれを月別で数えるだけ。 */
 var OK_YM='', OK_DATA=null;
+/* ===== 💵 現金（日別の推移）＝ボス指示 2026-09-05「現金管理を毎日の推移を一覧でみたい」 =====
+ * ⭐主役は**差額**。金額の羅列ではなく「合っている日／ずれた日／出していない日」が上から見えることを優先する。
+ * ⭐**記録が無い日も行を出す**＝現金の申告が飛んでいること自体が見たい情報（店休日は🏖で区別して騒がない）。
+ * ⚠️読み取り専用。現金管理シートは本番19列でコード定義より広く、書くと18/19列目を壊す。 */
+var CT_YM='', CT=null;
+function renderCashTrend(){
+  loading();
+  api('adminCashTrend',{ym:CT_YM||''}).then(function(r){
+    if(!r||r.ok===false){ setBody('<div class="empty">'+esc((r&&r.error)||'読み込みエラー')+'</div>'); return; }
+    CT=r; CT_YM=r.ym||CT_YM; drawCashTrend();
+  }).catch(function(e){ setBody('<div class="empty">'+esc((e&&e.message)||'通信エラー')+'</div>'); });
+}
+function ctNav(diff){
+  var p=(CT_YM||'').split('-'); if(p.length<2) return;
+  var d=new Date(parseInt(p[0],10), parseInt(p[1],10)-1+diff, 1);
+  CT_YM=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); CT=null; renderCashTrend();
+}
+function ctYen(n){ var v=Number(n)||0; return (v<0?'−':'')+'¥'+Math.abs(v).toLocaleString(); }
+/* 差額の色分け。⭐0円だけが「合っている」＝1円でも違えば色を付ける（丸めて見逃さない） */
+function ctDiffCell(x){
+  if(!x.filled) return '<td class="ct-na">—</td>';
+  var d=Number(x.diff)||0;
+  if(d===0) return '<td class="ct-ok">±0</td>';
+  var big=Math.abs(d)>=10000;
+  /* ⭐符号を必ず出す＝「多い(+)」と「足りない(−)」は原因も対処もまったく別。金額だけだと読み違える */
+  var sign=(d>0?'+':'−'), body=sign+'¥'+Math.abs(d).toLocaleString();
+  return '<td class="'+(big?'ct-bad':'ct-warn')+'" title="'+(d>0?'実測が多い':'実測が足りない')+'">'+body+'</td>';
+}
+function drawCashTrend(){
+  if(!CT){ setBody('<div class="empty">読み込み中…</div>'); return; }
+  var s=CT.sum||{}, days=CT.days||[];
+  var nav='<div class="toolbar" style="margin-bottom:10px">'
+    +'<button class="btn sm" onclick="ctNav(-1)">‹ 前月</button>'
+    +'<b style="font-size:15px">'+esc(CT.ym||'')+'</b>'
+    +'<button class="btn sm" onclick="ctNav(1)">翌月 ›</button>'
+    +'<button class="btn sm" onclick="CT=null;renderCashTrend()">🔄</button></div>';
+  /* 上の4つは「今月これを見ればいい」という要約。⚠️差額は合計より**ずれた日数**が効く
+     （+1万と−1万が相殺して合計0円になっても、2日ずれているのは問題） */
+  var cards='<div class="ct-sum">'
+    +'<div><b class="'+(s.ng?'ct-bad':'ct-ok')+'">'+(s.ng||0)+'</b><span>ずれた日</span></div>'
+    +'<div><b class="'+(s.missing?'ct-warn':'')+'">'+(s.missing||0)+'</b><span>出していない日</span></div>'
+    +'<div><b>'+ctYen(s.diffAbs)+'</b><span>ずれの合計（絶対値）</span></div>'
+    +'<div><b class="'+(s.unapproved?'ct-warn':'')+'">'+(s.unapproved||0)+'</b><span>未承認</span></div>'
+    +'</div>';
+  var rows=days.slice().reverse().map(function(x){        // 新しい日を上に＝今日の状態が最初に目に入る
+    var wd=hdWeekday(x.date), md=ctMd(x.date);
+    if(!x.filled){
+      return '<tr class="ct-empty"><td class="d">'+esc(md)+'<span class="ct-wd">'+wd+'</span></td>'
+        +'<td colspan="9" class="'+(x.closed?'ct-na':'ct-warn')+'">'
+        +(x.closed?('🏖 '+esc(x.closed)):'⚠️ 現金の申告がありません')+'</td>'
+        +'<td class="ct-na">—</td></tr>';
+    }
+    return '<tr><td class="d">'+esc(md)+'<span class="ct-wd">'+wd+'</span></td>'
+      +'<td>'+ctYen(x.cashSales)+'</td>'
+      +'<td>'+ctYen(x.f5)+'</td><td>'+ctYen(x.f2)+'</td>'
+      +'<td>'+ctYen(x.keihi)+'</td><td class="ct-safe">'+ctYen(x.safe)+'</td>'
+      +'<td>'+ctYen(x.actual)+'</td><td>'+ctYen(x.slips)+'</td><td>'+ctYen(x.should)+'</td>'
+      +ctDiffCell(x)
+      +'<td>'+(x.approver?('<span class="ct-ok">✓ '+esc(x.approver)+'</span>')
+                        :'<span class="ct-warn">未承認</span>')+'</td></tr>';
+  }).join('');
+  var head='<tr><th style="text-align:left">日</th><th>現金売上</th><th>5F</th><th>2F</th><th>経費袋</th>'
+    +'<th>金庫</th><th>実測</th><th>伝票</th><th>残るはず</th><th>差額</th><th>承認</th></tr>';
+  setBody('<div class="sec compact"><div class="sec-t">💵 現金の推移<span class="sub">閉店の現金チェックの記録を日ごとに</span></div>'
+    +nav+cards
+    +'<div class="mtx-scroll"><table class="mtx sm ct-tbl">'+head+rows+'</table></div>'
+    +'<div class="hint" style="margin-top:10px">'
+    +'<b>実測</b>＝4袋を数えた合計（5Fレジ・2Fレジ・経費袋・金庫）。<b>残るはず</b>＝前日から現金売上と伝票で計算した理論値。'
+    +'<b>差額</b>＝実測−残るはず。<b>±0以外は色が付きます</b>（1万円以上は赤）。'
+    +'<br>この画面は<b>見るだけ</b>です。訂正は軍師の閉店チェックから行ってください。</div></div>');
+}
+function ctMd(ds){ var p=String(ds).split('-'); return parseInt(p[1],10)+'/'+parseInt(p[2],10); }
+
 function renderOkuri(){
   loading();
   api('getOkuriMeansStats',{ym:OK_YM||''}).then(function(r){

@@ -1191,6 +1191,12 @@ function handleApiRequest_(body) {
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
     return getRsvMatrix_(body.from, body.days);
   }
+  // 管理コンソール「💵 現金」＝現金管理の日別推移（読取専用）
+  if (body.action === 'adminCashTrend') {
+    const ctName = getStaffName(body.userId);
+    if (!ctName || !isAdmin_(ctName)) return { ok: false, error: '権限がありません' };
+    return getCashTrend_(body.ym);
+  }
   // 管理コンソール「📅 予約」＝期間ぶん（既定1週間）を日ごと・時系列で
   if (body.action === 'getRsvWeek') {
     const weekName = getStaffName(body.userId);
@@ -19103,6 +19109,74 @@ function getCashPendingDays() {
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e), days: [] };
   }
+}
+
+/* ── 💵 現金の推移（管理コンソール）─────────────────────────────────────────
+   ボス指示 2026-09-05「現金管理を毎日の推移を一覧でみたい」。
+   ⭐**読むだけ**＝1行も書かない。現金管理シートは本番19列あり、コード側の定義(17列)より広い。
+     固定幅で書くと18/19列目を消すので、この機能は getValues の範囲も getLastColumn までに留める。
+   ⭐**行が無い日も日付を出す**＝現金の記録が飛んでいること自体が見たい情報（店休日は🏖で区別）。
+   ⚠️日付列はDate値＝String()で比べない（[[reference_sheet_date_tostring_trap]]）。
+--------------------------------------------------------------------------- */
+function getCashTrend_(ym) {
+  const m = String(ym || '').trim() || Utilities.formatDate(new Date(), TZ, 'yyyy-MM');
+  if (!/^\d{4}-\d{2}$/.test(m)) return { ok: false, error: '月の形式が不正です' };
+  const y = parseInt(m.slice(0, 4), 10), mo = parseInt(m.slice(5, 7), 10);
+
+  const sh = getCashCheckSheet_();
+  const last = sh.getLastRow(), lastCol = Math.min(sh.getLastColumn(), 17);
+  const byDate = {};
+  if (last >= 2) {
+    const vals = sh.getRange(2, 1, last - 1, lastCol).getValues();
+    const g = function (r, i) { return (i < r.length) ? r[i] : ''; };
+    vals.forEach(function (r) {
+      const d = visitDateStr_(r[0]); if (!d || d.slice(0, 7) !== m) return;
+      /* 同じ日が2行あったら**後の行を採る**＝閉店をやり直した日は最後の申告が正 */
+      byDate[d] = {
+        date: d,
+        reporter: String(g(r, 1) || '').trim(),
+        at:       fmtStamp_(g(r, 2)),
+        cashSales: Number(g(r, 3)) || 0,
+        f5:   Number(g(r, 5))  || 0,
+        f2:   Number(g(r, 6))  || 0,
+        keihi:Number(g(r, 7))  || 0,
+        safe: Number(g(r, 8))  || 0,
+        actual: Number(g(r, 9)) || 0,
+        slips:  Number(g(r, 10)) || 0,
+        should: Number(g(r, 11)) || 0,
+        diff:   Number(g(r, 12)) || 0,
+        judge:  String(g(r, 13) || '').trim(),
+        approver: String(g(r, 15) || '').trim()
+      };
+    });
+  }
+
+  const holi = {}; try { getHolidays_().forEach(function (h) { holi[h.date] = h.label || '店休日'; }); } catch (e) {}
+  const today = bizDateStr_();
+  const dim = new Date(y, mo, 0).getDate();          // その月の日数
+  const days = [];
+  for (let i = 1; i <= dim; i++) {
+    const d = m + '-' + (i < 10 ? '0' : '') + i;
+    if (d > today) break;                            // 未来の日は出さない（空行が並ぶだけ）
+    const rec = byDate[d];
+    days.push(rec ? Object.assign({ closed: holi[d] || '', filled: true }, rec)
+                  : { date: d, closed: holi[d] || '', filled: false });
+  }
+
+  const filled = days.filter(function (x) { return x.filled; });
+  const sum = {
+    days: days.length,
+    filled: filled.length,
+    missing: days.filter(function (x) { return !x.filled && !x.closed; }).length,
+    ng: filled.filter(function (x) { return x.diff !== 0; }).length,
+    unapproved: filled.filter(function (x) { return !x.approver; }).length,
+    diffTotal: filled.reduce(function (s, x) { return s + (x.diff || 0); }, 0),
+    diffAbs:   filled.reduce(function (s, x) { return s + Math.abs(x.diff || 0); }, 0),
+    cashSales: filled.reduce(function (s, x) { return s + (x.cashSales || 0); }, 0),
+    safeFirst: filled.length ? filled[0].safe : 0,
+    safeLast:  filled.length ? filled[filled.length - 1].safe : 0
+  };
+  return { ok: true, ym: m, today: today, days: days, sum: sum };
 }
 
 // 黒服「閉店の現金」: 4袋カウント＋現金売上＋伝票（画像読取＋手入力）で流れ照合→保存→LINE
