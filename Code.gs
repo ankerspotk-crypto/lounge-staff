@@ -1368,6 +1368,33 @@ function handleApiRequest_(body) {
     const addedH = savedH.filter(h => !beforeH[h.date]).map(h => h.date);
     return { ok: true, holidays: savedH, conflicts: shiftsOnDates_(addedH) };
   }
+  /* 🛑 今日はここまで（急な臨時休業・早締め）。判定の実体は dayStopHit_ ／ 一覧は daySchedList_。
+     ⚠️date はサーバの営業日で決める＝端末の時計がズレていても別の日を止めない。 */
+  if (body.action === 'getDayStop') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    return {
+      ok: true,
+      stop: getDayStop_(),
+      bizDate: bizDateStr_(),
+      now: Utilities.formatDate(new Date(), TZ, 'HH:mm'),
+      list: daySchedList_(),
+      holiday: isHoliday_(bizDateStr_())
+    };
+  }
+  if (body.action === 'setDayStop') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    const r = setDayStop_(body.from, body.label, adminName);
+    if (!r.ok) return r;
+    return { ok: true, stop: r.stop, bizDate: bizDateStr_(), now: Utilities.formatDate(new Date(), TZ, 'HH:mm'), list: daySchedList_() };
+  }
+  if (body.action === 'clearDayStop') {
+    const adminName = getStaffName(body.userId);
+    if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
+    clearDayStop_();
+    return { ok: true, stop: null, bizDate: bizDateStr_(), now: Utilities.formatDate(new Date(), TZ, 'HH:mm'), list: daySchedList_() };
+  }
   if (body.action === 'resetOpeningCheck') {
     const adminName = getStaffName(body.userId);
     if (!adminName || !isAdmin_(adminName)) return { ok: false, error: '権限がありません' };
@@ -7940,11 +7967,17 @@ function scheduledJobs() {
   //   ns_ を使うガードを毎分ブロックに足す時は、この宣言より後ろであることを必ず確認する。
   const ns_ = getNotifSettings_();
 
+  /* 🛑「今日はここまで」＝急な臨時休業／早締めで、指定時刻以降の通知を止める（ボス指示 2026-09-08）。
+     ⚠️未設定なら null ＝この行から下は一切ふるまいが変わらない（既定OFF）。
+     ⚠️止めるのは通知だけ。勤怠の保存・05:00クリーンアップ・予約同期・登録完了DMは下でも通す＝業務が壊れる。
+     ⚠️宣言は必ず ns_ の直後（const の TDZ で毎分ジョブが全滅した前例あり → reference_scheduled_jobs_silent_death）。 */
+  const stop_ = dayStopHit_(hhmm);
+
   // 毎分実行（日曜も継続）
   checkReminders();
-  if (notifEnabled_('aten_alert', ns_)) checkAtendou();
-  if (notifEnabled_('late_reservation', ns_)) checkLateReservations();
-  checkLeaveReservations();
+  if (!stop_ && notifEnabled_('aten_alert', ns_)) checkAtendou();
+  if (!stop_ && notifEnabled_('late_reservation', ns_)) checkLateReservations();
+  if (!stop_) checkLeaveReservations();
   checkPendingStaffRegistrations_();
   // 📈機能利用ログの流し残しを回収（usage.gs）。これが無いと、その営業日の最後の30件未満が
   //   CacheのTTL切れで消える。⚠️try/catchで隔離＝ここで落ちても以降の定時通知を巻き込まない（毎分ジョブ全滅の既知の罠）。
@@ -7978,6 +8011,7 @@ function scheduledJobs() {
 
   // 設定された時刻と一致したら1回だけ実行するヘルパー
   function notif_(key, fn) {
+    if (stop_) return; // 🛑今日はここまで（once()を立てずに戻る＝解除すれば残りは普通に出る）
     const s = ns_[key];
     if (!s || !s.enabled) return;
     if (s.days && s.days.length > 0 && !s.days.includes(bizDow)) return;
@@ -7993,14 +8027,14 @@ function scheduledJobs() {
   });
 
   // 週次棚卸しリマインド: 毎週月曜19:00（消耗品＋賞味期限管理品が対象）
-  if (dow === 1 && hhmm === '19:00') once('STOCKTAKE_REMINDER', () => {
+  if (!stop_ && dow === 1 && hhmm === '19:00') once('STOCKTAKE_REMINDER', () => {
     if (ns_['stocktake_reminder']?.enabled !== false) {
       push_(prop('GROUP_KUROFUKU'), '📋【棚卸しの日】\n本日は週次棚卸しの日です。軍師システムの「在庫発注管理」→「棚卸し」から実数の登録をお願いします。');
     }
   });
 
   // 月初1回(毎月1日 11:00台): 先月のTRUST売上を取り込むよう管理者へDM（給与を締める前に）。店休判定より前＝1日が日曜でも送る
-  if (Number(Utilities.formatDate(new Date(), TZ, 'd')) === 1 && hhmm >= '11:00' && hhmm <= '11:09') {
+  if (!stop_ && Number(Utilities.formatDate(new Date(), TZ, 'd')) === 1 && hhmm >= '11:00' && hhmm <= '11:09') {
     if (notifEnabled_('trust_sales_monthly', ns_)) once('TRUST_SALES_MONTHLY', () => {
       var lm = mkShift_(Utilities.formatDate(new Date(), TZ, 'yyyy/MM'), -1);
       pushAdmins_('📅【月次TRUST売上の取込】\n先月（' + lm + '）の売上が確定しました。給与を締める前に取り込んでください。\n① TRUSTにログイン →② コンソール「📥TRUST取込」で対象月を ' + lm.replace('/', '-') + ' にして「売上を取得」をクリック。');
@@ -8030,7 +8064,7 @@ function scheduledJobs() {
   // ---- 定時送信（月〜土のみ、月曜は12:00以降から） ----
 
   // 毎営業後 01:00台: 当日営業ぶんの伝票・現金を取り込むよう管理者へDM（GAS夜間自動取得が403で停止中の手動代替）
-  if (hhmm >= '01:00' && hhmm <= '01:09') {
+  if (!stop_ && hhmm >= '01:00' && hhmm <= '01:09') {
     if (notifEnabled_('trust_relay_nightly', ns_)) once('TRUST_RELAY_NIGHTLY', () => {
       pushAdmins_('🌙【TRUST取得のお願い】\n今日の営業ぶんを取り込んでください（各キャストの伝票・現金チェック用）。\n① TRUSTにログイン →② コンソール「📥TRUST取込」で\n　・「伝票を取得」\n　・「日払い・経費を取得」\nを順にクリック。\n※取れていない日はコンソールのカバレッジ表示（❌）で分かります。');
     });
@@ -8041,13 +8075,13 @@ function scheduledJobs() {
   });
 
   // 18:00: 当日中に管理コンソールから追加された黒服タスクをまとめて送信（18時以降の追加分は即送信済み）
-  if (hhmm >= '18:00' && hhmm <= '18:09' && notifEnabled_('kurofuku_tasks_1800', ns_)) once('KUROFUKU_TASKS_1800', sendPendingKurofukuTasks);
+  if (!stop_ && hhmm >= '18:00' && hhmm <= '18:09' && notifEnabled_('kurofuku_tasks_1800', ns_)) once('KUROFUKU_TASKS_1800', sendPendingKurofukuTasks);
 
   // 18:00: 月初1回、今月誕生日で誕生日バック未設定のキャストを軍師の要対応へ（内部で月ガード＝月1回）
-  if (hhmm >= '18:00' && hhmm <= '18:09' && notifEnabled_('bdayremind', ns_)) once('BDAYREMIND', remindBirthdayBackIfNeeded_);
+  if (!stop_ && hhmm >= '18:00' && hhmm <= '18:09' && notifEnabled_('bdayremind', ns_)) once('BDAYREMIND', remindBirthdayBackIfNeeded_);
 
   // 17:00: 当日出勤の黒服へ「今日の申し送り」を個別DM（日ガード＝1日1回。中身が空 or 当日黒服なしなら自然にスキップ）
-  if (hhmm >= '17:00' && hhmm <= '17:09' && notifEnabled_('kuro_handover', ns_)) once('KURO_HANDOVER', sendKurofukuHandoverDM_);
+  if (!stop_ && hhmm >= '17:00' && hhmm <= '17:09' && notifEnabled_('kuro_handover', ns_)) once('KURO_HANDOVER', sendKurofukuHandoverDM_);
 
   // 08:00: 前営業日の勤怠を判定して台帳へ積む（日ガード＝1日1回）。
   // ⚠️朝8時なのは、深夜2〜4時の退勤打刻が出揃ってから判定するため（6時境界で営業日が変わった後）。
@@ -8056,7 +8090,7 @@ function scheduledJobs() {
 
   // 月初(1日)11時台に1回: 今月誕生日の担当客を各キャストへLINE通知。
   // ⚠️既定OFF＝安全側。CUSTBDAY_NOTIFY_ON='1' をセットして初めて稼働（テスト承認後にONにする）。月ガードで月1回。
-  if (prop('CUSTBDAY_NOTIFY_ON') === '1' && hhmm >= '11:00' && hhmm <= '11:09') {
+  if (!stop_ && prop('CUSTBDAY_NOTIFY_ON') === '1' && hhmm >= '11:00' && hhmm <= '11:09') {
     var _cbNow = new Date();
     if (Number(Utilities.formatDate(_cbNow, TZ, 'd')) === 1) {
       var _cbYm = Utilities.formatDate(_cbNow, TZ, 'yyyy-MM');
@@ -8079,7 +8113,7 @@ function scheduledJobs() {
   });
 
   // 12:00 20時出勤の候補を黒服へ（14:00のシフト連絡までに前倒し依頼→シフト変更を反映できるよう）
-  if (hhmm >= '12:00' && hhmm <= '12:09' && notifEnabled_('req20_candidates', ns_)) once('REQ20_1200', sendReq20Candidates);
+  if (!stop_ && hhmm >= '12:00' && hhmm <= '12:09' && notifEnabled_('req20_candidates', ns_)) once('REQ20_1200', sendReq20Candidates);
 
   // 19:30 開店準備＝軍師の開店前チェックを各フロア完了せよ、の号令（旧11項目の羅列は廃止し軍師へ一本化）
   notif_('kinsen_mae', () => {
@@ -8104,7 +8138,7 @@ function scheduledJobs() {
   });
 
   // 16:00 ドライバーへ本日の連絡（ドライバーモード=よろしく / 自社便=送りなし お休み）
-  if (hhmm >= '16:00' && hhmm <= '16:09') once('DRIVER_MODE_NOTICE_' + todayStr(), () => {
+  if (!stop_ && hhmm >= '16:00' && hhmm <= '16:09') once('DRIVER_MODE_NOTICE_' + todayStr(), () => {
     if (ns_['driver_notice_1600']?.enabled === false) return;
     const mode = prop('OKURI_MODE') || 'driver';
     if (mode === 'jisha') {
@@ -8118,7 +8152,7 @@ function scheduledJobs() {
 
   notif_('okuri_confirm', jobOkuriConfirm);
 
-  if (hhmm >= '23:40' && hhmm <= '23:49' && notifEnabled_('check_proposal', ns_)) once('CHECK_PROPOSAL', proposeCheckSchedule_);
+  if (!stop_ && hhmm >= '23:40' && hhmm <= '23:49' && notifEnabled_('check_proposal', ns_)) once('CHECK_PROPOSAL', proposeCheckSchedule_);
 
   notif_('seki_check', () => {
     push_(notifTarget_('seki_check', ns_, 'GROUP_KUROFUKU'), ns_['seki_check'].message || '各席チェックを出してください');
@@ -8136,6 +8170,17 @@ function scheduledJobs() {
     resetAllAtendou_();
   });
 
+  /* 🛑 早締め・臨時休業で 00:30 の号令を止めた日も、**退勤リセットだけは必ず回す**。
+     ⚠️kinsen_go は「送る」だけでなく resetAllAtendou_（全員のアテンド解除）という副作用を持つ＝
+       通知ごと止めると在席状態が翌日に残り、翌営業日の付け回し/席が壊れる（既知の地雷）。
+     ⚠️別の once キーにする＝解除して号令が出た時に二重で走らせない（resetAllAtendou_ は冪等だが印は分ける）。 */
+  if (stop_ && ns_['kinsen_go'] && ns_['kinsen_go'].time) {
+    const _kgT = ns_['kinsen_go'].time;
+    const _kgM = parseInt(_kgT.slice(3, 5), 10);
+    const _kgEnd = _kgT.slice(0, 3) + String(_kgM + 10 < 60 ? _kgM + 10 : 59).padStart(2, '0');
+    if (hhmm >= _kgT && hhmm <= _kgEnd) once('DAYSTOP_TAIKIN_RESET', resetAllAtendou_);
+  }
+
   // カスタム通知（custom_ キー）
   Object.keys(ns_).forEach(k => {
     if (!k.startsWith('custom_')) return;
@@ -8148,19 +8193,19 @@ function scheduledJobs() {
   });
 
   // 退勤時間が24時前のキャストに10分前予告
-  if (ns_['early_taikin']?.enabled !== false) checkEarlyTaikin_(hhmm, once);
+  if (!stop_ && ns_['early_taikin']?.enabled !== false) checkEarlyTaikin_(hhmm, once);
 
-  if (hhmm === '21:00') once('ST2100', () => {
+  if (!stop_ && hhmm === '21:00') once('ST2100', () => {
     if (ns_['missing_shukkin']?.enabled !== false) checkMissingShukkin();
   });
 
-  if (hhmm === '01:00') once('ST0100', () => {
+  if (!stop_ && hhmm === '01:00') once('ST0100', () => {
     if (ns_['missing_taikin']?.enabled !== false) checkMissingTaikin();
   });
 
   // ☂️ 雨アラート（10分ごと、20:00〜24:30）
   const _mm = parseInt(Utilities.formatDate(new Date(), TZ, 'mm'));
-  if (_mm % 10 === 0 && (hhmm >= '20:00' || hhmm <= '00:30') && ns_['rain_alert']?.enabled !== false) {
+  if (!stop_ && _mm % 10 === 0 && (hhmm >= '20:00' || hhmm <= '00:30') && ns_['rain_alert']?.enabled !== false) {
     once('RAIN_CHECK_' + Utilities.formatDate(new Date(), TZ, 'yyyyMMddHHmm'), checkRainAlert_);
   }
 
@@ -13828,7 +13873,7 @@ function resetGunshiSettings_() {
   // 消してはいけない永続データ。軍師設定リセットは一時的な運用状態(席/タグ/呼び出し/一時タスク等)だけを消す。
   // ★ここに載っていないと「軍師設定」リセットで消える。店休日/現金しきい値/通知/PIN/公開状態などは必ず保護。
   const KEEP = ['LINE_TOKEN','GROUP_KUROFUKU','GROUP_STAFF','GROUP_DRIVER','GROUP_HAKEN','GROUP_YOYAKU','SHEET_ID',
-    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TRUST_OFF_FROM','TASK_DEFERRALS','YOBIKAKE_TPL'];
+    'HOLIDAYS_JSON','CASH_THRESHOLDS_JSON','NOTIF_SETTINGS','SALES_DATA_DATES','ADMIN_CONSOLE_PIN','KIOSK_USER_ID','CHECKLIST_CONFIG','ONBOARD_CONFIG','PORTAL_URL','MENDAN_SIM_CONFIG','PROCESSED_IMG_MSG_IDS','SEIKYU_SETTINGS','POS_MODE','TRUST_OFF_FROM','TASK_DEFERRALS','YOBIKAKE_TPL','DAY_STOP_JSON'];
   // ⚠️'NIPPO_' ＝日報のバック単価（予約¥500/同伴¥3,000 等）。消えると給与の素が黙って変わる
   // ⚠️'PARTNER_' ＝共同経営者ビューのPINと表示設定。消えると相手がログインできなくなる。
   //   ⭐一方 'PTK_'（ログイントークン）は**わざと入れない**＝リセットで切れていい（再ログインで済む）。
@@ -17319,6 +17364,102 @@ function setHolidays_(list) {
 function isHoliday_(dateStr) {
   const d = dateStr || bizDateStr_();
   return getHolidays_().some(h => h.date === d);
+}
+
+// ============================================================
+// 🛑 今日はここまで（急な臨時休業・早締めで、その先の通知を止める）  ボス指示 2026-09-08
+//   ScriptProperty DAY_STOP_JSON = {date:'yyyy-MM-dd'(営業日), from:'HH:mm', label:'', by:'', at:''}
+//   ⭐**未設定なら null ＝挙動は一行も変わらない**（既定OFF）。設定した時だけ関所が立つ。
+//   ⭐止めるのは「その営業日に紐づく通知」だけ＝定時のLINEと営業中アラート。
+//     記録の仕事（勤怠の保存・クリーンアップ・予約同期）と、人ごとの手続き（登録完了DM）は止めない＝業務が壊れる。
+//   ⭐**翌日に自動失効**＝date が今日の営業日と違えば無効。解除し忘れて店が黙り続ける事故を防ぐ。
+//   ⚠️ゲートは必ず once() の**手前**に置く＝onceフラグを立てずに戻る。立ててしまうと解除しても残りが二度と出ない。
+// ============================================================
+const DAYSTOP_PROP_ = 'DAY_STOP_JSON';
+
+/* 今日の営業日ぶんの「ここまで」設定。無ければ null（＝日付違いも null＝自動失効）。 */
+function getDayStop_() {
+  const raw = prop(DAYSTOP_PROP_);
+  if (!raw) return null;
+  let o = null;
+  try { o = JSON.parse(raw); } catch (e) { return null; }
+  if (!o || !o.date || !o.from) return null;
+  if (o.date !== bizDateStr_()) return null;
+  return o;
+}
+
+/* 保存（date は必ずサーバ側の営業日で上書き＝端末の時計ズレで別の日を止めない）。 */
+function setDayStop_(from, label, by) {
+  const f = String(from || '').trim();
+  /* ⚠️形式だけでなく**在り得る時刻か**まで見る（bizMinOfHhmm_ が唯一の判定）。
+     正規表現だけだと '25:00' が通り、以後どの時刻とも一致せず**止まったつもりで全部飛ぶ**（自動テストで検出）。 */
+  if (bizMinOfHhmm_(f) == null) return { ok: false, error: '時刻が正しくありません（00:00〜23:59）' };
+  const o = {
+    date: bizDateStr_(),
+    from: (f.length === 4 ? '0' + f : f),
+    label: String(label || '').trim(),
+    by: String(by || ''),
+    at: nowStamp_()
+  };
+  setProp(DAYSTOP_PROP_, JSON.stringify(o));
+  return { ok: true, stop: o };
+}
+
+function clearDayStop_() {
+  PropertiesService.getScriptProperties().deleteProperty(DAYSTOP_PROP_);
+  return { ok: true };
+}
+
+/* 'HH:mm' を営業日の軸（朝6時境界）での分に直す。00:30 は「24:30」＝19:30より後になる。
+ * ⚠️この変換を挟まないと、早締め22:00の指定が 00:30 の退勤号令を止められない（素の文字列比較では 00:30 < 22:00）。 */
+function bizMinOfHhmm_(hhmm) {
+  const m = String(hhmm == null ? '' : hhmm).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]);
+  if (h > 23 || mi > 59) return null;
+  return (h < 6 ? h + 24 : h) * 60 + mi;
+}
+
+/* 今この瞬間(hhmm)が「ここまで」の線を越えていれば設定を返す（＝通知を止める）。越えていなければ null。 */
+function dayStopHit_(hhmm) {
+  const st = getDayStop_();
+  if (!st) return null;
+  const now = bizMinOfHhmm_(hhmm), from = bizMinOfHhmm_(st.from);
+  if (now == null || from == null) return null;
+  return (now >= from) ? st : null;
+}
+
+/* その営業日に出る定時通知の一覧（コンソールの「何が止まるか」プレビュー用）。
+ * ⚠️時刻の正本は2箇所ある＝設定を持つものは ns_ から、直書きの定時ジョブはこの表から。
+ *   scheduledJobs 側の時刻を動かしたらここも直す（食い違うと画面の予告だけが嘘になる）。 */
+function daySchedList_(ns) {
+  const ns_ = ns || getNotifSettings_();
+  const out = [];
+  Object.keys(ns_).forEach(function (k) {
+    const s = ns_[k];
+    if (!s || !s.time || s.enabled === false) return;
+    if (s.category && s.category !== 'scheduled') return;
+    out.push({ key: k, label: s.label || k, time: s.time });
+  });
+  const RAW = [
+    { key: 'req20_candidates',    label: '20時出勤の候補を黒服へ',        time: '12:00' },
+    { key: 'driver_notice_1600',  label: 'ドライバーへ本日の連絡',        time: '16:00' },
+    { key: 'kuro_handover',       label: '黒服への申し送りDM',            time: '17:00' },
+    { key: 'kurofuku_tasks_1800', label: '黒服タスクのまとめ送信',        time: '18:00' },
+    { key: 'missing_shukkin',     label: '出勤打刻もれの確認',            time: '21:00' },
+    { key: 'check_proposal',      label: 'チェック予定の提案',            time: '23:40' },
+    { key: 'missing_taikin',      label: '退勤打刻もれの確認',            time: '01:00' },
+    { key: 'trust_relay_nightly', label: 'TRUST取得のお願い（管理者DM）', time: '01:00' }
+  ];
+  const has = {}; out.forEach(function (x) { has[x.key] = true; });
+  RAW.forEach(function (x) {
+    if (has[x.key]) return;
+    if (ns_[x.key] && ns_[x.key].enabled === false) return;
+    out.push(x);
+  });
+  out.forEach(function (x) { x.bizMin = bizMinOfHhmm_(x.time); });
+  return out.filter(function (x) { return x.bizMin != null; })
+            .sort(function (a, b) { return a.bizMin - b.bizMin; });
 }
 
 /* シフト表の日付表記('M/d')を営業日キー(yyyy-MM-dd)に。既にyyyy-MM-ddならそのまま返す。
