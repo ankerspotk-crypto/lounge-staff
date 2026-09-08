@@ -687,7 +687,7 @@ function pollAdminAuth(token){
    ⚠️💰月末の締めの①〜⑧は**実際の作業順**（取込→照合→立替→給与→公開）。飾りの連番ではないので
      並べ替えるときは順番の意味も一緒に確かめること。 */
 var TAB_GROUPS=[
-  {g:'today', label:'📆 今日', tabs:[['top','🏠 店の全容'],['rsv','📅 予約'],['shift','🗓 シフト'],['nippo','📋 日報'],['sales','💹 収支'],['cashtrend','💵 現金'],['slip','🧾 伝票'],['yobikake','📣 呼びかけ']]},
+  {g:'today', label:'📆 今日', tabs:[['top','🏠 店の全容'],['rsv','📅 予約'],['shift','🗓 シフト'],['nippo','📋 日報'],['sales','💹 収支'],['cashtrend','💵 現金'],['slip','🧾 伝票'],['yobikake','📣 呼びかけ'],['daystop','🛑 今日は止める']]},
   {g:'shime', label:'💰 月末の締め', tabs:[['trust','① TRUST取込'],['hibarai','② 日払い照合'],['tatekae','③ 立替集計'],['keihi','④ 経費立替'],['kotsu','⑤ 交通費'],['bday','⑥ 誕生日バック'],['kyuyo','⑦ 給与明細'],['publish','⑧ 公開設定']]},
   {g:'rec',   label:'📈 数字と記録', tabs:[['bills','🧾 売上明細'],['mybills','👤 個人売上明細'],['seikyu','📄 請求書'],['receipt','💇 領収書(月別)'],['kintaireg','🗂 出勤簿'],['kyukin','📉 当欠'],['okuri','🚗 送迎'],['nenkan','📈 年間集計'],['partner','📊 共同経営者']]},
   {g:'hito',  label:'👤 人とお客様', tabs:[['staff','👥 スタッフ'],['mendan','📋 面談表'],['haken','🪪 派遣台帳'],['awards','🏆 表彰'],['members','👤 会員'],['custbday','🎂 お客様の誕生日'],['feerenew','💳 会費更新']]},
@@ -742,7 +742,7 @@ var TAB_RENDER_={
   holiday:renderHolidays,members:renderMembers,custbday:renderCustBday,feerenew:renderFeeRenew,
   notice:renderNotice,voice:renderVoice,hallreq:renderHallReq,awards:renderAwards,
   manual:renderManualAdmin,skilltest:renderSkillTest,seikyu:renderSeikyu,issuer:renderIssuer,
-  ref:renderRef,usage:renderUsage,cashtrend:renderCashTrend,
+  ref:renderRef,usage:renderUsage,cashtrend:renderCashTrend,daystop:renderDayStop,
   /* 💰売上給与の13サブ → それぞれ独立したタブへ */
   tatekae:paySubTab_('tatekae'), keihi:paySubTab_('keihi'),   trust:paySubTab_('trust'),
   bills:paySubTab_('bills'),     mybills:paySubTab_('mybills'),kyuyo:paySubTab_('kyuyo'),
@@ -5657,6 +5657,110 @@ function drawRsvLog(){
   el.innerHTML=filt+bodyHtml;
 }
 
+/* ===== 🛑 今日は止める（急な臨時休業・早締めで、その先の通知を出さない）=====
+ * ボス指示 2026-09-08。🏖店休日は「先の予定」を決める画面＝当日いきなり休む/早く閉める時に遠い。
+ * ⭐決めるのは「今日のここから先は通知を出さない」の1本だけ。時刻を1つ選べば以降は全部止まる。
+ * ⭐止まるのは通知だけ＝勤怠の保存・退勤リセット・予約同期は今までどおり回る（サーバ側で切り分け済み）。
+ * ⚠️理由の入力欄で再描画しない（入力中に欄がDOMごと消える罠 → reference_search_input_rerender_trap）。
+ *   時刻を変えた時も、書きかえるのは予告リストだけ。 */
+var DS={stop:null,list:[],now:'',bizDate:'',holiday:false};
+function dsBizMin(t){ var m=String(t||'').match(/^(\d{1,2}):(\d{2})$/); if(!m)return null; var h=+m[1]; return (h<6?h+24:h)*60+(+m[2]); }
+function renderDayStop(){
+  loading();
+  api('getDayStop').then(function(r){
+    if(r&&r.ok===false){ setBody('<div class="empty">'+esc(r.error||'読み込みエラー')+'</div>'); return; }
+    DS.stop=r.stop||null; DS.list=r.list||[]; DS.now=r.now||''; DS.bizDate=r.bizDate||''; DS.holiday=!!r.holiday;
+    drawDayStop();
+  }).catch(function(){ setBody('<div class="empty">読み込みエラー</div>'); });
+}
+/* 予告リスト（この時刻で止めると何が黙るか）。ここだけ差し替える＝入力欄を消さない */
+function dsPreviewHtml(from){
+  var fm=dsBizMin(from);
+  var rows=(DS.list||[]).map(function(x){
+    var stop=(fm!=null && x.bizMin>=fm);
+    return '<div class="lrow" style="padding:7px 10px'+(stop?'':';opacity:.5')+'">'
+      +'<div class="main"><div class="nm" style="font-size:13px">'+(stop?'🛑 ':'✅ ')+esc(x.time)+'　'+esc(x.label)+'</div></div>'
+      +'<span class="sub" style="color:'+(stop?'#ff9d9d':'var(--dim)')+'">'+(stop?'止まる':'出る')+'</span></div>';
+  }).join('');
+  var n=(DS.list||[]).filter(function(x){return fm!=null&&x.bizMin>=fm;}).length;
+  return '<div class="sec-t" style="margin-bottom:6px">この時刻で止めると <b>'+n+'本</b> が黙ります <span class="sub">（'+(DS.list||[]).length+'本中）</span></div>'+rows;
+}
+function dsOnTime(){
+  var v=(document.getElementById('ds-from')||{}).value||'';
+  var box=document.getElementById('ds-prev'); if(box) box.innerHTML=dsPreviewHtml(v);
+}
+function drawDayStop(){
+  var st=DS.stop;
+  var head='<div class="sec"><div class="sec-t">🛑 今日は止める <span class="sub">'+esc(DS.bizDate)+'（営業日）／ ただいま '+esc(DS.now)+'</span></div>';
+  if(st){
+    head+='<div style="border:1px solid #7a2b2b;background:#2a1414;border-radius:10px;padding:12px;margin-top:8px">'
+      +'<div style="font-size:15px;font-weight:700;color:#ff9d9d">🛑 '+esc(st.from)+' 以降の通知を止めています</div>'
+      +'<div class="meta" style="margin-top:6px">'+(st.label?'理由：'+esc(st.label)+'<br>':'')+'設定：'+esc(st.by||'')+'　'+esc(st.at||'')+'</div>'
+      +'<div class="hint" style="margin-top:8px">明日の朝6時（＝翌営業日）になれば自動で元に戻ります。解除し忘れても店が黙り続けることはありません。</div>'
+      +'<button class="btn pri" style="margin-top:10px" onclick="dsClear()">▶️ 止めるのをやめる（通知を元に戻す）</button>'
+      +'</div>';
+  }else{
+    var def=DS.now||'22:00';
+    /* ⚠️店休日にしただけでは全部は止まらない＝夜の定時連絡は止まるが、おしぼり発注・お知らせ未読・
+       シフト号令・当欠者への朝DMは「営業の有無と関係ない」ので出る。気づけるようにここで言う。 */
+    if(DS.holiday) head+='<div style="border:1px solid #7a5c2b;background:#2a2214;border-radius:10px;padding:10px;margin-top:8px;font-size:13px">'
+      +'🏖 <b>本日は店休日です。</b>夜の定時連絡（現金チェック・送り・退勤号令など）は元から止まっていますが、'
+      +'<b>おしぼり発注・お知らせの未読リマインド・シフトの号令・当欠者への朝のDMは出ます</b>（営業の有無と関係ない連絡のため）。'
+      +'それも止めるなら、下で時刻を選んで止めてください。</div>';
+    head+='<div class="hint" style="margin-top:8px">急に休みにした日・早く閉めた日に、この先の定時連絡を出さないための画面です。'
+      +'<b>選んだ時刻から先の通知が全部止まります</b>（明日の朝6時で自動的に元通り）。</div>'
+      +'<div class="toolbar" style="flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px">'
+      +'<label style="display:flex;align-items:center;gap:6px;font-size:13px">ここから先を止める <input class="finput" type="time" id="ds-from" value="'+esc(def)+'" onchange="dsOnTime()" style="width:120px"></label>'
+      +'<button class="btn sm" onclick="dsNow()">今すぐ（'+esc(DS.now)+'）</button>'
+      +'<input class="finput grow" id="ds-label" placeholder="理由（任意）例：台風／貸切／客足なし" style="min-width:180px">'
+      +'</div>'
+      +'<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:8px"><input type="checkbox" id="ds-hol"'+(DS.holiday?' checked disabled':'')+'> 臨時休業として <b>店休日にも登録する</b>'+(DS.holiday?'（すでに店休日です）':'')+'</label>'
+      +'<button class="btn dng" style="margin-top:10px" onclick="dsSave()">🛑 これ以降の通知を止める</button>';
+  }
+  head+='</div>';
+  var prev='<div class="sec" id="ds-prevwrap"><div id="ds-prev">'+dsPreviewHtml(st?st.from:(DS.now||'22:00'))+'</div></div>';
+  var note='<div class="sec"><div class="sec-t">⚠️ 止まらないもの（わざと）</div>'
+    +'<div class="hint">・前営業日の<b>勤怠の保存</b>、05:00の掃除、予約の同期＝記録の仕事は今までどおり回ります。<br>'
+    +'・00:30の号令を止めた日も、<b>全員の退勤リセットだけは走ります</b>（在席のまま翌日に持ち越さないため）。<br>'
+    +'・お客様への予約確認や、黒服の呼び出しなど<b>その場の操作で出る通知</b>は止まりません（誰かが押した時だけ出るもの）。<br>'
+    +'・止めた連絡をやっぱり出したい時は「📢連絡 → 🔁再送」から手で送れます。</div></div>';
+  setBody(head+prev+note);
+}
+function dsNow(){ var el=document.getElementById('ds-from'); if(el){ el.value=DS.now||el.value; dsOnTime(); } }
+function dsSave(){
+  var from=(document.getElementById('ds-from')||{}).value||'';
+  var label=(document.getElementById('ds-label')||{}).value||'';
+  var hol=(document.getElementById('ds-hol')||{}).checked;
+  if(!from){ toast('止める時刻を選んでください',true); return; }
+  var n=(DS.list||[]).filter(function(x){return x.bizMin>=dsBizMin(from);}).length;
+  if(!confirm('今日 '+from+' 以降の通知を止めます。\n定時の連絡 '+n+'本が出なくなります。よろしいですか？')) return;
+  api('setDayStop',{from:from,label:label}).then(function(r){
+    if(!res(r,'今日 '+from+' 以降の通知を止めました')) return;
+    DS.stop=r.stop||null; DS.list=r.list||DS.list; DS.now=r.now||DS.now;
+    if(hol && !DS.holiday) dsAddHoliday(label);
+    else drawDayStop();
+  }).catch(function(){toast('通信エラー',true);});
+}
+/* 「店休日にも登録する」＝既存の店休日リストに今日を足すだけ（saveHolidays は全量置換なので必ず現状に足して送る） */
+function dsAddHoliday(label){
+  api('getHolidays').then(function(r){
+    var list=((r&&r.holidays)||[]).slice();
+    if(!list.some(function(h){return h.date===DS.bizDate;})) list.push({date:DS.bizDate,label:label||'臨時休業'});
+    return api('saveHolidays',{holidays:list});
+  }).then(function(r2){
+    if(r2&&r2.ok===false){ toast(r2.error||'店休日の登録に失敗',true); }
+    else { DS.holiday=true; toast('店休日にも登録しました'); hdWarnConflicts(r2&&r2.conflicts); }
+    drawDayStop();
+  }).catch(function(){ toast('店休日の登録に失敗',true); drawDayStop(); });
+}
+function dsClear(){
+  if(!confirm('通知を元に戻します（この先の定時連絡が普通に出ます）。よろしいですか？')) return;
+  api('clearDayStop').then(function(r){
+    if(!res(r,'元に戻しました')) return;
+    DS.stop=null; DS.list=r.list||DS.list; DS.now=r.now||DS.now; drawDayStop();
+  }).catch(function(){toast('通信エラー',true);});
+}
+
 /* ===== 🏖 店休日（お盆休み・臨時休業など）===== */
 var holidays=[];
 function hdFmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -7019,6 +7123,28 @@ function MOCKAPI(action,body){
       maybe:[{a:'ヴーヴ イエロー',b:'ヴーヴクリコ イエロー',aQty:3,bQty:5,aFloors:'2F',bFloors:'5F',score:55}]};
   }
   if(action==='mergeStockNames'){ window.__merged=body; return {ok:true,from:body.from,to:body.to,renamed:['2F: 3本'],mergedQty:[],relinked:''}; }
+  if(action==='getDayStop'||action==='setDayStop'||action==='clearDayStop'){
+    if(action==='setDayStop') window.__mockStop={date:'2026-09-08',from:body.from,label:body.label||'',by:'りく（ローカル）',at:'2026-09-08 21:00'};
+    if(action==='clearDayStop') window.__mockStop=null;
+    var _ml=[{key:'kyukin_early_dm',label:'🌅 当欠経験者への朝リマインド',time:'09:00'},
+             {key:'req20_candidates',label:'20時出勤の候補を黒服へ',time:'12:00'},
+             {key:'lineup',label:'本日出勤ラインナップ',time:'14:00'},
+             {key:'driver_notice_1600',label:'ドライバーへ本日の連絡',time:'16:00'},
+             {key:'kuro_handover',label:'黒服への申し送りDM',time:'17:00'},
+             {key:'ieyas_url',label:'IEYAS軍師URL通知',time:'18:00'},
+             {key:'kinsen_mae',label:'現金チェック（営業前）',time:'19:30'},
+             {key:'dohan_check',label:'同伴チェック',time:'22:00'},
+             {key:'okuri_summary',label:'送りサマリー',time:'22:30'},
+             {key:'okuri_confirm',label:'送り確認',time:'23:30'},
+             {key:'seki_check',label:'各席チェック',time:'23:45'},
+             {key:'shoumei',label:'照明消灯',time:'00:15'},
+             {key:'kinsen_go',label:'現金チェック（終了）+退勤',time:'00:30'},
+             {key:'trust_relay_nightly',label:'TRUST取得のお願い（管理者DM）',time:'01:00'}];
+    _ml.forEach(function(x){ var h=+x.time.slice(0,2); x.bizMin=(h<6?h+24:h)*60+ +x.time.slice(3); });
+    _ml.sort(function(a,b){return a.bizMin-b.bizMin;});
+    return {ok:true,stop:window.__mockStop||null,list:_ml,now:'21:12',bizDate:'2026-09-08',
+            holiday:(window.__mockHolidays||[]).some(function(h){return h.date==='2026-09-08';})};
+  }
   if(action==='getHolidays')return {ok:true,holidays:(window.__mockHolidays||[{date:'2026-08-13',label:'お盆休み'},{date:'2026-08-14',label:'お盆休み'},{date:'2026-08-15',label:'お盆休み'}])};
   if(action==='saveHolidays'){
     var _before={}; (window.__mockHolidays||[]).forEach(function(h){_before[h.date]=true;});
