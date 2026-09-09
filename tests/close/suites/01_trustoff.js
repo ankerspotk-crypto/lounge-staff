@@ -113,17 +113,32 @@ module.exports = function (t, which) {
     t.ok(!!step(w.cfSteps_(), 'cf_trust'), 'TRUSTの工程が残る');
   }
 
+  /* ⚠️ここから先は**本番とテスト環境で作りが違う**（テストは本番の上位互換ではない）。
+       本番 gunshi.html  ＝ 2026-08-27に「過去の未照合日」条件そのものを撤去済み。
+                            日次の自動突合を捨てた以上、全ての夜が未照合として積み上がり
+                            誰にも解けない条件になるため（＝詰まないことは構造的に保証済み）。
+       gunshi-test.html ＝ その撤去前の系統に legacy 降格を足したもの。
+     ⛔どちらが正しいかを写経で決めない＝**実物に past 条件があるか**で分岐する。
+       条件が無いのに「未反映」と読むと、本番へ余計なものを持ち込む判断になる。 */
   t.section('⑤ TRUST時代の未照合日が残っていても帰れる（9月いっぱい詰まない）');
   {
-    const w = boot(t, which, { today: '2026-09-03',
+    /* 現金の提出・承認は済ませた回にする＝「帰れない理由が未照合だけ」の状態を作る
+       （他の工程が未了のまま帰れないのを未照合のせいと読み違えない） */
+    const w = boot(t, which, { today: '2026-09-03', cash: { reportSubmitted: true, approved: true },
       gate: { dateKey: '2026-09-03', trustOff: true, nippo: { fixed: true } },
       ccGate: { dateKey: '2026-09-03', today: { hasTrust: false },
                 unresolved: [{ dateKey: '2026-08-20', status: '未照合', hasTrust: false, diff: 0, lines: [], legacy: true }] } });
     const C = w.ccGateConds_();
-    t.eq(cond(C, 'past').ok, true, '⭐必須条件「過去に未照合の日が残っていない」は満たす');
-    t.ok(!!cond(C, 'pastlegacy'), '代わりに引き継ぎとして1件出す');
-    t.eq(cond(C, 'pastlegacy').hard, false, '⭐帰宅も送信も止めない');
-    t.ok(/8-20|08-20/.test(cond(C, 'pastlegacy').detail), '日付が出る', cond(C, 'pastlegacy').detail);
+    if (!cond(C, 'past')) {
+      t.ok(true, '⭐「過去に未照合の日が残っていない」条件を持たない＝残っていても詰まない');
+      t.ok(!cond(C, 'pastlegacy'), 'legacy の引き継ぎ表示も持たない（条件が無いので出しようがない）');
+      t.eq(w.cfCanGoHome_(), true, '⭐未照合が残っていても帰れる');
+    } else {
+      t.eq(cond(C, 'past').ok, true, '⭐必須条件「過去に未照合の日が残っていない」は満たす');
+      t.ok(!!cond(C, 'pastlegacy'), '代わりに引き継ぎとして1件出す');
+      t.eq(cond(C, 'pastlegacy').hard, false, '⭐帰宅も送信も止めない');
+      t.ok(/8-20|08-20/.test(cond(C, 'pastlegacy').detail), '日付が出る', cond(C, 'pastlegacy').detail);
+    }
   }
   {
     /* legacy でない未照合（＝まだTRUSTが生きていた頃の宿題）は従来どおり止める */
@@ -131,7 +146,11 @@ module.exports = function (t, which) {
       ccGate: { dateKey: '2026-08-31', today: { hasTrust: false },
                 unresolved: [{ dateKey: '2026-08-20', status: '未照合', hasTrust: true, diff: 3000, lines: [] }] } });
     const C = w.ccGateConds_();
-    t.eq(cond(C, 'past').ok, false, 'TRUST時代は従来どおり止める（作りを弱めていない）');
-    t.eq(cond(C, 'past').hard, true, '必須のまま');
+    if (!cond(C, 'past')) {
+      t.ok(true, '本番は過去日ゲートを持たない＝TRUST時代の日も止めない（2026-08-27の決定どおり）');
+    } else {
+      t.eq(cond(C, 'past').ok, false, 'TRUST時代は従来どおり止める（作りを弱めていない）');
+      t.eq(cond(C, 'past').hard, true, '必須のまま');
+    }
   }
 };

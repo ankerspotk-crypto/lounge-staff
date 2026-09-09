@@ -1643,7 +1643,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-02d';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-10a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2047,6 +2047,17 @@ function renderHomeMid(){
    という導線の嘘だった（ボス指摘 2026-08-25）。この工程に必要なものだけをここに集める：
    ①今日TRUSTへ入れる中身（日払い・経費）②TRUSTを開くボタン ③突合結果 or 「入力しました」の申告。
    自己申告は端末に営業日ごとで持ち、閉店チェックのゲートと共有する（別々に持つと片方だけONになる）。 */
+/* 🗓 TRUST運用の終わり＝2026-09-01（ボス確定 2026-08-30「9月1日からTRUSTを使わない」）。
+   ⭐正本はサーバ（ccGateStatus が trustOff / trustOffFrom を返す）。ここはサーバが取れない夜の保険。
+   ⚠️「今日」ではなく**対象の営業日**で決める＝9/2に8/31を締め直しても8/31はTRUST時代の締め方のまま。
+   ⚠️画面とサーバで別々の条件を書かない。ここが持つのは日付ひとつだけ。 */
+var TRUST_OFF_FROM_FALLBACK='2026-09-01';
+function ccTrustOff_(dateKey){
+  var g=(CLOSE_FLOW&&CLOSE_FLOW.gate)||CC_GATE||null;
+  var d=String(dateKey||(g&&g.dateKey)||(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||(typeof TODAY!=='undefined'?TODAY:'')||'');
+  if(g&&typeof g.trustOff==='boolean'&&(!d||d===g.dateKey)) return g.trustOff;
+  return d>=String((g&&g.trustOffFrom)||TRUST_OFF_FROM_FALLBACK);
+}
 function trustSelfKey_(){ var d=(CLOSE_FLOW&&CLOSE_FLOW.cash&&CLOSE_FLOW.cash.dateKey)||(cashState&&cashState.dateKey)||''; return 'trustSelf_'+d; }
 function trustSelfGet_(){ try{ return localStorage.getItem(trustSelfKey_())==='1'; }catch(e){ return false; } }
 function trustSelfSet_(v){ try{ localStorage.setItem(trustSelfKey_(), v?'1':'0'); }catch(e){} if(cashState) cashState.trustConfirmed=!!v; }
@@ -2861,13 +2872,24 @@ function cfSteps_(){
      いまはどちらも「submitted || 自己申告」だけ。片方だけ条件を足さないこと。 */
   /* ⚠️自己申告(trustSelfGet_)も「この工程は終わった」に数える。黒服は送信より先に入力してチェックする＝
      送信を条件にすると、やったのに❌のままで「まだ帰れません」と言われる（実測で踏んだ）。 */
-  var selfOk=trustSelfGet_();
-  var trustOk=submitted||selfOk;
-  var trustS;
-  if(submitted) trustS='入力済みとして送信しました';
-  else if(selfOk) trustS='入力したと申告済み';
-  else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
-  S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
+  /* 🗓 2026-09-01から TRUST は使わない＝この工程は 📋日報の確定 に入れ替わる（ボス確定 2026-08-30）。
+     ⚠️TRUST時代の工程を残すと「やっていない作業をやったことにする」チェックを毎晩押させることになる。
+     ⚠️日報の状態が取れない夜（backend未反映・通信不良）は**工程そのものを出さない**
+        ＝取れないことを理由に誰も帰れなくしない（安全弁は必ず残す）。 */
+  if(!ccTrustOff_()){
+    var selfOk=trustSelfGet_();
+    var trustOk=submitted||selfOk;
+    var trustS;
+    if(submitted) trustS='入力済みとして送信しました';
+    else if(selfOk) trustS='入力したと申告済み';
+    else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
+    S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
+  }else{
+    var np=(gate&&gate.nippo)||null;
+    if(np) S.push({id:'cf_nippo',em:'📋',t:'日報を確定する',
+      s:np.fixed?('確定済み'+(np.by?'　'+np.by:'')):'勤怠・日払い・バックを確認して確定（ここが給与の元データです）',
+      state:np.fixed?'done':'todo',act:'openNippo()'});
+  }
   // ④ 手作業（端末チェック）
   // ⛔送りは締めの工程に置かない（ボス確定 2026-08-26）＝締めの時点で送りはもう終わっている。
   //   終わっている作業をチェックさせると「あと N 件」が実態とズレて、警告そのものが読まれなくなる。
@@ -9976,9 +9998,14 @@ function ccGateConds_(){
         未照合として積み上がり、誰にも解けない条件になって毎晩の締めが永久に止まるため。
      ⚠️二重払いの関所は月次に移った＝コンソールの 💴日払い照合 と 給与明細の赤バナー。
         日次で止められなくなったぶん、給与を作る前に必ず月次照合を通すこと。 */
-  C.push({key:'trust', hard:true, ok:!!st.trustConfirmed, selfDeclare:true,
-    label:'日払い・経費を TRUST に入力した',
-    detail:'<b style="color:#ffcf7a">TRUSTに入れ忘れると給与計算で日払いが引かれず、二重払いになります。</b>伝票の一覧とTRUSTの数字が同じか目で確かめてからチェックしてください。' });
+  /* 🗓 2026-09-01から＝TRUST運用外の営業日は突合する相手が存在しない＝条件を1つも足さない。
+     ⚠️ここに「日報を確定した」を足さないこと。日報は締めワークフロー(cfSteps_)の必須工程で見る。
+       同じことを2箇所で判定すると必ず食い違って「送信は通ったのに帰れない」が起きる（2026-08-25に2回踏んだ）。 */
+  if(!ccTrustOff_()){
+    C.push({key:'trust', hard:true, ok:!!st.trustConfirmed, selfDeclare:true,
+      label:'日払い・経費を TRUST に入力した',
+      detail:'<b style="color:#ffcf7a">TRUSTに入れ忘れると給与計算で日払いが引かれず、二重払いになります。</b>伝票の一覧とTRUSTの数字が同じか目で確かめてからチェックしてください。' });
+  }
   return C;
 }
 function ccGateReady_(){ return ccGateConds_().every(function(c){ return !c.hard||c.ok; }); }
@@ -10109,7 +10136,11 @@ function submitCash(){
   var slips=st.slips.filter(function(x){return x.include!==false&&x.amount>0;}).map(function(x){return {category:x.category,payee:x.payee,amount:x.amount,source:x.source,imageUrl:x.imageUrl||'',photoBase64:x.photoBase64||'',mime:x.mime||'',tatekaeName:x.tatekaeName||''};});
   /* 🔒 締め条件の結果を一緒に送る。日次の自動突合は撤去したので、記録に残るのは黒服の申告そのもの。
      ⚠️「照合済み」とは絶対に書かない＝誰も照合していない。突き合わせるのは月次の 💴日払い照合。 */
-  var _gate={trustStatus:'未照合',trustDiff:0,note:'黒服の自己申告で送信（日次の自動照合なし）'};
+  /* 🗓 TRUST運用外の営業日に「未照合」を書くと、帳簿に嘘の宿題が積み上がる。
+     ⚠️サーバ側(submitCashCheck)でも同じ判定で上書きする＝どちらか片方が古い版でも事故らない。 */
+  var _gate=ccTrustOff_()
+    ? {trustStatus:'TRUST運用外',trustDiff:0,note:'TRUSTは使っていません（日報が正本）'}
+    : {trustStatus:'未照合',trustDiff:0,note:'黒服の自己申告で送信（日次の自動照合なし）'};
   /* 🌙 締め作業の要約用。LINEに「何をやって帰ったか」を出すための材料（金額計算には使わない） */
   var _cf=(typeof CLOSE_FLOW!=='undefined'&&CLOSE_FLOW)?CLOSE_FLOW:null;
   var _sum={posOk:(_cf&&_cf.pos)?(!_cf.pos.enforce||!!_cf.pos.ready):null};
