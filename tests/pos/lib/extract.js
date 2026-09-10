@@ -85,11 +85,16 @@ function frontBuild(which) {
 /* 名前で関数1本だけを切り出す（波括弧の対応を数える）。共通ヘルパを写経しないため */
 /* opts.optional=true … 無い関数は黙って飛ばす。
    ⚠️`--live`（本番の検査）では、テスト環境にしか無い関数を注入しようとして落ちるため。
-     本番検査は「何が欠けているか」を見るのが目的＝欠けていても走り切れないと意味がない。 */
+     本番検査は「何が欠けているか」を見るのが目的＝欠けていても走り切れないと意味がない。
+   opts.last=true … **最後の定義**を採る（既定は最初の定義＝indexOf）。
+   ⚠️2026-09-10追加。`getShiftMgmtData_` のようにトップレベル同名定義が2つあると、
+     GAS(V8)は**後勝ち**で後ろの定義が動くのに、既定の indexOf は**死んでいる前half**を拾う。
+     ＝本番が壊れたままテストだけ緑になる。二重定義の関数を検査するときは必ず last:true。 */
 function pluckFn(file, names, opts) {
   const src = fs.readFileSync(file, 'utf8');
   return names.map(name => {
-    const at = src.indexOf('\nfunction ' + name + '(');
+    const mark = '\nfunction ' + name + '(';
+    const at = (opts && opts.last) ? src.lastIndexOf(mark) : src.indexOf(mark);
     if (at < 0) { if (opts && opts.optional) return ''; throw new Error('関数が見つかりません: ' + name + ' (' + file + ')'); }
     let i = src.indexOf('{', at), depth = 0, end = -1;
     for (; i < src.length; i++) {
