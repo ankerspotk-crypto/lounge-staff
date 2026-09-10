@@ -199,6 +199,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-status { text-align: center; font-size: 13px; padding: 6px 0; }
 .req-status.ok  { color: #88ffaa; }
 .req-status.off { color: #ff8866; }
+.req-status.warn { color: #ffb066; }  /* 『シフト表未反映』＝要回収。未処理と同じ色にしない */
+.reqhist-bar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.reqhist-bar .notif-group-sel { width:auto; flex:1 1 46%; min-width:130px; }
 .req-empty { text-align: center; color: #94886a; padding: 40px 0; font-size: 14px; }
 .reqhist-date { font-size: 13px; font-weight: 700; color: #e6cf95; margin: 18px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #33291a; }
 .reqhist-date:first-of-type { margin-top: 4px; }
@@ -4643,6 +4646,12 @@ function row(label, val, cls) {
 
 // ---- 申請管理 ----
 var reqFilter = 'pending';
+/* 🕓 出勤希望の履歴（全員分）2026-09-11。
+   ⛔「未処理」＝承認待ちキューは今までどおり tab=requests（getShiftRequests_ ＝ **黒服のみ**）。
+      履歴だけ別タブ tab=reqhistory（getShiftReqHistory_ ＝ 全員・サーバ側で期間の窓を切る）を叩く。
+      母集団を混ぜるとキャストの当日欠勤 pending が承認待ちに並び始める（LINEの一言承認と二重導線になる）。
+   ⭐履歴は「すべて（履歴）」を押したときだけ引く＝未処理キューの表示は1msも遅くしない。 */
+var reqHist = null, reqHistErr = '', reqHistRange = 'now2', reqHistName = '';
 
 function loadRequests() {
   setContent('<div class="loading">申請を読み込み中...</div>');
@@ -4656,12 +4665,12 @@ function loadRequests() {
     .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
 }
 
-function renderRequests(list) {
+function reqFilterBarHtml_() {
   var filters = [
     { key: 'pending', label: '未処理' },
     { key: 'all',     label: 'すべて（履歴）' },
   ];
-  var filterHtml = '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
+  return '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
     + buildWeekOptionsHtml_() + '</select>'
     + '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
     + '📅 シフト確定→黒服に通知</button>'
@@ -4671,37 +4680,112 @@ function renderRequests(list) {
           + '" onclick="setReqFilter(\'' + f.key + '\')">' + f.label + '</button>';
       }).join('')
     + '</div>';
+}
 
-  if (reqFilter !== 'all') {
-    // 未処理（承認待ち）＝アクションキュー。承諾/休みを即決する
-    var pend = list.filter(function(r) { return r.status === 'pending'; });
-    if (pend.length === 0) {
-      setContent(filterHtml + '<div class="req-empty">未処理の申請はありません</div>');
-      return;
-    }
-    var ph = filterHtml;
-    pend.forEach(function(r) { ph += reqCardHtml_(r, false); });
-    setContent(ph);
+function renderRequests(list) {
+  // 未処理（承認待ち）＝アクションキュー。承諾/休みを即決する。⛔黒服のみ（母集団は従来どおり）
+  var filterHtml = reqFilterBarHtml_();
+  var pend = list.filter(function(r) { return r.status === 'pending'; });
+  if (pend.length === 0) {
+    setContent(filterHtml + '<div class="req-empty">未処理の申請はありません</div>');
     return;
   }
+  var ph = filterHtml;
+  pend.forEach(function(r) { ph += reqCardHtml_(r, false); });
+  setContent(ph);
+}
 
-  // すべて（履歴）＝黒服の出勤希望を日付ごとにまとめて表示。
-  // 一旦確定したあとの欠員・シフト変更時に「元々出勤希望を出していた子」を確認して再調整するため。
-  if (list.length === 0) {
-    setContent(filterHtml + '<div class="req-empty">申請履歴はありません</div>');
-    return;
-  }
+/* ---- 🕓 出勤希望の履歴（全員分） ------------------------------------------
+   期間プリセット。⭐同じ既定はサーバ(shiftHistWindow_)にもある＝
+   from/to を送れなかった場合もサーバ側が「今月＋来月」に倒す（画面が壊れても安全側）。 */
+var REQHIST_RANGES = [
+  { k:'now2',  t:'今月＋来月' },
+  { k:'thism', t:'今月だけ' },
+  { k:'prevm', t:'先月だけ' },
+  { k:'m3',    t:'直近3か月＋来月' },
+  { k:'m6',    t:'直近6か月＋来月' }
+];
+function reqHistYmd_(d) { return d.getFullYear() + '-' + pad2_(d.getMonth()+1) + '-' + pad2_(d.getDate()); }
+function reqHistRangeYmd_(k) {
+  var n = new Date(), y = n.getFullYear(), m = n.getMonth(), f, t;
+  if (k === 'thism')      { f = new Date(y, m, 1);     t = new Date(y, m+1, 0); }
+  else if (k === 'prevm') { f = new Date(y, m-1, 1);   t = new Date(y, m, 0); }
+  else if (k === 'm3')    { f = new Date(y, m-2, 1);   t = new Date(y, m+2, 0); }
+  else if (k === 'm6')    { f = new Date(y, m-5, 1);   t = new Date(y, m+2, 0); }
+  else                    { f = new Date(y, m, 1);     t = new Date(y, m+2, 0); }
+  return { from: reqHistYmd_(f), to: reqHistYmd_(t) };
+}
+/* ⛔busyガード（読み込み中は無視）は置かない（[[reference_async_stale_guard_trap]]）。
+     通し番号で**古い応答を捨てる**＝期間セレクトを連打してもセレクトと中身がズレない。 */
+var reqHistSeq = 0;
+function loadReqHistory() {
+  var my = ++reqHistSeq;
+  setContent('<div class="loading">履歴を読み込み中...</div>');
+  var r = reqHistRangeYmd_(reqHistRange);
+  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId)
+    + '&tab=reqhistory&from=' + encodeURIComponent(r.from) + '&to=' + encodeURIComponent(r.to);
+  fetch(url)
+    .then(function(res) { return res.json(); })
+    .then(function(d) {
+      if (my !== reqHistSeq) return;   // 追い越された応答は捨てる
+      /* ⚠️落ちても履歴が空になるだけ。「未処理」タブに戻れば承認は続けられる（安全弁） */
+      if (!d.ok) { reqHist = null; reqHistErr = 'エラー: ' + (d.error || ''); }
+      else { reqHist = d; reqHistErr = ''; }
+      renderReqHistory();
+    })
+    .catch(function() {
+      if (my !== reqHistSeq) return;
+      reqHist = null; reqHistErr = '通信エラー'; renderReqHistory();
+    });
+}
+/* 'yyyy-MM-dd' → '9/12（金）'。年はサーバが提出日時を基準に確定させたものをそのまま使う
+   （画面側で 'M/d' から年を推測し直さない＝年またぎの規則を2箇所に持たない） */
+function ymdLabel_(ymd) {
+  var m = String(ymd || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return '';
+  var d = new Date(+m[1], +m[2]-1, +m[3]);
+  return (+m[2]) + '/' + (+m[3]) + '（' + ['日','月','火','水','木','金','土'][d.getDay()] + '）';
+}
+function reqHistNameKey_(s) { return String(s == null ? '' : s).replace(/[\s　]/g, ''); }
+function renderReqHistory() {
+  var bar = reqFilterBarHtml_();
+  if (reqHistErr) { setContent(bar + '<div class="err">' + esc(reqHistErr) + '</div>'); return; }
+  if (!reqHist) { setContent(bar + '<div class="req-empty">申請履歴はありません</div>'); return; }
+
+  var all = reqHist.items || [];
+  /* 名前は <select> で絞る。⛔スマホでテキスト検索欄を出すとIME中に再描画が噛む
+     （[[reference_search_input_rerender_trap]]）＝ポータル側は入力欄そのものを置かない。 */
+  var seen = {}, names = [];
+  all.forEach(function(r) { var k = reqHistNameKey_(r.name); if (k && !seen[k]) { seen[k] = 1; names.push(r.name); } });
+  names.sort();
+  var ropts = REQHIST_RANGES.map(function(r) {
+    return '<option value="' + r.k + '"' + (reqHistRange === r.k ? ' selected' : '') + '>' + esc(r.t) + '</option>';
+  }).join('');
+  var nopts = '<option value="">全員（' + names.length + '名）</option>'
+    + names.map(function(n) {
+        return '<option value="' + esc(n) + '"' + (reqHistName === n ? ' selected' : '') + '>' + esc(n) + '</option>';
+      }).join('');
+  bar += '<div class="reqhist-bar">'
+    + '<select class="notif-group-sel" onchange="setReqHistRange(this.value)">' + ropts + '</select>'
+    + '<select class="notif-group-sel" onchange="setReqHistName(this.value)">' + nopts + '</select>'
+    + '</div>';
+
+  var q = reqHistNameKey_(reqHistName);
+  var list = q ? all.filter(function(r) { return reqHistNameKey_(r.name) === q; }) : all;
+  bar += '<div style="font-size:12px;color:#b8a67c;margin:2px 0 6px;line-height:1.6">'
+    + '全員分（キャスト・体験・派遣・黒服）の出勤希望を日付ごとに表示。'
+    + esc(String(reqHist.from || '')) + '〜' + esc(String(reqHist.to || '')) + '／' + list.length + '件'
+    + (reqHist.truncated ? '　⚠️件数が多いため新しい側だけ表示中' : '') + '</div>';
+
+  if (!list.length) { setContent(bar + '<div class="req-empty">この条件の提出はありません</div>'); return; }
+
   var groups = {}, order = [];
   list.forEach(function(r) {
-    var p = mdParse_(r.date);
-    var gkey = p ? p.key : 99999999;
-    if (!groups[gkey]) { groups[gkey] = { label: (p ? p.label : r.date), items: [] }; order.push(gkey); }
+    var gkey = r.ymd || ('~' + (r.date || '?'));
+    if (!groups[gkey]) { groups[gkey] = { label: (r.ymd ? ymdLabel_(r.ymd) : r.date), items: [] }; order.push(gkey); }
     groups[gkey].items.push(r);
   });
-  order.sort(function(a, b) { return a - b; });
-  var hh = filterHtml
-    + '<div style="font-size:12px;color:#b8a67c;margin:2px 0 6px;line-height:1.6">'
-    + '黒服の出勤希望を日付ごとに表示。確定後の欠員・変更時に「元々出したい子」を確認して調整できます。</div>';
+  var hh = bar;
   order.forEach(function(gkey) {
     var g = groups[gkey];
     hh += '<div class="reqhist-date">📅 ' + esc(g.label) + '</div>';
@@ -4709,8 +4793,13 @@ function renderRequests(list) {
   });
   setContent(hh);
 }
-
-// "M/d" を並べ替え用キー＋曜日付きラベルに変換（年は現在基準で推定、半年以上前の月は翌年扱い＝年跨ぎ対応）
+/* "M/d" を並べ替え用キー＋曜日付きラベルに変換（年は現在基準で推定）。
+   ⛔2026-09-11時点で**呼び出し元ゼロの死にコード**（履歴はサーバが返す ymd を使う）。
+      残しているのは「他がまだ呼んでいるから」ではない ── repo全体で呼び出し元は無い。
+      **消す価値より、portal.html は git push が即本番の配信物で、差分をこれ以上
+      広げるリスクの方が上**だから残している、が正しい理由。
+   ⚠️再利用しないこと。年を「今」から推測する規則で、履歴のサーバ側
+      （shiftHistMdToDate_＝提出日時を基準に前後どちらへも補正）とは別物になる。 */
 function mdParse_(md) {
   var m = String(md).match(/^(\d{1,2})\/(\d{1,2})/);
   if (!m) return null;
@@ -4729,6 +4818,9 @@ function reqStatusInfo_(s) {
   if (s === 'クリア') return { cls: 'off', txt: '— クリア済み' };
   // 『重複』＝同じ申請の二度押しを承認時にまとめて閉じた行（2026-08-07・closeDupRequests_）。未処理と誤読させない
   if (s === '重複') return { cls: 'off', txt: '— 重複（同じ申請）' };
+  /* 『シフト表未反映』＝承諾したのにシフト表へ書けなかった行（RECON_shiftGhosts で回収する対象）。
+     ⚠️「未処理」に混ぜると気づかれず放置される＝独立した文言にする */
+  if (s === 'シフト表未反映') return { cls: 'warn', txt: '⚠️ シフト表未反映' };
   return { cls: '', txt: '⏳ 未処理' };
 }
 
@@ -4753,13 +4845,19 @@ function reqCardHtml_(r, isHistory) {
       + '</div>';
   } else {
     // 履歴ビュー：現在の状態を明示しつつ、再調整（出勤に戻す／休みにする）を確認付きで可能に
-    h += '<div class="req-status ' + st.cls + '">' + st.txt + '</div>'
-      + '<div class="req-actions">'
-      + '<button class="req-btn approve" onclick="readjustReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 出勤に</button>'
-      + '<button class="req-btn reject" onclick="readjustReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休みに</button>'
-      + '</div>';
+    h += '<div class="req-status ' + st.cls + '">' + st.txt + '</div>';
+    /* ⛔「出勤に／休みに」は**黒服の行だけ**（＝全員分に広げる前と同じ挙動のまま）。
+       キャスト/体験/派遣は承認制ではない。押すと approveShiftRequest_ が
+       シフト表への書込み＋当欠の本人DM＋黒服LINEまで走る＝履歴の閲覧から誤爆させない。
+       直すのはシフト提出カレンダー／コンソールのシフト表（正規の導線）。 */
+    if (String(r.role || '').indexOf('黒服') >= 0) {
+      h += '<div class="req-actions">'
+        + '<button class="req-btn approve" onclick="readjustReq(event,' + r.rowIdx + ',\''
+          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 出勤に</button>'
+        + '<button class="req-btn reject" onclick="readjustReq(event,' + r.rowIdx + ',\''
+          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休みに</button>'
+        + '</div>';
+    }
   }
   return h + '</div>';
 }
@@ -4773,8 +4871,11 @@ function readjustReq(ev, rowIdx, name, date, time, decision) {
 
 function setReqFilter(f) {
   reqFilter = f;
+  if (f === 'all') { loadReqHistory(); return; }
   loadRequests();
 }
+function setReqHistRange(k) { reqHistRange = k; reqHistName = ''; loadReqHistory(); }
+function setReqHistName(n) { reqHistName = n; renderReqHistory(); }
 
 function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
 
