@@ -26,6 +26,22 @@ function throws(fn, label) {
 function known(label, why) { S.knowns.push({ section: S.section, label, why }); console.log('  \x1b[33m⚠\x1b[0m ' + label + ' \x1b[2m← 未決: ' + why + '\x1b[0m'); }
 function skip(label, why) { S.skips++; console.log('  \x1b[33m－\x1b[0m ' + label + ' \x1b[2m(' + why + ')\x1b[0m'); }
 
+/* ⭐テストの仕事は「落ちる」ことではなく「赤くなる」こと（2026-09-11 qa指摘）。
+   退行で行や値が消えたとき undefined を掘って TypeError を投げると、runがそこで**中断**し、
+   それ以降の検査が1件も走らない＝**同時に起きた別の退行を丸ごと隠す**。
+   （実例: JSON.parse(undefined) がスイート全体を落とし、残り約140件が走らなかった）
+   ⇒ 配列/オブジェクトの添字は必ずこれを通す。無ければ undefined を返すだけなので、
+     受け側の eq/ok がいつもどおり赤くなる。
+   使い方: at(rows, 1, 7) / at(list, 0, 'rowIdx') / at(JSON.parse(raw || '{}'), '9/12') */
+function at(v, ...path) {
+  let cur = v;
+  for (const k of path) {
+    if (cur == null) return undefined;
+    cur = cur[k];
+  }
+  return cur;
+}
+
 function summary() {
   console.log('\n' + '─'.repeat(64));
   if (S.fail) {
@@ -41,4 +57,4 @@ function summary() {
   console.log('─'.repeat(64));
   return S.fail === 0;
 }
-module.exports = { section, note, ok, eq, throws, skip, known, summary, S };
+module.exports = { section, note, ok, eq, throws, skip, known, summary, at, S };

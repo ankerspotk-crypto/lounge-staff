@@ -305,7 +305,8 @@ module.exports = function (M, t) {
     t.eq(r.scanned, 4, '承諾済みだけを検査（pendingは数えない）');
     t.eq(r.mismatch, 1, '食い違いは1件');
     t.eq(r.future, 1, 'うち今日以降＝実害が出ていた分も1件');
-    t.eq(r.items[0].name + ' ' + r.items[0].date + ' ' + r.items[0].sheet + '→' + r.items[0].shownAs,
+    t.eq(t.at(r.items, 0, 'name') + ' ' + t.at(r.items, 0, 'date') + ' '
+       + t.at(r.items, 0, 'sheet') + '→' + t.at(r.items, 0, 'shownAs'),
       'あやか 9/12 ' + SHIFT_A + '→休み', '内訳に名前・日付・シートの値・旧表示が出る');
     t.eq(r.byReason['一致'], 1, '一致は食い違いに数えない');
     t.eq(r.byReason['シート空'], 2, 'シートが空/行なしは食い違いに数えない（黒服＝正常）');

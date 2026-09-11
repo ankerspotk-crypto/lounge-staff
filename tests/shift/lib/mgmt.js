@@ -32,7 +32,11 @@ const FNS = [
   'ensureShiftDateColumn_', 'ensureShiftIdColumn_', 'ensureShiftReqConfirmedHeader_',
   'writeShiftCell_', 'clearShiftRequestsForCell_', 'addConfirmedShiftDate_',
   'closeDupRequests_', 'approveShiftRequest_', 'decideKyukinRequest_',
-  'tsdCacheClear_'
+  'tsdCacheClear_',
+  /* 📩承認リクエスト（承認待ちの母集団）と、その一括クリア。
+     ⭐clearPendingShiftRequests_ は getShiftRequests_ を呼んで母集団を揃える作りなので、
+       この2本は必ず**同じサンドボックスに同居**させる（06_requests がそこを見る）。 */
+  'getShiftRequests_', 'clearPendingShiftRequests_'
 ];
 /* ⛔後勝ち（二重定義）で取らなければならない関数はこちら */
 const FNS_LAST = ['getShiftMgmtData_'];

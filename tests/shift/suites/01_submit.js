@@ -75,7 +75,9 @@ module.exports = function (L, t) {
     const rows = h.sheet(h.fn.SHIFT_TAB).dump();
     const line = rows.filter(x => x[0] === 'みなみ')[0];
     t.ok(!!line, '行が新設された');
-    t.eq(line[4], '19:00～26:00', '新設した行の該当日に入っている');
+    /* ⚠️行が新設されない退行のとき line[4] は TypeError＝runごと中断して他の退行を隠す。
+       t.at なら undefined が返るだけで、下の eq が普通に赤くなる。 */
+    t.eq(t.at(line, 4), '19:00～26:00', '新設した行の該当日に入っている');
   }
 
   t.section('シフト提出：管理者の代理提出');
