@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-02d-test';
+var BUILD='2026-09-13a-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -5550,7 +5550,10 @@ function bmPushNow(){
           var fk={}; fk[String(k)]=1;
           var p=bmPull(fk);                          // 会計済みなら他端末の結果を取り込んで画面を正す
           var show=function(){ BM_SYNC_ERR=msg; bmRenderIfIdle(); };
-          if(p&&p.then) p.then(show,show); else show();
+          /* ⭐サーバーが「会計済み」と言ったのに下書きに closed が無い＝会計の応答ロスト。
+             取り直した下書きにも closed が無いことがある（会計した端末の保存も届いていない）
+             ＝台帳を1回見て画面を正す。 */
+          if(p&&p.then) p.then(function(){ return bmSyncClosed(true); }).then(show,show); else show();
           return;
         }
         if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); }
@@ -5587,10 +5590,73 @@ function bmPull(force){
     });
     if(changed) bmStash_();
     bmRenderIfIdle();
+    /* ⭐会計の応答ロストで台帳にだけ会計が残っている伝票を拾って画面を直す。
+       ⚠️毎回は引かない＝bmSyncClosed の中で条件（払い切っているのに未会計）と60秒の間隔を見る。 */
+    return bmSyncClosed();
   }).catch(function(e){ BM_SYNC_ERR='他の端末の伝票を取得できていません'; bmRenderIfIdle(); });
 }
 function bmPullStart(){ bmPull(); if(BM_PULL_T) clearInterval(BM_PULL_T); BM_PULL_T=setInterval(bmPull,20000); }
 function bmPullStop(){ if(BM_PULL_T){ clearInterval(BM_PULL_T); BM_PULL_T=null; } }
+/* ============================================================================
+   🩹 会計台帳（POS_会計）と下書きの食い違いを直す（2026-09-13・実害2件目で恒久対策）
+   ----------------------------------------------------------------------------
+   ■ 起きたこと＝`posCloseBill` はサーバーで**成功して台帳に行を書いた**のに、その応答が端末に
+     返らなかった（GASの遅延・通信落ち）。応答が無いので下書きに `closed` が付かず、画面は
+     下書きしか見ないので「未会計」のまま。もう一度押すとサーバーが正しく二重会計を拒否して
+     「この伝票はすでに会計済みです」＝**自力で直る道が無くなる**。お客様控え・店舗控え・領収書は
+     3つとも `bmClosed_(d)` が真のときだけ出る＝客前で詰む。
+     （2026-09-10 早坂様／2026-09-12 渡辺さとる様。どちらも人が手でJSONを直して復旧した）
+   ■ ⭐直し方＝**台帳を正本にする**。台帳に会計行が在って下書きに `closed` が無ければ、
+     台帳の会計時刻・担当・合計から `closed` を作って画面を直す。
+   ■ ⛔台帳に行が無いのに `closed` を作ってはいけない（未会計の伝票が会計済みに見えると売上が消える）。
+     作るのは `getPosClosed` が返した行が在るときだけ。
+     ⭐**取消（状態≠会計済み）の行は `getPosClosed` がそもそも返さない**＝自動的に対象外。
+   ■ ⚠️注入は `bmStash_()` だけ＝**`_t` を上げない・サーバーへ書き戻さない**。`_t` を上げて押し返すと
+     共有の規則（新しい方が勝ち）でこの端末の下書きが他端末の編集に勝ってしまう。台帳は全端末から
+     同じに見えるので、各端末が自分で直せば揃う。
+     ⭐閉店ゲート(`getPosDayStatus`)は台帳を見ている＝サーバー側は元から正しい。直すのは画面だけ。
+   ■ ⚠️20秒ごとの `bmPull` で毎回引くと通信が増える（GASは直列＝詰まる）。引くのは
+     **「払い切っているのに会計済みでない伝票」が下書きに在るとき**だけ＝まさにこの罠に嵌った形。
+     さらに60秒の間隔を空ける。会計に失敗した直後(force)だけは条件も間隔も飛ばして1回引く。
+============================================================================ */
+var BM_CLOSED_CK=0, BM_CLOSED_BUSY=false;
+var BM_CLOSED_GAP=60000;
+function bmNeedClosedCheck_(){
+  var need=false, dr=(typeof BM!=='undefined'&&BM&&BM.draft)||{};
+  Object.keys(dr).forEach(function(k){
+    if(k==='demo') return;                       // 🧪お試しは台帳に送っていない＝照合の対象外
+    var d=dr[k]; if(!d||bmClosed_(d)) return;
+    try{ if(bmCloseReady_(bmCalc(d))) need=true; }catch(e){}   // 壊れた下書き1件で照合ごと止めない
+  });
+  return need;
+}
+function bmSyncClosed(force){
+  if(typeof gsr!=='function') return null;
+  if(BM_CLOSED_BUSY) return null;                // 連打しても台帳は1回しか引かない
+  var now=Date.now();
+  if(!force){
+    if(!bmNeedClosedCheck_()) return null;
+    if(now-BM_CLOSED_CK<BM_CLOSED_GAP) return null;
+  }
+  BM_CLOSED_BUSY=true; BM_CLOSED_CK=now;
+  return gsr('getPosClosed',bmDateKey()).then(function(r){
+    BM_CLOSED_BUSY=false;
+    if(r&&r.mode) BM_MODE=r.mode;
+    var rows=(r&&r.closed)||[];
+    if(!rows.length) return false;
+    bmLoad();
+    var hit=false;
+    rows.forEach(function(c){
+      var k=String((c&&c.rowIdx)||''); if(!k||k==='demo') return;
+      if(!c.ts) return;                          // 時刻が無い行から作ると bmClosed_ が真にならず毎回作り直す
+      var d=BM.draft[k]; if(!d||bmClosed_(d)) return;
+      d.closed={ ts:String(c.ts), by:String(c.by||''), total:Number(c.total)||0 };
+      hit=true;
+    });
+    if(hit){ bmStash_(); bmRenderIfIdle(); }     // ⚠️bmSave ではない＝_tを上げずサーバーへ返さない
+    return hit;
+  }).catch(function(e){ BM_CLOSED_BUSY=false; return false; });
+}
 /* モード表示＋切替。⚠️テスト=別シート(_TEST)に書く＝本番に上げた時に練習データが混ざらない */
 function bmModeHtml(){
   var m=BM_MODE, live=(m==='live');
@@ -6655,6 +6721,11 @@ function bmLockedAlert_(){
   alert('この伝票は会計済みです。\n直すには⑧会計の「会計を取り消す」を押してください。');
   return true;
 }
+/* 💰会計を押せる状態か＝**払い切っている伝票**。
+   ⚠️**お預り超過（お釣りが出る）は正常**＝止めるのは不足のときだけ（`unpaid!==0` にすると
+     4万円お預りの会計が通らない。実際に踏んだ）。
+   ⭐この判定は**台帳との照合を引く条件**(`bmNeedClosedCheck_`)でも使う＝同じ条件を2箇所に書かない。 */
+function bmCloseReady_(c){ return !!(c&&c.unpaid<=0&&c.total>0); }
 function bmCloseHtml(d,c){
   var cl=bmClosed_(d);
   if(cl){
@@ -6674,7 +6745,7 @@ function bmCloseHtml(d,c){
   }
   /* ⚠️**お預り超過（お釣りが出る）は正常**＝現金で多めに出すのが普通。止めるのは不足のときだけ。
      ここを `unpaid!==0` にすると4万円お預りの会計が通らない（実際に踏んだ） */
-  var ok=(c.unpaid<=0&&c.total>0);
+  var ok=bmCloseReady_(c);
   return '<div class="bm-row" style="margin-top:10px"><button class="bm-btn acc" style="flex:1;padding:11px" onclick="bmSlipPreview()">🖨 お会計伝票を印刷（お客様確認用）</button></div>'
     +'<div class="bm-row" style="margin-top:8px">'
     +'<button class="bm-btn pri" style="flex:1;padding:13px;font-size:15px'+((ok&&!BM_CLOSING)?'':';opacity:.5')+'" onclick="bmClose()">'
@@ -6719,6 +6790,22 @@ function bmSaveNextMemo_(key,d,c,bill){
       else if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）');
     }).catch(function(){ if(typeof toast==='function') toast('⚠️ 次回精算のメモを保存できませんでした（手で控えてください）'); });
   }catch(e){}
+}
+/* 会計が通らなかった時の後始末。⭐**台帳を1回だけ見に行く**（bmSyncClosed）。
+   ⛔応答ロストで台帳にだけ会計が残っていると、ここで拾わない限り画面は永久に未会計＝
+     控えも領収書も出せず、押し直しても「すでに会計済み」で詰む（2026-09-10／2026-09-12の実害）。
+   ⚠️理由は必ずそのまま出す＝黙って会計済みに見せない（直したことも書く）。 */
+function bmCloseFailed_(key,msg){
+  var p=bmSyncClosed(true);
+  var done=function(){
+    bmRender();
+    if(bmClosed_(BM.draft&&BM.draft[String(key)])){
+      alert('会計できませんでした：'+msg+'\n\n記録を確認したところ、この伝票は会計済みでした。\n画面を「会計済み」に直しました（控え・領収書が出せます）。');
+    }else{
+      alert('会計できませんでした：'+msg);
+    }
+  };
+  if(p&&p.then) p.then(done,done); else done();
 }
 var BM_CLOSING=false;
 function bmClose(){
@@ -6767,7 +6854,7 @@ function bmClose(){
   gsr('posCloseBill',bmDateKey(),key,rec,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_CLOSING=false;
-      if(!r||!r.ok){ alert('会計できませんでした：'+((r&&r.error)||'不明')); bmRender(); return; }
+      if(!r||!r.ok){ bmCloseFailed_(key,(r&&r.error)||'不明'); return; }
       bmLoad();
       var dd=BM.draft[key]; if(!dd){ bmRender(); return; }
       dd.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
@@ -6784,7 +6871,9 @@ function bmClose(){
       BM.key=key; bmSave(); bmRender();
       bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
     })
-    .catch(function(e){ BM_CLOSING=false; bmRender(); alert('会計できませんでした：'+((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
+    /* ⚠️通信エラー＝**サーバーでは成功しているかもしれない**（応答だけ落ちた）。
+       ここで台帳を見ないと、黒服がもう一度押して「すでに会計済み」に突き当たる。 */
+    .catch(function(e){ BM_CLOSING=false; bmCloseFailed_(key,((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
 }
 function bmReopen(){
   if(BM_CLOSING) return;
@@ -6800,7 +6889,19 @@ function bmReopen(){
   gsr('posReopenBill',bmDateKey(),BM.key,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_CLOSING=false;
-      if(!r||!r.ok){ alert('取り消せませんでした：'+((r&&r.error)||'不明')); bmRender(); return; }
+      if(!r||!r.ok){
+        var em=String((r&&r.error)||'不明');
+        /* ⛔台帳に生きた会計行が無い＝別の端末で既に取り消されている。画面だけ会計済みで固まると
+           会計も取消もできない＝会計の罠の裏返し。**台帳を正本**として下書きの closed を外す。 */
+        if(/見つかりません|記録がありません/.test(em)){
+          bmLoad();
+          var od=BM.draft[rkey]; if(od) delete od.closed;
+          BM.key=rkey; bmSave(); bmRender();
+          alert('この伝票の会計は、すでに取り消されていました。\n記録に合わせて画面を戻しました。');
+          return;
+        }
+        alert('取り消せませんでした：'+em); bmRender(); return;
+      }
       bmLoad();
       var dd=BM.draft[rkey]; if(dd) delete dd.closed;
       BM.key=rkey; bmSave(); bmRender();

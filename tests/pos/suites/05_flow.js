@@ -226,14 +226,20 @@ module.exports = async function (_f, _b, ctx) {
     A.fn.bmClose(); await tick(); await tick();
     t.ok(A.fn.bmGet('2').closed, '先に押した端末は会計できる');
     await sync(A);                                   // Aの「会計済み」がサーバーに載る
-    B.fn.bmClose(); await tick(); await tick();
-    t.ok(!B.fn.bmGet('2').closed, '後から押した端末は会計済みにならない');
+    B.fn.bmClose(); await tick(); await tick(); await tick();
     t.ok(B.log.alerts.some(a => /すでに会計済み/.test(a)), '「すでに会計済みです」と理由が出る', JSON.stringify(B.log.alerts));
     t.eq(back.closes().getLastRow(), 2, '⚠️会計行は1本だけ（二重計上しない）');
-    B.fn.bmSave(); await sync(B); await tick(); await tick(); await tick();
-    t.ok(/会計済み/.test(B.fn.BM_SYNC_ERR), '⚠️サーバーが拒否した理由が後の端末に出る（黙って共有済みにしない）', B.fn.BM_SYNC_ERR);
-    t.ok(B.fn.bmGet('2').closed, '拒否をきっかけに取り直して「会計済み」に揃う');
+    /* ⭐2026-09-13変更＝以前は「後から押した端末は会計済みにならない」で正解にしていたが、
+       それが**この罠そのもの**だった（応答が落ちた側は二度と会計済みにならず控えも出せない）。
+       いまは失敗した場で台帳(POS_会計)を採って画面を直す → 詳細は 15_closedsync。 */
+    t.ok(B.fn.bmGet('2').closed, '⭐後から押した端末は、その場で台帳を採って会計済みに直る');
     t.ok(B.fn.bmLocked(), '後の端末でも編集ロックがかかる');
+    /* 会計を知らない3台目が保存しにいったら＝サーバーは拒否する。理由を黙らせない */
+    const C = ctx.loadFront({ seats: S, gsr: wire, today: '2026-08-27', login: '黒服C' });
+    C.fn.BM.key = '2'; C.fn.bmGet('2', 2); C.fn.bmSave();
+    await sync(C); await tick(); await tick(); await tick();
+    t.ok(/会計済み/.test(C.fn.BM_SYNC_ERR), '⚠️サーバーが拒否した理由が後の端末に出る（黙って共有済みにしない）', C.fn.BM_SYNC_ERR);
+    t.ok(C.fn.bmGet('2').closed, '拒否をきっかけに取り直して「会計済み」に揃う');
   }
 
   t.section('⑪ 会計をやり直す（打ち間違いに気づいた）');
