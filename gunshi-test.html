@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-13a-test';
+var BUILD='2026-09-13e-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -10140,7 +10140,7 @@ function bagDenomInputs(bagKey,state,oninput){ var o=state[bagKey]||{}; return '
 function readSlipsFromDenpyo(dp){
   if(!dp) return [];
   var out=[];
-  function pull(sec,payeeHdr,amtHdr,defCat){
+  function pull(sec,payeeHdr,amtHdr,defCat,srcName){
     if(!sec||!sec.rows)return; var hs=sec.headers||[];
     var iP=hs.indexOf(payeeHdr), iA=hs.indexOf(amtHdr), iImg=-1;
     hs.forEach(function(hd,idx){ if(/画像|写真|URL|リンク|ドライブ/.test(String(hd))) iImg=idx; });
@@ -10156,13 +10156,242 @@ function readSlipsFromDenpyo(dp){
       var _py=iP>=0?String(c[iP]||''):'';
       var _cat=(defCat==='在籍 日払い'&&ccIsHaken_(_py))?'派遣 日払い':defCat;
       out.push({source:'read',category:_cat,payee:_py,amount:amt,
-        imageUrl:iImg>=0?String(c[iImg]||''):'',include:true,rowIdx:r.rowIdx,
+        imageUrl:iImg>=0?String(c[iImg]||''):'',include:true,rowIdx:r.rowIdx,srcKey:srcName+':'+r.rowIdx,
         ocrAmount:amt,cashSeen:cash,mismatch:!!mism,amountOk:false}); });
   }
-  pull(dp.daily,'受取人','伝票金額','在籍 日払い');
-  pull(dp.receipt,'発行元','金額','買出し・経費');
+  /* ⛔第5引数＝どのシート由来か。`rowIdx` は**シートごとの絶対行番号**（kioskGetDenpyoDay の read() が
+     `rowIdx:i+1`）で、日払い記録と領収書記録を1本の slips[] に混ぜる＝**両シートの5行目がどちらも 5**。
+     一時保存の復元はこの srcKey で重ねる（rowIdx 単独を鍵にすると別の伝票に金額を塗る）。
+     ⚠️納品記録(delivery)を足すときも同じ形で 'delivery' を渡すこと。 */
+  pull(dp.daily,'受取人','伝票金額','在籍 日払い','daily');
+  pull(dp.receipt,'発行元','金額','買出し・経費','receipt');
   return out;
 }
+/* ============================================================================
+   💾 閉店の現金チェックの「一時保存（下書き）」（ボス確定 2026-09-13）
+   ----------------------------------------------------------------------------
+   発端＝数えた枚数・現金売上・伝票の取捨・手入力伝票が、送信するまでどこにも残らない。
+     途中で別の画面へ行く／端末を落とす／朝まで持ち越すで全部消える。9/12 は締めが出せないまま朝になった。
+   ボス確定（2択）＝①保存先＝**全端末で共有**（サーバ保存） ②保存の仕方＝**打ったそばから自動保存**。
+
+   ⭐送り方の肝＝**打つたびには送らない**。GASは同時要求を直列で捌き、営業中の床は3〜4秒
+     （[[reference_gas_performance_floor]]）。1文字ごとに送ると閉店作業そのものが重くなる。
+     ・最後の入力から CC_DRAFT_WAIT_MS 待ってまとめて1回送る
+     ・打ち続けていても CC_DRAFT_MAXWAIT_MS を超えたら1回送る（永久に保存されないのを防ぐ）
+     ・**送信中は次を重ねない**（在庫は常に1本。間に変わっていれば終わってから送り直す）＝待ち行列に列を作らない
+   ⭐保存の失敗で画面を止めない＝入力は続けられる。黙って再試行し、最後に保存できた時刻だけ出す。
+   ⭐黙って復元しない＝復元したら必ずバナーを出す（別の人が数えた途中を自分の数字と勘違いするのが一番怖い）。
+   ⚠️保存するのは**人が入力した分だけ**。サーバから来る素の伝票・init・計算結果は入れない
+     ＝残るはず／差額は毎回計算し直す（古い数字が復活しない）。
+   ⚠️写真(photoBase64/previewUrl)は入れない＝数MBのbase64でセルの上限を割る。
+     手入力伝票の写真は復元されない（行・金額・相手先は残る）＝バナーに明記する。
+   ⚠️復元してよいかの判定は **cashState.formMode の1箇所だけ**（提出済み・承認済みは復元しない）。
+     サーバ側に同じ判定を書かない＝同じ条件を2箇所で判定すると必ず食い違う（2026-08-25に2回踏んだ）。
+============================================================================ */
+var CC_DRAFT=null;            /* サーバから来た下書き {data,t,at,by,term}（適用前の生） */
+var CC_DRAFT_T=0;             /* いま土台にしている版＝サーバが刻んだms。⚠️端末の時計は競合判定に使わない */
+var CC_DRAFT_ARMED=false;     /* 自動保存を始めてよいか。初回描画ぶんは保存しない */
+var CC_DRAFT_LAST='';         /* 最後に保存できた中身(JSON)。同じなら送らない＝描き直しで通信しない */
+var CC_DRAFT_SAVED_AT='';     /* 画面に出す「最後に保存できた時刻」 */
+var CC_DRAFT_ERR=false;       /* 直近の保存に失敗しているか（表示用。入力も送信も止めない） */
+var CC_DRAFT_RESTORED=null;   /* 復元した根拠 {at,by,local}＝バナーを出すため */
+var CC_DRAFT_TIMER=null, CC_DRAFT_SENDING=false, CC_DRAFT_DIRTY=false, CC_DRAFT_DIRTY_AT=0;
+var CC_DRAFT_WAIT_MS=4000;      /* 最後の入力からこれだけ待ってまとめて送る */
+var CC_DRAFT_MAXWAIT_MS=15000;  /* 打ち続けていても最初の変更からこれを超えたら送る */
+var CC_DRAFT_RETRY_MS=20000;    /* 失敗したら黙ってこれだけ後に再試行 */
+function ccDraftKey_(){ return 'ccDraft_'+((cashState&&cashState.dateKey)||''); }
+function ccDraftHm_(s){ var m=String(s||'').match(/(\d{1,2}):(\d{2})/); return m?(Number(m[1])+'時'+m[2]+'分'):String(s||''); }
+function ccDraftClock_(){ var d=new Date(); return d.getHours()+'時'+('0'+d.getMinutes()).slice(-2)+'分'; }
+/* 読み取り伝票の識別子。⛔`rowIdx` は**シートごとの絶対行番号**で、日払い記録と領収書記録を
+   1本の slips[] に混ぜている＝**両シートの5行目がどちらも 5**。rowIdx 単独を鍵にすると
+   別のシートの伝票に金額・受取人・区分を丸ごと塗る（qa実測＝日払い みな¥12,000 が
+   経費 酒屋¥30,000 に化け、差額が12,000円ズレた。区分が変わるので受取人確認の関所もすり抜けた）。
+   ⇒ `srcKey`（'daily:5' / 'receipt:5'）で分ける。⚠️納品記録を足しても同じ形で衝突しない。
+   ⚠️srcKey を持たない古い下書きは並び順で当てる（rowIdx には絶対に戻さない）。 */
+function ccDraftSlipId_(s,i){ return (s&&s.srcKey)?String(s.srcKey):('i'+i); }
+/* 保存する中身＝人が入力した分だけ。⚠️写真は入れない */
+function ccDraftSnap_(){
+  var st=cashState||{}, slips=[];
+  (st.slips||[]).forEach(function(s,i){
+    if(s.source==='read'){
+      /* 読み取り伝票は**サーバの伝票に重ねて戻す**ので、行の識別子と人が触った分だけ持つ */
+      slips.push({k:'read',id:ccDraftSlipId_(s,i),category:s.category,payee:s.payee||'',
+        amount:Number(s.amount)||0,include:s.include!==false,amountOk:!!s.amountOk});
+    }else{
+      slips.push({k:'manual',category:s.category,payee:s.payee||'',amount:Number(s.amount)||0,
+        include:s.include!==false,tatekaeName:s.tatekaeName||''});
+    }
+  });
+  return {v:1,reporterName:st.reporterName||'',cashSalesInput:Number(st.cashSalesInput)||0,
+    safeMode:st.safeMode||'manual',bags:st.bags||newBags(),slips:slips};
+}
+function ccDraftLocalGet_(){ try{ var r=localStorage.getItem(ccDraftKey_()); if(!r)return null; var o=JSON.parse(r); return (o&&o.data)?o:null; }catch(e){ return null; } }
+function ccDraftLocalSet_(data,t){ try{ localStorage.setItem(ccDraftKey_(),JSON.stringify({t:Number(t)||0,data:data})); }catch(e){} }
+function ccDraftLocalDel_(){ try{ localStorage.removeItem(ccDraftKey_()); }catch(e){} }
+/* 下書きを画面に戻す。
+   ⛔**途中で失敗したら何も適用しない**（qa指摘 2026-09-13）。前の版は 報告者→現金売上→袋 を先に
+     cashState へ書いてから slips を触っていたので、slips が壊れていると例外→呼び出し元の catch で
+     バナーだけ消え、**数字（現金売上999,000・袋9/9/9）だけが入って復元バナーが出ない**状態になった。
+     ボス確定「黙って復元しない」に真っ向から反する＝別の人の数字を自分のものと誤認する。
+   ⇒ いったん**全部ローカルに組み立て**、最後まで通ったときだけ cashState に差し替える。
+   ⚠️金庫は「確認しない」なら開店の額が正本＝下書きの枚数で上書きしない。 */
+function ccDraftRestore_(d){
+  if(!d||typeof d!=='object') throw new Error('下書きの形が不正です');
+  if(d.slips!=null&&!Array.isArray(d.slips)) throw new Error('下書きの伝票が配列ではありません');
+  if(d.bags!=null&&typeof d.bags!=='object') throw new Error('下書きの袋が壊れています');
+  var st=cashState, ds=d.slips||[];
+  /* ① 袋＝いまの値を土台に、下書きに入っている袋だけ差し替える */
+  var bags=newBags();
+  CASH_BAGS.forEach(function(b){
+    var o=(d.bags||{})[b.k], cur=(st.bags||{})[b.k]||newBag();
+    bags[b.k]=(o&&typeof o==='object')
+      ?{m10000:Number(o.m10000)||0,m5000:Number(o.m5000)||0,m1000:Number(o.m1000)||0}
+      :{m10000:Number(cur.m10000)||0,m5000:Number(cur.m5000)||0,m1000:Number(cur.m1000)||0};
+  });
+  var safeMode=st.safeMode;
+  if(d.safeMode==='auto'){ safeMode='auto'; bags.safe=safeDecompose(st.openingSafe); }
+  /* ② 伝票＝サーバの素の伝票の**複製**に、人が触った分だけ重ねる（鍵は srcKey＝シート名込み） */
+  var byId={};
+  ds.forEach(function(s){ if(s&&s.k==='read'&&s.id) byId[String(s.id)]=s; });
+  var slips=(st.slips||[]).map(function(s,i){
+    var n={},k;
+    for(k in s){ if(Object.prototype.hasOwnProperty.call(s,k)) n[k]=s[k]; }
+    if(s.source!=='read') return n;
+    var hit=byId[ccDraftSlipId_(s,i)]; if(!hit) return n;
+    n.include=hit.include!==false; n.amountOk=!!hit.amountOk;
+    if(hit.category) n.category=hit.category;
+    if(hit.payee!=null) n.payee=hit.payee;
+    if(hit.amount!=null) n.amount=Number(hit.amount)||0;
+    return n;
+  });
+  ds.forEach(function(s){
+    if(!s||s.k!=='manual') return;
+    slips.push({source:'manual',category:s.category||'買出し・経費',payee:s.payee||'',amount:Number(s.amount)||0,
+      include:s.include!==false,tatekaeName:s.tatekaeName||'',photoBase64:'',mime:'',previewUrl:''});
+  });
+  /* ③ ここまで来たら全部そろっている＝まとめて差し替える（途中で例外なら cashState は無傷） */
+  if(d.reporterName) st.reporterName=d.reporterName;
+  if(d.cashSalesInput!=null) st.cashSalesInput=Number(d.cashSalesInput)||0;
+  st.bags=bags; st.safeMode=safeMode; st.slips=slips;
+}
+/* 開いたときに1回だけ。⚠️壊れた下書きでも画面は必ず開く（try/catchで握る） */
+function ccDraftApply_(init){
+  CC_DRAFT=null; CC_DRAFT_T=0; CC_DRAFT_ARMED=false; CC_DRAFT_LAST=''; CC_DRAFT_SAVED_AT='';
+  CC_DRAFT_ERR=false; CC_DRAFT_RESTORED=null; CC_DRAFT_DIRTY=false; CC_DRAFT_DIRTY_AT=0; CC_DRAFT_SENDING=false;
+  if(CC_DRAFT_TIMER){ clearTimeout(CC_DRAFT_TIMER); CC_DRAFT_TIMER=null; }
+  try{
+    var srv=(init&&init.draft)?init.draft:null;
+    /* 提出済み・承認済みの日は復元しない。残っている下書きは用済み＝静かに消す
+       （次に開いた人に古い数字を見せない）。判定は formMode の1箇所だけ。 */
+    if(!cashState||!cashState.formMode){ if(srv) ccDraftDrop_(); else ccDraftLocalDel_(); return; }
+    /* この端末に残っている分（前回の保存が通信で落ちた分）も見て、**新しい方を採る** */
+    var loc=ccDraftLocalGet_(), use=null, t=0, from='';
+    if(srv&&srv.data){ use=srv.data; t=Number(srv.t)||0; from='server'; }
+    if(loc&&loc.data&&(Number(loc.t)||0)>t){ use=loc.data; from='local'; }
+    if(!use) return;
+    ccDraftRestore_(use);
+    CC_DRAFT=srv; CC_DRAFT_T=(srv?(Number(srv.t)||0):0);
+    CC_DRAFT_RESTORED={at:(srv?srv.at:''),by:(srv?srv.by:''),local:(from==='local')};
+    if(from==='local'){ CC_DRAFT_DIRTY=true; CC_DRAFT_DIRTY_AT=Date.now(); }   /* 端末に残っていた分は上げ直す */
+  }catch(e){ CC_DRAFT_RESTORED=null; }
+}
+/* ここから自動保存を始める（初回描画ぶんは「保存済み」とみなして送らない） */
+function ccDraftArm_(){
+  try{
+    if(!cashState||!cashState.formMode) return;
+    CC_DRAFT_ARMED=true;
+    if(CC_DRAFT_DIRTY){ CC_DRAFT_LAST=''; ccDraftSchedule_(); }
+    else CC_DRAFT_LAST=JSON.stringify(ccDraftSnap_());
+    ccDraftStatusPaint_();
+  }catch(e){}
+}
+/* 入力のたびに呼ばれる。⚠️例外を外に出さない＝ここで落ちると ccRefresh ごと止まって照合欄が死ぬ */
+function ccDraftTouch_(){
+  try{
+    if(!CC_DRAFT_ARMED||!cashState||!cashState.formMode) return;
+    var snap=ccDraftSnap_(), j=JSON.stringify(snap);
+    if(j===CC_DRAFT_LAST) return;              /* 中身が変わっていない＝送らない（描き直しでは通信しない） */
+    ccDraftLocalSet_(snap,Date.now());         /* 端末には即控える（通信ゼロ・落としても残る） */
+    if(!CC_DRAFT_DIRTY){ CC_DRAFT_DIRTY=true; CC_DRAFT_DIRTY_AT=Date.now(); }
+    ccDraftSchedule_();
+  }catch(e){}
+}
+function ccDraftSchedule_(){
+  if(CC_DRAFT_TIMER){ clearTimeout(CC_DRAFT_TIMER); CC_DRAFT_TIMER=null; }
+  var waited=Date.now()-(CC_DRAFT_DIRTY_AT||Date.now());
+  var wait=(waited>=CC_DRAFT_MAXWAIT_MS)?0:Math.min(CC_DRAFT_WAIT_MS,CC_DRAFT_MAXWAIT_MS-waited);
+  CC_DRAFT_TIMER=setTimeout(function(){ CC_DRAFT_TIMER=null; ccDraftFlush_(); },wait);
+}
+function ccDraftRetry_(){
+  if(CC_DRAFT_TIMER){ clearTimeout(CC_DRAFT_TIMER); CC_DRAFT_TIMER=null; }
+  CC_DRAFT_TIMER=setTimeout(function(){ CC_DRAFT_TIMER=null; ccDraftFlush_(); },CC_DRAFT_RETRY_MS);
+}
+function ccDraftFlush_(){
+  if(!CC_DRAFT_ARMED||!CC_DRAFT_DIRTY) return;
+  if(CC_DRAFT_SENDING) return;                 /* ⭐送信中は重ねない＝GASの待ち行列に列を作らない */
+  if(!cashState||!cashState.formMode) return;
+  if(typeof gsr!=='function') return;
+  var snap=ccDraftSnap_(), j=JSON.stringify(snap);
+  CC_DRAFT_SENDING=true; CC_DRAFT_DIRTY=false;
+  gsr('ccSaveDraft',{dateKey:cashState.dateKey,data:snap,
+    by:(typeof LOGIN!=='undefined'?(LOGIN||''):''),term:(typeof TERM!=='undefined'?(TERM||''):''),
+    baseT:CC_DRAFT_T}).then(function(r){
+    CC_DRAFT_SENDING=false;
+    if(r&&r.ok){
+      CC_DRAFT_LAST=j; CC_DRAFT_T=Number(r.t)||CC_DRAFT_T; CC_DRAFT_ERR=false;
+      CC_DRAFT_SAVED_AT=ccDraftClock_(); ccDraftLocalSet_(snap,CC_DRAFT_T);
+    }else if(r&&r.conflict){
+      /* ⭐別の端末が自分より新しい下書きを書いていた＝**古い版のまま上書きしない**。
+         相手の版を土台に付け替えてから、自分の入力をもう一度送る（最後に書いた方が残る）。 */
+      CC_DRAFT_T=Number(r.t)||CC_DRAFT_T; CC_DRAFT_ERR=false; CC_DRAFT_DIRTY=true;
+      if(!CC_DRAFT_DIRTY_AT) CC_DRAFT_DIRTY_AT=Date.now();
+    }else{
+      CC_DRAFT_ERR=true; CC_DRAFT_DIRTY=true; ccDraftRetry_();
+    }
+    ccDraftStatusPaint_();
+    if(CC_DRAFT_DIRTY&&!CC_DRAFT_TIMER) ccDraftSchedule_();
+  }).catch(function(){
+    /* ⚠️通信が落ちても画面は止めない＝入力は続けられる。黙って後で送り直す */
+    CC_DRAFT_SENDING=false; CC_DRAFT_ERR=true; CC_DRAFT_DIRTY=true;
+    ccDraftStatusPaint_(); ccDraftRetry_();
+  });
+}
+/* 下書きを消す（提出できた／破棄した）。⚠️先に自動保存を止める＝消した直後に書き戻さない */
+function ccDraftDrop_(){
+  CC_DRAFT_ARMED=false; CC_DRAFT_DIRTY=false; CC_DRAFT_DIRTY_AT=0; CC_DRAFT_LAST=''; CC_DRAFT_RESTORED=null;
+  if(CC_DRAFT_TIMER){ clearTimeout(CC_DRAFT_TIMER); CC_DRAFT_TIMER=null; }
+  ccDraftLocalDel_();
+  var dk=(cashState&&cashState.dateKey)||'';
+  CC_DRAFT=null;
+  if(!dk||typeof gsr!=='function'){ CC_DRAFT_T=0; return; }
+  gsr('ccSaveDraft',{dateKey:dk,data:null,baseT:CC_DRAFT_T}).catch(function(){});   /* 消し損ねても提出は成立している */
+  CC_DRAFT_T=0;
+}
+function ccDraftDiscard(){
+  if(!confirm('一時保存された内容を破棄して、最初からやり直しますか？\n\n数えた枚数・現金売上・手入力した伝票は消えます。'))return;
+  ccDraftDrop_();
+  openCashCheck(CC_TARGET_DATE||'');
+}
+/* ⛔黙って復元しない＝復元したら必ず出す */
+function ccDraftBannerHtml(){
+  var R=CC_DRAFT_RESTORED; if(!R) return '';
+  var head=R.local?'💾 この端末に残っていた入力から続けています'
+    :('💾 '+esc(ccDraftHm_(R.at))+' に一時保存された内容から続けています'+(R.by?('／'+esc(R.by)):''));
+  return '<div style="border:2px solid #6fa8dc;background:rgba(111,168,220,.12);border-radius:12px;padding:10px 12px;margin-bottom:10px">'
+    +'<div style="font-size:14px;font-weight:800;color:#bcd8f7">'+head+'</div>'
+    +'<div style="font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.6">'
+    +'別の人が数えた途中かもしれません。<b>金額と枚数を必ず自分の目で確かめてから</b>送信してください。<br>'
+    +'⚠️手入力した伝票の<b>写真は一時保存されません</b>（必要なら撮り直してください）。</div>'
+    +'<div class="bm-btn sm" style="margin-top:8px;display:inline-block" onclick="ccDraftDiscard()">🗑 破棄してやり直す</div></div>';
+}
+function ccDraftStatusHtml_(){
+  var msg='', col='#8a9ac0';
+  if(CC_DRAFT_ERR){ msg='⚠️ 一時保存できていません（入力は続けられます・あとで自動でやり直します）'; col='#e0a060'; }
+  else if(CC_DRAFT_SAVED_AT) msg='💾 '+esc(CC_DRAFT_SAVED_AT)+' に一時保存しました';
+  else if(CC_DRAFT_ARMED) msg='💾 入力は自動で一時保存されます';
+  return '<div id="cc-draft-status" style="font-size:11.5px;color:'+col+';text-align:center;margin-top:8px">'+msg+'</div>';
+}
+function ccDraftStatusPaint_(){ var el=document.getElementById('cc-draft-status'); if(el) el.outerHTML=ccDraftStatusHtml_(); }
 var cashState=null;
 /* 🕛 前日ぶんの締め（ボス指示 2026-08-29）。締められなかった夜の翌日に、その日ぶんとして出せる。
    CC_TARGET_DATE='' なら今日ぶん。'YYYY-MM-DD' なら過去日ぶんを締めている＝画面に警告を出す。
@@ -10173,7 +10402,9 @@ function openCashCheck(dk){
   closeMenu(); showSheet('🌙 閉店の現金','<div class="empty-msg">読み込み中...</div>',false);
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）閉店チェックは本番のみ</div>'; return; }
   var D=CC_TARGET_DATE;
-  Promise.all([gsr('getCashCheckInit',D),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay',D).catch(function(){return null;}),gsr('getOpeningCheckInit',D).catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];}),gsr('getCashPendingDays').catch(function(){return null;})]).then(function(r){
+  /* 💾 第2引数=1 のときだけサーバが下書きを載せて返す。⭐別の口を1本足さない＝GASは直列で
+     床が営業中3〜4秒＝往復を1本増やすと閉店の画面がそのぶん遅くなる（ホームの定期取得は引数なし＝無変更）。 */
+  Promise.all([gsr('getCashCheckInit',D,1),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay',D).catch(function(){return null;}),gsr('getOpeningCheckInit',D).catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];}),gsr('getCashPendingDays').catch(function(){return null;})]).then(function(r){
     CC_PENDING=(r[6]&&r[6].ok)?r[6]:null;
     initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]),r[4],r[5]||[]);
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
@@ -10203,12 +10434,14 @@ function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
   var openingSafe=(openingInit&&openingInit.locked&&openingInit.bags)
     ?(Number(openingInit.safeNow!=null?openingInit.safeNow:openingInit.bags.safe)||0):null;
   cashState={dateKey:init.dateKey,init:init,staff:staff||[],reporterName:'',cashSalesInput:0,bags:newBags(),slips:(readSlips||[]).slice(),approverName:'',approverNames:approvers||[],formMode:((!init.reportSubmitted||init.expectedRemain==null)&&!init.approved),   /* 照合できていない日は出し直しの形で開く（承認済みは触らせない） */safeMode:'manual',openingSafe:openingSafe,keihiStaff:keihiStaff||[],trustConfirmed:trustSelfGet_()};
+  ccDraftApply_(init);   /* 💾 一時保存（下書き）を先に載せてから描く */
   renderCashCheck();
+  ccDraftArm_();         /* 💾 ここから自動保存を始める（初回描画ぶんは送らない） */
   ccPosLoad();   // 🔒 POSの締め状況（未会計/請求書依頼漏れ）を取りに行く
   CC_GATE=null; CC_GATE_ERR=''; ccGateLoad();   // 🔒 締めの条件（TRUST突合・過去の未照合日・受取人の候補）
 }
 function souvenirAlert(init){ var s=init.souvenirStock||{}; var low=['2F','5F'].filter(function(f){return s[f]!==undefined&&s[f]<=50;}); if(!low.length)return ''; return '<div class="ck-banner warn">🎁 おみやげ発注アラーム　'+low.map(function(f){return f+' 残り'+s[f]+'個';}).join(' / ')+' → 発注してください</div>'; }
-function ccRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.reporterName=n; }
+function ccRep(el,n){ el.parentElement.querySelectorAll('.chip').forEach(function(c){c.classList.remove('sel');}); el.classList.add('sel'); cashState.reporterName=n; ccDraftTouch_(); }   /* 💾 報告者は ccRefresh を通らない＝ここで保存の契機を作る */
 function ccBagCard(bag){
   var o=cashState.bags[bag.k];
   var head='<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:11px;height:11px;border-radius:3px;background:'+bag.color+'"></span><span style="font-weight:700;color:var(--txt)">'+bag.label+'</span><span id="cc-sub-'+bag.k+'" style="margin-left:auto;font-weight:700;color:var(--txt)">¥'+bagYen(o).toLocaleString()+'</span></div>';
@@ -10235,8 +10468,16 @@ function ccCalc(){
   var st=cashState, init=st.init;
   var slipTotal=st.slips.reduce(function(s,x){ return s+((x.include!==false&&x.amount>0)?Number(x.amount):0); },0);
   var start=Number(init.openingTotal||0), sales=Number(st.cashSalesInput||0);
-  var expected=start+sales-slipTotal, actual=bagsYen(st.bags), diff=expected-actual;
-  return {start:start,sales:sales,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:Math.abs(diff)<=CASH_TOLERANCE,openingSubmitted:!!init.openingSubmitted};
+  /* 🏦 開店チェックを出した「後」に管理者が金庫へ入れた現金＝開店カウントに無い外部からの増加。
+     ⛔サーバ（コード.js の submitCashCheck）の式と1文字もずらさない：
+       残るはず ＝ 開店4袋 ＋ 現金売上 ＋ 金庫追加(開店後) − 伝票合計
+     これが無いと、その夜だけ画面は「¥add 多いです」と出すのにサーバは「合」と記録して黒服LINEに流す
+     （締めはブロックしないので**黙って食い違う**）→ [[project_safe_cash_deposit]] */
+  /* ⚠️Number(x)||0 の順にする（Number(x||0) ではない）＝数字にならない値が来ても NaN を
+     「残るはず」に伝播させない（¥NaN と表示され、差額も判定も意味を失う）。正常な数値では挙動は同一。 */
+  var safeAdd=Number(init.safeDepositAfterOpening)||0;
+  var expected=start+sales+safeAdd-slipTotal, actual=bagsYen(st.bags), diff=expected-actual;
+  return {start:start,sales:sales,safeAdd:safeAdd,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:Math.abs(diff)<=CASH_TOLERANCE,openingSubmitted:!!init.openingSubmitted};
 }
 function ccDiagHtml(){
   return '<div style="background:rgba(224,80,80,.12);border-radius:10px;padding:10px 12px;margin-top:8px">'
@@ -10429,6 +10670,7 @@ function ccGateBlockMsg_(){
   return ng.length?('締めの条件がそろっていません。\n\n'+ng.map(function(c){ return '・'+c.label; }).join('\n')):'';
 }
 function ccGateRefresh(){
+  ccDraftTouch_();   /* 💾 受取人の編集はここだけを通る（ccRefresh を経由しない入力がある） */
   var w=document.getElementById('cc-trust-gate'); if(w) w.outerHTML=ccGateHtml();
   var b=document.getElementById('cc-submit-btn');
   if(b){ var on=ccGateReady_()&&ccPosReady_(); b.style.opacity=on?'1':'.45'; b.textContent=(on?'':'🔒 ')+'閉店チェックを送信'; }
@@ -10461,6 +10703,8 @@ function ccFlowHtml(v,withDiag){
   var h='<div class="cc-flow">';
   h+=ccFlowRow('🌅 今夜のスタート','¥'+v.start.toLocaleString(),'#cfe0ff');
   if(v.sales>0) h+=ccFlowRow('＋ 現金売上','¥'+v.sales.toLocaleString(),'#7be0a8');
+  /* 🏦 開店後の金庫追加。出さないと「残るはず」が画面の足し算と合わなくなる（サーバのLINEには出ている） */
+  if(v.safeAdd>0) h+=ccFlowRow('＋ 金庫追加（開店後）','¥'+v.safeAdd.toLocaleString(),'#7be0a8');
   if(v.slipTotal>0) h+=ccFlowRow('－ 伝票 出金','¥'+v.slipTotal.toLocaleString(),'#e0a060');
   h+='<div class="cc-flow-row total"><span>＝ 残るはず</span><span>¥'+v.expected.toLocaleString()+'</span></div>';
   h+=ccFlowRow('実際に数えた（4袋）','¥'+v.actual.toLocaleString(),'#ccc');
@@ -10472,13 +10716,14 @@ function ccFlowHtml(v,withDiag){
   return h;
 }
 function ccRefresh(){
+  ccDraftTouch_();   /* 💾 打ったそばから一時保存（まとめて送る・送信中は重ねない・失敗しても止めない） */
   CASH_BAGS.forEach(function(bg){ var el=document.getElementById('cc-sub-'+bg.k); if(el) el.textContent='¥'+bagYen(cashState.bags[bg.k]).toLocaleString(); });
   var r=document.getElementById('cc-recon'); if(r) r.innerHTML=ccFlowHtml(ccCalc(),true);
 }
 function renderCashCheck(){
   var b=document.getElementById('sheetBody'); if(!b)return; var st=cashState, init=st.init;
   if(!st.formMode && init.reportSubmitted){ b.innerHTML=cashResultHtml(init); return; }
-  var h=souvenirAlert(init)+ccDayBannerHtml(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
+  var h=souvenirAlert(init)+ccDayBannerHtml(init)+ccDraftBannerHtml()+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
   if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店の現金が未提出です（残るはずが計算できません）</div>';
   else h+='<div class="cc-info"><div>🌅 今夜のスタート　¥'+Number(init.openingTotal||0).toLocaleString()+'</div></div>';
   h+='<div class="flabel">報告者（黒服）</div><div class="chips">'+chipsHtml(st.staff,'ccRep')+'</div>';
@@ -10489,6 +10734,7 @@ function renderCashCheck(){
   h+=ccPosGateHtml();
   h+=ccGateHtml();
   var _ready=ccGateReady_()&&ccPosReady_();
+  h+=ccDraftStatusHtml_();   /* 💾 最後に保存できた時刻（失敗していてもここに出すだけ＝送信は止めない） */
   h+='<div id="cc-status" style="font-size:12px;color:#8a9ac0;text-align:center;margin-top:8px"></div><div class="savebtn" id="cc-submit-btn" onclick="submitCash()" style="opacity:'+(_ready?'1':'.45')+'">'+(_ready?'':'🔒 ')+'閉店チェックを送信</div>';
   b.innerHTML=h; ccRenderSlips(); ccRefresh();
 }
@@ -10520,9 +10766,9 @@ function ccRenderSlips(){
     var payeeField;
     if(s.category==='立替 精算'){
       var opts='<option value="">立て替えた人を選択</option>'+(cashState.keihiStaff||[]).map(function(n){return '<option'+(s.tatekaeName===n?' selected':'')+'>'+esc(n)+'</option>';}).join('');
-      payeeField='<select class="finput" style="margin-bottom:6px" onchange="var v=this.value;cashState.slips['+i+'].tatekaeName=v;cashState.slips['+i+'].payee=v">'+opts+'</select>';
+      payeeField='<select class="finput" style="margin-bottom:6px" onchange="var v=this.value;cashState.slips['+i+'].tatekaeName=v;cashState.slips['+i+'].payee=v;ccDraftTouch_()">'+opts+'</select>';
     }else{
-      payeeField='<input type="text" class="finput" placeholder="相手先（例: りく、酒屋）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value" style="margin-bottom:6px">';
+      payeeField='<input type="text" class="finput" placeholder="相手先（例: りく、酒屋）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value;ccDraftTouch_()" style="margin-bottom:6px">';
     }
     return '<div class="cc-slip"><div class="cc-slip-top">'+slipCatSelect(i)+'<button onclick="cashState.slips.splice('+i+',1);ccRenderSlips();ccRefresh()">✕</button></div>'
       +payeeField
@@ -10565,11 +10811,12 @@ function submitCash(){
   var payload={reporterName:st.reporterName,cashSalesInput:st.cashSalesInput||0,bags:st.bags,slips:slips,safeUnchecked:st.safeMode==='auto',gate:_gate,summary:_sum,dateKey:CC_TARGET_DATE||''};
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
+    ccDraftDrop_();   /* 💾 提出できた＝下書きは用済み。⛔submitCashCheck 本体には一切フックを入れていない */
     gsr('getCashCheckInit',CC_TARGET_DATE||'').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
   }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
 }
 function cashResultHtml(init){
-  var v={start:Number(init.openingTotal||0),sales:Number(init.cashSalesInput||0),slipTotal:Number(init.slipTotal||0),expected:Number(init.expectedRemain||0),actual:Number(init.actualTotal||0),diff:Number(init.diff||0),within:!!init.within,openingSubmitted:!!init.openingSubmitted};
+  var v={start:Number(init.openingTotal||0),sales:Number(init.cashSalesInput||0),slipTotal:Number(init.slipTotal||0),safeAdd:Number(init.safeDepositAfterOpening)||0,expected:Number(init.expectedRemain||0),actual:Number(init.actualTotal||0),diff:Number(init.diff||0),within:!!init.within,openingSubmitted:!!init.openingSubmitted};
   var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'　報告者 '+esc(init.reporterName)+'</div>';
   h+='<div class="flabel">現金の流れ</div>'+ccFlowHtml(v,true);
   if(init.safeUnchecked) h+='<div class="safe-auto-note" style="margin-top:10px">🔒 金庫は未確認（開店時の額を自動入力しました）</div>';
@@ -10608,7 +10855,7 @@ function showImgOverlay(dataUrl, name){
     +'<div style="color:#cdd;font-size:12px;margin-top:10px">'+(name?esc(name)+'　':'')+'（タップで閉じる）</div>';
   ov.style.display='flex';
 }
-function redoCash(){ cashState.formMode=true; cashState.trustConfirmed=false; renderCashCheck(); }
+function redoCash(){ cashState.formMode=true; cashState.trustConfirmed=false; renderCashCheck(); ccDraftArm_(); }   /* 💾 直し始めた＝また自動保存する */
 
 /* ============ 📋 在庫発注管理 ============ */
 var stockState=null;
@@ -12378,6 +12625,41 @@ function afterLogin(){ window._k2loginAt=Date.now(); renderAll(); loadAll(); if(
 /* ===== 端末時刻ズレ検知（iPadの日付戻し忘れ対策・1分ごと） =====
  * 領収書発行で端末の日付を過去に戻したまま戻し忘れると翌営業の伝票日付がズレる。
  * サーバー時刻(getServerTime)と端末時刻を毎分突合し、閾値超過で：①最上部に赤バナー②reportClockDriftで黒服LINE＋要対応チケット。解消でclearClockDrift。 */
+/* ===== ⏱Phase 0：定期通信の間引き（2026-09-13）=====
+   軍師は「めったに変わらない3つ」を別便で叩いていた＝端末あたり毎分4本
+   （強制ログアウト30秒／時計ズレ60秒／メンテ60秒）。これを既存の loadAll バンドルに相乗りさせる。
+   ⭐GASは同時要求を事実上直列に捌く（→[[reference_gas_performance_floor]]）＝
+     本数が減ると**全員が速くなる**（黒服が押す書き込みの待ち時間にも効く）。
+   ⭐仕組みは「バンドルが養った時刻」を覚えるだけ。個別のポーラーは**45秒以内に養われていれば網を撃たない**。
+     ＝バンドルが止まれば（backend未反映・通信失敗・タブ非表示）**自動で従来の個別ポーリングに戻る**。
+     止める系（強制ログアウト・メンテ）を取りこぼさないための安全弁。
+   ⚠️判定の本体は applyLogoutTs_ / applyMaint_ / applyServerTime_ の3つだけ＝
+     バンドル経路と個別経路が**同じ1箇所**を使う（同じ条件を2箇所に書かない）。
+   ⚠️このテスト環境の loadAll は**バンドル導入前の旧版**＝養う側が居ない。
+     よって bundleFresh_ は常に false ＝ここでの挙動は従来と1ミリも変わらない（本番と形を揃えるために置く）。 */
+var _bundleFed={logout:0,clock:0,maint:0};
+var BUNDLE_FRESH_MS=45000;   /* これより古ければ個別に叩く（バンドルの間隔30秒＋取りこぼし1回分の余裕） */
+var _clockLastAt=0;          /* 時計ズレを最後に judge した時刻（下の間隔で間引く） */
+var CLOCK_MIN_GAP_MS=55000;  /* 時計ズレの判定はこの間隔より詰めない（個別ポーリングの60秒に合わせる） */
+function bundleFresh_(k){ return (Date.now()-((_bundleFed&&_bundleFed[k])||0))<BUNDLE_FRESH_MS; }
+/* バンドルに相乗りしてきた3つを処理する。⚠️入っていない項目は素通り＝個別ポーリングがそのまま担当する。 */
+function applyBundleExtras_(b,t0){
+  if(!b) return;
+  var now=Date.now();
+  try{
+    if(b.logoutTs!=null){ _bundleFed.logout=now; applyLogoutTs_(b.logoutTs); }
+    if(b.maint!=null){ _bundleFed.maint=now; applyMaint_(b.maint); }
+    /* ⚠️時計ズレは間引く。30秒バンドルに素直に乗せると、ズレている間ずっと reportClockDrift を
+       倍の頻度で叩く＝**GASの本数と要対応チケットの書き込みが増える**（Phase 0 の目的そのものに反する）。
+       ⭐関所も刻印も applyServerTime_ の中に置く＝**バンドル経路と個別経路の両方**に効く。
+         ここだけに置くと、ログイン直後に両経路の往復が同時に飛んで0秒間隔で2回判定される
+         （2026-09-13 qa実測）。 */
+    if(b.serverTime!=null){
+      _bundleFed.clock=now;
+      applyServerTime_(b.serverTime,t0||now,now);
+    }
+  }catch(e){}
+}
 var CLOCK_DRIFT_SEC=43200;   // この秒数以上ズレたら警告。領収書の日付戻しは「日」単位なので12時間閾値に設定＝数分〜数時間の些細なズレは無視し、日付戻し忘れ（≒1日以上前）だけ確実に捕捉
 var _clockDrifted=false;
 function showDriftBanner(html){
@@ -12390,9 +12672,18 @@ function showDriftBanner(html){
 function hideDriftBanner(){ var b=document.getElementById('clockDriftBanner'); if(b)b.style.display='none'; }
 function checkClockDrift(){
   if(!IS_GAS||!LOGIN)return;
+  if(bundleFresh_('clock')) return;   /* ⏱Phase 0: バンドルが養っている間は網を撃たない（止まれば自動で復活） */
   var t0=Date.now();
-  gsr('getServerTime').then(function(st){
+  gsr('getServerTime').then(function(st){ applyServerTime_(st,t0,Date.now()); }).catch(function(){});
+}
+/* 時刻ズレの判定本体。⭐バンドル経路と個別経路の**両方がここだけ**を使う（判定を2箇所に置かない） */
+function applyServerTime_(st,t0,t1){
     if(!st||!st.epoch)return;
+    /* ⭐間引きの関所と刻印は**ここ1箇所**。バンドル経路も個別経路も必ずここを通るので、
+       片方だけに置いたときのような「両方の往復が同時に飛んで0秒間隔で2回判定」が起きない。
+       ⚠️取れなかった応答（上のreturn）では刻まない＝次の機会を潰さない。 */
+    if(Date.now()-(_clockLastAt||0)<CLOCK_MIN_GAP_MS) return;
+    _clockLastAt=Date.now();
     /* ⚠️2026-08-28追加＝**営業日の自動切替**。
        TODAY/curDate は起動時に1回決めたきりで、朝6時をまたいでも更新されていなかった。
        軍師のiPadは開きっぱなし＝日付が変わっても前の営業日のまま動き続け、
@@ -12416,8 +12707,7 @@ function checkClockDrift(){
         else if(typeof renderAll==='function') renderAll();
       }
     }catch(e){}
-    var t1=Date.now();
-    var offsetSec=Math.round(((t0+t1)/2 - st.epoch)/1000); // 端末 - サーバー（往復遅延を相殺）
+    var offsetSec=Math.round(((t0+t1)/2 - st.epoch)/1000); // 端末 - サーバー（往復遅延を相殺。t0/t1は呼び側が渡す）
     if(Math.abs(offsetSec)>=CLOCK_DRIFT_SEC){
       var behind=offsetSec<0;
       showDriftBanner('🚨 この端末の日付/時刻が'+(behind?'過去に戻っています':'進んでずれています')+'。<br>領収書の日付戻しのあとは【設定 ＞ 一般 ＞ 日付と時刻 ＞ 自動設定】をONに戻してください。');
@@ -12427,15 +12717,18 @@ function checkClockDrift(){
       hideDriftBanner();
       if(_clockDrifted){ gsr('clearClockDrift').catch(function(){}); _clockDrifted=false; }
     }
-  }).catch(function(){});
 }
 function forceLogoutReload(){ try{localStorage.removeItem(kSessKey());}catch(_){} LOGIN=''; stopAuthPoll(); location.reload(); }
 /* 強制ログアウト監視: ①翌3時失効 ②現金承認の10分後 or 管理者操作（全端末） */
 function checkForceLogout(){
   if(!IS_GAS||!LOGIN)return;
+  /* ⭐この判定は通信しない＝バンドルが養っていても**必ず毎回**見る（翌3時の失効は取りこぼせない） */
   if(!loadKioskSession()){ forceLogoutReload(); return; } // 翌3時（営業日境界）
-  gsr('kioskLogoutTs').then(function(r){ if(r&&r.ts&&window._k2loginAt&&r.ts>window._k2loginAt) forceLogoutReload(); }).catch(function(){});
+  if(bundleFresh_('logout')) return;   /* ⏱Phase 0: バンドルが養っている間は網を撃たない（止まれば自動で復活） */
+  gsr('kioskLogoutTs').then(applyLogoutTs_).catch(function(){});
 }
+/* 強制ログアウトの判定本体（バンドル経路と個別経路の共通） */
+function applyLogoutTs_(r){ if(r&&r.ts&&window._k2loginAt&&r.ts>window._k2loginAt) forceLogoutReload(); }
 /* セッション（翌3時まで有効） */
 function kSessKey(){return 'k2sess_'+TERM;}
 function loadKioskSession(){try{var r=localStorage.getItem(kSessKey());if(!r)return null;var s=JSON.parse(r);if(s&&s.exp&&Date.now()<s.exp)return s;localStorage.removeItem(kSessKey());return null;}catch(e){return null;}}
@@ -12505,13 +12798,16 @@ function showMaintenance(m){
   }
   el.innerHTML=inner; el.style.display='flex';
 }
+/* メンテ表示の判定本体（バンドル経路と個別経路の共通） */
+function applyMaint_(m){
+  if(m&&m.on){ if(!window._maintOn) showMaintenance(m); }
+  else { if(window._maintOn) location.reload(); }   /* 再開＝クリーンに復帰 */
+}
 function startMaintPoll(){
   if(window._maintPoll) return;
   window._maintPoll=setInterval(function(){
-    gsr('getGunshiMaintenance').then(function(m){
-      if(m&&m.on){ if(!window._maintOn) showMaintenance(m); }
-      else { if(window._maintOn) location.reload(); }   /* 再開＝クリーンに復帰 */
-    }).catch(function(){});                              /* 通信不良時は現状維持 */
+    if(bundleFresh_('maint')) return;   /* ⏱Phase 0: バンドルが養っている間は網を撃たない（止まれば自動で復活） */
+    gsr('getGunshiMaintenance').then(applyMaint_).catch(function(){});   /* 通信不良時は現状維持 */
   },60000);
 }
 /* ===== 🛠 軍師メンテナンス ここまで ===== */

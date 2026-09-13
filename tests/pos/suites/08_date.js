@@ -5,9 +5,14 @@
 const t = require('../lib/tiny');
 const { loadPieces } = require('../lib/frontend');
 
-const NAMES = ['fmtKey', 'bizKeyClient', 'checkClockDrift', 'showDriftBanner', 'hideDriftBanner'];
+/* ⚠️2026-09-13（Phase 0）＝checkClockDrift は「取りに行く係」と「判定の本体」に分かれた。
+     判定は applyServerTime_ に移り、入口に bundleFresh_ のガードが付いた（挙動は不変・場所が変わっただけ）。
+     ⇒ 本体とガードまで切り出さないと ReferenceError で**このスイートごと中断**する
+       （実際に踏んだ：既定は summary が出ずに中断・--live は12件が黙って消えた）。 */
+const NAMES = ['fmtKey', 'bizKeyClient', 'checkClockDrift', 'applyServerTime_', 'bundleFresh_',
+  'showDriftBanner', 'hideDriftBanner'];
 /* ⚠️しきい値も実物から取る（写経すると本物と別の値でテストしてしまう） */
-const VARS = ['CLOCK_DRIFT_SEC', '_clockDrifted'];
+const VARS = ['CLOCK_DRIFT_SEC', '_clockDrifted', '_bundleFed', 'BUNDLE_FRESH_MS', '_clockLastAt', 'CLOCK_MIN_GAP_MS'];
 const clock = (bizDate, epoch) => ({ ok: true, epoch: epoch || Date.now(), bizDate: bizDate, hhmm: '10:09' });
 
 module.exports = async function () {
