@@ -1643,7 +1643,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-13e';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-15a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2450,6 +2450,17 @@ function npRender(){
   if(!(NP.rows||[]).length){
     h+='<div class="empty-msg">この日の出勤者が見つかりません。シフトが入っているか確認してください</div>';
   }else{
+    /* ⛔時給が空の出勤者（2026-09-14）。⭐名前はサーバ(nippoWageMissing_)が決める＝画面は判定しない。
+       🛟時給が本当に分からない夜のために「理由を書いて保存」を残す（締めで誰も帰れなくしない）。 */
+    var wm=(!lock&&NP.wageMissing&&NP.wageMissing.length)?NP.wageMissing:null;
+    if(wm){
+      h+='<div class="ck-banner" style="margin-bottom:10px;border-color:#7a3020;color:#ff9a9a" data-nk="wage-missing">'
+        +(NP.wageMissingReason
+          ? '⚠️ 時給が空のまま保存しています：<b>'+esc(wm.join('・'))+'</b>（理由：'+esc(NP.wageMissingReason)+'）。時給が分かったら入れて保存し直してください。'
+          : '⛔ 時給が空の出勤者がいます：<b>'+esc(wm.join('・'))+'</b>。赤い時給欄に入れてから保存してください（空のままだと時間報酬が0円になります）。'
+            +'<div style="margin-top:6px"><button class="bm-btn sm" onclick="npSaveWageUnknown()">時給が分からない → 理由を書いて保存</button></div>')
+        +'</div>';
+    }
     h+=npTableHtml();
   }
 
@@ -2520,7 +2531,10 @@ function npTableHtml(){
       +'<td><input type="time" class="np-in t-time" value="'+esc(r.start||'')+'"'+dis+' onchange="npSet('+i+',\'start\',this.value)"></td>'
       +'<td><input type="time" class="np-in t-time" value="'+esc(r.end||'')+'"'+dis+' onchange="npSet('+i+',\'end\',this.value)"></td>'
       +'<td class="calc" data-nk="workText">'+esc(r.workText||'')+'</td>'
-      +'<td><input type="tel" inputmode="numeric" class="np-in t-wage" value="'+(r.wage||'')+'"'+dis+' onchange="npSet('+i+',\'wage\',this.value)"></td>'
+      +'<td><input type="tel" inputmode="numeric" class="np-in t-wage" value="'+(r.wage||'')+'"'+dis
+        /* ⛔時給が空の出勤者＝赤枠（名前はサーバが返した NP.wageMissing） */
+        +((NP.wageMissing||[]).indexOf(r.name)>=0?' data-nk="wage-miss" style="border:2px solid #e0564a;background:#3a1418"':'')
+        +' onchange="npSet('+i+',\'wage\',this.value)"></td>'
       +'<td class="calc" data-nk="jikan">'+npYen(r.jikan)+'</td>'
       +'<td class="calc"><span title="'+esc(npBackText(r).replace(/<[^>]+>/g,''))+'">'+npYen(r.back)+'</span>'
         +'<button class="np-more" style="margin-left:4px" onclick="npMore('+i+')">'+(NP_MORE[i]?'▲':'▼')+'</button></td>'
@@ -2675,6 +2689,8 @@ function npSet(i,key,val){
   else if(key==='adj') r.adj=parseInt(String(val).replace(/[^\d-]/g,''),10)||0;
   else if(key==='backOver') r.backOver=(String(val).trim()===''?null:npNum(val));
   else r[key]=Math.max(0,npNum(val));   /* ⚠️金額は0以上に丸める（負号で二重に引かれるのを防ぐ） */
+  /* ⛔時給を打ち直した行は赤を外す。⚠️ここで「足りているか」は判定しない＝保存でサーバが見直し、まだ空なら赤に戻る */
+  if(key==='wage'&&NP.wageMissing){ NP.wageMissing=NP.wageMissing.filter(function(n){ return n!==r.name; }); }
   npCalcRow(r,NP.backConf);
   NP_DIRTY=true;
   /* ⚠️2026-09-04修理: 出退勤時間(開始/終了)は入力欄がネイティブの時刻ピッカー（iPadでは
@@ -2751,6 +2767,9 @@ function npSave(cb){
   }
   if(NP_BUSY){ npMsg('保存中です。少しお待ちください'); return; }
   NP_BUSY=true;
+  /* ⚠️保存を始めた時点の日を覚える（2026-09-14 qa穴1）。応答が届く前に別の日へ移ると NP は差し替わる＝
+     届いた応答（メモ・時給が空の名前・確定の続き）は**その日を開いている時だけ**反映する */
+  var saveDate=NP.date;
   var btn=document.getElementById('np-save'); if(btn){ btn.disabled=true; btn.style.opacity='.5'; }
   npMsg('保存中…');
   var by=(typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):'';
@@ -2761,13 +2780,36 @@ function npSave(cb){
                soge:r.soge, zangyo:r.zangyo, urihan:r.urihan, unei:r.unei,
                backOverride:(r.backOver==null?'':r.backOver), tally:r.tally };
     }),
-    cashIn:NP.cashIn||[], cashOut:NP.cashOut||[] };
+    cashIn:NP.cashIn||[], cashOut:NP.cashOut||[],
+    /* 🛟時給が空のまま保存する理由（空なら送らないのと同じ＝サーバが拒む） */
+    wageMissingReason:NP.wageMissingReason||'',
+    /* 📱この画面は「時給が空」の拒否と理由の再送に対応している、の申告。サーバはこれがある時だけ拒む（旧画面は従来どおり通す） */
+    wageGate:1 };
   gsr('saveNippo',payload).then(function(res){
     NP_BUSY=false;
     if(btn){ btn.disabled=false; btn.style.opacity=''; }
+    var sameDay=!!(NP&&NP.date===saveDate);   // 応答が届いた今も、保存した日を開いているか
+    if(res&&res.ok===false&&res.wageMissing&&res.wageMissing.length){
+      /* ⛔時給が空の出勤者がいて保存を拒まれた＝赤く出す（名前はサーバが決めた物） */
+      if(!sameDay){ npMsg(saveDate+' の日報は時給が空の出勤者がいて保存されていません',true); return; }
+      NP.wageMissing=res.wageMissing; npRender();
+      npMsg(res.error||'時給が空の出勤者がいます',true); return;
+    }
     if(!res||res.ok===false){ npMsg((res&&res.error)||'保存に失敗しました',true); return; }
+    if(!sameDay){
+      /* ⚠️別の日を開いている＝今の画面（メモ・未保存の印・確定の続き）には一切触らない。
+         特に確定の続き(cb)は NP.date を見る＝走らせると**開き直した別の日を確定してしまう** */
+      npMsg('✅ '+saveDate+' の日報を保存しました（今は別の日を表示中）');
+      return;
+    }
     NP_DIRTY=false;
     NP.savedAt=res.savedAt; NP.savedBy=res.savedBy;
+    if(typeof res.memo==='string') NP.memo=res.memo;          // 🛟理由の1行をサーバがメモに足す
+    if(res.wageMissing){
+      /* 帯を描き直すのは中身が変わる時だけ（名前が変わった／理由つきで保存して「保存済み」の表示に変わる） */
+      var _wmChanged=(String(NP.wageMissing||[])!==String(res.wageMissing))||!!(NP.wageMissingReason&&res.wageMissing.length);
+      NP.wageMissing=res.wageMissing; if(_wmChanged) npRender();
+    }
     npMsg('✅ 保存しました　'+res.savedAt);
     if(typeof toast==='function') toast('✅ 日報を保存しました');
     if(cb) cb();
@@ -2776,6 +2818,18 @@ function npSave(cb){
     if(btn){ btn.disabled=false; btn.style.opacity=''; }
     npMsg('通信エラー。もう一度押してください',true);
   });
+}
+/* 🛟時給が本当に分からない夜の逃げ道（2026-09-14）。理由は必須＝その日のメモに残る（黙って0円にしない）。
+   ⚠️理由はこの日を開き直すまで覚えておく＝続けて「確定する」を押しても拒まれない。 */
+function npSaveWageUnknown(){
+  if(!NP||NP.locked) return;
+  var names=(NP.wageMissing||[]).join('・');
+  var why=prompt('時給が空のまま保存します（'+names+'）。\n時間報酬は0円で記録されます。理由を書いてください（メモに残ります）','');
+  if(why==null) return;
+  why=String(why).trim();
+  if(!why){ npMsg('理由を書かないと保存できません',true); return; }
+  NP.wageMissingReason=why;
+  npSave();
 }
 /* 確定＝先に必ず保存してから締める（画面の直しかけを置き去りにして締めない） */
 function npConfirm(){
