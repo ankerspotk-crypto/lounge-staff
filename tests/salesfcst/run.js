@@ -28,7 +28,11 @@ const ADMIN_F = pickFile(['Admin.html']);
 const CODE_F = pickFile(['コード.js', 'Code.gs']);
 if (!SALES_F || !ADMIN_F || !CODE_F) { console.error('⛔ ' + DIR + ' に sales / Admin.html / コード が揃っていません'); process.exit(1); }
 
-const bRaw = fs.readFileSync(SALES_F, 'utf8'), fRaw = fs.readFileSync(ADMIN_F, 'utf8');
+const bRaw = fs.readFileSync(SALES_F, 'utf8');
+/* ⚠️次の当てるスクリプト（apply-sales-forecast-pdf2.js＝PDFに見込み）が当たっていたら先に外す。
+   ここは @902 の形を検査するテスト＝その上に積んだ変更は tests/salesfcst/pdf2.js が見る。 */
+const AP2 = require('../pending/apply-sales-forecast-pdf2');
+const fRaw = AP2.unapply(fs.readFileSync(ADMIN_F, 'utf8'));
 const bAp = AP.applyBack(bRaw), fAp = AP.applyFront(fRaw);
 if (bAp.error || fAp.error) { console.error('⛔ 当てられません: ' + (bAp.error || fAp.error)); process.exit(1); }
 const B_PATCHED = bAp.src, F_PATCHED = fAp.src;
