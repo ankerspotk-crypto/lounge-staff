@@ -1643,7 +1643,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-15a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-17a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -11603,7 +11603,8 @@ function openOkuriManager(){
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）送り管理は本番のみ</div>'; return; }
   gsr('kioskGetOkuriBoard').then(function(r){
     var pf=okuriState?okuriState.filter:'all';
-    okuriState={list:(r&&r.list)||[],casts:(r&&r.casts)||[],mode:(r&&r.mode)||'driver',fare:(r&&r.fare)||{yen:0,note:''},edit:null,filter:pf,binSel:{}};
+    /* destDef＝名簿の「送り先」常設メモ（サーバで名寄せ済み）。行き先欄の**初期値**にだけ使う */
+    okuriState={list:(r&&r.list)||[],casts:(r&&r.casts)||[],mode:(r&&r.mode)||'driver',fare:(r&&r.fare)||{yen:0,note:''},destDef:(r&&r.destDef)||{},edit:null,filter:pf,binSel:{}};
     renderOkuri();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -11638,8 +11639,13 @@ function okCard(name){
   var h='<div class="ok-card'+(on?' on':'')+'"><div class="ok-card-nm">'+esc(name)+'</div><div class="ok-card-st '+(on?'on':'off')+'">'+stLine+'</div>';
   if(editing){
     var cur=ents[0]||{dest:'',bin:1}; var bin=st.binSel[name]||cur.bin||1;
-    h+='<div class="ok-form"><input id="ok-dest-'+cssId(name)+'" class="finput" placeholder="行き先" value="'+esc(cur.dest||'')+'">';
-    h+='<div class="ok-dest-quick">'+OK_DEST_QUICK.map(function(d){return '<button class="ok-dq" onclick="okQuickDest(\''+jsStr(name)+'\',\''+jsStr(d)+'\')">'+esc(d)+'</button>';}).join('')+'</div>';
+    /* 🏠 いつもの送り先（名簿の常設メモ）。⛔**今日すでに入っている行き先が最優先**＝上書きしない。
+       まだ行き先が無いときだけ初期値として入れる。違う日は黒服がそのまま書き換えればいい。 */
+    var memo=(st.destDef||{})[name]||'';
+    var initDest=cur.dest||memo;
+    h+='<div class="ok-form"><input id="ok-dest-'+cssId(name)+'" class="finput" placeholder="行き先" value="'+esc(initDest)+'">';
+    h+=memo?'<div class="ok-dest-memo" style="font-size:11px;color:var(--dim);margin:2px 0 0">🏠 いつもの送り先: '+esc(memo)+'</div>':'';
+    h+='<div class="ok-dest-quick">'+(memo?'<button class="ok-dq" onclick="okQuickDest(\''+jsStr(name)+'\',\''+jsStr(memo)+'\')">🏠 '+esc(memo)+'</button>':'')+OK_DEST_QUICK.map(function(d){return '<button class="ok-dq" onclick="okQuickDest(\''+jsStr(name)+'\',\''+jsStr(d)+'\')">'+esc(d)+'</button>';}).join('')+'</div>';
     h+='<div class="ok-bin-row">'+[1,2].map(function(bn){return '<button class="ok-bin'+(bin===bn?' sel':'')+'" onclick="okBin(\''+jsStr(name)+'\','+bn+')">'+bn+'便</button>';}).join('')+'</div>';
     h+='<div class="ok-form-btns"><button class="ok-btn add" onclick="okSave(\''+jsStr(name)+'\')">保存</button><button class="ok-btn edit" onclick="okuriState.edit=null;renderOkuriGrid()">閉じる</button></div></div>';
   } else if(on){
