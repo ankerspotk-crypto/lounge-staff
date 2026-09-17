@@ -321,7 +321,7 @@ function paintMonth(r){
   h+='<div class="card"><h2>💹 日別の収支 <small>日付を押すとその日の詳細</small></h2><div class="tw tall"><table>'
     + '<thead><tr>'
     + '<th class="l">日付</th><th>現金</th><th>カード</th><th>売掛</th><th>売上計</th>'
-    + '<th>担当小計</th><th>同伴小計</th>'
+    + '<th>担当小計（税サ抜き）</th><th>同伴小計（税サ抜き）</th>'
     + '<th>残り支給額</th>'+(SHOW.kyuritsu?'<th>給率</th>':'')
     + '<th>スタッフ日払</th><th>キャスト日払</th><th>ボーナス</th>'
     + '<th>入金</th><th>出金</th><th>経費計</th><th>粗利</th>'
@@ -347,6 +347,13 @@ function paintMonth(r){
       + '<td>'+(x.groups||'--')+'</td><td>'+(x.pax||'--')+'</td></tr>';
   });
   h+='</tbody></table></div></div>';
+  /* 🧾担当小計・同伴小計は税サ抜き（2026-09-18）。⚠️管理コンソール(Admin.html)の 💹収支と**同じ言葉**で書く
+     ＝同じ数字を2つの画面で別の言い方をすると、どちらかが間違っていると読まれる。 */
+  h+='<div class="card pad" style="font-size:12px;line-height:1.7;color:var(--dim)">'
+    + '<b>担当小計・同伴小計</b>は<b>税サ（サービス料20%）を含まない金額</b>です（伝票の「小計」の合計）。'
+    + '売上計は税サ込みなので、同じ日でも担当小計のほうが約2割小さくなります。'
+    + '<br>⚠️<b>担当小計と同伴小計は足し合わせないでください</b>（担当小計には同伴料が含まれます）。'
+    + '</div>';
   $('view').innerHTML=h;
 }
 function td(v){ return '<td>'+(Number(v)?yen(v):'<span class="mut">--</span>')+'</td>'; }
@@ -396,7 +403,7 @@ function daySales(r){
   h+='<div class="card"><h2>📊 当日・累計・平均 <small>平均は'+n+'営業日</small></h2><div class="tw"><table>'
     + '<thead><tr><th class="l">項目</th><th>当日</th><th>当月累計</th><th>1日平均</th></tr></thead><tbody>';
   [['総売上','total'],['現金売上','cash'],['カード売上','card'],['売掛','credit'],
-   ['担当小計','tantoSub'],['同伴小計','dohanSub'],
+   ['担当小計（税サ抜き）','tantoSub'],['同伴小計（税サ抜き）','dohanSub'],
    ['キャストの給料','joshiPay'],['残り支給額','nokori'],
    ['キャスト日払','hibaraiCast'],['スタッフ日払','hibaraiStaff'],
    ['入金','nyukin'],['出金','syukkin'],['経費計','keihi'],['粗利','arari']
