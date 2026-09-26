@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-17a-test';
+var BUILD='2026-09-26a-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -2296,15 +2296,21 @@ function npWorkLabel(m){ m=Number(m)||0; return m<=0?'なし':(Math.floor(m/60)+
 
 function npBackCalc(t,c){
   var g=function(k){ return Number((t||{})[k])||0; };
+  /* 🍹ドリンクのバック金額（品ごとに違う）。⛔サーバの nippoBackCalc_ と同じ式にすること */
+  var dBack=((t||{}).drinkBack==null)?null:Math.round(Number((t||{}).drinkBack)||0);
   var parts=[
     {k:'tantoSub',t:'担当小計',pct:c.tantoPct,base:g('tantoSales'),amt:Math.round(g('tantoSales')*c.tantoPct/100)},
     {k:'dohanSub',t:'同伴小計',pct:c.dohanPct,base:g('dohanSales'),amt:Math.round(g('dohanSales')*c.dohanPct/100)},
-    {k:'tanto', t:'担当',    cnt:g('tantoCnt'), unit:c.tantoYen, amt:g('tantoCnt')*c.tantoYen},
-    {k:'yoyaku',t:'予約',    cnt:g('yoyakuCnt'),unit:c.yoyakuYen,amt:g('yoyakuCnt')*c.yoyakuYen},
-    {k:'dohan', t:'同伴',    cnt:g('dohanCnt'), unit:c.dohanYen, amt:g('dohanCnt')*c.dohanYen},
-    {k:'drink', t:'ドリンク',cnt:g('drinkCnt'), unit:c.drinkYen, amt:g('drinkCnt')*c.drinkYen},
-    {k:'bottle',t:'ボトル',  cnt:g('bottleCnt'),unit:c.bottleYen,amt:g('bottleCnt')*c.bottleYen},
-    {k:'food',  t:'フード',  cnt:g('foodCnt'),  unit:c.foodYen,  amt:g('foodCnt')*c.foodYen}
+    {k:'tanto', t:'担当',    cnt:g('tantoCnt'), unit:c.tantoYen, amt:Math.round(g('tantoCnt')*c.tantoYen)},
+    {k:'yoyaku',t:'予約',    cnt:g('yoyakuCnt'),unit:c.yoyakuYen,amt:Math.round(g('yoyakuCnt')*c.yoyakuYen)},
+    {k:'dohan', t:'同伴',    cnt:g('dohanCnt'), unit:c.dohanYen, amt:Math.round(g('dohanCnt')*c.dohanYen)},
+    /* 🍹品ごとにバック額が違う（テキーラ¥1,000／それ以外¥200）＝⛔サーバの nippoBackCalc_ と同じ式 */
+    {k:'drink', t:'ドリンク',cnt:g('drinkCnt'),
+     unit:(dBack==null||dBack===Math.round(g('drinkCnt')*c.drinkYen))?c.drinkYen:null,
+     amt:(dBack==null)?Math.round(g('drinkCnt')*c.drinkYen):dBack},
+    {k:'bottle',t:'ボトル',  cnt:g('bottleCnt'),unit:c.bottleYen,amt:Math.round(g('bottleCnt')*c.bottleYen)},
+    /* 💳年会費＝旧「フード」枠（ボス確定 2026-09-18・1件¥5,000）。⛔サーバの nippoBackCalc_ と同じ並び・同じ式 */
+    {k:'nenkaihi',t:'年会費',cnt:g('nenkaihiCnt'),unit:c.nenkaihiYen,amt:Math.round(g('nenkaihiCnt')*c.nenkaihiYen)}
   ];
   var total=parts.reduce(function(s,p){return s+(Number(p.amt)||0);},0);
   return {total:total,parts:parts};
@@ -2705,7 +2711,11 @@ function npBackText(r){
   if(!live.length) return '<span style="color:var(--dim)">売上の材料なし</span>';
   return live.map(function(p){
     if(p.pct!=null) return esc(p.t)+' '+npYen(p.base)+'×'+p.pct+'% ＝ '+npYen(p.amt);
-    return esc(p.t)+' '+p.cnt+'回×'+npYen(p.unit)+' ＝ '+npYen(p.amt);
+    /* ⚠️折半（1杯を2人で分けた）行は 0.5回になる＝整数の時だけ整数で出す（"1回"が"1.0回"にならない） */
+    var cnt=(Math.round(p.cnt*100)/100);
+    /* 🍹単価が品ごとに違って1つに決まらない時は**単価を出さない**（嘘の単価を画面に出さない） */
+    if(p.unit==null) return esc(p.t)+' '+cnt+'回 ＝ '+npYen(p.amt);
+    return esc(p.t)+' '+cnt+'回×'+npYen(p.unit)+' ＝ '+npYen(p.amt);
   }).join('　/　')+'　自動計 <b>'+npYen(r.backAuto)+'</b>';
 }
 function npMore(i){ NP_MORE[i]=!NP_MORE[i]; npRender(); }
@@ -2937,6 +2947,26 @@ function cfSteps_(){
   }else if(!pos){ posWhy='確認中'; }
   S.push({id:'cf_pos',em:'🧾',t:'POSを締める',s:posOk?'未会計・請求書の依頼なし':posWhy,
     state:posOk?'done':'todo',act:"setViewMode('bill')"});
+  /* 🧑 担当が空のまま会計された伝票（ボス確定 2026-09-26・必須工程）
+     ■ なぜ要るか＝2026年8月に **¥150,300 が別人の担当売上として給与に乗った**。
+       原因は「担当が空だったこと」ではなく **なぜ空なのかが記録されなかったこと**＝
+       後から月次を作り直したとき「予約を入力した人」に引っ張られて付いた。
+     ⭐逃げ道は🏠店担当＝深夜に思い出せなくても必ず前へ進める（閉じ込めない）。しかも
+       「店担当だった」という事実が会計記録に残る＝後から誰かに勝手に付かない。
+     ⛔会計の瞬間には止めない（客前で会計が止まるのは現場事故）＝止めるのは閉店のここだけ。
+     ⛔判定はこの1箇所。ccGateConds_（閉店チェックの送信ゲート）に同じ条件を足さないこと
+       ＝必須と警告を2箇所で判定して「送信は通ったのに帰れない」を2026-08-25に2回踏んでいる。
+     ⚠️**状態が取れない夜は工程そのものを出さない**（日報の工程と同じ流儀）。
+       `pos.noTantou` が配列で来たときだけ出す＝通信不良・backend未投入で誰も帰れなくしない。
+     ⚠️テストモード(enforce=false)では止めない＝練習データで本物の締めを止めない（①POSと同じ）。 */
+  if(pos&&Object.prototype.toString.call(pos.noTantou)==='[object Array]'){
+    var noT=pos.noTantou, tanOk=(!pos.enforce||noT.length===0);
+    S.push({id:'cf_tantou',em:'🧑',t:'担当が空の伝票をなくす',
+      s:(!pos.enforce)?'テストモードのため止めていません'
+        :(noT.length?(noT.length+'件　担当を入れるか🏠店担当を選んでください（空のままだと別の人の売上になります）')
+                    :'会計済みの伝票はすべて担当が入っています'),
+      state:tanOk?'done':'todo',act:'openTantouBlank()'});
+  }
   // ② 日払い伝票を整える（受取人・金額）
   var slips=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&/日払/.test(String(x.category||''));});
   var known=(gate&&gate.payees)||null;
@@ -3133,6 +3163,96 @@ function renderClosingFlow(){
     h+=fin.map(cfStepHtml_).join('');
   }
   return h;
+}
+
+/* 🧑 担当が空のまま会計された伝票を1画面で片付ける（必須工程 cf_tantou の中身）。
+   ⭐ここは**一覧と案内だけ**＝担当を直すのは伝票管理の③担当。入口を増やさない
+     （担当を2箇所から動かせると必ず食い違う＝2026-08-31に④から外したのと同じ理由）。
+   ⭐会計済みの伝票は編集ロック＝手順は分岐なしの1本道で書く。
+       伝票を開く →「会計を取り消す」→ ③担当で選ぶ →「会計する」
+     ⛔条件分岐のある案内を書かない（深夜に読む人が迷う）。
+   ⭐分からなければ🏠店担当＝それも「担当が決まった」として扱う。台帳の担当キャスト列に残るので
+     後から月次を作り直しても別人に付かない。⚠️店担当は④に予約キャストが居ればそちらへ振り替わる
+     （bmSalesTantou_）＝黙って誰かに付けるのではなく、店のルールどおりの帰属。 */
+function openTantouBlank(){ closeMenu(); showSheet('🧑 担当が空の伝票', tbBlankHtml_(), false); }
+function tbBlankHtml_(){
+  var pos=CLOSE_FLOW.pos, rows=(pos&&pos.noTantou)||[];
+  /* ⚠️「取れていない」と「0件」を同じ顔にしない＝読めていないのに「ありません」と断言しない。 */
+  if(!pos||Object.prototype.toString.call(pos.noTantou)!=='[object Array]')
+    return '<div class="empty-msg">伝票の状態を確認できませんでした。<br>🔄 を押すか、しばらくしてからもう一度開いてください。</div>'+tbRefreshHtml_();
+  var head='<div style="font-size:12px;color:var(--dim);margin-bottom:10px">'
+    +'担当が空のまま会計された伝票です。空のままだと、あとで給与を作り直したときに<b style="color:#ffcf7a">別の人の売上になります</b>。<br>'
+    +'<b>伝票を開く →「会計を取り消す」→ ③担当で選ぶ →「会計する」</b><br>'
+    +'分からなければ <b>🏠店担当</b> を選んでください。それも記録に残ります。</div>';
+  if(!rows.length) return head+'<div class="empty-msg">担当が空の伝票はありません</div>'+tbRefreshHtml_();
+  return head+rows.map(function(r){
+    /* ⚠️属性の中に埋めるので **JSON.stringify は使わない**（二重引用符が属性を壊す＝実描画で踏んだ）。
+       jsStr＝この画面の既存の作法（'\ を逃がす）。⭐値は台帳の伝票行番号。 */
+    return '<div class="hv-chk" style="border-color:#e6c14a" onclick="tbOpenBill(\''+jsStr(String(r.rowIdx))+'\')">'
+      +'<div class="em">🧑</div>'
+      +'<div class="bd"><div class="t">'+esc(r.label||('伝票 '+r.rowIdx))+'</div>'
+      +'<div class="s" style="color:#e6c14a">担当が空　'+bmYen(r.total)+'</div></div>'
+      +'<div class="go">›</div></div>';
+  }).join('')+tbRefreshHtml_();
+}
+function tbRefreshHtml_(){
+  return '<div style="margin-top:12px;text-align:right"><button onclick="tbRefresh()" '
+    +'style="background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">🔄 最新の状態を見る</button></div>';
+}
+/* 伝票管理を開いて、その伝票を表に出す。⚠️順番は setViewMode(描画とポーリング開始) → bmOpen(鍵を差す)。
+   ⛔**BM.key だけでは空振りする**（2026-09-26 qa指摘）。bmRender の先頭に
+       if(BM.key && !bills.some(…)) BM.key=null;
+     の関所があり、**その伝票が bmBills() に居なければ即 null に戻される**。
+     会計済みの組はもう席に居ない＝拾えるのは BM.draft 側（gone:true）だけなのに、
+     下書きの取り込み(bmPull)は**非同期**（GASの床≈1.9秒）。
+     ⇒ リロード直後・別フロアで打たれた伝票・5F/2Fの掛け持ちでは**タップしても何も起きない**。
+   ⭐直し方＝この画面が既に持っている救済機構 BM.want を使う（openBillFor と同じ作法）。
+     下書きが届いた時点で bmRender が自動で選ぶ＝新しい仕組みを作らない。 */
+function tbOpenBill(rowIdx){
+  closeSheet(); setViewMode('bill');
+  if(typeof BM!=='undefined'&&BM) BM.want=String(rowIdx);   // ← 届いたら自動で開く（空振り防止）
+  if(typeof bmOpen==='function') bmOpen(String(rowIdx));
+}
+/* ⛔**いま開いているシートが担当一覧か**を、書く直前に必ず確かめる（2026-09-26 qa指摘）。
+     sheetBody は全シートの共用枠＝🔄の直後に一覧を閉じて💰現金チェックや📋残タスクを開くと、
+     遅れて戻ってきた描画が**そのシートの中身を担当一覧に差し替える**（qaが実測で再現）。
+   ⚠️closeSheet() は show クラスを外すだけで、別シートに切り替わっても show は付いたまま
+     ＝**クラスでは判定できない**。showSheet が入れた見出しの文字で見分ける。
+   → [[reference_async_stale_guard_trap]] */
+var TB_TITLE='🧑 担当が空の伝票';
+function tbShown_(){
+  var sh=document.getElementById('sheet'), ti=document.getElementById('sheetTitle');
+  if(!sh||!ti) return false;
+  return sh.classList.contains('show')&&ti.textContent===TB_TITLE;
+}
+function tbPaint_(html){ if(!tbShown_()) return; var b=document.getElementById('sheetBody'); if(b) b.innerHTML=html; }
+/* ⚠️loadClosingFlow は Promise を返さない＝完了を待てない。取得時刻(CLOSE_FLOW.at)が動いたら描き直す。
+   ⚠️**12tick で戻るのは前面タブだけ**＝背面タブでは setInterval(500) が実測1,669ms/tickまで伸びる
+     （ブラウザの間引き。qa実測 2026-09-26）。「最長6秒」と言えるのは画面を見ている時だけ。
+     ⭐画面を見ていない間に伸びても害は無い（戻ってきた時に描き直すだけ）。
+   ⛔TB_BUSY を立てたあとに loadClosingFlow が**同期で投げる**と setInterval に届かず、
+     true のまま居残って**この端末では以後🔄が一切効かない**（閉店の逃げ道のボタン）。
+     ⇒ try/catch で必ず降ろす。 */
+var TB_BUSY=false;
+function tbRefresh(){
+  if(TB_BUSY) return;
+  TB_BUSY=true;
+  var at0=CLOSE_FLOW.at, n=0, iv=null;
+  tbPaint_('<div class="empty-msg">確認中…</div>');
+  try{
+    loadClosingFlow(true);
+    iv=setInterval(function(){
+      n++;
+      if(CLOSE_FLOW.at===at0&&n<12) return;
+      clearInterval(iv); TB_BUSY=false;
+      tbPaint_(tbBlankHtml_());
+      if(typeof viewMode!=='undefined'&&viewMode==='home'&&typeof renderHome==='function') renderHome();
+    },500);
+  }catch(e){
+    if(iv) clearInterval(iv);
+    TB_BUSY=false;                      // ⭐投げても🔄は死なせない
+    tbPaint_(tbBlankHtml_());
+  }
 }
 
 /* 📋 残っているタスクを1画面で決める（対応した／明日へ持ち越す）。
@@ -5336,7 +5456,7 @@ var BM_ITEMS=[
 ["マッカラン18年",185000,"ボトル系","ウィスキー"],
 ["ラフロイグ",25000,"ボトル系","ウィスキー"],
 ["スーパードライ小瓶",2000,"単品系","ビール"],
-["テキーラ1800",3000,"単品系","スピリッツ"],
+["テキーラ1800",3000,"単品系","スピリッツ",1000],
 ["年会費",10000,"単品系","年会費"],
 ["炭酸2本",1500,"単品系","割り物"],
 ["ウーロン茶P",2000,"単品系","ソフトドリンク"],
@@ -5420,6 +5540,7 @@ var BM_ITEMS=[
 ["プルシア",15000,"ボトル系","焼酎"],
 ["ムルソープルミエクリュクロデペリエール",170000,"ボトル系","ワイン"],
 ["ルイナールブランドブラン",50000,"ボトル系","シャンパン"],
+["ローランペリエ　ブランドブラン",45000,"ボトル系","シャンパン"],
 ["クエルボ魚10個",15000,"単品系","スピリッツ"],
 ["ルイナールロゼ",70000,"ボトル系","シャンパン"],
 ["ジェントルマンジャック",15000,"ボトル系","ウィスキー"],
@@ -6057,7 +6178,12 @@ function bmLoadAddShared(){
   BM_ADD_SRV='loading';
   gsr('getPosMenuAdds').then(function(r){
     /* ⚠️種類(kind)はサーバに持たせない＝`bmKindOf_` の1箇所で決める（2実装に割らない） */
-    BM_ADD_SRV=((r&&r.items)||[]).map(function(x){ return [String(x.name||''),Number(x.price)||0,bmKindOf_(x.genre||'その他'),String(x.genre||'その他')]; });
+    /* ⭐5列目＝その品のバック額（サーバのシート「POS_メニュー追加」の列）。
+       ⚠️空欄は**入れない**＝配列を4列のままにする（null を入れると「バック0の品」に見える）。 */
+    BM_ADD_SRV=((r&&r.items)||[]).map(function(x){
+      var row=[String(x.name||''),Number(x.price)||0,bmKindOf_(x.genre||'その他'),String(x.genre||'その他')];
+      if(x.back!=null&&x.back!=='') row.push(Number(x.back)||0);
+      return row; });
     BM_ADD_HIDE=((r&&r.hidden)||[]).map(function(x){ return {name:String(x.name||''),price:Number(x.price)||0}; });
     bmRenderIfIdle();
   }).catch(function(){ BM_ADD_SRV=[]; BM_ADD_SRV_ERR='共有メニューを取得できませんでした'; bmRenderIfIdle(); });
@@ -6108,7 +6234,9 @@ function bmAddMenu(){
   if(BM_GENRES.indexOf(gn)<0) gn='その他';
   var dup=bmItems_().filter(function(r){ return r[0]===nm; });
   if(dup.length&&!confirm('「'+nm+'」は既にメニューに在ります（'+bmYen(dup[0][1])+'）。\n同じ名前で単価違いとして足しますか？')) return;
+  var bk=((document.getElementById('bmNewBk')||{}).value||'').trim();
   var row=[nm,pr,bmKindOf_(gn),gn];
+  if(bk!=='') row.push(Math.max(0,Number(bk)||0));
   /* ⭐まずサーバへ（店で共有）。落ちたら端末に残して営業を続ける＝入力を捨てない。
      ⚠️`IS_GAS` を直に読まない＝この定数が無い環境（テスト・ローカル）で落ちる。
         通信できるかは **gsr が在るか** で判断する（ファイル内の他の判定と同じ流儀）。 */
@@ -6124,7 +6252,7 @@ function bmAddMenu(){
     if(typeof toast==='function') toast(msg);
   };
   if(srvOk){
-    gsr('posAddMenuItem',nm,pr,gn,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
+    gsr('posAddMenuItem',nm,pr,gn,(typeof LOGIN!=='undefined'?LOGIN:''),(bk===''?null:Math.max(0,Number(bk)||0))).then(function(r){
       if(!(r&&r.ok)) demote('⚠️共有できませんでした。この端末にだけ足しました');
     }).catch(function(){ demote('⚠️通信できず。この端末にだけ足しました'); });
   }else{
@@ -6132,6 +6260,7 @@ function bmAddMenu(){
   }
   var e1=document.getElementById('bmNewNm'); if(e1)e1.value='';
   var e2=document.getElementById('bmNewPr'); if(e2)e2.value='';
+  var e3=document.getElementById('bmNewBk'); if(e3)e3.value='';
   BM.kind=gn;                    /* 足したジャンルに切り替える＝足した品がその場で見える */
   bmRender();
   if(typeof toast==='function') toast('メニューに追加しました：'+nm+' '+bmYen(pr));
@@ -6171,7 +6300,7 @@ function bmAddedListHtml_(){
 function bmShareMenu(i){
   var a=bmAddLoad(), r=a[i]; if(!r) return;
   if(!IS_GAS){ toast('（ローカルでは共有できません）'); return; }
-  gsr('posAddMenuItem',r[0],r[1],r[3],(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(res){
+  gsr('posAddMenuItem',r[0],r[1],r[3],(typeof LOGIN!=='undefined'?LOGIN:''),(r[4]==null||r[4]==='')?null:(Number(r[4])||0)).then(function(res){
     if(!(res&&res.ok)){ toast('共有できませんでした：'+((res&&res.error)||'不明')); return; }
     if(BM_ADD_SRV&&BM_ADD_SRV!=='loading') BM_ADD_SRV.push(r);
     a.splice(i,1); bmAddSave_(a); bmRender();
@@ -7307,7 +7436,14 @@ function bmPickEach_(pk){
 function bmPickEachSet(v){ if(!BM.pick) return; BM.pick.each=v?1:0; bmRender(); }
 function bmPick(nm,pr){ if(bmLockedAlert_()) return;
   var it=bmItem_(nm);
-  BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:'') };
+  /* ⭐kind＝商品マスタの「ボトル系／単品系／つまみ系」。📋日報のドリンクバックと
+     ボトル本数の判定がこの1語だけを見る（給与側で品名から推測させない）。
+     ⭐back＝商品マスタ5列目の**この品のバック額**（ボス確定 2026-09-18＝テキーラ¥1,000／
+       書いていない品は日報の既定額¥200）。⛔品名や単価からの当て推量をさせないため、
+       **注文した時点のマスタの値**をそのまま伝票に刻む（後からマスタを直しても過去の日報は動かない）。
+     ⚠️マスタに無い臨時商品は空のまま＝日報は「分からない物は数えない」で処理する。 */
+  BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:''), kind:(it?it[2]:''),
+            back:(it&&it[4]!=null&&it[4]!=='')?(Number(it[4])||0):null };
   bmRender();
 }
 function bmPickCancel(){ BM.pick=null; bmRender(); }
@@ -7335,7 +7471,10 @@ function bmPickConfirm(){ if(bmLockedAlert_()) return;
     var key=at.join('・'), hit=-1;
     d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
     if(hit>=0) d.orders[hit].qty+=pk.qty;
-    else d.orders.push({name:pk.name,genre:pk.genre,price:pk.price,qty:pk.qty,attrs:at});
+    else d.orders.push({name:pk.name,genre:pk.genre,kind:pk.kind||'',
+                        /* 🍹この品のバック額（マスタに書いてある品だけ。無ければ日報の既定額） */
+                        back:(pk.back==null?null:pk.back),
+                        price:pk.price,qty:pk.qty,attrs:at});
   });
   BM.pick=null; bmSave(); bmRender();
 }
@@ -9461,6 +9600,8 @@ function mnRenderMenu_(el){
     +'<div class="bm-row" style="flex-wrap:wrap;gap:6px">'
     +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;flex:1;min-width:140px">'
     +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:96px">'
+    /* 🥃空欄なら日報の既定額（1杯¥200）。テキーラのように別額の品だけ入れる */
+    +'<input type="number" id="bmNewBk" placeholder="バック額" title="1杯あたりのバック額。空欄なら既定（¥200）" class="bm-in" style="width:96px">'
     +'<select id="bmNewGn" class="bm-in" style="width:130px">'
     +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'">'+esc(bmGenreLabel_(g))+'</option>'; }).join('')
     +'</select>'

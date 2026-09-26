@@ -1643,7 +1643,7 @@ function printLogHtml_(){
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-17a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-26a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 var LOGIN = '';
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
@@ -2907,6 +2907,26 @@ function cfSteps_(){
   }else if(!pos){ posWhy='確認中'; }
   S.push({id:'cf_pos',em:'🧾',t:'POSを締める',s:posOk?'未会計・請求書の依頼なし':posWhy,
     state:posOk?'done':'todo',act:"setViewMode('bill')"});
+  /* 🧑 担当が空のまま会計された伝票（ボス確定 2026-09-26・必須工程）
+     ■ なぜ要るか＝2026年8月に **¥150,300 が別人の担当売上として給与に乗った**。
+       原因は「担当が空だったこと」ではなく **なぜ空なのかが記録されなかったこと**＝
+       後から月次を作り直したとき「予約を入力した人」に引っ張られて付いた。
+     ⭐逃げ道は🏠店担当＝深夜に思い出せなくても必ず前へ進める（閉じ込めない）。しかも
+       「店担当だった」という事実が会計記録に残る＝後から誰かに勝手に付かない。
+     ⛔会計の瞬間には止めない（客前で会計が止まるのは現場事故）＝止めるのは閉店のここだけ。
+     ⛔判定はこの1箇所。ccGateConds_（閉店チェックの送信ゲート）に同じ条件を足さないこと
+       ＝必須と警告を2箇所で判定して「送信は通ったのに帰れない」を2026-08-25に2回踏んでいる。
+     ⚠️**状態が取れない夜は工程そのものを出さない**（日報の工程と同じ流儀）。
+       `pos.noTantou` が配列で来たときだけ出す＝通信不良・backend未投入で誰も帰れなくしない。
+     ⚠️テストモード(enforce=false)では止めない＝練習データで本物の締めを止めない（①POSと同じ）。 */
+  if(pos&&Object.prototype.toString.call(pos.noTantou)==='[object Array]'){
+    var noT=pos.noTantou, tanOk=(!pos.enforce||noT.length===0);
+    S.push({id:'cf_tantou',em:'🧑',t:'担当が空の伝票をなくす',
+      s:(!pos.enforce)?'テストモードのため止めていません'
+        :(noT.length?(noT.length+'件　担当を入れるか🏠店担当を選んでください（空のままだと別の人の売上になります）')
+                    :'会計済みの伝票はすべて担当が入っています'),
+      state:tanOk?'done':'todo',act:'openTantouBlank()'});
+  }
   // ② 日払い伝票を整える（受取人・金額）
   var slips=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&/日払/.test(String(x.category||''));});
   var known=(gate&&gate.payees)||null;
@@ -3105,6 +3125,96 @@ function kkResolve(rowIdx){
     var el=document.getElementById('sheetBody'); if(el)el.innerHTML=kkIssuesHtml_();
     if(viewMode==='home')renderHome();
   }).catch(function(){ KK_BUSY[rowIdx]=false; alert('通信エラー'); });
+}
+
+/* 🧑 担当が空のまま会計された伝票を1画面で片付ける（必須工程 cf_tantou の中身）。
+   ⭐ここは**一覧と案内だけ**＝担当を直すのは伝票管理の③担当。入口を増やさない
+     （担当を2箇所から動かせると必ず食い違う＝2026-08-31に④から外したのと同じ理由）。
+   ⭐会計済みの伝票は編集ロック＝手順は分岐なしの1本道で書く。
+       伝票を開く →「会計を取り消す」→ ③担当で選ぶ →「会計する」
+     ⛔条件分岐のある案内を書かない（深夜に読む人が迷う）。
+   ⭐分からなければ🏠店担当＝それも「担当が決まった」として扱う。台帳の担当キャスト列に残るので
+     後から月次を作り直しても別人に付かない。⚠️店担当は④に予約キャストが居ればそちらへ振り替わる
+     （bmSalesTantou_）＝黙って誰かに付けるのではなく、店のルールどおりの帰属。 */
+function openTantouBlank(){ closeMenu(); showSheet('🧑 担当が空の伝票', tbBlankHtml_(), false); }
+function tbBlankHtml_(){
+  var pos=CLOSE_FLOW.pos, rows=(pos&&pos.noTantou)||[];
+  /* ⚠️「取れていない」と「0件」を同じ顔にしない＝読めていないのに「ありません」と断言しない。 */
+  if(!pos||Object.prototype.toString.call(pos.noTantou)!=='[object Array]')
+    return '<div class="empty-msg">伝票の状態を確認できませんでした。<br>🔄 を押すか、しばらくしてからもう一度開いてください。</div>'+tbRefreshHtml_();
+  var head='<div style="font-size:12px;color:var(--dim);margin-bottom:10px">'
+    +'担当が空のまま会計された伝票です。空のままだと、あとで給与を作り直したときに<b style="color:#ffcf7a">別の人の売上になります</b>。<br>'
+    +'<b>伝票を開く →「会計を取り消す」→ ③担当で選ぶ →「会計する」</b><br>'
+    +'分からなければ <b>🏠店担当</b> を選んでください。それも記録に残ります。</div>';
+  if(!rows.length) return head+'<div class="empty-msg">担当が空の伝票はありません</div>'+tbRefreshHtml_();
+  return head+rows.map(function(r){
+    /* ⚠️属性の中に埋めるので **JSON.stringify は使わない**（二重引用符が属性を壊す＝実描画で踏んだ）。
+       jsStr＝この画面の既存の作法（'\ を逃がす）。⭐値は台帳の伝票行番号。 */
+    return '<div class="hv-chk" style="border-color:#e6c14a" onclick="tbOpenBill(\''+jsStr(String(r.rowIdx))+'\')">'
+      +'<div class="em">🧑</div>'
+      +'<div class="bd"><div class="t">'+esc(r.label||('伝票 '+r.rowIdx))+'</div>'
+      +'<div class="s" style="color:#e6c14a">担当が空　'+bmYen(r.total)+'</div></div>'
+      +'<div class="go">›</div></div>';
+  }).join('')+tbRefreshHtml_();
+}
+function tbRefreshHtml_(){
+  return '<div style="margin-top:12px;text-align:right"><button onclick="tbRefresh()" '
+    +'style="background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">🔄 最新の状態を見る</button></div>';
+}
+/* 伝票管理を開いて、その伝票を表に出す。⚠️順番は setViewMode(描画とポーリング開始) → bmOpen(鍵を差す)。
+   ⛔**BM.key だけでは空振りする**（2026-09-26 qa指摘）。bmRender の先頭に
+       if(BM.key && !bills.some(…)) BM.key=null;
+     の関所があり、**その伝票が bmBills() に居なければ即 null に戻される**。
+     会計済みの組はもう席に居ない＝拾えるのは BM.draft 側（gone:true）だけなのに、
+     下書きの取り込み(bmPull)は**非同期**（GASの床≈1.9秒）。
+     ⇒ リロード直後・別フロアで打たれた伝票・5F/2Fの掛け持ちでは**タップしても何も起きない**。
+   ⭐直し方＝この画面が既に持っている救済機構 BM.want を使う（openBillFor と同じ作法）。
+     下書きが届いた時点で bmRender が自動で選ぶ＝新しい仕組みを作らない。 */
+function tbOpenBill(rowIdx){
+  closeSheet(); setViewMode('bill');
+  if(typeof BM!=='undefined'&&BM) BM.want=String(rowIdx);   // ← 届いたら自動で開く（空振り防止）
+  if(typeof bmOpen==='function') bmOpen(String(rowIdx));
+}
+/* ⛔**いま開いているシートが担当一覧か**を、書く直前に必ず確かめる（2026-09-26 qa指摘）。
+     sheetBody は全シートの共用枠＝🔄の直後に一覧を閉じて💰現金チェックや📋残タスクを開くと、
+     遅れて戻ってきた描画が**そのシートの中身を担当一覧に差し替える**（qaが実測で再現）。
+   ⚠️closeSheet() は show クラスを外すだけで、別シートに切り替わっても show は付いたまま
+     ＝**クラスでは判定できない**。showSheet が入れた見出しの文字で見分ける。
+   → [[reference_async_stale_guard_trap]] */
+var TB_TITLE='🧑 担当が空の伝票';
+function tbShown_(){
+  var sh=document.getElementById('sheet'), ti=document.getElementById('sheetTitle');
+  if(!sh||!ti) return false;
+  return sh.classList.contains('show')&&ti.textContent===TB_TITLE;
+}
+function tbPaint_(html){ if(!tbShown_()) return; var b=document.getElementById('sheetBody'); if(b) b.innerHTML=html; }
+/* ⚠️loadClosingFlow は Promise を返さない＝完了を待てない。取得時刻(CLOSE_FLOW.at)が動いたら描き直す。
+   ⚠️**12tick で戻るのは前面タブだけ**＝背面タブでは setInterval(500) が実測1,669ms/tickまで伸びる
+     （ブラウザの間引き。qa実測 2026-09-26）。「最長6秒」と言えるのは画面を見ている時だけ。
+     ⭐画面を見ていない間に伸びても害は無い（戻ってきた時に描き直すだけ）。
+   ⛔TB_BUSY を立てたあとに loadClosingFlow が**同期で投げる**と setInterval に届かず、
+     true のまま居残って**この端末では以後🔄が一切効かない**（閉店の逃げ道のボタン）。
+     ⇒ try/catch で必ず降ろす。 */
+var TB_BUSY=false;
+function tbRefresh(){
+  if(TB_BUSY) return;
+  TB_BUSY=true;
+  var at0=CLOSE_FLOW.at, n=0, iv=null;
+  tbPaint_('<div class="empty-msg">確認中…</div>');
+  try{
+    loadClosingFlow(true);
+    iv=setInterval(function(){
+      n++;
+      if(CLOSE_FLOW.at===at0&&n<12) return;
+      clearInterval(iv); TB_BUSY=false;
+      tbPaint_(tbBlankHtml_());
+      if(typeof viewMode!=='undefined'&&viewMode==='home'&&typeof renderHome==='function') renderHome();
+    },500);
+  }catch(e){
+    if(iv) clearInterval(iv);
+    TB_BUSY=false;                      // ⭐投げても🔄は死なせない
+    tbPaint_(tbBlankHtml_());
+  }
 }
 
 /* 📋 残っているタスクを1画面で決める（対応した／明日へ持ち越す）。
