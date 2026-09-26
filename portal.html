@@ -713,7 +713,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-08-28a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var PORTAL_BUILD = '2026-09-26a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -2810,13 +2810,29 @@ function renderKyuritsuBody(d) {
   setContent(h);
 }
 
+/* ヘアサロン立替＝**領収書として登録された分だけ**（コンソール🧮給与明細 getHairReceipts_ と同じ1本）。
+   ⛔2026-09-26 まで、領収書が0円のときは `給与計算` シートの「ヘアサロン立替(手入力)」へ落ちていた。
+     `給与計算` は 2026-07 で更新が止まった手入力シート＝**ポータルだけ最終支給額が大きくなる**
+     （本番実測は 2026/05 りお ¥2,400 の1件）。コンソールは落ちない＝2画面で金額が食い違う原因だった。
+   ⭐給与明細の表示(renderPay)と受領確認の送信額(sendPayrollReceipt)は**この1本**を見る。
+   ⛔同じ式を2箇所に書き戻さない。片方だけ直すと、画面の金額とLINEに飛ぶ金額が黙ってズレる。 */
+function payHairAmount(month) {
+  var hairTotals = (portalData && portalData.hairTotals) || {};
+  return Number(hairTotals[month]) || 0;
+}
+
 // ---- 給与明細（TRUST明細書形式） ----
 function renderPay() {
   var sales = (portalData && portalData.sales) || {};
   var hairTotals = (portalData && portalData.hairTotals) || {};
-  var salesMonths = Object.keys(sales);
-  var hairMonths  = Object.keys(hairTotals).filter(function(m) { return !salesMonths.includes(m); });
-  var allMonths   = salesMonths.concat(hairMonths).sort().reverse();
+  // ⭐月タブの正本はサーバが返す months（backend の portalPayMonths_）。⛔ここで月を数え直さない。
+  //   数え直していたせいで、サーバが「当月は給与として出さない」と決めた月でも、領収書だけある月は
+  //   画面がすり抜けて出していた＝同じ条件を2箇所で判定していた（2026-09-26 に1本化）。
+  //   ⚠️months が来ていない古いペイロードのときだけ、給与のある月で描く（領収書だけの月は落ちるが、
+  //     止まった旧方式の月が復活することは無い＝安全側に倒す）。領収書そのものは📄領収書タブで見える。
+  var allMonths = (portalData && Object.prototype.toString.call(portalData.months) === '[object Array]' && portalData.months.length)
+    ? portalData.months.slice()
+    : Object.keys(sales).sort().reverse();
 
   if (allMonths.length === 0) {
     setContent('<div style="text-align:center;padding:60px 20px">'
@@ -2828,7 +2844,13 @@ function renderPay() {
 
   var pay = portalData && portalData.pay;
   var months = allMonths;
-  var sel = (currentMonth && (sales[currentMonth] || hairTotals[currentMonth])) ? currentMonth : months[0];
+  // ⭐選べる月は**必ず月タブの中**（＝サーバが返した months）。⛔`sales[...]`/`hairTotals[...]` で判定し直さない。
+  //   ⛔2026-09-26 まで hairTotals を見ていたので**月タブに無い月が選ばれた**（qaがブラウザで再現）：
+  //     月タブは 2026/08・07・06 なのに本文が「令和8年9月分／ヘアサロン立替代 ＋¥7,000／最終支給額 ¥7,000」になり、
+  //     payPublished['2026/09'] が無いのに **🔒未公開ロックを素通りした**＝**未公開の給与が本人に漏れる穴**。
+  //     発火条件は「当月のヘアサロン領収書が1件でもある」＝キャストは月中に登録するのでいずれ必ず満たす。
+  //   到達経路の一例＝jumpToBillDayFromVisit(date) が currentMonth を当月にしてから成績タブへ飛ぶ。
+  var sel = (currentMonth && months.indexOf(currentMonth) >= 0) ? currentMonth : months[0];
 
   // 公開チェック（非管理者は未公開月を表示しない）
   var payPublished = portalData.payPublished || {};
@@ -2848,6 +2870,9 @@ function renderPay() {
     return t;
   }
 
+  // ⚠️「領収書だけの月」＝給与の行が無い月。サーバの `PORTAL_PAY_SHOW_HAIR_ONLY_` が false のあいだ、
+  //   months には**給与の行がある月しか来ない**＝isHairOnlyMonth は常に false ＝**この逃げ道は到達しない**。
+  //   ⛔あのスイッチを true に戻すなら、ここが「未公開でもロックを素通りする道」になることを必ず読み直すこと。
   var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
   if (!adminPriv() && !payPublished[sel] && !isHairOnlyMonth) {
     // ⚠️ 成績データは初回のみ取得（loadStatsDataのload-onceガード）。管理者が公開した後に
@@ -2878,6 +2903,8 @@ function renderPay() {
   function yen(v) { return '¥' + (parseInt(v) || 0).toLocaleString(); }
 
   // 売上データなし・領収書のみの月
+  // ⚠️上の isHairOnlyMonth と同じ理由で、`PORTAL_PAY_SHOW_HAIR_ONLY_` が false のあいだ**ここも到達しない**。
+  //   残してあるのはスイッチを戻したときのため。⛔消すなら上の逃げ道と一緒に消すこと（片方だけ消さない）。
   var hairTotals = portalData.hairTotals || {};
   var hairOnly = Object.keys(s).length === 0;
   if (hairOnly && hairTotals[sel]) {
@@ -2950,11 +2977,8 @@ function renderPay() {
   var kojo      = gensen + nichibara + minus;
 
   var nokori    = n(s['残り支給額']);
-  var hairTotals = portalData.hairTotals || {};
-  var hairReceipt = hairTotals[sel] || 0;
-  var hairManual  = n(p['ヘアサロン立替(手入力)']);
-  var hair        = hairReceipt > 0 ? hairReceipt : hairManual;
-  var finalPay    = nokori + hair;
+  var hair      = payHairAmount(sel);   // 領収書1本（「給与計算」手入力へのフォールバックは廃止・2026-09-26）
+  var finalPay  = nokori + hair;
 
   // 令和変換
   var parts = sel.split('/');
@@ -3214,12 +3238,10 @@ function togglePayPublish(month, action) {
 
 function sendPayrollReceipt(month, method) {
   var s = (portalData.sales && portalData.sales[month]) || {};
-  var p = (portalData.pay && portalData.pay[month]) || {};
   var num = function(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; };
   var nokori = num(s['残り支給額']);
-  var hairTotals = portalData.hairTotals || {};
-  var hair = (hairTotals[month] || 0) > 0 ? hairTotals[month] : num(p['ヘアサロン立替(手入力)']);
-  var amount = nokori + hair;
+  // ⭐画面の最終支給額と同じ1本を見る（renderPay と同じ payHairAmount）＝送る額と見せる額をズラさない
+  var amount = nokori + payHairAmount(month);
 
   if (!confirm(method + 'で給与受領確認をLINEに送信します。よろしいですか？')) return;
 
