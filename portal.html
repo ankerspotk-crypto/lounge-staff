@@ -714,6 +714,8 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
 var PORTAL_BUILD = '2026-09-26a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+/* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
+   8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -2425,7 +2427,7 @@ function renderSales() {
   var salesDates = (portalData && portalData.salesDataDates) || {};
   var asOf = salesDates[sel] || '';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
-  h += '<span style="font-size:10px;color:#94886a;letter-spacing:0.5px">' + sel + ' TRUSTデータ'
+  h += '<span style="font-size:10px;color:#94886a;letter-spacing:0.5px">' + sel + ' 給与データ'
     + (asOf ? '　<span style="color:#e6cf95;font-weight:600">' + asOf + '時点</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>') + '</span>';
   if (adminPriv()) {
     h += '<span style="font-size:10px;color:#b8a67c;cursor:pointer;text-decoration:underline" onclick="salesSetDate(\'' + sel + '\')">'
@@ -2478,7 +2480,7 @@ function renderSales() {
 
   h += '</div>';
 
-  h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
+  h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:10px 0">お店の給与計算の集計値です</div>';
   h += '</div>';
 
   // ---- バック率メーター（煽りあり） ----
@@ -2769,7 +2771,7 @@ function renderKyuritsuBody(d) {
   h += '<div style="margin-top:12px;padding-top:11px;border-top:1px solid #241d10;font-size:11px;color:#94886a;line-height:1.9">'
     + '担当売上 <b style="color:#cbb98a">' + kyu0(me.tanto) + '</b> ÷ 時間報酬 <b style="color:#cbb98a">' + kyu0(me.jikan) + '</b> ＝ ' + kyuBai(b) + '<br>'
     + '出勤 ' + me.days + '日　（お店の言い方だと <b style="color:#cbb98a">給率 ' + kyuPct(me.rate) + '</b>・目標は' + T + '%以下）'
-    + '<br><span style="color:#7d7159">※バックは含みません（バックは頑張った分のご褒美。TRUSTの給率欄はバック込みのため数字が異なります）</span>'
+    + '<br><span style="color:#7d7159">※バックは含みません（バックは頑張った分のご褒美。以前の給与明細の給率欄はバック込みのため数字が異なります）</span>'
     + '</div></div>';
 
   // ── 出勤1日あたり ──
@@ -3395,20 +3397,20 @@ function renderRanking(d) {
   // 管理者：TRUST組数同期（ブックマークレット）
   if (adminPriv()) {
     h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
-    h += '<div style="font-size:11px;color:#b8a67c;font-weight:600;margin-bottom:8px">🔄 TRUST 組数を同期する</div>';
+    h += '<div style="font-size:11px;color:#b8a67c;font-weight:600;margin-bottom:8px">🔄 旧システムの組数を同期する（〜8月分）</div>';
     h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
        + '① 下のリンクをブックマークバーにドラッグ<br>'
-       + '② TRUSTを開いてそのブックマークをクリック<br>'
+       + '② 旧システムの管理画面を開いてそのブックマークをクリック<br>'
        + '③ 自動で今月分の同伴・予約組数が反映される'
        + '</div>';
-    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 TRUSТSync ← ドラッグしてブックマーク登録</a>';
+    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 旧システムSync ← ドラッグしてブックマーク登録</a>';
     h += '</div>';
 
     h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
     h += '<div style="font-size:11px;color:#ccaa66;font-weight:600;margin-bottom:8px">💴 現金チェック用 日払い・経費を取得</div>';
     h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
        + '① 下のリンクをブックマークバーにドラッグ<br>'
-       + '② 営業後、TRUSTを開いてそのブックマークをクリック<br>'
+       + '② 営業後、旧システムの管理画面を開いてそのブックマークをクリック<br>'
        + '③ 当日の日払い合計・経費合計を自動取得して記録'
        + '</div>';
     h += '<a id="trust-cash-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 現金Sync ← ドラッグしてブックマーク登録</a>';
@@ -3612,7 +3614,7 @@ function renderWine(d) {
   h += wineCard_('🍷 ワイン', wineActive);
   if (dropped.length) h += wineDroppedCard_(dropped);
   h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:8px 4px;line-height:1.6">'
-    + '単価は店舗メニューの価格です（会計はTRUSTが正）。<br>'
+    + '単価は店舗メニューの価格です（会計は伝票の金額が正）。<br>'
     + 'メニューに紐づいた銘柄のみ表示・在庫0本は非表示。</div>';
   h += '</div>';
   setContent(h);
@@ -4099,7 +4101,7 @@ function renderPortalVisits(v) {
       + '<span style="width:66px;flex-shrink:0;font-weight:700;color:#efe4cd">' + esc(fmtVisitDate(r.date)) + '</span>'
       + '<span style="flex:1;color:#b09f74">' + esc(r.in || '') + (r.out ? '〜' + esc(r.out) : '') + (r.table ? '　' + esc(r.table) : '') + (r.pax ? '　' + r.pax + '名' : '') + (r.tantou ? '　担当' + esc(r.tantou) : '') + (sales ? '　' + sales : (fee ? '　' + fee : '')) + '</span>'
       + (r.dohan ? '<span class="ycm ycm-note" style="flex-shrink:0">🤝同伴' + (r.dohanCast ? esc(r.dohanCast) : '') + '</span>' : '')
-      + (r.source === 'TRUST' ? '<span class="ycm ycm-note" style="flex-shrink:0">TRUST</span>' : '')
+      + (r.source === 'TRUST' ? '<span class="ycm ycm-note" style="flex-shrink:0">旧システム</span>' : '')
       + (canJump ? '<span style="flex-shrink:0;color:#8c7f5e;font-size:12px">伝票 ›</span>' : '')
       + '</div>';
   }).join('');

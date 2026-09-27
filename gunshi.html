@@ -1641,10 +1641,20 @@ function printLogHtml_(){
       }).join('')+'</div>';
 }
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
-var KIOSK_USER_ID='';    /* bootstrap で設定 */
+var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID の固定値1個）。
+                            ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
+                            （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-26a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-28a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+/* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
+   8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
+/* ⭐軍師で「誰がやったか」をサーバに伝えるときの名前＝ログイン中の黒服（ボス申告 2026-09-28）。
+   ⛔`KIOSK_USER_ID` を実施者に使うな。あれは ScriptProperty の固定値1個で、端末でも人でもない
+   ＝棚卸し・発注・納品✓・購入登録・終売/欠品・受取人登録が全部「りく」になっていた原因。
+   ⚠️これは認証ではない（この変数は書き換えられる）。本人確認はログイン(PIN / LINE QR)の1箇所が正本。
+   ⚠️ログイン前は空文字＝サーバ側 gunshiActorName_ が userId 経路に落ちる（古い端末と同じ扱い）。 */
+function gunshiActor_(){ return (typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):''; }
 function fmtKey(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
 function bizKeyClient(){var n=new Date(); if(n.getHours()<6){n=new Date(n.getTime()-24*3600000);} return fmtKey(n);}
 var TODAY = bizKeyClient();  /* bootstrap の today で上書き */
@@ -2064,7 +2074,7 @@ function trustSelfSet_(v){ try{ localStorage.setItem(trustSelfKey_(), v?'1':'0')
 
 function openTrustEntry(){
   closeMenu();
-  showSheet('🔢 TRUSTに入力', trustEntryHtml(), false);
+  showSheet('🔢 旧システムに入力', trustEntryHtml(), false);
 }
 function trustEntryHtml(){
   var F=CLOSE_FLOW||{}, all=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0;});
@@ -2081,12 +2091,12 @@ function trustEntryHtml(){
     }).join('');
   };
   var h='<div style="font-size:12.5px;color:var(--dim);line-height:1.6;margin-bottom:12px">'
-    +'今日ぶんを <b style="color:#ffcf7a">TRUST</b> に入力してください。下は軍師が持っている伝票＝<b>これと同じ額</b>をTRUSTに入れます。</div>';
+    +'今日ぶんを <b style="color:#ffcf7a">旧システム</b>に入力してください。下は軍師が持っている伝票＝<b>これと同じ額</b>を旧システムに入れます。</div>';
   h+='<div class="flabel">💴 日払い　<span style="color:var(--gold)">計 ¥'+sum(hib).toLocaleString()+'</span>（'+hib.length+'件）</div>'
     +'<div class="cc-slip">'+rows(hib,'今日の日払いはありません')+'</div>';
   h+='<div class="flabel">🧾 経費　<span style="color:var(--gold)">計 ¥'+sum(kei).toLocaleString()+'</span>（'+kei.length+'件）</div>'
     +'<div class="cc-slip">'+rows(kei,'今日の経費はありません')+'</div>';
-  h+='<div class="act pri" style="margin-top:14px" onclick="openTrustSite()">🔗 TRUSTを開く</div>';
+  h+='<div class="act pri" style="margin-top:14px" onclick="openTrustSite()">🔗 旧システムを開く</div>';
 
   /* ⚠️ここは【自己申告だけ】。日報スクショの自動突合は 2026-08-27 に撤去した（上のコメント参照）。
      機械の照合が無くなったぶん、二重払いを止めるのは月次の 💴日払い照合（コンソール）＋給与明細の赤バナー。
@@ -2095,10 +2105,10 @@ function trustEntryHtml(){
   h+='<div style="border:2px solid '+(on?'#3ea06a':'#e05050')+';background:'+(on?'rgba(62,160,106,.12)':'rgba(224,80,80,.10)')+';border-radius:12px;padding:12px 14px;margin-top:16px">'
     +'<label style="display:flex;gap:11px;align-items:flex-start;cursor:pointer">'
     +'<input type="checkbox" '+(on?'checked':'')+' style="width:22px;height:22px;margin-top:1px;flex:0 0 auto;accent-color:#3ea06a" onchange="trustSelfSet_(this.checked);trustEntryRefresh_()">'
-    +'<span style="font-size:14.5px;font-weight:700;color:var(--txt);line-height:1.45">上の金額をTRUSTに入力しました'
+    +'<span style="font-size:14.5px;font-weight:700;color:var(--txt);line-height:1.45">上の金額を旧システムに入力しました'
     +'<div style="font-size:11.5px;font-weight:400;color:var(--dim);margin-top:3px">'
-    +'<b style="color:#ffcf7a">TRUSTに入れ忘れると、給与計算で日払いが引かれず二重払いになります。</b>'
-    +'画面を閉じる前に、上の一覧とTRUSTの数字が同じか目で確かめてください。</div></span>'
+    +'<b style="color:#ffcf7a">旧システムに入れ忘れると、給与計算で日払いが引かれず二重払いになります。</b>'
+    +'画面を閉じる前に、上の一覧と旧システムの数字が同じか目で確かめてください。</div></span>'
     +'</label></div>';
   h+='<div class="act" style="margin-top:10px" onclick="closeSheet()">閉じる</div>';
   return h;
@@ -2119,7 +2129,7 @@ function trustEntryRefresh_(){
 /* TRUSTは外部システム（別オリジン）。軍師からは開くだけ＝中身は触らない。 */
 function openTrustSite(){
   try{ window.open('https://admin.trust-operation.com/','_blank','noopener'); }
-  catch(e){ if(typeof toast==='function')toast('TRUSTを開けませんでした',true); }
+  catch(e){ if(typeof toast==='function')toast('旧システムを開けませんでした',true); }
 }
 
 /* --- 💴 日払いの不明分（まとめて仕訳） -------------------------------------
@@ -2155,7 +2165,7 @@ function hbuRender(){
     b.innerHTML=h+hbuGuide(); return;
   }
   h+='<div style="font-size:12px;color:var(--dim);line-height:1.6;margin:8px 0">'
-    +'受取人が分からない日払い伝票です。<b>誰の日払いか決まらないとTRUSTと突き合わせられず、給与の控除も合いません。</b>'
+    +'受取人が分からない日払い伝票です。<b>誰の日払いか決まらないと、給与の日払い控除が合いません。</b>'
     +'📷で受領書の署名を確認してから決めてください。</div>';
   h+=rows.map(hbuCard).join('');
   b.innerHTML=h+hbuGuide();
@@ -2438,7 +2448,7 @@ function npRender(){
 
   /* ── バックの出典。⚠️どこから数えたかを必ず出す（混ざっていないことを黒服が見て分かる） ── */
   var srcTxt = NP.backSrc==='POS' ? '自社POSの会計から自動計算'
-             : NP.backSrc==='TRUST伝票' ? 'TRUST取込の伝票から自動計算'
+             : NP.backSrc==='TRUST伝票' ? '旧システム取込の伝票から自動計算'
              : '売上の材料がまだありません（バックは0のまま。あとで取り込めば自動で入ります）';
   h+='<div class="np-note">🧮 バックの出典：<b>'+esc(srcTxt)+'</b>　'
     +'<span style="color:var(--dim)">単価＝予約 '+npYen(NP.backConf.yoyakuYen)+'/回・同伴 '+npYen(NP.backConf.dohanYen)+'/回'
@@ -2894,7 +2904,7 @@ function loadClosingFlow(force){
     var g=rr[0], ex=rr[1];
     CLOSE_FLOW.extra=(ex&&ex.ok!==false)?ex:null;
     CLOSE_FLOW.gate=(g&&g.ok!==false)?g:null;
-    CLOSE_FLOW.err=CLOSE_FLOW.gate?'':'TRUSTの状態を確認できませんでした';
+    CLOSE_FLOW.err=CLOSE_FLOW.gate?'':'締めの条件を確認できませんでした';
     CLOSE_FLOW.loading=false; CLOSE_FLOW.at=Date.now();
     if(viewMode==='home'&&curPhase()==='post')renderHome();
   }).catch(function(){
@@ -2941,10 +2951,11 @@ function cfSteps_(){
   var slips=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&/日払/.test(String(x.category||''));});
   var known=(gate&&gate.payees)||null;
   var noName=slips.filter(function(x){return !String(x.payee||'').trim();});
-  var unknown=slips.filter(function(x){
-    var n=String(x.payee||'').replace(/[\s　]/g,'').trim(); if(!n)return false; if(!known)return false;
-    return !known.some(function(p){return String(p||'').replace(/[\s　]/g,'').trim()===n;});
-  });
+  /* ⛔受取人の判定は ccPayeeKnown_ の1本だけ（送信ゲート①・赤枠と同じ物を呼ぶ）。2026-09-18 に一本化。
+     以前ここは完全一致だけの別実装＝「派遣 みな」「P.本名.源氏名」「体験〇〇」を知らず、
+     送信ゲートは通るのに工程が❌のまま＝「送信できたのに帰れない」形になっていた。
+     ⚠️名簿が取れていない夜（known=null）は ccPayeeKnown_ が通す＝通信不良で閉じ込めない（従来どおり）。 */
+  var unknown=slips.filter(function(x){ return !!String(x.payee||'').trim()&&!ccPayeeKnown_(x.payee, known); });
   var slipOk=(noName.length===0&&unknown.length===0);
   S.push({id:'cf_slip',em:'💴',t:'日払い伝票を整える',
     s:slipOk?(slips.length?('日払い '+slips.length+'件 すべて受取人あり'):'今日の日払いはありません')
@@ -2966,8 +2977,8 @@ function cfSteps_(){
     var trustS;
     if(submitted) trustS='入力済みとして送信しました';
     else if(selfOk) trustS='入力したと申告済み';
-    else trustS='タップ→TRUSTを開いて入力→「入力しました」にチェック';
-    S.push({id:'cf_trust',em:'🔢',t:'TRUSTに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
+    else trustS='タップ→旧システムの管理画面を開いて入力→「入力しました」にチェック';
+    S.push({id:'cf_trust',em:'🔢',t:'旧システムに日払い・経費を入力',s:trustS,state:trustOk?'done':'todo',act:'openTrustEntry()'});
   }else{
     var np=(gate&&gate.nippo)||null;
     if(np) S.push({id:'cf_nippo',em:'📋',t:'日報を確定する',
@@ -9598,7 +9609,7 @@ function renderCustVisits(v){
       +'<span style="width:74px;flex-shrink:0;font-weight:700">'+esc(fmtVisitDate(r.date))+'</span>'
       +'<span style="flex:1;color:var(--sub)">'+esc(r.in||'')+(r.out?'〜'+esc(r.out):'')+(r.table?'　'+esc(r.table):'')+(r.pax?'　'+r.pax+'名':'')+(r.tantou?'　担当 '+esc(r.tantou):'')+(fee?'　'+fee:'')+(sales?'　'+sales:'')+'</span>'
       +(r.dohan?'<span class="cbd" style="flex-shrink:0">🤝同伴'+(r.dohanCast?' '+esc(r.dohanCast):'')+'</span>':'')
-      +(r.source==='TRUST'?'<span class="cbd" style="flex-shrink:0">TRUST</span>':'')
+      +(r.source==='TRUST'?'<span class="cbd" style="flex-shrink:0">旧システム</span>':'')
       +'</div>';
   }).join('');
   var listId='cust-visit-list';
@@ -10484,19 +10495,37 @@ function ccNameKeys_(s){
 }
 /* 受取人の署名が派遣さんのものか（頭に"派遣"／"派"が付く＝現場の書き方） */
 function ccIsHaken_(s){ var n=String(s||'').replace(/[\s　]/g,'').trim(); return /^(派遣|派)./.test(n); }
+/* 🌸 受取人が体験の子か（頭に「体験」＋名前。空白のゆらぎは詰めて見る）。ボス確定 2026-09-18（指示箱#32）。
+   体験の子はその日に全額払って終わり（受領書の名目「体験報酬として」）＝後で給与から差し引く相手がいない
+   ＝名簿との照合は要らない。⚠️「体験」だけ（名前なし）は通さない＝誰に渡したか分からない。
+   ⛔サーバの hbIsTaiken_（コード.js）と同じ形にすること。tests/close/suites/03_taiken.js が同じ表で両方を突き合わせる。 */
+function ccIsTaiken_(s){ var n=String(s||'').replace(/[\s　]/g,'').trim(); return /^体験./.test(n); }
+/* 受取人が「体験」だけ（名前が無い）か。⚠️通す／止めるの判定には使わない（止めるのは ccPayeeKnown_）。
+   ここは**案内の出し分けだけ**＝「名簿にありません／登録してください」ではなく「名前も入れて」と言うため。
+   ⛔「体験」を名寄せに登録させない（登録すると名前の無い「体験」が通ってしまう）。 */
+function ccIsTaikenBare_(s){ return String(s||'').replace(/[\s　]/g,'').trim()==='体験'; }
+var CC_TAIKEN_NONAME_='名前も入れてください（例：体験 めい）';
 var _ccPayeeSet=null,_ccPayeeSrc=null;
-function ccPayeeSet_(){
-  var list=(CC_GATE&&CC_GATE.payees)||[];
+/* list を渡さなければ閉店チェックの名簿（CC_GATE.payees）。締めワークフローは CLOSE_FLOW.gate.payees を渡す。 */
+function ccPayeeSet_(list){
+  list=(arguments.length?list:(CC_GATE&&CC_GATE.payees))||[];
   if(_ccPayeeSrc===list&&_ccPayeeSet) return _ccPayeeSet;
   var set={}; list.forEach(function(p){ ccNameKeys_(p).forEach(function(k){ set[k]=1; }); });
   _ccPayeeSrc=list; _ccPayeeSet=set; return set;
 }
-/* 受取人が「ちゃんと決まっている」か。空欄と、名簿にも名寄せにもTRUSTにも無い名前はNG。
-   ⚠️名簿を取れていない時（CC_GATE=null）は空欄だけを見る＝通信不良で全部NGにしない。 */
-function ccPayeeKnown_(name){
+/* 受取人が「ちゃんと決まっている」か。空欄と、名簿にも名寄せにも（過去の給与データにも）無い名前はNG。
+   ⭐**受取人の判定の正本はこの1本**。送信ゲート①（ccGateConds_）・赤枠・⚠️「名簿にありません」・
+     「🆕この名前で登録」・締めワークフローの「💴 日払い伝票を整える」（cfSteps_）が全部これを呼ぶ。
+     ⛔ここ以外に受取人の照合を書かない（同じ条件を2箇所で書くと「送信できたのに帰れない」になる）。
+   🌸体験の子（ccIsTaiken_）は名簿に無くても通す（ボス確定 2026-09-18）。在籍・派遣は今までどおり名簿で見る。
+   ⚠️名簿を取れていない時（リストが無い・空）は空欄だけを見る＝通信不良で全部NGにしない。
+   list … 省略時は閉店チェックの名簿（CC_GATE.payees）。 */
+function ccPayeeKnown_(name, list){
   var keys=ccNameKeys_(name); if(!keys.length) return false;
-  if(!CC_GATE||!(CC_GATE.payees||[]).length) return true;
-  var set=ccPayeeSet_();
+  if(ccIsTaiken_(name)) return true;
+  var L=(arguments.length>=2)?list:(CC_GATE&&CC_GATE.payees);
+  if(!L||!L.length) return true;
+  var set=ccPayeeSet_(L);
   return keys.some(function(k){ return !!set[k]; });
 }
 /* 🆕 名簿にない受取人を、その場で名寄せ台帳に登録する。
@@ -10505,8 +10534,9 @@ function ccPayeeKnown_(name){
 function ccRegPayee(i){
   var s=(cashState.slips||[])[i]; if(!s)return;
   var nm=String(s.payee||'').trim(); if(!nm){ alert('先に受取人（署名の名前）を入れてください'); return; }
-  if(!confirm('「'+nm+'」を受取人として登録しますか？\n\n初めて来た派遣さんなど、名簿に無い人のための登録です。\n署名のとおりに入っているか、写真をもう一度確かめてください。\n（TRUSTのどの名前と同じ人かは、後でコンソールの💴日払い照合で結び付けます）'))return;
-  gsr('ccRegisterPayee',{userId:KIOSK_USER_ID,name:nm}).then(function(r){
+  if(ccIsTaikenBare_(nm)){ alert('「体験」だけでは登録できません。'+CC_TAIKEN_NONAME_); return; }   /* 登録すると名前の無い「体験」が通ってしまう */
+  if(!confirm('「'+nm+'」を受取人として登録しますか？\n\n初めて来た派遣さんなど、名簿に無い人のための登録です。\n署名のとおりに入っているか、写真をもう一度確かめてください。\n（登録した名前はスプレッドシートの「日払い名寄せ」に残ります）'))return;
+  gsr('ccRegisterPayee',{by:gunshiActor_(),name:nm}).then(function(r){
     if(r&&r.ok){
       if(CC_GATE){ CC_GATE.payees=(CC_GATE.payees||[]).concat([nm]); _ccPayeeSrc=null; _ccPayeeSet=null; }
       toast(r.already?'すでに登録されています':'✅ 登録しました');
@@ -10523,8 +10553,8 @@ function ccGateConds_(){
   var pd='';
   if(noName.length) pd+='受取人が空欄 '+noName.length+'件（'+noName.map(function(s){return '¥'+Number(s.amount).toLocaleString();}).join('・')+'）';
   if(noName.length&&unknown.length) pd+=' / ';
-  if(unknown.length) pd+='名簿に無い名前 '+unknown.map(function(s){return '「'+esc(s.payee)+'」';}).join('・');
-  if(pd) pd+=' — 誰の日払いか決まらないとTRUSTと突き合わせられません。伝票でない写真（金種メモ・画面のスクショ）は「含める」を外してください。';
+  if(unknown.length) pd+='名簿に無い名前 '+unknown.map(function(s){return '「'+esc(s.payee)+'」'+(ccIsTaikenBare_(s.payee)?'→'+CC_TAIKEN_NONAME_:'');}).join('・');
+  if(pd) pd+=' — 誰の日払いか決まらないと、給与の日払い控除が合いません。伝票でない写真（金種メモ・画面のスクショ）は「含める」を外してください。';
   C.push({key:'payee', hard:true, ok:(noName.length===0&&unknown.length===0),
     label:'日払い伝票の受取人がすべて決まっている', detail:pd});
   // ② 金額の食い違い
@@ -10543,8 +10573,8 @@ function ccGateConds_(){
        同じことを2箇所で判定すると必ず食い違って「送信は通ったのに帰れない」が起きる（2026-08-25に2回踏んだ）。 */
   if(!ccTrustOff_()){
     C.push({key:'trust', hard:true, ok:!!st.trustConfirmed, selfDeclare:true,
-      label:'日払い・経費を TRUST に入力した',
-      detail:'<b style="color:#ffcf7a">TRUSTに入れ忘れると給与計算で日払いが引かれず、二重払いになります。</b>伝票の一覧とTRUSTの数字が同じか目で確かめてからチェックしてください。' });
+      label:'日払い・経費を旧システムに入力した',
+      detail:'<b style="color:#ffcf7a">旧システムに入れ忘れると給与計算で日払いが引かれず、二重払いになります。</b>伝票の一覧と旧システムの数字が同じか目で確かめてからチェックしてください。' });
   }
   return C;
 }
@@ -10573,7 +10603,7 @@ function ccGateHtml(){
     if(c.detail) h+='<div style="font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.55">'+c.detail+'</div>';
     if(c.selfDeclare) h+='<label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer">'
       +'<input type="checkbox" '+(cashState&&cashState.trustConfirmed?'checked':'')+' style="width:20px;height:20px;accent-color:#3ea06a" onchange="cashState.trustConfirmed=this.checked;trustSelfSet_(this.checked);ccGateRefresh()">'
-      +'<span style="font-size:12.5px;color:var(--txt)">TRUSTに入力しました</span></label>';
+      +'<span style="font-size:12.5px;color:var(--txt)">旧システムに入力しました</span></label>';
     return h+'</div></div>';
   }).join('');
   var err=(!CC_GATE&&CC_GATE_ERR)?'<div style="font-size:11.5px;color:#e0a060;margin-top:8px">⚠️ '+esc(CC_GATE_ERR)+'</div>':'';
@@ -10636,8 +10666,9 @@ function ccRenderSlips(){
       +'<input type="text" class="finput" list="cc-payees" style="flex:1;margin:0'+(ccPayeeKnown_(s.payee)?'':';border-color:#e05050')+'" placeholder="受取人（署名の名前）" value="'+esc(s.payee||'')+'" oninput="cashState.slips['+i+'].payee=this.value;ccGateRefresh()" onchange="ccRenderSlips()">'
       +'<input type="number" class="finput" style="width:104px;margin:0" value="'+(s.amount||'')+'" inputmode="numeric" oninput="cashState.slips['+i+'].amount=Number(this.value)||0;cashState.slips['+i+'].amountOk=true;ccRefresh();ccGateRefresh()">'
       +(s.imageUrl&&s.imageUrl!=='#'?'<a href="'+esc(s.imageUrl)+'" target="_blank" class="dp-img">📷</a>':'<span class="dp-img" style="opacity:.45">📷</span>')+'</div>'
-      +((s.include!==false&&String(s.payee||'').trim()&&!ccPayeeKnown_(s.payee))?('<div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11.5px;color:#ffcf7a">'
-        +'<span style="flex:1">⚠️「'+esc(s.payee)+'」は名簿・名寄せ・TRUSTのどれにもありません。源氏名に直すか、署名のとおりなら登録してください。</span>'
+      +((s.include!==false&&ccIsTaikenBare_(s.payee))?('<div style="margin-top:6px;font-size:11.5px;color:#ffcf7a">⚠️ 「体験」だけでは誰か分かりません。'+CC_TAIKEN_NONAME_+'</div>'):'')
+      +((s.include!==false&&String(s.payee||'').trim()&&!ccPayeeKnown_(s.payee)&&!ccIsTaikenBare_(s.payee))?('<div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11.5px;color:#ffcf7a">'
+        +'<span style="flex:1">⚠️「'+esc(s.payee)+'」は名簿にも名寄せにもありません。源氏名に直すか、署名のとおりなら登録してください。</span>'
         +'<button class="bm-btn sm" onclick="ccRegPayee('+i+')">🆕 この名前で登録</button></div>'):'')
       +(s.mismatch&&s.include!==false?('<div style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:11.5px;color:'+(s.amountOk?'#8fe0ac':'#ffcf7a')+'">'
         +'<span style="flex:1">'+(s.amountOk?'✅ 確認しました':'⚠️ 読み取った金額 ¥'+Number(s.ocrAmount||0).toLocaleString()+' と、写真の現金 '+(s.cashSeen==null?'（不明）':'¥'+Number(s.cashSeen).toLocaleString())+' が合いません')+'</span>'
@@ -10684,7 +10715,7 @@ function submitCash(){
   /* 🗓 TRUST運用外の営業日に「未照合」を書くと、帳簿に嘘の宿題が積み上がる。
      ⚠️サーバ側(submitCashCheck)でも同じ判定で上書きする＝どちらか片方が古い版でも事故らない。 */
   var _gate=ccTrustOff_()
-    ? {trustStatus:'TRUST運用外',trustDiff:0,note:'TRUSTは使っていません（日報が正本）'}
+    ? {trustStatus:'TRUST運用外',trustDiff:0,note:'日報が正本（日次の照合なし）'}
     : {trustStatus:'未照合',trustDiff:0,note:'黒服の自己申告で送信（日次の自動照合なし）'};
   /* 🌙 締め作業の要約用。LINEに「何をやって帰ったか」を出すための材料（金額計算には使わない） */
   var _cf=(typeof CLOSE_FLOW!=='undefined'&&CLOSE_FLOW)?CLOSE_FLOW:null;
@@ -10891,7 +10922,7 @@ function stkMarkOrder(rowIdx,kind){
   if(!confirm('「'+nm+'」を「'+status+'」として記録しますか？'+extra))return;
   stockState.undelivered=(stockState.undelivered||[]).filter(function(x){return x.rowIdx!==rowIdx;});
   stkUndelRedraw_();
-  gsr('setOrderStatusManual',{userId:KIOSK_USER_ID,rowIdx:rowIdx,status:status}).then(function(r){
+  gsr('setOrderStatusManual',{by:gunshiActor_(),rowIdx:rowIdx,status:status}).then(function(r){
     if(r&&r.ok){ toast('記録しました：'+status+(r.supplyStopped?'（在庫'+r.supplyStopped+'件をメニュー落ちに）':'')); loadOrderAlerts(); }   /* ホームの📦も取り直す */
     else{ alert('エラー: '+((r&&r.error)||'不明')); openStockManager(); }
   }).catch(function(){ alert('記録に失敗'); openStockManager(); });
@@ -11046,7 +11077,7 @@ function stkOrder(rowIdx){
   var el=document.getElementById('stk-oq-'+rowIdx); var qty=el?el.value.trim():'';
   if(!qty){alert('数量を入力してください');return;}
   if(!confirm(stkSupplyWarn(it.name,it.floor)+it.name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
-  gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:it.name,floor:it.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok){alert('発注依頼を送信しました');if(el)el.value='';}else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
+  gsr('addOrderDraftItem',{by:gunshiActor_(),name:it.name,floor:it.floor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok){alert('発注依頼を送信しました');if(el)el.value='';}else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 /* 名刺: 名簿(SSOT)と行を同期する。新入りを追加し、名簿にいない子（退職者）の行は削除する。
    削除は不可逆（入力済みのレベルが消える）ので、何が起きるかを明記して確認を取る。 */
@@ -11075,7 +11106,7 @@ function stkFreeOrder(){
   if(!name){alert('品名を入力してください');return;} if(!qty){alert('数量を入力してください');return;}
   var foFloor=stockState.floor==='合算'?'2F':stockState.floor;
   if(!confirm(stkSupplyWarn(name,foFloor)+name+' ×'+qty+' を発注依頼します。よろしいですか？'))return;
-  gsr('addOrderDraftItem',{userId:KIOSK_USER_ID,name:name,floor:foFloor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
+  gsr('addOrderDraftItem',{by:gunshiActor_(),name:name,floor:foFloor,qty:qty,memo:''}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('発注依頼に失敗');});
 }
 function stkDelete(rowIdx){
   if(!confirm('この品目をマスタから削除しますか？'))return;
@@ -11088,7 +11119,7 @@ function stkDelivered(rowIdx){
   var prev=(stockState.undelivered||[]).slice();
   stockState.undelivered=prev.filter(function(i){return i.rowIdx!==rowIdx;});
   stkUndelRedraw_();
-  gsr('confirmOrderDelivered',{userId:KIOSK_USER_ID,rowIdx:rowIdx}).then(function(r){
+  gsr('confirmOrderDelivered',{by:gunshiActor_(),rowIdx:rowIdx}).then(function(r){
     if(r&&r.ok){ toast('✅ 納品を記録しました'); loadOrderAlerts(); }   /* ホームの📦も取り直す */
     else{ alert('記録できませんでした: '+((r&&r.error)||'不明')); stockState.undelivered=prev; stkUndelRedraw_(); }
   }).catch(function(){ alert('記録に失敗しました（通信エラー）'); stockState.undelivered=prev; stkUndelRedraw_(); });
@@ -11101,7 +11132,7 @@ function stkPurchaseForm(rowIdx){
 function stkSubmitPurchase(rowIdx){
   var qty=Number((document.getElementById('stk-pq-'+rowIdx)||{}).value); var pd=(document.getElementById('stk-pd-'+rowIdx)||{}).value;
   if(!qty||qty<=0){alert('数量を入力してください');return;} if(!pd){alert('購入日を入力してください');return;}
-  gsr('registerStockPurchase',{userId:KIOSK_USER_ID,rowIdx:rowIdx,qty:qty,purchaseDate:pd}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('購入登録に失敗');});
+  gsr('registerStockPurchase',{by:gunshiActor_(),rowIdx:rowIdx,qty:qty,purchaseDate:pd}).then(function(res){ if(res&&res.ok)openStockManager(); else alert('エラー: '+((res&&res.error)||'')); }).catch(function(){alert('購入登録に失敗');});
 }
 /* ============ 📦 棚卸し（実数登録→差異記録→在庫を実数に更新） ============ */
 var stkState=null;
@@ -11168,7 +11199,7 @@ function submitStocktakeUI(){
   var diffN=stkState.filter(function(it){return it.actual!==it.recorded;}).length;
   if(!confirm('棚卸しを確定します（対象 '+items.length+'品／差異 '+diffN+'品）。\n在庫が実数に更新され、黒服グループに通知されます。よろしいですか？'))return;
   var btn=document.querySelector('.stk-apply'); if(btn){btn.disabled=true;btn.textContent='送信中...';}
-  gsr('submitStocktake',{userId:KIOSK_USER_ID,items:items}).then(function(res){
+  gsr('submitStocktake',{by:gunshiActor_(),items:items}).then(function(res){
     if(res&&res.ok){ alert('📦 棚卸し完了：'+res.count+'件'+(res.diffCount?'（差異 '+res.diffCount+'件）':'（差異なし）')); closeSheet(); }
     else { alert('エラー: '+((res&&res.error)||'')); if(btn){btn.disabled=false;btn.textContent='✅ 棚卸しを確定（在庫を実数に更新）';} }
   }).catch(function(e){ alert('送信に失敗しました: '+((e&&e.message)||e)); if(btn){btn.disabled=false;btn.textContent='✅ 棚卸しを確定（在庫を実数に更新）';} });
