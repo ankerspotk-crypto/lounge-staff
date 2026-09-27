@@ -2266,15 +2266,21 @@ function npWorkLabel(m){ m=Number(m)||0; return m<=0?'なし':(Math.floor(m/60)+
 
 function npBackCalc(t,c){
   var g=function(k){ return Number((t||{})[k])||0; };
+  /* 🍹ドリンクのバック金額（品ごとに違う）。⛔サーバの nippoBackCalc_ と同じ式にすること */
+  var dBack=((t||{}).drinkBack==null)?null:Math.round(Number((t||{}).drinkBack)||0);
   var parts=[
     {k:'tantoSub',t:'担当小計',pct:c.tantoPct,base:g('tantoSales'),amt:Math.round(g('tantoSales')*c.tantoPct/100)},
     {k:'dohanSub',t:'同伴小計',pct:c.dohanPct,base:g('dohanSales'),amt:Math.round(g('dohanSales')*c.dohanPct/100)},
-    {k:'tanto', t:'担当',    cnt:g('tantoCnt'), unit:c.tantoYen, amt:g('tantoCnt')*c.tantoYen},
-    {k:'yoyaku',t:'予約',    cnt:g('yoyakuCnt'),unit:c.yoyakuYen,amt:g('yoyakuCnt')*c.yoyakuYen},
-    {k:'dohan', t:'同伴',    cnt:g('dohanCnt'), unit:c.dohanYen, amt:g('dohanCnt')*c.dohanYen},
-    {k:'drink', t:'ドリンク',cnt:g('drinkCnt'), unit:c.drinkYen, amt:g('drinkCnt')*c.drinkYen},
-    {k:'bottle',t:'ボトル',  cnt:g('bottleCnt'),unit:c.bottleYen,amt:g('bottleCnt')*c.bottleYen},
-    {k:'food',  t:'フード',  cnt:g('foodCnt'),  unit:c.foodYen,  amt:g('foodCnt')*c.foodYen}
+    {k:'tanto', t:'担当',    cnt:g('tantoCnt'), unit:c.tantoYen, amt:Math.round(g('tantoCnt')*c.tantoYen)},
+    {k:'yoyaku',t:'予約',    cnt:g('yoyakuCnt'),unit:c.yoyakuYen,amt:Math.round(g('yoyakuCnt')*c.yoyakuYen)},
+    {k:'dohan', t:'同伴',    cnt:g('dohanCnt'), unit:c.dohanYen, amt:Math.round(g('dohanCnt')*c.dohanYen)},
+    /* 🍹品ごとにバック額が違う（テキーラ¥1,000／それ以外¥200）＝⛔サーバの nippoBackCalc_ と同じ式 */
+    {k:'drink', t:'ドリンク',cnt:g('drinkCnt'),
+     unit:(dBack==null||dBack===Math.round(g('drinkCnt')*c.drinkYen))?c.drinkYen:null,
+     amt:(dBack==null)?Math.round(g('drinkCnt')*c.drinkYen):dBack},
+    {k:'bottle',t:'ボトル',  cnt:g('bottleCnt'),unit:c.bottleYen,amt:Math.round(g('bottleCnt')*c.bottleYen)},
+    /* 💳年会費＝旧「フード」枠（ボス確定 2026-09-18・1件¥5,000）。⛔サーバの nippoBackCalc_ と同じ並び・同じ式 */
+    {k:'nenkaihi',t:'年会費',cnt:g('nenkaihiCnt'),unit:c.nenkaihiYen,amt:Math.round(g('nenkaihiCnt')*c.nenkaihiYen)}
   ];
   var total=parts.reduce(function(s,p){return s+(Number(p.amt)||0);},0);
   return {total:total,parts:parts};
@@ -2675,7 +2681,11 @@ function npBackText(r){
   if(!live.length) return '<span style="color:var(--dim)">売上の材料なし</span>';
   return live.map(function(p){
     if(p.pct!=null) return esc(p.t)+' '+npYen(p.base)+'×'+p.pct+'% ＝ '+npYen(p.amt);
-    return esc(p.t)+' '+p.cnt+'回×'+npYen(p.unit)+' ＝ '+npYen(p.amt);
+    /* ⚠️折半（1杯を2人で分けた）行は 0.5回になる＝整数の時だけ整数で出す（"1回"が"1.0回"にならない） */
+    var cnt=(Math.round(p.cnt*100)/100);
+    /* 🍹単価が品ごとに違って1つに決まらない時は**単価を出さない**（嘘の単価を画面に出さない） */
+    if(p.unit==null) return esc(p.t)+' '+cnt+'回 ＝ '+npYen(p.amt);
+    return esc(p.t)+' '+cnt+'回×'+npYen(p.unit)+' ＝ '+npYen(p.amt);
   }).join('　/　')+'　自動計 <b>'+npYen(r.backAuto)+'</b>';
 }
 function npMore(i){ NP_MORE[i]=!NP_MORE[i]; npRender(); }
@@ -5380,7 +5390,7 @@ var BM_ITEMS=[
 ["マッカラン18年",185000,"ボトル系","ウィスキー"],
 ["ラフロイグ",25000,"ボトル系","ウィスキー"],
 ["スーパードライ小瓶",2000,"単品系","ビール"],
-["テキーラ1800",3000,"単品系","スピリッツ"],
+["テキーラ1800",3000,"単品系","スピリッツ",1000],
 ["年会費",10000,"単品系","年会費"],
 ["炭酸2本",1500,"単品系","割り物"],
 ["ウーロン茶P",2000,"単品系","ソフトドリンク"],
@@ -5464,6 +5474,7 @@ var BM_ITEMS=[
 ["プルシア",15000,"ボトル系","焼酎"],
 ["ムルソープルミエクリュクロデペリエール",170000,"ボトル系","ワイン"],
 ["ルイナールブランドブラン",50000,"ボトル系","シャンパン"],
+["ローランペリエ　ブランドブラン",45000,"ボトル系","シャンパン"],
 ["クエルボ魚10個",15000,"単品系","スピリッツ"],
 ["ルイナールロゼ",70000,"ボトル系","シャンパン"],
 ["ジェントルマンジャック",15000,"ボトル系","ウィスキー"],
@@ -6100,7 +6111,12 @@ function bmLoadAddShared(){
   BM_ADD_SRV='loading';
   gsr('getPosMenuAdds').then(function(r){
     /* ⚠️種類(kind)はサーバに持たせない＝`bmKindOf_` の1箇所で決める（2実装に割らない） */
-    BM_ADD_SRV=((r&&r.items)||[]).map(function(x){ return [String(x.name||''),Number(x.price)||0,bmKindOf_(x.genre||'その他'),String(x.genre||'その他')]; });
+    /* ⭐5列目＝その品のバック額（サーバのシート「POS_メニュー追加」の列）。
+       ⚠️空欄は**入れない**＝配列を4列のままにする（null を入れると「バック0の品」に見える）。 */
+    BM_ADD_SRV=((r&&r.items)||[]).map(function(x){
+      var row=[String(x.name||''),Number(x.price)||0,bmKindOf_(x.genre||'その他'),String(x.genre||'その他')];
+      if(x.back!=null&&x.back!=='') row.push(Number(x.back)||0);
+      return row; });
     BM_ADD_HIDE=((r&&r.hidden)||[]).map(function(x){ return {name:String(x.name||''),price:Number(x.price)||0}; });
     bmRenderIfIdle();
   }).catch(function(){ BM_ADD_SRV=[]; BM_ADD_SRV_ERR='共有メニューを取得できませんでした'; bmRenderIfIdle(); });
@@ -6151,7 +6167,9 @@ function bmAddMenu(){
   if(BM_GENRES.indexOf(gn)<0) gn='その他';
   var dup=bmItems_().filter(function(r){ return r[0]===nm; });
   if(dup.length&&!confirm('「'+nm+'」は既にメニューに在ります（'+bmYen(dup[0][1])+'）。\n同じ名前で単価違いとして足しますか？')) return;
+  var bk=((document.getElementById('bmNewBk')||{}).value||'').trim();
   var row=[nm,pr,bmKindOf_(gn),gn];
+  if(bk!=='') row.push(Math.max(0,Number(bk)||0));
   /* ⭐まずサーバへ（店で共有）。落ちたら端末に残して営業を続ける＝入力を捨てない。
      ⚠️`IS_GAS` を直に読まない＝この定数が無い環境（テスト・ローカル）で落ちる。
         通信できるかは **gsr が在るか** で判断する（ファイル内の他の判定と同じ流儀）。 */
@@ -6167,7 +6185,7 @@ function bmAddMenu(){
     if(typeof toast==='function') toast(msg);
   };
   if(srvOk){
-    gsr('posAddMenuItem',nm,pr,gn,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
+    gsr('posAddMenuItem',nm,pr,gn,(typeof LOGIN!=='undefined'?LOGIN:''),(bk===''?null:Math.max(0,Number(bk)||0))).then(function(r){
       if(!(r&&r.ok)) demote('⚠️共有できませんでした。この端末にだけ足しました');
     }).catch(function(){ demote('⚠️通信できず。この端末にだけ足しました'); });
   }else{
@@ -6175,6 +6193,7 @@ function bmAddMenu(){
   }
   var e1=document.getElementById('bmNewNm'); if(e1)e1.value='';
   var e2=document.getElementById('bmNewPr'); if(e2)e2.value='';
+  var e3=document.getElementById('bmNewBk'); if(e3)e3.value='';
   BM.kind=gn;                    /* 足したジャンルに切り替える＝足した品がその場で見える */
   bmRender();
   if(typeof toast==='function') toast('メニューに追加しました：'+nm+' '+bmYen(pr));
@@ -6214,7 +6233,7 @@ function bmAddedListHtml_(){
 function bmShareMenu(i){
   var a=bmAddLoad(), r=a[i]; if(!r) return;
   if(!IS_GAS){ toast('（ローカルでは共有できません）'); return; }
-  gsr('posAddMenuItem',r[0],r[1],r[3],(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(res){
+  gsr('posAddMenuItem',r[0],r[1],r[3],(typeof LOGIN!=='undefined'?LOGIN:''),(r[4]==null||r[4]==='')?null:(Number(r[4])||0)).then(function(res){
     if(!(res&&res.ok)){ toast('共有できませんでした：'+((res&&res.error)||'不明')); return; }
     if(BM_ADD_SRV&&BM_ADD_SRV!=='loading') BM_ADD_SRV.push(r);
     a.splice(i,1); bmAddSave_(a); bmRender();
@@ -7348,7 +7367,14 @@ function bmPickEach_(pk){
 function bmPickEachSet(v){ if(!BM.pick) return; BM.pick.each=v?1:0; bmRender(); }
 function bmPick(nm,pr){ if(bmLockedAlert_()) return;
   var it=bmItem_(nm);
-  BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:'') };
+  /* ⭐kind＝商品マスタの「ボトル系／単品系／つまみ系」。📋日報のドリンクバックと
+     ボトル本数の判定がこの1語だけを見る（給与側で品名から推測させない）。
+     ⭐back＝商品マスタ5列目の**この品のバック額**（ボス確定 2026-09-18＝テキーラ¥1,000／
+       書いていない品は日報の既定額¥200）。⛔品名や単価からの当て推量をさせないため、
+       **注文した時点のマスタの値**をそのまま伝票に刻む（後からマスタを直しても過去の日報は動かない）。
+     ⚠️マスタに無い臨時商品は空のまま＝日報は「分からない物は数えない」で処理する。 */
+  BM.pick={ name:nm, price:pr, qty:1, attrs:[], genre:(it?it[3]:''), kind:(it?it[2]:''),
+            back:(it&&it[4]!=null&&it[4]!=='')?(Number(it[4])||0):null };
   bmRender();
 }
 function bmPickCancel(){ BM.pick=null; bmRender(); }
@@ -7376,7 +7402,10 @@ function bmPickConfirm(){ if(bmLockedAlert_()) return;
     var key=at.join('・'), hit=-1;
     d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
     if(hit>=0) d.orders[hit].qty+=pk.qty;
-    else d.orders.push({name:pk.name,genre:pk.genre,price:pk.price,qty:pk.qty,attrs:at});
+    else d.orders.push({name:pk.name,genre:pk.genre,kind:pk.kind||'',
+                        /* 🍹この品のバック額（マスタに書いてある品だけ。無ければ日報の既定額） */
+                        back:(pk.back==null?null:pk.back),
+                        price:pk.price,qty:pk.qty,attrs:at});
   });
   BM.pick=null; bmSave(); bmRender();
 }
@@ -9273,6 +9302,8 @@ function mnRenderMenu_(el){
     +'<div class="bm-row" style="flex-wrap:wrap;gap:6px">'
     +'<input type="text" id="bmNewNm" placeholder="品名" class="bm-in" style="text-align:left;flex:1;min-width:140px">'
     +'<input type="number" id="bmNewPr" placeholder="単価" class="bm-in" style="width:96px">'
+    /* 🥃空欄なら日報の既定額（1杯¥200）。テキーラのように別額の品だけ入れる */
+    +'<input type="number" id="bmNewBk" placeholder="バック額" title="1杯あたりのバック額。空欄なら既定（¥200）" class="bm-in" style="width:96px">'
     +'<select id="bmNewGn" class="bm-in" style="width:130px">'
     +BM_GENRES.map(function(g){ return '<option value="'+esc(g)+'">'+esc(bmGenreLabel_(g))+'</option>'; }).join('')
     +'</select>'
