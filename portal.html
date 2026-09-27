@@ -1144,6 +1144,7 @@ function setPreviewMode(on) {
   adminViewAs = '';
   portalData = null;
   currentMonth = '';
+  billsMonth = '';   // ⛔前に見ていたキャストの月を持ち越さない（在籍期間が違う）
   var sel = document.getElementById('admin-viewas-sel');
   if (sel) sel.value = '';
   updateModeUI();
@@ -1155,6 +1156,7 @@ function setPreviewMode(on) {
 function adminChange(name) {
   adminViewAs = name;
   currentMonth = '';
+  billsMonth = '';   // ⛔前に見ていたキャストの月を持ち越さない（在籍期間が違う）
   portalData = null;
   if (name) staffRole = adminCastRoles[name] || 'キャスト';
   currentTab = 'home';
@@ -2149,6 +2151,12 @@ function homeToast(msg, ok){
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
 var statsSubTab = 'sales';
 var billsJumpDate = '';  // 顧客の来店記録タップ→その日の伝票へ飛ぶ時だけセット（renderBillsBodyで1回だけ消費）
+// 🧾 伝票タブが見ている月。⭐**`currentMonth` とは別に持つ。**
+//   ⛔`currentMonth` は給与の月一覧（`TRUST報酬` ＝6/7/8）に紐づいた共有変数で、
+//     給与・給率・売上明細の3タブが読む。伝票の月一覧は**別の集合**（9月以降を含む）なので、
+//     共有すると伝票で9月を選んだ瞬間に他タブの月が勝手に飛ぶ（`months.indexOf(currentMonth)<0`）。
+//   ⭐中身はサーバの答え（`d.month`）で毎回上書きする＝画面が月を数え直さない。
+var billsMonth = '';
 // 給与ロック画面での自動リフレッシュ済みフラグ（月キー単位・1度だけ）。公開直後の反映漏れ対策で
 // ロックを踏んだら一度だけ最新の公開状態を取り直す。ループ防止に月ごとに済みを記録する。
 var payLockAutoRefreshed = {};
@@ -2157,7 +2165,11 @@ var payLockAutoRefreshed = {};
 function jumpToBillDayFromVisit(date) {
   if (!date) return;
   billsJumpDate = date;
-  currentMonth = String(date).slice(0, 7);
+  // ⭐伝票タブ専用の月だけ動かす。⛔`currentMonth`（給与・給率・売上明細の共有）は触らない。
+  //   ⚠️ここが `currentMonth` を書いていたせいで、給与タブに戻ると月が飛んでいた。
+  //     しかも 2026-09-26 に塞いだ「未公開の給与が本人に漏れる穴」の**到達経路がここ**だった
+  //     （renderPay のコメント参照）。⛔あちらの関所 `months.indexOf(currentMonth) >= 0` は残す（二重）。
+  billsMonth = String(date).slice(0, 7);
   statsSubTab = 'bills';
   switchTab('stats');
 }
@@ -2223,7 +2235,9 @@ function renderBills() {
   setContent('<div class="loading">読み込み中...</div>');
   var url = GAS_URL + '?action=portal&tab=bills&userId=' + encodeURIComponent(userId);
   if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
-  if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
+  // ⭐送るのは伝票タブの月。⛔`currentMonth`（給与の月＝6/7/8）を送ると9月が永遠に選べない。
+  //   空で送ってよい＝サーバが「伝票がある月のいちばん新しい方」を選んで `month` で名乗る。
+  if (billsMonth) url += '&month=' + encodeURIComponent(billsMonth);
   gasFetch(url).then(function(r){ return r.json(); }).then(function(d){
     if (!d.ok) { setContent('<div style="color:#e88;padding:24px 16px;font-size:13px">エラー: ' + esc(d.error||'') + '</div>'); return; }
     renderBillsBody(d);
@@ -2251,9 +2265,25 @@ function renderBillsBody(d) {
     }
   }
   var days = d.days || [];
+  // ⭐サーバが「どの月を出したか」を名乗るので、画面はそれに合わせるだけ（月を数え直さない）。
+  //   ⚠️頼んだ月に伝票が無ければサーバが一覧の先頭を返す＝ここでズレを吸収する。
+  if (d.month) billsMonth = d.month;
+  var bMonths = d.months || [];
   var h = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
     + '<div style="font-size:13px;color:#e6cf95;font-weight:700">' + esc(d.cast||'') + ' さんの伝票</div>'
     + '<div style="font-size:11px;color:#b8a67c">' + esc(d.month||'') + '・前日まで</div></div>';
+  // 🗓 月チップ。⭐並びと中身は**サーバの `months`**（＝伝票シートにある月）。
+  //   ⛔`portalData.months`（給与の月）を使わない。1ヶ月しか無い人には出さない（📊給率と同じ作法）。
+  if (bMonths.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
+    bMonths.forEach(function(m) {
+      var act = m === d.month;
+      h += '<button onclick="switchBillsMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
+        + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + esc(m) + '</button>';
+    });
+    h += '</div>';
+  }
   h += '<div style="background:#241d10;border:1px solid #8a6a2e;border-radius:8px;padding:11px 13px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'
     + '<span style="font-size:12px;color:#b8a67c">今月の担当売上（前日まで）</span>'
     + '<span style="font-size:19px;font-weight:800;color:#e6cf95">' + yen(d.monthTotal||0) + '</span></div>';
@@ -2281,6 +2311,9 @@ function renderBillsBody(d) {
   });
   finishBills(h);
 }
+
+// 🗓 伝票タブの月を切り替える。⛔`currentMonth` は触らない（給与・給率・売上明細の月を飛ばさない）。
+function switchBillsMonth(m) { billsMonth = m; renderBills(); }
 
 function toggleBillDay(el){ var b = el.nextElementSibling; b.style.display = (b.style.display === 'none' ? 'block' : 'none'); }
 
