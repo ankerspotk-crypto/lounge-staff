@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-26a-test';
+var BUILD='2026-09-28a-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -7012,9 +7012,14 @@ function bmClose(){
   if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
       +(c.unpaid<0?('\nお釣り '+bmYen(-c.unpaid)):'')+'\n\nよろしいですか？')) return;
   var rec={ floor:b.floor||'', table:b.table||'', cust:b.cust||'', pax:(d.guests||[]).length,
-            /* ⚠️会計シートの「担当キャスト」＝**売上の帰属先**。③の表示そのままではない
-               ＝🏠店担当は予約を取った子へ振り替わる（bmSalesTantou_）。 */
-            tantou:bmSalesTantou_(d), uriban:d.uriban?1:0,
+            /* 🧾⭐**③で黒服が選んだ生の担当をそのまま送る**（🏠店担当も 店担当 のまま）。
+               ⛔**画面で振り替えない**（ボス確定 2026-09-28）。売上配分ルール＝
+                 「店担当なら予約キャストに／キャスト担当なら予約をとったキャストと折半」は
+                 **サーバの1箇所**（posTantouOnClose_ → billTantoByRsvRule_）が当てる。
+               ⭐理由＝`POS_会計` の担当キャスト欄は**伝票シートと給与が同じものを読む**ので、
+                 そこを1箇所で確定させないと伝票と給与が静かに割れる。
+               ⛔画面で計算すると正本が画面に移る＝端末ごとに版が違うので信用できない。 */
+            tantou:bmTantouList_(d).join('、'), uriban:d.uriban?1:0,
             setSum:c.setSum, tanto:c.tc*BM_FEE.tanto, yoyaku:c.yc*BM_FEE.yoyaku, dohan:c.dc*BM_FEE.dohan,
             ordSum:c.ordSum, welCount:(d.welcome||[]).reduce(function(a,w){return a+(w.qty||0);},0),
             discount:Number(d.discount)||0, surcharge:Number(d.surcharge)||0,
@@ -7038,6 +7043,12 @@ function bmClose(){
     .then(function(r){
       BM_CLOSING=false;
       if(!r||!r.ok){ bmCloseFailed_(key,(r&&r.error)||'不明'); return; }
+      /* 🧾⭐**担当が振り替わったときだけ1行知らせる**（ボス指示 2026-09-28）。
+         ⛔会計は止めない・確認も出さない＝客前で手を止めるのが最悪。⭐気づくのは会計の**後**で十分。
+         ⚠️黒服が「自分が入れたのと違う」と思わないための一言＝**誰に付いたかと理由**を出す。
+         ⛔サーバが言っていないときは何も出さない（画面で判定しない＝正本はサーバ1箇所）。 */
+      try{ if(r['配分ルール']) toast('担当は '+r['担当']+' になりました（予約をとったのは '
+        +r['予約をとったキャスト']+'／'+(r['配分ルール']==='house'?'🏠店担当は予約キャストに付けます':'🤝予約キャストと折半します')+'）'); }catch(e){}
       bmLoad();
       var dd=BM.draft[key]; if(!dd){ bmRender(); return; }
       dd.closed={ ts:r.ts, by:(typeof LOGIN!=='undefined'?LOGIN:''), total:c.total };
