@@ -97,12 +97,31 @@ function constLine(src, name) {
   const m = String(src).match(new RegExp('^var ' + name + ' = .*$', 'm'));
   return m ? m[0] : null;
 }
-const CONST_NAMES = ['STAFF_OKURI_HEADER', 'STAFF_OKURI_DEST_HEADER', 'STAFF_KOTSU_HEADERS'];
+/* ⭐2026-09-28 追記（tests/pending/apply-okuri-roster.js）で足された定数。
+   ⛔委譲先の関数はこれを使うので、注入しないと "…is not defined" で落ちて偽の赤になる。
+   ⚠️まだ当たっていないソースには無い＝**あるものだけ**足す（無いことを赤にしない）。 */
+const ROSTER_CONSTS = ['STAFF_OKURI_LOG_TAB_', 'STAFF_OKURI_LOG_HEAD_', 'STAFF_OKURI_DEST_MAX_',
+  'STAFF_OKURI_FARE_MAX_', 'STAFF_OKURI_LOG_SCAN_'].filter(n => constLine(CODE, n) != null);
+const CONST_NAMES = ['STAFF_OKURI_HEADER', 'STAFF_OKURI_DEST_HEADER', 'STAFF_KOTSU_HEADERS'].concat(ROSTER_CONSTS);
 const CONST_MISS = CONST_NAMES.filter(n => constLine(CODE, n) == null);
 const CONSTS = CONST_NAMES.map(n => constLine(CODE, n) || '').join('\n') + '\n';
 
+/* ⭐2026-09-28 追記（📒名簿の🚗送り代/🏠送り先を黒服が軍師から直す・tests/pending/apply-okuri-roster.js）
+   ----------------------------------------------------------------------------
+   あの改修で adminSetCastOkuri / adminSetCastOkuriDest / castOkuriDestMap_ の**中身**が
+   staffOkuriApply_ ほかに委譲された（書き込みの式を1本にするため）。
+   ⛔ここで委譲先の実物を一緒に読み込まないと、undefined を呼んで落ち、
+     **このスイート全体が偽の赤**になる（機能は何も壊れていないのに）。
+   ⚠️まだ当たっていないソース（repo の Code.gs）には存在しない＝**あるものだけ**足す。
+     ⛔「無いこと」を赤にしない＝あの改修の有無でこのスイートの意味が変わらないようにする。
+   ⚠️新しい仕様（空欄と0の区別・変更ログ）を検査するのは tests/okuriroster/run.js の仕事。
+     ここは「🏠送り先の常設メモが今までどおり動くか」だけを見る。 */
+const ROSTER_FNS = ['okuriFareNorm_', 'okuriDestNorm_', 'okuriFareLabel_', 'okuriDestLabel_', 'okuriLogText_',
+  'okuriRowSetting_', 'staffOkuriLogSheet_', 'staffOkuriLog_', 'staffOkuriApply_', 'castOkuriSettingMap_',
+  'staffOkuriLastByMap_'].filter(n => pluck(CODE, n) != null);
 /* 列を解決する側の実物一式（新設は ensureStaffExtraHeaders_ の中だけでやる作り） */
-const COL_FNS = ['staffExtraHeaders_', 'staffHeaderIdxMap_', 'ensureStaffExtraHeaders_', 'staffExtraCol_'];
+const COL_FNS = ['staffExtraHeaders_', 'staffHeaderIdxMap_', 'ensureStaffExtraHeaders_', 'staffExtraCol_',
+  'getStaffOkuriCol_', 'getStaffOkuriDestCol_'].concat(ROSTER_FNS);
 
 /* ── 偽の実行環境（GASの薄い偽物＋この機能が外から借りているものだけ） ───────── */
 function env(opts) {
@@ -110,7 +129,7 @@ function env(opts) {
   const gas = makeGas({ now: '2026-09-16T23:30:00+09:00' });
   const sb = {
     console: { error: () => {}, log: () => {} },
-    JSON, Math, String, Number, Array, Object, Date, RegExp, parseInt, parseFloat, isNaN,
+    JSON, Math, String, Number, Array, Object, Date, RegExp, parseInt, parseFloat, isNaN, isFinite,
     SpreadsheetApp: gas.SpreadsheetApp, PropertiesService: gas.PropertiesService,
     LockService: gas.LockService,
     Utilities: gas.Utilities, TZ: 'Asia/Tokyo',
@@ -203,7 +222,15 @@ function watchWrites(sh) {
 
 /* ────────────────────────────────────────────────────────────── */
 sec('⓪ 当てるスクリプトが全部の hunk に当たる', () => {
-  t.eq(APPLY_FAIL, [], '当てられない hunk が無い（あれば名前が出る）');
+  /* ⛔B-0c だけは「後の改修に取って代わられた」ので当たらなくなる（2026-09-28）。
+     apply-okuri-roster が adminSetCastOkuri を staffOkuriApply_ への委譲に書き換え、
+     '名簿に「送り代負担」列を作れませんでした' という**文字列**が関数から消えたため。
+     ⭐守りたい振る舞い（列が作れなければ書かない）は下の⑥で**実際に走らせて**見ている＝
+       ここを許しても検査は緩まない。⚠️許すのはこの1本だけ・委譲先が実在するときだけ。 */
+  const SUPERSEDED = ROSTER_FNS.indexOf('staffOkuriApply_') >= 0
+    ? ['コード.js: B-0c adminSetCastOkuri：列が作れなければ書かない（置換元が 0 件）',
+       'Code.gs: B-0c adminSetCastOkuri：列が作れなければ書かない（置換元が 0 件）'] : [];
+  t.eq(APPLY_FAIL.filter(x => SUPERSEDED.indexOf(x) < 0), [], '当てられない hunk が無い（あれば名前が出る）');
   const r = need(CODE, ['getStaffOkuriDestCol_', 'adminSetCastOkuriDest', 'castOkuriDestMap_']);
   t.eq(r.miss, [], 'Code側に3つの関数が揃っている');
   t.eq(need(CODE, COL_FNS).miss, [], '⭐列の新設をまとめる関所（ensureStaffExtraHeaders_ 一式）が揃っている');

@@ -1619,7 +1619,7 @@ var KIOSK_KEY='';        /* URL ?key= か localStorage から設定 */
 var IS_GAS = true;       /* 常に本番バックエンドと通信 */
 var KIOSK_USER_ID='';    /* bootstrap で設定 */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-28a-test';
+var BUILD='2026-09-28c-test';
 /* ============================================================================
    🖨 印刷モード（ボス指示 2026-08-28）＝**テストでは「刷ったことにして」先へ進める**
    ----------------------------------------------------------------------------
@@ -12079,7 +12079,9 @@ function openOkuriManager(){
   gsr('kioskGetOkuriBoard').then(function(r){
     var pf=okuriState?okuriState.filter:'all';
     /* destDef＝名簿の「送り先」常設メモ（サーバで名寄せ済み）。行き先欄の**初期値**にだけ使う */
-    okuriState={list:(r&&r.list)||[],casts:(r&&r.casts)||[],mode:(r&&r.mode)||'driver',fare:(r&&r.fare)||{yen:0,note:''},destDef:(r&&r.destDef)||{},edit:null,filter:pf,binSel:{}};
+    /* okuriDef＝名簿の常設設定（🚗送り代／🏠送り先＋最後に直した人）。⛔fare は null（未設定）と 0（無料）が別物。
+       ⚠️古いサーバ（この機能の前）からの応答では空＝画面は「未設定」と出るだけで落ちない。 */
+    okuriState={list:(r&&r.list)||[],casts:(r&&r.casts)||[],mode:(r&&r.mode)||'driver',fare:(r&&r.fare)||{yen:0,note:''},destDef:(r&&r.destDef)||{},okuriDef:(r&&r.okuriDef)||{},edit:null,roster:null,filter:pf,binSel:{}};
     renderOkuri();
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -12112,6 +12114,9 @@ function okCard(name){
   var st=okuriState, ents=okEntry(name), on=ents.length>0, editing=st.edit===name;
   var stLine=on?ents.map(function(o){return '🚗 '+esc(o.dest||'（行き先未入力）')+' ('+(o.bin||1)+'便)';}).join('<br>'):'⚪ 自便（送りなし）';
   var h='<div class="ok-card'+(on?' on':'')+'"><div class="ok-card-nm">'+esc(name)+'</div><div class="ok-card-st '+(on?'on':'off')+'">'+stLine+'</div>';
+  h+=okRosterLine_(name);   /* 📒 名簿の常設設定（今の値＋最後に直した人）。⛔今夜の送りとは別物 */
+  /* ⛔名簿を直している間は今夜の欄を出さない＝2つの「保存」が並んで誤タップするのを防ぐ */
+  if(st.roster===name) return h+okRosterForm_(name)+'</div>';
   if(editing){
     var cur=ents[0]||{dest:'',bin:1}; var bin=st.binSel[name]||cur.bin||1;
     /* 🏠 いつもの送り先（名簿の常設メモ）。⛔**今日すでに入っている行き先が最優先**＝上書きしない。
@@ -12140,9 +12145,86 @@ function okMode(mode){
   gsr('kioskSetGlobalOkuriMode',mode).then(function(r){ if(r&&r.mode){okuriState.mode=r.mode;renderOkuri();} }).catch(function(){alert('モード切替に失敗');});
 }
 function okFilter(f){ okuriState.filter=f; renderOkuri(); }
-function okOpenEdit(name){ okuriState.edit=name; renderOkuriGrid(); }
+function okOpenEdit(name){ okuriState.edit=name; okuriState.roster=null; renderOkuriGrid(); }  /* ⛔今夜の欄と名簿の欄を同時に開かない */
 function okBin(name,bn){ okuriState.binSel[name]=bn; renderOkuriGrid(); }
 function okQuickDest(name,d){ var el=document.getElementById('ok-dest-'+cssId(name)); if(el)el.value=d; }
+/* ══════════════════════════════════════════════════════════════════════
+   📒 名簿の常設設定（🚗送り代＝片道いくら／🏠送り先）を黒服がここから直す
+   （ボス依頼 2026-09-28「名簿の送り代の入力、黒服に軍師からさせることもできるかな。都度じゃなく恒久的に」）
+   ⛔**今夜の送り**とは別物＝ここで直すのは名簿＝**次の夜からずっと効く。**
+   ⛔空欄（未設定）と ¥0（無料）は別物（ボス確定 2026-09-27＝無料の子がいる）＝見た目も別にする。
+   ⚠️送り代は**給与から引かれる金額**＝保存の前に「何が何に変わるか」を必ず1枚見せる。
+   ⚠️「誰が直したか」はサーバが 送り代変更ログ に残す。⛔ただし名前はなりすませる＝記録の目安まで
+     （[[reference_gunshi_actor_record]]）＝手当・評価・責任追及には使わない。
+   ══════════════════════════════════════════════════════════════════════ */
+function okRoster_(name){ var d=(okuriState&&okuriState.okuriDef)||{}; return d[name]||{fare:null,dest:'',by:'',at:''}; }
+/* ⛔「空欄か 0 か」の判定の正本は**サーバの okuriFareNorm_**。ここは見せ方だけ。
+   ⚠️サーバの okuriFareLabel_ と**同じ答え**になること（tests/okuriroster が4通りで縛っている）。 */
+function okFareLabel_(v){
+  if(v===null||v===undefined||v==='') return '未設定';
+  var n=Number(v); if(!isFinite(n)) return '未設定';
+  return n===0?'¥0（無料）':('¥'+String(n).replace(/\B(?=(\d{3})+(?!\d))/g,','));
+}
+function okDestLabel_(v){ return String(v==null?'':v)||'未設定'; }
+/* カードに常に出す1行＝今の名簿の値と、最後に直した人（「自分が入れたのと違う」を後から追えるように） */
+function okRosterLine_(name){
+  var rs=okRoster_(name);
+  var h='<div class="ok-roster" style="margin:4px 0 0;padding:4px 6px;border:1px dashed var(--line,#444);border-radius:6px;font-size:11px;color:var(--dim)">'
+       +'📒 名簿 🚗<b style="color:var(--fg,#eee)">'+esc(okFareLabel_(rs.fare))+'</b>'
+       +' / 🏠<b style="color:var(--fg,#eee)">'+esc(okDestLabel_(rs.dest))+'</b>';
+  if(rs.by) h+='<br>📝 最後に直した人: '+esc(rs.by)+(rs.at?'（'+esc(rs.at)+'）':'')+(rs.via?' ['+esc(rs.via)+']':'');
+  /* ⛔onclick の中の名前は jsStr だけでは足りない＝ダブルクォートや < が**属性を壊す**（源氏名に入り得る）。
+     ⭐JSの文字列として安全にしてから（jsStr）HTML属性として安全にする（esc）＝この順番でなければ意味が無い。
+     ⚠️隣の okOpenEdit / okQuickDest は jsStr だけの古い形＝**この案件では触らない**（別案件で直す）。 */
+  h+='<div style="margin-top:4px"><button class="ok-btn edit" onclick="okOpenRoster(\''+esc(jsStr(name))+'\')">📒 名簿を直す</button></div></div>';
+  return h;
+}
+function okOpenRoster(name){ okuriState.roster=name; okuriState.edit=null; renderOkuriGrid(); }
+function okCloseRoster(){ okuriState.roster=null; renderOkuriGrid(); }
+function okRFareSet(name,v){ var el=document.getElementById('ok-rfare-'+cssId(name)); if(el)el.value=v; }
+function okRosterForm_(name){
+  var rs=okRoster_(name), id=cssId(name);
+  var curFare=(rs.fare===null||rs.fare===undefined)?'':String(rs.fare);
+  var h='<div class="ok-rform" style="margin-top:6px;padding:8px;border:2px solid var(--accent,#c9a34a);border-radius:8px">'
+       +'<div style="font-weight:800;font-size:13px">📒 '+esc(name)+' の名簿を直します</div>'
+       +'<div style="font-size:11px;color:var(--dim);margin:2px 0 6px">⚠️<b>次の夜からずっと</b>効きます。⛔今夜の送りはこれでは変わりません（上の「🚗 送りを追加」で入れてください）</div>';
+  h+='<div style="font-size:11px;font-weight:700;margin-top:4px">🚗 送り代（片道いくら）　いま: '+esc(okFareLabel_(rs.fare))+'</div>';
+  h+='<input id="ok-rfare-'+id+'" class="finput" inputmode="numeric" placeholder="空欄＝未設定" value="'+esc(curFare)+'">';
+  h+='<div class="ok-dest-quick"><button class="ok-dq" onclick="okRFareSet(\''+esc(jsStr(name))+'\',\'\')">未設定にする</button>'
+    +'<button class="ok-dq" onclick="okRFareSet(\''+esc(jsStr(name))+'\',\'0\')">¥0（無料）</button></div>';
+  h+='<div style="font-size:11px;color:var(--dim);margin:2px 0 6px">⛔<b>空欄＝未設定</b>（日報に自動では入りません）と <b>¥0＝無料</b>は<b>別物</b>です。無料と決まっている子は 0 を入れてください。</div>';
+  h+='<div style="font-size:11px;font-weight:700;margin-top:4px">🏠 送り先（いつもの行き先）　いま: '+esc(okDestLabel_(rs.dest))+'</div>';
+  h+='<input id="ok-rdest-'+id+'" class="finput" maxlength="60" placeholder="空欄＝未設定" value="'+esc(rs.dest||'')+'">';
+  h+='<div class="ok-form-btns"><button class="ok-btn add" onclick="okRosterSave(\''+esc(jsStr(name))+'\')">📒 名簿に保存</button>'
+    +'<button class="ok-btn edit" onclick="okCloseRoster()">閉じる</button></div></div>';
+  return h;
+}
+function okRosterSave(name){
+  var rs=okRoster_(name), id=cssId(name);
+  var fe=document.getElementById('ok-rfare-'+id), de=document.getElementById('ok-rdest-'+id);
+  if(!fe||!de){ alert('入力欄が見つかりません。閉じてもう一度開いてください'); return; }
+  var fRaw=String(fe.value||'').replace(/[¥￥,、\s　]/g,'').trim(), dRaw=String(de.value||'').trim();
+  if(fRaw!==''&&!/^[0-9]+$/.test(fRaw)){ alert('送り代は数字で入れてください。\n空欄＝未設定 / 0＝無料 です。'); return; }
+  var curFare=(rs.fare===null||rs.fare===undefined)?'':String(rs.fare);
+  /* ⛔テスト環境の軍師（gunshi-test.html）には gunshiActor_ がまだ無い＝素で呼ぶと ReferenceError で
+     「名簿に保存」が必ず死ぬ（qa指摘 2026-09-28）。⚠️本番と機能を1文字も違わせないために
+     **両方のファイルで同じこの式**を使う＝無ければ LOGIN から取り、それも無ければ空で送る
+     （空ならサーバが「登録されていません」と読める文で断る＝黙って書かれることはない）。 */
+  var by=(typeof gunshiActor_==='function')?gunshiActor_():((typeof LOGIN!=='undefined'&&LOGIN)?String(LOGIN):'');
+  var p={by:by,name:name,was:{}}, lines=[];
+  if(fRaw!==curFare){ p.fare=fRaw; p.was.fare=curFare;
+    lines.push('🚗 送り代: '+okFareLabel_(rs.fare)+' → '+okFareLabel_(fRaw===''?null:Number(fRaw))); }
+  if(dRaw!==String(rs.dest||'')){ p.dest=dRaw; p.was.dest=String(rs.dest||'');
+    lines.push('🏠 送り先: '+okDestLabel_(rs.dest)+' → '+okDestLabel_(dRaw)); }
+  if(!lines.length){ alert('変わっていません。'); return; }
+  /* ⛔誤タップで名簿が変わらないように、何が何に変わるかを必ず1枚見せる */
+  if(!confirm('📒 '+name+' さんの名簿を書き換えます。\n\n'+lines.join('\n')
+    +'\n\n⚠️送り代は給与から引かれる金額です。\n⚠️次の夜からずっと効きます（今夜の送りは変わりません）。\n\nよろしいですか？')) return;
+  gsr('kioskSetCastOkuri',p).then(function(r){
+    if(r&&r.ok){ toast('📒 '+name+' の名簿を直しました'); okuriState.roster=null; openOkuriManager(); }
+    else alert('保存できませんでした:\n'+((r&&r.error)||''));
+  }).catch(function(){ alert('通信に失敗しました。\nもう一度開いて、いまの値を確かめてください。'); });
+}
 function okSave(name){
   var el=document.getElementById('ok-dest-'+cssId(name)); var dest=el?el.value.trim():'';
   if(!dest){alert('行き先を入力してください');return;}
