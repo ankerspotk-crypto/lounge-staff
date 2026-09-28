@@ -1251,8 +1251,12 @@ function homeMenu() {
   var castKeys = ['board','awards','kassen','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
-  // ゴースト在籍（今日以降の出勤ゼロ）は 予約管理／席リクエスト を出さない。理由は画面に一切書かない（休職中と同じ流儀）
-  if (ghost) castKeys = castKeys.filter(function(k){ return GHOST_DENY_KEYS.indexOf(k) < 0; });
+  /* 🗓 ゴースト在籍（今日以降の出勤ゼロ）＝⭐**ボタンは消さない。押したら理由を出す**（ボス確定 2026-09-28）。
+     ⛔旧＝`castKeys.filter(...)` でボタンごと消し、理由も一切出さなかった（休職中と同じ流儀）。
+       ⚠️実害＝ゆきから「ポータルで予約入力ができなくなってる」と申告が来た。本人には**消えた理由が分からず**、
+       こちらも原因に辿り着くまでに時間がかかった（サーバは正しく ghost を出していた）。
+     ⭐ボスの言葉＝「予約管理を消すんじゃなくて、押したらそういう対象の子にはメッセージ出るようにするとか」。
+     ⛔休職中（onLeave）の方は**従来どおり消す**＝そちらは「見せない」こと自体が目的。ここだけを変える。 */
   // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
   //   ⚠️キャスト表示中は adminPriv()=false ＝ プレビュー対象が黒服のときだけ出る（本人と同じ挙動）
   if (!onLeave && (adminPriv() || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === '黒服')) castKeys.push('skill');
@@ -1284,9 +1288,31 @@ function updateAdminBar(castList) {
 // 休職中が触れる画面か（ボタンを消すだけでなく、直接呼ばれても通さない）
 function leaveAllows_(tab) { return !onLeave || tab === 'home' || LEAVE_KEYS.indexOf(tab) >= 0; }
 
+/* 🗓 出勤予定が無い方への案内。⭐**なぜ見られないか**と⭐**どうすれば見られるか**を1本道で書く
+   （[[feedback_beginner_guide_no_branching]]＝案内に条件分岐を置かない）。
+   ⛔「権限がありません」と書かない＝本人は何も悪くない。⭐シフトを出せば自動で戻る、とだけ伝える。 */
+function renderGhostNotice(tab) {
+  var s = SECTIONS[tab] || { i:'🗓', t:'予約管理' };
+  document.getElementById('content').innerHTML =
+    '<div style="background:#16130d;border:1px solid #33291a;border-radius:14px;padding:22px 18px;margin-top:10px;text-align:center">'
+    + '<div style="font-size:34px;line-height:1;margin-bottom:12px">' + s.i + '</div>'
+    + '<div style="font-size:15px;font-weight:700;color:#f2ead9;margin-bottom:12px">'
+    +   esc(s.t) + 'は、これから先の出勤予定が入っている方がご利用いただけます</div>'
+    + '<div style="font-size:13px;color:#cbb98a;line-height:1.9">'
+    +   'いまのところ、今日より先の出勤予定が入っていません。<br>'
+    +   'シフトを提出して確定すると、自動でご利用いただけるようになります。</div>'
+    + '<button onclick="switchTab(\'shift\')" style="margin-top:18px;padding:12px 22px;background:linear-gradient(135deg,#c9a459,#8d6f2e);border:none;border-radius:10px;color:#1a1409;font-size:14px;font-weight:800;cursor:pointer">シフトを提出する</button>'
+    + '<div style="font-size:12px;color:#8d8168;margin-top:14px">分からないときは黒服にお声がけください。</div>'
+    + '</div>';
+}
+
 function switchTab(tab) {
   contentTargetId = 'content';
-  if (!leaveAllows_(tab) || !ghostAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  /* 🗓 出勤予定が無い方が 予約管理／席リクエスト を押したとき＝⭐**理由を出して止める**（ボス確定 2026-09-28）。
+     ⛔ホームへ弾き返すな＝何も起きないように見えて「壊れている」と受け取られる（ゆきの申告がこの形）。
+     ⚠️サーバはこの状態のとき予約も空席も**送ってきていない**＝中身を描こうとしても空になる。だから必ずここで止める。 */
+  if (!ghostAllows_(tab)) { switchTabActive(tab); renderGhostNotice(tab); return; }
   switchTabActive(tab);
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'board') { loadBoard(); return; }
