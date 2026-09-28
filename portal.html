@@ -713,7 +713,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-09-28a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-09-28b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -1007,7 +1007,12 @@ function applyHomePayload_(d) {
   if (onLeave && currentTab !== 'home' && LEAVE_KEYS.indexOf(currentTab) < 0) currentTab = 'home';
   ghost = !!d.ghost;     // 今日以降の出勤ゼロ＝予約管理／席リクエスト／今日の予約／空席を出さない
   stripGhostData_(d);    // 古いキャッシュ由来の予約/空席が画面に残らないよう毎回落とす
-  if (ghost && GHOST_DENY_KEYS.indexOf(currentTab) >= 0) currentTab = 'home';
+  /* ⛔2026-09-28＝ここで `currentTab='home'` に書き戻していた。
+     ⚠️実害＝案内（renderGhostNotice）を出した数秒後に **遅れて届いたホームの応答** がタブを home に戻し、
+       画面をホームで塗り潰す＝本人には「押しても何も起きない」に見える（ゆきの申告そのもの）。
+     ⭐ポータルは homelite と homerest を並列で取り、**届くたびにここを通る**（GASの床 1.9秒×2）。
+       キャッシュから即描画された画面で本人が押すのは、ほぼ確実にこの数秒の間。
+     ⭐判定は ghostAllows_ の1本・描画は renderTab の1本に揃えた＝ここでは**タブを動かさない**。 */
   if (isAdmin) showAdminTab();
   if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
   portalData = d;
@@ -1346,7 +1351,12 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
-  if (!leaveAllows_(tab) || !ghostAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  /* 🗓 出勤予定が無い方の 予約管理／席リクエスト＝⛔**ホームへ弾き返さず、理由を出す**（switchTab と同じ形）。
+     ⛔ここを switchTab と違う形にしていたのが 2026-09-28 の取りこぼし＝
+       押した瞬間は案内が出るのに、遅れて届いたホームの応答がここを通って**案内をホームで塗り潰していた**。
+     ⚠️**片方だけ直すと直らない。**判定は ghostAllows_ の1本・描画は renderGhostNotice の1本。 */
+  if (!ghostAllows_(tab)) { switchTabActive(tab); renderGhostNotice(tab); return; }
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'awards') { loadAwards(); return; }
