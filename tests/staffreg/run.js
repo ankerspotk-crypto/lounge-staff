@@ -1328,7 +1328,11 @@ t.section('⑧ 軍師の日報画面：赤くする・保存を止める・理�
       prompt: () => '時給は来週決まる', confirm: () => true
     };
     vm.createContext(sbN);
-    vm.runInContext(ex.pluckFn(VPATH.admin, ['esc', 'res', 'npaYen', 'npaIn', 'npaSet', 'npaDraw', 'npaSave']) + '\nvar NPA=null,NPA_DATE="",NPA_DIRTY=false;\nfunction npaLoad(){ }', sbN, { filename: 'Admin(日報)' });
+    /* ⚠️`npaBackTip`＝2026-09-18 に日報の表へ足された「バックの内訳のツールチップ」。
+       ⛔借り忘れると `npaDraw` が ReferenceError で落ち、**このスイートが丸ごと中断する**。
+       ⭐2026-09-28 に実際に踏んだ（同型を tests/close/suites/03_taiken.js でも `gunshiActor_` で踏んでいる）。
+       ⭐**実物から借りる**＝ここで中身を写経しない（写経すると画面と検査で別物になる）。 */
+    vm.runInContext(ex.pluckFn(VPATH.admin, ['esc', 'res', 'npaYen', 'npaIn', 'npaSet', 'npaBackTip', 'npaDraw', 'npaSave']) + '\nvar NPA=null,NPA_DATE="",NPA_DIRTY=false;\nfunction npaLoad(){ }', sbN, { filename: 'Admin(日報)' });
     vm.runInContext('NPA={date:"2026-08-27",locked:false,isTest:true,sheet:"日報明細_TEST",rows:[{name:"みお",kubun:"キャスト",start:"20:30",end:"23:30",wage:0,workText:"3時間0分"}],memo:"",cashIn:[],cashOut:[],wageMissing:["みお"]};', sbN);
     sbN.npaDraw();
     const last = setBodyLog[setBodyLog.length - 1] || '';
