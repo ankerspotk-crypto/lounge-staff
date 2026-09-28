@@ -713,7 +713,11 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-09-26a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var PORTAL_BUILD = '2026-09-28a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+   ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
+     ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
+     （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
+     ⚠️同日、`tests/actor` が版バッジを改修の有無の材料にしていて、BUILDを1つ進めただけで黙って赤くなった。 */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 
