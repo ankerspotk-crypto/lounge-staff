@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-28c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-30a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -4365,9 +4365,24 @@ function occupantsHtml(s){
    ⚠️席カード自体のonclick(onSeatClick)を巻き込まないようstopPropagationする。 */
 function seatBillBtn_(o){
   var rid=o&&o.rowIdx; if(!rid) return '';
-  var p=bmPeek_(rid);
-  return '<button class="bill-btn'+(p.total?' on':'')+'" onclick="event.stopPropagation();openBillFor('+rid+')">'
-    +(p.closed?'✅':'🧾')+' 伝票'+(p.total?' <b>'+bmYen(p.total)+'</b>':'')+'</button>';
+  var p=bmPeek_(rid), sp=bmPeekSplits_(rid);
+  /* ⛔鍵は文字列で渡す（✂分けた伝票 "296_2" は引用符なしだと数値 2962 になる）。①も同じ書き方に揃える */
+  var h='<button class="bill-btn'+(p.total?' on':'')+'" onclick="event.stopPropagation();openBillFor(\''+jsStr(String(rid))+'\')">'
+    +(p.closed?'✅':'🧾')+' 伝票'+(sp.length?'①':'')+(p.total?' <b>'+bmYen(p.total)+'</b>':'')+'</button>';
+  /* ✂分けた伝票ごとにボタンを出す（組ごと→分けた伝票ごと） */
+  sp.forEach(function(k){
+    var q=bmPeek_(k);
+    h+='<button class="bill-btn'+(q.total?' on':'')+'" onclick="event.stopPropagation();openBillFor(\''+jsStr(k)+'\')">'
+      +(q.closed?'✅':'')+bmSplitMark_(k)+(q.total?' <b>'+bmYen(q.total)+'</b>':'')+'</button>';
+  });
+  return h;
+}
+/* ✂その組から分けた伝票の鍵（②③…）。⚠️BM.draftを触らない＝保存済みの下書きを覗くだけ（bmPeek_ と同じ流儀） */
+function bmPeekSplits_(rowIdx){
+  try{
+    var raw=localStorage.getItem(bmStoreKey()); if(!raw) return [];
+    return bmSplitFamily_(rowIdx,JSON.parse(raw)||{}).slice(1);
+  }catch(e){ return []; }
 }
 /* 保存済みの下書きから合計と会計済みかだけ覗く。⚠️BM.draftを触らない＝ホール描画で伝票の状態を変えない */
 function bmPeek_(rowIdx){
@@ -5666,9 +5681,25 @@ function bmPushNow(){
            別端末で会計された伝票を自分だけ未会計だと信じ続ける。理由を出して状態を取り直す。 */
         if(r&&r.ok===false){
           var msg=String(r.error||'この伝票を保存できませんでした');
+          /* ✂別の端末が同じ番号の分けた伝票を先に作っていた＝自分の伝票を次の番号へ付け替えて送り直す。
+             ⚠️付け替えてから下の取り直しで**相手の伝票を元の番号に**取り込む（どちらも消さない）。 */
+          if(r.splitTaken){
+            var nk=bmSplitRekey_(k);
+            if(nk) msg='別の端末が同じ番号（'+bmSplitMark_(k)+'）で伝票を作っていました。この端末の伝票を'+bmSplitMark_(nk)+'に付け替えました';
+          }
+          /* ✂別の端末で「①に戻して消す」された分けた伝票を、この端末が送り直した＝サーバが断った（蘇らせない）。
+             ⭐下の取り直し(bmPull)が、この端末の②も消す（中身は①に戻っている）。
+             ⚠️この端末で②に打った最後の変更は①に入っていない＝①を確かめてもらう。 */
+          var lsnap=(r.splitGone&&BM.draft[k])?JSON.parse(JSON.stringify(BM.draft[k])):null;   // ✂消える前の②の写し（QA-J）
+          if(r.splitGone) msg=bmSplitLostMsg_(k,lsnap);
+          /* ⚠️帯（BM_SYNC_ERR）は次の保存・取り込みが通ると消える＝見落とさないようトーストでも出す */
+          if(r.splitTaken&&typeof toast==='function') toast('✂ '+msg);
           var fk={}; fk[String(k)]=1;
           var p=bmPull(fk);                          // 会計済みなら他端末の結果を取り込んで画面を正す
-          var show=function(){ BM_SYNC_ERR=msg; bmRenderIfIdle(); };
+          var show=function(){
+            if(r.splitGone){ msg=bmSplitLostMsg_(k,lsnap); if(typeof toast==='function') toast('✂ '+msg); }   // 取り直した①で「入っていない注文」を数え直す
+            BM_SYNC_ERR=msg; bmRenderIfIdle();
+          };
           /* ⭐サーバーが「会計済み」と言ったのに下書きに closed が無い＝会計の応答ロスト。
              取り直した下書きにも closed が無いことがある（会計した端末の保存も届いていない）
              ＝台帳を1回見て画面を正す。 */
@@ -5676,6 +5707,7 @@ function bmPushNow(){
           return;
         }
         if(r&&r.mode){ BM_MODE=r.mode; } if(BM_SYNC_ERR){ BM_SYNC_ERR=''; bmRenderIfIdle(); }
+        bmSplitShared_(k);                           // ✂サーバに載った分けた伝票に印（消されたら他端末でも消すため）
       })
       .catch(function(e){
         /* ⚠️2026-08-28追加＝失敗したキーを**捨てていた**。次に何か打つまで再送されず、
@@ -5700,13 +5732,30 @@ function bmPull(force){
     if(r&&r.mode) BM_MODE=r.mode;
     BM_SYNC_ERR='';
     bmLoad();
-    var changed=false;
+    var changed=false, srv={};
     ((r&&r.bills)||[]).forEach(function(b){
       if(!b||!b.data) return;
+      srv[String(b.rowIdx)]=1;
       var loc=BM.draft[b.rowIdx];
       var st=Number(b.data._t)||0, lt=Number(loc&&loc._t)||0;
-      if(!loc||st>lt||(force&&force[String(b.rowIdx)])){ BM.draft[b.rowIdx]=b.data; changed=true; }
+      if(!loc||st>lt||(force&&force[String(b.rowIdx)])){
+        BM.draft[b.rowIdx]=b.data; changed=true;
+        if(b.data._split) b.data._split.shared=1;    // ✂サーバから来た＝共有済み
+      }
     });
+    /* ✂**分けた伝票がサーバから消えていたら、この端末でも消す**（別の端末で「①に戻して消す」された）。
+       ⛔消さないと、①に戻ったセット・注文がこの端末では②にも残り、会計すると二重になる。
+       ⚠️消すのは「1度サーバに載った（shared）・送信待ちでない・会計済みでない」分けた伝票だけ。
+         ①や分けない伝票は今までどおり（サーバに無くても消さない）。応答が壊れていたら何もしない。 */
+    if(r&&Array.isArray(r.bills)){
+      Object.keys(BM.draft||{}).forEach(function(k){
+        if(!bmSplitKey_(k).split||srv[k]||BM_PUSH_Q[k]) return;
+        var d=BM.draft[k];
+        if(!(d&&d._split&&d._split.shared)||bmClosed_(d)) return;
+        delete BM.draft[k]; changed=true;
+        if(String(BM.key)===String(k)) BM.key=bmSplitKey_(k).base;
+      });
+    }
     if(changed) bmStash_();
     bmRenderIfIdle();
     /* ⭐会計の応答ロストで台帳にだけ会計が残っている伝票を拾って画面を直す。
@@ -5929,6 +5978,326 @@ function bmRsvOf_(key){
   for(var i=0;i<L.length;i++) if(String(L[i].rowIdx)===String(key)) return L[i];
   return null;
 }
+/* ============================================================================
+   ✂ 伝票を分ける（指示箱 #61・ボス確定 2026-09-30）
+   ----------------------------------------------------------------------------
+   ■ 同じ席・同じ予約（予約行は1つ）でも、会員様ごとに伝票を分けたいことがある。
+     黒服が［✂伝票を分ける］で②③を足して名前を付ける。予約のサブ内訳（同席の会員様）は候補に出す。
+     予約に1人しか登録していなくても分けられる（名前を打てばよい）。
+   ■ 鍵＝分けない伝票は今までどおり "296"（予約行）。2枚目以降だけ "296_2"（n≥2）＝後方互換。
+     ⛔鍵の読み方は bmSplitKey_ の1本（サーバは posBillKey_ の1本）。区切りの字は BM_SPLIT_SEP。
+     ⛔**鍵を onclick に引用符なしで書かない**＝ "296_2" は JS の数値区切りで 2962 になり、
+       bmOpen(296_2) は「伝票2962」を探して黙って何も開かない。必ず jsStr で文字列にして渡す。
+   ■ 分けた伝票が**自分で持つ**もの＝セット（お客様）・注文・ウェルカム・担当・支払・値引。
+     予約キャスト・同伴・前回のお預かりは①にだけ乗る（②には自動で入れない＝同伴¥3,000や
+     前回分が二重にならない）。②の担当は既定で「サブ内訳のその会員様の担当」→無ければ予約の担当。
+   ■ 分けた瞬間に、いま開いている伝票が2名以上ならお客様を1名②へ移す（セットが二重にならない）。
+     1名なら②に1名分を足す（予約の人数より多く来たとき）。人数の合計は✂カードに予約の人数と並べて出す。
+   ■ 会計済みの伝票からは移さない・会計済みの伝票へは移さない（ロック）。お客様は1名は残す。
+   ■ ②③を消すときは「①に戻して消す」＝セット・注文・ウェルカムを①へ戻してから消す。
+     ①は②③が残っている間は消させない（サーバの posDeleteBill も断る）。
+============================================================================ */
+var BM_SPLIT_SEP='_';
+function bmSplitKey_(k){
+  var s=String(k==null?'':k).trim(), at=s.indexOf(BM_SPLIT_SEP);
+  if(at<0) return {base:s,n:1,split:false};
+  var head=s.slice(0,at), tail=s.slice(at+BM_SPLIT_SEP.length);
+  if(!head||!/^\d+$/.test(tail)||!(Number(tail)>=2)) return {base:s,n:1,split:false};
+  return {base:head,n:Number(tail),split:true};
+}
+function bmSplitMark_(k){ var n=bmSplitKey_(k).n; return '①②③④⑤⑥⑦⑧⑨⑩'.charAt(n-1)||('('+n+')'); }
+function bmUid_(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+/* 同じ予約の伝票（①＋分けた伝票）の鍵を番号順に。①は下書きが無くても先頭に置く。dr省略時は BM.draft */
+function bmSplitFamily_(k,dr){
+  dr=dr||BM.draft||{};
+  var base=bmSplitKey_(k).base, sp=[];
+  Object.keys(dr).forEach(function(x){ var p=bmSplitKey_(x); if(p.split&&p.base===base) sp.push(p); });
+  sp.sort(function(a,b){ return a.n-b.n; });
+  return [base].concat(sp.map(function(p){ return p.base+BM_SPLIT_SEP+p.n; }));
+}
+function bmSplitNextKey_(base){
+  var n=1; bmSplitFamily_(base).forEach(function(k){ n=Math.max(n,bmSplitKey_(k).n); });
+  return String(base)+BM_SPLIT_SEP+(n+1);
+}
+/* 1回の操作で複数の伝票を変えたとき（移す・分ける・戻す）。⚠️bmSave は BM.key の1枚しか送らない */
+function bmSaveKeys_(keys){
+  (keys||[]).forEach(function(k){ var d=BM.draft[k]; if(d){ d._t=Date.now(); BM_PUSH_Q[k]=1; } });
+  bmStash_(); bmPushSoon();
+}
+/* 予約のお客様名（サーバが「行がずれていないか」を確かめる物差し。分けた伝票の会計で送る）。
+   ⭐①の会計で送っている名前と同じ出どころ＝予約一覧(RSV)→席の組→①の下書き の順。 */
+function bmRsvCustOf_(k){
+  var base=bmSplitKey_(k).base, r=bmRsvOf_(base);
+  if(r&&String(r.cust||'').trim()) return String(r.cust).trim();
+  var S=(typeof SEATS!=='undefined'&&SEATS)?SEATS:[];
+  for(var i=0;i<S.length;i++){
+    var oc=(S[i]&&S[i].occupants)||[];
+    for(var j=0;j<oc.length;j++) if(oc[j]&&String(oc[j].rowIdx)===base&&String(oc[j].cust||'').trim()) return String(oc[j].cust).trim();
+  }
+  var d=BM.draft&&BM.draft[base]; return String((d&&d._cust)||'').trim();
+}
+/* 同じ注文が2枚の伝票に載っている（2端末が同時に移した・古い下書きが勝った）＝二重請求になる */
+function bmSplitDupOrders_(k){
+  var fam=bmSplitFamily_(k), mine=(BM.draft[k]&&BM.draft[k].orders)||[], out=[];
+  mine.forEach(function(o){
+    if(!o||!o.id) return;
+    fam.forEach(function(x){
+      if(x===String(k)) return;
+      ((BM.draft[x]&&BM.draft[x].orders)||[]).forEach(function(p){ if(p&&p.id===o.id) out.push({name:o.name,at:x}); });
+    });
+  });
+  return out;
+}
+/* 分けた伝票の候補＝予約のサブ内訳（同席の会員様）。⚠️もう使った名前は出さない */
+function bmSplitCands_(k){
+  var base=bmSplitKey_(k).base, r=bmRsvOf_(base), used={}, out=[];
+  used[bmRsvCustOf_(base)]=1;
+  bmSplitFamily_(base).forEach(function(x){ var d=BM.draft[x]; var nm=String((d&&d._cust)||'').trim(); if(nm) used[nm]=1; });
+  ((r&&r.subCustomers)||[]).forEach(function(s){
+    var nm=String((s&&s.name)||'').trim(); if(!nm||used[nm]) return;
+    used[nm]=1; out.push({name:nm,member:String((s&&s.memberId)||''),tantou:String((s&&s.tantouCast)||'').trim()});
+  });
+  return out;
+}
+function bmSplitCardHtml_(d){
+  var k=String(BM.key); if(!k||k==='demo') return '';
+  var fam=bmSplitFamily_(k), base=fam[0], bills=bmBills();
+  var nameOf=function(x){ var b=bills.filter(function(y){ return String(y.rowIdx)===x; })[0]; return (b&&b.cust)||((BM.draft[x]||{})._cust)||''; };
+  /* ⚠️見出しに番号の丸（class="n"）を付けない＝2-4／5／6 の番号の並びを崩さない（現場の言い方） */
+  var h='<div class="bm-card"><h3>✂ 伝票を分ける'
+    +' <span style="color:var(--sub);font-weight:600;font-size:10px">同じ予約で会員様ごとに</span></h3>';
+  if(fam.length>1){
+    var sum=0;
+    h+='<div class="chips">'+fam.map(function(x){
+      var dx=BM.draft[x]; var g=((dx&&dx.guests)||[]).length; sum+=g;
+      var tot=0; try{ if(dx) tot=bmCalc(bmGet(x)).total; }catch(e){}
+      return '<div class="chip'+(x===k?' sel':'')+'" onclick="bmOpen(\''+jsStr(x)+'\')">'+bmSplitMark_(x)+' '+esc(nameOf(x))
+        +' <span style="font-size:10.5px;color:var(--sub)">'+g+'名</span> <b>'+bmYen(tot)+'</b>'+(bmClosed_(dx)?' ✅':'')+'</div>';
+    }).join('')+'</div>';
+    var bb=bills.filter(function(y){ return String(y.rowIdx)===base; })[0]||{}, r=bmRsvOf_(base);
+    var pax=Number((r&&r.pax)||bb.seatPax||bb.pax||0)||0;
+    h+='<div class="bm-note"'+((pax&&pax!==sum)?' style="color:#ff9a5a;font-weight:700"':'')+'>セットの合計 '+sum+'名'
+      +(pax?'（予約 '+pax+'名）':'')+((pax&&pax!==sum)?'＝人数が予約と違います。セットが二重・不足していないか確かめてください':'')+'</div>';
+    var dup=bmSplitDupOrders_(k);
+    if(dup.length) h+='<div class="bm-warn" style="margin-top:6px">⚠️ <b>同じ注文が別の伝票にも載っています</b>（'
+      +dup.map(function(x){ return esc(x.name)+'→'+bmSplitMark_(x.at); }).join('、')+'）。このまま会計すると二重請求になります。どちらかを−で消してください。</div>';
+  }
+  h+='<div class="bm-row" style="margin-top:6px"><button class="bm-btn acc" onclick="bmSplitOpen()">✂ 伝票を分ける（'+bmSplitMark_(bmSplitNextKey_(base))+'を足す）</button></div>'
+    +'<div class="bm-note">'+(fam.length>1?'注文・お客様の行の［→②］で別の伝票へ移せます。':'同じ予約でも会員様ごとに伝票を分けられます（名前を付けて2枚目を足す）。')+'</div></div>';
+  return h;
+}
+/* 移すボタン（注文1行・お客様1人ごと）。⚠️会計済みの伝票の中では出さない */
+function bmMoveBtns_(kind,i,id){
+  var k=String(BM.key); if(!k||k==='demo') return '';
+  var fam=bmSplitFamily_(k); if(fam.length<2) return '';
+  if(bmClosed_(BM.draft[k])) return '';
+  return fam.filter(function(x){ return x!==k; }).map(function(x){
+    return '<button class="bm-btn sm" title="'+esc(bmSplitMark_(x))+'の伝票へ移す" onclick="bmMove(\''+kind+'\','+i+',\''+jsStr(String(id||''))+'\',\''+jsStr(x)+'\')">→'+bmSplitMark_(x)+'</button>';
+  }).join('');
+}
+/* 注文1行／お客様1人を、同じ予約の別の伝票へ移す。
+   ⚠️注文は id で掴む（連打の2回目は「もう移っている」で何もしない＝別の行を巻き込まない）。
+   ⚠️お客様と id の無い古い注文は行番号だけ＝連打は時間で止める（BM_MOVE_T）。
+     ⛔id のある注文には時間の関所を掛けない＝別の行を続けて移すのを黙って飲み込まない。 */
+var BM_MOVE_T=0;
+function bmMove(kind,i,id,to){
+  if(bmLockedAlert_()) return;
+  if(kind==='guest'||!id){ var now=Date.now(); if(now-BM_MOVE_T<350) return; BM_MOVE_T=now; }
+  var from=String(BM.key); to=String(to);
+  if(from===to||bmSplitKey_(from).base!==bmSplitKey_(to).base) return;   // 別の予約へは移さない
+  var src=bmGet(from), dst=BM.draft[to];
+  if(!dst||BM_UNDOING===to){ alert('移す先の伝票（'+bmSplitMark_(to)+'）が見つかりません。別の端末で消された可能性があります。'); return; }
+  if(bmClosed_(dst)){ alert(bmSplitMark_(to)+' の伝票は会計済みです。\n移すなら先に'+bmSplitMark_(to)+'の会計を取り消してください。'); return; }
+  bmGet(to);
+  if(kind==='guest'){
+    if(!src.guests[i]) return;
+    if(src.guests.length<=1){ alert('お客様は1名より少なくできません。\n（伝票ごと戻すときは「①に戻して消す」）'); return; }
+    dst.guests.push(src.guests.splice(i,1)[0]);
+  }else{
+    var at=-1;
+    if(id){ src.orders.forEach(function(o,j){ if(o&&o.id===id) at=j; }); }
+    else if(src.orders[i]&&!src.orders[i].id) at=i;
+    if(at<0) return;                                 // 連打の2回目＝もう移っている
+    dst.orders.push(src.orders.splice(at,1)[0]);
+  }
+  bmSaveKeys_([from,to]); bmRender();
+  if(typeof toast==='function') toast((kind==='guest'?'お客様1名':'注文1行')+'を'+bmSplitMark_(to)+'へ移しました');
+}
+/* ✂分ける画面（ポップアップ）。BM.split={name,member,tantou} */
+var BM_SPLITTING=false;
+function bmSplitOpen(){
+  var k=String(BM.key||''); if(!k||k==='demo') return;
+  if(BM_SPLITTING) return;
+  BM.split={name:'',member:'',tantou:''}; bmRender();
+}
+function bmSplitCancel(){ BM.split=null; bmRender(); }
+function bmSplitPick(i){
+  if(!BM.split) return;
+  var c=bmSplitCands_(BM.key)[i]; if(!c) return;
+  BM.split={name:c.name,member:c.member,tantou:c.tantou}; bmRender();
+}
+/* 名前を手で打った＝候補の会員番号・担当は外す（別の人の番号を付けない） */
+function bmSplitName(v){ if(!BM.split) return; BM.split.name=String(v||''); BM.split.member=''; BM.split.tantou=''; }
+function bmSplitHtml_(){
+  var sp=BM.split; if(!sp||!BM.key) return '';
+  var cands=bmSplitCands_(BM.key), base=bmSplitKey_(BM.key).base, r=bmRsvOf_(base);
+  var tan=sp.tantou||(r&&(r.tantou||r.custTantou))||'';
+  return '<div class="bm-modal-bg" onclick="bmSplitCancel()"></div><div class="bm-modal">'
+    +'<div style="font-size:16px;font-weight:800">✂ 伝票を分ける（'+bmSplitMark_(bmSplitNextKey_(base))+'）</div>'
+    +'<div class="bm-note" style="margin-top:6px">同じ予約のまま、この会員様の伝票を別に作ります。</div>'
+    +(cands.length?'<div class="bm-note" style="margin-top:9px;color:var(--accent);font-weight:700">同席の会員様（予約のサブ内訳）</div><div class="chips" style="margin-top:3px">'
+      +cands.map(function(c,i){ return '<div class="chip'+(sp.name===c.name?' sel':'')+'" onclick="bmSplitPick('+i+')">'+esc(c.name)
+        +(c.tantou?' <span style="font-size:10px;color:var(--sub)">担当 '+esc(c.tantou)+'</span>':'')+'</div>'; }).join('')+'</div>':'')
+    +'<div class="bm-row" style="margin-top:9px"><span class="lb">お客様名</span><input type="text" id="bmSplitNm" class="bm-in" style="flex:1;text-align:left" placeholder="名前を打つ（例：田中）" value="'+esc(sp.name||'')+'" oninput="bmSplitName(this.value)"></div>'
+    +'<div class="bm-note">担当は既定で <b>'+esc(tan||'なし')+'</b>（分けた伝票の③で変えられます）。セットはいま開いている伝票から1名移します（1名しか居なければ1名分を足します）。</div>'
+    +'<div class="bm-row" style="margin-top:12px"><button class="bm-btn pri" style="flex:1;padding:12px" onclick="bmSplitCreate()">'+(BM_SPLITTING?'⏳ 作成中…':'✅ 分ける')+'</button>'
+    +'<button class="bm-btn" onclick="bmSplitCancel()">キャンセル</button></div></div>';
+}
+/* ⚠️作る前に他の端末の伝票を1回取り込む（別の端末が作った②と番号がぶつかりにくくする）。
+   それでもぶつかったら、サーバ(posSaveBill)が splitTaken で断り、bmSplitRekey_ が次の番号へ付け替える。 */
+function bmSplitCreate(){
+  if(BM_SPLITTING) return;
+  var sp=BM.split; if(!sp) return;
+  var el=document.getElementById('bmSplitNm'); if(el&&el.value!=null&&String(el.value).trim()&&!String(sp.name||'').trim()) bmSplitName(el.value);
+  var nm=String(sp.name||'').trim();
+  if(!nm){ alert('分けた伝票のお客様名を入れてください。\n（同席の会員様を選ぶか、名前を打ってください）'); return; }
+  var from=String(BM.key), base=bmSplitKey_(from).base;
+  BM_SPLITTING=true;
+  var go=function(){
+    BM_SPLITTING=false;
+    if(!BM.split) return;                            // 待っている間にキャンセルされた
+    bmLoad();
+    var bills=bmBills(), bb=bills.filter(function(x){ return String(x.rowIdx)===base; })[0]||{};
+    var bd=bmGet(base,bb.pax), src=BM.draft[from]||bd, r=bmRsvOf_(base);
+    var key=bmSplitNextKey_(base);
+    var nd={guests:[],casts:{},castSel:[],welcome:[],orders:[],discount:0,surcharge:0,pay:{cash:0,card:0,credit:0,next:0},
+            /* ⛔予約から自動で乗せるもの（担当・予約・同伴・前回のお預かり）は①だけ＝ここで「済み」にしておく */
+            tantouSeeded:1,roleSeeded:1,carrySeeded:1,
+            _split:{base:base,n:bmSplitKey_(key).n,uid:bmUid_(),member:String(sp.member||'')},
+            _cust:nm,_table:(bb.gone?(bd._table||''):bmTblLabel_(bb.floor,bb.table))||bd._table||''};
+    var moved=false;
+    if(!bmClosed_(src)&&src.guests&&src.guests.length>=2){ nd.guests.push(src.guests.pop()); moved=true; }
+    /* ✂①が1名＝①から抜かずにセットを1名分足す。⭐足したセットには印（_splitAdd）を付ける＝
+       「①に戻して消す」で①へ移さず消す（qa QA-H：予約1名なのに①が2名になっていた）。
+       ⚠️印はお客様の行そのものに付ける（_split に件数で持つと、移すたびに数が合わなくなる）。
+         ①から移してきたお客様には印が無い＝今までどおり①へ戻る。 */
+    else nd.guests.push({price:BM_FEE.set,_splitAdd:1});
+    var tan=bmTantouList_({tantou:sp.tantou||''});
+    if(!tan.length) tan=bmTantouList_({tantou:bb.tantou||(r&&(r.tantou||r.custTantou))||''});
+    if(tan.length){ nd.tantou=tan.join('、'); tan.forEach(function(n){ bmTantouAttach_(nd,n); }); }
+    BM.draft[key]=nd; BM.split=null; BM.key=key;
+    bmSaveKeys_(moved?[from,key]:[key]);
+    bmRender();
+    if(typeof toast==='function') toast(bmSplitMark_(key)+' '+nm+' 様の伝票を作りました'+(moved?'（'+bmSplitMark_(from)+'からお客様1名を移しました）':'（1名分のセットを足しました）'));
+  };
+  bmRender();
+  var p=(typeof gsr==='function')?bmPull():null;
+  if(p&&p.then) p.then(go,go); else go();
+}
+/* サーバに「この番号は別の端末が使っている」と断られた＝自分の伝票を次の番号へ付け替えて送り直す */
+function bmSplitRekey_(k){
+  bmLoad();
+  var d=BM.draft[k], p=bmSplitKey_(k); if(!d||!p.split) return '';
+  var nk=bmSplitNextKey_(p.base);
+  if(!d._split) d._split={base:p.base,uid:bmUid_()};
+  d._split.n=bmSplitKey_(nk).n; delete d._split.shared;
+  BM.draft[nk]=d; delete BM.draft[k];
+  if(String(BM.key)===String(k)) BM.key=nk;
+  d._t=Date.now(); BM_PUSH_Q[nk]=1; bmStash_(); bmPushSoon();
+  return nk;
+}
+/* 共有できた印（サーバに1度載った分けた伝票）。これが付いた伝票がサーバから消えたら、
+   別の端末で「①に戻して消す」された＝この端末でも消す（bmPull）。 */
+function bmSplitShared_(k){
+  if(!bmSplitKey_(k).split) return;
+  var d=BM.draft[k]; if(d&&d._split&&!d._split.shared){ d._split.shared=1; bmStash_(); }
+}
+/* ✂別の端末で①に戻された②が、この端末にだけ持っていた注文（qa QA-J・2026-09-30）。
+   ⛔②は取り込みで消える＝ここで名前を控えて出さないと、打った注文が①にもサーバにも無いまま**黙って消える**（請求漏れ）。
+   ⭐「①に在るか」は注文の id で見る（id の無い古い注文は品名・単価・数量で見る）。snap＝消える前の②の写し。 */
+function bmSplitLostMsg_(k,snap){
+  var mk=bmSplitMark_(k), base=bmSplitKey_(k).base, bd=(BM.draft&&BM.draft[base])||{};
+  var have=(bd.orders||[]).map(function(o){ return o&&(o.id||(o.name+'|'+o.price+'|'+o.qty)); });
+  var lost=((snap&&snap.orders)||[]).filter(function(o){ return o&&have.indexOf(o.id||(o.name+'|'+o.price+'|'+o.qty))<0; });
+  return mk+'は別の端末で①に戻されていました。この端末で'+mk+'に入れた最後の変更は①に入っていません。'
+    +(lost.length?'\n①に入っていない注文：'+lost.map(function(o){ return o.name+(o.qty>1?'×'+o.qty:''); }).join('、')+'\n①に入れ直してください。':'\n①を確かめてください。');
+}
+/* ②③を①へ戻して消す。⚠️予約・同伴の回数は戻さない（二重になりうる）＝確認で知らせる */
+/* ✂②③を①へ戻して消す。
+   ⭐**サーバで先に消してから①へ戻す**（2026-09-30）。逆の順番（①へ戻す→消す）だと、消すのが通信で落ちたとき
+     サーバに②が残ったまま①にも同じセット・注文が載る＝次の取り込みで②が戻ってきて**二重請求**になる。
+     ⇒消せなかったら①には戻さない（②はそのまま残る＝会計はそのまま続けられる）。
+   ⚠️待っている間（BM_UNDOING）は②を触らせない（bmLockedAlert_／bmMove）＝戻す中身は押した瞬間の写し。
+   ⚠️予約・同伴の回数は戻さない（二重になりうる）＝確認で知らせる。 */
+var BM_UNDOING='';
+function bmSplitUndo(){
+  if(bmLockedAlert_()) return;
+  if(BM_UNDOING) return;                           // 連打
+  var k=String(BM.key), p=bmSplitKey_(k); if(!p.split) return;
+  var d=bmGet(k), bd=BM.draft[p.base];
+  if(!bd){ alert('①の伝票が見つかりません。'); return; }
+  if(bmClosed_(bd)){ alert('①は会計済みです。\n戻すなら先に①の会計を取り消してください。'); return; }
+  var roles=[];
+  Object.keys(d.casts||{}).forEach(function(n){ var v=d.casts[n]||{}; if(v.yoyaku) roles.push(n+' 予約'+v.yoyaku); if(v.dohan) roles.push(n+' 同伴'+v.dohan); });
+  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0)+(Number(d.pay.next)||0);
+  var addN=(d.guests||[]).filter(function(g){ return g&&g._splitAdd; }).length;   // 分けるときに足したセット（QA-H）
+  if(!confirm(bmSplitMark_(k)+'「'+(d._cust||'')+'」の伝票を①に戻して消します。\n'
+      +'セット '+(d.guests.length-addN)+'名・注文 '+d.orders.length+'行'+((d.welcome||[]).length?'・ウェルカム':'')+' を①へ移します。'
+      +(addN?'\n分けるときに足したセット '+addN+'名は消します（①へは移しません）。':'')
+      +(roles.length?'\n⚠️予約・同伴（'+roles.join('、')+'）は①に戻しません。必要なら①で入れ直してください。':'')
+      +(paid?'\n⚠️入れたお預り（'+bmYen(paid)+'）は消えます。':'')
+      +'\n\nよろしいですか？')) return;
+  var snap=JSON.parse(JSON.stringify(d)), mk=bmSplitMark_(k);
+  delete BM_PUSH_Q[k];                             // 送信待ちの②を送らない（消した後に蘇らせない）
+  var merge=function(){
+    bmLoad();                                      // ⚠️待っている間に下書きが作り直されている＝キーから取り直す
+    var b2=BM.draft[p.base];
+    if(!b2||bmClosed_(b2)){
+      /* サーバの②はもう消えた。①へ戻せない＝②を写しから作り直して残す（中身を黙って捨てない）。
+         ⚠️共有済みの印を外して送る（付けたままだとサーバが「消された伝票」として断る） */
+      if(snap._split) delete snap._split.shared;
+      BM.draft[k]=snap; BM.key=k; bmSaveKeys_([k]); bmRender();
+      alert('①が'+(b2?'会計済み':'見つからない')+'ため、①に戻せませんでした。\n'+mk+'はそのまま残しています。');
+      return;
+    }
+    bmGet(p.base);
+    snap.guests.forEach(function(g){ if(g&&g._splitAdd) return; b2.guests.push(g); });   // ⭐足したセットは①へ移さず消す（QA-H）
+    snap.orders.forEach(function(o){ b2.orders.push(o); });
+    (snap.welcome||[]).forEach(function(w){
+      var hit=null; b2.welcome.forEach(function(x){ if(x.name===w.name) hit=x; });
+      if(hit) hit.qty=(hit.qty||0)+(w.qty||0); else b2.welcome.push(w);
+    });
+    delete BM.draft[k]; delete BM_PUSH_Q[k];
+    BM.key=p.base;
+    bmSaveKeys_([p.base]);
+    bmRender();
+    if(typeof toast==='function') toast(mk+'を①に戻しました');
+  };
+  if(typeof gsr!=='function'){ delete BM.draft[k]; merge(); return; }
+  BM_UNDOING=k; bmRender();
+  gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+    .then(function(r){
+      BM_UNDOING='';
+      if(r&&r.ok===false){
+        /* 会計済み（別の端末で会計された）など＝サーバを正として②を取り直す。①には戻さない */
+        alert('①に戻せませんでした：'+String(r.error||'不明')+'\n'+mk+'はそのまま残しています。');
+        var fk={}; fk[k]=1; var pp=bmPull(fk); if(pp&&pp.then) pp.then(function(){ return bmSyncClosed(true); });
+        bmRender(); return;
+      }
+      merge();
+    })
+    .catch(function(){
+      BM_UNDOING='';
+      /* 消せたか分からない（応答だけ落ちたかもしれない）＝②はこの端末に残す。
+         ⭐共有済みの印を外す＝サーバで消えていても、次の取り込み(bmPull)がこの②を「消された」と見て捨てない。
+           ①には戻していないので、②が残っても二重にはならない（もう一度押せば①へ戻る）。 */
+      bmLoad();
+      var dk=BM.draft[k]||snap; if(dk._split) delete dk._split.shared;
+      BM.draft[k]=dk; bmStash_();
+      alert('通信できなかったので①に戻していません。\n'+mk+'はそのまま残しています。もう一度押してください。');
+      bmRender();
+    });
+}
 function bmSeedCarry_(key,d){
   if(d.carrySeeded) return;
   var r=bmRsvOf_(key); if(!r) return;              // 予約行がまだ届いていない＝次の描画で入る
@@ -5955,8 +6324,18 @@ function bmBills(){
     if(!s||s.type==='W'||s.type==='K'||s.mergedTo!=null) return;
     (s.occupants||[]).forEach(function(o){
       if(!o||!o.rowIdx) return;
-      out.push({rowIdx:o.rowIdx,table:shortNm(s.name),floor:s.floor,cust:o.cust||s.cust||'ご来店',pax:o.pax||s.pax||1,tantou:o.tantou||s.tantou||'',
-                member:o.member||s.member||'',inT:o.inT||o.inTime||s.inT||s.inTime||''});   /* 店舗控え用。無ければ出さない */
+      var b0={rowIdx:o.rowIdx,table:shortNm(s.name),floor:s.floor,cust:o.cust||s.cust||'ご来店',pax:o.pax||s.pax||1,tantou:o.tantou||s.tantou||'',
+                member:o.member||s.member||'',inT:o.inT||o.inTime||s.inT||s.inTime||''};   /* 店舗控え用。無ければ出さない */
+      /* ✂分けた伝票があるときは、①の人数も①に残っているセットの数で出す（席の人数のままだと合計が合わない） */
+      var fam0=bmSplitFamily_(o.rowIdx), d0=BM.draft[String(o.rowIdx)];
+      if(fam0.length>1&&d0&&d0.guests&&d0.guests.length){ b0.seatPax=b0.pax; b0.pax=d0.guests.length; }
+      out.push(b0);
+      /* ✂分けた伝票（②③）は①の直後に並べる。卓・来店時刻は①と同じ／客名・人数・担当・会員番号は自分の物 */
+      fam0.slice(1).forEach(function(k){
+        var d=BM.draft[k]||{};
+        out.push({rowIdx:k,table:b0.table,floor:b0.floor,cust:d._cust||('伝票'+bmSplitMark_(k)),pax:(d.guests||[]).length||1,
+                  tantou:d.tantou||'',member:(d._split&&d._split.member)||'',inT:b0.inT,split:bmSplitKey_(k).n,base:String(o.rowIdx)});
+      });
     });
   });
   /* ⚠️**退店して席から消えた組の伝票**も出す。席(SEATS)だけを見ていると、未会計のまま
@@ -5966,8 +6345,10 @@ function bmBills(){
     if(k==='demo'||seen[k]) return;
     var d=BM.draft[k]||{};
     if(!d.guests||!d.guests.length) return;
+    var sp=bmSplitKey_(k);
     out.push({rowIdx:k,table:(d._table||'伝票'+k),floor:'🚪',cust:(d._cust||'退店済み'),
-              pax:(d.guests||[]).length,tantou:d.tantou||'',member:'',inT:'',gone:true});
+              pax:(d.guests||[]).length,tantou:d.tantou||'',member:(sp.split&&d._split&&d._split.member)||'',inT:'',gone:true,
+              split:sp.split?sp.n:0,base:sp.base});
   });
   return out;
 }
@@ -6050,8 +6431,10 @@ function bmRender(){
   var html='<div><div class="bm-card"><h3><span class="n">1</span> 伝票（いま席にいる組）</h3>'
     +(bills.length?bills.map(function(b){
         var d=bmGet(b.rowIdx,b.pax),c=bmCalc(d);
-        return '<div class="bm-bill'+(String(BM.key)===String(b.rowIdx)?' sel':'')+'" onclick="bmOpen('+b.rowIdx+')">'
-          +'<div class="t">'+esc(bmTblLabel_(b.floor,b.table))+'</div>'
+        /* ⛔鍵は必ず文字列で渡す＝"296_2" を引用符なしで書くと数値 2962 になる（✂分けた伝票） */
+        var mk=(bmSplitFamily_(b.rowIdx).length>1)?' <b style="color:var(--accent)">'+bmSplitMark_(b.rowIdx)+'</b>':'';
+        return '<div class="bm-bill'+(String(BM.key)===String(b.rowIdx)?' sel':'')+'" onclick="bmOpen(\''+jsStr(String(b.rowIdx))+'\')">'
+          +'<div class="t">'+esc(bmTblLabel_(b.floor,b.table))+mk+'</div>'
           +'<div class="c">'+esc(b.cust)+'<span style="font-size:11px;color:var(--sub);font-weight:600"> '+b.pax+'名</span></div>'
           +'<div class="s">'+(b.tantou?'担当 '+esc(b.tantou):'担当なし')+'</div>'
           +'<div class="a">'+bmYen(c.total)+'</div></div>';
@@ -6070,7 +6453,7 @@ function bmRender(){
   }else{
     html+=bmEditorHtml()+bmDetailHtml();
   }
-  document.getElementById('bmWrap').innerHTML=html+bmPickHtml()+bmSlipHtml();
+  document.getElementById('bmWrap').innerHTML=html+bmPickHtml()+bmSlipHtml()+bmSplitHtml_();
 }
 /* 品名からマスタ行を引く。⚠️臨時商品はマスタに無いのでnull＝ボトル判定しない */
 /* 📦在庫との連携（**読み取り専用**）。ボス指示＝実際の在庫はいじらない状態で連携する。
@@ -6430,7 +6813,7 @@ function bmEditorHtml(){
   var d=bmGet(BM.key,b0.pax),pool=bmCastPool();
   var setSum=(d.guests||[]).reduce(function(a,g){return a+(Number(g.price)||0);},0);
   var f2=bmFolded_(2,d);
-  var h='<div><div class="bm-card">'
+  var h='<div>'+bmSplitCardHtml_(d)+'<div class="bm-card">'
     +bmSetupHead_(d,f2)
     +(f2?'':bmSetupSecHead_('お客様・セット',1)+d.guests.map(function(g,i){
         return '<div class="bm-row"><span class="lb">お客様'+(i+1)+'</span>'
@@ -6438,6 +6821,7 @@ function bmEditorHtml(){
           +'<input type="number" class="bm-in" value="'+(g.price)+'" oninput="bmGuestPrice('+i+',this.value)" onchange="bmGuestPrice('+i+',this.value,1)">'
           +'<button class="bm-btn sm acc" onclick="bmToggleGuestPick('+i+')">▼ 選ぶ</button>'
           +(d.guests.length>1?'<button class="bm-btn sm dng" onclick="bmDelGuest('+i+')">×</button>':'')
+          +(d.guests.length>1?bmMoveBtns_('guest',i,''):'')   /* ✂別の伝票へ（1名は残す） */
           +'</div>'
           +(BM.openGuest===i?'<div class="chips" style="padding:2px 0 9px">'+bmPrices().map(function(pp){
               return '<div class="chip'+(pp===g.price?' sel':'')+'" onclick="bmGuestPrice('+i+','+pp+',1)">'+bmYen(pp)
@@ -6501,7 +6885,7 @@ function bmEditorHtml(){
           +' oninput="bmOrdPrice('+i+',this.value)" onchange="bmOrdPrice('+i+',this.value,1)">'
           +'<button class="bm-btn sm" onclick="bmQty('+i+',-1)">−</button><span style="min-width:18px;text-align:center;font-weight:900;font-size:15px">'+o.qty+'</span>'
           +'<button class="bm-btn sm" onclick="bmQty('+i+',1)">＋</button>'
-          +'<span class="amt">'+bmYen(o.price*o.qty)+'</span></div>';
+          +'<span class="amt">'+bmYen(o.price*o.qty)+'</span>'+bmMoveBtns_('order',i,o.id)+'</div>';
       }).join(''):'<div class="bm-note">まだ注文がありません。下のメニューから選びます</div>')+'</div>'
     +'<div class="bm-note" style="margin-bottom:5px">メニュー <span style="color:var(--sub)">全'+bmItems_().length+'品'
       +(bmAddShared_().length?'（うち⭐'+bmAddShared_().length+'件は店で追加）':'')
@@ -6844,6 +7228,8 @@ function bmClosed_(d){ return (d&&d.closed&&d.closed.ts)?d.closed:null; }
 function bmLocked(){ return !!bmClosed_(BM.draft&&BM.draft[BM.key]); }
 /* 各操作の入口で呼ぶ。⚠️ロック中に黙って無視すると「打てないのに理由が分からない」になる */
 function bmLockedAlert_(){
+  /* ✂①に戻している最中の②は触らせない（戻す中身は押した瞬間の写し＝この間の入力は消える） */
+  if(typeof BM_UNDOING!=='undefined'&&BM_UNDOING&&String(BM.key)===BM_UNDOING){ alert('①に戻しています。少し待ってください。'); return true; }
   if(!bmLocked()) return false;
   alert('この伝票は会計済みです。\n直すには⑧会計の「会計を取り消す」を押してください。');
   return true;
@@ -6895,6 +7281,12 @@ function bmNextTag_(amount,dateKey,where){
   return '【次回精算】¥'+(Number(amount)||0).toLocaleString('ja-JP')+'（'+(dateKey||'')+' '+(where||'')+'）';
 }
 function bmSaveNextMemo_(key,d,c,bill){
+  /* ✂分けた伝票はお客様メモに自動で書かない。⛔メモは**上書き**＝その会員様の今のメモを持っていない
+     （予約行は代表のお客様の物）ので、書くと同席の会員様のメモを消してしまう。手で控えてもらう。 */
+  if(bmSplitKey_(key).split){
+    if(c&&c.next>0&&typeof toast==='function') toast('⚠️ 分けた伝票の次回精算はお客様のメモに自動で残せません（手で控えてください）');
+    return;
+  }
   try{
     var r=bmRsvOf_(key)||{};
     var no=String((bill&&bill.member)||r.mem||'').trim();
@@ -6952,6 +7344,20 @@ function bmClose(){
     return;
   }
   var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
+  /* ✂**一度もサーバに載っていない分けた伝票は会計しない**（qa QA-A・2026-09-30）。
+     ⛔通信断の間に作った②は、別の端末の②と同じ番号のことがある＝先に会計すると台帳の「2_2」と
+       下書きの「2_2」が別のお客様になる。保存が通れば（番号がぶつかっていれば③へ付け替わって）会計できる。
+     ⭐止めっぱなしにしない＝その場で送り直しを掛ける（通信が戻れば数秒で会計できる）。 */
+  var spK=bmSplitKey_(BM.key);
+  if(spK.split&&!(d._split&&d._split.shared)){
+    BM_PUSH_Q[String(BM.key)]=1; bmPushSoon();
+    alert('この分けた伝票（'+bmSplitMark_(BM.key)+'）はまだ他の端末と共有できていません。\n共有できてから会計してください（通信が戻れば自動で送り直します）。');
+    return;
+  }
+  /* ✂同じ注文が別の伝票にも載っている＝二重請求。止めはしない（客前）が、黙って通さない */
+  var dupO=bmSplitDupOrders_(BM.key);
+  if(dupO.length&&!confirm('⚠️ 同じ注文が別の伝票にも載っています（'+dupO.map(function(x){ return x.name+'→'+bmSplitMark_(x.at); }).join('、')
+      +'）。\nこのまま会計すると二重請求になります。\n\nそれでも会計しますか？')) return;
   if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
       +(c.unpaid<0?('\nお釣り '+bmYen(-c.unpaid)):'')+'\n\nよろしいですか？')) return;
   var rec={ floor:b.floor||'', table:b.table||'', cust:b.cust||'', pax:(d.guests||[]).length,
@@ -6977,7 +7383,12 @@ function bmClose(){
             change:Math.max(0,(Number(d.pay.cash)||0)-(c.due-(Number(d.pay.card)||0)-(Number(d.pay.credit)||0)-c.next)),
             /* backendは今この2つを読まない（列が無い）＝無視される。下書きJSON(POS_伝票)には残るので
                「合計 −（現金+カード+売掛）＝次回来店時払い」で後から追える。列を足すのは次の段。 */
-            carry:c.carry, nextPay:c.next };
+            carry:c.carry, nextPay:c.next,
+            /* ✂分けた伝票だけ＝**予約のお客様名**。サーバが売上配分ルールを当てる前に「予約行がずれていないか」を
+               確かめる物差し（分けた伝票の客名は同席の会員様＝予約の客名と違って当然）。分けない伝票では送らない。 */
+            rsvCust:(bmSplitKey_(BM.key).split?bmRsvCustOf_(BM.key):''),
+            /* ✂分けた伝票だけ＝この端末の伝票の uid。サーバの下書きと違えば別のお客様の②＝サーバが断る（B8） */
+            splitUid:(spK.split&&d._split&&d._split.uid)?String(d._split.uid):'' };
   /* ⚠️`bmRender()`を挟むと`bmLoad()`が下書きを**作り直す**＝ここで掴んでいる`d`は死ぬ。
      成功後は必ずキーから取り直すこと（これで一度「会計済みが記録されない」を踏んだ） */
   var key=String(BM.key);
@@ -6985,6 +7396,24 @@ function bmClose(){
   gsr('posCloseBill',bmDateKey(),key,rec,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_CLOSING=false;
+      /* ✂サーバが分けた伝票の会計を断った（B8）。⛔bmCloseFailed_ に流さない（台帳に会計は無い＝照合しても直らない）。
+         splitGone＝別の端末で①に戻された → 取り直してこの端末の②も消す（中身は①に在る）。
+         splitTaken＝同じ番号の別のお客様 → この端末の伝票を送り直す（サーバが③へ付け替えさせる）。 */
+      if(r&&r.ok===false&&(r.splitGone||r.splitTaken)){
+        if(r.splitTaken){
+          BM_PUSH_Q[key]=1; bmPushNow();
+          alert('会計できませんでした：'+String(r.error||'')+'\n番号を付け替えてから、もう一度会計してください。');
+          bmRender(); return;
+        }
+        /* ✂splitGone＝①に戻されていた。⛔②を黙って消さない＝消える前に写しを取り、①に入っていない注文を名前で出す（QA-J） */
+        bmLoad();
+        var gsnap=BM.draft[key]?JSON.parse(JSON.stringify(BM.draft[key])):null;
+        delete BM_PUSH_Q[key]; var fk={}; fk[key]=1;   // ⚠️送信待ちを外す（残すと取り込みが②を消さず、送り直しで蘇らせに行く）
+        var gp=bmPull(fk);
+        var gshow=function(){ alert('会計できませんでした：'+String(r.error||'')+'\n'+bmSplitLostMsg_(key,gsnap)); bmRender(); };
+        if(gp&&gp.then) gp.then(gshow,gshow); else gshow();
+        return;
+      }
       if(!r||!r.ok){ bmCloseFailed_(key,(r&&r.error)||'不明'); return; }
       /* 🧾⭐**担当が振り替わったときだけ1行知らせる**（ボス指示 2026-09-28）。
          ⛔会計は止めない・確認も出さない＝客前で手を止めるのが最悪。⭐気づくのは会計の**後**で十分。
@@ -7300,8 +7729,13 @@ function bmDetailHtml(){
     /* ⚠️2026-08-28ボス指示＝**TRUSTと切り離した本番**を想定するので⑨TRUST照合は廃止。
        ただし「下書きを消す」は照合カードの中に同居していた＝一緒に消すと**打ち間違えて作った伝票を
        取り下げる手段が無くなり、閉店の関所(getPosDayStatus)に永久に残る**。⑧へ移してある。 */
-    +'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmClear()">🗑 この伝票の下書きを消す</button></div>'
-    +'<div class="bm-note">打ち間違えて作った伝票はここで取り下げます。残すと閉店の関所に出続けます。<br>値引・値増は<b>税サの後</b>に差引き、税サは値引前の小計に掛かります。</div>'
+    /* ✂分けた伝票は「消す」ではなく「①に戻して消す」＝セット・注文を①へ戻す（黙って人数や注文を消さない） */
+    +(bmSplitKey_(BM.key).split
+      ?'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmSplitUndo()">↩ ①に戻して消す</button></div>'
+       +'<div class="bm-note">分けた伝票をやめるときはここ。セット・注文・ウェルカムを①へ戻してから、この伝票を消します。</div>'
+      :'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmClear()">🗑 この伝票の下書きを消す</button></div>'
+       +'<div class="bm-note">打ち間違えて作った伝票はここで取り下げます。残すと閉店の関所に出続けます。</div>')
+    +'<div class="bm-note">値引・値増は<b>税サの後</b>に差引き、税サは値引前の小計に掛かります。</div>'
     +'</div></div>';
 }
 function bmRow(k,v,id){ return '<div class="r"><span>'+k+'</span><b'+(id?' id="'+id+'"':'')+'>'+bmYen(v)+'</b></div>'; }
@@ -7424,7 +7858,8 @@ function bmPickConfirm(){ if(bmLockedAlert_()) return;
     var key=at.join('・'), hit=-1;
     d.orders.forEach(function(o,i){ if(o.name===pk.name&&bmAttrOf(o)===key&&o.price===pk.price) hit=i; });
     if(hit>=0) d.orders[hit].qty+=pk.qty;
-    else d.orders.push({name:pk.name,genre:pk.genre,kind:pk.kind||'',
+    /* ✂id＝伝票を分けて移すときに行を掴む鍵（連打で別の行を巻き込まない／2枚に同じ行が載ったら気づける） */
+    else d.orders.push({id:bmUid_(),name:pk.name,genre:pk.genre,kind:pk.kind||'',
                         /* 🍹この品のバック額（マスタに書いてある品だけ。無ければ日報の既定額） */
                         back:(pk.back==null?null:pk.back),
                         price:pk.price,qty:pk.qty,attrs:at});
@@ -7532,9 +7967,24 @@ function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.c
 function bmClearServer_(k){
   if(typeof gsr!=='function'||k==='demo') return;
   gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+    /* ✂2026-09-30追加＝サーバが**断った**とき（会計済み／分けた伝票が残っている①）に黙って素通りしていた
+       ＝この端末だけ消えたと思い込む。理由を出し、その伝票だけサーバを正として取り直す（画面に戻ってくる）。 */
+    .then(function(r){
+      if(r&&r.ok===false){
+        BM_SYNC_ERR=String(r.error||'下書きを取り下げられませんでした');
+        var fk={}; fk[String(k)]=1; bmPull(fk);
+        bmRenderIfIdle();
+      }
+    })
     .catch(function(){ BM_SYNC_ERR='下書きの取り下げが共有できていません'; bmRenderIfIdle(); });
 }
 function bmClear(){ if(bmLockedAlert_()) return;
+  /* ✂①から分けた伝票が残っている間は①を消さない（次に開くと人数ぶんのセットで作り直され、②と二重になる）。
+     ⚠️この端末が知っている②だけの確認＝他の端末が作った②はサーバ（posDeleteBill）が断る。 */
+  if(!bmSplitKey_(BM.key).split&&bmSplitFamily_(BM.key).length>1){
+    alert('この伝票から分けた伝票（'+bmSplitFamily_(BM.key).slice(1).map(bmSplitMark_).join('')+'）があります。\n先にそちらを「①に戻して消す」してください。');
+    return;
+  }
   if(!confirm('この伝票の下書きを消します。よろしいですか？')) return;
   var k=String(BM.key);
   delete BM.draft[k]; bmStash_(); bmClearServer_(k); BM.key=null; bmRender();
@@ -10460,7 +10910,8 @@ function ccPosGateHtml(){
       +list.map(function(x){
           return '<div style="display:flex;gap:8px;font-size:12.5px;margin-top:3px"><span style="flex:1">'+esc(x.label||('伝票'+x.rowIdx))+'</span>'
             +'<span style="color:var(--gold);font-weight:800">'+bmYen(x.total)+'</span>'
-            +'<button class="bm-btn sm" onclick="openBillFor('+x.rowIdx+')">開く</button></div>';
+            /* ⛔鍵は文字列で渡す（✂分けた伝票 "296_2" は引用符なしだと数値 2962 になる） */
+            +'<button class="bm-btn sm" onclick="openBillFor(\''+jsStr(String(x.rowIdx))+'\')">開く</button></div>';
         }).join('')+'</div>';
   };
   if(d.ready) return wrap('#3ea06a','rgba(62,160,106,.12)',
