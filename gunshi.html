@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-30b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-30c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -8601,6 +8601,75 @@ var RCPT_PAYMONTHS=null;   // 対象月キーの配列 ['2026/06',...]（null=�
 var RCPT_PAYCASTS={};      // 月キー→[{name,finalPay,kinmu}] のキャッシュ
 var RCPT_PAYMONTH='';      // 選択中の対象月キー
 var RCPT_PAYCAST='';       // 選択中のキャスト名
+/* ============================================================================
+   ✍️ 月払い受領書の手入力（仮）（ボス指示 2026-09-30）
+   ----------------------------------------------------------------------------
+   ■ 給与計算（TRUST報酬／getMonthlyPayReceipts）に行が無い人＝名簿外（退職したドライバー等）の月払いを、
+     仮で受領書にする入口。キャストの一覧の末尾「（✍️手入力・名簿外／仮）」を選んだときだけ、
+     受取人・金額・名目を手で入れられる。⛔通常の月払い（自動・readonly）の作りは変えない＝
+     描く所は `MM`（M かつ手入力）の分岐だけ、選ぶ所は rcptManSwitch_ が引き受けたときだけ。
+   ■ 印字（rcptBuildXml_ の M＝最下部に名前を太字）と控え台帳（rcptLogIssue_＝docType「月払い受領書」）は通常と同じ経路。
+     控え台帳の但し書きの末尾に RCPT_MAN_LOGMARK を足す＝あとで「手入力だった」と分かる（紙には刷らない）。
+   ■ ⚠️名目の既定は「◯年◯月分 給与として」。書類OCR（コード.js の分類の指示）は
+     ①この名目 ②最下部の太字の名前 のどちらかで「月払い受領書」＝日払い記録に書かない、と振り分ける。
+     名目をこの形から外したら画面で言う（止めはしない＝②が残るので月払いに振り分く見込み）。
+   ■ 入力は画面ではなく状態（RCPT_PAYMAN）に持つ＝発行店や対象月の取得で描き直しても消えない。
+   ■ ⚠️名前は必ず esc を通す（手で打つ＝引用符や < が入り得る）。
+============================================================================ */
+var RCPT_MAN_VAL='__manual';
+var RCPT_MAN_LOGMARK='［✍手入力・名簿外（仮）］';
+var RCPT_MAN_TADA_RE=/^[0-9０-９]{4}年[0-9０-９]{1,2}月分[\s　]*給与として$/;
+var RCPT_PAYMANUAL=false;  // 手入力（仮）を選んでいる
+var RCPT_PAYMAN={atena:'',amt:'',tada:null};   // 手入力の中身。tada:null＝まだ触っていない（対象月から既定を作る）
+function rcptManOpt_(){ return '<option value="'+RCPT_MAN_VAL+'"'+(RCPT_PAYMANUAL?' selected':'')+'>（✍️手入力・名簿外／仮）</option>'; }
+/* 名目の既定＝選んでいる対象月（無ければ今月）の「◯年◯月分 給与として」 */
+function rcptManTadaDef_(){ var k=RCPT_PAYMONTH||rcptToday_().slice(0,7).replace('-','/'); return rcptYmLabel_(k)+'分 給与として'; }
+function rcptManTada_(){ return (RCPT_PAYMAN.tada==null)?rcptManTadaDef_():String(RCPT_PAYMAN.tada); }
+/* 手入力を選んだ／手入力から通常のキャストへ戻った＝ここで引き受けて描き直す（readonly の付け外しは描き直しで行う）。
+   それ以外（通常→通常）は false＝rcptPickCast の元の経路がそのまま走る。 */
+function rcptManSwitch_(v){
+  if(v!==RCPT_MAN_VAL&&!RCPT_PAYMANUAL) return false;
+  RCPT_PAYMANUAL=(v===RCPT_MAN_VAL);
+  RCPT_PAYCAST=RCPT_PAYMANUAL?'':String(v||'');
+  if(RCPT_PAYMANUAL) RCPT_PAYMAN={atena:'',amt:'',tada:null};
+  var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el);
+  return true;
+}
+/* 手入力の欄を打った＝状態に写してプレビューを描き直す */
+function rcptManIn_(){
+  var g=function(id){ return String(((document.getElementById(id)||{}).value)||''); };
+  RCPT_PAYMAN.atena=g('rcpt-atena'); RCPT_PAYMAN.amt=g('rcpt-amt'); RCPT_PAYMAN.tada=g('rcpt-tada');
+  var w=document.getElementById('rcpt-man-warn'); if(w)w.innerHTML=rcptManWarnHtml_();
+  rcptCalc();
+}
+function rcptManWarnHtml_(){
+  if(RCPT_MAN_TADA_RE.test(rcptManTada_().trim())) return '';
+  return '⚠️名目が「◯年◯月分 給与として」の形ではありません。写真で取り込むと振り分けを誤るおそれがあります（例：2026年9月分 給与として）。';
+}
+/* 刷る前の確かめ。空なら理由を返す（空の受領書を出さない） */
+function rcptManCheck_(){
+  var a=String(((document.getElementById('rcpt-atena')||{}).value)||'').trim();
+  var n=parseInt(String(((document.getElementById('rcpt-amt')||{}).value)||'0').replace(/[^0-9]/g,''),10)||0;
+  if(!a) return '受取人の名前を入れてください（✍️手入力）。';
+  if(n<=0) return '受領金額を入れてください（✍️手入力）。';
+  return '';
+}
+function rcptManNoteHtml_(){
+  return '<div class="rcpt-note" style="color:#ffcf7a;font-weight:700">⚠️仮の手入力（給与計算に無い人）</div>'
+    +'<div class="rcpt-note">給与計算（最終支給額）に行が無い人の受領書を仮で作ります。受取人・金額・名目は手で入れてください。'
+    +'給与計算には載りません。控え台帳には「月払い受領書」として、但し書きの末尾に「手入力」の印を付けて残します。</div>';
+}
+function rcptManAtenaHtml_(){
+  return '<input id="rcpt-atena" class="finput" autocapitalize="off" value="'+esc(RCPT_PAYMAN.atena)+'" placeholder="例：星野 太郎" oninput="rcptManIn_()">';
+}
+function rcptManAmtHtml_(){
+  return '<div class="flabel">受領金額（円） <span style="color:#ffcf7a;font-weight:400">＝✍️手入力（仮）</span></div>'
+    +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric" value="'+esc(RCPT_PAYMAN.amt)+'" placeholder="例：304000" oninput="rcptManIn_()">';
+}
+function rcptManTadaHtml_(){
+  return '<input id="rcpt-tada" class="finput" value="'+esc(rcptManTada_())+'" placeholder="例：2026年9月分 給与として" oninput="rcptManIn_()">'
+    +'<div class="rcpt-note" id="rcpt-man-warn" style="color:#ffcf7a">'+rcptManWarnHtml_()+'</div>';
+}
 function rcptMonthlyMock_(){ return {ok:true, month:'2026/06', months:['2026/06','2026/05','2026/04'], rows:[
   {name:'佐藤 美咲', finalPay:182459, kinmu:18},
   {name:'鈴木 レイ',  finalPay:96500,  kinmu:11},
@@ -8611,7 +8680,9 @@ function rcptYmLabel_(k){ var a=String(k||'').split('/'); return (a.length===2)?
 function rcptMonthOpts_(){ if(RCPT_PAYMONTHS===null) return '<option value="">読み込み中…</option>';
   if(!RCPT_PAYMONTHS.length) return '<option value="">対象月がありません</option>';
   return RCPT_PAYMONTHS.map(function(k){ return '<option value="'+esc(k)+'"'+(k===RCPT_PAYMONTH?' selected':'')+'>'+esc(rcptYmLabel_(k))+'分</option>'; }).join(''); }
-function rcptCastOpts_(){ var list=RCPT_PAYCASTS[RCPT_PAYMONTH];
+/* ⭐一覧は元のまま（rcptCastOptsBase_）＋末尾に✍️手入力（仮）。読み込み中・0人でも出す＝名簿外の人は一覧の取得に依らない */
+function rcptCastOpts_(){ return rcptCastOptsBase_()+rcptManOpt_(); }
+function rcptCastOptsBase_(){ var list=RCPT_PAYCASTS[RCPT_PAYMONTH];
   if(list===undefined) return '<option value="">読み込み中…</option>';
   if(!list.length) return '<option value="">対象キャストがいません</option>';
   return '<option value="">▼ キャストを選ぶ</option>'+list.map(function(c){ return '<option value="'+esc(c.name)+'"'+(c.name===RCPT_PAYCAST?' selected':'')+'>'+esc(c.name)+'</option>'; }).join(''); }
@@ -8627,7 +8698,8 @@ function rcptLoadMonthly_(monthKey){
 function rcptPickMonth(v){ RCPT_PAYMONTH=v; RCPT_PAYCAST='';
   if(RCPT_PAYCASTS[v]===undefined){ rcptLoadMonthly_(v); }   // 未キャッシュ月→取得後に再描画
   else { var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); } }
-function rcptPickCast(v){ RCPT_PAYCAST=v; var list=RCPT_PAYCASTS[RCPT_PAYMONTH]||[], c=null;
+function rcptPickCast(v){ if(rcptManSwitch_(v)) return;   /* ✍️手入力に入る／手入力から戻る時だけ。通常の選択は下の元の経路 */
+  RCPT_PAYCAST=v; var list=RCPT_PAYCASTS[RCPT_PAYMONTH]||[], c=null;
   for(var i=0;i<list.length;i++){ if(list[i].name===v){ c=list[i]; break; } }
   var amt=document.getElementById('rcpt-amt'), at=document.getElementById('rcpt-atena');
   if(c){ if(amt)amt.value=String(Number(c.finalPay)||0); if(at)at.value=c.name; }
@@ -8984,6 +9056,7 @@ function rcptRenderMenu_(el){
     h+='<div class="rcpt-note">選ぶと<b>領収書名（宛名）と会計金額</b>が入ります。'
       +'金額が出ていない行は伝票と結べていません（同じお名前が2件ある等）＝金額は手入力してください。</div>';
   }
+  var MM=M&&RCPT_PAYMANUAL;   // ✍️月払いの手入力（仮）＝この時だけ下の4箇所を手入力用に差し替える
   var mSelCast=null; if(M&&RCPT_PAYCAST){ (RCPT_PAYCASTS[RCPT_PAYMONTH]||[]).forEach(function(c){ if(c.name===RCPT_PAYCAST)mSelCast=c; }); }
   if(M){
     h+='<div class="rcpt-h">支払対象の月とキャストを選ぶ（最終支給額を自動反映）</div>';
@@ -8991,14 +9064,16 @@ function rcptRenderMenu_(el){
       +'<select id="rcpt-paymonth" class="finput" onchange="rcptPickMonth(this.value)" style="margin-bottom:8px">'+rcptMonthOpts_()+'</select>';
     h+='<div class="flabel">キャスト</div>'
       +'<select id="rcpt-paycast" class="finput" onchange="rcptPickCast(this.value)">'+rcptCastOpts_()+'</select>';
-    h+='<div class="rcpt-note">金額は先月までの給与計算の「最終支給額」を自動で挿入します（手入力不可）。給与が締まっていない当月は選べません。</div>';
+    h+=MM?rcptManNoteHtml_():'<div class="rcpt-note">金額は先月までの給与計算の「最終支給額」を自動で挿入します（手入力不可）。給与が締まっていない当月は選べません。</div>';
   }
   if(R){ rcptQApply_(); h+='<div id="rcpt-queue">'+rcptQueueHtml_()+'</div>'; }   /* 🧾複数枚の発行（キュー）。⚠️印紙判定のため宛名より前で行を確定させる */
-  var atenaLabel=R?'宛名（領収書名）':(M?'受取人（キャスト・自動入力／修正可）':'受取人（今日の出勤スタッフ・派遣含む／自由入力可）');
+  var atenaLabel=MM?'受取人（✍️手入力・名簿外）':R?'宛名（領収書名）':(M?'受取人（キャスト・自動入力／修正可）':'受取人（今日の出勤スタッフ・派遣含む／自由入力可）');
   h+='<div class="flabel">'+atenaLabel+'</div>';
   if(J){ h+='<select id="rcpt-payee" class="finput" onchange="rcptPickPayee(this.value)" style="margin-bottom:6px"><option value="">▼ 出勤スタッフから選ぶ</option>'+rcptPayeeOpts_()+'<option value="__free">（自由入力）</option></select>'; }
   var qRow=(R&&RCPT_QUEUE&&RCPT_QIDX>=0)?RCPT_QUEUE[RCPT_QIDX]:null;
+  if(MM) h+=rcptManAtenaHtml_(); else
   h+='<input id="rcpt-atena" class="finput" autocapitalize="off"'+(qRow?(' value="'+esc(qRow.atena||'')+'"'):((M&&mSelCast)?(' value="'+esc(mSelCast.name)+'"'):(RCPT_ATENA?(' value="'+esc(RCPT_ATENA)+'"'):'')))+' placeholder="'+(R?'山田 太郎 様 / 株式会社◯◯ 御中':(M?'キャストを選ぶと自動入力':'氏名（選択 または 手入力）'))+'" oninput="rcptCalc()">';
+  if(MM) h+=rcptManAmtHtml_(); else
   h+='<div class="flabel">'+(R?'領収金額（税込・円）':'受領金額（円）')+(M?' <span style="color:var(--sub);font-weight:400">＝給与計算の最終支給額（自動）</span>':'')+'</div>'
     +'<input id="rcpt-amt" class="finput" type="tel" inputmode="numeric"'+(qRow?(' value="'+(Number(qRow.amount)||0)+'"'):((M&&mSelCast)?(' value="'+(Number(mSelCast.finalPay)||0)+'"'):((R&&RCPT_BASE>0)?(' value="'+RCPT_BASE+'"'):'')))+' placeholder="'+(M?'キャストを選ぶと自動で入ります':'50000')+'"'+(M?' readonly style="background:#0b1220;color:var(--accent);font-weight:800"':'')+' oninput="rcptCalc()">';
   if(R){
@@ -9009,6 +9084,7 @@ function rcptRenderMenu_(el){
   h+='<div class="flabel">'+(R?'但し書き':'名目')+'</div>';
   if(J){ h+='<select id="rcpt-mokuteki" class="finput" onchange="rcptPickMokuteki(this.value)" style="margin-bottom:6px">'+rcptMokutekiOpts_()+'</select>'; }
   var tadaVal=R?'飲食代として':(M?((RCPT_PAYMONTH?rcptYmLabel_(RCPT_PAYMONTH)+'分 ':'')+'給与として'):'日払い報酬として');
+  if(MM) h+=rcptManTadaHtml_(); else
   h+='<input id="rcpt-tada" class="finput" value="'+esc(tadaVal)+'"'+(M?' readonly style="background:#0b1220"':(R?'':' placeholder="名目（自由入力可）"'))+' oninput="rcptTadaInput_()">';
   h+='<div class="flabel">発行日</div>'
     +'<div class="rcpt-seg" style="margin-bottom:6px">'
@@ -9030,7 +9106,7 @@ function rcptRenderMenu_(el){
   rcptCalc();
 }
 function rcptSetMode(m){ RCPT_MODE=m; RCPT_SEL=-1;
-  if(m==='M'){ RCPT_PAYCAST=''; if(RCPT_PAYMONTHS===null)rcptLoadMonthly_(''); }
+  if(m==='M'){ RCPT_PAYCAST=''; RCPT_PAYMANUAL=false; if(RCPT_PAYMONTHS===null)rcptLoadMonthly_(''); }
   var el=document.getElementById('menu-body'); if(el)rcptRenderMenu_(el); }
 function rcptSetCash(v,quiet,keepSplit){ RCPT_CASH=v;
   if(!keepSplit) RCPT_SPLIT=null;   /* 手で選び直したら伝票から来た内訳は捨てる（黒服の指定が優先） */
@@ -9283,6 +9359,8 @@ function rcptLandscapePrintXml_(o){
 function rcptPrint(reissue){
   /* ⚠️合計が会計金額を超える領収書は出さない＝二重領収書になる。刷る手前で止める。
      （不足は止めない＝「会社宛に一部だけ」は実務で在る） */
+  /* ✍️月払いの手入力（仮）＝受取人か金額が空なら刷らない（空の受領書を出さない） */
+  if(RCPT_MODE==='M'&&RCPT_PAYMANUAL){ var manNg=rcptManCheck_(); if(manNg){ alert(manNg); return false; } }
   if(RCPT_QUEUE&&RCPT_BASE>0&&rcptQSum_()>RCPT_BASE){
     alert('領収書の合計が会計金額より '+rcptYen_(rcptQSum_()-RCPT_BASE)+' 多いです。\n二重の領収書になるので、金額を直してください。');
     return false;
@@ -9309,7 +9387,7 @@ function rcptLogIssue_(reissue){
     var memberNo=(d.mode==='R'&&RCPT_SEL>=0&&RCPT_DENPYO&&RCPT_DENPYO[RCPT_SEL])?(RCPT_DENPYO[RCPT_SEL].no||''):'';
     var payload={ docType:docType, atena:d.atena||'', memberNo:memberNo,
       amount:d.amount||0, taxExcl:(d.mode==='R'?(d.taxExcl||0):0), tax:(d.mode==='R'?(d.tax||0):0), inshi:(d.mode==='R'?(d.inshi||0):0),
-      cash:(d.mode==='R'?RCPT_CASH:true), tada:d.tada||'', issueDate:d.iso||rcptToday_(),
+      cash:(d.mode==='R'?RCPT_CASH:true), tada:(d.tada||'')+((d.mode==='M'&&RCPT_PAYMANUAL)?RCPT_MAN_LOGMARK:''), issueDate:d.iso||rcptToday_(),
       by:(typeof LOGIN!=='undefined'&&LOGIN)?LOGIN:'',
       /* ⚠️刷り直し（同じ内容をもう1枚）は控え台帳で見分けが付くようにする＝
          紙が2枚出ている事実は残しつつ、売上が二重に見えないため */
@@ -9323,6 +9401,7 @@ function rcptLogIssue_(reissue){
 function openReceipt(){
   menuView='receipt'; RCPT_MODE='R'; RCPT_CASH=true; RCPT_SPLIT=null; RCPT_QUEUE=null; RCPT_QIDX=-1; RCPT_BASE=0; RCPT_BASEPAY=null; RCPT_ATENA=''; RCPT_SEL=-1; RCPT_DENPYO=null; RCPT_PAYEES=null; RCPT_DATEMODE='today';
   RCPT_PAYMONTHS=null; RCPT_PAYCASTS={}; RCPT_PAYMONTH=''; RCPT_PAYCAST='';
+  RCPT_PAYMANUAL=false; RCPT_PAYMAN={atena:'',amt:'',tada:null};
   RCPT_ISSUERS=null; RCPT_ISSUER_ID='';
   RCPT_TAB='form'; RCPT_HIST=null; RCPT_HIST_F=''; RCPT_HIST_Q='';
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
