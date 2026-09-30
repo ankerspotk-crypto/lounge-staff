@@ -108,6 +108,10 @@ tr.sum td{background:#1c202b;font-weight:700;border-top:2px solid var(--gold);bo
 tr.sum td:first-child{background:#1c202b}
 tr.zero td{color:#5b6478}
 .neg{color:var(--dn)} .pos{color:var(--up)}
+/* 🏠固定費のカード（2026-09-30） */
+.kt td{white-space:normal}.kt tr.kc td{font-weight:700;color:var(--ink)}.kt td.ki{padding-left:24px;color:var(--dim);font-size:12px}
+.kt-after{display:flex;justify-content:space-between;align-items:center;gap:12px}.kt-after .mut{font-size:11.5px;margin-top:2px}
+.kt-after .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .mut{color:var(--dim)}
 
 /* ── その他 ─────────────────────────────────────────────── */
@@ -166,7 +170,7 @@ tr.zero td{color:#5b6478}
     </div>
     <div id="err"></div>
     <div id="view"></div>
-    <div class="foot">ラウンジ家康 経営レポート ── BUILD 2026-09-02a</div>
+    <div class="foot">ラウンジ家康 経営レポート ── BUILD 2026-09-30a</div>
   </div>
 </div>
 
@@ -317,6 +321,7 @@ function paintMonth(r){
     + kpi('粗利',yen(s.arari),sgn(s.arari)==='neg'?'dn':'up')
     + (SHOW.kyuritsu?kpi('給率',pct(s.kyuritsu),''):'')
     + '</div></div>';
+  h+=koteiCard(r);   /* 🏠固定費（2026-09-30）＝r.kotei が無ければ空 */
 
   h+='<div class="card"><h2>💹 日別の収支 <small>日付を押すとその日の詳細</small></h2><div class="tw tall"><table>'
     + '<thead><tr>'
@@ -355,6 +360,29 @@ function paintMonth(r){
     + '<br>⚠️<b>担当小計と同伴小計は足し合わせないでください</b>（担当小計には同伴料が含まれます）。'
     + '</div>';
   $('view').innerHTML=h;
+}
+/* 🏠 固定費（2026-09-30・ボス「２も、見せる」）＝サーバの r.kotei をそのまま並べる（⛔ここで足し引きしない）。
+   ・区分の小計＝byCat／合計＝total／固定費を引いた利益＝arariAfter（サーバが**この画面の粗利**から引いた値）。
+     項目は区分ごとに並べ替えて見せるだけ（金額は items の値のまま）。
+   ・r.kotei が無い（GAS がまだ古い）→ 何も出さない＝今までと同じ画面。
+   ・読めない → 1行だけ（利益は出さない）。登録0件 →「登録がありません」だけ（粗利と同じ数字を別名で並べない）。
+   ⚠️メモ・登録者はサーバが送ってこない（partnerKotei_）＝この画面で隠しているのではない。 */
+function koteiCard(r){
+  var k=r&&r.kotei; if(!k) return '';
+  var h='<div class="card" id="kotei"><h2>🏠 固定費 <small>家賃・通信など毎月決まった支払い</small></h2>';
+  if(k.error) return h+'<div class="pad mut" style="font-size:12.5px">固定費を読み込めませんでした（時間をおいて開き直してください）</div></div>';
+  var by=k.byCat||{}, cats=Object.keys(by), items=k.items||[];
+  if(!cats.length&&!items.length&&!Number(k.total)) return h+'<div class="pad mut" style="font-size:12.5px">この月の固定費は登録がありません</div></div>';
+  h+='<table class="kt"><tbody>';
+  cats.forEach(function(c){
+    h+='<tr class="kc"><td class="l">'+esc(c)+'</td><td>'+yen(by[c])+'</td></tr>';
+    items.forEach(function(x){ if(x.cat===c) h+='<tr><td class="l ki">'+esc(x.item)+'</td><td class="mut">'+yen(x.amount)+'</td></tr>'; });
+  });
+  h+='<tr class="sum"><td class="l">固定費 合計</td><td>'+yen(k.total)+'</td></tr></tbody></table>';
+  h+='<div class="pad kt-after"><div><b>固定費を引いた利益</b><div class="mut">＝ 粗利 '+yen(r.sum&&r.sum.arari)+' − 固定費 '+yen(k.total)+'</div></div>'
+    +'<div class="v '+sgn(k.arariAfter)+'">'+yen(k.arariAfter)+'</div></div>';
+  h+='<div class="pad mut" style="font-size:11.5px;padding-top:0">固定費は上の「経費計」「粗利」には入っていません。</div>';
+  return h+'</div>';
 }
 function td(v){ return '<td>'+(Number(v)?yen(v):'<span class="mut">--</span>')+'</td>'; }
 function kpi(k,v,cls,sub){ return '<div class="kpi"><div class="k">'+esc(k)+'</div>'
