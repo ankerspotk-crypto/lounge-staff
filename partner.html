@@ -170,7 +170,7 @@ tr.zero td{color:#5b6478}
     </div>
     <div id="err"></div>
     <div id="view"></div>
-    <div class="foot">ラウンジ家康 経営レポート ── BUILD 2026-09-30a</div>
+    <div class="foot">ラウンジ家康 経営レポート ── BUILD 2026-09-30b</div>
   </div>
 </div>
 
@@ -442,10 +442,13 @@ function daySales(r){
   h+='</tbody></table></div></div>';
 
   if(SHOW.cashCheck && r.cashCheck){
+    /* 💰閉店チェックの4項目（2026-09-30b）＝サーバがそのまま送る値（載せていない伝票の現金はサーバが差し引き済み）。
+       ⭐画面で足し引きしない。null（列が無い／空）は yen() が「--」。
+       ⚠️差額の向き＝残るはず−実測（閉店チェックの実物）＝＋は不足なので＋を赤にする（−は多い） */
     var k=r.cashCheck;
     h+='<div class="card"><h2>💰 現金の締め</h2><div class="kpis">'
-      + kpi('開始金',yen(k.start),'') + kpi('過不足',yen(k.diff),sgn(k.diff)==='neg'?'dn':'')
-      + kpi('預入',yen(k.deposit),'') + kpi('翌日釣銭',yen(k.end),'')
+      + kpi('現金売上',yen(k.cashSales),'') + kpi('残るはず',yen(k.expected),'')
+      + kpi('実測',yen(k.counted),'') + kpi('差額（＋は不足）',yen(k.diff),(k.diff!=null&&sgn(k.diff)==='pos')?'dn':'')
       + '</div></div>';
   }
 
