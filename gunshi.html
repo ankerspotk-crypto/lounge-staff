@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-30a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-09-30b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -6128,7 +6128,8 @@ var BM_SPLITTING=false;
 function bmSplitOpen(){
   var k=String(BM.key||''); if(!k||k==='demo') return;
   if(BM_SPLITTING) return;
-  BM.split={name:'',member:'',tantou:''}; bmRender();
+  /* q/hits/gen＝🔍顧客情報から探す（#62）の入力と結果。⚠️画面ではなく状態に持つ＝20秒の取り込みで描き直しても消えない */
+  BM.split={name:'',member:'',tantou:'',q:'',hits:null,gen:0}; bmRender();
 }
 function bmSplitCancel(){ BM.split=null; bmRender(); }
 function bmSplitPick(i){
@@ -6136,20 +6137,113 @@ function bmSplitPick(i){
   var c=bmSplitCands_(BM.key)[i]; if(!c) return;
   BM.split={name:c.name,member:c.member,tantou:c.tantou}; bmRender();
 }
-/* 名前を手で打った＝候補の会員番号・担当は外す（別の人の番号を付けない） */
-function bmSplitName(v){ if(!BM.split) return; BM.split.name=String(v||''); BM.split.member=''; BM.split.tantou=''; }
+/* 名前を手で打った＝候補の会員番号・担当は外す（別の人の番号を付けない）。
+   ⚠️入力中は描き直さない（フォーカスが飛ぶ）＝会員番号と担当の表示だけ、その場で外す（#62・表示が古いまま残らないように） */
+function bmSplitName(v){
+  if(!BM.split) return; BM.split.name=String(v||''); BM.split.member=''; BM.split.tantou='';
+  var m=document.getElementById('bmSplitMem'); if(m&&m.style) m.style.display='none';
+  var t=document.getElementById('bmSplitTan'); if(t) t.textContent=bmSplitTanDefault_(BM.split)||'なし';
+}
+/* ✂の画面に出す担当の既定＝①選んだお客様の担当（同席の会員様の候補／🔍顧客情報の担当）②予約の担当。
+   ⚠️作るとき（bmSplitCreate）は ① → 席の担当 → 予約の担当（#61 からの順・①が先なのは同じ）。 */
+function bmSplitTanDefault_(sp){
+  var r=bmRsvOf_(bmSplitKey_(BM.key).base);
+  return String((sp&&sp.tantou)||(r&&(r.tantou||r.custTantou))||'');
+}
+/* ============================================================================
+   ✂🔍 分けた伝票のお客様を**顧客情報から探す**（指示箱 #62・2026-09-30）
+   ----------------------------------------------------------------------------
+   ■ 名前か会員番号で探して選ぶ → 分けた伝票に**名前・会員番号・顧客情報の担当**が入る。
+   ■ ⭐探し方は**予約フォームの会員検索と同じ1本**＝サーバの searchKioskCustomersV2
+     （→ searchCustomersForYoyaku_：カード名/氏名/会員番号/ふりがな/よみがな）を呼んで adaptCustomer で読むだけ。
+     ⛔ここに検索の条件を書かない（写すと本物とズレる）。⛔担当名検索（withTantou）は使わない＝予約フォームと同じ。
+   ■ 同席の会員様（予約のサブ内訳）の候補は今までどおり一番上。会員でない方は下の名前欄に手で打つ（今までどおり）。
+   ■ ⚠️遅れて届いた古い返事で新しい結果を上書きしない（gen＝何回目の検索か）。
+     ⚠️選ぶときは「何番目」と「何回目の検索か」の数字だけを渡す＝名前を onclick に書かない（引用符で壊れない）。
+   ■ この予約で既に伝票があるお客様（①の代表・もう分けた伝票）は選べない＝同じ人の伝票を2枚にしない。
+     会員番号があれば会員番号で、無ければ名前で見る。
+============================================================================ */
+var BM_SPLIT_FIND_T=null;
+function bmSplitFindHtml_(sp){
+  return '<div class="bm-note" style="margin-top:9px;color:var(--accent);font-weight:700">🔍 顧客情報から探す（名前・会員番号）</div>'
+    +'<div class="bm-row" style="margin-top:3px"><input type="text" id="bmSplitQ" class="bm-in" style="flex:1;text-align:left" placeholder="例：田中／0361" value="'+esc(sp.q||'')+'" oninput="bmSplitFind(this.value)"></div>'
+    +'<div id="bmSplitRes" class="af-results">'+bmSplitResHtml_(sp)+'</div>';
+}
+/* 打つたびに探す（予約フォームと同じ）。⚠️0.3秒まとめる＝1文字ごとにサーバを叩かない */
+function bmSplitFind(v){
+  var sp=BM.split; if(!sp) return;
+  sp.q=String(v==null?'':v); sp.gen=(Number(sp.gen)||0)+1; sp.busy=false; sp.err=false;
+  if(BM_SPLIT_FIND_T) clearTimeout(BM_SPLIT_FIND_T);
+  var q=sp.q.trim(), gen=sp.gen;
+  if(!q){ sp.hits=null; bmSplitResPaint_(); return; }
+  sp.busy=true; bmSplitResPaint_();
+  BM_SPLIT_FIND_T=setTimeout(function(){ BM_SPLIT_FIND_T=null; bmSplitFindGo_(q,gen); },300);
+}
+function bmSplitFindGo_(q,gen){
+  var sp=BM.split; if(!sp||sp.gen!==gen) return;
+  var fresh=function(){ return BM.split===sp&&sp.gen===gen; };   // 閉じた・次の検索が始まった＝捨てる
+  gsr('searchKioskCustomersV2',q).then(function(list){
+    if(!fresh()) return;
+    sp.hits=(Array.isArray(list)?list:[]).map(adaptCustomer); sp.busy=false; bmSplitResPaint_();
+  }).catch(function(){
+    if(!fresh()) return;
+    sp.hits=null; sp.busy=false; sp.err=true; bmSplitResPaint_();
+  });
+}
+function bmSplitResPaint_(){
+  var el=document.getElementById('bmSplitRes'); if(el&&BM.split) el.innerHTML=bmSplitResHtml_(BM.split);
+}
+/* この予約で既に伝票があるお客様（会員番号→無ければ名前）。⚠️会員番号は数字だけで比べる（"No.0361"＝"361"） */
+function bmSplitNoKey_(v){ var s=String(v==null?'':v).replace(/[０-９]/g,function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); }); var d=s.replace(/\D/g,'').replace(/^0+/,''); return d||s.trim(); }
+function bmSplitUsed_(){
+  var base=bmSplitKey_(BM.key).base, r=bmRsvOf_(base), no={}, nm={};
+  if(r&&String(r.mem||'').trim()) no[bmSplitNoKey_(r.mem)]=1;
+  nm[bmRsvCustOf_(base)]=1;
+  bmSplitFamily_(base).forEach(function(x){
+    var d=BM.draft[x]; if(!d) return;
+    var m=String((d._split&&d._split.member)||'').trim(); if(m) no[bmSplitNoKey_(m)]=1;
+    var n=String(d._cust||'').trim(); if(n) nm[n]=1;
+  });
+  return function(c){ var m=String((c&&c.member)||'').trim(); return m?!!no[bmSplitNoKey_(m)]:!!nm[String((c&&c.name)||'').trim()]; };
+}
+function bmSplitResHtml_(sp){
+  if(!sp||!String(sp.q||'').trim()) return '';
+  if(sp.busy) return '<div class="empty-msg" style="padding:10px;font-size:12px">検索中...</div>';
+  if(sp.err) return '<div class="empty-msg" style="padding:10px;font-size:12px">検索エラー（通信を確かめてもう一度打つか、名前を手で打ってください）</div>';
+  var list=sp.hits||[];
+  if(!list.length) return '<div class="empty-msg" style="padding:10px;font-size:12px">見つかりませんでした（会員でない方は下の名前欄に打ってください）</div>';
+  var used=bmSplitUsed_();
+  return list.map(function(c,i){
+    var u=used(c), on=!!(sp.member&&sp.member===c.member&&sp.name===c.name);
+    return '<div class="af-res"'+(u?' style="opacity:.45;cursor:default"':(on?' style="border-color:var(--accent)"':''))
+      +(u?'':' onclick="bmSplitPickCust('+i+','+(Number(sp.gen)||0)+')"')+'>'
+      +'<div class="af-res-top"><span class="cc-nm">'+esc(c.name)+' 様</span> <span class="cc-mem">'+esc(c.member||'—')+'</span>'
+      +(u?' <span style="font-size:10.5px;color:var(--sub)">この予約で伝票あり</span>':(on?' ✅':''))+'</div>'
+      +(c.tantou?'<div class="cc-meta">担当 '+esc(c.tantou)+'</div>':'')+'</div>';
+  }).join('');
+}
+/* 🔍の結果から選ぶ。i＝何番目／gen＝何回目の検索の結果か（違えば押した後に結果が入れ替わった＝選ばない） */
+function bmSplitPickCust(i,gen){
+  var sp=BM.split; if(!sp||Number(gen)!==Number(sp.gen)) return;
+  var c=(sp.hits||[])[i]; if(!c) return;
+  if(bmSplitUsed_()(c)) return;
+  sp.name=String(c.name||'').trim(); sp.member=String(c.member||'').trim(); sp.tantou=String(c.tantou||'').trim();
+  bmRender();
+}
 function bmSplitHtml_(){
   var sp=BM.split; if(!sp||!BM.key) return '';
   var cands=bmSplitCands_(BM.key), base=bmSplitKey_(BM.key).base, r=bmRsvOf_(base);
-  var tan=sp.tantou||(r&&(r.tantou||r.custTantou))||'';
+  var tan=bmSplitTanDefault_(sp);
   return '<div class="bm-modal-bg" onclick="bmSplitCancel()"></div><div class="bm-modal">'
     +'<div style="font-size:16px;font-weight:800">✂ 伝票を分ける（'+bmSplitMark_(bmSplitNextKey_(base))+'）</div>'
     +'<div class="bm-note" style="margin-top:6px">同じ予約のまま、この会員様の伝票を別に作ります。</div>'
     +(cands.length?'<div class="bm-note" style="margin-top:9px;color:var(--accent);font-weight:700">同席の会員様（予約のサブ内訳）</div><div class="chips" style="margin-top:3px">'
       +cands.map(function(c,i){ return '<div class="chip'+(sp.name===c.name?' sel':'')+'" onclick="bmSplitPick('+i+')">'+esc(c.name)
         +(c.tantou?' <span style="font-size:10px;color:var(--sub)">担当 '+esc(c.tantou)+'</span>':'')+'</div>'; }).join('')+'</div>':'')
-    +'<div class="bm-row" style="margin-top:9px"><span class="lb">お客様名</span><input type="text" id="bmSplitNm" class="bm-in" style="flex:1;text-align:left" placeholder="名前を打つ（例：田中）" value="'+esc(sp.name||'')+'" oninput="bmSplitName(this.value)"></div>'
-    +'<div class="bm-note">担当は既定で <b>'+esc(tan||'なし')+'</b>（分けた伝票の③で変えられます）。セットはいま開いている伝票から1名移します（1名しか居なければ1名分を足します）。</div>'
+    +bmSplitFindHtml_(sp)
+    +'<div class="bm-row" style="margin-top:9px"><span class="lb">お客様名</span><input type="text" id="bmSplitNm" class="bm-in" style="flex:1;text-align:left" placeholder="会員でない方は名前を打つ（例：田中）" value="'+esc(sp.name||'')+'" oninput="bmSplitName(this.value)"></div>'
+    +'<div id="bmSplitMem" class="bm-note" style="color:var(--green);font-weight:700'+(sp.member?'':';display:none')+'">✅ 会員番号 '+esc(sp.member||'')+'＝この伝票に付きます</div>'
+    +'<div class="bm-note">担当は既定で <b id="bmSplitTan">'+esc(tan||'なし')+'</b>（分けた伝票の③で変えられます）。セットはいま開いている伝票から1名移します（1名しか居なければ1名分を足します）。</div>'
     +'<div class="bm-row" style="margin-top:12px"><button class="bm-btn pri" style="flex:1;padding:12px" onclick="bmSplitCreate()">'+(BM_SPLITTING?'⏳ 作成中…':'✅ 分ける')+'</button>'
     +'<button class="bm-btn" onclick="bmSplitCancel()">キャンセル</button></div></div>';
 }
