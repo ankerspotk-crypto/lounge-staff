@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-10-01a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-02a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -1996,7 +1996,8 @@ function phaseStatLine_(p){
     }
     if(p==='post'){
       if(!CLOSE_FLOW||!CLOSE_FLOW.at) return '';             /* 閉店データを一度も読んでいない＝黙る */
-      var left=cfSteps_().filter(function(x){return x.state!=='done';}).length;
+      /* 🟡warn＝締めを止めない要修正（#66）＝「残り」に数えない（帰れるかは cfCanGoHome_ と同じ答え） */
+      var left=cfSteps_().filter(function(x){return x.state!=='done'&&x.state!=='warn';}).length;
       return left ? '残り '+left+'件' : '<span class="ok">✓ 退勤OK</span>';
     }
   }catch(e){ return ''; }
@@ -2885,6 +2886,8 @@ function loadClosingFlow(force){
   if(!IS_GAS||CLOSE_FLOW.loading)return;
   if(!force&&CLOSE_FLOW.at&&(Date.now()-CLOSE_FLOW.at)<20000)return;   // 20秒はキャッシュ（GASの床1.9秒を毎回払わない）
   CLOSE_FLOW.loading=true;
+  /* 🟡前の日に残った伝票（#66）。⚠️締めの4本とは別に取る＝遅くても・取れなくても締めは止めない（数分おぼえる） */
+  if(typeof posFixLoad==='function') posFixLoad(false);
   Promise.all([
     gsr('getCashCheckInit').catch(function(){return null;}),
     gsr('getPosDayStatus').catch(function(){return null;}),
@@ -2917,16 +2920,25 @@ function cfSteps_(){
   var F=CLOSE_FLOW, cash=F.cash||{}, pos=F.pos, gate=F.gate;
   var submitted=!!cash.reportSubmitted, approved=!!cash.approved;
   var S=[];
-  // ① POS
-  var posOk=!pos||!pos.enforce||!!pos.ready;
+  // ① POS ＝ 🟡警告（ボス確定 2026-10-01・指示箱 #66）
+  /* ボス「売上伝票とかはあとから修正できるようにして、締めはできるようにしてほしい」。
+     発端＝9/30 の締めが、分けた伝票②の置き去り（未会計）で止まった。
+     ⭐伝票の問題（未会計 open／請求書の依頼漏れ invoice／担当が空 noTantou）は**締めを止めない**＝state:'warn'。
+       warn は cfCanGoHome_ が数えない＝帰れる。伝票はあとから直せる（🧾伝票管理 →📅過去の伝票を直す）。
+     ⭐残った伝票は翌日以降も「要修正」に出続ける（下の cf_posfix／サーバの getPosFixList）＝消えない・溜まるのが見える。
+     ⛔**必須か警告かを決めるのはここ（cfSteps_）の1箇所だけ**。閉店チェックの送信（ccPosReady_）はここに聞く。
+     ⛔getPosDayStatus の ready の意味は変えていない（サーバは事実を返すだけ）。
+     ⛔現金・日払い・TRUST／日報・タスクの持ち越しの関所は今のまま（伝票だけを下げた）。 */
+  var posIssue=!!(pos&&pos.enforce&&!pos.ready);
   var posWhy='';
-  if(pos&&pos.enforce&&!pos.ready){
+  if(posIssue){
     var m=[]; if((pos.open||[]).length)m.push('未会計 '+pos.open.length+'件');
     if((pos.invoice||[]).length)m.push('請求書の依頼 '+pos.invoice.length+'件');
     posWhy=m.join(' / ');
-  }else if(!pos){ posWhy='確認中'; }
-  S.push({id:'cf_pos',em:'🧾',t:'POSを締める',s:posOk?'未会計・請求書の依頼なし':posWhy,
-    state:posOk?'done':'todo',act:"setViewMode('bill')"});
+  }
+  S.push({id:'cf_pos',em:'🧾',t:posIssue?'伝票を直す（締めは通ります）':'POSを締める',
+    s:!pos?'確認中':(posIssue?(posWhy+'　あとから直せます（残ると明日も「要修正」に出ます）'):'未会計・請求書の依頼なし'),
+    state:posIssue?'warn':'done',act:"setViewMode('bill')"});
   /* 🧑 担当が空のまま会計された伝票（ボス確定 2026-09-26・必須工程）
      ■ なぜ要るか＝2026年8月に **¥150,300 が別人の担当売上として給与に乗った**。
        原因は「担当が空だったこと」ではなく **なぜ空なのかが記録されなかったこと**＝
@@ -2939,13 +2951,24 @@ function cfSteps_(){
      ⚠️**状態が取れない夜は工程そのものを出さない**（日報の工程と同じ流儀）。
        `pos.noTantou` が配列で来たときだけ出す＝通信不良・backend未投入で誰も帰れなくしない。
      ⚠️テストモード(enforce=false)では止めない＝練習データで本物の締めを止めない（①POSと同じ）。 */
+  /* 🟡2026-10-01（#66）＝担当が空の伝票も**締めを止めない**（warn）。ボス確定「伝票の問題は全部通す」。
+     ⚠️それでも空のままだと別の人の売上になる＝文言で必ず言う・翌日以降も「要修正」に出続ける。 */
   if(pos&&Object.prototype.toString.call(pos.noTantou)==='[object Array]'){
     var noT=pos.noTantou, tanOk=(!pos.enforce||noT.length===0);
     S.push({id:'cf_tantou',em:'🧑',t:'担当が空の伝票をなくす',
       s:(!pos.enforce)?'テストモードのため止めていません'
-        :(noT.length?(noT.length+'件　担当を入れるか🏠店担当を選んでください（空のままだと別の人の売上になります）')
+        :(noT.length?(noT.length+'件　担当を入れるか🏠店担当を選んでください（締めは通ります。空のままだと別の人の売上になります）')
                     :'会計済みの伝票はすべて担当が入っています'),
-      state:tanOk?'done':'todo',act:'openTantouBlank()'});
+      state:tanOk?'done':'warn',act:'openTantouBlank()'});
+  }
+  /* 🟡前の日に残った伝票（#66）＝締めのあとに残った伝票を翌日以降も出し続ける（消えない・溜まるのが見える）。
+     ⭐中身はサーバ getPosFixList（各営業日を getPosDayStatus に聞くだけ）＝ここで数え直さない。
+     ⚠️取れていない夜は出さない（締めは止めないので、出ないことで困る人はいない）。 */
+  var pfx=(typeof POS_FIX!=='undefined'&&POS_FIX&&Array.isArray(POS_FIX.list))?POS_FIX:null;
+  if(pfx&&Number(pfx.count)>0){
+    S.push({id:'cf_posfix',em:'🟡',t:'前の日の伝票に要修正があります',
+      s:pfx.count+'件（'+pfx.list.length+'日分）　締めは通ります。🧾伝票管理の「📅過去の伝票を直す」から直せます',
+      state:'warn',act:'openPosFix()'});
   }
   // ② 日払い伝票を整える（受取人・金額）
   var slips=readSlipsFromDenpyo(F.denpyo).filter(function(x){return Number(x.amount)>0&&/日払/.test(String(x.category||''));});
@@ -3039,7 +3062,9 @@ function cfSteps_(){
     state:approved?'done':'wait',act:'openCashCheck()'});
   return S;
 }
-function cfCanGoHome_(){ return cfSteps_().every(function(s){return s.state==='done';}); }
+/* 🟡warn＝締めを止めない要修正（#66・伝票の問題）。帰れる／帰れないを数えるのはここと、ホームの「残り」だけ。
+   ⛔どの工程を warn にするかは cfSteps_ の1箇所が決める（ここで工程を名指ししない）。 */
+function cfCanGoHome_(){ return cfSteps_().every(function(s){return s.state==='done'||s.state==='warn';}); }
 /* ⚠️「今日中に片付けたいこと」＝退勤はブロックしない警告（ボス確定 2026-08-26「まずは警告表示から」）。
    ⛔ここに出す条件を cfSteps_ 側にも書かないこと。同じ条件を2箇所で判定すると必ずズレて
       「送信済みなのに永久に帰れない」が起きる（2026-08-25に2回踏んだ）。必須はcfSteps_・警告はここ、で分ける。 */
@@ -3072,11 +3097,11 @@ function cfWarnHtml_(w){
     +'<div class="go">›</div></div>';
 }
 function cfStepHtml_(s){
-  var done=s.state==='done', wait=s.state==='wait';
-  var mark=done?'✓':(wait?'…':'');
-  var col=done?'var(--green)':(wait?'var(--dim)':'var(--gold)');
+  var done=s.state==='done', wait=s.state==='wait', warn=s.state==='warn';   // 🟡warn＝締めは通る要修正（#66）
+  var mark=done?'✓':(wait?'…':(warn?'!':''));
+  var col=done?'var(--green)':(wait?'var(--dim)':(warn?'#e6c14a':'var(--gold)'));
   return '<div class="hv-chk'+(done?' done':'')+'" onclick="'+s.act+'" style="'+(done?'':'border-color:'+col)+'">'
-    +'<div class="box"'+(s.manual?' onclick="toggleHomeCheck(\''+s.id+'\',event)"':'')+' style="color:'+(done?'':'transparent')+';border-color:'+col+'">'+mark+'</div>'
+    +'<div class="box"'+(s.manual?' onclick="toggleHomeCheck(\''+s.id+'\',event)"':'')+' style="color:'+(done?'':(warn?col:'transparent'))+';border-color:'+col+'">'+mark+'</div>'
     +'<div class="em">'+s.em+'</div>'
     +'<div class="bd"><div class="t">'+esc(s.t)+'</div><div class="s" style="color:'+(done?'var(--dim)':col)+'">'+esc(s.s)+'</div></div>'
     +'<div class="go">›</div></div>';
@@ -3084,7 +3109,9 @@ function cfStepHtml_(s){
 function renderClosingFlow(){
   if(CLOSING_TASKS==null&&IS_GAS)loadChecklistConfig();
   loadClosingFlow(false);
-  var S=cfSteps_(), doneN=S.filter(function(x){return x.state==='done';}).length, total=S.length;
+  /* 🟡warn（要修正・締めは通る #66）は「あと N 件」にも進み具合にも入れない＝別の段で出す */
+  var S0=cfSteps_(), W=S0.filter(function(x){return x.state==='warn';});
+  var S=S0.filter(function(x){return x.state!=='warn';}), doneN=S.filter(function(x){return x.state==='done';}).length, total=S.length;
   var pct=total?Math.round(doneN/total*100):0;
   var left=total-doneN, ok=cfCanGoHome_();
   /* 🚪 一番上に「帰れるかどうか」だけを大きく出す。締めの目的はこれ1つなので、他は全部その下。 */
@@ -3109,6 +3136,11 @@ function renderClosingFlow(){
   /* ⚠️退勤をブロックする「やること」と、ブロックしない「今日中に片付けたいこと」を必ず分けて出す。
      混ぜると『あと N 件』が何を指すのか分からなくなる＝締めの目的がぼやける。 */
   /* ⚠️警告ブロックは 2026-08-27 に必須工程 cf_warn へ格上げ＝ここには出さない（同じものを2箇所に出さない） */
+  /* 🟡要修正（#66）＝伝票の問題。帰れるが、直すまで毎晩ここに出る（前の日の分は cf_posfix） */
+  if(W.length){
+    h+='<div class="hv-sec"><span class="st" style="color:#e6c14a">🟡 要修正（締めは通ります・あとから直せます）</span><span class="cnt">'+W.length+'</span></div>';
+    h+=W.map(cfStepHtml_).join('');
+  }
 
   if(fin.length){
     h+='<div class="hv-sec done"><span class="st">✓ 完了</span><span class="cnt">'+fin.length+'</span></div>';
@@ -4399,11 +4431,14 @@ function bmPeek_(rowIdx){
 /* 🧾 席の「伝票」ボタンから開く。⚠️2026-08-28ボス指示＝**ポップアップで出してすぐ戻れる**ように。
    伝票管理タブ(viewMode==='bill')を自分で開いている時は、従来どおりその画面で切り替えるだけ。 */
 function openBillFor(rowIdx){
+  /* 📅#66 過去の日の伝票管理から離れて、①に戻し終わるのを待っている間（BM_PAST が残っている）＝開かせない */
+  if(typeof BM_PAST!=='undefined'&&BM_PAST&&viewMode!=='bill'){ alert('過去の日の伝票を片付けています。少し待ってから開いてください。'); return; }
   BM.key=String(rowIdx); BM.want=String(rowIdx);
   if(viewMode==='bill'){ bmRender(); return; }
   openBillPopup();
 }
 function openBillPopup(){
+  if(typeof BM_PAST!=='undefined'&&BM_PAST){ alert('過去の日の伝票を片付けています。少し待ってから開いてください。'); return; }   // 📅#66
   document.body.classList.add('bill-pop');
   var t=document.getElementById('bmPopTtl');
   if(t){
@@ -5642,10 +5677,240 @@ function bmYen(n){ return '¥'+(Math.round(Number(n)||0)).toLocaleString('ja-JP'
 /* ⚠️POSは**営業日**で動く。`curDate`（画面で見ている日付）を使ってはいけない＝
    黒服が前日を開いたまま打つと、伝票が前日に保存され、閉店ゲートも前日を見に行って
    「タスクなし」と誤判定する。TODAY＝bootstrapが返す営業日（深夜6時前は前日）。 */
-function bmDateKey(){ return (typeof TODAY!=='undefined'&&TODAY)?TODAY:(typeof curDate!=='undefined'?curDate:''); }
+/* 📅#66＝過去の営業日の伝票を直している間（BM_PAST）はその日を返す。⛔ここ以外で営業日を決めない（1本のまま） */
+function bmDateKey(){ if(typeof BM_PAST!=='undefined'&&BM_PAST) return BM_PAST; return (typeof TODAY!=='undefined'&&TODAY)?TODAY:(typeof curDate!=='undefined'?curDate:''); }
 function bmStoreKey(){ return 'gunshiBillDraft_'+(bmDateKey()||'today'); }
 function bmLoad(){ try{ BM.draft=JSON.parse(localStorage.getItem(bmStoreKey())||'{}'); }catch(e){ BM.draft={}; } }
 function bmStash_(){ try{ localStorage.setItem(bmStoreKey(),JSON.stringify(BM.draft)); }catch(e){} }
+/* ============================================================================
+   📅 過去の営業日の伝票を直す（指示箱 #66・2026-10-01）
+   ----------------------------------------------------------------------------
+   ボス「売上伝票とかはあとから修正できるようにして、締めはできるようにしてほしい」／確定「過去の日の伝票もあとから直せる」。
+   ⭐作り＝この伝票管理（BM）を**そのまま別の営業日で開く**だけ。bmDateKey() がその日を返すので、
+     保存 posSaveBill／取り込み getPosBills／会計 posCloseBill／取消 posReopenBill／消す posDeleteBill／台帳 getPosClosed が
+     全部その日へ行く（サーバは元から営業日を引数で受ける＝サーバは変えていない）。
+     ⛔別の編集画面を作らない（伝票の編集を2箇所に持つと必ず食い違う）。コンソールは一覧を見せるだけ。
+   ⭐直し方は今日の伝票と同じ＝伝票を開く →「会計を取り消す」→ 直す →「会計する」。
+     台帳（POS_会計）の行は消さず状態を「取消」にする（posReopenBill・forward-only）。行のキー（営業日｜伝票行）は変えない。
+   ⭐過去の日を開いている間は**オレンジの帯を常に出す**＝今日の伝票と取り違えない。
+     今日の席（SEATS）とお試し伝票は出さない＝今日の組を過去の日に保存させない。
+   ⭐伝票管理から離れたら今日に戻る（bmPullStop が bmPastLeave_ を呼ぶ）＝戻し忘れて今日の伝票を過去の日に打たせない。
+     離れる瞬間にまとめ保存（1.2秒）が残っていれば、その場で過去の日のまま送り切る（bmPastFlush_）。
+   ⚠️返事が戻る前に日を切り替えたら、その返事を今の日の下書きに混ぜない（bmPull／bmSyncClosed／会計／取消が
+     営業日を持ち回って確かめる）。台帳が正本なので、その日を開き直せば画面は台帳に合わせて直る。
+   ⚠️開ける日＝今日より前・BM_PAST_MAX_DAYS 日まで（入口の日付欄とこの関所の2つで同じ定数を使う）。
+============================================================================ */
+var BM_PAST='';                 // '' = 今日の営業日。'YYYY-MM-DD' = 過去の営業日の伝票を直している
+var BM_PAST_MAX_DAYS=31;        // 過去の何日前まで開けるか（ボス確定 2026-10-01＝31日）
+var BM_PAST_CASH=null;          // その日の閉店チェックの状態 {submitted,approved}（警告に使うだけ・止めない）
+var BM_PAST_LEAVE_T=null, BM_PAST_LEAVE_N=0, BM_PAST_LEAVING=false;   // ✂①に戻している最中は離れても日を切り替えない（待つ）
+/* ⭐保存の待ち行列の「営業日」（伝票行→営業日）。bmSave で積んだ日・送れなかった日を覚える（qa 差し戻し2）。
+   ⛔再送を「送る瞬間の bmDateKey()」で送ると、日を切り替えた後に別の日へ保存してしまう／今の日の下書きに無くて黙って消える。
+   ⭐今の日と違う日の再送は、その日の端末の下書き（localStorage）から送る（bmPushOther_）。 */
+var BM_PUSH_DK={};
+function bmPastToday_(){ return (typeof TODAY!=='undefined'&&TODAY)?TODAY:(typeof curDate!=='undefined'?curDate:''); }
+function bmPastMd_(dk){ var m=String(dk||'').match(/^\d{4}-(\d{2})-(\d{2})$/); return m?(Number(m[1])+'/'+Number(m[2])):String(dk||''); }
+/* 暦日で n 日ずらした 'YYYY-MM-DD'（正午で数える＝日付の境目で転ばない） */
+function bmPastShift_(dk,n){
+  var m=String(dk||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return '';
+  var d=new Date(Number(m[1]),Number(m[2])-1,Number(m[3])+n,12);
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+/* 開ける過去の営業日か。⭐今日より前・BM_PAST_MAX_DAYS 日以内だけ（今日の分は普通の伝票管理で直す） */
+function bmPastOk_(dk){
+  var today=bmPastToday_(); dk=String(dk||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(dk)||!today) return false;
+  return dk<today&&dk>=bmPastShift_(today,-BM_PAST_MAX_DAYS);
+}
+/* まとめ保存（1.2秒待ち）が残っていたら、いまの日のまま送り切る（⚠️bmPushNow は送る瞬間の bmDateKey() を使う） */
+function bmPastFlush_(){ if(BM_PUSH_T){ clearTimeout(BM_PUSH_T); BM_PUSH_T=null; bmPushNow(); } }
+/* 送り残し（まとめ保存待ち・再送待ち）があるか */
+function bmPastUnsent_(){ return Object.keys(BM_PUSH_Q).length>0||!!BM_RETRY_T; }
+/* 今の日と違う営業日の伝票を、その日の端末の下書きから送る（再送・離れた後の送り残し） */
+function bmPushOther_(dk,k){
+  var all={}; try{ all=JSON.parse(localStorage.getItem('gunshiBillDraft_'+dk)||'{}')||{}; }catch(e){ all={}; }
+  var d=all[k]; if(!d){ delete BM_PUSH_DK[k]; return; }
+  gsr('posSaveBill',dk,k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
+    .then(function(r){ if(BM_PUSH_DK[k]===dk&&!BM_PUSH_Q[k]) delete BM_PUSH_DK[k]; bmPushLate_(dk,k,r); })
+    .catch(function(){ BM_PUSH_Q[k]=1; BM_PUSH_DK[k]=dk; bmRetrySoon(); });
+}
+/* 別の日の保存の返事＝今の日の下書きには触らない。断られたときだけ知らせる */
+function bmPushLate_(dk,k,r){
+  /* 「混み合っています」＝サーバがロックを取れなかっただけ＝その日のまま送り直す（A1 と同じ考え） */
+  if(r&&r.ok===false&&!r.splitTaken&&!r.splitGone&&/混み合っています/.test(String(r.error||''))){ BM_PUSH_Q[k]=1; BM_PUSH_DK[k]=dk; bmRetrySoon(); return; }
+  if(r&&r.ok===false&&typeof toast==='function') toast('📅 '+bmPastMd_(dk)+' の伝票（'+k+'）を保存できませんでした：'+String(r.error||'')+'（その日を開いて確かめてください）');
+}
+/* ✂①に戻す途中で日を切り替えた（20秒待っても戻らなかった）＝②をその日の端末の下書きに残す（中身を黙って捨てない）。
+   push=true＝サーバでは②が消えている＝その日のまま送り直して元に戻す（①には入っていない＝二重にならない） */
+function bmPastKeepSplit_(dk,k,snap,push){
+  var key='gunshiBillDraft_'+dk, all={};
+  try{ all=JSON.parse(localStorage.getItem(key)||'{}')||{}; }catch(e){ all={}; }
+  if(snap){ if(snap._split) delete snap._split.shared; all[k]=snap; }
+  try{ localStorage.setItem(key,JSON.stringify(all)); }catch(e){}
+  if(push){ BM_PUSH_Q[k]=1; BM_PUSH_DK[k]=dk; bmPushSoon(); }
+}
+/* 過去の日を会計し直す／取り消すときの確認文の頭（ボス確定 B＝止めずに警告） */
+function bmPastWarn_(d){
+  if(!BM_PAST) return '';
+  var m='📅 '+bmPastMd_(BM_PAST)+' の伝票です（今日ではありません）。\n';
+  if(d&&d.pay&&Number(d.pay.cash)>0) m+='⚠️現金で会計すると、この日の現金チェックと合わなくなります。\n';
+  var c=BM_PAST_CASH;
+  if(c&&c.approved) m+='⚠️この日の閉店チェックは承認済みです。直すと承認した数字と変わります。\n';
+  else if(c&&c.submitted) m+='⚠️この日の閉店チェックは送信済みです。直すと送った数字と変わります。\n';
+  return m+'\n';
+}
+/* 過去の日を会計し直した／取り消した＝その日の伝票シートの流し直しを頼む（サーバ posPastDayChanged が印を付け、営業時間外に billSyncPosDay・ボス確定 C）。
+   ⭐会計の返事を受け取った後に別に頼む（会計を重くしない）。⚠️失敗しても伝票は直っている＝知らせるだけ */
+function bmPastResync_(dk,k,what){
+  dk=String(dk||''); var today=bmPastToday_();
+  if(!dk||!today||!(dk<today)||typeof gsr!=='function') return null;
+  return gsr('posPastDayChanged',dk,String(k),what,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
+    if(typeof toast!=='function') return;
+    /* ⭐サーバは「流し直しが要る日」の印を付けるだけ（会計の通り道で流し直さない）＝流し直しは営業時間外に自動 */
+    if(r&&r.marked) toast('📅 '+bmPastMd_(dk)+' の伝票シートは、営業時間外（朝〜昼）に自動で流し直します'+(r.nippoFixed?'（日報は確定済みのため変えていません・管理者に知らせました）':''));
+    else toast('⚠️ '+bmPastMd_(dk)+' の伝票シートの流し直しを頼めませんでした'+((r&&r.error)?'（'+r.error+'）':'')+'。管理者に伝えてください');
+  },function(){ if(typeof toast==='function') toast('⚠️ '+bmPastMd_(dk)+' の伝票シートの流し直しが通信できませんでした。管理者に伝えてください'); });
+}
+function bmPastOpen(dk,rowIdx){
+  dk=String(dk||'');
+  if(!bmPastOk_(dk)){ alert('開けるのは今日より前の '+BM_PAST_MAX_DAYS+' 日までです（'+(dk||'日付なし')+'）'); return; }
+  if(BM_CLOSING){ alert('会計の返事を待っています。少し待ってから開いてください。'); return; }
+  if(BM_UNDOING){ alert('分けた伝票を戻しています（消しています）。少し待ってから開いてください。'); return; }
+  if(typeof document!=='undefined'&&document.body&&document.body.classList.contains('bill-pop')&&typeof closeBillPopup==='function') closeBillPopup();
+  bmPastFlush_();                                  // ⭐切り替える前に、いまの日の送り残しを送る
+  /* ⭐再送待ちは元の日のまま送る（BM_PUSH_DK）＝消えない。待っていることだけ知らせる（qa 差し戻し2） */
+  if(bmPastUnsent_()&&typeof toast==='function') toast('共有待ちの伝票があります。通信が戻れば元の日のまま自動で送ります');
+  BM_PAST=dk; BM_PAST_CASH=null; BM_PAST_LEAVING=false; BM_PAST_LEAVE_N=0; BM.key=null; BM.want=rowIdx?String(rowIdx):null; BM.slip=null; BM.pick=null; BM_SYNC_ERR='';
+  BM_CLOSED_CK=0;                                  // ⭐最初の取り込みで台帳の照合を間隔待ちなしで回す（離れた後に届いた会計も、開き直せば台帳に合わせて直る）
+  bmLoad();                                        // その日の端末の下書き（保存場所は日ごとに別＝bmStoreKey）
+  if(typeof closeSheet==='function') closeSheet();
+  if(typeof setViewMode==='function') setViewMode('bill');   // 描画＋取り込み（bmPullStart）＝その日のサーバの伝票が届く
+  /* その日の閉店チェックの状態（送信済み・承認済み）＝帯と確認文で警告するだけ（止めない・ボス確定 B） */
+  if(typeof gsr==='function') gsr('getCashCheckInit',dk).then(function(r){
+    if(BM_PAST!==dk||!r) return;
+    BM_PAST_CASH={submitted:!!r.reportSubmitted,approved:!!r.approved};
+    bmRenderIfIdle();
+  },function(){});
+}
+/* 今日の伝票に戻る（帯のボタン）。⚠️会計・取消の返事を待っている間は戻さない */
+function bmPastExit(){
+  if(!BM_PAST) return;
+  if(BM_CLOSING){ alert('会計の返事を待っています。少し待ってから戻ってください。'); return; }
+  if(BM_UNDOING){ alert('分けた伝票を戻しています（消しています）。少し待ってから戻ってください。'); return; }
+  bmPastLeave_(); bmRender();
+  if(BM_PULL_T) bmPull();                          // 今日の伝票を取り直す（取り込みは回ったまま）
+}
+/* 過去の日を閉じる本体（bmPastExit と、伝票管理から離れたとき bmPullStop から）。戻ったら true */
+function bmPastLeave_(){
+  if(!BM_PAST) return false;
+  /* ✂①に戻している（②だけ消している）最中は日を切り替えない＝返事が来てから戻る（qa 差し戻し1）。
+     ⚠️0.5秒ごとに見直し、20秒待っても終わらなければ戻る（返事の側も営業日を確かめるので混ざらない）。
+     ⭐待っている間に伝票管理へ戻ってきたら（bmPullStart）戻るのをやめる。 */
+  if(BM_UNDOING&&BM_PAST_LEAVE_N<40){
+    BM_PAST_LEAVING=true;
+    if(!BM_PAST_LEAVE_T) BM_PAST_LEAVE_T=setTimeout(function(){ BM_PAST_LEAVE_T=null; BM_PAST_LEAVE_N++; if(BM_PAST_LEAVING) bmPastLeave_(); },500);
+    return false;
+  }
+  BM_PAST_LEAVING=false; BM_PAST_LEAVE_N=0;
+  var dk=BM_PAST;
+  bmPastFlush_();                                  // ⭐まとめ保存を過去の日のまま送り切ってから切り替える
+  var unsent=bmPastUnsent_();
+  BM_PAST=''; BM_PAST_CASH=null; BM.key=null; BM.want=null; BM.slip=null; BM.pick=null; BM_SYNC_ERR='';
+  bmLoad();
+  POS_FIX_AT=0;                                    // 直した結果を、次に一覧を見るとき取り直す
+  if(unsent&&typeof toast==='function') toast('📅 '+bmPastMd_(dk)+' の伝票に、まだ共有できていない変更があります。通信が戻れば '+bmPastMd_(dk)+' のまま自動で送ります');
+  return true;
+}
+/* 返事が戻る前に日を切り替えていたら true（その返事で今の日の下書きを触らない）。台帳が正本＝その日を開き直せば直る */
+function bmPastMoved_(dk,r){
+  if(String(dk)===String(bmDateKey())) return false;
+  if(typeof toast==='function') toast('📅 '+bmPastMd_(dk)+' の伝票：'+((r&&r.ok)?'記録しました':'結果を確かめられませんでした')+'（画面はもう別の日です。その日を開き直すと台帳に合わせて直ります）');
+  return true;
+}
+function bmPastBannerHtml_(){
+  if(!BM_PAST) return '';
+  return '<div style="border:2px solid #e08a2a;background:rgba(224,138,42,.14);border-radius:12px;padding:10px 12px;margin:0 0 10px">'
+    +'<div style="font-size:15px;font-weight:900;color:#ffb060">📅 '+esc(bmPastMd_(BM_PAST))+' の伝票を直しています</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-top:3px">今日の伝票ではありません。直し終わったら「今日の伝票に戻る」を押してください。</div>'
+    +((BM_PAST_CASH&&(BM_PAST_CASH.approved||BM_PAST_CASH.submitted))?'<div style="font-size:12px;color:#ffcf7a;margin-top:3px">⚠️この日の閉店チェックは'+(BM_PAST_CASH.approved?'承認済み':'送信済み')+'です。現金で会計し直すと、この日の現金チェックと合わなくなります。</div>':'')
+    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn sm acc" onclick="bmPastExit()">↩ 今日の伝票に戻る</button>'
+    +'<button class="bm-btn sm" onclick="openPosFix()">🟡 要修正の一覧</button></div></div>';
+}
+/* ============================================================================
+   🟡 要修正の伝票（前の日に残った伝票）＝サーバ getPosFixList（直近7営業日・今日は含めない）
+   ⭐判定は書かない＝サーバが各営業日を getPosDayStatus に聞いた結果をそのまま出す。
+   ⚠️サーバは1日につき2枚のシートを読む＝ここで3分おぼえる（締めの画面は20秒ごとに描き直すため）。
+   ⚠️取れない夜は何も出さない（締めは止めないので、出ないことで閉じ込められる人はいない）。
+============================================================================ */
+var POS_FIX=null, POS_FIX_AT=0, POS_FIX_BUSY=false, POS_FIX_ERR='';
+var POS_FIX_TTL=180000;
+var POS_FIX_TITLE='🟡 要修正の伝票';
+function posFixLoad(force){
+  if(typeof gsr!=='function'||POS_FIX_BUSY) return null;
+  if(!force&&POS_FIX_AT&&(Date.now()-POS_FIX_AT)<POS_FIX_TTL) return null;
+  POS_FIX_BUSY=true;
+  var done=function(){
+    POS_FIX_BUSY=false; POS_FIX_AT=Date.now();
+    posFixPaint_();
+    if(typeof viewMode!=='undefined'){
+      if(viewMode==='bill') bmRenderIfIdle();
+      else if(viewMode==='home'&&typeof curPhase==='function'&&curPhase()==='post'&&typeof renderHome==='function') renderHome();
+    }
+  };
+  return gsr('getPosFixList').then(function(r){
+    if(r&&r.ok!==false&&Array.isArray(r.list)){ POS_FIX=r; POS_FIX_ERR=''; }
+    else POS_FIX_ERR=(r&&r.error)?String(r.error):'要修正の伝票を確認できませんでした';
+    done();
+  },function(){ POS_FIX_ERR='要修正の伝票を確認できませんでした（通信）'; done(); });
+}
+function openPosFix(){
+  if(typeof closeMenu==='function') closeMenu();
+  showSheet(POS_FIX_TITLE,posFixHtml_(),false);
+  posFixLoad(true);
+}
+/* ⛔書く直前に「いま開いているシートが要修正の一覧か」を確かめる（sheetBody は全シートの共用枠。担当一覧 tbShown_ と同じ作法） */
+function posFixShown_(){
+  var sh=document.getElementById('sheet'), ti=document.getElementById('sheetTitle');
+  return !!(sh&&ti&&sh.classList.contains('show')&&ti.textContent===POS_FIX_TITLE);
+}
+function posFixPaint_(){ if(!posFixShown_()) return; var b=document.getElementById('sheetBody'); if(b) b.innerHTML=posFixHtml_(); }
+/* 1日分を「伝票ごと」にまとめる（同じ伝票が担当空と請求書の両方に出ても1行） */
+function posFixRows_(day){
+  var by={}, order=[];
+  [['open','未会計'],['invoice','請求書の依頼がまだ'],['noTantou','担当が空']].forEach(function(kv){
+    ((day&&day[kv[0]])||[]).forEach(function(b){
+      var k=String(b&&b.rowIdx); if(!k) return;
+      if(!by[k]){ by[k]={rowIdx:k,label:String((b&&b.label)||''),total:Number(b&&b.total)||0,why:[]}; order.push(k); }
+      by[k].why.push(kv[1]);
+    });
+  });
+  return order.map(function(k){ return by[k]; });
+}
+function posFixHtml_(){
+  var today=bmPastToday_();
+  var h='<div style="font-size:12px;color:var(--dim);margin-bottom:10px;line-height:1.6">締めのあとに残った伝票です（直近の営業日・今日は含みません）。締めは止めていません。<br>'
+    +'<b>伝票を開いて直してから、会計してください。</b>会計済みの伝票は「会計を取り消す」を押すと直せます。</div>';
+  if(POS_FIX_ERR) h+='<div style="font-size:12px;color:#e0a060;margin-bottom:8px">⚠️ '+esc(POS_FIX_ERR)+'</div>';
+  if(!POS_FIX) h+='<div class="empty-msg">'+(POS_FIX_BUSY?'確認しています…':'まだ確認できていません。')+'</div>';
+  else if(!POS_FIX.list.length) h+='<div class="empty-msg">要修正の伝票はありません（直近'+esc(String(POS_FIX.days||''))+'日）</div>';
+  else h+=POS_FIX.list.map(function(day){
+    var rows=posFixRows_(day), dk=String(day.dateKey||'');
+    return '<div class="flabel" style="margin-top:10px">📅 '+esc(bmPastMd_(dk))+'　'+rows.length+'件</div>'
+      +rows.map(function(r){
+        /* ⛔鍵は必ず文字列で渡す（✂分けた伝票 "296_2" は引用符なしだと数値 2962 になる） */
+        return '<div class="hv-chk" style="border-color:#e6c14a" onclick="bmPastOpen(\''+jsStr(dk)+'\',\''+jsStr(r.rowIdx)+'\')">'
+          +'<div class="em">🧾</div>'
+          +'<div class="bd"><div class="t">'+esc(r.label||('伝票 '+r.rowIdx))+'</div>'
+          +'<div class="s" style="color:#e6c14a">'+esc(r.why.join('・'))+'　'+bmYen(r.total)+'</div></div>'
+          +'<div class="go">›</div></div>';
+      }).join('');
+  }).join('');
+  h+='<div class="flabel" style="margin-top:14px">ほかの日の伝票を開く（今日より前の'+BM_PAST_MAX_DAYS+'日まで）</div>'
+    +'<input type="date" class="finput" style="width:180px" min="'+esc(bmPastShift_(today,-BM_PAST_MAX_DAYS))+'" max="'+esc(bmPastShift_(today,-1))+'" onchange="if(this.value)bmPastOpen(this.value,\'\')">'
+    +'<div style="margin-top:12px;text-align:right"><button onclick="posFixLoad(true);posFixPaint_()" '
+    +'style="background:transparent;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">🔄 最新の状態を見る</button></div>';
+  return h;
+}
 /* ============================================================================
    ☁️ 端末間の共有（2026-08-08）。それまでは端末のlocalStorageだけ＝5Fで打った伝票が2Fから見えなかった。
    ■ 端末内保存は**残す**＝通信が落ちても打ち続けられる（GASは1.9秒の床があり、毎打鍵は送れない）。
@@ -5658,7 +5923,8 @@ var BM_MODE=null;            // 'test' | 'live' | null(未取得)
 var BM_SYNC_ERR='';
 var BM_PUSH_T=null, BM_PUSH_Q={}, BM_PULL_T=null;
 function bmSave(){
-  if(BM.key&&BM.draft[BM.key]){ BM.draft[BM.key]._t=Date.now(); BM_PUSH_Q[BM.key]=1; }
+  if(BM.key&&BM.draft[BM.key]){ BM.draft[BM.key]._t=Date.now(); BM_PUSH_Q[BM.key]=1;
+    if(typeof BM_PUSH_DK!=='undefined') BM_PUSH_DK[BM.key]=bmDateKey(); }   // 📅#66 どの営業日の保存か（日を切り替えても元の日へ送る）
   bmStash_();
   bmPushSoon();
 }
@@ -5671,14 +5937,28 @@ function bmPushNow(){
   BM_PUSH_T=null;
   var keys=Object.keys(BM_PUSH_Q); BM_PUSH_Q={};
   if(typeof gsr!=='function') return;
+  var cur=bmDateKey();
   keys.forEach(function(k){
     if(k==='demo') return;                                   // お試しは共有しない
+    /* 📅#66 積んだ営業日へ送る（無ければ今の日）。今の日と違う日＝その日の端末の下書きから送る */
+    var dk=(typeof BM_PUSH_DK!=='undefined'&&BM_PUSH_DK[k])||cur;
+    if(dk!==cur){ bmPushOther_(dk,k); return; }
     var d=BM.draft[k]; if(!d) return;
-    gsr('posSaveBill',bmDateKey(),k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
+    gsr('posSaveBill',dk,k,bmCalc(d).total,JSON.stringify(d),(typeof LOGIN!=='undefined'?LOGIN:''))
       .then(function(r){
+        if(dk!==bmDateKey()){ bmPushLate_(dk,k,r); return; }   // ⛔返事の前に日を切り替えた＝今の日の下書きに触らない
+        if(r&&r.ok!==false&&typeof BM_PUSH_DK!=='undefined'&&BM_PUSH_DK[k]===dk&&!BM_PUSH_Q[k]) delete BM_PUSH_DK[k];
         /* ⚠️2026-08-28追加＝サーバーが**受け取りを拒否**しても（会計済み／データが大きすぎ）
            ここは通信成功として素通りしていた＝端末は「共有できた」と思い込み、
            別端末で会計された伝票を自分だけ未会計だと信じ続ける。理由を出して状態を取り直す。 */
+        /* ⭐「混み合っています」＝サーバがロックを取れなかっただけ（断ったのではない・2026-10-01 qa）。
+           ⛔ここで bmPull(fk) で取り直すと、サーバの古い版がこの端末の新しい下書きに勝ち、打ったばかりの注文が消える。
+           ⭐待ち行列に戻して15秒後に送り直す（本当に断られた splitGone／splitTaken／会計済みなどは下の今までどおり）。 */
+        if(r&&r.ok===false&&!r.splitTaken&&!r.splitGone&&/混み合っています/.test(String(r.error||''))){
+          BM_PUSH_Q[k]=1; if(typeof BM_PUSH_DK!=='undefined'&&typeof dk!=='undefined') BM_PUSH_DK[k]=dk;
+          BM_SYNC_ERR='サーバが混み合っています（この端末には残っています・送り直します）';
+          bmRetrySoon(); bmRenderIfIdle(); return;
+        }
         if(r&&r.ok===false){
           var msg=String(r.error||'この伝票を保存できませんでした');
           /* ✂別の端末が同じ番号の分けた伝票を先に作っていた＝自分の伝票を次の番号へ付け替えて送り直す。
@@ -5714,7 +5994,7 @@ function bmPushNow(){
            サーバーに一度も載らないまま会計されると**閉店ゲートがその伝票を知らない**
            （ゲートはサーバーの下書きを見る）＝未会計を素通りさせる穴になっていた。
            ⭐キューに戻して自分で再送する。間隔は15秒＝GASの床1.9秒とWAFを考えて連投しない。 */
-        BM_PUSH_Q[k]=1;
+        BM_PUSH_Q[k]=1; if(typeof BM_PUSH_DK!=='undefined') BM_PUSH_DK[k]=dk;   // 📅#66 再送も同じ営業日へ
         BM_SYNC_ERR='共有できていません（この端末には残っています・再送します）';
         bmRetrySoon(); bmRenderIfIdle();
       });
@@ -5728,7 +6008,9 @@ function bmPull(force){
   if(typeof gsr!=='function') return null;
   /* ⚠️プロミスを返す＝呼び出し側が「取り直しが終わってから」表示を決められる
      （返さないと、保存拒否のメッセージをこの中の BM_SYNC_ERR='' が先に消してしまう） */
-  return gsr('getPosBills',bmDateKey()).then(function(r){
+  var pdk=bmDateKey();                             // 📅#66 どの営業日の伝票を頼んだか
+  return gsr('getPosBills',pdk).then(function(r){
+    if(pdk!==bmDateKey()) return null;             // ⛔返事の前に日を切り替えた＝別の日の伝票を今の下書きに混ぜない
     if(r&&r.mode) BM_MODE=r.mode;
     BM_SYNC_ERR='';
     bmLoad();
@@ -5763,8 +6045,9 @@ function bmPull(force){
     return bmSyncClosed();
   }).catch(function(e){ BM_SYNC_ERR='他の端末の伝票を取得できていません'; bmRenderIfIdle(); });
 }
-function bmPullStart(){ bmPull(); if(BM_PULL_T) clearInterval(BM_PULL_T); BM_PULL_T=setInterval(bmPull,20000); }
-function bmPullStop(){ if(BM_PULL_T){ clearInterval(BM_PULL_T); BM_PULL_T=null; } }
+function bmPullStart(){ if(typeof BM_PAST_LEAVING!=='undefined') BM_PAST_LEAVING=false; bmPull(); if(BM_PULL_T) clearInterval(BM_PULL_T); BM_PULL_T=setInterval(bmPull,20000); }
+/* 📅#66 伝票管理から離れた（setViewMode で別の画面へ／ポップアップを閉じた）＝過去の日を閉じて今日に戻す */
+function bmPullStop(){ if(BM_PULL_T){ clearInterval(BM_PULL_T); BM_PULL_T=null; } bmPastLeave_(); }
 /* ============================================================================
    🩹 会計台帳（POS_会計）と下書きの食い違いを直す（2026-09-13・実害2件目で恒久対策）
    ----------------------------------------------------------------------------
@@ -5807,8 +6090,10 @@ function bmSyncClosed(force){
     if(now-BM_CLOSED_CK<BM_CLOSED_GAP) return null;
   }
   BM_CLOSED_BUSY=true; BM_CLOSED_CK=now;
-  return gsr('getPosClosed',bmDateKey()).then(function(r){
+  var cdk=bmDateKey();                             // 📅#66 どの営業日の台帳を頼んだか
+  return gsr('getPosClosed',cdk).then(function(r){
     BM_CLOSED_BUSY=false;
+    if(cdk!==bmDateKey()) return false;            // ⛔返事の前に日を切り替えた＝別の日の会計を今の下書きに注入しない
     if(r&&r.mode) BM_MODE=r.mode;
     var rows=(r&&r.closed)||[];
     if(!rows.length) return false;
@@ -6021,7 +6306,7 @@ function bmSplitNextKey_(base){
 }
 /* 1回の操作で複数の伝票を変えたとき（移す・分ける・戻す）。⚠️bmSave は BM.key の1枚しか送らない */
 function bmSaveKeys_(keys){
-  (keys||[]).forEach(function(k){ var d=BM.draft[k]; if(d){ d._t=Date.now(); BM_PUSH_Q[k]=1; } });
+  (keys||[]).forEach(function(k){ var d=BM.draft[k]; if(d){ d._t=Date.now(); BM_PUSH_Q[k]=1; if(typeof BM_PUSH_DK!=='undefined') BM_PUSH_DK[k]=bmDateKey(); } });   // 📅#66 営業日も覚える
   bmStash_(); bmPushSoon();
 }
 /* 予約のお客様名（サーバが「行がずれていないか」を確かめる物差し。分けた伝票の会計で送る）。
@@ -6375,9 +6660,17 @@ function bmSplitUndo(){
   };
   if(typeof gsr!=='function'){ delete BM.draft[k]; merge(); return; }
   BM_UNDOING=k; bmRender();
-  gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+  var udk=bmDateKey();                             // 📅#66 どの営業日の②か
+  gsr('posDeleteBill',udk,k,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_UNDOING='';
+      /* ⛔返事の前に日を切り替えた＝今の日の①に戻さない（別の日の伝票に混ぜる・今日の POS_伝票 に蘇る）。
+         ②はその日の端末の下書きに残し、サーバで消えていればその日のまま送り直す＝押す前の形に戻る */
+      if(udk!==bmDateKey()){
+        bmPastKeepSplit_(udk,k,snap,!(r&&r.ok===false));
+        if(typeof toast==='function') toast('📅 '+bmPastMd_(udk)+' の'+mk+'は①に戻せていません（途中で日を切り替えたため）。その日を開いてもう一度「①に戻して消す」を押してください');
+        return;
+      }
       if(r&&r.ok===false){
         /* 会計済み（別の端末で会計された）など＝サーバを正として②を取り直す。①には戻さない */
         alert('①に戻せませんでした：'+String(r.error||'不明')+'\n'+mk+'はそのまま残しています。');
@@ -6388,6 +6681,7 @@ function bmSplitUndo(){
     })
     .catch(function(){
       BM_UNDOING='';
+      if(udk!==bmDateKey()){ bmPastKeepSplit_(udk,k,snap,false); if(typeof toast==='function') toast('📅 '+bmPastMd_(udk)+' の'+mk+'は①に戻せていません（通信できませんでした）'); return; }
       /* 消せたか分からない（応答だけ落ちたかもしれない）＝②はこの端末に残す。
          ⭐共有済みの印を外す＝サーバで消えていても、次の取り込み(bmPull)がこの②を「消された」と見て捨てない。
            ①には戻していないので、②が残っても二重にはならない（もう一度押せば①へ戻る）。 */
@@ -6428,8 +6722,10 @@ function bmSplitDrop(){
      ⛔端末の記憶だけで決めない＝別の端末で①の会計が取り消されていたら、②だけ消すと①の人数・注文が減ったまま残る。
      ⛔取り直せなかったら消さない（止めるだけ＝②は残り、もう一度押せる）。 */
   BM_UNDOING=k; BM_UNDO_DROP=true; bmRender();
-  gsr('getPosClosed',bmDateKey()).then(function(r){
+  var sdk=bmDateKey();                             // 📅#66 どの営業日の台帳か
+  gsr('getPosClosed',sdk).then(function(r){
     BM_UNDOING=''; BM_UNDO_DROP=false;
+    if(bmPastMoved_(sdk,null)) return;             // ⛔返事の前に日を切り替えた＝消さない（その日を開いてもう一度）
     if(!r||!Array.isArray(r.closed)){ alert('①が会計済みかをサーバで確かめられませんでした。\n'+mk+'は消していません。もう一度押してください。'); bmRender(); return; }
     var hit=r.closed.some(function(c){ return c&&String(c.rowIdx)===p.base&&c.ts; });
     if(hit){ bmSplitDropGo_(k); return; }
@@ -6444,6 +6740,7 @@ function bmSplitDrop(){
     if(pp&&pp.then) pp.then(next,next); else next();
   },function(){
     BM_UNDOING=''; BM_UNDO_DROP=false;
+    if(bmPastMoved_(sdk,null)) return;
     alert('通信できなかったので、①が会計済みかを確かめられませんでした。\n'+mk+'は消していません。もう一度押してください。');
     bmRender();
   });
@@ -6476,9 +6773,11 @@ function bmSplitDropGo_(k){
   };
   if(typeof gsr!=='function'){ drop(); return; }
   BM_UNDOING=k; BM_UNDO_DROP=true; bmRender();
-  gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+  var gdk=bmDateKey();                             // 📅#66 どの営業日の②か
+  gsr('posDeleteBill',gdk,k,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_UNDOING=''; BM_UNDO_DROP=false;
+      if(bmPastMoved_(gdk,r)) return;              // ⛔返事の前に日を切り替えた（消えた②はその日を開けば取り込みで消える）
       if(r&&r.ok===false){
         /* 会計済み（別の端末で②が会計された）など＝サーバを正として②を取り直す */
         alert('消せませんでした：'+String(r.error||'不明')+'\n'+mk+'はそのまま残しています。');
@@ -6489,6 +6788,7 @@ function bmSplitDropGo_(k){
     })
     .catch(function(){
       BM_UNDOING=''; BM_UNDO_DROP=false;
+      if(bmPastMoved_(gdk,null)) return;
       bmLoad();
       /* ⭐待っている間の取り込み（bmPull）で端末から既に消えていた＝サーバに②は無い（共有済みの②がサーバから消えた）
          ＝消えたと見なして後始末に進む。⛔写しから作り直さない（作り直すとサーバに無い②が端末に残る・qa P3） */
@@ -6522,8 +6822,10 @@ function bmTblLabel_(floor,table){
 function bmBills(){
   var out=[];
   // 🧪お試し伝票＝席に紐づかない検算用。**GASの応答を1回も待たずに**金額テストを始められる
-  if(BM.draft&&BM.draft['demo']) out.push({rowIdx:'demo',table:'お試し',floor:'🧪',cust:'テスト伝票',pax:1,tantou:'',demo:true});
-  (typeof SEATS!=='undefined'?SEATS:[]).forEach(function(s){
+  /* 📅#66 過去の日を直している間は、今日の席の組とお試し伝票を出さない（今日の組を過去の日に保存させない） */
+  var past=(typeof BM_PAST!=='undefined'&&!!BM_PAST);
+  if(!past&&BM.draft&&BM.draft['demo']) out.push({rowIdx:'demo',table:'お試し',floor:'🧪',cust:'テスト伝票',pax:1,tantou:'',demo:true});
+  (typeof SEATS!=='undefined'&&!past?SEATS:[]).forEach(function(s){
     if(!s||s.type==='W'||s.type==='K'||s.mergedTo!=null) return;
     (s.occupants||[]).forEach(function(o){
       if(!o||!o.rowIdx) return;
@@ -6631,7 +6933,8 @@ function bmRender(){
   var bills=bmBills();
   if(BM.key&&!bills.some(function(b){return String(b.rowIdx)===String(BM.key);})) BM.key=null;
   if(!BM.key&&BM.want&&bills.some(function(b){return String(b.rowIdx)===String(BM.want);})){ BM.key=BM.want; BM.want=null; }
-  var html='<div><div class="bm-card"><h3><span class="n">1</span> 伝票（いま席にいる組）</h3>'
+  var html='<div><div class="bm-card"><h3><span class="n">1</span> '+(BM_PAST?'伝票（'+esc(bmPastMd_(BM_PAST))+' の伝票）':'伝票（いま席にいる組）')+'</h3>'
+    +bmPastBannerHtml_()
     +(bills.length?bills.map(function(b){
         var d=bmGet(b.rowIdx,b.pax),c=bmCalc(d);
         /* ⛔鍵は必ず文字列で渡す＝"296_2" を引用符なしで書くと数値 2962 になる（✂分けた伝票） */
@@ -6642,11 +6945,16 @@ function bmRender(){
           +'<div class="s">'+(b.tantou?'担当 '+esc(b.tantou):'担当なし')+'</div>'
           +'<div class="a">'+bmYen(c.total)+'</div></div>';
       }).join('')
-      :(!BOOTED
+      :(BM_PAST
+          ? '<div class="empty-msg" style="padding:18px 0;font-size:12px">この日の伝票を読み込んでいます…<div style="font-size:11px;color:var(--sub);margin-top:6px">しばらくしても出ないときは、この日に伝票がありません</div></div>'
+          :!BOOTED
           ? '<div class="empty-msg" style="padding:18px 0;font-size:12px">⏳ ホール状況を読み込み中…<div style="font-size:11px;color:var(--sub);margin-top:6px">席のデータが届き次第、ここに伝票が出ます（自動で更新）</div></div>'
           : '<div class="empty-msg" style="padding:18px 0;font-size:12px">いま席にいる組がありません<div style="font-size:11px;color:var(--sub);margin-top:6px">ホール状況で席にお客様を設定すると、ここに伝票が出ます</div></div>'))
-    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmDemo()">🧪 お試し伝票で今すぐ試す</button></div>'
+    /* 📅#66 過去の日を直している間はお試し伝票を出さない（帯の中に「今日に戻る」がある） */
+    +(BM_PAST?'':('<div class="bm-row" style="margin-top:8px"><button class="bm-btn pri" onclick="bmDemo()">🧪 お試し伝票で今すぐ試す</button></div>'
     +'<div class="bm-note">席のデータを待たずに金額だけ試せる伝票。操作の練習や検算に使えます。</div>'
+    +'<div class="bm-row" style="margin-top:8px"><button class="bm-btn" onclick="openPosFix()">📅 過去の伝票を直す'
+    +((POS_FIX&&Number(POS_FIX.count)>0)?' <b style="color:#e6c14a">🟡要修正 '+Number(POS_FIX.count)+'件</b>':'')+'</button></div>'))
     +bmModeHtml()
     +'</div>'+bmBottlesHtml()+'</div>';
   if(!BM.key){
@@ -7561,7 +7869,7 @@ function bmClose(){
   var dupO=bmSplitDupOrders_(BM.key);
   if(dupO.length&&!confirm('⚠️ 同じ注文が別の伝票にも載っています（'+dupO.map(function(x){ return x.name+'→'+bmSplitMark_(x.at); }).join('、')
       +'）。\nこのまま会計すると二重請求になります。\n\nそれでも会計しますか？')) return;
-  if(!confirm('会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
+  if(!confirm(bmPastWarn_(d)+'会計します。\n合計 '+bmYen(c.total)+'\nお預り 現金 '+bmYen(d.pay.cash||0)+' ／ カード '+bmYen(d.pay.card||0)+' ／ 売掛 '+bmYen(d.pay.credit||0)
       +(c.unpaid<0?('\nお釣り '+bmYen(-c.unpaid)):'')+'\n\nよろしいですか？')) return;
   var rec={ floor:b.floor||'', table:b.table||'', cust:b.cust||'', pax:(d.guests||[]).length,
             /* 🧾⭐**③で黒服が選んだ生の担当をそのまま送る**（🏠店担当も 店担当 のまま）。
@@ -7596,9 +7904,12 @@ function bmClose(){
      成功後は必ずキーから取り直すこと（これで一度「会計済みが記録されない」を踏んだ） */
   var key=String(BM.key);
   BM_CLOSING=true; bmRender();
-  gsr('posCloseBill',bmDateKey(),key,rec,(typeof LOGIN!=='undefined'?LOGIN:''))
+  var cdk=bmDateKey();                             // 📅#66 どの営業日の会計か
+  gsr('posCloseBill',cdk,key,rec,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_CLOSING=false;
+      if(r&&r.ok) bmPastResync_(cdk,key,'会計し直し');  // 📅過去の日だけ＝その日の伝票シートを流し直す（今日は何もしない）
+      if(bmPastMoved_(cdk,r)) return;              // ⛔返事の前に日を切り替えた＝今の日の下書きに会計を書かない
       /* ✂サーバが分けた伝票の会計を断った（B8）。⛔bmCloseFailed_ に流さない（台帳に会計は無い＝照合しても直らない）。
          splitGone＝別の端末で①に戻された → 取り直してこの端末の②も消す（中身は①に在る）。
          splitTaken＝同じ番号の別のお客様 → この端末の伝票を送り直す（サーバが③へ付け替えさせる）。 */
@@ -7644,7 +7955,7 @@ function bmClose(){
     })
     /* ⚠️通信エラー＝**サーバーでは成功しているかもしれない**（応答だけ落ちた）。
        ここで台帳を見ないと、黒服がもう一度押して「すでに会計済み」に突き当たる。 */
-    .catch(function(e){ BM_CLOSING=false; bmCloseFailed_(key,((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
+    .catch(function(e){ BM_CLOSING=false; if(bmPastMoved_(cdk,null)) return; bmCloseFailed_(key,((e&&e.message)||'通信エラー')+'\nもう一度お試しください。'); });
 }
 function bmReopen(){
   if(BM_CLOSING) return;
@@ -7655,11 +7966,14 @@ function bmReopen(){
     if(!confirm('🧪 お試し伝票の会計を取り消して、直せる状態に戻します。')) return;
     delete d.closed; bmSave(); bmRender(); return;
   }
-  if(!confirm('会計を取り消して、伝票を直せる状態に戻します。\n（取り消した記録は残ります）')) return;
+  if(!confirm(bmPastWarn_(null)+'会計を取り消して、伝票を直せる状態に戻します。\n（取り消した記録は残ります）')) return;
   BM_CLOSING=true;
-  gsr('posReopenBill',bmDateKey(),BM.key,(typeof LOGIN!=='undefined'?LOGIN:''))
+  var rdk=bmDateKey();                             // 📅#66 どの営業日の取消か
+  gsr('posReopenBill',rdk,BM.key,(typeof LOGIN!=='undefined'?LOGIN:''))
     .then(function(r){
       BM_CLOSING=false;
+      if(r&&r.ok) bmPastResync_(rdk,rkey,'会計の取消');  // 📅過去の日だけ＝その日の伝票シートを流し直す
+      if(bmPastMoved_(rdk,r)) return;              // ⛔返事の前に日を切り替えた
       if(!r||!r.ok){
         var em=String((r&&r.error)||'不明');
         /* ⛔台帳に生きた会計行が無い＝別の端末で既に取り消されている。画面だけ会計済みで固まると
@@ -7677,7 +7991,7 @@ function bmReopen(){
       var dd=BM.draft[rkey]; if(dd) delete dd.closed;
       BM.key=rkey; bmSave(); bmRender();
     })
-    .catch(function(e){ BM_CLOSING=false; bmRender(); alert('取り消せませんでした：'+((e&&e.message)||'通信エラー')); });
+    .catch(function(e){ BM_CLOSING=false; if(bmPastMoved_(rdk,null)) return; bmRender(); alert('取り消せませんでした：'+((e&&e.message)||'通信エラー')); });
 }
 /* ③担当カード＝ボス指示「セットの次に担当をデフォルト表示」＋「売半かどうかを選べる」。
    ⚠️既定はお客様に紐づく担当（予約行のtantou）。この伝票だけ差し替えられる。
@@ -8175,10 +8489,12 @@ function bmFillCash(){ if(bmLockedAlert_()) return; var d=bmGet(BM.key); d.pay.c
 /* ⚠️サーバーからも消さないと、間違えて作った伝票が閉店ゲートに永久に残る */
 function bmClearServer_(k){
   if(typeof gsr!=='function'||k==='demo') return;
-  gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+  var xdk=bmDateKey();                             // 📅#66 どの営業日の下書きか
+  gsr('posDeleteBill',xdk,k,(typeof LOGIN!=='undefined'?LOGIN:''))
     /* ✂2026-09-30追加＝サーバが**断った**とき（会計済み／分けた伝票が残っている①）に黙って素通りしていた
        ＝この端末だけ消えたと思い込む。理由を出し、その伝票だけサーバを正として取り直す（画面に戻ってくる）。 */
     .then(function(r){
+      if(xdk!==bmDateKey()){ bmPastMoved_(xdk,r); return; }   // ⛔返事の前に日を切り替えた＝今の日で取り直さない
       if(r&&r.ok===false){
         BM_SYNC_ERR=String(r.error||'下書きを取り下げられませんでした');
         var fk={}; fk[String(k)]=1; bmPull(fk);
@@ -11172,10 +11488,16 @@ function ccPosLoad(){
 }
 /* ⚠️取得できていない時は**止めない**（通信不良で閉店報告ができなくなる方が現場は困る）。
    ただし画面には「確認できていません」と出す＝黙って通さない。 */
+/* ⛔2026-10-01（#66）＝**POS で送信を止めるかどうかは cfSteps_（締めワークフロー）の1箇所が決める**。
+   ここで POS_DAY.ready を自前で見ない＝「送信は通るのに帰れない／帰れるのに送信できない」を作らない
+   （同じ条件を2箇所で判定して2026-08-25に2回踏んでいる）。
+   いまは伝票の問題は警告（cf_pos／cf_tantou は todo にならない）＝送信は止まらない。
+   ⚠️過去の日の締め（CC_TARGET_DATE）は今日の工程と別の日＝POS では止めない。判定が落ちても止めない（帰れなくしない）。 */
 function ccPosReady_(){
-  if(!POS_DAY) return true;
-  if(!POS_DAY.enforce) return true;      // テストモード
-  return !!POS_DAY.ready;
+  if(typeof CC_TARGET_DATE!=='undefined'&&CC_TARGET_DATE) return true;
+  if(typeof cfSteps_!=='function') return true;
+  try{ return !cfSteps_().some(function(s){ return (s.id==='cf_pos'||s.id==='cf_tantou')&&s.state!=='done'&&s.state!=='warn'; }); }
+  catch(e){ return true; }
 }
 function ccPosBlockMsg_(){
   if(!POS_DAY) return 'POSの状態を確認できていません。';
@@ -11199,18 +11521,22 @@ function ccPosGateHtml(){
           return '<div style="display:flex;gap:8px;font-size:12.5px;margin-top:3px"><span style="flex:1">'+esc(x.label||('伝票'+x.rowIdx))+'</span>'
             +'<span style="color:var(--gold);font-weight:800">'+bmYen(x.total)+'</span>'
             /* ⛔鍵は文字列で渡す（✂分けた伝票 "296_2" は引用符なしだと数値 2962 になる） */
-            +'<button class="bm-btn sm" onclick="openBillFor(\''+jsStr(String(x.rowIdx))+'\')">開く</button></div>';
+            /* 📅#66 過去の日の締め（d.dateKey が今日より前）なら、その日の伝票を開く */
+            +'<button class="bm-btn sm" onclick="'+((typeof bmPastOk_==='function'&&d.dateKey&&bmPastOk_(String(d.dateKey)))
+              ?('bmPastOpen(\''+jsStr(String(d.dateKey))+'\',\''+jsStr(String(x.rowIdx))+'\')')
+              :('openBillFor(\''+jsStr(String(x.rowIdx))+'\')'))+'">開く</button></div>';
         }).join('')+'</div>';
   };
-  if(d.ready) return wrap('#3ea06a','rgba(62,160,106,.12)',
+  if(d.ready&&!(Array.isArray(d.noTantou)&&d.noTantou.length)) return wrap('#3ea06a','rgba(62,160,106,.12)',
     '<div style="font-size:15px;font-weight:800">✅ POSはすべて締まっています</div>'
     +'<div style="font-size:12px;color:var(--dim);margin-top:3px">未会計の伝票・請求書の依頼漏れはありません'+(d.enforce?'':'（🧪テストモード）')+'</div>');
-  return wrap('#e05050','rgba(224,80,80,.10)',
-    '<div style="font-size:15px;font-weight:800;color:#ff9a9a">🔒 POSのタスクが残っています</div>'
-    +'<div style="font-size:12px;color:var(--dim);margin-top:3px">'
-    +(d.enforce?'これが片付くまで閉店チェックは送信できません。':'🧪テストモード中は送信を止めません（本番では止まります）。')+'</div>'
+  /* 🟡2026-10-01（#66）＝伝票の問題は送信を止めない（判定は cfSteps_）。直す場所を見せるだけ。 */
+  return wrap('#e6c14a','rgba(230,193,74,.10)',
+    '<div style="font-size:15px;font-weight:800;color:#ffcf7a">🟡 直していない伝票があります（送信は止めません）</div>'
+    +'<div style="font-size:12px;color:var(--dim);margin-top:3px">あとから直せます。残った伝票は明日も「要修正」に出ます（🧾伝票管理 →📅過去の伝票を直す）。</div>'
     +rows(d.open,'未会計の伝票')
-    +rows(d.invoice,'請求書の発行依頼がまだ'));
+    +rows(d.invoice,'請求書の発行依頼がまだ')
+    +rows(Array.isArray(d.noTantou)?d.noTantou:[],'担当が空の伝票'));
 }
 /* --- 🔒 締めの条件ゲート（毎日・全部そろわないと送信できない） ------------------
    ボス確定 2026-08-25。自己申告チェック1つでは止まらなかった（押せば通る）ので、
@@ -12105,7 +12431,7 @@ function skOcrUsage_(slip){
 
 function openSeikyu(){
   menuView='seikyu'; SK_VIEW='form'; SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[];
-  SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null; SK_USAGE=skBizToday_(); SK_USAGE_TOUCHED=false; SK_USAGE_OCR=''; SK_ITEMS_TOUCHED=false; SK_USAGE_FILLED=false; SK_SLIP_SEQ=0;
+  SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null; SK_USAGE=(typeof BM_PAST!=='undefined'&&BM_PAST)?BM_PAST:skBizToday_(); SK_USAGE_TOUCHED=false; SK_USAGE_OCR=''; SK_ITEMS_TOUCHED=false; SK_USAGE_FILLED=false; SK_SLIP_SEQ=0;
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
   if(!IS_GAS){ SK_BOOT={ok:true,senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込'}],closeMonth:'2026-07',due:'2026-08-31',taxRate:0.10}; SK_CLOSE='2026-07'; SK_DUE='2026-08-31'; renderMenu(); return; }
   gsr('getSeikyuBootstrap').then(function(r){
