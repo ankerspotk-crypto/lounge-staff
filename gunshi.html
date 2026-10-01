@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-09-30c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-01a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -6313,6 +6313,10 @@ function bmSplitLostMsg_(k,snap){
   var mk=bmSplitMark_(k), base=bmSplitKey_(k).base, bd=(BM.draft&&BM.draft[base])||{};
   var have=(bd.orders||[]).map(function(o){ return o&&(o.id||(o.name+'|'+o.price+'|'+o.qty)); });
   var lost=((snap&&snap.orders)||[]).filter(function(o){ return o&&have.indexOf(o.id||(o.name+'|'+o.price+'|'+o.qty))<0; });
+  /* ✂①が会計済みなら、別の端末は「①に戻して」ではなく「②だけ消す」をした（bmSplitDrop・①に戻すのは①が未会計のときだけ）。
+     ⚠️「①に入れ直して」とは言えない（①は会計済み）＝どの伝票にも入っていない注文を品名で出す。 */
+  if(bmClosed_(bd)) return mk+'は別の端末で消されていました（①は会計済みのため①には戻っていません）。'
+    +(lost.length?'\nこの端末で'+mk+'に入れた注文はどの伝票にも入っていません：'+lost.map(function(o){ return o.name+(o.qty>1?'×'+o.qty:''); }).join('、')+'\n請求が要るなら別の伝票で入れ直してください。':'');
   return mk+'は別の端末で①に戻されていました。この端末で'+mk+'に入れた最後の変更は①に入っていません。'
     +(lost.length?'\n①に入っていない注文：'+lost.map(function(o){ return o.name+(o.qty>1?'×'+o.qty:''); }).join('、')+'\n①に入れ直してください。':'\n①を確かめてください。');
 }
@@ -6326,11 +6330,13 @@ function bmSplitLostMsg_(k,snap){
 var BM_UNDOING='';
 function bmSplitUndo(){
   if(bmLockedAlert_()) return;
-  if(BM_UNDOING) return;                           // 連打
+  if(bmSplitBusy_(String(BM.key))) return;         // 連打／別の②を待っている（理由を出す・qa P2）
   var k=String(BM.key), p=bmSplitKey_(k); if(!p.split) return;
   var d=bmGet(k), bd=BM.draft[p.base];
   if(!bd){ alert('①の伝票が見つかりません。'); return; }
-  if(bmClosed_(bd)){ alert('①は会計済みです。\n戻すなら先に①の会計を取り消してください。'); return; }
+  /* ✂①が会計済み＝①には戻せない（戻すと会計済みの人数・金額が変わる）→②だけ消す導線へ（2026-10-01）。
+     ⚠️以前はここで止めていた＝置き去りの②を軍師から消す手段が無く、閉店の関所が止まった（9/30 予約329）。 */
+  if(bmClosed_(bd)) return bmSplitDrop();
   var roles=[];
   Object.keys(d.casts||{}).forEach(function(n){ var v=d.casts[n]||{}; if(v.yoyaku) roles.push(n+' 予約'+v.yoyaku); if(v.dohan) roles.push(n+' 同伴'+v.dohan); });
   var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0)+(Number(d.pay.next)||0);
@@ -6389,6 +6395,109 @@ function bmSplitUndo(){
       var dk=BM.draft[k]||snap; if(dk._split) delete dk._split.shared;
       BM.draft[k]=dk; bmStash_();
       alert('通信できなかったので①に戻していません。\n'+mk+'はそのまま残しています。もう一度押してください。');
+      bmRender();
+    });
+}
+/* ✂①が会計済みのとき、分けた伝票（②③…）**だけ**を消す（2026-10-01・ボス号令）。
+   きっかけ＝9/30 予約329 から分けた②を別の予約で会計し直した後、②が未会計のまま残り、
+     閉店の関所（getPosDayStatus の open）で締めが止まった。①は会計済み＝「①に戻して消す」は断られ、
+     分けた伝票には「下書きを消す」も出ない＝軍師から消す手段が無かった。
+   ⭐①には何も戻さない（①は会計済み＝戻すと人数・金額が変わる）。
+   ⭐作法は bmSplitUndo と同じ＝**サーバで先に消す**（posDeleteBill は②単体なら①の状態を見ずに消す／②が会計済みなら断る）
+     →通ったら端末から消す。断られた・通信が落ちた＝②はそのまま残す（閉店の関所に出続ける＝もう一度押せる）。
+   ⭐待っている間は BM_UNDOING で②を触らせない（bmLockedAlert_／bmMove）＝「①に戻す」と同じ錠を使う。
+   ⚠️注文が入っている②を消すと誰にも請求されない＝品名を出して確かめる（bmSplitLostMsg_ と同じ考え）。
+   ⛔①が未会計なら従来どおり「①に戻して消す」へ（判定の正本は bmClosed_(①) の1箇所）。 */
+var BM_UNDO_DROP=false;                            // BM_UNDOING 中の中身が「②だけ消す」か（待ち中の文言だけに使う）
+/* ✂待ち中の関所（bmSplitUndo／bmSplitDrop の入口で呼ぶ）。true＝押させない。
+   ⭐同じ伝票の連打は bmLockedAlert_ が文言を出す。**別の②**へ切り替えて押したときは黙って無視せず理由を出す
+     （qa P2・2026-10-01＝何も起きないと黒服は壊れたと思う）。 */
+function bmSplitBusy_(k){
+  if(!BM_UNDOING) return false;
+  if(BM_UNDOING!==String(k)) alert('別の伝票（'+bmSplitMark_(BM_UNDOING)+'）を'+(BM_UNDO_DROP?'消しています':'①に戻しています')+'。少し待ってから押してください。');
+  return true;
+}
+function bmSplitDrop(){
+  if(bmLockedAlert_()) return;
+  var k=String(BM.key), p=bmSplitKey_(k); if(!p.split) return;
+  if(bmSplitBusy_(k)) return;                      // 連打／別の②を待っている
+  var bd=BM.draft[p.base], mk=bmSplitMark_(k);
+  if(!bmClosed_(bd)) return bmSplitUndo();         // ①が未会計（または見つからない）＝従来の「①に戻して消す」
+  if(typeof gsr!=='function'){ bmSplitDropGo_(k); return; }
+  /* ⭐①の会計済みを**サーバの台帳（getPosClosed）で取り直してから**確認を出す（qa P4・PM判断）。
+     ⛔端末の記憶だけで決めない＝別の端末で①の会計が取り消されていたら、②だけ消すと①の人数・注文が減ったまま残る。
+     ⛔取り直せなかったら消さない（止めるだけ＝②は残り、もう一度押せる）。 */
+  BM_UNDOING=k; BM_UNDO_DROP=true; bmRender();
+  gsr('getPosClosed',bmDateKey()).then(function(r){
+    BM_UNDOING=''; BM_UNDO_DROP=false;
+    if(!r||!Array.isArray(r.closed)){ alert('①が会計済みかをサーバで確かめられませんでした。\n'+mk+'は消していません。もう一度押してください。'); bmRender(); return; }
+    var hit=r.closed.some(function(c){ return c&&String(c.rowIdx)===p.base&&c.ts; });
+    if(hit){ bmSplitDropGo_(k); return; }
+    /* サーバでは①は会計済みではない（別の端末で取り消された）＝①を取り直して「①に戻して消す」へ */
+    var fk={}; fk[p.base]=1; var pp=bmPull(fk);
+    var next=function(){
+      bmLoad();
+      if(!bmClosed_(BM.draft[p.base])&&BM.draft[k]){ BM.key=k; bmSplitUndo(); return; }
+      alert('①の会計が台帳に見当たりません（取り消された可能性があります）。\n'+mk+'は消していません。①を確かめてください。');
+      bmRender();
+    };
+    if(pp&&pp.then) pp.then(next,next); else next();
+  },function(){
+    BM_UNDOING=''; BM_UNDO_DROP=false;
+    alert('通信できなかったので、①が会計済みかを確かめられませんでした。\n'+mk+'は消していません。もう一度押してください。');
+    bmRender();
+  });
+}
+/* ②だけ消す本体（①の会計済みはサーバで確かめた後）。⚠️鍵は引数で持つ＝待っている間に別の伝票を開いていても取り違えない */
+function bmSplitDropGo_(k){
+  var p=bmSplitKey_(k), mk=bmSplitMark_(k);
+  if(!BM.draft[k]){ if(typeof toast==='function') toast(mk+'はもう消えています'); bmRender(); return; }   // 待っている間に別の端末で消された
+  var d=bmGet(k);
+  if(bmClosed_(d)){ alert(mk+'は会計済みです。消せません。'); bmRender(); return; }
+  var roles=[];
+  Object.keys(d.casts||{}).forEach(function(n){ var v=d.casts[n]||{}; if(v.yoyaku) roles.push(n+' 予約'+v.yoyaku); if(v.dohan) roles.push(n+' 同伴'+v.dohan); });
+  var paid=(Number(d.pay.cash)||0)+(Number(d.pay.card)||0)+(Number(d.pay.credit)||0)+(Number(d.pay.next)||0);
+  var ords=d.orders||[];
+  if(!confirm(mk+'「'+(d._cust||'')+'」の伝票を消します。\n'
+      +'①は会計済みのため①には戻しません。\n'
+      +'この伝票（セット'+(d.guests||[]).length+'名・注文'+ords.length+'行・お預り'+bmYen(paid)+'）を消します。'
+      +((d.welcome||[]).length?'\nウェルカムも一緒に消えます。':'')
+      +(ords.length?'\n\n⚠️注文が入っています：'+ords.map(function(o){ return o.name+(o.qty>1?'×'+o.qty:''); }).join('、')
+        +'\n消すと、この注文はどの伝票にも請求されません（請求漏れ）。\n別の伝票で会計し直した注文でなければ、消さずにこの伝票で会計してください。':'')
+      +(roles.length?'\n⚠️予約・同伴（'+roles.join('、')+'）も一緒に消えます。':'')
+      +'\n\nよろしいですか？')) return;
+  delete BM_PUSH_Q[k];                             // ⭐送信待ちの②を送らない（1.2秒のまとめ保存が、消した②をサーバに戻すのを防ぐ）
+  var drop=function(){
+    bmLoad();                                      // ⚠️待っている間に下書きが作り直されている＝キーから取り直す
+    delete BM.draft[k]; delete BM_PUSH_Q[k];
+    if(String(BM.key)===k) BM.key=p.base;          // ⭐待っている間に別の伝票を開いていたらそのまま
+    bmStash_(); bmRender();
+    if(typeof toast==='function') toast(mk+'を消しました（①はそのまま）');
+  };
+  if(typeof gsr!=='function'){ drop(); return; }
+  BM_UNDOING=k; BM_UNDO_DROP=true; bmRender();
+  gsr('posDeleteBill',bmDateKey(),k,(typeof LOGIN!=='undefined'?LOGIN:''))
+    .then(function(r){
+      BM_UNDOING=''; BM_UNDO_DROP=false;
+      if(r&&r.ok===false){
+        /* 会計済み（別の端末で②が会計された）など＝サーバを正として②を取り直す */
+        alert('消せませんでした：'+String(r.error||'不明')+'\n'+mk+'はそのまま残しています。');
+        var fk={}; fk[k]=1; var pp=bmPull(fk); if(pp&&pp.then) pp.then(function(){ return bmSyncClosed(true); });
+        bmRender(); return;
+      }
+      drop();                                      // ⭐別の端末で既に消えていてもサーバは ok＝ここで端末からも消える
+    })
+    .catch(function(){
+      BM_UNDOING=''; BM_UNDO_DROP=false;
+      bmLoad();
+      /* ⭐待っている間の取り込み（bmPull）で端末から既に消えていた＝サーバに②は無い（共有済みの②がサーバから消えた）
+         ＝消えたと見なして後始末に進む。⛔写しから作り直さない（作り直すとサーバに無い②が端末に残る・qa P3） */
+      if(!BM.draft[k]){ drop(); return; }
+      /* 消せたか分からない＝②はこの端末に残す。共有済みの印を外す（bmSplitUndo と同じ理由＝
+         サーバで消えていても次の取り込みが「消された」と見て黙って捨てない。もう一度押せば消える） */
+      var dk=BM.draft[k]; if(dk._split) delete dk._split.shared;
+      bmStash_();
+      alert('通信できなかったので消していません。\n'+mk+'はそのまま残しています。もう一度押してください。');
       bmRender();
     });
 }
@@ -7323,7 +7432,7 @@ function bmLocked(){ return !!bmClosed_(BM.draft&&BM.draft[BM.key]); }
 /* 各操作の入口で呼ぶ。⚠️ロック中に黙って無視すると「打てないのに理由が分からない」になる */
 function bmLockedAlert_(){
   /* ✂①に戻している最中の②は触らせない（戻す中身は押した瞬間の写し＝この間の入力は消える） */
-  if(typeof BM_UNDOING!=='undefined'&&BM_UNDOING&&String(BM.key)===BM_UNDOING){ alert('①に戻しています。少し待ってください。'); return true; }
+  if(typeof BM_UNDOING!=='undefined'&&BM_UNDOING&&String(BM.key)===BM_UNDOING){ alert((typeof BM_UNDO_DROP!=='undefined'&&BM_UNDO_DROP)?'この伝票を消しています。少し待ってください。':'①に戻しています。少し待ってください。'); return true; }
   if(!bmLocked()) return false;
   alert('この伝票は会計済みです。\n直すには⑧会計の「会計を取り消す」を押してください。');
   return true;
@@ -7504,7 +7613,9 @@ function bmClose(){
         var gsnap=BM.draft[key]?JSON.parse(JSON.stringify(BM.draft[key])):null;
         delete BM_PUSH_Q[key]; var fk={}; fk[key]=1;   // ⚠️送信待ちを外す（残すと取り込みが②を消さず、送り直しで蘇らせに行く）
         var gp=bmPull(fk);
-        var gshow=function(){ alert('会計できませんでした：'+String(r.error||'')+'\n'+bmSplitLostMsg_(key,gsnap)); bmRender(); };
+        /* ⚠️①が会計済みなら②は「①に戻された」のではなく「消された」（bmSplitDrop）＝サーバの文言（①に戻されています）を出すと
+             下の行と食い違う → その時は bmSplitLostMsg_ だけ（qa P5）。①が未会計なら従来どおり */
+        var gshow=function(){ alert((bmClosed_(BM.draft[bmSplitKey_(key).base])?'会計できませんでした。':'会計できませんでした：'+String(r.error||''))+'\n'+bmSplitLostMsg_(key,gsnap)); bmRender(); };
         if(gp&&gp.then) gp.then(gshow,gshow); else gshow();
         return;
       }
@@ -7824,7 +7935,11 @@ function bmDetailHtml(){
        ただし「下書きを消す」は照合カードの中に同居していた＝一緒に消すと**打ち間違えて作った伝票を
        取り下げる手段が無くなり、閉店の関所(getPosDayStatus)に永久に残る**。⑧へ移してある。 */
     /* ✂分けた伝票は「消す」ではなく「①に戻して消す」＝セット・注文を①へ戻す（黙って人数や注文を消さない） */
-    +(bmSplitKey_(BM.key).split
+    /* ✂①が会計済み（かつこの伝票が未会計）なら「②だけ消す」＝①には戻さない（bmSplitDrop・2026-10-01） */
+    +((bmSplitKey_(BM.key).split&&!bmClosed_(d)&&bmClosed_(BM.draft[bmSplitKey_(BM.key).base]))
+      ?'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmSplitDrop()">🗑 この伝票を消す（①は会計済み）</button></div>'
+       +'<div class="bm-note">①は会計済みなので、この伝票は①に戻せません。別の伝票で会計し直した・作り間違えたときはここで消します。残すと閉店の関所に出続けます。</div>'
+     :bmSplitKey_(BM.key).split
       ?'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmSplitUndo()">↩ ①に戻して消す</button></div>'
        +'<div class="bm-note">分けた伝票をやめるときはここ。セット・注文・ウェルカムを①へ戻してから、この伝票を消します。</div>'
       :'<div class="bm-row" style="margin-top:14px"><button class="bm-btn dng sm" onclick="bmClear()">🗑 この伝票の下書きを消す</button></div>'
