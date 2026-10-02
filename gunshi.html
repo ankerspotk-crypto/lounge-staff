@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-10-02b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-02c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -11215,7 +11215,11 @@ function submitSW(){
 /* ============ 現金管理：🌙 閉店チェック ============ */
 /* --- 閉店チェック共通ヘルパ（4袋モデル・Kiosk2と同一契約） --- */
 var CASH_BAGS=[{k:'f5',label:'5Fレジ',color:'#8fb8ff'},{k:'f2',label:'2Fレジ',color:'#6fd6b0'},{k:'keihi',label:'経費袋',color:'#e0a060'},{k:'safe',label:'金庫',color:'#bb99ee'}];
-var CASH_TOLERANCE=1000; // 札だけ数えるため小銭ぶんのズレは±この額まで「合ってる」扱い
+/* 札だけ数えるため小銭ぶんのズレは「差額の絶対値が幅**未満**」なら「合ってる」扱い（2026-10-02 ボス確定 #69＝±¥5,000 未満）。
+   ⭐幅の正本はサーバ（コード.js の CASH_TOLERANCE_ → getCashCheckInit の cashTolerance）。CASH_TOLERANCE は GAS が古いときだけの予備。
+   ⛔「<」で比べる（サーバの cashWithin_ と同じ）。「<=」にすると ¥5,000 ちょうどで画面とサーバが食い違う。 */
+var CASH_TOLERANCE=5000;
+function ccWithin_(diff,init){ var t=Number(init&&init.cashTolerance); if(!(t>0)) t=CASH_TOLERANCE; return typeof diff==='number'&&isFinite(diff)&&Math.abs(diff)<t; }
 var SLIP_CATS=['買出し・経費','代引き','酒屋 現金仕入れ','派遣 日払い','在籍 日払い','給与 一部払い','出前','ドライバー支払い','通信光熱費支払い','立替 精算','その他'];
 function newBag(){ return {m10000:0,m5000:0,m1000:0}; }
 function newBags(){ var o={}; CASH_BAGS.forEach(function(b){ o[b.k]=newBag(); }); return o; }
@@ -11582,7 +11586,7 @@ function ccCalc(){
      「残るはず」に伝播させない（¥NaN と表示され、差額も判定も意味を失う）。正常な数値では挙動は同一。 */
   var safeAdd=Number(init.safeDepositAfterOpening)||0;
   var expected=start+sales+safeAdd-slipTotal, actual=bagsYen(st.bags), diff=expected-actual;
-  return {start:start,sales:sales,safeAdd:safeAdd,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:Math.abs(diff)<=CASH_TOLERANCE,openingSubmitted:!!init.openingSubmitted};
+  return {start:start,sales:sales,safeAdd:safeAdd,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:ccWithin_(diff,init),openingSubmitted:!!init.openingSubmitted};
 }
 function ccDiagHtml(){
   return '<div style="background:rgba(224,80,80,.12);border-radius:10px;padding:10px 12px;margin-top:8px">'
