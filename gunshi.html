@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-10-02a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-02b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -7428,7 +7428,22 @@ function bmEditorHtml(){
      この伝票に「依頼済み」を刻む＝閉店ゲートがそれを見る。
    ⚠️刻まないと閉店報告が止まる＝出し忘れが構造的に検知される（それが狙い）。
 ============================================================================ */
-var SK_FROM_POS=null;      // {key} 請求書画面をPOSから開いた印
+/* 🧾 2026-10-02（伝票344 磯貝様の件・本番で同じ伝票の請求書が4件できた＋伝票に「依頼済み」が残らなかった）
+   ⭐直したこと
+     1. POSから開いた印（SK_FROM_POS）は openSeikyu が**毎回作り直す**＝前に開いた伝票の印を持ち越さない。
+        印は「どの営業日のどの伝票か」と金額まで持つ（dk/key/total）＝送信の返事が来るまでに日を切り替えても元の伝票に刻む。
+     2. 明細は**開いた瞬間にこの伝票の分だけ**で始める（以前は 0.35 秒後に差し込んでいた）。
+        ⭐POSから開いたときは明細を「手で入れた扱い」にする＝対象伝票の写真の読み取り（OCR）が金額を**足さない**。
+        ⛔以前は写真を付けると OCR が「10/1 ご利用分」を2行目に足し、¥19,200 の伝票が ¥38,400 で登録された（402666）。
+     3. 「依頼済み」は**サーバが請求の登録と同じ呼び出しの中で POS_伝票 に刻む**（submitSeikyu／seikyuLinkBill）。
+        端末は返ってきた印を写すだけ（送り返さない）。⛔以前は端末がもう一度 posSaveBill で送っていた＝
+        その保存が「混み合っています」「会計済み」で断られると、取り直し（bmPull）でサーバの古い版が勝って印が消えた。
+        ⚠️サーバが刻めなかった（古いGAS／伝票がサーバに無い 等）ときだけ、今までどおり端末から送る。
+     4. 「この伝票の請求書はもうある」＝既にある請求書を選んで結び付ける（新しい請求書は作らない）。
+        過去の日の伝票（📅#66）でも同じボタンが出る（この伝票管理をその日で開いているだけなので）。 */
+var SK_FROM_POS=null;      // {key,dk,total,cust} 請求書画面をPOSから開いた印（⭐openSeikyu が毎回作り直す）
+var BM_SK_LINK=null;       // 🔗結び付ける請求書の候補 {key,dk,total,list,err,loading}（開いている伝票のときだけ描く）
+var BM_SK_LINK_BUSY=false; // 結び付けの返事待ち（連打止め）
 function bmSeikyuHtml(d,c){
   /* ⚠️2026-08-28修正＝`payMethod==='invoice'`で判定していたので、**分割で一部だけ売掛**のとき
      このブロックが出なかった。backendの閉店ゲートは`pay.credit>0`で請求依頼を要求する＝
@@ -7436,40 +7451,147 @@ function bmSeikyuHtml(d,c){
      ⭐判定は必ず**金額(pay.credit)**で行う。payMethodは代表を覚えているだけの飾り。 */
   if(!(Number((d.pay||{}).credit)>0)) return '';
   if(d.seikyuRequested){
-    return '<div class="bm-sum" style="margin-top:8px"><div class="r"><span style="color:var(--green)">✅ 請求書の発行依頼 済み</span>'
-      +'<b style="font-size:11px;color:var(--sub)">'+esc(d.seikyuRequested.ts||'')+'</b></div></div>';
+    var q=d.seikyuRequested;
+    return '<div class="bm-sum" style="margin-top:8px"><div class="r"><span style="color:var(--green)">✅ 請求書の発行依頼 済み'+(q.how==='link'?'（既にある請求書に結び付け）':'')+'</span>'
+      +'<b style="font-size:11px;color:var(--sub)">'+esc(q.ts||'')+'</b></div>'
+      +(q.invId?'<div class="r"><span style="font-size:11px;color:var(--sub)">請求書 '+esc(q.invId)+'</span></div>':'')+'</div>';
   }
   return '<div class="bm-warn" style="margin-top:8px">🧾 <b>請求書払い</b>です。<b>発行依頼がまだ</b>です。'
     +'<div style="margin-top:3px">閉店報告までに出してください（残っていると閉店チェックを送れません）。</div>'
-    +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn pri sm" onclick="bmSeikyuRequest()">🧾 請求書の発行を依頼する</button></div></div>';
+    +'<div class="bm-row" style="margin-top:7px"><button class="bm-btn pri sm" onclick="bmSeikyuRequest()">🧾 請求書の発行を依頼する</button></div>'
+    +'<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm" onclick="bmSeikyuLinkOpen()">🔗 この伝票の請求書はもうある（選んで結び付ける）</button></div>'
+    +bmSeikyuLinkHtml_()+'</div>';
 }
 function bmSeikyuRequest(){
-  var d=bmGet(BM.key), c=bmCalc(d);
-  var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(BM.key); })[0]||{};
+  var k=String(BM.key), dk=bmDateKey(), d=bmGet(BM.key), c=bmCalc(d);
+  var b=bmBills().filter(function(x){ return String(x.rowIdx)===k; })[0]||{};
   if(typeof openSeikyu!=='function'){ alert('請求書の画面が見つかりません'); return; }
-  SK_FROM_POS={ key:String(BM.key) };
-  openSeikyu();
-  /* 金額と摘要を入れておく。⚠️請求先はボス/黒服が選ぶ＝ここでは決められない */
-  setTimeout(function(){
-    try{
-      var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
-      SK_ITEMS=[{name:(nm?nm+' 様　':'')+'ご利用分（'+(bmDateKey()||'')+'）',amount:c.total}];
-      SK_NOTE=(b.floor||'')+' '+(b.table||'')+'　'+nm+' 様　'+bmYen(c.total);
-      SK_NOTE_TOUCHED=true;
-      if(typeof renderMenu==='function') renderMenu();
-    }catch(e){}
-  },350);
+  /* 金額と摘要を入れて開く。⚠️請求先はボス/黒服が選ぶ＝ここでは決められない */
+  var nm=String(b.cust||'').replace(/\s*様\s*$/,'').trim();
+  openSeikyu({ fromPos:{ key:k, dk:dk, total:c.total, cust:nm,
+    items:[{name:(nm?nm+' 様　':'')+'ご利用分（'+(dk||'')+'）',amount:c.total}],
+    note:(b.floor||'')+' '+(b.table||'')+'　'+nm+' 様　'+bmYen(c.total) } });
 }
-/* 請求書の送信が通ったらPOS側に刻む。⚠️skSubmitの成功時から呼ばれる */
-function bmSeikyuDone_(){
-  if(!SK_FROM_POS) return;
-  var k=SK_FROM_POS.key; SK_FROM_POS=null;
-  bmLoad();
-  var d=BM.draft[k]; if(!d) return;
-  /* ⚠️金額も一緒に覚える＝会計をやり直して金額が変わったら「出し直し」を要求するため */
-  d.seikyuRequested={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:''), total:bmCalc(d).total };
-  var keep=BM.key; BM.key=k; bmSave(); BM.key=keep;
+/* 伝票に「依頼済み」を刻む（請求の登録・結び付けの返事から）。
+   ps＝サーバが POS_伝票 に刻んだ結果 {stamped,t,info}。⭐刻めていれば端末は同じ印を写すだけ（_t もサーバに揃え、送り返さない）。
+   刻めていなければ（ps 無し／stamped:false）今までどおり端末から送る（info に金額を足して bmSave）。
+   ⭐dk が今開いている営業日と違えば、その日の端末の下書きに書く（📅#66 の過去の日を開いたまま日を切り替えた場合）。 */
+function bmSeikyuStamp_(dk,k,ps,info){
+  dk=String(dk||''); k=String(k||'');
+  if(!dk||!k) return false;
+  var cur=bmDateKey(), mine=(dk===String(cur)), all;
+  if(mine){ bmLoad(); all=BM.draft; }
+  else { try{ all=JSON.parse(localStorage.getItem('gunshiBillDraft_'+dk)||'{}')||{}; }catch(e){ all={}; } }
+  var d=all[k], put=function(){ if(mine) bmStash_(); else { try{ localStorage.setItem('gunshiBillDraft_'+dk,JSON.stringify(all)); }catch(e){} } };
+  if(ps&&ps.stamped&&ps.info){
+    /* 端末にこの伝票が無くても良い＝サーバの版が新しい（_t を上げてある）ので次の取り込みで届く */
+    if(d){ d.seikyuRequested=ps.info; if(Number(ps.t)>(Number(d._t)||0)) d._t=Number(ps.t); put(); }
+  }else{
+    if(!d) return false;
+    /* ⚠️金額も一緒に覚える＝会計をやり直して金額が変わったら「出し直し」を要求するため */
+    var q={}; Object.keys(info||{}).forEach(function(x){ q[x]=info[x]; });
+    q.total=bmCalc(d).total; d.seikyuRequested=q;
+    if(mine){ var keep=BM.key; BM.key=k; bmSave(); BM.key=keep; }
+    else {
+      d._t=Date.now(); put();
+      BM_PUSH_Q[k]=1; if(typeof BM_PUSH_DK!=='undefined') BM_PUSH_DK[k]=dk; bmPushSoon();   // その日のまま送る（bmPushNow→bmPushOther_）
+    }
+  }
+  if(typeof POS_FIX_AT!=='undefined') POS_FIX_AT=0;     // 🟡要修正の一覧を次に見るとき取り直す
+  if(typeof bmRenderIfIdle==='function') bmRenderIfIdle();
   if(typeof POS_DAY!=='undefined'&&document.getElementById('cc-pos-gate')) ccPosLoad();
+  return true;
+}
+/* 請求書の送信が通ったらPOS側に刻む。⚠️skSubmitの成功時から呼ばれる。
+   fp＝送った瞬間の印（⭐返事の前にフォームを開き直しても、送った伝票に刻む）。r＝submitSeikyu の返事（テスト環境は null） */
+function bmSeikyuDone_(r,fp){
+  fp=fp||SK_FROM_POS;
+  if(!fp) return;
+  if(SK_FROM_POS===fp) SK_FROM_POS=null;
+  bmSeikyuStamp_(fp.dk||bmDateKey(),fp.key,r&&r.posStamp,
+    { ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:''), invId:(r&&r.id)||'', how:'submit' });
+}
+/* 🔗「この伝票の請求書はもうある」＝候補を出す（取消でない請求書）。押すたびに開く／閉じる */
+function bmSeikyuLinkOpen(){
+  var k=String(BM.key), dk=bmDateKey(), c=bmCalc(bmGet(BM.key));
+  if(BM_SK_LINK&&BM_SK_LINK.key===k&&BM_SK_LINK.dk===dk){ BM_SK_LINK=null; bmRender(); return; }
+  var me={key:k,dk:dk,total:c.total,list:null,err:'',loading:true};
+  BM_SK_LINK=me; bmRender();
+  if(!IS_GAS){ me.loading=false; me.list=[]; bmRender(); return; }
+  /* ⭐その営業日の請求（利用日 or 対象伝票がその日）＋最近40件。読むだけ＝テスト環境でも呼んでよい */
+  gsr('getSeikyuListKiosk',{usageDate:dk}).then(function(r){
+    if(BM_SK_LINK!==me) return;
+    me.loading=false;
+    if(!r||r.ok===false) me.err=(r&&r.error)||'請求の一覧を読めませんでした'; else me.list=r.list||[];
+    bmRenderIfIdle();
+  }).catch(function(){ if(BM_SK_LINK!==me) return; me.loading=false; me.err='通信エラー（もう一度押してください）'; bmRenderIfIdle(); });
+}
+/* 候補の並び＝0:この伝票の請求書（対象伝票が一致）→1:同じ日・同じ金額→2:同じ日→3:そのほか */
+function bmSeikyuLinkRank_(r,bill,dk,total){
+  if(r.bill&&r.bill===bill) return 0;
+  if(r.usageDate===dk&&Number(r.amount)===Number(total)) return 1;
+  if(r.usageDate===dk) return 2;
+  return 3;
+}
+function bmSeikyuLinkHtml_(){
+  var L=BM_SK_LINK; if(!L||L.key!==String(BM.key)||L.dk!==String(bmDateKey())) return '';
+  var bill=L.dk+'|'+L.key;
+  var h='<div style="margin-top:8px;padding:8px;border:1px solid rgba(255,255,255,.18);border-radius:8px">'
+    +'<div style="font-weight:700;margin-bottom:4px">🔗 結び付ける請求書を選んでください（新しい請求書は作りません）</div>';
+  if(L.loading) return h+'<div style="font-size:12px;color:var(--sub)">読み込み中…</div></div>';
+  if(L.err) h+='<div style="color:#ff9a5a;font-size:12px">⚠️ '+esc(L.err)+'</div>';
+  var rows=(L.list||[]).filter(function(r){ return r&&r.id&&r.status!=='取消'; })
+    .map(function(r,i){ return {r:r,i:i,rank:bmSeikyuLinkRank_(r,bill,L.dk,L.total)}; })
+    .sort(function(a,b){ return (a.rank-b.rank)||(a.i-b.i); }).slice(0,12);
+  if(!rows.length&&!L.err) h+='<div style="font-size:12px;color:var(--sub)">候補がありません（取消でない請求書が見つかりません）</div>';
+  rows.forEach(function(x){
+    var r=x.r, other=!!(r.bill&&r.bill!==bill);
+    var tag=['この伝票の請求書','同じ日・同じ金額','同じ日',''][x.rank];
+    h+='<div style="padding:6px 0;border-top:1px dashed rgba(255,255,255,.18)">'
+      +'<div style="font-size:13px"><b>'+esc(r.senderName||'')+'</b> '+bmYen(r.amount)+' ・ '+esc(r.status||'')
+      +(tag?' <span style="color:var(--green);font-size:11px">'+tag+'</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--sub)">'+esc(r.id)+(r.usageDate?' ・ 利用 '+esc(r.usageDate):'')+(r.registeredAt?' ・ 登録 '+esc(r.registeredAt):'')
+      +((r.items||[]).length?' ・ '+esc(r.items.map(function(it){ return it.name; }).join('／')):'')+'</div>'
+      +(other?'<div style="font-size:11px;color:#ff9a5a">別の伝票（'+esc(r.bill)+'）に結び付いています</div>'
+        :'<div class="bm-row" style="margin-top:4px"><button class="bm-btn sm pri" onclick="bmSeikyuLinkGo(\''+esc(jsStr(r.id))+'\')">これに結び付ける</button></div>')
+      +'</div>';
+  });
+  return h+'<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm" onclick="BM_SK_LINK=null;bmRender()">閉じる</button></div></div>';
+}
+function bmSeikyuLinkGo(id){
+  var L=BM_SK_LINK; if(!L) return;
+  var r=(L.list||[]).filter(function(x){ return x&&x.id===id; })[0]; if(!r) return;
+  var b=bmBills().filter(function(x){ return String(x.rowIdx)===String(L.key); })[0]||{};
+  var msg='伝票（'+(b.cust||L.key)+'・'+bmYen(L.total)+'）を\n請求書 '+id+'（'+(r.senderName||'')+'・'+bmYen(r.amount)+'・'+(r.status||'')+'）に結び付けて「依頼済み」にします。\n新しい請求書は作りません。';
+  if(Number(r.amount)!==Number(L.total)) msg+='\n\n⚠️金額が違います（伝票 '+bmYen(L.total)+'／請求書 '+bmYen(r.amount)+'）。請求書の金額はコンソールで直してください。';
+  if(!confirm(msg+'\n\nよろしいですか？')) return;
+  bmSeikyuLinkDo_(L.dk,L.key,L.total,id,function(ok,err){
+    if(ok){ if(BM_SK_LINK===L) BM_SK_LINK=null; }
+    else if(BM_SK_LINK===L) L.err=err||'結び付けられませんでした';
+    bmRenderIfIdle();
+  });
+}
+/* 結び付けの本体（POSの候補からも、請求書画面の「既にあります」からも使う＝1本）。
+   ⭐サーバ（seikyuLinkBill）が請求書の「対象伝票」に記録し、POS_伝票 に「依頼済み」を刻む。何度押しても請求書は増えない。
+   🧪テスト環境は本番の請求書に書かない＝伝票に印だけ残す（請求の登録 skSubmit と同じ考え方）。 */
+function bmSeikyuLinkDo_(dk,k,total,id,done){
+  done=done||function(){};
+  var info={ ts:bmNowStr_(), by:(typeof LOGIN!=='undefined'?LOGIN:''), invId:String(id||''), how:'link' };
+  if(IS_TEST_ENV){
+    bmSeikyuStamp_(dk,k,null,info);
+    toast('🧪 テスト環境：本番の請求書には結び付けていません（伝票には依頼済みの印だけ残しました）');
+    done(true); return;
+  }
+  if(!IS_GAS){ toast('（ローカルでは結び付けできません）'); done(false,'ローカルでは結び付けできません'); return; }
+  if(BM_SK_LINK_BUSY){ toast('結び付けています。そのままお待ちください'); return; }
+  BM_SK_LINK_BUSY=true;
+  gsr('seikyuLinkBill',{ id:String(id||''), bill:{dk:String(dk),rowIdx:String(k),total:Number(total)||0}, by:info.by }).then(function(r){
+    BM_SK_LINK_BUSY=false;
+    if(!r||r.ok===false){ done(false,(r&&r.error)||'結び付けられませんでした'); return; }
+    bmSeikyuStamp_(dk,k,r.posStamp,info);
+    toast('🔗 伝票を請求書 '+id+' に結び付けました（依頼済み・新しい請求書は作っていません）');
+    done(true);
+  }).catch(function(){ BM_SK_LINK_BUSY=false; done(false,'通信エラー（もう一度押しても請求書は増えません）'); });
 }
 /* ============================================================================
    🖨 お会計伝票（お客様に見せる紙）＝TRUSTが刷っていた「会計伝票」の置き換え。
@@ -11391,10 +11513,15 @@ function openCashCheck(dk){
 function ccDayBannerHtml(init){
   var d=String((init&&init.dateKey)||'');
   if(CC_TARGET_DATE&&CC_TARGET_DATE!==((CC_PENDING&&CC_PENDING.today)||'')){
+    /* 2026-10-02＝送信済みの結果画面（入力フォームではない）では「締めています…入れてください」ではなく「表示しています」。
+       ⭐出すか出さないか（CC_TARGET_DATE の判定）は今までどおりここ1本＝文言だけを分ける */
+    var shown=!!(init&&init.reportSubmitted)&&!(typeof cashState!=='undefined'&&cashState&&cashState.formMode);
     return '<div style="border:2px solid #e0a060;background:rgba(224,160,96,.12);border-radius:12px;padding:10px 12px;margin-bottom:10px">'
-      +'<div style="font-size:14px;font-weight:800;color:#ffcf7a">🕛 '+esc(ccMd_(d))+'（締められていなかった日）の分を締めています</div>'
-      +'<div style="font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.6">今日の分ではありません。伝票も現金売上も <b>'+esc(ccMd_(d))+'</b> のものを入れてください。<br>'
-      +'数える現金は<b>いまの4袋</b>＝その日の閉店以降に触っていなければ、それがその日の残です。</div>'
+      +'<div style="font-size:14px;font-weight:800;color:#ffcf7a">🕛 '+esc(ccMd_(d))+'（締められていなかった日）の分を'+(shown?'表示しています':'締めています')+'</div>'
+      +(shown
+        ?'<div style="font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.6">今日の分ではありません。<b>'+esc(ccMd_(d))+'</b> の閉店チェックは送信済みです。</div>'
+        :'<div style="font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.6">今日の分ではありません。伝票も現金売上も <b>'+esc(ccMd_(d))+'</b> のものを入れてください。<br>'
+          +'数える現金は<b>いまの4袋</b>＝その日の閉店以降に触っていなければ、それがその日の残です。</div>')
       +'<div class="bm-btn sm" style="margin-top:8px;display:inline-block" onclick="openCashCheck(\'\')">↩︎ 今日の分に戻る</div></div>';
   }
   var pend=(CC_PENDING&&CC_PENDING.days)||[];
@@ -11711,7 +11838,10 @@ function ccRefresh(){
 }
 function renderCashCheck(){
   var b=document.getElementById('sheetBody'); if(!b)return; var st=cashState, init=st.init;
-  if(!st.formMode && init.reportSubmitted){ b.innerHTML=cashResultHtml(init); return; }
+  /* 🕛 送信済みの結果画面にも「締められていない日」の帯を出す（2026-10-02）。
+     ⛔以前は結果画面で return して帯が出なかった＝6時前（営業日がまだ前日）に前の日の締め忘れを締めようとして、入口が無かった。
+     ⭐帯の中身は ccDayBannerHtml の1本（過去日を締めている間＝CC_TARGET_DATE の出し方は変えない） */
+  if(!st.formMode && init.reportSubmitted){ b.innerHTML=ccDayBannerHtml(init)+cashResultHtml(init); return; }
   var h=souvenirAlert(init)+ccDayBannerHtml(init)+ccDraftBannerHtml()+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
   if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店の現金が未提出です（残るはずが計算できません）</div>';
   else h+='<div class="cc-info"><div>🌅 今夜のスタート　¥'+Number(init.openingTotal||0).toLocaleString()+'</div></div>';
@@ -12415,7 +12545,11 @@ function skOcrUsage_(slip){
   var req = slip.base64 ? {base64:slip.base64,mime:slip.mime} : (slip.copyFileId?{fileId:slip.copyFileId}:null);
   if(!req)return;
   SK_USAGE_OCR='📷 伝票から日付と金額を読み取り中…'; if(menuView==='seikyu')renderMenu();
+  /* ⛔読み取りの返事は数秒〜十数秒後に来る。その間に請求書画面を開き直していたら（別の伝票・POSから等）、
+     **前の写真の金額を新しいフォームに足さない**＝開き直すたびに増える番号（SK_FORM_SEQ）で見分ける（2026-10-02） */
+  var seq=SK_FORM_SEQ;
   gsr('extractSeikyuSlipDate',req).then(function(r){
+    if(seq!==SK_FORM_SEQ) return;
     var ok=(r&&r.ok!==false), got=[];
     if(ok&&r.date&&!SK_USAGE_TOUCHED&&!SK_USAGE_FILLED){ SK_USAGE=r.date; SK_USAGE_FILLED=true; got.push('利用日 '+skFmtMd_(r.date)); }
     var amt=ok?(Number(r.amount)||0):0;
@@ -12426,12 +12560,38 @@ function skOcrUsage_(slip){
     else if(amt<=0) SK_USAGE_OCR='伝票から金額を読み取れませんでした（明細の金額欄に手入力してください）';
     else SK_USAGE_OCR='';   /* 読み取り中…のまま残さない */
     if(menuView==='seikyu')renderMenu();
-  }).catch(function(){ SK_USAGE_OCR='読み取りに失敗しました（手入力できます）'; if(menuView==='seikyu')renderMenu(); });
+  }).catch(function(){ if(seq!==SK_FORM_SEQ) return; SK_USAGE_OCR='読み取りに失敗しました（手入力できます）'; if(menuView==='seikyu')renderMenu(); });
 }
 
-function openSeikyu(){
-  menuView='seikyu'; SK_VIEW='form'; SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[];
-  SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null; SK_USAGE=(typeof BM_PAST!=='undefined'&&BM_PAST)?BM_PAST:skBizToday_(); SK_USAGE_TOUCHED=false; SK_USAGE_OCR=''; SK_ITEMS_TOUCHED=false; SK_USAGE_FILLED=false; SK_SLIP_SEQ=0;
+/* 🧾 二重登録の関所（2026-10-02・伝票344 で同じ請求が連打で3件できた）
+   SK_REQ_TOKEN＝この請求の一意の札。サーバ（submitSeikyu）は同じ札の請求が既に在れば**作らずに最初の結果を返す**（dup）。
+     ⭐札は「登録が通るまで」同じ＝通信が切れて押し直しても1件。通ったら新しい札にする（次の請求は別物）。
+   SK_SUBMITTING＝返事待ちの間はボタンを押せなくする（画面の連打止め）。
+   SK_STATUS＝送信中・失敗の文言。⭐描き直し（写真の読み取り完了など）で消えないよう状態で持つ
+     （⛔以前は「送信中…」がフォームの描き直しで消え、押せていないと思って押し直していた）。
+   SK_EXISTS＝「この伝票の請求書は既にあります」と断られたときの、その請求書（結び付けるか選ばせる）。
+   SK_FORM_SEQ＝フォームを開き直すたびに増える番号（遅れて来た返事で新しいフォームを触らない）。 */
+var SK_REQ_TOKEN='', SK_SUBMITTING=false, SK_STATUS=null, SK_EXISTS=null, SK_FORM_SEQ=0;
+function skNewToken_(){ return 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,10); }
+/* opts.fromPos＝POSの［請求書の発行を依頼する］から開いた {key,dk,total,cust,items,note}。
+   ⭐毎回すべて作り直す＝前に開いた伝票の印・明細・写真・請求先を持ち越さない。 */
+function openSeikyu(opts){
+  /* ⛔送信の返事待ちの間は開き直させない（qa差し戻し③）＝開き直すと札も「送信中」も作り直され、
+     古い返事が新しいフォームの「送信中」を解いてしまう。今のフォームをそのまま見せる（返事は最長20秒で必ず来る） */
+  if(SK_SUBMITTING){
+    menuView='seikyu'; SK_VIEW='form'; document.getElementById('menuOverlay').classList.add('show'); renderMenu();
+    toast('前の請求を送信中です。返事が来てから開いてください'); return;
+  }
+  var fp=(opts&&opts.fromPos)||null;
+  SK_FROM_POS=fp?{ key:String(fp.key), dk:String(fp.dk||''), total:Number(fp.total)||0, cust:String(fp.cust||'') }:null;
+  SK_FORM_SEQ++; SK_REQ_TOKEN=skNewToken_(); SK_STATUS=null; SK_EXISTS=null;
+  menuView='seikyu'; SK_VIEW='form'; SK_SEL=''; SK_SLIPS=[];
+  SK_ITEMS=(fp&&fp.items&&fp.items.length)?fp.items.map(function(x){ return {name:String(x.name||''),amount:Number(x.amount)||0}; }):[{name:'',amount:0}];
+  SK_NOTE=fp?String(fp.note||''):''; SK_NOTE_TOUCHED=!!fp; SK_MEISHI=null; SK_EDIT_ID=''; SK_LIST=null; SK_BOOT=null;
+  SK_USAGE=(typeof BM_PAST!=='undefined'&&BM_PAST)?BM_PAST:skBizToday_(); SK_USAGE_TOUCHED=false; SK_USAGE_OCR=''; SK_ITEMS_TOUCHED=false; SK_USAGE_FILLED=false; SK_SLIP_SEQ=0;
+  /* ⭐POSから＝明細と利用日はこの伝票で決まっている（利用日＝その伝票の営業日）＝「手で入れた扱い」にして
+     写真の読み取りに上書き・追加させない（⛔402666＝写真の金額が2行目に足されて ¥38,400 になった） */
+  if(fp){ SK_USAGE=String(fp.dk||SK_USAGE); SK_USAGE_TOUCHED=true; SK_ITEMS_TOUCHED=true; }
   document.getElementById('menuOverlay').classList.add('show'); renderMenu();
   if(!IS_GAS){ SK_BOOT={ok:true,senders:[{id:'demoA',name:'株式会社デモ商事',keisho:'御中',zip:'460-0003',addr:'名古屋市中区錦3-9-15',contact:'山田',tel:'052-000-0000',email:'',meishiUrl:'',note:'月末締め・翌月末振込'}],closeMonth:'2026-07',due:'2026-08-31',taxRate:0.10}; SK_CLOSE='2026-07'; SK_DUE='2026-08-31'; renderMenu(); return; }
   gsr('getSeikyuBootstrap').then(function(r){
@@ -12459,6 +12619,9 @@ function skFormHtml_(){
   var opts='<option value="">請求先を選択…</option>'+senders.map(function(s){return '<option value="'+esc(s.id)+'"'+(s.id===SK_SEL?' selected':'')+'>'+esc(s.name)+(s.keisho?(' '+esc(s.keisho)):'')+'</option>';}).join('');
   var sender=skSenderById_(SK_SEL);
   var h=skBack_();
+  /* POSから開いた＝どの伝票の請求かを最上段に出す（別の伝票の請求と取り違えない） */
+  if(SK_FROM_POS) h+='<div class="sk-sender-card" style="margin:4px 0 8px">🧾 伝票の請求です：<b>'+esc(SK_FROM_POS.cust?SK_FROM_POS.cust+' 様':'伝票 '+SK_FROM_POS.key)+'</b>'
+    +'　¥'+(Number(SK_FROM_POS.total)||0).toLocaleString()+'<div class="sk-sc-sub">'+esc(SK_FROM_POS.dk)+' の伝票 '+esc(SK_FROM_POS.key)+'（明細はこの伝票の分だけで始めています）</div></div>';
   h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin:4px 0 10px">'
     +'<div style="font-size:12px;color:var(--dim);line-height:1.5">請求書払いのお客様の請求を登録します。<br>月末締め・翌月末払いが既定です。</div>'
     +'<span class="sk-listlink" onclick="SK_VIEW=\'list\';SK_LIST=null;renderMenu()">📋 最近の請求</span></div>';
@@ -12490,8 +12653,20 @@ function skFormHtml_(){
     +'<div class="sk-addphoto" onclick="skOpenGroupPicker()"><span>📁</span><span>グループ<br>から</span></div>'
     +'</div>';
   h+='<div class="flabel">その他 注意書き</div><textarea class="finput" rows="2" oninput="SK_NOTE=this.value;SK_NOTE_TOUCHED=true" placeholder="請求書の備考欄に記載されます">'+esc(SK_NOTE)+'</textarea>';
-  h+='<div class="act pri" style="margin-top:16px" onclick="skSubmit()">📄 この内容で請求を登録</div>';
-  h+='<div id="sk-status" style="text-align:center;font-size:12px;color:var(--dim);margin-top:8px"></div>';
+  /* 「この伝票の請求書は既にあります」（サーバが断った）＝結び付けるか、それでも作るかを選ばせる */
+  if(SK_EXISTS){
+    var X=SK_EXISTS;
+    /* X.similar＝対象伝票ではなく「同じ請求先・同じ日（・同じ金額）」で見つかった請求（qa差し戻し①）。
+       タイルから（POS の伝票が無い）＝結び付ける先が無い＝［それでも作る］と［最近の請求で確かめる］だけ */
+    var head=X.similar?(SK_FROM_POS?'同じ日・同じ請求先の請求が既にあります'+(X.exact?'（金額も同じ）':''):'同じ請求先・同じ利用日・同じ金額の請求が既にあります'):'この伝票の請求書は既にあります';
+    h+='<div class="sk-sender-card" style="margin-top:14px;border-color:#e0c070">⚠️ <b>'+head+'</b>'
+      +'<div class="sk-sc-sub">'+esc(X.senderName||'')+'　¥'+(Number(X.amount)||0).toLocaleString()+'　'+esc(X.status||'')+'　'+esc(X.id||'')+(X.no?(' ・ '+esc(X.no)):'')+(X.usageDate?(' ・ 利用 '+esc(X.usageDate)):'')+'</div>'
+      +(SK_FROM_POS?'<div class="act pri" style="margin-top:10px" onclick="skLinkExisting()">🔗 この請求書に結び付ける（新しく作らない）</div>'
+        :'<div class="act" style="margin-top:10px" onclick="SK_VIEW=\'list\';SK_LIST=null;renderMenu()">📋 最近の請求で確かめる（作らない）</div>')
+      +'<div style="text-align:center;margin-top:8px;font-size:12px"><span class="sk-listlink" onclick="skForceNew()">それでも新しく作る（別の請求・金額が変わった等）</span></div></div>';
+  }
+  h+='<div class="act pri" id="sk-submit" style="margin-top:16px'+(SK_SUBMITTING?';opacity:.5;pointer-events:none':'')+'" onclick="skSubmit()">'+(SK_SUBMITTING?'⏳ 送信中…':'📄 この内容で請求を登録')+'</div>';
+  h+='<div id="sk-status" style="text-align:center;font-size:12px;color:'+(SK_STATUS?SK_STATUS.color:'var(--dim)')+';margin-top:8px">'+(SK_STATUS?esc(SK_STATUS.text):'')+'</div>';
   return h;
 }
 function skBreakdownInner_(){
@@ -12626,24 +12801,100 @@ function skSaveSender(){
     gsr('getSeikyuBootstrap').then(function(b){ if(b&&b.ok!==false){ SK_BOOT=b; if(!SK_CLOSE)SK_CLOSE=b.closeMonth; } SK_SEL=r.id; SK_NOTE_TOUCHED=false; SK_VIEW='form'; renderMenu(); });
   }).catch(function(){ if(st)st.textContent='⚠️ 通信エラー'; });
 }
-/* 送信を弾いた理由はトーストだけに頼らない＝フォーム内(ボタン直下)にも赤字で残す */
-function skWarn_(msg){ var st=document.getElementById('sk-status'); if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ '+msg; } toast(msg); }
+/* 送信を弾いた理由はトーストだけに頼らない＝フォーム内(ボタン直下)にも赤字で残す。
+   ⭐文言は SK_STATUS（状態）に持つ＝フォームを描き直しても消えない */
+function skSetStatus_(color,text){
+  SK_STATUS=text?{color:color,text:text}:null;
+  var st=document.getElementById('sk-status'); if(st){ st.style.color=color||'var(--dim)'; st.textContent=text||''; }
+}
+function skWarn_(msg){ skSetStatus_('#ff9a9a','⚠️ '+msg); toast(msg); }
+/* 送信ボタンの見た目を返事待ちに合わせる（描き直さずに今の画面へ） */
+function skSyncBtn_(){
+  var b=document.getElementById('sk-submit'); if(!b) return;
+  b.style.opacity=SK_SUBMITTING?'.5':''; b.style.pointerEvents=SK_SUBMITTING?'none':'';
+  b.textContent=SK_SUBMITTING?'⏳ 送信中…':'📄 この内容で請求を登録';
+}
+/* 登録（または結び付け）が通った後＝フォームを空にして一覧へ。⭐次の請求は新しい札 */
+function skResetAfter_(){
+  SK_FROM_POS=null; SK_EXISTS=null; SK_STATUS=null; SK_SUBMITTING=false; SK_REQ_TOKEN=skNewToken_(); SK_FORM_SEQ++;
+  SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[]; SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_ITEMS_TOUCHED=false; SK_USAGE_TOUCHED=false;
+  SK_VIEW='list'; SK_LIST=null; if(menuView==='seikyu') renderMenu();
+}
+/* 引数 true＝「この伝票の請求書は既にあります」と言われた後で、それでも新しく作る（skForceNew から）。
+   ⚠️宣言は skSubmit() のまま＝tests/pos/suites/14_testguard.js が 'function skSubmit(){' で本体を切り出している */
 function skSubmit(){
+  var force=arguments[0];
+  /* ⭐連打止め＝返事待ちの間は何回押しても送らない（ボタンも押せなくしてある） */
+  if(SK_SUBMITTING){ toast('送信中です。そのままお待ちください（押し直さなくて大丈夫です）'); return; }
   if(!SK_SEL){ skWarn_('請求先を選択してください'); return; }
   var total=skTotal_();
   var items=SK_ITEMS.filter(function(x){return (x.name||'').trim()||Number(x.amount)>0;}).map(function(x){return {name:x.name||'',amount:Number(x.amount)||0};});
   if(!total && !items.length){ skWarn_('金額を入力してください（明細の金額欄に税込金額を入れてください）'); return; }
-  var st=document.getElementById('sk-status'); if(st){ st.style.color='var(--dim)'; st.textContent='送信中…'; }
+  var fp=SK_FROM_POS;
+  if(!SK_REQ_TOKEN) SK_REQ_TOKEN=skNewToken_();
   var payload={ senderId:SK_SEL, closeMonth:SK_CLOSE, due:SK_DUE, usageDate:SK_USAGE, items:items, amount:total, note:SK_NOTE, by:(typeof LOGIN!=='undefined'?LOGIN:''),
-    slips:SK_SLIPS.map(function(s){ return s.copyFileId?{copyFileId:s.copyFileId}:{base64:s.base64,mime:s.mime}; }) };
+    slips:SK_SLIPS.map(function(s){ return s.copyFileId?{copyFileId:s.copyFileId}:{base64:s.base64,mime:s.mime}; }),
+    reqToken:SK_REQ_TOKEN };
+  /* POSから＝どの伝票の請求か（サーバが「その伝票の請求書は既にあるか」を見て、作れたら伝票に「依頼済み」を刻む） */
+  if(fp) payload.bill={ dk:fp.dk, rowIdx:fp.key, total:fp.total };
+  if(force===true) payload.force=true;
   if(!IS_GAS){ toast('（ローカルでは登録不可）'); return; }
+  /* 🧪 テスト環境は本番の請求台帳に書かない。ただし**流れは止めない**＝伝票側には
+     「依頼したことにして」印を残す（🖨印刷の「刷ったことにする」と同じ考え方）。
+     ⚠️ここを素通りさせると、請求書払いの伝票が閉店ゲートに永久に残る。 */
+  if(IS_TEST_ENV){
+    skSetStatus_('#e0c070','🧪 テスト環境：本番の請求には登録していません');
+    toast('🧪 請求書の発行を依頼したことにしました（本番には登録していません）');
+    if(typeof bmSeikyuDone_==='function') bmSeikyuDone_(null,fp);
+    return;
+  }
+  var seq=SK_FORM_SEQ, sentSel=SK_SEL, sentTotal=total;
+  SK_SUBMITTING=true; SK_EXISTS=null;
+  skSetStatus_('var(--dim)','送信中…（写真が多いと数十秒かかります。押し直さずにお待ちください）'); skSyncBtn_();
   gsr('submitSeikyu',payload).then(function(r){
-    if(!r||r.ok===false){ if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ '+((r&&r.error)||'登録に失敗'); } return; }
+    var here=(seq===SK_FORM_SEQ);       // まだ同じフォームを見ているか
+    if(here) SK_SUBMITTING=false;       // ⛔古い返事で新しいフォームの「送信中」を解かない（qa差し戻し③）
+    /* この伝票の請求書は既にある（別の札で登録済み）＝作っていない。結び付けるか選ばせる */
+    if(r&&r.ok===false&&r.exists){
+      if(here){ SK_EXISTS=Object.assign({similar:!!r.similar},r.exists); skSetStatus_('#e0c070',fp?'既にある請求書に結び付けるか選んでください':'同じ請求が既にないか確かめてください（作っていません）'); if(menuView==='seikyu') renderMenu(); }
+      else toast('⚠️ この伝票の請求書は既にありました（新しくは作っていません）');
+      return;
+    }
+    if(!r||r.ok===false){
+      if(here){ skSetStatus_('#ff9a9a','⚠️ '+((r&&r.error)||'登録に失敗')); skSyncBtn_(); }
+      else toast('⚠️ 請求を登録できませんでした：'+((r&&r.error)||''));
+      return;
+    }
     var extra=(r&&r.reclassified)?('／経費から'+r.reclassified+'件を対象伝票へ振替'):'';
-    toast('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）'+extra);
-    if(typeof bmSeikyuDone_==='function') bmSeikyuDone_();   // POSから来ていたら伝票に「依頼済み」を刻む
-    SK_SEL=''; SK_ITEMS=[{name:'',amount:0}]; SK_SLIPS=[]; SK_NOTE=''; SK_NOTE_TOUCHED=false; SK_VIEW='list'; SK_LIST=null; renderMenu();
-  }).catch(function(){ if(st){ st.style.color='#ff9a9a'; st.textContent='⚠️ 通信エラー（もう一度お試しください）'; } });
+    toast(r.dup?'✅ この請求は登録済みでした（二重には作っていません）':('✅ 請求を登録しました（支払期限 '+esc(r.due)+'）'+extra));
+    /* ⚠️押し直しの前に中身を直していた＝登録済みなのは最初の中身（qa差し戻し②）。黙って成功にしない */
+    if(r.dup&&((r.senderId&&r.senderId!==sentSel)||(r.amount!=null&&Number(r.amount)!==Number(sentTotal))))
+      alert('この請求は最初に送った内容で登録済みです（¥'+(Number(r.amount)||0).toLocaleString()+(r.senderName?'・'+r.senderName:'')+'）。\n直した内容（¥'+(Number(sentTotal)||0).toLocaleString()+'）は入っていません。\n管理コンソールの請求書で直してください。');
+    if(fp&&typeof bmSeikyuDone_==='function') bmSeikyuDone_(r,fp);   // POSから来ていたら伝票に「依頼済み」を刻む（送った伝票に）
+    if(here) skResetAfter_();
+  }).catch(function(){
+    if(seq===SK_FORM_SEQ) SK_SUBMITTING=false;
+    /* ⚠️通信切れ＝サーバでは登録できているかもしれない。⭐札は変えない＝押し直しても二重にならず、最初の結果が返る */
+    if(seq!==SK_FORM_SEQ){ toast('⚠️ 請求の登録の返事が届きませんでした。［📋最近の請求］で確かめてください'); return; }
+    skSetStatus_('#ff9a9a','⚠️ 通信が途切れました。登録できたか分かりません。もう一度［登録］を押してください（同じ請求は二重になりません）'); skSyncBtn_();
+  });
+}
+/* 「既にあります」→ その請求書に結び付ける（新しく作らない）。本体は POS と同じ bmSeikyuLinkDo_ */
+function skLinkExisting(){
+  var fp=SK_FROM_POS, X=SK_EXISTS; if(!fp||!X||!X.id) return;
+  var seq=SK_FORM_SEQ;
+  skSetStatus_('var(--dim)','結び付けています…');
+  bmSeikyuLinkDo_(fp.dk,fp.key,fp.total,X.id,function(ok,err){
+    if(seq!==SK_FORM_SEQ) return;
+    if(!ok){ skSetStatus_('#ff9a9a','⚠️ '+(err||'結び付けられませんでした')); return; }
+    skResetAfter_();
+  });
+}
+/* 「既にあります」→ それでも新しく作る（金額が変わった等）。⚠️二重請求になりうるので確かめる */
+function skForceNew(){
+  var X=SK_EXISTS||{};
+  if(!confirm((X.similar?'似た請求が既にあります（':'この伝票の請求書は既にあります（')+(X.id||'')+'・¥'+(Number(X.amount)||0).toLocaleString()+'）。\nもう1枚つくると二重請求になります。別の請求か、古い方を取り消す予定ですか？\n\nそれでも新しく作りますか？')) return;
+  SK_EXISTS=null; if(menuView==='seikyu') renderMenu(); skSubmit(true);
 }
 function skListHtml_(){
   var h='<span class="menu-back" onclick="SK_VIEW=\'form\';renderMenu()">← 請求書入力に戻る</span>';
