@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-10-02c';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-07a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -3087,7 +3087,29 @@ function cfWarnItems_(){
   /* ① 過去の営業日に残ったままの日払い未仕訳（当日ぶんはゲートが既に止めている） */
   if(ex.hibaraiPastN) W.push({key:'hibaraiPast',em:'💴',t:'前の日の日払い伝票が仕訳されていません',
     s:ex.hibaraiPastN+'件　受取人が不明のまま（給与の前に片付けてください）', act:'openHibaraiUnknown()'});
+  /* 🚗 送りの記録が0件（指示箱#72・ボス確定「A：警告（締めは止めない）」）＝判定は cfOkuriWarn_ の1か所。
+     ⭐soft:true＝⚠️今日中に片付けること（必須工程 cf_warn の仕分け）には入れない＝押さなくても帰れる（waRows_ が soft を外す）。 */
+  var okw=cfOkuriWarn_(F.cash,ex);
+  if(okw) W.push(okw);
   return W;
+}
+/* 🚗 「今日（0時まで）の送りの記録が見つかりません。…」（指示箱#72・ボス確定 2026-10「A：警告（締めは止めない）」）
+   ⭐出す／出さないを決めるのはここ1か所（締めの画面＝cfWarnItems_／過去日の閉店チェック＝ccOkuriNoteHtml_ の両方がここを呼ぶ）。
+   cash＝getCashCheckInit の返り値（その営業日）／ex＝getClosingExtras の返り値（okuriN＝送迎ログのその営業日の送りの人数）。
+   ⛔cfSteps_ に足さない＝必須（帰れない）にしない。⛔送りは工程に置かない（2026-08-26 ボス確定）。
+   ⚠️0時を過ぎてから🚗送り管理に入れた送りは暦日（翌日）で残り、朝6時前の行は数えない規則＝ここでは数に戻らない。
+     だから案内は「日報の送り代を確かめる」（送り代の控除漏れが実害）。
+   ⚠️出さないとき＝開店チェックが無い日（店休日・営業していない日）／数が取れない（古いGAS・通信不良＝okuriN が数でない）／
+     日付が食い違う（別の日の数）／1件以上ある。⇒ 取れないなら出さない（締めを止める作りにしない）。 */
+function cfOkuriWarn_(cash,ex,act){
+  if(!cash||!cash.openingSubmitted) return null;
+  if(!ex||typeof ex.okuriN!=='number'||!isFinite(ex.okuriN)) return null;
+  if(String(ex.dateKey||'')!==String(cash.dateKey||'')) return null;
+  if(ex.okuriN>0) return null;
+  /* ⚠️言い切らない（qa 差し戻し F2）＝0時を過ぎてから入った送りは数えない規則なので「0件です」とは言わない */
+  return {key:'okuri',soft:true,em:'🚗',t:'今日（0時まで）の送りの記録が見つかりません。送った子がいれば、日報の送り代を確かめてください。',
+    s:'LINEの送り依頼・🚗送り管理とも、0時までの記録が見つからない日に出ます（締めは通ります）',
+    act:(act==null?'openOkuriManager()':act)};
 }
 function cfWarnHtml_(w){
   return '<div class="hv-chk" onclick="'+w.act+'" style="border-color:#e6c14a">'
@@ -3140,6 +3162,12 @@ function renderClosingFlow(){
   if(W.length){
     h+='<div class="hv-sec"><span class="st" style="color:#e6c14a">🟡 要修正（締めは通ります・あとから直せます）</span><span class="cnt">'+W.length+'</span></div>';
     h+=W.map(cfStepHtml_).join('');
+  }
+  /* 🚗 気づき（soft・指示箱#72）＝cfWarnItems_ の soft だけ。押さなくても帰れる（あと N 件にも cf_warn にも入らない） */
+  var SW=(typeof cfWarnItems_==='function'?cfWarnItems_():[]).filter(function(w){ return w.soft; });
+  if(SW.length){
+    h+='<div class="hv-sec"><span class="st" style="color:#e6c14a">🟡 気づき（締めは通ります）</span><span class="cnt">'+SW.length+'</span></div>';
+    h+=SW.map(cfWarnHtml_).join('');
   }
 
   if(fin.length){
@@ -3571,7 +3599,8 @@ function openOrderTriage(){ closeMenu(); TRI_OPEN='oa'; showSheet('📦 届い�
 
 /* ---- ⚠️ 今日中に片付けたいこと（旧・警告ブロック。2026-08-27に必須へ格上げ） ---- */
 function waRows_(){
-  return cfWarnItems_().map(function(w,i){
+  /* 🚗 soft（気づかせるだけ・指示箱#72）は仕分け（必須工程 cf_warn）に入れない＝締めは止めない */
+  return cfWarnItems_().filter(function(w){ return !w.soft; }).map(function(w,i){
     return { id:w.key||('w'+i), em:w.em, t:esc(w.t), s:esc(w.s),
       act:'closeSheet();'+w.act, actLabel:'▶ 開いて片付ける',
       mainHow:'fixed', canTomo:true };
@@ -11500,16 +11529,19 @@ var cashState=null;
 /* 🕛 前日ぶんの締め（ボス指示 2026-08-29）。締められなかった夜の翌日に、その日ぶんとして出せる。
    CC_TARGET_DATE='' なら今日ぶん。'YYYY-MM-DD' なら過去日ぶんを締めている＝画面に警告を出す。
    ⚠️出せるのは「まだ誰も出していない過去の日」だけ（サーバ側 submitCashCheck でも同じ判定をする）。 */
-var CC_TARGET_DATE='', CC_PENDING=null;
+var CC_TARGET_DATE='', CC_PENDING=null, CC_OKURI_EX=null;   /* 🚗 CC_OKURI_EX＝過去日の送りの数（getClosingExtras・指示箱#72） */
 function openCashCheck(dk){
   CC_TARGET_DATE=String(dk||'');
+  CC_OKURI_EX=null;
   closeMenu(); showSheet('🌙 閉店の現金','<div class="empty-msg">読み込み中...</div>',false);
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）閉店チェックは本番のみ</div>'; return; }
   var D=CC_TARGET_DATE;
   /* 💾 第2引数=1 のときだけサーバが下書きを載せて返す。⭐別の口を1本足さない＝GASは直列で
      床が営業中3〜4秒＝往復を1本増やすと閉店の画面がそのぶん遅くなる（ホームの定期取得は引数なし＝無変更）。 */
-  Promise.all([gsr('getCashCheckInit',D,1),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay',D).catch(function(){return null;}),gsr('getOpeningCheckInit',D).catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];}),gsr('getCashPendingDays').catch(function(){return null;})]).then(function(r){
+  Promise.all([gsr('getCashCheckInit',D,1),Promise.resolve([]),gsr('getKioskStaffList').catch(function(){return[];}),gsr('kioskGetDenpyoDay',D).catch(function(){return null;}),gsr('getOpeningCheckInit',D).catch(function(){return null;}),gsr('getKeihiStaffNames').catch(function(){return[];}),gsr('getCashPendingDays').catch(function(){return null;}),(D?gsr('getClosingExtras',D).catch(function(){return null;}):Promise.resolve(null))]).then(function(r){
     CC_PENDING=(r[6]&&r[6].ok)?r[6]:null;
+    /* 🚗 過去日の締めでも、その日の送りの数で判定する（指示箱#72）。今日の分は締めの画面（cfWarnItems_）が出す＝ここでは取らない */
+    CC_OKURI_EX=(D&&r[7]&&r[7].ok!==false&&String(r[7].dateKey||'')===D)?r[7]:null;
     initCashCheck(r[0],r[1]||[],r[2]||[],readSlipsFromDenpyo(r[3]),r[4],r[5]||[]);
   }).catch(function(){ var b=document.getElementById('sheetBody'); if(b)b.innerHTML='<div class="empty-msg">読み込みエラー</div>'; });
 }
@@ -11535,6 +11567,15 @@ function ccDayBannerHtml(init){
     +'<div style="font-size:11.5px;color:var(--dim);margin-top:3px">先にそちらを片付けてください（放置すると現金が合わなくなります）</div>'
     +pend.map(function(x){ return '<div class="bm-btn sm" style="margin-top:8px;margin-right:6px;display:inline-block" onclick="openCashCheck(\''+esc(x)+'\')">📅 '+esc(ccMd_(x))+' の分を締める</div>'; }).join('')
     +'</div>';
+}
+/* 🚗 過去日の締め（CC_TARGET_DATE）でも、その日の送りの数で気づかせる（指示箱#72）。
+   ⭐判定は cfOkuriWarn_ の1か所（ここは見た目だけ）。CC_OKURI_EX は過去日を開いたときだけ入る（今日の分は締めの画面が出す）。
+   ⚠️ccDayBannerHtml の中には足さない（#63〜の帯の本文＝apply-gunshi-cash-daybanner.js の C2 を壊さない）。 */
+function ccOkuriNoteHtml_(init){
+  var w=(typeof cfOkuriWarn_==='function')?cfOkuriWarn_(init,CC_OKURI_EX,''):null;
+  if(!w) return '';
+  return '<div style="border:1px solid #e6c14a;border-radius:12px;padding:9px 12px;margin-bottom:10px;font-size:12.5px;color:#e6c14a;line-height:1.6">🚗 '+esc(w.t)
+    +'<br><span style="font-size:11px;color:var(--dim)">閉店チェックは送れます。</span></div>';
 }
 function ccMd_(d){ var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?(Number(m[2])+'/'+Number(m[3])):String(d||''); }
 function initCashCheck(init,approvers,staff,readSlips,openingInit,keihiStaff){
@@ -11846,7 +11887,8 @@ function renderCashCheck(){
      ⛔以前は結果画面で return して帯が出なかった＝6時前（営業日がまだ前日）に前の日の締め忘れを締めようとして、入口が無かった。
      ⭐帯の中身は ccDayBannerHtml の1本（過去日を締めている間＝CC_TARGET_DATE の出し方は変えない） */
   if(!st.formMode && init.reportSubmitted){ b.innerHTML=ccDayBannerHtml(init)+cashResultHtml(init); return; }
-  var h=souvenirAlert(init)+ccDayBannerHtml(init)+ccDraftBannerHtml()+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
+  /* 🚗 ccOkuriNoteHtml_＝過去日の締めで、その日の送りの記録が0件なら1行（指示箱#72・締めは止めない） */
+  var h=souvenirAlert(init)+ccDayBannerHtml(init)+(typeof ccOkuriNoteHtml_==='function'?ccOkuriNoteHtml_(init):'')+ccDraftBannerHtml()+'<div class="ck-note">対象日 '+esc(init.dateKey)+'</div>';
   if(!init.openingSubmitted) h+='<div class="ck-banner warn">🔶 開店の現金が未提出です（残るはずが計算できません）</div>';
   else h+='<div class="cc-info"><div>🌅 今夜のスタート　¥'+Number(init.openingTotal||0).toLocaleString()+'</div></div>';
   h+='<div class="flabel">報告者（締めた人）</div><div class="chips" id="cc-rep">'+chipsHtml(st.staff,'ccRep',st.reporterName)+'</div>';
