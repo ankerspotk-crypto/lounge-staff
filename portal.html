@@ -713,7 +713,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-09-28b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-10-09a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -858,6 +858,99 @@ function retryBtn_(fn) {
   return '<br><button onclick="' + fn + '()" style="margin-top:14px;padding:10px 24px;background:#241d10;color:#e6cf95;border:1px solid #8a6d3a;border-radius:8px;font-size:14px;cursor:pointer">再試行</button>';
 }
 
+/* ===== 🔐 本人確認（2026-10-09 ボス決定「今の GAS ですぐ塞ぐ」）ここから =====
+   ⛔それまでは LINE の userId をそのまま送り、サーバも信じていた＝userId を知られると誰でも本人として入れた。
+   ⭐いまは GAS 宛ての通信だけ、この入口1本（window.fetch の包み）で本人の証を足す：
+     券（pt・サーバの署名・6時間）があれば券／無ければ LIFF の ID トークン（idt）。サーバは idt を LINE で確かめて券を返す。
+     開発用 `#u=` は鍵（dk）を足すだけ＝効くかどうかはサーバ（鍵＋試験用アカウントだけ）が決める。
+   ⭐ここで足すので、各画面の gasFetch / fetch(GAS_URL…) は1行も直していない（直し漏れの道を作らない）。
+   ⭐断られた依頼（error:'auth'）はサーバの入口で止まっていて何も実行されていない＝POST でも1回だけ送り直してよい。
+   ⚠️券は localStorage（portalAuth:v1）。別の LINE アカウントの券は使わない（持ち主の userId で照合）。 */
+var _paUid = '', _paTicket = '', _paIdt = '';
+var PA_STORE_KEY = 'portalAuth:v1';
+function paLoadTicket_() { try { var o = JSON.parse(localStorage.getItem(PA_STORE_KEY) || 'null'); return (o && o.t) ? o : null; } catch (e) { return null; } }
+function paSaveTicket_(t, exp) { _paTicket = String(t || ''); try { localStorage.setItem(PA_STORE_KEY, JSON.stringify({ t: _paTicket, exp: Number(exp) || 0, uid: _paUid })); } catch (e) {} }
+function paClearTicket_() { _paTicket = ''; try { localStorage.removeItem(PA_STORE_KEY); } catch (e) {} }
+// LIFF でログインした直後に1回。券は持ち主が同じで期限まで1分以上あるときだけ使う
+function paPrepare_(uid) {
+  _paUid = String(uid || '');
+  var o = paLoadTicket_();
+  if (o && o.uid === _paUid && Number(o.exp) * 1000 > Date.now() + 60000) _paTicket = String(o.t); else paClearTicket_();
+  try { _paIdt = (window.liff && liff.getIDToken && liff.getIDToken()) || ''; } catch (e) { _paIdt = ''; }
+}
+function paCred_() {
+  if (_devUid) return _devKey ? { k: 'dk', v: _devKey } : { k: '', v: '' };
+  if (_paTicket) return { k: 'pt', v: _paTicket };
+  if (_paIdt) return { k: 'idt', v: _paIdt };
+  return { k: '', v: '' };
+}
+function paIsGas_(u) { return typeof u === 'string' && u.indexOf(GAS_URL) === 0 && u.indexOf('action=portalMaintenance') < 0; }
+// pa=1＝新しい画面の印（サーバは「新しい画面なのに証が無い＝LIFF の openid が無い」を見分けて記録する）
+function paDecorate_(u, init, cred) {
+  var extra = { pa: '1' };
+  if (cred.k) extra[cred.k] = cred.v;
+  var method = String((init && init.method) || 'GET').toUpperCase();
+  if (method === 'GET') {
+    // 👤キャスト表示（プレビュー）中は、未公開の月の金額をサーバから受け取らない（キャスト本人と同じ応答）
+    if (previewMode && adminViewAs && u.indexOf('action=portal') >= 0) extra.pv = '1';
+    var q = Object.keys(extra).map(function (k) { return k + '=' + encodeURIComponent(extra[k]); }).join('&');
+    return { url: u + (u.indexOf('?') >= 0 ? '&' : '?') + q, init: init };
+  }
+  if (init && typeof init.body === 'string') {
+    try {
+      var b = JSON.parse(init.body);
+      if (b && typeof b === 'object' && !Array.isArray(b)) {
+        Object.keys(extra).forEach(function (k) { b[k] = extra[k]; });
+        return { url: u, init: Object.assign({}, init, { body: JSON.stringify(b) }) };
+      }
+    } catch (e) {}
+  }
+  return { url: u, init: init };
+}
+var _paRawFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null;
+function paFetch_(u, init, attempt) {
+  var cred = paCred_();
+  var dd = paDecorate_(u, init, cred);
+  return _paRawFetch(dd.url, dd.init).then(function (r) {
+    var c; try { c = r.clone(); } catch (e) { return r; }
+    return c.json().then(function (d) {
+      if (d && d._pt) paSaveTicket_(d._pt, d._ptExp);
+      if (d && d.ok === false && d.error === 'auth') {
+        if (!attempt && cred.k === 'pt') { paClearTicket_(); if (_paIdt) return paFetch_(u, init, 1); }
+        paShowAuthError_(d);
+      }
+      return r;
+    }, function () { return r; });
+  });
+}
+if (_paRawFetch) window.fetch = function (input, init) {
+  if (paIsGas_(input)) return paFetch_(input, init, 0);
+  return _paRawFetch(input, init);
+};
+function paRelogin_() {
+  paClearTicket_();
+  try { if (window.liff && liff.isInClient && !liff.isInClient() && liff.isLoggedIn && liff.isLoggedIn()) { liff.logout(); liff.login({ redirectUri: location.href }); return; } } catch (e) {}
+  location.reload();
+}
+// 断られたら全面に案内を出す（下の画面が遅れて何を描いても隠れない）。メンテナンスの全面表示よりは下
+function paShowAuthError_(d) {
+  try { dismissOpening(); } catch (e) {}
+  var el = document.getElementById('portalAuthOverlay');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'portalAuthOverlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#16130d,#080604 72%)';
+    document.body.appendChild(el);
+  }
+  var expired = d && (d.auth === 'expired' || d.auth === 'ticket_expired');
+  el.innerHTML = '<div style="max-width:440px;text-align:center;padding:30px 24px;color:#f2ead9">'
+    + '<div style="font-size:46px;line-height:1;margin-bottom:16px">🔐</div>'
+    + '<div style="font-family:serif;font-size:20px;font-weight:800;color:#e6cf95;margin-bottom:12px">' + (expired ? 'ログインの期限が切れました' : '本人確認ができませんでした') + '</div>'
+    + '<div style="font-size:14px;line-height:1.9">LINE のトークから、ポータルを開き直してください。</div>'
+    + '<button onclick="paRelogin_()" style="margin-top:22px;padding:12px 26px;border-radius:10px;border:1px solid #8a6d3a;background:#241d10;color:#e6cf95;font-size:15px;font-weight:800">🔄 開き直す</button>'
+    + '</div>';
+  el.style.display = 'flex';
+}
+/* ===== 🔐 本人確認 ここまで ===== */
 // ---- LIFF init ----
 // ホームを lite/rest の2本に分けて取る間、rest(席/今日の予約/空席)がまだ届いていないことを示す（2026-07-20）。
 // true の間 renderHome はフォールバックの個別取得を走らせず「読み込み中...」のまま待つ＝二重取得を防ぐ。
@@ -873,6 +966,9 @@ var homeRestPending = false;
 //   （既知の罠。最新世代の応答は必ず処理されるので、この形なら固まらない）。
 var _homeLoadSeq = 0;
 var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
+/* 🔐 `#u=` は開発・確認用。⛔2026-10-09 まではこれだけで誰にでもなれた。いまは鍵 `#u=…&dk=…` を足して送るだけで、
+   通すかどうかはサーバ（PORTAL_AUTH_DEV_KEY と試験用アカウント PORTAL_AUTH_DEV_UIDS の両方）が決める。 */
+var _devKey = new URLSearchParams(location.hash.slice(1)).get('dk') || '';
 var _kt = new URLSearchParams(location.search).get('kt'); // 軍師QRログインのトークン
 
 // 軍師QRログイン: 本人のuserIdでトークンを認証
@@ -962,6 +1058,7 @@ if (_devUid) {
       if (!p) return; // login redirect pending
       userId   = p.userId;
       userName = p.displayName;
+      paPrepare_(p.userId); // 🔐 券の読み出し／LIFF の ID トークン（以後の GAS 宛ては paFetch_ が証を足す）
       if (_kt) { doKioskAuth(userId, _kt); return; }
       document.getElementById('user-name').textContent = p.displayName;
       openingSetName(p.displayName);
@@ -984,7 +1081,8 @@ if (_devUid) {
    ⭐ボス確定 2026-09-28＝**未来の出勤予定が入っていれば予約は誰でも見られる**。判定はサーバが正しく出しているので、
      直すのは「古い判定が端末に居座ること」だけ＝この版を上げると全端末が次の1回で読み直す。
    ⛔挙動は1つも変えていない（キーが変わるだけ）。次の表示が一度だけ遅くなる。 */
-var HOME_CACHE_VER = 'v2';
+/* 🔐 v2→v3（2026-10-09）＝本人確認を入れた版。確かめていない userId で取った応答が端末に3日残らないよう、全員1回だけ捨てさせる。 */
+var HOME_CACHE_VER = 'v3';
 function homeCacheKey_() { return 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + (adminViewAs || ''); }
 function readHomeCache_() {
   try {
@@ -997,6 +1095,7 @@ function readHomeCache_() {
   } catch (e) { return null; }
 }
 function writeHomeCache_(d) {
+  if (d && d._pt) { d = Object.assign({}, d); delete d._pt; delete d._ptExp; } // 🔐 券は portalAuth:v1 だけに置く
   try { localStorage.setItem(homeCacheKey_(), JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
 }
 // キャスト本人のホームペイロードを画面に反映（初回キャッシュ描画と最新反映で共用）
@@ -2468,6 +2567,14 @@ function renderSales() {
     h += '</div>';
   }
 
+  // 🔐 未公開の月＝サーバが金額を落として { __locked:true } だけ返す（2026-10-09）。⛔ここで金額を探しにいかない
+  if (row && row.__locked) {
+    h += '<div style="text-align:center;padding:50px 20px"><div style="font-size:34px;margin-bottom:12px">🔒</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与データは確認中です。<br>公開されるまでお待ちください。</div></div></div>';
+    setContent(h);
+    return;
+  }
   // カード
   h += '<div style="background:#16130d;border:1px solid #211a0f;border-radius:12px;padding:14px">';
   var salesDates = (portalData && portalData.salesDataDates) || {};
