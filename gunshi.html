@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-10-07a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-10a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -7942,6 +7942,40 @@ function bmCloseHtml(d,c){
 function bmNextTag_(amount,dateKey,where){
   return '【次回精算】¥'+(Number(amount)||0).toLocaleString('ja-JP')+'（'+(dateKey||'')+' '+(where||'')+'）';
 }
+/* 📅取消で前回分（ツケの回収）を戻す（2026-10-10・qa指摘）。
+   ⛔これが無いと、会計で外した d.carry と【次回精算】のタグが取消で戻らず（carrySeeded=1 なので入り直さない）、
+     会計し直すと前回回収が台帳から消える＝ツケの記録が消え、その夜の締めも「多い」と出る。
+   ⭐金額はサーバの返事（取り消した会計行の前回回収）が正本。返事が無いときだけ端末の控え（carryPaid）。
+   ⭐お客様メモ＝【次回精算】を全部外してから、戻す前回分のタグだけ付け直す（取り消した会計で付けた次回分のタグも消える）。
+   ⚠️分けた伝票はメモに自動で書かない（bmSaveNextMemo_ と同じ）。 */
+function bmCarryRestore_(key,d,r){
+  var paid=d.carryPaid||null;
+  var amt=Number(r&&r.carry)||0; if(!(amt>0)) amt=Number(paid&&paid.amount)||0;
+  var nextAmt=Number(r&&r.nextPay)||0; if(!(nextAmt>0)) nextAmt=Number(d.pay&&d.pay.next)||0;
+  delete d.carryPaid;
+  if(amt>0&&!d.carry) d.carry={amount:amt,memo:String((paid&&paid.memo)||'')};
+  if(!(amt>0)&&!(nextAmt>0)) return;               // メモに触る理由が無い
+  var pm=String((paid&&paid.memo)||'').match(/【次回精算】[^\n]*/);
+  var tag=(amt>0)?((pm&&bmCarryParse_(pm[0])===amt)?pm[0]:bmNextTag_(amt,'取消で戻した','')):'';
+  bmRestoreNextMemo_(key,tag);
+}
+function bmRestoreNextMemo_(key,tag){
+  if(bmSplitKey_(key).split){ if(tag&&typeof toast==='function') toast('⚠️ 分けた伝票の前回分はお客様のメモに自動で戻せません（手で控えてください）'); return; }
+  try{
+    var r=bmRsvOf_(key)||{};
+    var b=null; try{ b=bmBills().filter(function(x){ return String(x.rowIdx)===String(key); })[0]||null; }catch(e){}
+    var no=String((b&&b.member)||r.mem||'').trim(), nm=String((b&&b.cust)||r.cust||'').trim();
+    if(!no&&!nm) return;
+    var cur=String(r.nextMemo||'');
+    var base=cur.replace(/【次回精算】[^\n]*/g,'').replace(/\n{2,}/g,'\n').trim();
+    var memo=tag?((base?base+'\n':'')+tag):base;
+    if(memo===cur) return;
+    gsr('kioskSaveNextVisitMemo',no,nm,memo).then(function(res){
+      if(res&&res.ok){ r.nextMemo=memo; if(typeof toast==='function') toast(tag?'📌 前回のお預かりをお客様のメモに戻しました':'📌 次回精算のメモを外しました'); }
+      else if(typeof toast==='function') toast('⚠️ お客様のメモを戻せませんでした（手で直してください）');
+    }).catch(function(){ if(typeof toast==='function') toast('⚠️ お客様のメモを戻せませんでした（手で直してください）'); });
+  }catch(e){}
+}
 function bmSaveNextMemo_(key,d,c,bill){
   /* ✂分けた伝票はお客様メモに自動で書かない。⛔メモは**上書き**＝その会員様の今のメモを持っていない
      （予約行は代表のお客様の物）ので、書くと同席の会員様のメモを消してしまう。手で控えてもらう。 */
@@ -8100,6 +8134,8 @@ function bmClose(){
       }
       /* 📅次回来店時払い／前回のお預かりの回収を、お客様のメモに反映する（回収漏れ防止） */
       if(c.next>0||dd.carry) bmSaveNextMemo_(key,dd,c,b);
+      /* 📅2026-10-10 取消→会計し直しで前回分が消えないよう、外す前に控える（bmReopen → bmCarryRestore_ が戻す） */
+      if(dd.carry) dd.carryPaid={amount:Number(dd.carry.amount)||0,memo:String(dd.carry.memo||'')}; else delete dd.carryPaid;
       if(dd.carry) delete dd.carry;      // 回収したので伝票からは落とす（記録は会計行と控えに残る）
       BM.key=key; bmSave(); bmRender();
       bmSlipPreview('guest');   // 決済が終わったら、まずお客様控えを出す（ボスの流れ）
@@ -8132,6 +8168,7 @@ function bmReopen(){
         if(/見つかりません|記録がありません/.test(em)){
           bmLoad();
           var od=BM.draft[rkey]; if(od) delete od.closed;
+          if(od) bmCarryRestore_(rkey,od,null);   /* 📅サーバの返事が無い＝端末の控えから戻す */
           BM.key=rkey; bmSave(); bmRender();
           alert('この伝票の会計は、すでに取り消されていました。\n記録に合わせて画面を戻しました。');
           return;
@@ -8140,6 +8177,7 @@ function bmReopen(){
       }
       bmLoad();
       var dd=BM.draft[rkey]; if(dd) delete dd.closed;
+      if(dd) bmCarryRestore_(rkey,dd,r);   /* 📅取り消した会計で回収した前回分を伝票とお客様メモに戻す（2026-10-10） */
       BM.key=rkey; bmSave(); bmRender();
     })
     .catch(function(e){ BM_CLOSING=false; if(bmPastMoved_(rdk,null)) return; bmRender(); alert('取り消せませんでした：'+((e&&e.message)||'通信エラー')); });
@@ -11614,6 +11652,19 @@ function ccSafeMode(m){
   var w=document.getElementById('cc-bags'); if(w) w.innerHTML=CASH_BAGS.map(ccBagCard).join('');
   ccRefresh();
 }
+/* 📅 「残るはず」に足す項目（2026-10-10）。⭐正本はサーバ（コード.js の cashExpectedAdds_ → getCashCheckInit の expectedAdds）。
+   画面は並べて足すだけ＝項目を写さない。expectedAdds が無い（旧サーバ・読めなかった）ときは従来どおり金庫追加だけ。
+   返り値＝[{k,label,yen}]（0円の項目は入れない） */
+function ccAdds_(init){
+  var a=init&&init.expectedAdds, out=[];
+  if(Object.prototype.toString.call(a)==='[object Array]'){
+    a.forEach(function(x){ var y=Number(x&&x.yen)||0; if(y) out.push({k:String((x&&x.k)||''),label:String((x&&x.label)||''),yen:y}); });
+    return out;
+  }
+  var s=Number(init&&init.safeDepositAfterOpening)||0;
+  if(s) out.push({k:'safeAdd',label:'金庫追加（開店後）',yen:s});
+  return out;
+}
 function ccCalc(){
   var st=cashState, init=st.init;
   var slipTotal=st.slips.reduce(function(s,x){ return s+((x.include!==false&&x.amount>0)?Number(x.amount):0); },0);
@@ -11625,9 +11676,12 @@ function ccCalc(){
      （締めはブロックしないので**黙って食い違う**）→ [[project_safe_cash_deposit]] */
   /* ⚠️Number(x)||0 の順にする（Number(x||0) ではない）＝数字にならない値が来ても NaN を
      「残るはず」に伝播させない（¥NaN と表示され、差額も判定も意味を失う）。正常な数値では挙動は同一。 */
-  var safeAdd=Number(init.safeDepositAfterOpening)||0;
-  var expected=start+sales+safeAdd-slipTotal, actual=bagsYen(st.bags), diff=expected-actual;
-  return {start:start,sales:sales,safeAdd:safeAdd,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:ccWithin_(diff,init),openingSubmitted:!!init.openingSubmitted};
+  /* 📅 2026-10-10：足す項目（金庫追加（開店後）・前回分の回収（現金））はサーバの cashExpectedAdds_ が正本＝ccAdds_ で並べて足すだけ。
+       残るはず ＝ 開店4袋 ＋ 現金売上 ＋ Σ足す項目 − 伝票合計（サーバ submitCashCheck と同じ） */
+  var adds=ccAdds_(init), addTotal=0, safeAdd=0, carryCash=0;
+  adds.forEach(function(x){ addTotal+=x.yen; if(x.k==='safeAdd') safeAdd+=x.yen; if(x.k==='carryCash') carryCash+=x.yen; });
+  var expected=start+sales+addTotal-slipTotal, actual=bagsYen(st.bags), diff=expected-actual;
+  return {start:start,sales:sales,safeAdd:safeAdd,carryCash:carryCash,adds:adds,slipTotal:slipTotal,expected:expected,actual:actual,diff:diff,within:ccWithin_(diff,init),openingSubmitted:!!init.openingSubmitted};
 }
 function ccDiagHtml(){
   return '<div style="background:rgba(224,80,80,.12);border-radius:10px;padding:10px 12px;margin-top:8px">'
@@ -11864,8 +11918,9 @@ function ccFlowHtml(v,withDiag){
   var h='<div class="cc-flow">';
   h+=ccFlowRow('🌅 今夜のスタート','¥'+v.start.toLocaleString(),'#cfe0ff');
   if(v.sales>0) h+=ccFlowRow('＋ 現金売上','¥'+v.sales.toLocaleString(),'#7be0a8');
-  /* 🏦 開店後の金庫追加。出さないと「残るはず」が画面の足し算と合わなくなる（サーバのLINEには出ている） */
-  if(v.safeAdd>0) h+=ccFlowRow('＋ 金庫追加（開店後）','¥'+v.safeAdd.toLocaleString(),'#7be0a8');
+  /* 🏦📅 足す項目（金庫追加（開店後）・前回分の回収（現金））。出さないと「残るはず」が画面の足し算と合わなくなる。
+     v.adds が無い呼び元は従来どおり金庫追加だけ。0円・マイナスの行は出さない（従来と同じ見た目） */
+  (v.adds||(v.safeAdd>0?[{label:'金庫追加（開店後）',yen:v.safeAdd}]:[])).forEach(function(x){ if(x.yen>0) h+=ccFlowRow('＋ '+esc(x.label),'¥'+x.yen.toLocaleString(),'#7be0a8'); });
   if(v.slipTotal>0) h+=ccFlowRow('－ 伝票 出金','¥'+v.slipTotal.toLocaleString(),'#e0a060');
   h+='<div class="cc-flow-row total"><span>＝ 残るはず</span><span>¥'+v.expected.toLocaleString()+'</span></div>';
   h+=ccFlowRow('実際に数えた（4袋）','¥'+v.actual.toLocaleString(),'#ccc');
@@ -11976,11 +12031,11 @@ function submitCash(){
   gsr('submitCashCheck',payload).then(function(res){
     if(!res||!res.ok){ if(s)s.textContent='⚠️ '+((res&&res.error)||'エラー'); return; }
     ccDraftDrop_();   /* 💾 提出できた＝下書きは用済み。⛔submitCashCheck 本体には一切フックを入れていない */
-    gsr('getCashCheckInit',CC_TARGET_DATE||'').then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });
+    gsr('getCashCheckInit',CC_TARGET_DATE||'',0,1).then(function(d){ cashState.init=d; cashState.formMode=false; renderCashCheck(); });   /* 📅withAdds＝結果画面に足す項目を並べる */
   }).catch(function(){ if(s)s.textContent='⚠️ 通信エラー'; });
 }
 function cashResultHtml(init){
-  var v={start:Number(init.openingTotal||0),sales:Number(init.cashSalesInput||0),slipTotal:Number(init.slipTotal||0),safeAdd:Number(init.safeDepositAfterOpening)||0,expected:Number(init.expectedRemain||0),actual:Number(init.actualTotal||0),diff:Number(init.diff||0),within:!!init.within,openingSubmitted:!!init.openingSubmitted};
+  var v={start:Number(init.openingTotal||0),sales:Number(init.cashSalesInput||0),slipTotal:Number(init.slipTotal||0),safeAdd:Number(init.safeDepositAfterOpening)||0,adds:ccAdds_(init),expected:Number(init.expectedRemain||0),actual:Number(init.actualTotal||0),diff:Number(init.diff||0),within:!!init.within,openingSubmitted:!!init.openingSubmitted};
   var h=souvenirAlert(init)+'<div class="ck-note">対象日 '+esc(init.dateKey)+'　報告者 '+esc(init.reporterName)+'</div>';
   h+='<div class="flabel">現金の流れ</div>'+ccFlowHtml(v,true);
   if(init.safeUnchecked) h+='<div class="safe-auto-note" style="margin-top:10px">🔒 金庫は未確認（開店時の額を自動入力しました）</div>';
