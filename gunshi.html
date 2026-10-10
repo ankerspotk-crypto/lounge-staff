@@ -1645,7 +1645,7 @@ var KIOSK_USER_ID='';    /* bootstrap で設定（ScriptProperty KIOSK_USER_ID �
                             ⛔「実施者」「申請者」「登録者」に使うな＝端末でも人でもないので全員が同じ1人になる
                             （2026-09-28まで在庫/発注/棚卸しの6機能が全部りくになっていた）。実施者は gunshiActor_() */
 var TERM = '5F';         /* initGunshi で URL/localStorage から設定 */
-var BUILD='2026-10-10a';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
+var BUILD='2026-10-11b';  /* ⚠️デプロイのたびに手で更新。5F/2F端末の版照合用（バッジに v+BUILD 表示） */
 /* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
    8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 var LOGIN = '';
@@ -4651,7 +4651,7 @@ function rcastHtml(c){
     var wc=(t.alert||w>=iv)?'overw':(w>=iv*0.6?'warnw':'wait');
     rows+='<div class="rtab '+wc+'"><span class="tl">⏳ '+esc(t.key)+' '+esc(t.cust)+'</span><span class="tr">抜けて'+w+'分'+(t.alert?'・'+esc(t.alert):(w>=iv?'・交代を':''))+'</span></div>';
   });
-  var intctl=multi?'<div class="rint">⏱ 何分で回す<div class="ichips">'+[10,15,20,25].map(function(m){return '<div class="ic'+(iv===m?' sel':'')+'" onclick="setCastInterval('+ci+','+m+')">'+m+'</div>';}).join('')+'</div></div>':'';
+  var intctl=''; /* 🗑 「⏱何分で回す」の切替は 2026-10-10 に削除（利用0回）。間隔は既定のまま表示に使う */
   var actions='';
   if(others.length){
     var tgt=worstWait(c);
@@ -4661,7 +4661,6 @@ function rcastHtml(c){
   var tag=act?' <span class="rcast-tag a">要付け回し</span>':'';
   return '<div class="rcast'+(act?' act':'')+'" id="rcast-'+esc(c.cast)+'"><div class="rcast-hd"><span class="rcast-nm">'+(act?'🔴 ':'🟢 ')+esc(c.cast)+tag+'</span>'+load+'</div>'+rows+intctl+actions+'</div>';
 }
-function setCastInterval(ci,m){ROT[ci].interval=m;renderAll();if(IS_GAS)gsr('kioskSetInterval',ROT[ci].cast,m).catch(function(){});}
 function toast(msg){var t=document.getElementById('rotToast');t.textContent=msg;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){t.classList.remove('show');},2200);}
 /* 🔄付け回しタブからの移動。付ける前にNG関所を通す（ボス確定＝NGキャストは通さない） */
 function rotateCast(ci,key){var c=ROT[ci];if(!c)return;var t0=(c.tables||[]).find(function(t){return t.key===key;});ngGate(t0?t0.code:'',c.cast,function(){rotateCastGo(ci,key);});}
@@ -4708,9 +4707,6 @@ function openBottlePrep(){
   showSheet('🍶 本日の予約ボトル（'+list.length+'本）',body,false);
 }
 function outMin(s){return tmin(s.out);}
-function setHaya(i){ var cur=SHIFT[i].hayaagari||''; var t=prompt(SHIFT[i].name+' の早上がり時刻（例 22:00 / 空欄で解除）', cur); if(t===null)return; t=String(t).trim(); SHIFT[i].hayaagari=t; renderShift(); renderAlerts(); if(IS_GAS)gsr('kioskSetHayaagari',SHIFT[i].name,t).catch(function(){}); }
-function toggleOkuri(i){ SHIFT[i].okuri=!SHIFT[i].okuri; renderShift(); if(IS_GAS)gsr('kioskSetOkuri',SHIFT[i].name,SHIFT[i].okuri,'',SHIFT[i].okuriMode||'ドライバー').catch(function(){}); }
-function toggleOkuriMode(i){ SHIFT[i].okuriMode=SHIFT[i].okuriMode==='ドライバー'?'自便':'ドライバー'; renderShift(); if(IS_GAS)gsr('kioskSetOkuriMode',SHIFT[i].name,SHIFT[i].okuriMode).catch(function(){}); }
 function renderShift(){
   var haya=SHIFT.filter(function(s){return s.hayaagari;}), okuri=SHIFT.filter(function(s){return s.okuri;});
   var drv=okuri.filter(function(s){return s.okuriMode==='ドライバー';}).length, jib=okuri.length-drv;
@@ -4740,29 +4736,14 @@ function arrBadge(s){
 function shiftRow(s){
   var i=SHIFT.indexOf(s);
   var col=castColor(s.name);
-  var shusen='<span class="sb shusen'+(s.shusen?'':' off')+'" onclick="setShusen('+i+')">🚃 '+(s.shusen?esc(s.shusen):'終電')+'</span>';
-  var haya='<span class="sb haya'+(s.hayaagari?'':' off')+'" onclick="setHaya('+i+')">🚪 '+(s.hayaagari?fmtTime(s.hayaagari):'早上がり')+'</span>';
-  var okuri='<span class="sb okuri'+(s.okuri?'':' off')+'" onclick="toggleOkuri('+i+')">🚗 '+(s.okuri?'送りあり':'送りなし')+'</span>';
-  var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'" onclick="toggleOkuriMode('+i+')">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
-  var nm='<span class="sr-nm" onclick="setGenji('+i+')" title="源氏名を修正（当日）">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'<span class="pen">✎</span></span>'+castBadge(s.name);
+  /* 🗑 終電・早上がり・送り・モード・源氏名の✎（軍師から書く口）は 2026-10-10 に削除（利用0回・apply-remove-unused-r2.js）。
+     ⭐値が入っているときだけ読むだけのバッジで出す（コンソール等で入った値は今まで通り見える）。 */
+  var shusen=s.shusen?'<span class="sb shusen">🚃 '+esc(s.shusen)+'</span>':'';
+  var haya=s.hayaagari?'<span class="sb haya">🚪 '+fmtTime(s.hayaagari)+'</span>':'';
+  var okuri=s.okuri?'<span class="sb okuri">🚗 送りあり</span>':'';
+  var mode=s.okuri?'<span class="sb mode '+(s.okuriMode==='ドライバー'?'drv':'jib')+'">'+(s.okuriMode==='ドライバー'?'🚙 ドライバー':'🚶 自便')+'</span>':'';
+  var nm='<span class="sr-nm">'+esc(s.name)+(s.renamed?'<span class="rnm">改</span>':'')+'</span>'+castBadge(s.name);
   return '<div class="shift-row'+(s.hayaagari?' hay':'')+(s.renamed?' rnm':'')+'"><span class="sr-ava" style="background:'+col+'">'+esc(s.name.charAt(0))+'</span>'+nm+'<span class="sr-time">'+fmtTime(s.in)+(s.out?('〜'+fmtTime(s.out)):'')+'</span>'+arrBadge(s)+attBadge(s)+'<span class="sr-b">'+shusen+haya+okuri+mode+'</span></div>';
-}
-/* 当日の源氏名を修正（体験の子など）。空欄で元名に戻す。keyは元のシート名。 */
-function setGenji(i){
-  var s=SHIFT[i]; var orig=s.origName||s.name;
-  var t=prompt('「'+orig+'」の当日の源氏名（体験の子など・空欄で元に戻す）', s.renamed?s.name:orig);
-  if(t===null)return; t=String(t).trim();
-  s.name=(t&&t!==orig)?t:orig; s.renamed=(s.name!==orig); /* 楽観的反映 */
-  renderShift(); renderAlerts();
-  if(IS_GAS)gsr('kioskSetGenji',orig,t).then(function(){loadAll();}).catch(function(){toast('保存エラー');loadAll();});
-}
-/* 当日の終電情報（時刻＋自由メモ）。空欄で解除。 */
-function setShusen(i){
-  var s=SHIFT[i];
-  var t=prompt(s.name+' の終電情報（例 24:35 / 24:10 京王線・空欄で解除）', s.shusen||'');
-  if(t===null)return; t=String(t).trim();
-  s.shusen=t; renderShift();
-  if(IS_GAS)gsr('kioskSetShusen',s.name,t).catch(function(){toast('保存エラー');loadAll();});
 }
 function rcardHtml(r,isNext){
   var done=r.status==='退店済み';
@@ -6149,8 +6130,7 @@ function bmModeHtml(){
   return '<div class="bm-warn" style="'+(live?'border-color:#7a2a2a;background:#2a1212':'')+'">'+label
     +(body?'<div style="margin-top:3px;font-weight:600">'+body+'</div>':'')
     +(BM_SYNC_ERR?'<div style="margin-top:4px;color:#ff9a5a;font-weight:700">⚠️ '+esc(BM_SYNC_ERR)+'</div>':'')
-    +(m===null?'':'<div class="bm-row" style="margin-top:6px"><button class="bm-btn sm'+(live?'':' dng')+'" onclick="bmModeSwitch()">'
-      +(live?'🧪 テストモードに戻す':'🔴 本番モードにする')+'</button></div>')
+    /* 🗑 本番/テストの切替ボタンは 2026-10-10 に削除（9/1 以降は日付で必ず本番＝押しても変わらなかった）。表示だけ残す */
     /* 🖨 印刷モード＝プリンターが無い場所で流れを試すためのスイッチ（ボス指示 2026-08-28） */
     +'<div class="bm-row" style="margin-top:8px;align-items:center">'
     +'<span class="lb" style="flex:0 0 auto">印刷</span>'
@@ -6161,17 +6141,6 @@ function bmModeHtml(){
         :'TM-M30へ送ります。')+'</div>'
     +printLogHtml_()
     +'</div>';
-}
-function bmModeSwitch(){
-  var live=(BM_MODE==='live'), next=live?'test':'live';
-  var word=live?'テスト':'本番';
-  var t=prompt('POSを【'+word+'モード】に切り替えます。\n'
-    +(next==='live'?'ここからの入力が本番の記録になります。\n':'記録はテスト用シートに戻ります。\n')
-    +'よければ「'+word+'」と入力してください。');
-  if(String(t||'').trim()!==word) return;
-  gsr('setPosMode',next,(typeof LOGIN!=='undefined'?LOGIN:'')).then(function(r){
-    BM_MODE=(r&&r.mode)||next; bmLoad(); bmPull(); bmRender();
-  }).catch(function(e){ alert('切り替えできませんでした：'+(e&&e.message||'通信エラー')); });
 }
 /* 伝票の下書きを取り出す（無ければ初期セット1本＝TRUSTが卓を開いた時に既定を自動投入するのと同じ） */
 /* お客様n人ぶんのセット行を作る。⚠️単価は**客ごと**に持つ＝同じ席でも女性が混ざると単価が変わるため（ボス談） */
@@ -9054,7 +9023,7 @@ function manToggle(id){ MAN_OPEN[id]=!MAN_OPEN[id]; manRenderList(); }
    ⚠️名前は原則いじっていない（黒服の空間記憶を壊さないため）。意味は s（補助テキスト）で補う方針。
      例外＝「対象伝票・名刺を登録」だけ改名した＝中身が請求書発行で、名前が実体を指していなかった。
    ⚠️act の先頭関数がその環境に無い項目は自動で落とす（menuItemOk_）。
-     ＝本番だけの機能(黒服面談)とテストだけの機能(表彰投票)を1つのテーブルで両立させるため。
+     ＝環境で有る無しが違う機能（例：黒服面談）を1つのテーブルで両立させるため（2026-10-10 表彰の項目は削除）。
      ⛔環境ごとに MENU_CATS を分岐させるな。昇格のたびに差分が生まれて必ず腐る。
    ⚠️棚卸・納品反映・おみやげ在庫は openStockManager の内側に埋もれていた＝ここで初めて表に出す。 */
 var MENU_CATS=[
@@ -9086,8 +9055,7 @@ var MENU_CATS=[
     {ic:'🗂', t:'黒服の面談表',     s:'過去の面談を見る',       act:"openKurofukuMendanManager()"},
     {ic:'🪪', t:'派遣スタッフ登録', s:'顔＋身分証・初回のみ',   act:"openHakenId()"},
     {ic:'🚗', t:'送り管理',         s:'行き先・ドライバー',     act:"openOkuriManager()"},
-    {ic:'📖', t:'新人マニュアル',   s:'13章・テストつき',       act:"openManual()"},
-    {ic:'🏆', t:'表彰投票',         s:'匿名のピア投票',         act:"openAwardVote()"}
+    {ic:'📖', t:'新人マニュアル',   s:'13章・テストつき',       act:"openManual()"}
   ]},
   {id:'kami', ic:'🧾', t:'紙モノ', pv:'伝票・領収書・請求書', items:[
     {ic:'🖊', t:'テーブル伝票',   s:'席に置く手書き用を刷る',   act:"openTableSlip()"},
@@ -13197,7 +13165,6 @@ function dpDelSlipIdx(idsStr,n){
 
 /* ============ 🚗 送り管理 ============ */
 var okuriState=null;
-var OK_DEST_QUICK=['東海市','大治','助光','黒川','名古屋駅'];
 function openOkuriManager(){
   closeMenu(); showSheet('🚗 送り管理','<div class="empty-msg">読み込み中...</div>','full');
   if(!IS_GAS){ document.getElementById('sheetBody').innerHTML='<div class="empty-msg">（ローカル）送り管理は本番のみ</div>'; return; }
@@ -13215,7 +13182,7 @@ function renderOkuri(){
   var st=okuriState,b=document.getElementById('sheetBody'); if(!b)return;
   var n=st.list.length, drv=st.mode!=='jisha';
   // 上部: モード + サマリ
-  var top='<div class="ok-top"><div class="ok-mode"><button class="ok-mode-btn driver'+(drv?' sel':'')+'" onclick="okMode(\'driver\')">🚗 ドライバー手配</button><button class="ok-mode-btn jisha'+(!drv?' sel':'')+'" onclick="okMode(\'jisha\')">🏠 自社送り</button></div>';
+  var top='<div class="ok-top">'; /* 🗑 ドライバー手配／自社送りの切替は 2026-10-10 に削除（利用0回）。モードは下の要約に出るだけ */
   top+='<div class="ok-summary">🚗 送り '+n+'名'+(drv&&n?'<span class="fare">料金目安 ¥'+Number(st.fare.yen||0).toLocaleString()+'</span>'+(st.fare.note?'<span class="sub">'+esc(st.fare.note)+'</span>':''):'')+(drv?'':'<span class="sub">自社送りモード：ドライバー通知なし</span>')+'</div></div>';
   // 確定リスト帯
   var chips=st.list.length?st.list.slice().sort(function(a,b){return (a.bin||1)-(b.bin||1);}).map(function(o){return '<div class="ok-chip"><span class="bin">'+(o.bin||1)+'便</span>'+esc(o.name)+' → '+esc(o.dest||'（未入力）')+'</div>';}).join(''):'<span class="empty-msg" style="padding:0;font-size:12px">まだ送りはありません</span>';
@@ -13236,43 +13203,19 @@ function renderOkuriGrid(){
   var cnt=document.getElementById('ok-count'); if(cnt)cnt.textContent=rows.length+'名';
 }
 function okCard(name){
-  var st=okuriState, ents=okEntry(name), on=ents.length>0, editing=st.edit===name;
+  var st=okuriState, ents=okEntry(name), on=ents.length>0;
   var stLine=on?ents.map(function(o){return '🚗 '+esc(o.dest||'（行き先未入力）')+' ('+(o.bin||1)+'便)';}).join('<br>'):'⚪ 自便（送りなし）';
   var h='<div class="ok-card'+(on?' on':'')+'"><div class="ok-card-nm">'+esc(name)+'</div><div class="ok-card-st '+(on?'on':'off')+'">'+stLine+'</div>';
   h+=okRosterLine_(name);   /* 📒 名簿の常設設定（今の値＋最後に直した人）。⛔今夜の送りとは別物 */
   /* ⛔名簿を直している間は今夜の欄を出さない＝2つの「保存」が並んで誤タップするのを防ぐ */
   if(st.roster===name) return h+okRosterForm_(name)+'</div>';
-  if(editing){
-    var cur=ents[0]||{dest:'',bin:1}; var bin=st.binSel[name]||cur.bin||1;
-    /* 🏠 いつもの送り先（名簿の常設メモ）。⛔**今日すでに入っている行き先が最優先**＝上書きしない。
-       まだ行き先が無いときだけ初期値として入れる。違う日は黒服がそのまま書き換えればいい。 */
-    var memo=(st.destDef||{})[name]||'';
-    var initDest=cur.dest||memo;
-    h+='<div class="ok-form"><input id="ok-dest-'+cssId(name)+'" class="finput" placeholder="行き先" value="'+esc(initDest)+'">';
-    h+=memo?'<div class="ok-dest-memo" style="font-size:11px;color:var(--dim);margin:2px 0 0">🏠 いつもの送り先: '+esc(memo)+'</div>':'';
-    h+='<div class="ok-dest-quick">'+(memo?'<button class="ok-dq" onclick="okQuickDest(\''+jsStr(name)+'\',\''+jsStr(memo)+'\')">🏠 '+esc(memo)+'</button>':'')+OK_DEST_QUICK.map(function(d){return '<button class="ok-dq" onclick="okQuickDest(\''+jsStr(name)+'\',\''+jsStr(d)+'\')">'+esc(d)+'</button>';}).join('')+'</div>';
-    h+='<div class="ok-bin-row">'+[1,2].map(function(bn){return '<button class="ok-bin'+(bin===bn?' sel':'')+'" onclick="okBin(\''+jsStr(name)+'\','+bn+')">'+bn+'便</button>';}).join('')+'</div>';
-    h+='<div class="ok-form-btns"><button class="ok-btn add" onclick="okSave(\''+jsStr(name)+'\')">保存</button><button class="ok-btn edit" onclick="okuriState.edit=null;renderOkuriGrid()">閉じる</button></div></div>';
-  } else if(on){
-    h+='<div class="ok-form-btns"><button class="ok-btn edit" onclick="okOpenEdit(\''+jsStr(name)+'\')">変更</button><button class="ok-btn cancel" onclick="okCancel(\''+jsStr(name)+'\')">キャンセル</button></div>';
-  } else {
-    h+='<button class="ok-btn add" onclick="okOpenEdit(\''+jsStr(name)+'\')">🚗 送りを追加</button>';
-  }
+  /* 🗑 今夜の送りの「🚗送りを追加／変更／キャンセル」は 2026-10-10 に削除（利用0回・apply-remove-unused-r2.js）。
+     ⭐今夜の送りは LINE の「◯◯まで送ってください」で入る＝上の確定リストに出る。📒名簿を直す は残す。 */
   return h+'</div>';
 }
 function cssId(s){ return String(s).replace(/[^0-9A-Za-z]/g,function(c){return 'x'+c.charCodeAt(0);}); }
 function jsStr(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
-function okMode(mode){
-  if(okuriState.mode===mode)return;
-  var msg=mode==='jisha'?'自社送りモードに切替えます（ドライバーへの通知を止めます）。よろしいですか？':'ドライバー手配モードに切替えます。よろしいですか？';
-  if(!confirm(msg))return;
-  okuriState.mode=mode; renderOkuri();
-  gsr('kioskSetGlobalOkuriMode',mode).then(function(r){ if(r&&r.mode){okuriState.mode=r.mode;renderOkuri();} }).catch(function(){alert('モード切替に失敗');});
-}
 function okFilter(f){ okuriState.filter=f; renderOkuri(); }
-function okOpenEdit(name){ okuriState.edit=name; okuriState.roster=null; renderOkuriGrid(); }  /* ⛔今夜の欄と名簿の欄を同時に開かない */
-function okBin(name,bn){ okuriState.binSel[name]=bn; renderOkuriGrid(); }
-function okQuickDest(name,d){ var el=document.getElementById('ok-dest-'+cssId(name)); if(el)el.value=d; }
 /* ══════════════════════════════════════════════════════════════════════
    📒 名簿の常設設定（🚗送り代＝片道いくら／🏠送り先）を黒服がここから直す
    （ボス依頼 2026-09-28「名簿の送り代の入力、黒服に軍師からさせることもできるかな。都度じゃなく恒久的に」）
@@ -13300,7 +13243,7 @@ function okRosterLine_(name){
   if(rs.by) h+='<br>📝 最後に直した人: '+esc(rs.by)+(rs.at?'（'+esc(rs.at)+'）':'')+(rs.via?' ['+esc(rs.via)+']':'');
   /* ⛔onclick の中の名前は jsStr だけでは足りない＝ダブルクォートや < が**属性を壊す**（源氏名に入り得る）。
      ⭐JSの文字列として安全にしてから（jsStr）HTML属性として安全にする（esc）＝この順番でなければ意味が無い。
-     ⚠️隣の okOpenEdit / okQuickDest は jsStr だけの古い形＝**この案件では触らない**（別案件で直す）。 */
+ */
   h+='<div style="margin-top:4px"><button class="ok-btn edit" onclick="okOpenRoster(\''+esc(jsStr(name))+'\')">📒 名簿を直す</button></div></div>';
   return h;
 }
@@ -13312,7 +13255,7 @@ function okRosterForm_(name){
   var curFare=(rs.fare===null||rs.fare===undefined)?'':String(rs.fare);
   var h='<div class="ok-rform" style="margin-top:6px;padding:8px;border:2px solid var(--accent,#c9a34a);border-radius:8px">'
        +'<div style="font-weight:800;font-size:13px">📒 '+esc(name)+' の名簿を直します</div>'
-       +'<div style="font-size:11px;color:var(--dim);margin:2px 0 6px">⚠️<b>次の夜からずっと</b>効きます。⛔今夜の送りはこれでは変わりません（上の「🚗 送りを追加」で入れてください）</div>';
+       +'<div style="font-size:11px;color:var(--dim);margin:2px 0 6px">⚠️<b>次の夜からずっと</b>効きます。⛔今夜の送りはこれでは変わりません（今夜の送りは LINE の「◯◯まで送ってください」で入ります）</div>';
   h+='<div style="font-size:11px;font-weight:700;margin-top:4px">🚗 送り代（片道いくら）　いま: '+esc(okFareLabel_(rs.fare))+'</div>';
   h+='<input id="ok-rfare-'+id+'" class="finput" inputmode="numeric" placeholder="空欄＝未設定" value="'+esc(curFare)+'">';
   h+='<div class="ok-dest-quick"><button class="ok-dq" onclick="okRFareSet(\''+esc(jsStr(name))+'\',\'\')">未設定にする</button>'
@@ -13349,21 +13292,6 @@ function okRosterSave(name){
     if(r&&r.ok){ toast('📒 '+name+' の名簿を直しました'); okuriState.roster=null; openOkuriManager(); }
     else alert('保存できませんでした:\n'+((r&&r.error)||''));
   }).catch(function(){ alert('通信に失敗しました。\nもう一度開いて、いまの値を確かめてください。'); });
-}
-function okSave(name){
-  var el=document.getElementById('ok-dest-'+cssId(name)); var dest=el?el.value.trim():'';
-  if(!dest){alert('行き先を入力してください');return;}
-  var bin=okuriState.binSel[name]||(okEntry(name)[0]||{}).bin||1;
-  gsr('kioskSaveOkuriEntry',name,dest,bin).then(function(res){
-    if(res&&res.ok){ okuriState.edit=null; delete okuriState.binSel[name]; openOkuriManager(); }
-    else alert('エラー: '+((res&&res.error)||''));
-  }).catch(function(){alert('送りの保存に失敗');});
-}
-function okCancel(name){
-  if(!confirm(name+' さんの送りをキャンセルします。よろしいですか？'))return;
-  gsr('kioskCancelOkuriEntry',name,null).then(function(res){
-    if(res&&res.ok) openOkuriManager(); else alert('エラー: '+((res&&res.error)||''));
-  }).catch(function(){alert('取消に失敗');});
 }
 
 /* ============ 実データ接続層（GAS本番） ============ */
@@ -13952,8 +13880,7 @@ function showTaiken(id){
   el.innerHTML=
     '<div style="font-size:14px;font-weight:700;color:#e6d2a8;margin-bottom:12px">🌸 体験の登録（シフト表に反映）</div>'
     +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">源氏名（お店での名前）</div>'
-    +'<input id="tkGenji" placeholder="例：ゆい" onblur="checkGenjiShift()" style="width:100%;'+inp+'">'
-    +'<div id="tkShiftHint" style="font-size:12px;margin:6px 0 12px;min-height:1px"></div>'
+    +'<input id="tkGenji" placeholder="例：ゆい" style="width:100%;'+inp+';margin-bottom:12px">'
     +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">体験日</div>'
     +'<input id="tkDate" type="date" value="'+iso+'" style="width:100%;'+inp+';margin-bottom:12px">'
     +'<div style="font-size:12px;color:#a29a8e;margin-bottom:4px">時間（シフト表の書き方で）</div>'
@@ -13975,27 +13902,6 @@ function submitTaiken(id){
     if(r&&r.ok){ alert('体験を登録し、シフトに反映しました。'); openMendanManager(); }
     else alert((r&&r.error)||'登録に失敗しました');
   }).catch(function(){ alert('通信に失敗しました'); });
-}
-/* 源氏名を入れたら、既にシフト表にあるか調べて流用（あれば日時を自動セット・変更可） */
-function checkGenjiShift(){
-  var genji=((document.getElementById('tkGenji')||{}).value||'').trim();
-  var el=document.getElementById('tkShiftHint'); if(!el)return;
-  if(!genji){ el.innerHTML=''; return; }
-  el.innerHTML='<span style="color:#6f685e">既存シフトを確認中…</span>';
-  gsr('gunshiGetGenjiShift', genji).then(function(r){
-    if(r&&r.found&&r.shifts&&r.shifts.length){
-      var last=r.shifts[r.shifts.length-1];
-      el.innerHTML='<span style="color:#7fdca0">✅ 既にシフトあり：'+r.shifts.map(function(s){return s.date+' '+s.time;}).join('、')+'</span>'
-        +'<br><span style="color:#c9a45c">→ 直近の '+last.date+' '+last.time+' を流用しました（下で変更もできます）</span>';
-      var tt=document.getElementById('tkTime'); if(tt)tt.value=last.time;
-      var mdy=String(last.date).split('/');
-      if(mdy.length===2){ var y=new Date().getFullYear(); var dd=document.getElementById('tkDate'); if(dd)dd.value=y+'-'+('0'+mdy[0]).slice(-2)+'-'+('0'+mdy[1]).slice(-2); }
-    } else if(r&&r.found){
-      el.innerHTML='<span style="color:#a29a8e">この源氏名は在籍していますが、シフト未登録です。日時を入力してください。</span>';
-    } else {
-      el.innerHTML='<span style="color:#6f685e">新しい源氏名です。日時を入力してください。</span>';
-    }
-  }).catch(function(){ el.innerHTML=''; });
 }
 function submitMendanJudge(id,judge){
   var memo=(document.getElementById('mjMemo')||{}).value||'';

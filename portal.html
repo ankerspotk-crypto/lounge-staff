@@ -559,107 +559,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 .home-hero .hh-rule{ margin:13px 0 0; height:1px; width:64px; background:linear-gradient(90deg,#c9a95f,transparent); }
 .home-hero .hh-line{ margin-top:11px; font-size:13px; letter-spacing:.05em; color:#dcc084; position:relative; }
 
-/* 🏆 表彰・匿名ピア投票 */
-.aw-head{ display:flex; align-items:center; gap:9px; margin:2px 2px 6px; }
-.aw-head .aw-emoji{ font-size:23px; }
-.aw-head .aw-title{ font-size:19px; font-weight:800; color:#f4ecdc; }
-.aw-sub{ font-size:12px; color:#b09f74; margin:0 2px 12px; letter-spacing:.03em; }
-.aw-note{ background:linear-gradient(135deg,#1c1710,#141009); border:1px solid rgba(214,183,120,.2); border-radius:12px; padding:12px 13px; font-size:12.5px; color:#c7ae74; line-height:1.7; margin-bottom:14px; }
-.aw-reward{ display:flex; align-items:center; gap:12px; background:linear-gradient(135deg,#2c2113,#171009); border:1px solid rgba(214,183,120,.42); border-radius:14px; padding:14px 15px; margin-bottom:13px; box-shadow:0 8px 22px rgba(0,0,0,.34); }
-.aw-reward.done{ border-color:rgba(214,183,120,.62); box-shadow:0 8px 24px rgba(185,152,90,.22); }
-.aw-prog{ font-size:12px; color:#b09f74; text-align:center; margin:0 0 14px; letter-spacing:.04em; }
-.aw-cat{ background:linear-gradient(180deg,#17140d,#120f09); border:1px solid rgba(214,183,120,.16); border-radius:14px; padding:15px 14px; margin-bottom:11px; box-shadow:0 6px 16px rgba(0,0,0,.28); }
-.aw-cat .aw-c-top{ display:flex; align-items:center; gap:9px; margin-bottom:4px; }
-.aw-cat .aw-c-ico{ font-size:21px; }
-.aw-cat .aw-c-name{ font-size:15.5px; font-weight:800; color:#f2ead9; }
-.aw-scope{ margin-left:auto; font-size:10.5px; font-weight:700; color:#c9a459; background:#241d10; border:1px solid rgba(214,183,120,.3); border-radius:8px; padding:2px 8px; white-space:nowrap; }
-.aw-cat .aw-c-desc{ font-size:12px; color:#94886a; margin:0 0 12px; line-height:1.55; }
-.aw-pick{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 14px; border-radius:11px; border:1px solid rgba(214,183,120,.3); background:#241d10; color:#f2ead9; font-size:15px; font-weight:700; cursor:pointer; }
-.aw-pick:active{ filter:brightness(1.08); }
-.aw-pick.empty{ color:#94886a; font-weight:600; border-style:dashed; background:#141009; }
-.aw-pick .aw-pick-r{ color:#c9a459; font-size:13px; font-weight:600; }
-.aw-cmt{ margin-top:9px; width:100%; background:#100d08; border:1px solid rgba(214,183,120,.16); border-radius:10px; padding:10px 12px; font-size:13.5px; color:#f2ead9; resize:none; font-family:inherit; line-height:1.5; }
-.aw-cmt::placeholder{ color:#6f6650; }
-.aw-search{ width:100%; background:#100d08; border:1px solid rgba(214,183,120,.24); border-radius:11px; padding:12px 14px; font-size:15px; color:#f2ead9; }
-.aw-search::placeholder{ color:#6f6650; }
-.aw-cand{ display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid #241d10; cursor:pointer; }
-.aw-cand:active{ background:#1c160d; }
-.aw-cand .aw-av{ width:38px; height:38px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; background:linear-gradient(135deg,#2a2114,#1a140b); border:1px solid rgba(214,183,120,.32); color:#e6cf95; }
-.aw-cand .aw-nm{ flex:1; min-width:0; font-size:15px; color:#f2ead9; font-weight:600; }
-.aw-cand .aw-role{ font-size:11px; color:#94886a; white-space:nowrap; }
-.aw-cand.sel{ background:#241d10; }
-.aw-cand.sel .aw-nm{ color:#f4d98a; font-weight:800; }
-.aw-cand.sel .aw-av{ border-color:#c9a459; color:#f4d98a; }
-.aw-win{ position:relative; overflow:hidden; background:linear-gradient(135deg,#241c0f,#15100a); border:1px solid rgba(214,183,120,.34); border-radius:16px; padding:16px; margin-bottom:11px; box-shadow:0 10px 26px rgba(0,0,0,.4); }
-.aw-win::before{ content:''; position:absolute; top:-40%; right:-12%; width:150px; height:150px; border-radius:50%; background:radial-gradient(circle, rgba(232,202,122,.16), rgba(232,202,122,0) 70%); pointer-events:none; }
-.aw-win .aw-w-cat{ font-size:12px; color:#c7ae74; letter-spacing:.06em; }
-.aw-win .aw-w-name{ margin-top:6px; font-size:22px; font-weight:800; color:#f4ecdc; }
-.aw-win .aw-w-name b{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-.aw-mine{ background:linear-gradient(135deg,#2a2012,#15100a); border:1px solid rgba(214,183,120,.42); border-radius:16px; padding:20px 18px; margin-bottom:14px; text-align:center; box-shadow:0 12px 30px rgba(0,0,0,.42); }
-
-
-/* ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦） */
-.ks-arena{ position:relative; overflow:hidden; background:linear-gradient(160deg,#221a0f,#14100a 60%,#0f0c07); border:1px solid rgba(214,183,120,.34); border-radius:18px; padding:16px 15px 14px; margin-bottom:13px; box-shadow:0 12px 30px rgba(0,0,0,.44); }
-.ks-arena::before{ content:''; position:absolute; top:-55%; left:50%; transform:translateX(-50%); width:230px; height:230px; border-radius:50%; background:radial-gradient(circle, rgba(232,202,122,.13), rgba(232,202,122,0) 70%); pointer-events:none; }
-.ks-turn{ position:relative; text-align:center; font-size:11.5px; letter-spacing:.16em; color:#c7ae74; margin-bottom:13px; }
-.ks-fight{ position:relative; display:flex; align-items:flex-start; gap:8px; }
-.ks-side{ flex:1; min-width:0; }
-.ks-side .ks-flag{ font-size:10.5px; font-weight:700; letter-spacing:.1em; color:#8d7c56; }
-.ks-side .ks-nm{ font-size:15.5px; font-weight:800; color:#f2ead9; margin:2px 0 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ks-side.me .ks-nm{ color:#f4d98a; }
-.ks-hp{ height:9px; border-radius:5px; background:#0d0a06; border:1px solid rgba(214,183,120,.2); overflow:hidden; }
-.ks-hp i{ display:block; height:100%; background:linear-gradient(90deg,#b8933f,#f0d38d); transition:width .5s cubic-bezier(.2,.8,.3,1); }
-.ks-side.hurt .ks-hp i{ background:linear-gradient(90deg,#8d3040,#d1697a); }
-.ks-stat{ display:flex; justify-content:space-between; font-size:11px; color:#94886a; margin-top:5px; }
-.ks-stat b{ color:#e6cf95; font-weight:700; }
-.ks-vs{ align-self:center; font-size:13px; font-weight:800; color:#8d7c56; letter-spacing:.06em; padding-top:16px; }
-.ks-panel{ background:linear-gradient(180deg,#17140d,#120f09); border:1px solid rgba(214,183,120,.16); border-radius:14px; padding:15px 14px; margin-bottom:12px; box-shadow:0 6px 16px rgba(0,0,0,.28); }
-.ks-lbl{ font-size:11.5px; color:#b09f74; letter-spacing:.06em; margin-bottom:9px; }
-.ks-hands{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-.ks-hand{ display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 4px 11px; border-radius:13px; border:1px solid rgba(214,183,120,.22); background:#181309; color:#cbb98a; cursor:pointer; font-family:inherit; transition:transform .12s, border-color .18s, background .18s; }
-.ks-hand .ks-h-ico{ font-size:27px; line-height:1; }
-.ks-hand .ks-h-nm{ font-size:13.5px; font-weight:800; }
-.ks-hand:active{ transform:scale(.96); }
-.ks-hand.sel{ background:linear-gradient(160deg,#3a2c15,#221a0d); border-color:#d6b778; color:#f6e2ab; box-shadow:0 0 0 1px rgba(214,183,120,.32), 0 6px 18px rgba(185,152,90,.24); }
-.ks-bets{ display:flex; gap:7px; }
-.ks-bet{ flex:1; padding:12px 0; border-radius:11px; border:1px solid rgba(214,183,120,.22); background:#181309; color:#cbb98a; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit; transition:transform .12s, border-color .18s, background .18s; }
-.ks-bet:active{ transform:scale(.94); }
-.ks-bet.sel{ background:linear-gradient(160deg,#3a2c15,#221a0d); border-color:#d6b778; color:#f6e2ab; }
-.ks-bet:disabled{ opacity:.28; cursor:default; }
-.ks-go{ width:100%; margin-top:14px; padding:16px 0; border-radius:13px; border:1px solid rgba(214,183,120,.5); background:linear-gradient(135deg,#3d2d14,#241a0c); color:#f6e2ab; font-size:17px; font-weight:800; letter-spacing:.1em; cursor:pointer; font-family:inherit; box-shadow:0 8px 22px rgba(0,0,0,.36); }
-.ks-go:disabled{ opacity:.36; cursor:default; box-shadow:none; }
-.ks-go:active:not(:disabled){ filter:brightness(1.12); }
-.ks-wait{ text-align:center; padding:22px 8px; }
-.ks-wait .ks-w-ico{ font-size:32px; line-height:1; }
-.ks-wait .ks-w-t{ margin-top:9px; font-size:14.5px; font-weight:700; color:#f2ead9; }
-.ks-wait .ks-w-s{ margin-top:5px; font-size:12px; color:#94886a; line-height:1.7; }
-.ks-dot{ display:inline-block; width:5px; height:5px; margin:0 2px; border-radius:50%; background:#c9a459; animation:ksBlink 1.3s infinite; }
-.ks-dot:nth-child(2){ animation-delay:.22s } .ks-dot:nth-child(3){ animation-delay:.44s }
-@keyframes ksBlink{ 0%,60%,100%{opacity:.22} 30%{opacity:1} }
-.ks-res{ position:relative; overflow:hidden; text-align:center; padding:26px 16px; border-radius:16px; margin-bottom:12px; border:1px solid rgba(214,183,120,.34); background:linear-gradient(135deg,#2a2012,#15100a); box-shadow:0 12px 30px rgba(0,0,0,.42); }
-.ks-res.win{ border-color:rgba(214,183,120,.62); box-shadow:0 12px 32px rgba(185,152,90,.26); }
-.ks-res .ks-r-ico{ font-size:44px; line-height:1; }
-.ks-res .ks-r-t{ margin-top:8px; font-size:25px; font-weight:800; color:#f4ecdc; letter-spacing:.06em; }
-.ks-res.win .ks-r-t{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-.ks-res .ks-r-s{ margin-top:7px; font-size:12.5px; color:#c7ae74; }
-.ks-log{ display:flex; align-items:center; gap:9px; padding:9px 4px; border-bottom:1px solid #221b11; font-size:13px; }
-.ks-log:last-child{ border-bottom:none; }
-.ks-log .ks-l-t{ font-size:10.5px; color:#8d7c56; width:34px; flex-shrink:0; letter-spacing:.04em; }
-.ks-log .ks-l-h{ color:#cbb98a; white-space:nowrap; }
-.ks-log .ks-l-r{ margin-left:auto; font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:8px; white-space:nowrap; }
-.ks-log .ks-l-r.win{ color:#f4d98a; background:#2a2012; border:1px solid rgba(214,183,120,.34); }
-.ks-log .ks-l-r.lose{ color:#cc8a96; background:#241318; border:1px solid rgba(204,138,150,.26); }
-.ks-log .ks-l-r.draw{ color:#94886a; background:#191510; border:1px solid rgba(214,183,120,.14); }
-.ks-rule{ font-size:11.5px; color:#8d7c56; line-height:1.85; letter-spacing:.02em; }
-.ks-rule b{ color:#c9a459; font-weight:700; }
-.ks-rank{ display:flex; align-items:center; gap:11px; padding:11px 4px; border-bottom:1px solid #221b11; }
-.ks-rank:last-child{ border-bottom:none; }
-.ks-rank .ks-no{ width:26px; flex-shrink:0; text-align:center; font-size:13px; font-weight:800; color:#8d7c56; }
-.ks-rank.top .ks-no{ font-size:17px; }
-.ks-rank .ks-r-nm{ flex:1; min-width:0; font-size:14.5px; color:#f2ead9; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ks-rank.me .ks-r-nm{ color:#f4d98a; font-weight:800; }
-.ks-rank .ks-r-w{ font-size:12.5px; color:#94886a; white-space:nowrap; }
-.ks-rank .ks-r-w b{ color:#e6cf95; font-size:15px; font-weight:800; }
+/* 🏆表彰・⚔️合戦の画面は 2026-10-10 ボス指示で削除（apply-remove-vote-kassen.js）。 */
 </style>
 </head>
 <body>
@@ -691,15 +591,6 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
   </div>
 </div>
 
-<div class="overlay" id="aw-overlay" onclick="if(event.target===this)closeCandPicker()">
-  <div class="picker" onclick="event.stopPropagation()" style="max-height:82vh;display:flex;flex-direction:column">
-    <div class="picker-title" id="aw-pk-title"></div>
-    <input class="aw-search" id="aw-search" placeholder="名前で探す" oninput="filterCand()" autocomplete="off">
-    <div id="aw-cand-list" style="overflow-y:auto;flex:1;margin-top:4px"></div>
-    <button class="picker-cancel" onclick="closeCandPicker()">閉じる</button>
-  </div>
-</div>
-
 <div class="overlay" id="notice-overlay" style="align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeNoticeModal()">
   <div id="notice-modal-box" style="background:#0e1726;border:1px solid #33291a;border-radius:16px;padding:22px;max-width:440px;width:100%;max-height:80vh;overflow-y:auto"></div>
 </div>
@@ -713,7 +604,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-10-09a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-10-11b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -1082,7 +973,7 @@ if (_devUid) {
      直すのは「古い判定が端末に居座ること」だけ＝この版を上げると全端末が次の1回で読み直す。
    ⛔挙動は1つも変えていない（キーが変わるだけ）。次の表示が一度だけ遅くなる。 */
 /* 🔐 v2→v3（2026-10-09）＝本人確認を入れた版。確かめていない userId で取った応答が端末に3日残らないよう、全員1回だけ捨てさせる。 */
-var HOME_CACHE_VER = 'v3';
+var HOME_CACHE_VER = 'v4'; // v4＝2026-10-10 表彰・合戦のボタンを外した（apply-remove-vote-kassen.js）＝端末に覚えたホームを捨てさせる
 function homeCacheKey_() { return 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + (adminViewAs || ''); }
 function readHomeCache_() {
   try {
@@ -1286,8 +1177,6 @@ function adminChange(name) {
 // セクション名（戻るバー・メニュー用）
 var SECTIONS = {
   board:    { t:'お知らせ',     i:'📢' },
-  awards:   { t:'表彰・投票',   i:'🏆' },
-  kassen:   { t:'合戦',         i:'⚔️' },
   shift:    { t:'シフト提出',   i:'📅' },
   yoyaku:   { t:'予約管理',     i:'🗓' },
   stats:    { t:'売上・給与',   i:'💰' },
@@ -1300,7 +1189,6 @@ var SECTIONS = {
   custbday: { t:'今月誕生日の客', i:'🎂' },
   wine:     { t:'シャンパン・ワイン在庫', i:'🍾' },
   skill:    { t:'スキルテスト',   i:'📝' },
-  requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'全員シフト',   i:'📋' },
   notif:    { t:'通知設定',     i:'🔔' },
   cashset:  { t:'軍師設定',     i:'⚙️' }
@@ -1335,10 +1223,6 @@ function menuBtn(key) {
     var un = noticeUnread().length;
     if (un) badge = '<span style="position:absolute;top:10px;right:10px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;background:#c0405a;color:#fff;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">' + un + '</span>';
   }
-  // 合戦ボタンは「あなたの手番です」を金バッジで表示（未読の赤バッジとは意味が違うので色を分ける）
-  if (key === 'kassen' && ksPending > 0) {
-    badge = '<span style="position:absolute;top:10px;right:10px;height:20px;padding:0 8px;box-sizing:border-box;background:linear-gradient(135deg,#c9a459,#8d6f2e);color:#1a1409;border-radius:10px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;letter-spacing:.04em">手番</span>';
-  }
   return '<button onclick="switchTab(\'' + key + '\')" style="position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:linear-gradient(180deg,#191510,#120f09);border:1px solid rgba(214,183,120,.16);border-radius:14px;text-align:left;cursor:pointer;width:100%;box-shadow:0 6px 16px rgba(0,0,0,.28)">'
     + badge
     + '<span style="font-size:23px;line-height:1;filter:saturate(.85)">' + s.i + '</span>'
@@ -1355,8 +1239,7 @@ function versionFooter() {
 }
 
 function homeMenu() {
-  ksPingOnce();   // ⚔️合戦の「手番」バッジ用。ホーム描画をブロックしない（結果が来たら描き直す）
-  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
+  var castKeys = ['board','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
   /* 🗓 ゴースト在籍（今日以降の出勤ゼロ）＝⭐**ボタンは消さない。押したら理由を出す**（ボス確定 2026-09-28）。
@@ -1424,12 +1307,9 @@ function switchTab(tab) {
   switchTabActive(tab);
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'board') { loadBoard(); return; }
-  if (tab === 'awards') { loadAwards(); return; }
-  if (tab === 'kassen') { loadKassen(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'kyuritsu') { renderKyuritsu(); return; }
   if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
-  if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
   if (tab === 'shiftmgmt') { loadShiftMgmt(); return; }
@@ -1458,7 +1338,6 @@ function renderTab(tab) {
   if (!ghostAllows_(tab)) { switchTabActive(tab); renderGhostNotice(tab); return; }
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
-  if (tab === 'awards') { loadAwards(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -1645,385 +1524,8 @@ function loadBoard(){
   setContent(head + cards);
 }
 
-// ================= 🏆 表彰・匿名ピア投票 =================
-// 全員（キャスト＋黒服）が匿名で相互評価→月イチ多部門で表彰。管理者は監査可・本人同士は完全匿名。
-// バックエンド未配線のため、現状はモック(window.__AW_MOCK__)があればそれを使う。無ければ実エンドポイントを叩く。
-var awData = null, awPickCat = null;
-function awFetch(){
-  if (window.__AW_MOCK__) return Promise.resolve(JSON.parse(JSON.stringify(window.__AW_MOCK__)));
-  return gasFetch(GAS_URL + '?action=portal&tab=awards&userId=' + encodeURIComponent(userId) + (adminViewAs?'&viewAs='+encodeURIComponent(adminViewAs):''))
-    .then(function(r){ return r.json(); });
-}
-function loadAwards(){
-  contentTargetId = 'content';
-  setContent('<div class="loading">表彰を読み込み中...</div>');
-  awFetch().then(function(d){ awData = d; renderAwards(); })
-    .catch(function(){ setContent('<div class="err" style="text-align:center;color:#cc7766;padding:50px 0">表彰の取得に失敗しました' + retryBtn_('loadAwards') + '</div>'); });
-}
-function candName(id){ var c=(awData&&awData.candidates||[]).filter(function(x){return x.id===id;})[0]; return c?c.name:''; }
-function saveAwVote(catKey, pick, comment){
-  if (window.__AW_MOCK__) return; // モック時は保存しない
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'awardVote', userId:userId, viewAs:(adminViewAs||''), catKey:catKey, pick:(pick||''), comment:(comment||'') }) })
-    .then(function(r){ return r.json(); }).catch(function(){});
-}
-function renderAwards(){
-  if (!awData){ loadAwards(); return; }
-  var html = '';
-  if (awData.lastResult && awData.lastResult.categories && awData.lastResult.categories.length){
-    html += renderAwardsResult(awData.lastResult, awData.myAwards, awData.myReceived);
-  }
-  if (awData.voteOpen){ html += renderAwardsVote(); }
-  else if (!html){
-    html = '<div class="aw-head"><span class="aw-emoji">🏆</span><span class="aw-title">表彰</span></div>'
-      + '<div style="text-align:center;color:#94886a;padding:44px 0;font-size:14px;line-height:1.7">いまは投票期間ではありません。<br>月末が近づいたら投票を受け付けます。</div>';
-  }
-  setContent(html);
-}
-function renderAwardsVote(){
-  var cats = awData.categories || [], myV = awData.myVotes || {};
-  var done = cats.filter(function(c){ return myV[c.key] && myV[c.key].pick; }).length;
-  var h = '<div class="aw-head"><span class="aw-emoji">🏆</span><span class="aw-title">今月の表彰投票</span></div>';
-  h += '<div class="aw-sub">締切：' + esc(awData.deadline || '今月末') + '</div>';
-  var yen = (awData.rewardYen || 500), total = cats.length, complete = (total > 0 && done >= total);
-  h += '<div class="aw-reward' + (complete ? ' done' : '') + '">'
-    + (complete
-        ? '<span style="font-size:24px">✅</span><div><div style="font-size:15px;font-weight:800;color:#f4d98a">投票完了！¥' + yen + ' 獲得 🎉</div><div style="font-size:12px;color:#c7ae74;margin-top:2px">お給料に反映されます。投票の変更はいつでもOK。</div></div>'
-        : '<span style="font-size:24px">🎁</span><div><div style="font-size:15px;font-weight:800;color:#f4d98a">全部門に投票して ¥' + yen + ' ゲット</div><div style="font-size:12px;color:#c7ae74;margin-top:3px">投票済み <b style="color:#f4d98a">' + done + '</b>／' + total + '部門　・　あと <b style="color:#f4d98a">' + (total - done) + '</b>部門でGET</div></div>')
-    + '</div>';
-  h += '<div class="aw-note">🤫 <b style="color:#e6cf95">完全匿名</b>です。あなたが誰に入れたかは、本人にも他の人にも分かりません。素直に「すごい」と思う人を選んでください。一言を添えると、匿名のまま本人に届きます。</div>';
-  h += cats.map(function(c){
-    var v = myV[c.key] || {};
-    var picked = v.pick ? candName(v.pick) : '';
-    return '<div class="aw-cat">'
-      + '<div class="aw-c-top"><span class="aw-c-ico">' + (c.icon||'🏆') + '</span><span class="aw-c-name">' + esc(c.title) + '</span>'
-      +   (awScopeLabel_(c.scope) ? '<span class="aw-scope">' + esc(awScopeLabel_(c.scope)) + '</span>' : '')
-      + '</div>'
-      + '<div class="aw-c-desc">' + esc(c.desc || '') + '</div>'
-      + '<button class="aw-pick' + (picked?'':' empty') + '" onclick="openCandPicker(\'' + c.key + '\')">'
-      +   '<span>' + (picked ? '✓ ' + esc(picked) + ' さん' : '選ぶ') + '</span>'
-      +   '<span class="aw-pick-r">' + (picked?'変更':'▾') + '</span></button>'
-      + (picked ? '<textarea class="aw-cmt" id="awcmt-' + c.key + '" rows="2" placeholder="一言そえる（任意・匿名で本人に届きます）" onblur="saveAwComment(\'' + c.key + '\')">' + esc(v.comment || '') + '</textarea>' : '')
-      + '</div>';
-  }).join('');
-  return h;
-}
-function renderAwardsResult(res, myAwards, myRecv){
-  var h = '<div class="aw-head"><span class="aw-emoji">🎉</span><span class="aw-title">' + esc(res.monthLabel || '先月') + 'の受賞者</span></div>';
-  if (myAwards && myAwards.length){
-    h += '<div class="aw-mine"><div style="font-size:34px;line-height:1">🏆</div>'
-      + '<div style="font-size:13px;color:#c7ae74;margin-top:6px;letter-spacing:.08em">おめでとうございます</div>'
-      + '<div style="font-size:20px;font-weight:800;color:#f4d98a;margin-top:6px">' + myAwards.map(function(a){ return esc(a.title); }).join(' ・ ') + '</div>'
-      + '<div style="font-size:13px;color:#c7ae74;margin-top:2px">受賞</div></div>';
-  }
-  if (myRecv && (myRecv.votes || (myRecv.comments && myRecv.comments.length))){
-    h += '<div class="aw-note">💌 <b style="color:#e6cf95">あなたに届いた声</b>' + (myRecv.votes ? '（' + myRecv.votes + '票）' : '')
-      + (myRecv.comments && myRecv.comments.length ? '<div style="margin-top:8px;line-height:1.8">' + myRecv.comments.map(function(c){ return '「' + esc(c) + '」'; }).join('<br>') + '</div>' : '') + '</div>';
-  }
-  h += res.categories.map(function(c){
-    return '<div class="aw-win"><div class="aw-w-cat">' + (c.icon||'🏆') + ' ' + esc(c.title) + '</div>'
-      + '<div class="aw-w-name"><b>' + esc(c.winner) + '</b> さん' + (c.role ? ' <span style="font-size:12px;color:#94886a">（' + esc(c.role) + '）</span>' : '') + '</div>'
-      + (c.votes ? '<div style="font-size:12px;color:#94886a;margin-top:5px">' + c.votes + '票</div>' : '') + '</div>';
-  }).join('');
-  return h;
-}
-// 候補ピッカー（ボトムシート）
-function openCandPicker(catKey){
-  awPickCat = catKey;
-  var cat = (awData.categories || []).filter(function(c){ return c.key === catKey; })[0] || {};
-  document.getElementById('aw-pk-title').textContent = (cat.icon||'🏆') + ' ' + (cat.title||'') + ' に選ぶ';
-  document.getElementById('aw-search').value = '';
-  renderCandList('');
-  document.getElementById('aw-overlay').classList.add('show');
-}
-// 部門の「対象」で候補を絞る（黒服部門＝候補は黒服だけ。投票は全員できる）
-function awCatOf_(key){ var a=(awData&&awData.categories)||[]; for(var i=0;i<a.length;i++){ if(a[i].key===key) return a[i]; } return null; }
-function awScopeOk_(scope, role){ if(scope==='kurofuku') return role==='黒服'; if(scope==='cast') return role==='キャスト'; return true; }
-function awScopeLabel_(scope){ return scope==='kurofuku' ? '黒服から選ぶ' : (scope==='cast' ? 'キャストから選ぶ' : ''); }
-function renderCandList(q){
-  var cat = awCatOf_(awPickCat) || {};
-  var list = (awData.candidates || []).filter(function(c){ return c.id !== awData.meId && awScopeOk_(cat.scope, c.role); });
-  q = (q||'').trim();
-  if (q) list = list.filter(function(c){ return String(c.name).indexOf(q) >= 0; });
-  var cur = (awData.myVotes && awData.myVotes[awPickCat] && awData.myVotes[awPickCat].pick) || '';
-  var el = document.getElementById('aw-cand-list');
-  if (!list.length){ el.innerHTML = '<div style="text-align:center;color:#94886a;padding:26px 0;font-size:14px">見つかりません</div>'; return; }
-  el.innerHTML = list.map(function(c){
-    var sel = c.id === cur;
-    return '<div class="aw-cand' + (sel?' sel':'') + '" onclick="selectCand(\'' + c.id + '\')">'
-      + '<div class="aw-av">' + esc(String(c.name).slice(0,1)) + '</div>'
-      + '<div class="aw-nm">' + esc(c.name) + (sel?' ✓':'') + '</div>'
-      + '<div class="aw-role">' + esc(c.role || '') + '</div></div>';
-  }).join('');
-}
-function filterCand(){ renderCandList(document.getElementById('aw-search').value); }
-function selectCand(id){
-  if (!awPickCat) return;
-  awData.myVotes = awData.myVotes || {};
-  var prev = awData.myVotes[awPickCat] || {};
-  awData.myVotes[awPickCat] = { pick:id, comment:(prev.comment||'') };
-  saveAwVote(awPickCat, id, prev.comment||'');
-  closeCandPicker();
-  renderAwards();
-}
-function closeCandPicker(){ document.getElementById('aw-overlay').classList.remove('show'); awPickCat = null; }
-function saveAwComment(catKey){
-  var el = document.getElementById('awcmt-' + catKey); if (!el) return;
-  awData.myVotes = awData.myVotes || {};
-  var v = awData.myVotes[catKey] || {}; v.comment = el.value; awData.myVotes[catKey] = v;
-  saveAwVote(catKey, v.pick || '', el.value);
-}
-// ホームの投票受付バナー（portalData.awVoteOpen のとき）
-function awHomeBanner(){
-  if (!(portalData && portalData.awVoteOpen)) return '';
-  return '<div class="card" onclick="switchTab(\'awards\')" style="cursor:pointer;background:linear-gradient(135deg,#2a2012,#15100a);border-color:rgba(214,183,120,.4)">'
-    + '<div style="display:flex;align-items:center;gap:11px">'
-    +   '<span style="font-size:26px">🏆</span>'
-    +   '<div style="flex:1"><div style="font-size:15px;font-weight:800;color:#f4d98a">今月の表彰投票 受付中</div>'
-    +     '<div style="font-size:12px;color:#c7ae74;margin-top:2px">匿名で選んで <b style="color:#f4d98a">¥500</b> ゲット（お給料に反映）</div></div>'
-    +   '<span style="font-size:20px;color:#c9a459">›</span>'
-    + '</div></div>';
-}
-
-// ================= ⚔️ いえやす合戦 =================
-// 出勤キャスト同士の非同期ターン制対戦。相手を待たない「同時選択」方式＝接客の合間に2タップで打てる。
-// ⚠️ LINE通知は入れない（通数が即死する）。気づかせるのはホームのバッジだけ。
-var ksData = null, ksSelHand = '', ksSelBet = 0, ksBusy = false, ksPoll = null, ksReqToken = 0, ksPending = -1;
-var KS_HAND_ICO = { '槍': '🗡', '盾': '🛡', '計略': '🎴' };
-
-function ksFetch(){
-  return gasFetch(GAS_URL + '?action=portal&tab=kassen&userId=' + encodeURIComponent(userId)
-      + (adminViewAs ? '&viewAs=' + encodeURIComponent(adminViewAs) : ''))
-    .then(function(r){ return r.json(); });
-}
-function loadKassen(){
-  contentTargetId = 'content';
-  setContent('<div class="loading">陣容を確認中...</div>');
-  var token = ++ksReqToken;   // 古い応答は捨てる。※busyフラグで新規要求を止めない＝永久ローディングにしない
-  ksFetch().then(function(d){
-    if (token !== ksReqToken) return;
-    ksData = d; ksSelHand = ''; ksSelBet = 0;
-    renderKassen();
-  }).catch(function(){
-    if (token !== ksReqToken) return;
-    setContent('<div class="err" style="text-align:center;color:#cc7766;padding:50px 0">合戦の取得に失敗しました' + retryBtn_('loadKassen') + '</div>');
-  });
-}
-function ksStopPoll(){ if (ksPoll){ clearInterval(ksPoll); ksPoll = null; } }
-// 相手の手が入ったかの確認。※この画面を開いていて、かつ自分が打ち終えて相手待ちの時だけ動かす
-function ksSyncPoll(){
-  ksStopPoll();
-  var m = ksData && ksData.match;
-  if (!m || m.state !== '進行中' || !m.iPlayed) return;
-  ksPoll = setInterval(function(){
-    if (currentTab !== 'kassen'){ ksStopPoll(); return; }
-    ksFetch().then(function(d){
-      if (currentTab !== 'kassen' || !d || !d.ok || !d.match) return;
-      var om = ksData && ksData.match;
-      // ターンが進んだ／決着した時だけ描き直す（毎回描くと選択中のUIがチラつく）
-      if (!om || d.match.turn !== om.turn || d.match.state !== om.state){ ksData = d; renderKassen(); }
-    }).catch(function(){});
-  }, 10000);
-}
-
-function ksSelectHand(h){ ksSelHand = h; renderKassen(); }
-function ksSelectBet(n){ ksSelBet = n; renderKassen(); }
-
-function ksPlay(){
-  if (ksBusy) return;                       // 連打の二重送信を止める（サーバ側でも already_played で弾く）
-  var m = ksData && ksData.match;
-  if (!m || !ksSelHand) return;
-  ksBusy = true;
-  var btn = document.getElementById('ks-go');
-  if (btn){ btn.disabled = true; btn.textContent = '出陣中...'; }
-  var done = function(){ ksBusy = false; };  // ⚠️ 成否にかかわらず必ず解除する
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({
-      action:'kassenPlay', userId:userId, viewAs:(adminViewAs||''),
-      matchId:m.id, hand:ksSelHand, bet:ksSelBet }) })
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      done();
-      if (!res || !res.ok){
-        var msg = { already_played:'この陣はもう出陣済みです', finished:'この合戦は決着しています',
-                    not_your_match:'あなたの合戦ではありません', disabled:'いまは合戦をお休みしています',
-                    busy:'混み合っています。もう一度お試しください' }[res && res.error] || '出陣に失敗しました';
-        alert(msg);
-        loadKassen();
-        return;
-      }
-      ksData.match = res.match; ksSelHand = ''; ksSelBet = 0;
-      renderKassen();
-    })
-    .catch(function(){ done(); alert('通信に失敗しました。もう一度お試しください'); renderKassen(); });
-}
-
-function ksHpBar(hp, max, hurt){
-  var pct = Math.max(0, Math.min(100, Math.round((hp / (max || 1)) * 100)));
-  return '<div class="ks-hp"' + (hurt ? ' style="--x:1"' : '') + '><i style="width:' + pct + '%"></i></div>';
-}
-function ksSideHtml(name, hp, troops, maxHp, isMe, flag){
-  var hurt = (hp / (maxHp || 1)) <= 0.34;
-  return '<div class="ks-side' + (isMe ? ' me' : '') + (hurt ? ' hurt' : '') + '">'
-    + '<div class="ks-flag">' + flag + '</div>'
-    + '<div class="ks-nm">' + esc(name) + '</div>'
-    + ksHpBar(hp, maxHp)
-    + '<div class="ks-stat"><span>城 <b>' + hp + '</b></span><span>兵力 <b>' + troops + '</b></span></div>'
-    + '</div>';
-}
-function ksArenaHtml(m, rules){
-  // 東軍/西軍はサーバが決めた実際の陣営を出す（自分を常に東にすると表示が嘘になる）
-  var myFlag = (m.mySide === '西') ? '西軍' : '東軍';
-  var opFlag = (m.mySide === '西') ? '東軍' : '西軍';
-  return '<div class="ks-arena">'
-    + '<div class="ks-turn">' + (m.state === '決着' ? '決着' : ('第 ' + m.turn + ' 陣 ／ 全 ' + rules.turns + ' 陣')) + '</div>'
-    + '<div class="ks-fight">'
-    +   ksSideHtml(ksData.me, m.myHp, m.myTroops, rules.hp, true, myFlag)
-    +   '<div class="ks-vs">VS</div>'
-    +   ksSideHtml(m.opponent, m.opHp, m.opTroops, rules.hp, false, opFlag)
-    + '</div></div>';
-}
-function ksChooseHtml(m, rules){
-  var remain = m.myTroops;
-  var h = '<div class="ks-panel"><div class="ks-lbl">一、手を選ぶ</div><div class="ks-hands">';
-  ['槍','盾','計略'].forEach(function(x){
-    h += '<button class="ks-hand' + (ksSelHand === x ? ' sel' : '') + '" onclick="ksSelectHand(\'' + x + '\')">'
-      +  '<span class="ks-h-ico">' + KS_HAND_ICO[x] + '</span><span class="ks-h-nm">' + x + '</span></button>';
-  });
-  h += '</div></div>';
-
-  h += '<div class="ks-panel"><div class="ks-lbl">二、兵力を賭ける　<span style="color:#8d7c56">残り ' + remain + '</span></div>';
-  if (remain <= 0){
-    h += '<div style="font-size:13px;color:#94886a;line-height:1.7">兵力を使い切りました。手だけを選んで出陣できます（この陣のダメージは 0 です）。</div>';
-  } else {
-    h += '<div class="ks-bets">';
-    for (var n = 1; n <= rules.maxBet; n++){
-      var over = n > remain;
-      h += '<button class="ks-bet' + (ksSelBet === n ? ' sel' : '') + '"' + (over ? ' disabled' : '')
-        +  ' onclick="ksSelectBet(' + n + ')">' + n + '</button>';
-    }
-    h += '</div>';
-  }
-  var ready = !!ksSelHand && (remain <= 0 || ksSelBet > 0);
-  h += '<button class="ks-go" id="ks-go"' + (ready ? '' : ' disabled') + ' onclick="ksPlay()">出 陣</button>';
-  h += '</div>';
-  return h;
-}
-function ksWaitHtml(m){
-  return '<div class="ks-panel"><div class="ks-wait">'
-    + '<div class="ks-w-ico">' + (KS_HAND_ICO[m.myHandThisTurn] || '⚔️') + '</div>'
-    + '<div class="ks-w-t">' + esc(m.opponent) + ' さんの手を待っています</div>'
-    + '<div class="ks-w-s">あなたの手：<b style="color:#e6cf95">' + esc(m.myHandThisTurn) + '</b>'
-    +   (m.myBetThisTurn > 0 ? '　兵力 <b style="color:#e6cf95">' + m.myBetThisTurn + '</b>' : '')
-    +   '<br>相手が打つと、この陣の勝敗が決まります'
-    + '<div style="margin-top:9px"><span class="ks-dot"></span><span class="ks-dot"></span><span class="ks-dot"></span></div>'
-    + '</div></div></div>';
-}
-function ksResultHtml(m){
-  var draw = !m.winner, win = m.iWon;
-  var ico = draw ? '🤝' : (win ? '🏯' : '🌾');
-  var ttl = draw ? '痛み分け' : (win ? '勝鬨' : '無念');
-  var sub = draw ? '互角の勝負でした' : (win ? esc(m.opponent) + ' さんに勝ちました' : esc(m.opponent) + ' さんに敗れました');
-  return '<div class="ks-res' + (win ? ' win' : '') + '">'
-    + '<div class="ks-r-ico">' + ico + '</div><div class="ks-r-t">' + ttl + '</div>'
-    + '<div class="ks-r-s">' + sub + '　（城 ' + m.myHp + ' － ' + m.opHp + '）</div></div>';
-}
-function ksLogHtml(log){
-  if (!log || !log.length) return '';
-  var h = '<div class="ks-panel"><div class="ks-lbl">戦の記録</div>';
-  log.forEach(function(l){
-    var lbl = { win:'勝', lose:'負', draw:'分' }[l.result];
-    h += '<div class="ks-log"><span class="ks-l-t">' + l.turn + '陣</span>'
-      +  '<span class="ks-l-h">' + (KS_HAND_ICO[l.myHand]||'') + ' ' + esc(l.myHand) + ' ' + l.myBet
-      +    ' <span style="color:#6f6650">対</span> ' + (KS_HAND_ICO[l.opHand]||'') + ' ' + esc(l.opHand) + ' ' + l.opBet + '</span>'
-      +  '<span class="ks-l-r ' + l.result + '">' + lbl + (l.damage ? ' ' + l.damage : '') + '</span></div>';
-  });
-  return h + '</div>';
-}
-function ksRankHtml(rank){
-  if (!rank || !rank.rows || !rank.rows.length) return '';
-  var meK = String(ksData.me || '');
-  var h = '<div class="ks-panel"><div class="ks-lbl">今月の番付　<span style="color:#8d7c56">勝ち星の数（負けても減りません）</span></div>';
-  rank.rows.slice(0, 10).forEach(function(r, i){
-    var medal = ['🥇','🥈','🥉'][i] || String(i + 1);
-    h += '<div class="ks-rank' + (i < 3 ? ' top' : '') + (r.name === meK ? ' me' : '') + '">'
-      +  '<span class="ks-no">' + medal + '</span>'
-      +  '<span class="ks-r-nm">' + esc(r.name) + '</span>'
-      +  '<span class="ks-r-w"><b>' + r.win + '</b> 勝 <span style="color:#6f6650">/ ' + r.played + '戦</span></span></div>';
-  });
-  return h + '</div>';
-}
-function ksHistHtml(hist){
-  if (!hist || !hist.length) return '';
-  var h = '<div class="ks-panel"><div class="ks-lbl">これまでの戦</div>';
-  hist.forEach(function(x){
-    var lbl = { win:'勝', lose:'負', draw:'分' }[x.result];
-    h += '<div class="ks-log"><span class="ks-l-t">' + esc(String(x.date).slice(5).replace('-','/')) + '</span>'
-      +  '<span class="ks-l-h">' + esc(x.opponent) + ' <span style="color:#6f6650">戦</span></span>'
-      +  '<span class="ks-l-r ' + x.result + '">' + lbl + '</span></div>';
-  });
-  return h + '</div>';
-}
-var KS_RULE_HTML = '<div class="ks-panel"><div class="ks-lbl">合戦の心得</div><div class="ks-rule">'
-  + '<b>🗡 槍</b> は <b>🎴 計略</b> を破り、<b>🎴 計略</b> は <b>🛡 盾</b> を崩し、<b>🛡 盾</b> は <b>🗡 槍</b> を防ぐ。<br>'
-  + '勝った側は、賭けた<b>兵力</b>の分だけ相手の<b>城</b>を削る。同じ手なら痛み分け。<br>'
-  + '兵力は全五陣で使い切り。<b>どこに厚く賭けるか</b>が将の腕。<br>'
-  + '相手を待つ必要はない。<b>先に打っておける</b>ので、接客の合間で構わない。'
-  + '</div></div>';
-
-function renderKassen(){
-  if (!ksData){ loadKassen(); return; }
-  if (ksData.ok === false){
-    setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">合戦に参加できませんでした</div>');
-    return;
-  }
-  if (!ksData.enabled){
-    setContent('<div class="aw-head"><span class="aw-emoji">⚔️</span><span class="aw-title">合戦</span></div>'
-      + '<div style="text-align:center;color:#94886a;padding:44px 0;font-size:14px;line-height:1.7">いまは合戦をお休みしています。</div>');
-    return;
-  }
-  var m = ksData.match, rules = ksData.rules || { turns:5, maxBet:5, hp:15, troops:15 };
-  var h = '<div class="aw-head"><span class="aw-emoji">⚔️</span><span class="aw-title">本日の合戦</span></div>';
-
-  if (!m){
-    h += '<div class="aw-sub">' + esc(ksData.bizDate || '') + '</div>'
-      +  '<div style="text-align:center;color:#94886a;padding:38px 8px;font-size:14px;line-height:1.8">'
-      +  (ksData.noMatchReason === 'few_entrants'
-          ? '今日は出勤が少なく、合戦は組まれていません。<br>出勤者が2人以上そろうと自動で組まれます。'
-          : '今日のあなたの対戦は組まれていません。<br>次の出勤日をお待ちください。')
-      +  '</div>';
-    h += KS_RULE_HTML + ksRankHtml(ksData.ranking) + ksHistHtml(ksData.history);
-    setContent(h); ksStopPoll(); ksPending = 0;
-    return;
-  }
-
-  h += ksArenaHtml(m, rules);
-  if (m.state === '決着')      h += ksResultHtml(m);
-  else if (!m.iPlayed)         h += ksChooseHtml(m, rules);
-  else                         h += ksWaitHtml(m);
-  h += ksLogHtml(m.log);
-  h += KS_RULE_HTML;
-  h += ksRankHtml(ksData.ranking);
-  h += ksHistHtml(ksData.history);
-  setContent(h);
-
-  ksPending = (m.state === '進行中' && !m.iPlayed) ? 1 : 0;  // ホームのバッジと同期
-  ksSyncPoll();
-}
-
-// ホームの⚔️ボタンに「手番が来ています」バッジを出すための軽い問い合わせ。
-// ⚠️ ホーム本体のペイロードには相乗りさせない（ホームの初回描画をこれ以上遅くしないため）
-function ksPingOnce(){
-  if (ksPending >= 0) return;              // 1回のポータル起動につき1回だけ
-  if (isAdmin && !adminViewAs) { ksPending = 0; return; }
-  ksPending = 0;                            // 先に確定させて多重発火を防ぐ
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'kassenPing', userId:userId, viewAs:(adminViewAs||'') }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      var n = (d && d.pending) || 0;
-      if (!n || n === ksPending) return;
-      ksPending = n;
-      if (currentTab === 'home') renderHome();
-    }).catch(function(){});
-}
+// 🏆表彰（匿名ピア投票）・⚔️いえやす合戦は 2026-10-10 ボス指示で削除（apply-remove-vote-kassen.js）。
+//   サーバ側（award.js／kassen.js）も同じ号令で外す。シート（表彰_*／合戦_*）は消していない＝読まれなくなるだけ。
 
 function renderHome(){
   contentTargetId = 'content';
@@ -2089,7 +1591,7 @@ function renderHome(){
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める）。休職中は予約・空席・呼び出しを出さない ---
   // ⚠️休職中である旨は本人の画面に一切表示しない（ボス指定2026-07-15）。メニューが黙って減るだけ。
   // ＝本人が「予約が消えた」と黒服に問い合わせてくる可能性がある点は承知の上での判断。
-  var html = homeGreetHero() + awHomeBanner() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard
+  var html = homeGreetHero() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard
     + (onLeave ? '' : homeCallCard()
     // ゴースト在籍は「今日の予約」「空席状況」カードごと出さない（呼び出しカードは残す）
     + (ghost ? '' : '<div class="card">'
@@ -2521,8 +2023,6 @@ function showGunshiLink() {
 
 // 管理者タブを表示
 function showAdminTab() {
-  var el = document.getElementById('tab-requests');
-  if (el) el.style.display = '';
   var el2 = document.getElementById('tab-notif');
   if (el2) el2.style.display = '';
   var el3 = document.getElementById('tab-cashset');
@@ -3109,18 +2609,6 @@ function renderPay() {
       hOnly += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPubO ? 'unpublishPay' : 'publishPay') + '\')" style="padding:8px 16px;background:' + (isPubO ? '#2a1010' : '#102a10') + ';border:1px solid ' + (isPubO ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPubO ? '#ff8888' : '#66dd66') + ';font-size:13px;font-weight:700;cursor:pointer">' + (isPubO ? '非公開に戻す' : '公開する') + '</button>';
       hOnly += '</div>';
 
-      hOnly += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
-      hOnly += '<div style="font-size:10px;color:#b8a67c;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
-      hOnly += '<div style="display:flex;gap:8px;align-items:center">';
-      hOnly += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
-        + 'style="width:80px;background:#0d0d18;border:1px solid #241d10;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
-      hOnly += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #3a2e18;border-radius:8px;color:#e6cf95;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
-      hOnly += 'CSVファイルを選択';
-      hOnly += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
-      hOnly += '</label>';
-      hOnly += '</div>';
-      hOnly += '<div id="payroll-csv-status" style="font-size:11px;color:#b8a67c;margin-top:6px"></div>';
-      hOnly += '</div>';
     }
     hOnly += '<div style="background:#f2ead9;color:#111;border-radius:12px;padding:16px 14px">';
     hOnly += '<div style="text-align:center;border-bottom:2px solid #94886a;padding-bottom:10px;margin-bottom:12px">';
@@ -3196,18 +2684,6 @@ function renderPay() {
       + (isPub ? '非公開に戻す' : '公開する') + '</button>';
     h += '</div>';
 
-    h += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
-    h += '<div style="font-size:10px;color:#b8a67c;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
-    h += '<div style="display:flex;gap:8px;align-items:center">';
-    h += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
-      + 'style="width:80px;background:#0d0d18;border:1px solid #241d10;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
-    h += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #3a2e18;border-radius:8px;color:#e6cf95;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
-    h += 'CSVファイルを選択';
-    h += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
-    h += '</label>';
-    h += '</div>';
-    h += '<div id="payroll-csv-status" style="font-size:11px;color:#b8a67c;margin-top:6px"></div>';
-    h += '</div>';
   }
 
   // 受領確認状況・送信ボタン（管理者・キャスト共通）
@@ -3371,41 +2847,6 @@ function renderPay() {
 
 function switchPayMonth(m) { currentMonth = m; renderPay(); }
 
-function handlePayrollCsv(input) {
-  var file = input.files && input.files[0];
-  if (!file) return;
-  var monthEl = document.getElementById('payroll-csv-month');
-  var month = monthEl ? monthEl.value.trim() : '';
-  var statusEl = document.getElementById('payroll-csv-status');
-  if (!month) {
-    if (statusEl) statusEl.textContent = '⚠️ 対象月を入力してください（例: 2026/06）';
-    input.value = '';
-    return;
-  }
-  if (statusEl) statusEl.textContent = '読み込み中...';
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var csvText = e.target.result;
-    gasFetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'importPayrollCsv', userId: userId, month: month, csvText: csvText })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      input.value = '';
-      if (!d.ok) { if (statusEl) statusEl.textContent = '⚠️ ' + (d.error || 'エラー'); return; }
-      if (statusEl) statusEl.textContent = '✅ ' + d.count + '名分を取り込みました';
-      currentMonth = month;
-      loadStatsData(true, function(){ renderStats(); });
-    })
-    .catch(function() {
-      input.value = '';
-      if (statusEl) statusEl.textContent = '⚠️ 通信エラーが発生しました';
-    });
-  };
-  reader.readAsText(file, 'UTF-8');
-}
-
 function togglePayPublish(month, action) {
   gasFetch(GAS_URL, {
     method: 'POST',
@@ -3547,33 +2988,8 @@ function renderRanking(d) {
   h += rankCard('予約ランキング', rd.yoyaku, 'yoyakuCnt', true);
   h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
 
-  // 管理者：TRUST組数同期（ブックマークレット）
-  if (adminPriv()) {
-    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
-    h += '<div style="font-size:11px;color:#b8a67c;font-weight:600;margin-bottom:8px">🔄 旧システムの組数を同期する（〜8月分）</div>';
-    h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
-       + '① 下のリンクをブックマークバーにドラッグ<br>'
-       + '② 旧システムの管理画面を開いてそのブックマークをクリック<br>'
-       + '③ 自動で今月分の同伴・予約組数が反映される'
-       + '</div>';
-    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 旧システムSync ← ドラッグしてブックマーク登録</a>';
-    h += '</div>';
-
-    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
-    h += '<div style="font-size:11px;color:#ccaa66;font-weight:600;margin-bottom:8px">💴 現金チェック用 日払い・経費を取得</div>';
-    h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
-       + '① 下のリンクをブックマークバーにドラッグ<br>'
-       + '② 営業後、旧システムの管理画面を開いてそのブックマークをクリック<br>'
-       + '③ 当日の日払い合計・経費合計を自動取得して記録'
-       + '</div>';
-    h += '<a id="trust-cash-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 現金Sync ← ドラッグしてブックマーク登録</a>';
-    h += '</div>';
-  }
-
   h += '</div>';
   setContent(h);
-  setupBookmarklet_();
-  setupCashBookmarklet_();
 }
 
 // ---- 📝 スキルテスト受験（黒服＋管理者属性。作問・結果はコンソール） ----
@@ -3818,120 +3234,7 @@ function wineTag_(menuCat) {
   return '';
 }
 
-function setupBookmarklet_() {
-  var el = document.getElementById('trust-bookmarklet');
-  if (!el) return;
-  var secret = 'lounge-sync-2026';
-  var gas = GAS_URL;
-
-  // TRUSTの合計行(62列)から全データを抽出するヘルパーをブックマークレット内に埋め込む
-  // 列マッピング (実測):
-  //  1=残り支給額, 3=担当小計, 5=同伴小計, 6=給率%, 7=勤務日数
-  //  20=時間報酬計, 29=担当バック金額, 30=予約組数, 32=予約バック金額
-  //  33=同伴組数, 35=同伴バック金額, 39=ドリンクバック金額
-  //  43=ボトルバック金額, 47=年会費バック金額, 54=源泉徴収, 55=日払, 61=マイナス計
-  var code = 'javascript:(function(){'
-    + 'var G=' + JSON.stringify(gas) + ';'
-    + 'var S=' + JSON.stringify(secret) + ';'
-    + 'var now=new Date();var yr=now.getFullYear();var mo=now.getMonth()+1;'
-    + 'var mk=yr+"/"+(("0"+mo).slice(-2));'
-    + 'var show=function(t){var e=document.getElementById("_lsm");if(!e){e=document.createElement("div");e.id="_lsm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#16130d",border:"1px solid #c9a459",borderRadius:"10px",padding:"12px 16px",color:"#e6cf95",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
-    + 'function pv(s){if(!s||s==="--")return null;var n=parseFloat(s.replace(/[￥,]/g,""));return isNaN(n)?null:n;}'
-    + 'function extractCast(html,name){'
-    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
-    +   'var tot=null;'
-    +   'doc.querySelectorAll("tr").forEach(function(tr){var c=tr.querySelectorAll("td");if(c.length===62&&c[0].textContent.trim()==="合計")tot=c;});'
-    +   'if(!tot)return null;'
-    +   'function v(i){return pv(tot[i].textContent.trim());}'
-    +   'return{name:name,nokori:v(1),tanto:v(3),dohan:v(5),kyuritsu:v(6),kinmu:v(7),'
-    +     'jikan:v(20),tantoBk:v(29),yoyakuCnt:v(30),yoyakuBk:v(32),'
-    +     'dohanCnt:v(33),dohanBk:v(35),drinkBk:v(39),bottleBk:v(43),'
-    +     'foodBk:v(47),gensen:v(54),hizuke:v(55),minus:v(61)};'
-    + '}'
-    + 'show("① キャスト一覧を取得中...");'
-    + 'fetch("/cast/index/"+yr+"/"+mo+"/0").then(function(r){return r.text();})'
-    + '.then(function(html){'
-    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
-    +   'var links=doc.querySelectorAll("a[href*=\\"/cast/detail/\\"]");'
-    +   'var um={};links.forEach(function(a){var n=a.textContent.trim();var h=a.getAttribute("href");if(n&&h&&!um[n])um[n]=h;});'
-    +   'var names=Object.keys(um);'
-    +   'if(!names.length){show("❌ キャストURLが取得できません");return null;}'
-    +   'show("② "+names.length+"名の詳細を取得中...");'
-    +   'var done=0;'
-    +   'return Promise.all(names.map(function(name){'
-    +     'return fetch(um[name]).then(function(r){return r.text();}).then(function(h2){'
-    +       'done++;show("② "+done+"/"+names.length+"名 取得中...");'
-    +       'return extractCast(h2,name);'
-    +     '});'
-    +   '}));'
-    + '})'
-    + '.then(function(casts){'
-    +   'if(!casts)return null;'
-    +   'casts=casts.filter(function(c){return c!==null;});'
-    +   'show("③ GASにデータ送信中 ("+casts.length+"名)...");'
-    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustAll",syncSecret:S,monthKey:mk,casts:casts})}).then(function(r){return r.json();});'
-    + '})'
-    + '.then(function(res){'
-    +   'if(!res)return;'
-    +   'if(res.ok)show("✅ "+mk+" の売上データを同期しました<br><small>"+res.updated+"名分 完了</small>");'
-    +   'else show("❌ "+(res.error||"エラー"));'
-    +   'setTimeout(function(){var e=document.getElementById("_lsm");if(e)e.remove();},8000);'
-    + '})'
-    + '.catch(function(e){show("❌ "+(e.message||e));});'
-    + '})();';
-  el.href = code;
-}
-
-function setupCashBookmarklet_() {
-  var el = document.getElementById('trust-cash-bookmarklet');
-  if (!el) return;
-  var secret = 'lounge-sync-2026';
-  var gas = GAS_URL;
-
-  // TRUST「日報登録」(/report/index/{年}/{月}/{日}) から当日の日払い合計・経費合計を抽出する
-  // 実測で確認済み:
-  //  table#timecard (cast用・staff用の2つ) 内の input[name="1"] = 各人の日払い額 → 全行を合計
-  //  table#logCostOut の各行: select[name="cost_id"] の選択中option文字 = 経費カテゴリ名, input[name="price"] = 金額
-  //  営業は深夜に及ぶため、当日午前6時より前にクリックした場合は前日を営業日とみなす
-  var code = 'javascript:(function(){'
-    + 'var G=' + JSON.stringify(gas) + ';'
-    + 'var S=' + JSON.stringify(secret) + ';'
-    + 'var now=new Date();var biz=new Date(now);if(now.getHours()<6)biz.setDate(biz.getDate()-1);'
-    + 'var yr=biz.getFullYear();var mo=biz.getMonth()+1;var dy=biz.getDate();'
-    + 'function pad(n){return ("0"+n).slice(-2);}'
-    + 'var dateKey=yr+"-"+pad(mo)+"-"+pad(dy);'
-    + 'var path="/report/index/"+yr+"/"+pad(mo)+"/"+pad(dy);'
-    + 'var show=function(t){var e=document.getElementById("_lcm");if(!e){e=document.createElement("div");e.id="_lcm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#2a2210",border:"1px solid #aa8822",borderRadius:"10px",padding:"12px 16px",color:"#ddbb55",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
-    + 'function pv(s){var n=parseFloat(String(s).replace(/[￥,]/g,""));return isNaN(n)?0:n;}'
-    + 'show("① "+dateKey+" の日報を取得中...");'
-    + 'fetch(path).then(function(r){return r.text();})'
-    + '.then(function(html){'
-    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
-    +   'var dayPayTotal=0;'
-    +   'var dayPayRows=[];doc.querySelectorAll("table#timecard input[name=\\"1\\"]").forEach(function(inp){var v=pv(inp.value);dayPayTotal+=v;if(!v)return;var tr=inp.closest("tr");var nm="";if(tr){var tds=tr.querySelectorAll("th,td");for(var q=0;q<tds.length;q++){var t=(tds[q].textContent||"").replace(/[\\s\\u3000]/g,"");if(!t)continue;if(tds[q].querySelector("input,select"))continue;if(/^[\\d,.\\u00a5\\uffe5-]+$/.test(t))continue;nm=t;break;}}dayPayRows.push({name:nm,amount:v});});'
-    +   'var costOutTotal=0;var costOutDetail=[];'
-    +   'doc.querySelectorAll("table#logCostOut tr").forEach(function(tr){'
-    +     'var sel=tr.querySelector("select[name=\\"cost_id\\"]");'
-    +     'var priceInp=tr.querySelector("input[name=\\"price\\"]");'
-    +     'if(!sel||!priceInp)return;'
-    +     'var label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:"";'
-    +     'var amount=pv(priceInp.value);'
-    +     'costOutTotal+=amount;'
-    +     'costOutDetail.push({label:label,amount:amount});'
-    +   '});'
-    +   'show("② GASに送信中...<br><small>日払い合計 ¥"+dayPayTotal.toLocaleString()+" / 経費合計 ¥"+costOutTotal.toLocaleString()+"</small>");'
-    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustDailyCash",syncSecret:S,dateKey:dateKey,dayPayTotal:dayPayTotal,dayPayRows:dayPayRows,costOutTotal:costOutTotal,costOutDetail:costOutDetail})}).then(function(r){return r.json();});'
-    + '})'
-    + '.then(function(res){'
-    +   'if(res.ok)show("✅ "+dateKey+" の現金データを記録しました<br><small>日払い合計 ¥"+res.dayPayTotal.toLocaleString()+" / 経費合計 ¥"+res.costOutTotal.toLocaleString()+"</small>");'
-    +   'else show("❌ "+(res.error||"エラー"));'
-    +   'setTimeout(function(){var e=document.getElementById("_lcm");if(e)e.remove();},8000);'
-    + '})'
-    + '.catch(function(e){show("❌ "+(e.message||e));});'
-    + '})();';
-  el.href = code;
-}
-
+/* 🗑 旧システムの組数・日払い経費のブックマークレットは 2026-10-10 に削除（利用0回・apply-remove-unused-r2.js） */
 function toggleRankingPublish(month, action) {
   gasFetch(GAS_URL, {
     method: 'POST',
@@ -4854,238 +4157,8 @@ function row(label, val, cls) {
     + '<span class="row-val' + (cls ? ' '+cls : '') + '">' + (val !== undefined && val !== null ? esc(String(val)) : '—') + '</span></div>';
 }
 
-// ---- 申請管理 ----
-var reqFilter = 'pending';
-/* 🕓 出勤希望の履歴（全員分）2026-09-11。
-   ⛔「未処理」＝承認待ちキューは今までどおり tab=requests（getShiftRequests_ ＝ **黒服のみ**）。
-      履歴だけ別タブ tab=reqhistory（getShiftReqHistory_ ＝ 全員・サーバ側で期間の窓を切る）を叩く。
-      母集団を混ぜるとキャストの当日欠勤 pending が承認待ちに並び始める（LINEの一言承認と二重導線になる）。
-   ⭐履歴は「すべて（履歴）」を押したときだけ引く＝未処理キューの表示は1msも遅くしない。 */
-var reqHist = null, reqHistErr = '', reqHistRange = 'now2', reqHistName = '';
-
-function loadRequests() {
-  setContent('<div class="loading">申請を読み込み中...</div>');
-  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId) + '&tab=requests';
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
-      renderRequests(d.requests || []);
-    })
-    .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
-}
-
-function reqFilterBarHtml_() {
-  var filters = [
-    { key: 'pending', label: '未処理' },
-    { key: 'all',     label: 'すべて（履歴）' },
-  ];
-  return '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
-    + buildWeekOptionsHtml_() + '</select>'
-    + '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
-    + '📅 シフト確定→黒服に通知</button>'
-    + '<div class="req-filter">'
-    + filters.map(function(f) {
-        return '<button class="req-filter-btn' + (reqFilter === f.key ? ' active' : '')
-          + '" onclick="setReqFilter(\'' + f.key + '\')">' + f.label + '</button>';
-      }).join('')
-    + '</div>';
-}
-
-function renderRequests(list) {
-  // 未処理（承認待ち）＝アクションキュー。承諾/休みを即決する。⛔黒服のみ（母集団は従来どおり）
-  var filterHtml = reqFilterBarHtml_();
-  var pend = list.filter(function(r) { return r.status === 'pending'; });
-  if (pend.length === 0) {
-    setContent(filterHtml + '<div class="req-empty">未処理の申請はありません</div>');
-    return;
-  }
-  var ph = filterHtml;
-  pend.forEach(function(r) { ph += reqCardHtml_(r, false); });
-  setContent(ph);
-}
-
-/* ---- 🕓 出勤希望の履歴（全員分） ------------------------------------------
-   期間プリセット。⭐同じ既定はサーバ(shiftHistWindow_)にもある＝
-   from/to を送れなかった場合もサーバ側が「今月＋来月」に倒す（画面が壊れても安全側）。 */
-var REQHIST_RANGES = [
-  { k:'now2',  t:'今月＋来月' },
-  { k:'thism', t:'今月だけ' },
-  { k:'prevm', t:'先月だけ' },
-  { k:'m3',    t:'直近3か月＋来月' },
-  { k:'m6',    t:'直近6か月＋来月' }
-];
-function reqHistYmd_(d) { return d.getFullYear() + '-' + pad2_(d.getMonth()+1) + '-' + pad2_(d.getDate()); }
-function reqHistRangeYmd_(k) {
-  var n = new Date(), y = n.getFullYear(), m = n.getMonth(), f, t;
-  if (k === 'thism')      { f = new Date(y, m, 1);     t = new Date(y, m+1, 0); }
-  else if (k === 'prevm') { f = new Date(y, m-1, 1);   t = new Date(y, m, 0); }
-  else if (k === 'm3')    { f = new Date(y, m-2, 1);   t = new Date(y, m+2, 0); }
-  else if (k === 'm6')    { f = new Date(y, m-5, 1);   t = new Date(y, m+2, 0); }
-  else                    { f = new Date(y, m, 1);     t = new Date(y, m+2, 0); }
-  return { from: reqHistYmd_(f), to: reqHistYmd_(t) };
-}
-/* ⛔busyガード（読み込み中は無視）は置かない（[[reference_async_stale_guard_trap]]）。
-     通し番号で**古い応答を捨てる**＝期間セレクトを連打してもセレクトと中身がズレない。 */
-var reqHistSeq = 0;
-function loadReqHistory() {
-  var my = ++reqHistSeq;
-  setContent('<div class="loading">履歴を読み込み中...</div>');
-  var r = reqHistRangeYmd_(reqHistRange);
-  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId)
-    + '&tab=reqhistory&from=' + encodeURIComponent(r.from) + '&to=' + encodeURIComponent(r.to);
-  fetch(url)
-    .then(function(res) { return res.json(); })
-    .then(function(d) {
-      if (my !== reqHistSeq) return;   // 追い越された応答は捨てる
-      /* ⚠️落ちても履歴が空になるだけ。「未処理」タブに戻れば承認は続けられる（安全弁） */
-      if (!d.ok) { reqHist = null; reqHistErr = 'エラー: ' + (d.error || ''); }
-      else { reqHist = d; reqHistErr = ''; }
-      renderReqHistory();
-    })
-    .catch(function() {
-      if (my !== reqHistSeq) return;
-      reqHist = null; reqHistErr = '通信エラー'; renderReqHistory();
-    });
-}
-/* 'yyyy-MM-dd' → '9/12（金）'。年はサーバが提出日時を基準に確定させたものをそのまま使う
-   （画面側で 'M/d' から年を推測し直さない＝年またぎの規則を2箇所に持たない） */
-function ymdLabel_(ymd) {
-  var m = String(ymd || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return '';
-  var d = new Date(+m[1], +m[2]-1, +m[3]);
-  return (+m[2]) + '/' + (+m[3]) + '（' + ['日','月','火','水','木','金','土'][d.getDay()] + '）';
-}
-function reqHistNameKey_(s) { return String(s == null ? '' : s).replace(/[\s　]/g, ''); }
-function renderReqHistory() {
-  var bar = reqFilterBarHtml_();
-  if (reqHistErr) { setContent(bar + '<div class="err">' + esc(reqHistErr) + '</div>'); return; }
-  if (!reqHist) { setContent(bar + '<div class="req-empty">申請履歴はありません</div>'); return; }
-
-  var all = reqHist.items || [];
-  /* 名前は <select> で絞る。⛔スマホでテキスト検索欄を出すとIME中に再描画が噛む
-     （[[reference_search_input_rerender_trap]]）＝ポータル側は入力欄そのものを置かない。 */
-  var seen = {}, names = [];
-  all.forEach(function(r) { var k = reqHistNameKey_(r.name); if (k && !seen[k]) { seen[k] = 1; names.push(r.name); } });
-  names.sort();
-  var ropts = REQHIST_RANGES.map(function(r) {
-    return '<option value="' + r.k + '"' + (reqHistRange === r.k ? ' selected' : '') + '>' + esc(r.t) + '</option>';
-  }).join('');
-  var nopts = '<option value="">全員（' + names.length + '名）</option>'
-    + names.map(function(n) {
-        return '<option value="' + esc(n) + '"' + (reqHistName === n ? ' selected' : '') + '>' + esc(n) + '</option>';
-      }).join('');
-  bar += '<div class="reqhist-bar">'
-    + '<select class="notif-group-sel" onchange="setReqHistRange(this.value)">' + ropts + '</select>'
-    + '<select class="notif-group-sel" onchange="setReqHistName(this.value)">' + nopts + '</select>'
-    + '</div>';
-
-  var q = reqHistNameKey_(reqHistName);
-  var list = q ? all.filter(function(r) { return reqHistNameKey_(r.name) === q; }) : all;
-  bar += '<div style="font-size:12px;color:#b8a67c;margin:2px 0 6px;line-height:1.6">'
-    + '全員分（キャスト・体験・派遣・黒服）の出勤希望を日付ごとに表示。'
-    + esc(String(reqHist.from || '')) + '〜' + esc(String(reqHist.to || '')) + '／' + list.length + '件'
-    + (reqHist.truncated ? '　⚠️件数が多いため新しい側だけ表示中' : '') + '</div>';
-
-  if (!list.length) { setContent(bar + '<div class="req-empty">この条件の提出はありません</div>'); return; }
-
-  var groups = {}, order = [];
-  list.forEach(function(r) {
-    var gkey = r.ymd || ('~' + (r.date || '?'));
-    if (!groups[gkey]) { groups[gkey] = { label: (r.ymd ? ymdLabel_(r.ymd) : r.date), items: [] }; order.push(gkey); }
-    groups[gkey].items.push(r);
-  });
-  var hh = bar;
-  order.forEach(function(gkey) {
-    var g = groups[gkey];
-    hh += '<div class="reqhist-date">📅 ' + esc(g.label) + '</div>';
-    g.items.forEach(function(r) { hh += reqCardHtml_(r, true); });
-  });
-  setContent(hh);
-}
-/* "M/d" を並べ替え用キー＋曜日付きラベルに変換（年は現在基準で推定）。
-   ⛔2026-09-11時点で**呼び出し元ゼロの死にコード**（履歴はサーバが返す ymd を使う）。
-      残しているのは「他がまだ呼んでいるから」ではない ── repo全体で呼び出し元は無い。
-      **消す価値より、portal.html は git push が即本番の配信物で、差分をこれ以上
-      広げるリスクの方が上**だから残している、が正しい理由。
-   ⚠️再利用しないこと。年を「今」から推測する規則で、履歴のサーバ側
-      （shiftHistMdToDate_＝提出日時を基準に前後どちらへも補正）とは別物になる。 */
-function mdParse_(md) {
-  var m = String(md).match(/^(\d{1,2})\/(\d{1,2})/);
-  if (!m) return null;
-  var mo = parseInt(m[1], 10), da = parseInt(m[2], 10);
-  var now = new Date();
-  var yr = now.getFullYear();
-  if (mo < (now.getMonth() + 1) - 6) yr += 1;
-  var dt = new Date(yr, mo - 1, da);
-  var wd = ['日','月','火','水','木','金','土'][dt.getDay()];
-  return { key: yr * 10000 + mo * 100 + da, label: mo + '/' + da + '（' + wd + '）' };
-}
-
-function reqStatusInfo_(s) {
-  if (s === '承諾') return { cls: 'ok',  txt: '✓ 承諾済み（出勤）' };
-  if (s === '休み' || s === '却下') return { cls: 'off', txt: '✗ 休み決定' };
-  if (s === 'クリア') return { cls: 'off', txt: '— クリア済み' };
-  // 『重複』＝同じ申請の二度押しを承認時にまとめて閉じた行（2026-08-07・closeDupRequests_）。未処理と誤読させない
-  if (s === '重複') return { cls: 'off', txt: '— 重複（同じ申請）' };
-  /* 『シフト表未反映』＝承諾したのにシフト表へ書けなかった行（RECON_shiftGhosts で回収する対象）。
-     ⚠️「未処理」に混ぜると気づかれず放置される＝独立した文言にする */
-  if (s === 'シフト表未反映') return { cls: 'warn', txt: '⚠️ シフト表未反映' };
-  return { cls: '', txt: '⏳ 未処理' };
-}
-
-function reqCardHtml_(r, isHistory) {
-  var st = reqStatusInfo_(r.status);
-  var cardCls = 'req-card' + (r.status === '承諾' ? ' approved'
-    : (r.status === '休み' || r.status === '却下') ? ' rejected' : '');
-  var h = '<div class="' + cardCls + '">'
-    + '<div class="req-head">'
-    + '<span class="req-name">' + esc(r.name) + '</span>'
-    + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
-    + '</div>'
-    + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time)
-    + (r.role ? '　👤 ' + esc(r.role) : '') + '</div>';
-
-  if (!isHistory) {
-    h += '<div class="req-actions">'
-      + '<button class="req-btn approve" onclick="processReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 承諾</button>'
-      + '<button class="req-btn reject" onclick="processReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休み</button>'
-      + '</div>';
-  } else {
-    // 履歴ビュー：現在の状態を明示しつつ、再調整（出勤に戻す／休みにする）を確認付きで可能に
-    h += '<div class="req-status ' + st.cls + '">' + st.txt + '</div>';
-    /* ⛔「出勤に／休みに」は**黒服の行だけ**（＝全員分に広げる前と同じ挙動のまま）。
-       キャスト/体験/派遣は承認制ではない。押すと approveShiftRequest_ が
-       シフト表への書込み＋当欠の本人DM＋黒服LINEまで走る＝履歴の閲覧から誤爆させない。
-       直すのはシフト提出カレンダー／コンソールのシフト表（正規の導線）。 */
-    if (String(r.role || '').indexOf('黒服') >= 0) {
-      h += '<div class="req-actions">'
-        + '<button class="req-btn approve" onclick="readjustReq(event,' + r.rowIdx + ',\''
-          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 出勤に</button>'
-        + '<button class="req-btn reject" onclick="readjustReq(event,' + r.rowIdx + ',\''
-          + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休みに</button>'
-        + '</div>';
-    }
-  }
-  return h + '</div>';
-}
-
-// 履歴からの再調整（確定後のシフト変更）。誤操作防止で確認を挟んでから承諾/休みを反映
-function readjustReq(ev, rowIdx, name, date, time, decision) {
-  var label = decision === '承諾' ? '出勤（承諾）' : '休み';
-  if (!confirm(name + 'さんの ' + date + ' を「' + label + '」に変更します。よろしいですか？')) return;
-  processReq(ev, rowIdx, name, date, time, decision);
-}
-
-function setReqFilter(f) {
-  reqFilter = f;
-  if (f === 'all') { loadReqHistory(); return; }
-  loadRequests();
-}
-function setReqHistRange(k) { reqHistRange = k; reqHistName = ''; loadReqHistory(); }
-function setReqHistName(n) { reqHistName = n; renderReqHistory(); }
+// 🗑 申請管理（loadRequests／履歴 loadReqHistory／processReq）は 2026-10-10 に削除（利用0回・apply-remove-unused-r2.js）。
+//   申請の承認はコンソールの申請管理で行う（サーバの approveShift・reqhistory は残す）。
 
 function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -5255,28 +4328,6 @@ function submitSeatRequest() {
   .catch(function() { alert('通信エラー'); });
 }
 
-function processReq(ev, rowIdx, name, date, time, decision) {
-  var card = ev && ev.target ? ev.target.closest('.req-card') : null;
-  if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
-
-  gasFetch(GAS_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'approveShift', userId: userId, rowIdx: rowIdx,
-                           name: name, date: date, time: time, decision: decision })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(d) {
-    if (d.ok) { loadRequests(); }
-    else {
-      if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
-      alert('エラー: ' + (d.error || '不明'));
-    }
-  })
-  .catch(function() {
-    if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
-    alert('通信エラー');
-  });
-}
 
 var contentTargetId = 'content';
 // ---- 🎂 誕生日設定タブ（誕生日 & 誕生日週間の申請）----
