@@ -1000,6 +1000,8 @@ function edgeHomeFetch_(again) {
 // ホームの答えが届くたびに（loadPortal の handleHome_）。st＝その読み込みの間だけの覚え
 function edgeAfterHome_(st, which, d, merged, gotLite, again, alive, fallback) {
   if (which === 'edge') st.held = String(d.held || '');
+  // qa L-3：答え待ち・ゴーストで止めた答え＝端末の覚えにある前の予約・空席を描かない（覚え直しもしない＝handleHome_ の writeHomeCache_ の手前で held を見る）
+  if (which === 'edge' && d.held) { delete merged.reservations; delete merged.vacancy; }
   // GAS（homelite）が「ゴーストでない」と答えたのに Worker は答え待ち・古い答えで止めた → 1回だけ取り直す（その時には Worker が答えを残している）
   if (st.held && !st.refetched && gotLite && merged.ghost === false) {
     st.refetched = true;
@@ -1226,7 +1228,7 @@ function loadPortal(month) {
   var merged = {};
   if (cached) { try { merged = JSON.parse(JSON.stringify(cached)); } catch (e) { merged = {}; } }
   var gotLite = false, gotRest = false;
-  var edgeSt = { held: '', refetched: false }; // ⚡P-3：この読み込みの間だけの覚え
+  var edgeSt = { held: '', refetched: false, wait: false, rest: '' }; // ⚡P-3：この読み込みの間だけの覚え（wait＝homelite の後に Worker を呼ぶ・rest＝GAS の homerest を送った）
   // キャッシュが無い完全初回だけ、rest到着まで renderHome のフォールバック個別取得を止める
   homeRestPending = !renderedFromCache;
 
@@ -1251,20 +1253,19 @@ function loadPortal(month) {
     for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
     stripGhostData_(merged);   // ゴーストは予約/空席をホームキャッシュにも残さない
     if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }
-    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restFromGas_(''); }); // ⚡P-3
+    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restOnce_(''); }); // ⚡P-3
     // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
-    // ⚡P-3：Worker の答えは速い＝端末の覚えも homelite も無い初めての1回は、シフト（次の出勤）が届くまで描かない（「出勤予定がまだありません」を一瞬出さない）
-    if (which === 'edge' && !gotLite && !renderedFromCache) return;
-    if (gotLite && gotRest) writeHomeCache_(merged); // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
+    if (gotLite && gotRest && !merged.held) writeHomeCache_(merged); // ⚡P-3（qa L-3）：答え待ちの答えは覚えない // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
     applyHomePayload_(merged);
     edgeHomePainted_(); // ⚡計測：届いたデータでホームを描いた（最初の1回だけ送る）
   }
 
   gasFetch(base + '&tab=homelite')
     .then(function(r) { return r.json(); })
-    .then(function(d) { handleHome_(d, 'lite'); })
+    .then(function(d) { handleHome_(d, 'lite'); if (edgeSt.wait) edgeKick_(!!(d && d.ok)); }) // ⚡P-3：homelite の後に Worker
     .catch(function(e) {
       if (mySeq !== _homeLoadSeq) return; // 古い世代の失敗で新しい画面を潰さない
+      if (edgeSt.wait) edgeKick_(false); // ⚡P-3：homelite が落ちた＝今までどおり GAS の homerest
       // キャッシュから描画済み、または重い方が既に届いているなら画面を潰さない
       if (!renderedFromCache && !gotRest) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
     });
@@ -1280,16 +1281,23 @@ function loadPortal(month) {
       if (gotLite || renderedFromCache) renderTab(currentTab);
     });
   }
-  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。
-  //   Worker が使えない（管理者・落ちた・トークン不可）＝今までどおり GAS の homerest
-  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) {
+  // ⚡P-3（qa L-4）：GAS の homerest は1回の読み込みで1本だけ（お知らせだけ／丸ごと のどちらか）
+  function restOnce_(q) { if (edgeSt.rest) return; edgeSt.rest = q || 'full'; restFromGas_(q); }
+  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。⭐呼ぶのは homelite（ゴーストの答え）が届いた後（qa M-C）。
+  //   お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。Worker が使えない（管理者・落ちた）・homelite が落ちた＝今までどおり GAS の homerest
+  function edgeKick_(liteOk) {
+    edgeSt.wait = false;
+    if (mySeq !== _homeLoadSeq) return;
+    if (!liteOk) { restOnce_(''); return; }
     edgeHomeFetch_().then(function (d) {
       if (mySeq !== _homeLoadSeq) return;
-      if (!d) { restFromGas_(''); return; }
+      if (!d) { restOnce_(''); return; }
       handleHome_(d, 'edge');
-      restFromGas_('&only=notices');
+      restOnce_('&only=notices');
     });
-  } else restFromGas_('');
+  }
+  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) edgeSt.wait = true;
+  else restFromGas_('');
 }
 
 function initAdminUI(castList) {

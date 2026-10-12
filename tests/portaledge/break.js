@@ -9,10 +9,14 @@ const { spawnSync } = require('child_process');
 const SRC = path.join(__dirname, '..', 'pending', 'apply-portal-edge.js');
 const M = [
   ['function edgeHomeUsable_() { return edgeActive_() && !adminViewAs && !previewMode; }', 'function edgeHomeUsable_() { return edgeActive_(); }', '代理閲覧でも Worker のホーム'],
-  ["      + \"      restFromGas_('&only=notices');\\n\"", "      + \"      restFromGas_('');\\n\"", 'お知らせだけにせず客名入りの homerest を取る'],
+  ["      + \"      restOnce_('&only=notices');\\n\"", "      + \"      restOnce_('');\\n\"", 'お知らせだけにせず客名入りの homerest を取る'],
+  // qa P-3 の直し（M-C・L-3・L-4）
+  ["      + \"  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) edgeSt.wait = true;\\n\"", "      + \"  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) { edgeSt.wait = true; edgeKick_(true); }\\n\"", 'homelite を待たずに Worker を呼ぶ（M-C）'],
+  ["  if (which === 'edge' && d.held) { delete merged.reservations; delete merged.vacancy; }", '', 'held でも前の予約を描く（L-3）'],
+  ["    if (gotLite && gotRest && !merged.held) writeHomeCache_(merged);", "    if (gotLite && gotRest) writeHomeCache_(merged);", 'held の答えを覚える（L-3）'],
+  ["      + \"  function restOnce_(q) { if (edgeSt.rest) return; edgeSt.rest = q || 'full'; restFromGas_(q); }\\n\"", "      + \"  function restOnce_(q) { restFromGas_(q); }\\n\"", 'homerest を2本送れる（L-4）'],
   ['      if (!d2.held) again(d2);', '      again(d2);', '取り直しても止まったのに描く'],
   ["    if (d && d.held) return; // ゴーストの答え待ち＝今の表示のまま", '', '答え待ちの空席を GAS から取る'],
-  ["      + \"    if (which === 'edge' && !gotLite && !renderedFromCache) return;\\n\"", '', '覚えなしで homelite の前に描く'],
   ["(r.masked ? '<span style=\\\"color:#94886a\\\">ご予約</span> ' : esc(r.customer) + '様 ')", "esc(r.customer) + '様 '", '伏せた予約を「様」だけで出す'],
   ["  if (typeof EDGE_ON !== 'undefined' && EDGE_ON && /同伴/.test(", '  if (/同伴/.test(', '旗がオフでも同伴を 20:30'],
   ["          d.held = d.held || ''; // 前の答えの held を端末の覚えに残さない", '', '前の held を残す'],

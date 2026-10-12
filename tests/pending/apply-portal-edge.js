@@ -230,6 +230,8 @@ function edgeHomeFetch_(again) {
 // ホームの答えが届くたびに（loadPortal の handleHome_）。st＝その読み込みの間だけの覚え
 function edgeAfterHome_(st, which, d, merged, gotLite, again, alive, fallback) {
   if (which === 'edge') st.held = String(d.held || '');
+  // qa L-3：答え待ち・ゴーストで止めた答え＝端末の覚えにある前の予約・空席を描かない（覚え直しもしない＝handleHome_ の writeHomeCache_ の手前で held を見る）
+  if (which === 'edge' && d.held) { delete merged.reservations; delete merged.vacancy; }
   // GAS（homelite）が「ゴーストでない」と答えたのに Worker は答え待ち・古い答えで止めた → 1回だけ取り直す（その時には Worker が答えを残している）
   if (st.held && !st.refetched && gotLite && merged.ghost === false) {
     st.refetched = true;
@@ -268,27 +270,37 @@ function hunks3() {
       "/* ⚡v4→v5（2026-10-13・P-3）＝ホームの「今日」を Worker で組む版。旗がオンの端末は v5e（客名を伏せた答えと伏せていない答えを端末の覚えで混ぜない） */\n"
       + "var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v5e' : 'v5';"],
     ["  var gotLite = false, gotRest = false;\n",
-      "  var gotLite = false, gotRest = false;\n  var edgeSt = { held: '', refetched: false }; // ⚡P-3：この読み込みの間だけの覚え\n"],
+      "  var gotLite = false, gotRest = false;\n  var edgeSt = { held: '', refetched: false, wait: false, rest: '' }; // ⚡P-3：この読み込みの間だけの覚え（wait＝homelite の後に Worker を呼ぶ・rest＝GAS の homerest を送った）\n"],
     ["    if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }\n",
       "    if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }\n"
-      + "    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restFromGas_(''); }); // ⚡P-3\n"],
+      + "    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restOnce_(''); }); // ⚡P-3\n"],
     ["    if (gotLite && gotRest) writeHomeCache_(merged);",
-      "    // ⚡P-3：Worker の答えは速い＝端末の覚えも homelite も無い初めての1回は、シフト（次の出勤）が届くまで描かない（「出勤予定がまだありません」を一瞬出さない）\n"
-      + "    if (which === 'edge' && !gotLite && !renderedFromCache) return;\n"
-      + "    if (gotLite && gotRest) writeHomeCache_(merged);"],
+      "    if (gotLite && gotRest && !merged.held) writeHomeCache_(merged); // ⚡P-3（qa L-3）：答え待ちの答えは覚えない"],
+    // qa M-C：旗がオンの画面は homelite（ghost の答え）が届いてから /portal/home を呼ぶ＝ゴーストになった最初の1回に予約が端末へ届かない
+    ["    .then(function(d) { handleHome_(d, 'lite'); })\n",
+      "    .then(function(d) { handleHome_(d, 'lite'); if (edgeSt.wait) edgeKick_(!!(d && d.ok)); }) // ⚡P-3：homelite の後に Worker\n"],
+    ["      if (mySeq !== _homeLoadSeq) return; // 古い世代の失敗で新しい画面を潰さない\n",
+      "      if (mySeq !== _homeLoadSeq) return; // 古い世代の失敗で新しい画面を潰さない\n      if (edgeSt.wait) edgeKick_(false); // ⚡P-3：homelite が落ちた＝今までどおり GAS の homerest\n"],
     ["  gasFetch(base + '&tab=homerest')\n    .then(function(r) { return r.json(); })\n    .then(function(d) { handleHome_(d, 'rest'); })\n    .catch(function(e) {\n      if (mySeq !== _homeLoadSeq) return; // ★古い世代がガード(homeRestPending)を解除すると新しい読み込みが誤発動する\n      // 重い方だけ落ちた場合は画面を潰さず、renderHome 側の従来フォールバック（個別取得）に委ねる\n      homeRestPending = false;\n      if (gotLite || renderedFromCache) renderTab(currentTab);\n    });\n}\n",
       "  function restFromGas_(q) {\n"
       + "  gasFetch(base + '&tab=homerest' + (q || ''))\n    .then(function(r) { return r.json(); })\n    .then(function(d) { handleHome_(d, 'rest'); })\n    .catch(function(e) {\n      if (mySeq !== _homeLoadSeq) return; // ★古い世代がガード(homeRestPending)を解除すると新しい読み込みが誤発動する\n      // 重い方だけ落ちた場合は画面を潰さず、renderHome 側の従来フォールバック（個別取得）に委ねる\n      homeRestPending = false;\n      if (gotLite || renderedFromCache) renderTab(currentTab);\n    });\n  }\n"
-      + "  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。\n"
-      + "  //   Worker が使えない（管理者・落ちた・トークン不可）＝今までどおり GAS の homerest\n"
-      + "  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) {\n"
+      + "  // ⚡P-3（qa L-4）：GAS の homerest は1回の読み込みで1本だけ（お知らせだけ／丸ごと のどちらか）\n"
+      + "  function restOnce_(q) { if (edgeSt.rest) return; edgeSt.rest = q || 'full'; restFromGas_(q); }\n"
+      + "  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。⭐呼ぶのは homelite（ゴーストの答え）が届いた後（qa M-C）。\n"
+      + "  //   お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。Worker が使えない（管理者・落ちた）・homelite が落ちた＝今までどおり GAS の homerest\n"
+      + "  function edgeKick_(liteOk) {\n"
+      + "    edgeSt.wait = false;\n"
+      + "    if (mySeq !== _homeLoadSeq) return;\n"
+      + "    if (!liteOk) { restOnce_(''); return; }\n"
       + "    edgeHomeFetch_().then(function (d) {\n"
       + "      if (mySeq !== _homeLoadSeq) return;\n"
-      + "      if (!d) { restFromGas_(''); return; }\n"
+      + "      if (!d) { restOnce_(''); return; }\n"
       + "      handleHome_(d, 'edge');\n"
-      + "      restFromGas_('&only=notices');\n"
+      + "      restOnce_('&only=notices');\n"
       + "    });\n"
-      + "  } else restFromGas_('');\n}\n"],
+      + "  }\n"
+      + "  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) edgeSt.wait = true;\n"
+      + "  else restFromGas_('');\n}\n"],
     ["function homeRsvArr(r){ return",
       "function homeRsvArr(r){ if (r && r.arrive !== undefined && r.masked !== undefined) return r.arrive || r.time || ''; /* ⚡P-3：Worker の答えは並びの根拠（同伴＝20:30）をそのまま */ return"],
     ["  return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;\n",

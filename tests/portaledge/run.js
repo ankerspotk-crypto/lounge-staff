@@ -261,7 +261,7 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
   {
     t.ok(OUT.indexOf(AP.MARK3) >= 0 && OUT.split(AP.MARK3).length === 2, 'P-3 の印がちょうど1つ');
     t.ok(OUT.indexOf("var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v5e' : 'v5';") >= 0 && OUT.indexOf("var HOME_CACHE_VER = 'v4';") < 0, 'HOME_CACHE_VER を v5 に上げた（旗がオンは v5e）');
-    t.ok(OUT.indexOf("      restFromGas_('&only=notices');") >= 0 && OUT.indexOf("  } else restFromGas_('');\n}") >= 0, '旗がオンならお知らせだけ GAS・オフなら今までどおり homerest');
+    t.ok(OUT.indexOf("      restOnce_('&only=notices');") >= 0 && OUT.indexOf("  else restFromGas_('');\n}") >= 0, '旗がオンならお知らせだけ GAS・オフなら今までどおり homerest');
     t.ok(OUT.indexOf("  if (typeof edgeVacancy_ === 'function' && edgeVacancy_()) return;") >= 0, '空席の60秒ごとの取り直しも Worker');
     t.ok(OUT.indexOf("(r.masked ? '<span style=\"color:#94886a\">ご予約</span> ' : esc(r.customer) + '様 ')") >= 0, '伏せた予約は「ご予約」');
     t.ok(OUT.indexOf("yoyakuTimeMin_(edgeDohanTime_(r.time, r.customer))") >= 0 && OUT.indexOf("var p = String(edgeDohanTime_(t, '') || '').split(':');") >= 0, '重なりの判定の同伴も 20:30（旗がオン）');
@@ -342,16 +342,18 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     Rf.sb.gasFetch = (u) => new Promise((res) => liteWait.push(() => res(u.indexOf('tab=homelite') >= 0 ? resp(200, { ok: true, name: '架空A', ghost: false, shifts: { '10/13': '20:00' } }) : resp(200, { ok: true, name: '架空A', ghost: false, notices: [] }))));
     Rf.sb.loadPortal(); await settle(); await settle();
     t.eq(Rf.sb.applied.length, 0, 'homelite の前は描かない（覚えなし）');
-    liteWait.forEach((f) => f()); await settle(); await settle();
-    const lf = Rf.sb.applied[0] || {};
-    t.eq([!!lf.shifts, (lf.reservations || []).length], [true, 1], 'homelite が届いたら Worker の答えと一緒に描く');
+    t.eq(Rf.calls.edge.filter((c) => c.u === EDGE + '/portal/home').length, 0, 'qa M-C：homelite（ゴーストの答え）の前は /portal/home を呼ばない');
+    liteWait.splice(0).forEach((f) => f()); await settle(); await settle(); await settle();
+    t.ok(Rf.sb.applied.some((a) => !!a.shifts && (a.reservations || []).length === 1), 'homelite が届いたら Worker を呼んで一緒に描く');
     const Rc = rig3({ search: '?edge=1', cache: { ok: true, name: '架空A', shifts: {} }, routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() } });
     const liteWait2 = [];
     Rc.sb.edgePrepare_(UID); await settle();
     const gc = Rc.sb.gasFetch;
     Rc.sb.gasFetch = (u) => (u.indexOf('tab=homelite') >= 0 ? new Promise((res) => liteWait2.push(() => res(resp(200, { ok: true })))) : gc(u));
     Rc.sb.loadPortal(); await settle(); await settle();
-    t.ok(Rc.sb.applied.some((a) => (a.reservations || []).length === 1), '覚えがあれば Worker の答えをすぐ描く（homelite を待たない）');
+    t.eq([Rc.calls.edge.filter((c) => c.u === EDGE + '/portal/home').length, Rc.sb.applied.some((a) => (a.reservations || []).length === 1)], [0, false], 'qa M-C：覚えがあっても homelite の前は Worker の予約を端末に入れない（覚えだけ描く）');
+    liteWait2.splice(0).forEach((f) => f()); await settle(); await settle(); await settle();
+    t.ok(Rc.sb.applied.some((a) => (a.reservations || []).length === 1), 'homelite の後に Worker の予約を描く');
     const R2 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(503, { ok: false }) } });
     R2.sb.edgePrepare_(UID); await settle();
     R2.sb.loadPortal(); await settle(); await settle();
@@ -388,7 +390,23 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     const R4 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': () => (++m === 1 ? resp(200, { ok: true, edge: 'home', name: '架空A', seats: [], working: false, held: 'unknown' }) : resp(503, {})) }, gas: { homelite: { ok: true, ghost: false } } });
     R4.sb.edgePrepare_(UID); await settle();
     R4.sb.loadPortal(); await settle(); await settle(); await settle();
-    t.eq(R4.gas.filter((u) => /tab=homerest(?!&only)/.test(u)).length, 1, '取り直しが Worker に届かない＝今までどおり GAS の homerest');
+    t.eq([R4.gas.filter((u) => /tab=homerest/.test(u)).length, R4.gas.filter((u) => /tab=homerest(?!&only)/.test(u)).length], [1, 0], 'qa L-4：取り直しが Worker に届かなくても homerest を2本送らない（お知らせの1本だけ）');
+    // homelite が落ちた＝今までどおり GAS の homerest 丸ごと1本（Worker は呼ばない）
+    const R5 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() } });
+    R5.sb.edgePrepare_(UID); await settle();
+    const g5 = R5.sb.gasFetch;
+    R5.sb.gasFetch = (u) => (u.indexOf('tab=homelite') >= 0 ? (R5.gas.push(u), Promise.reject(new TypeError('x'))) : g5(u));
+    R5.sb.loadPortal(); await settle(); await settle(); await settle();
+    t.eq([R5.calls.edge.filter((c) => c.u === EDGE + '/portal/home').length, R5.gas.filter((u) => /tab=homerest(?!&only)/.test(u)).length], [0, 1], 'homelite が落ちた＝Worker を呼ばず GAS の homerest');
+    // qa L-3：答え待ち（held）の答え＝端末の覚えにある前の予約・空席を描かない・覚え直さない
+    const writes = [];
+    const R6 = rig3({ search: '?edge=1', cache: { ok: true, name: '架空A', shifts: {}, reservations: [{ rowIdx: 1, customer: '前の日の客', status: '確定' }], vacancy: { floors: [] } },
+      routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(200, { ok: true, edge: 'home', name: '架空A', seats: [], working: false, held: 'unknown' }) }, gas: { homelite: { ok: true, ghost: false }, 'homerest:notices': { ok: true, ghost: false, notices: [] } } });
+    R6.sb.writeHomeCache_ = (d) => writes.push(JSON.parse(JSON.stringify(d)));
+    R6.sb.edgePrepare_(UID); await settle();
+    R6.sb.loadPortal(); await settle(); await settle(); await settle();
+    const l6 = R6.sb.applied[R6.sb.applied.length - 1] || {};
+    t.eq(['reservations' in l6, 'vacancy' in l6, writes.length], [false, false, 0], 'held の後は前の予約・空席を描かず、覚え直さない');
   }
 
   t.section('P-3：空席の取り直し・同伴 20:30・伏せた予約の描き方');
