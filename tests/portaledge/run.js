@@ -27,12 +27,17 @@ const DISK_LIFF = ((fs.existsSync(path.join(REPO, 'portal-edge-test.html')) ? fs
 const r = AP.apply(HEAD, { testPage: true, liffId: DISK_LIFF });
 t.ok(!r.error, '当てられる', r.error);
 const OUT = r.src || '';
+function PRODFORM_EARLY() { return AP.apply(HEAD, { edgeUrl: EDGE }).src || ''; }
 t.eq(AP.syntaxCheck(OUT), '', '<script> の構文が通る');
 t.ok(AP.apply(OUT).already === true, '2回目は何もしない（冪等）');
 t.ok(OUT.indexOf("var EDGE_URL = \"" + EDGE + "\";") >= 0, 'EDGE_URL はテストの Worker');
 t.ok(OUT.indexOf('<title>IEYASLOUNGE PORTAL（edge試験）</title>') >= 0, '題名に edge試験');
 t.ok(/var PORTAL_BUILD = '[^']+-edge';/.test(OUT), '版に -edge');
-t.ok(OUT.indexOf('var GAS_URL = \'' + GAS_URL + '\'') >= 0, 'GAS_URL は変えていない（旗がオフ・Worker が落ちたときは今までどおり）');
+t.ok(PRODFORM_EARLY().indexOf("var GAS_URL = '" + GAS_URL + "'") >= 0, '本番に当てる形の GAS_URL は変えていない（旗がオフ・Worker が落ちたときは今までどおり本番の GAS）');
+t.ok(OUT.indexOf("var GAS_URL = '" + AP.COPY_GAS_URL + "';") >= 0, '試験の画面の GAS_URL は写しの GAS');
+t.eq(OUT.indexOf(AP.PROD_GAS_ID), -1, '⛔試験の画面のどこにも本番の GAS のデプロイ ID が無い');
+t.ok(OUT.indexOf('var EDGE_NO_DIRECT = true;') >= 0 && PRODFORM_EARLY().indexOf('var EDGE_NO_DIRECT = false;') >= 0, '直接に戻る道を止めるのは試験の画面だけ');
+t.ok(fs.existsSync(path.join(REPO, 'portal-edge-test.html')) && fs.readFileSync(path.join(REPO, 'portal-edge-test.html'), 'utf8').indexOf(AP.PROD_GAS_ID) < 0, '⛔コミットする portal-edge-test.html にも本番の GAS の ID が無い');
 t.ok(OUT.indexOf("  var wait = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 0 : Math.max(0, 1900 - (Date.now() - _openStart));") >= 0, '旗がオンなら最低1.9秒をやめる（データが届いたら閉じる）');
 t.ok(OUT.indexOf("      : (canEdit && !edgeNoRsvStatus_())") >= 0, '旗がオンなら予約の来店前／来店済／退店済のボタンを出さない');
 t.ok(/function yoyakuSetStatus\(rowIdx, status\) \{\n  if \(edgeNoRsvStatus_\(\)\) \{ alert/.test(OUT), '旗がオンなら yoyakuSetStatus を呼ばれても送らない');
@@ -80,12 +85,12 @@ function rig(opts) {
     navigator: { sendBeacon: (u, b) => { calls.beacon.push({ u, b }); return true; } },
     Blob: function (parts) { this.text = parts.join(''); }, performance: { timeOrigin: Date.now() - 1000 },
     URLSearchParams, AbortController, setTimeout, clearTimeout, Promise, JSON, Date, Math, String, Number, Object,
-    GAS_URL, PORTAL_BUILD: 'test-edge', _openStart: Date.now() - 1000, _devUid: opts.devUid || null, _paIdt: opts.idt === undefined ? 'eyJ.idt.sig' : opts.idt,
+    GAS_URL: opts.gas || GAS_URL, showErr: (h) => { (opts.errs || []).push(h); }, PORTAL_BUILD: 'test-edge', _openStart: Date.now() - 1000, _devUid: opts.devUid || null, _paIdt: opts.idt === undefined ? 'eyJ.idt.sig' : opts.idt,
     _paRawFetch: rawFetch, previewMode: !!opts.preview, adminViewAs: opts.viewAs || '',
-    paIsGas_: (u) => typeof u === 'string' && u.indexOf(GAS_URL) === 0 && u.indexOf('action=portalMaintenance') < 0,
+    paIsGas_: (u) => typeof u === 'string' && u.indexOf(opts.gas || GAS_URL) === 0 && u.indexOf('action=portalMaintenance') < 0,
   };
   vm.createContext(sb);
-  vm.runInContext(blk, sb);
+  vm.runInContext(opts.src || blk, sb);
   return { sb, ls, calls, fetch: (u, init) => sb.window.fetch(u, init) };
 }
 const AUTH_OK = (exp) => resp(200, { ok: true, token: 'v1.tok.sig', exp: exp || Math.floor(Date.now() / 1000) + 3600, name: '架空A' });
@@ -270,6 +275,44 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     t.ok(!!AP.apply(HEAD, { testPage: true, liffId: 'bad' }).error, 'LIFF ID の形が違えば止める');
     const R0 = rig({});
     t.eq(R0.sb.EDGE_ON, false, '（P-1 の部分の単体は本番の既定＝オフのまま）');
+  }
+
+  t.section('試験の画面：GAS へ直接戻らない（PM 2026-10-13）＝Worker につながらなければ止めて「試験の入口につながりません」');
+  {
+    const blkT = (OUT.match(/\/\* ⚡EDGE_P1 2026-10-13 \*\/[\s\S]*?\/\* ===== ⚡ Cloudflare 経由 ここまで ===== \*\//) || [''])[0];
+    const CG = AP.COPY_GAS_URL;
+    const HOMET = CG + '?action=portal&userId=' + UID + '&tab=homelite';
+    // Worker に届かない GET
+    let errs = [];
+    const R = rig({ src: blkT, gas: CG, errs, routes: { '/portal/auth': AUTH_OK(), '/portal/rget': new TypeError('Failed to fetch') } });
+    t.eq(R.sb.EDGE_ON, true, '試験の画面は旗が既定でオン');
+    R.sb.edgePrepare_(UID); await settle();
+    let threw = '';
+    try { await R.fetch(HOMET); } catch (e) { threw = e.message; }
+    t.eq([threw, R.calls.direct.length, errs.length], ['edge-test-blocked', 0, 1], 'GET が Worker に届かない＝GAS へ直接は0本・止めて知らせる');
+    t.ok(/試験の入口につながりません/.test(errs[0] || ''), '「試験の入口につながりません（PM に連絡）」');
+    // 入口で断られた（edgeOff_）後の依頼も直接に行かない
+    errs = [];
+    const R2 = rig({ src: blkT, gas: CG, errs, routes: { '/portal/auth': resp(403, { ok: false, error: 'unregistered' }) } });
+    R2.sb.edgePrepare_(UID); await settle();
+    try { await R2.fetch(CG, { method: 'POST', body: JSON.stringify({ action: 'castCall' }) }); } catch (e) {}
+    try { await R2.fetch(HOMET); } catch (e) {}
+    t.eq([R2.calls.direct.length, errs.length], [0, 1], '入口で断られても GAS へ直接は0本（知らせは1回だけ）');
+    // GAS が券を断った（M2 の道）も直接に行かない
+    const R3 = rig({ src: blkT, gas: CG, errs: [], routes: { '/portal/auth': AUTH_OK(), '/portal/relay': resp(200, { ok: false, error: 'auth' }, { 'x-edge-relay': 'sent' }) } });
+    R3.sb.edgePrepare_(UID); await settle();
+    try { await R3.fetch(CG, { method: 'POST', body: JSON.stringify({ action: 'castCall' }) }); } catch (e) {}
+    t.eq(R3.calls.direct.length, 0, 'GAS が券を断っても直接に送り直さない');
+    // ?edge=0 でも直接に行かない・メンテの確かめは「止めていない」（全面表示で止めない）
+    const R4 = rig({ src: blkT, gas: CG, errs: [], search: '?edge=0' });
+    try { await R4.fetch(HOMET); } catch (e) {}
+    const m = await R4.fetch(CG + '?action=portalMaintenance&cb=1');
+    t.eq([R4.calls.direct.length, (await m.json()).on], [0, false], '旗を切っても直接に行かない・メンテの確かめは止めていない扱い');
+    // 本番に当てる形は今までどおり直接に戻る
+    const R5 = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/rget': new TypeError('x') } });
+    R5.sb.edgePrepare_(UID); await settle();
+    await R5.fetch(HOME);
+    t.eq(R5.calls.direct.length, 1, '本番に当てる形は Worker に届かなければ今までどおり GAS へ直接');
   }
 
   /* ======== P-3 ホームの「今日」（MARK3） ======== */

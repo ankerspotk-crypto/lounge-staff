@@ -33,6 +33,11 @@ const M = [
   ["    if (!edgeArg) { console.error('⛔ --edge-url=URL が要ります（--test-page 以外）'); process.exit(2); }", '', '--edge-url を付け忘れても書く'],
   ["\"  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン\"", "\"  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; } // x\"", '試験の画面で旗を既定でオフ'],
   ["      if (!/^\\d{10}-[A-Za-z0-9]{8}$/.test(opts.liffId)) return { error: 'LIFF ID の形が違います: ' + opts.liffId };", '', 'LIFF ID の形を見ない'],
+  // 試験の画面は GAS へ直接戻らない（PM 2026-10-13）
+  ["    const nd = ['var EDGE_NO_DIRECT = false;', 'var EDGE_NO_DIRECT = true;", "    const nd = ['var EDGE_NO_DIRECT = false;', 'var EDGE_NO_DIRECT = false;", '試験の画面でも直接に戻る'],
+  ["  if (!EDGE_NO_DIRECT) return _edgePrevFetch(input, init);", "  return _edgePrevFetch(input, init);", '止めずに直接へ送る'],
+  ["    out = out.replace(/var GAS_URL = 'https:", "    if (false) out = out.replace(/var GAS_URL = 'https:", '試験の画面の GAS_URL を本番のまま'],
+  ["  else p = edgeDirect_(input, init);", "  else p = _edgePrevFetch(input, init);", '旗がオフの依頼を直接へ'],
 ];
 const orig = fs.readFileSync(SRC, 'utf8');
 const tmp = path.join(os.tmpdir(), 'apply-portal-edge-break-' + process.pid + '.js');

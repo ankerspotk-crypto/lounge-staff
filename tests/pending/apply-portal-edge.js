@@ -40,6 +40,9 @@ const { execFileSync } = require('child_process');
 const MARK = '/* ⚡EDGE_P1 2026-10-13 */';
 const MARK3 = '/* ⚡EDGE_P3 2026-10-13 */';
 const TEST_EDGE_URL = 'https://portal-edge-test.ankerspot-k.workers.dev';
+// 試験の画面の GAS_URL＝写しの GAS（本番のコードの写し・写しのブックだけに書ける）。⛔試験の画面に本番の GAS のデプロイ ID を残さない
+const COPY_GAS_URL = 'https://script.google.com/macros/s/AKfycbyShPk0XfphimbNFmQvec89bHcLBs2ph_CC36Y6emdUASHAObS_-ykZSi5YBdn0HL84/exec';
+const PROD_GAS_ID = 'AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g';
 
 function edgeBlock(edgeUrl) {
   return `
@@ -56,6 +59,15 @@ var EDGE_ON = (function () {
   if (q === '1' || q === '0') { try { localStorage.setItem(EDGE_FLAG_KEY, q); } catch (e) {} return q === '1'; }
   try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }
 })();
+// 試験の画面だけ true（--test-page）：GAS へ直接戻る道を止める（GAS_URL は写しの GAS＝券なしの直接の依頼は受けない）。⭐本番に当てる形は false＝今までどおり本番の GAS へ戻る
+var EDGE_NO_DIRECT = false;
+var _edgeBlockedShown = false;
+// GAS へ直接（paFetch_ の包み）。試験の画面では止めて「試験の入口につながりません」を出す（試験中の操作を本番にも写しにも黙って送らない）
+function edgeDirect_(input, init) {
+  if (!EDGE_NO_DIRECT) return _edgePrevFetch(input, init);
+  if (!_edgeBlockedShown) { _edgeBlockedShown = true; try { showErr('試験の入口につながりません（PM に連絡してください）<br><small>' + String(_edgeWhy || 'edge').replace(/[<>&"]/g, '') + '</small>'); } catch (e) {} }
+  return Promise.reject(new Error('edge-test-blocked'));
+}
 var _edgeTok = '', _edgeExp = 0, _edgeUid = '', _edgeDown = false, _edgeWhy = '', _edgeAuthP = null, _edgeHomeReq = false;
 var _edgePerf = { marks: {}, sent: false, cached: false };
 function edgeActive_() { return EDGE_ON && !_edgeDown && !_devUid; }
@@ -126,7 +138,7 @@ function edgeRelayQuery_(u) {
 function edgeFetch_(u, init, attempt) {
   var method = String((init && init.method) || 'GET').toUpperCase();
   var isGet = method === 'GET';
-  var direct = function () { return _edgePrevFetch(u, init); };
+  var direct = function () { return edgeDirect_(u, init); };
   return edgeReady_().then(function (ok) {
     if (!ok) return direct();
     // GET も POST で送る（中身は本文）。GET＝/portal/rget（Worker が GAS へ GET で取り次ぐ）・POST＝/portal/relay
@@ -156,15 +168,18 @@ function edgeFetch_(u, init, attempt) {
     });
   });
 }
+// メンテの確かめが Worker に届かないとき（試験の画面）＝「止めていない」の答え（現場を止めない・画面の checkPortalMaintenance_ は on:false で通常起動）
+function resp503_() { return Promise.resolve({ ok: true, status: 200, headers: { get: function () { return null; } }, json: function () { return Promise.resolve({ on: false, unknown: true }); }, clone: function () { return this; } }); }
 var _edgePrevFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null; // 🔐 paFetch_ の包み（GAS へ直接＝今までどおり）
 if (_edgePrevFetch) window.fetch = function (input, init) {
   if (typeof input !== 'string' || input.indexOf(GAS_URL) !== 0) return _edgePrevFetch(input, init);
   var home = !_edgeHomeReq && input.indexOf('action=portal') >= 0 && input.indexOf('tab=homelite') >= 0;
   if (home) { _edgeHomeReq = true; edgeMark_('reqStart'); }
   var p;
-  if (edgeActive_() && input.indexOf('action=portalMaintenance') >= 0) p = _paRawFetch(EDGE_URL + '/portal/maint', { cache: 'no-store' }).catch(function () { return _edgePrevFetch(input, init); });
+  if (edgeActive_() && input.indexOf('action=portalMaintenance') >= 0) p = _paRawFetch(EDGE_URL + '/portal/maint', { cache: 'no-store' }).catch(function () { return EDGE_NO_DIRECT ? resp503_() : edgeDirect_(input, init); });
   else if (edgeActive_() && paIsGas_(input)) p = edgeFetch_(input, init, 0);
-  else p = _edgePrevFetch(input, init);
+  else if (EDGE_NO_DIRECT && input.indexOf('action=portalMaintenance') >= 0) p = resp503_(); // 試験の画面：メンテの確かめは止めていない扱い（全面表示で止めない）
+  else p = edgeDirect_(input, init);
   if (home) p = p.then(function (r) { edgeMark_('respEnd'); return r; });
   return p;
 };
@@ -351,6 +366,14 @@ function apply(src, opts) {
   //   ・旗は既定でオン（?edge=0 で切れる）＝LIFF の入口 URL に ?edge=1 を付け忘れても Worker を通る（LIFF は初回 liff.state で query を運ぶため、読み込みの瞬間に ?edge が見えないことがある）
   //   ・--liff-id＝試験の画面を入口にした別の LIFF アプリの ID（同じチャネル 2010376677 の中に作る＝id_token の aud は同じ）。liff.init はその ID の入口 URL の下でしか動かない
   if (opts.testPage && !has1) {
+    // GAS_URL を写しの GAS に・直接に戻る道を止める（PM 2026-10-13：試験中の操作を本番に入れない）
+    const gm = out.match(/var GAS_URL = '(https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec)';/g) || [];
+    if (gm.length !== 1) return { error: 'GAS_URL の行が1か所ではありません' };
+    out = out.replace(/var GAS_URL = 'https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec';/, () => "var GAS_URL = '" + COPY_GAS_URL + "'; /* ⚡試験の画面＝写しの GAS（本番の GAS へはつながない） */");
+    const nd = ['var EDGE_NO_DIRECT = false;', 'var EDGE_NO_DIRECT = true; // ⚡試験の画面＝GAS へ直接戻らない（Worker につながらなければ止めて知らせる）'];
+    if (out.split(nd[0]).length - 1 !== 1) return { error: 'EDGE_NO_DIRECT の行が1か所ではありません' };
+    out = out.replace(nd[0], () => nd[1]);
+    if (out.indexOf(PROD_GAS_ID) >= 0) return { error: '試験の画面に本番の GAS のデプロイ ID が残っています' };
     const f = ["  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }", "  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン"];
     if (out.split(f[0]).length - 1 !== 1) return { error: '旗の既定の行が1か所ではありません' };
     out = out.replace(f[0], () => f[1]);
@@ -381,7 +404,7 @@ function syntaxCheck(html) {
   finally { try { fs.unlinkSync(tmp); } catch (e) {} }
 }
 
-module.exports = { apply, syntaxCheck, MARK, MARK3, TEST_EDGE_URL, edgeBlock, edgeHomeBlock };
+module.exports = { apply, syntaxCheck, MARK, MARK3, TEST_EDGE_URL, COPY_GAS_URL, PROD_GAS_ID, edgeBlock, edgeHomeBlock };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

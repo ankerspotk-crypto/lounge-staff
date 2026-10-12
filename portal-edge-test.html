@@ -603,7 +603,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbyShPk0XfphimbNFmQvec89bHcLBs2ph_CC36Y6emdUASHAObS_-ykZSi5YBdn0HL84/exec'; /* ⚡試験の画面＝写しの GAS（本番の GAS へはつながない） */ /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
 var PORTAL_BUILD = '2026-10-11b-edge'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
@@ -857,6 +857,15 @@ var EDGE_ON = (function () {
   if (q === '1' || q === '0') { try { localStorage.setItem(EDGE_FLAG_KEY, q); } catch (e) {} return q === '1'; }
   try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン
 })();
+// 試験の画面だけ true（--test-page）：GAS へ直接戻る道を止める（GAS_URL は写しの GAS＝券なしの直接の依頼は受けない）。⭐本番に当てる形は false＝今までどおり本番の GAS へ戻る
+var EDGE_NO_DIRECT = true; // ⚡試験の画面＝GAS へ直接戻らない（Worker につながらなければ止めて知らせる）
+var _edgeBlockedShown = false;
+// GAS へ直接（paFetch_ の包み）。試験の画面では止めて「試験の入口につながりません」を出す（試験中の操作を本番にも写しにも黙って送らない）
+function edgeDirect_(input, init) {
+  if (!EDGE_NO_DIRECT) return _edgePrevFetch(input, init);
+  if (!_edgeBlockedShown) { _edgeBlockedShown = true; try { showErr('試験の入口につながりません（PM に連絡してください）<br><small>' + String(_edgeWhy || 'edge').replace(/[<>&"]/g, '') + '</small>'); } catch (e) {} }
+  return Promise.reject(new Error('edge-test-blocked'));
+}
 var _edgeTok = '', _edgeExp = 0, _edgeUid = '', _edgeDown = false, _edgeWhy = '', _edgeAuthP = null, _edgeHomeReq = false;
 var _edgePerf = { marks: {}, sent: false, cached: false };
 function edgeActive_() { return EDGE_ON && !_edgeDown && !_devUid; }
@@ -927,7 +936,7 @@ function edgeRelayQuery_(u) {
 function edgeFetch_(u, init, attempt) {
   var method = String((init && init.method) || 'GET').toUpperCase();
   var isGet = method === 'GET';
-  var direct = function () { return _edgePrevFetch(u, init); };
+  var direct = function () { return edgeDirect_(u, init); };
   return edgeReady_().then(function (ok) {
     if (!ok) return direct();
     // GET も POST で送る（中身は本文）。GET＝/portal/rget（Worker が GAS へ GET で取り次ぐ）・POST＝/portal/relay
@@ -957,15 +966,18 @@ function edgeFetch_(u, init, attempt) {
     });
   });
 }
+// メンテの確かめが Worker に届かないとき（試験の画面）＝「止めていない」の答え（現場を止めない・画面の checkPortalMaintenance_ は on:false で通常起動）
+function resp503_() { return Promise.resolve({ ok: true, status: 200, headers: { get: function () { return null; } }, json: function () { return Promise.resolve({ on: false, unknown: true }); }, clone: function () { return this; } }); }
 var _edgePrevFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null; // 🔐 paFetch_ の包み（GAS へ直接＝今までどおり）
 if (_edgePrevFetch) window.fetch = function (input, init) {
   if (typeof input !== 'string' || input.indexOf(GAS_URL) !== 0) return _edgePrevFetch(input, init);
   var home = !_edgeHomeReq && input.indexOf('action=portal') >= 0 && input.indexOf('tab=homelite') >= 0;
   if (home) { _edgeHomeReq = true; edgeMark_('reqStart'); }
   var p;
-  if (edgeActive_() && input.indexOf('action=portalMaintenance') >= 0) p = _paRawFetch(EDGE_URL + '/portal/maint', { cache: 'no-store' }).catch(function () { return _edgePrevFetch(input, init); });
+  if (edgeActive_() && input.indexOf('action=portalMaintenance') >= 0) p = _paRawFetch(EDGE_URL + '/portal/maint', { cache: 'no-store' }).catch(function () { return EDGE_NO_DIRECT ? resp503_() : edgeDirect_(input, init); });
   else if (edgeActive_() && paIsGas_(input)) p = edgeFetch_(input, init, 0);
-  else p = _edgePrevFetch(input, init);
+  else if (EDGE_NO_DIRECT && input.indexOf('action=portalMaintenance') >= 0) p = resp503_(); // 試験の画面：メンテの確かめは止めていない扱い（全面表示で止めない）
+  else p = edgeDirect_(input, init);
   if (home) p = p.then(function (r) { edgeMark_('respEnd'); return r; });
   return p;
 };
