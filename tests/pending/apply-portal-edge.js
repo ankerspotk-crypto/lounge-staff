@@ -4,7 +4,7 @@
    ⚡ポータルの画面を Cloudflare（ポータルの入口 Worker）経由にする「旗」を足す（P-1・2026-10-13・#74 ポータル高速化）
    ----------------------------------------------------------------------------
    使い方:
-     node tests/pending/apply-portal-edge.js --test-page          … HEAD の portal.html から試験用の画面 portal-edge-test.html を作る
+     node tests/pending/apply-portal-edge.js --test-page [--liff-id=<試験用 LIFF ID>]  … HEAD の portal.html から試験用の画面 portal-edge-test.html を作る（旗は既定でオン）
                                                                    （EDGE_URL＝テストの Worker portal-edge-test・題名と版に「edge試験」）
      node tests/pending/apply-portal-edge.js <in> <out> --edge-url=URL    … 任意のファイルに当てる（--edge-url は必須・qa M1）（⛔本番の portal.html に当てるのは号令の後）
    ⛔portal-test.html には当てない（2026-10-13 時点で他のセッションの未コミットがある・本人確認の券の仕組みが無い・本番の GAS を向いている）。
@@ -347,7 +347,19 @@ function apply(src, opts) {
   const r3 = applyHunks(out, hunks3());
   if (r3.error) return r3;
   out = r3.src;
+  // 試験の画面だけ（実機の通し・2026-10-13）：
+  //   ・旗は既定でオン（?edge=0 で切れる）＝LIFF の入口 URL に ?edge=1 を付け忘れても Worker を通る（LIFF は初回 liff.state で query を運ぶため、読み込みの瞬間に ?edge が見えないことがある）
+  //   ・--liff-id＝試験の画面を入口にした別の LIFF アプリの ID（同じチャネル 2010376677 の中に作る＝id_token の aud は同じ）。liff.init はその ID の入口 URL の下でしか動かない
   if (opts.testPage && !has1) {
+    const f = ["  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }", "  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン"];
+    if (out.split(f[0]).length - 1 !== 1) return { error: '旗の既定の行が1か所ではありません' };
+    out = out.replace(f[0], () => f[1]);
+    if (opts.liffId) {
+      if (!/^\d{10}-[A-Za-z0-9]{8}$/.test(opts.liffId)) return { error: 'LIFF ID の形が違います: ' + opts.liffId };
+      const l = "var LIFF_ID = '2010376677-EDF5MZuq';";
+      if (out.split(l).length - 1 !== 1) return { error: 'LIFF_ID の行が1か所ではありません' };
+      out = out.replace(l, () => "var LIFF_ID = '" + opts.liffId + "'; // ⚡試験の画面の LIFF（入口＝portal-edge-test.html）");
+    }
     const t = [['<title>IEYASLOUNGE PORTAL</title>', '<title>IEYASLOUNGE PORTAL（edge試験）</title>']];
     for (const [a, b] of t) { if (out.split(a).length - 1 !== 1) return { error: '題名が1か所ではありません' }; out = out.replace(a, b); }
     const re = /var PORTAL_BUILD = '([^']*)';/;
@@ -388,7 +400,9 @@ if (require.main === module) {
     src = fs.readFileSync(pos[0], 'utf8');
     outPath = pos[1];
   }
-  const r = apply(src, { edgeUrl: edgeArg || undefined, testPage });
+  const liffArg = (args.find((a) => a.indexOf('--liff-id=') === 0) || '').slice(10);
+  if (liffArg && !testPage) { console.error('⛔ --liff-id は --test-page のときだけ'); process.exit(2); }
+  const r = apply(src, { edgeUrl: edgeArg || undefined, testPage, liffId: liffArg || undefined });
   if (r.error) { console.error('⛔ 当てられません: ' + r.error); process.exit(1); }
   if (r.already) { console.log('適用済み（何もしない）'); process.exit(0); }
   const se = syntaxCheck(r.src);

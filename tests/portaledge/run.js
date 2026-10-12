@@ -22,7 +22,9 @@ const GAS_URL = (HEAD.match(/var GAS_URL = '([^']+)'/) || [])[1];
 const EDGE = AP.TEST_EDGE_URL;
 
 t.section('当てる（HEAD の portal.html・メモリ上）');
-const r = AP.apply(HEAD, { testPage: true });
+// 試験の画面の LIFF ID（--liff-id で作り直したとき）は、ファイルにある値を使って同じ物を作る
+const DISK_LIFF = ((fs.existsSync(path.join(REPO, 'portal-edge-test.html')) ? fs.readFileSync(path.join(REPO, 'portal-edge-test.html'), 'utf8') : '').match(/var LIFF_ID = '([^']+)'; \/\/ ⚡試験の画面の LIFF/) || [])[1];
+const r = AP.apply(HEAD, { testPage: true, liffId: DISK_LIFF });
 t.ok(!r.error, '当てられる', r.error);
 const OUT = r.src || '';
 t.eq(AP.syntaxCheck(OUT), '', '<script> の構文が通る');
@@ -45,7 +47,9 @@ if (!BREAK) t.ok(onDisk === OUT, 'portal-edge-test.html ＝ HEAD の portal.html
 t.ok(fs.readFileSync(path.join(REPO, 'portal.html'), 'utf8') === HEAD, '本番の portal.html（作業ツリー）は触っていない');
 
 /* ---- 旗の部分を vm で走らせる ---- */
-const blk = (OUT.match(/\/\* ⚡EDGE_P1 2026-10-13 \*\/[\s\S]*?\/\* ===== ⚡ Cloudflare 経由 ここまで ===== \*\//) || [''])[0];
+// 単体（vm）は本番に当てる形（旗は既定でオフ・EDGE_URL はテストの Worker）で走らせる＝試験の画面だけの違い（既定でオン・LIFF）は上の静的な検査で縛る
+const PRODFORM = AP.apply(HEAD, { edgeUrl: EDGE }).src || '';
+const blk = (PRODFORM.match(/\/\* ⚡EDGE_P1 2026-10-13 \*\/[\s\S]*?\/\* ===== ⚡ Cloudflare 経由 ここまで ===== \*\//) || [''])[0];
 t.ok(blk.length > 1000, '旗の部分を切り出せた');
 const tick = () => new Promise((res) => setImmediate(res));
 async function settle() { for (let i = 0; i < 10; i++) await tick(); await new Promise((res) => setTimeout(res, 5)); for (let i = 0; i < 5; i++) await tick(); }
@@ -256,6 +260,18 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     try { fs.unlinkSync(tmpIn); fs.unlinkSync(tmpOut); } catch (e) {}
   }
 
+  t.section('実機の通し：試験の画面は旗が既定でオン・--liff-id で試験用の LIFF に替えられる（本番に当てるときは替えない）');
+  {
+    t.ok(OUT.indexOf("localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン") >= 0, '試験の画面は旗が既定でオン');
+    const prodLike = AP.apply(HEAD, { edgeUrl: 'https://portal-edge.x.workers.dev' }).src || '';
+    t.ok(prodLike.indexOf("localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }") >= 0 && prodLike.indexOf("var LIFF_ID = '2010376677-EDF5MZuq';") >= 0, '本番に当てる形は旗が既定でオフ・LIFF は今のまま');
+    const L = AP.apply(HEAD, { testPage: true, liffId: '2010376677-TESTabcd' });
+    t.ok(!L.error && L.src.indexOf("var LIFF_ID = '2010376677-TESTabcd';") >= 0, '--liff-id で試験用の LIFF にする');
+    t.ok(!!AP.apply(HEAD, { testPage: true, liffId: 'bad' }).error, 'LIFF ID の形が違えば止める');
+    const R0 = rig({});
+    t.eq(R0.sb.EDGE_ON, false, '（P-1 の部分の単体は本番の既定＝オフのまま）');
+  }
+
   /* ======== P-3 ホームの「今日」（MARK3） ======== */
   t.section('P-3：当てた形（静的）');
   {
@@ -272,13 +288,13 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     t.ok(p1only.length > 0, '（portal-edge-test.html は上で HEAD に当てた物と一致を確かめ済み）');
   }
 
-  const blk3 = (OUT.match(/\/\* ⚡EDGE_P3 2026-10-13 \*\/[\s\S]*?\/\* ===== ⚡ ホームの「今日」 ここまで ===== \*\//) || [''])[0];
+  const blk3 = (PRODFORM.match(/\/\* ⚡EDGE_P3 2026-10-13 \*\/[\s\S]*?\/\* ===== ⚡ ホームの「今日」 ここまで ===== \*\//) || [''])[0];
   t.ok(blk3.length > 500, 'P-3 の部分を切り出せた');
   const fnText = (name) => {
-    const i = OUT.indexOf('function ' + name + '(');
+    const i = PRODFORM.indexOf('function ' + name + '(');
     if (i < 0) return '';
-    let depth = 0, j = OUT.indexOf('{', i);
-    for (let k = j; k < OUT.length; k++) { const ch = OUT[k]; if (ch === '{') depth++; else if (ch === '}') { depth--; if (depth === 0) return OUT.slice(i, k + 1); } }
+    let depth = 0, j = PRODFORM.indexOf('{', i);
+    for (let k = j; k < PRODFORM.length; k++) { const ch = PRODFORM[k]; if (ch === '{') depth++; else if (ch === '}') { depth--; if (depth === 0) return PRODFORM.slice(i, k + 1); } }
     return '';
   };
   // P-1 の rig に P-3 の部分と画面の関数を足して走らせる（偽物は fetch・document・GAS だけ）

@@ -855,7 +855,7 @@ var EDGE_STORE_KEY = 'portalEdge:v1', EDGE_FLAG_KEY = 'portalEdge:on';
 var EDGE_ON = (function () {
   var q = null; try { q = new URLSearchParams(location.search).get('edge'); } catch (e) {}
   if (q === '1' || q === '0') { try { localStorage.setItem(EDGE_FLAG_KEY, q); } catch (e) {} return q === '1'; }
-  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }
+  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン
 })();
 var _edgeTok = '', _edgeExp = 0, _edgeUid = '', _edgeDown = false, _edgeWhy = '', _edgeAuthP = null, _edgeHomeReq = false;
 var _edgePerf = { marks: {}, sent: false, cached: false };

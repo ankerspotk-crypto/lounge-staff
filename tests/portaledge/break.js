@@ -31,6 +31,8 @@ const M = [
   ["          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }", '', 'GAS が券を断っても直接へ戻さない'],
   ["          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }", "          if (d && d.ok === false) { edgeOff_('gas:auth'); return direct(); }", 'GAS のどの断りでも直接へ送り直す（二重）'],
   ["    if (!edgeArg) { console.error('⛔ --edge-url=URL が要ります（--test-page 以外）'); process.exit(2); }", '', '--edge-url を付け忘れても書く'],
+  ["\"  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; } // 試験の画面＝既定でオン\"", "\"  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; } // x\"", '試験の画面で旗を既定でオフ'],
+  ["      if (!/^\\d{10}-[A-Za-z0-9]{8}$/.test(opts.liffId)) return { error: 'LIFF ID の形が違います: ' + opts.liffId };", '', 'LIFF ID の形を見ない'],
 ];
 const orig = fs.readFileSync(SRC, 'utf8');
 const tmp = path.join(os.tmpdir(), 'apply-portal-edge-break-' + process.pid + '.js');
