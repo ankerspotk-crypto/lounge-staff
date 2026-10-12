@@ -20,6 +20,13 @@ const M = [
   ["  if (!(list.length && list.every(function(r){ return r.arrive !== undefined && r.masked !== undefined; }))) list.sort", '  list.sort', 'Worker の並びを並べ直す'],
   ["  if (r && r.mine === true) return true;", '', 'Worker の「自分」を見ない'],
   ["return '20:30';\n  return time;", "return '20:00';\n  return time;", '同伴を 20:00 のまま'],
+  // qa 2026-10-13 の直し（H1・M1・M2）
+  ["  EDGE_STRIP_KEYS.forEach(function (k) { p.delete(k); });", '', '画面で userId・証を削らない'],
+  ["    return _paRawFetch(EDGE_URL + (isGet ? '/portal/rget' : '/portal/relay'), opts).then(function (r) {", "    return _paRawFetch(EDGE_URL + (isGet ? '/portal/relay' + edgeRelayQuery_(u) : '/portal/relay'), opts).then(function (r) {", 'GET の中身を URL に乗せる'],
+  ['  if (!EDGE_ON) return; // qa M1（PM 判断）：計測は旗がオンのときだけ送る', '', '旗がオフでも計測を送る'],
+  ["          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }", '', 'GAS が券を断っても直接へ戻さない'],
+  ["          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }", "          if (d && d.ok === false) { edgeOff_('gas:auth'); return direct(); }", 'GAS のどの断りでも直接へ送り直す（二重）'],
+  ["    if (!edgeArg) { console.error('⛔ --edge-url=URL が要ります（--test-page 以外）'); process.exit(2); }", '', '--edge-url を付け忘れても書く'],
 ];
 const orig = fs.readFileSync(SRC, 'utf8');
 const tmp = path.join(os.tmpdir(), 'apply-portal-edge-break-' + process.pid + '.js');

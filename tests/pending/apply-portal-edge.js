@@ -6,7 +6,7 @@
    使い方:
      node tests/pending/apply-portal-edge.js --test-page          … HEAD の portal.html から試験用の画面 portal-edge-test.html を作る
                                                                    （EDGE_URL＝テストの Worker portal-edge-test・題名と版に「edge試験」）
-     node tests/pending/apply-portal-edge.js <in> <out> [--edge-url=URL]  … 任意のファイルに当てる（⛔本番の portal.html に当てるのは号令の後）
+     node tests/pending/apply-portal-edge.js <in> <out> --edge-url=URL    … 任意のファイルに当てる（--edge-url は必須・qa M1）（⛔本番の portal.html に当てるのは号令の後）
    ⛔portal-test.html には当てない（2026-10-13 時点で他のセッションの未コミットがある・本人確認の券の仕組みが無い・本番の GAS を向いている）。
      試験用の画面は HEAD の portal.html（本人確認 paFetch_ 入り）を写した portal-edge-test.html にする。
    ------------------------------------------------------------------------
@@ -65,6 +65,7 @@ function edgeOff_(why) { _edgeDown = true; if (!_edgeWhy) _edgeWhy = String(why 
 function edgeT0_() { try { return (performance.timeOrigin || performance.timing.navigationStart) || _openStart; } catch (e) { return _openStart; } }
 function edgeMark_(k) { if (_edgePerf.marks[k] == null) _edgePerf.marks[k] = Math.max(0, Math.round(Date.now() - edgeT0_())); }
 function edgeSendPerf_() {
+  if (!EDGE_ON) return; // qa M1（PM 判断）：計測は旗がオンのときだけ送る
   if (_edgePerf.sent) return; _edgePerf.sent = true;
   var m = _edgePerf.marks; m.navigationStart = 0;
   var o = { v: 1, edge: edgeActive_(), cached: !!_edgePerf.cached, build: PORTAL_BUILD, marks: m };
@@ -111,11 +112,16 @@ function edgeReady_() {
   edgeClear_();
   return edgeAuth_();
 }
-function edgeRelayUrl_(u) {
-  var i = u.indexOf('?'), q = i >= 0 ? u.slice(i) : '';
+// qa H1（2026-10-13）：GET の中身は Worker の URL に乗せない（Workers Logs に残る）＝POST /portal/rget の本文 { q } で運ぶ。
+//   本人の名乗り・証（userId・pt・idt・dk ほか）は画面の側でも必ず削る（Worker も捨てる＝二重）
+var EDGE_STRIP_KEYS = ['userId', 'pt', 'idt', 'dk', 'pa', 'k', 'key'];
+function edgeRelayQuery_(u) {
+  var i = u.indexOf('?');
+  var p = new URLSearchParams(i >= 0 ? u.slice(i + 1) : '');
+  EDGE_STRIP_KEYS.forEach(function (k) { p.delete(k); });
   // 👤キャスト表示（プレビュー）中は、未公開の月の金額を受け取らない（paDecorate_ と同じ印 pv=1）
-  if (q && previewMode && adminViewAs && u.indexOf('action=portal') >= 0) q += '&pv=1';
-  return EDGE_URL + '/portal/relay' + q;
+  if (previewMode && adminViewAs && u.indexOf('action=portal') >= 0) p.set('pv', '1');
+  return '?' + p.toString();
 }
 function edgeFetch_(u, init, attempt) {
   var method = String((init && init.method) || 'GET').toUpperCase();
@@ -123,10 +129,11 @@ function edgeFetch_(u, init, attempt) {
   var direct = function () { return _edgePrevFetch(u, init); };
   return edgeReady_().then(function (ok) {
     if (!ok) return direct();
-    var opts = { method: method, headers: { authorization: 'Bearer ' + _edgeTok }, cache: 'no-store' };
-    if (!isGet) { opts.headers['content-type'] = 'application/json'; opts.body = init && init.body; }
+    // GET も POST で送る（中身は本文）。GET＝/portal/rget（Worker が GAS へ GET で取り次ぐ）・POST＝/portal/relay
+    var opts = { method: 'POST', headers: { authorization: 'Bearer ' + _edgeTok, 'content-type': 'application/json' }, cache: 'no-store' };
+    opts.body = isGet ? JSON.stringify({ q: edgeRelayQuery_(u) }) : (init && init.body);
     if (init && init.signal) opts.signal = init.signal;
-    return _paRawFetch(edgeRelayUrl_(u), opts).then(function (r) {
+    return _paRawFetch(EDGE_URL + (isGet ? '/portal/rget' : '/portal/relay'), opts).then(function (r) {
       var notSent = !!(r && r.headers && r.headers.get && r.headers.get('x-edge-relay') === 'not-sent');
       // トークンが切れた・鍵が替わった＝Worker は GAS へ送っていない → 取り直して1回だけ（POST でも二重にならない）
       if (r.status === 401 && notSent && !attempt) { edgeClear_(); return edgeFetch_(u, init, 1); }
@@ -134,6 +141,13 @@ function edgeFetch_(u, init, attempt) {
       if (notSent && (r.status === 401 || r.status >= 500)) { edgeOff_('relay:' + r.status); return direct(); }
       // GET は何度読んでも同じ＝Worker が GAS に届かなかった・時間切れなら GAS へ直接
       if (isGet && (r.status === 502 || r.status === 504)) return direct();
+      // qa M2：GAS が Worker の券を断った（error:'auth'）＝GAS は実行していない＝POST でも GAS へ直接1回だけ（paFetch_ と同じ理屈）。以後は直接
+      if (r.status === 200 && r.headers && r.headers.get && r.headers.get('x-edge-relay') === 'sent' && r.clone) {
+        return r.clone().json().then(function (d) {
+          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }
+          return r;
+        }, function () { return r; });
+      }
       return r;
     }, function (e) {
       if (e && e.name === 'AbortError') throw e; // 画面の時間切れ＝gasFetch の取り直しに任せる
@@ -356,7 +370,9 @@ if (require.main === module) {
     testPage = true;
   } else {
     const pos = args.filter((a) => a.indexOf('--') !== 0);
-    if (pos.length !== 2) { console.error('使い方: --test-page か <in> <out>'); process.exit(2); }
+    if (pos.length !== 2) { console.error('使い方: --test-page か <in> <out> --edge-url=URL'); process.exit(2); }
+    // qa M1：試験の画面でなければ --edge-url を必ず付ける（付け忘れて本番の画面がテストの Worker を向く道を塞ぐ）
+    if (!edgeArg) { console.error('⛔ --edge-url=URL が要ります（--test-page 以外）'); process.exit(2); }
     src = fs.readFileSync(pos[0], 'utf8');
     outPath = pos[1];
   }

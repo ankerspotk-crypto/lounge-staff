@@ -62,7 +62,9 @@ function rig(opts) {
   window.fetch = function (u, init) { calls.direct.push({ u, init }); return Promise.resolve(resp(200, { ok: true, via: 'gas' })); };
   const rawFetch = function (u, init) {
     calls.edge.push({ u, init: init || {} });
-    const key = Object.keys(routes).find((k) => u.indexOf(EDGE + k) === 0);
+    // GET の取り次ぎ（/portal/rget・qa H1）は、別の答えを書いていなければ /portal/relay と同じ答え（取り次ぎの口として同じ扱い）
+    let key = Object.keys(routes).find((k) => u.indexOf(EDGE + k) === 0);
+    if (!key && u.indexOf(EDGE + '/portal/rget') === 0 && routes['/portal/relay'] !== undefined) key = '/portal/relay';
     const h = key ? routes[key] : null;
     const out = typeof h === 'function' ? h(u, init, calls) : h;
     if (out instanceof Error) return Promise.reject(out);
@@ -99,13 +101,11 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     t.eq(R.calls.edge.length, 0, 'Worker は呼ばない');
     t.eq(R.sb.edgeNoRsvStatus_(), false, '予約のボタンは今までどおり');
     R.sb.edgeHomePainted_(); await settle();
-    t.eq(R.calls.beacon.length, 1, '計測の印は旗がオフでも送る（比べるため）');
-    const b = JSON.parse((R.calls.beacon[0] || {}).b.text || '{}');
-    t.eq([b.edge, Object.keys(b.marks || {}).sort()], [false, ['homePainted', 'navigationStart', 'reqStart', 'respEnd']], '印の中身（edge:false）');
-    t.ok((R.calls.beacon[0] || {}).u === EDGE + '/portal/perf', '送り先は /portal/perf');
+    R.sb.edgeSendPerf_(); await settle();
+    t.eq(R.calls.beacon.length, 0, 'qa M1：旗がオフなら計測の印も送らない（Worker に1本も届かない）');
   }
 
-  t.section('旗がオン：入口 → トークン → GAS 宛ては /portal/relay（Bearer）・メンテは /portal/maint');
+  t.section('旗がオン：入口 → トークン → GAS 宛ては Worker（GET＝/portal/rget の本文・POST＝/portal/relay）・メンテは /portal/maint');
   {
     const R = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/relay': RELAY_OK, '/portal/maint': resp(200, { on: false }) } });
     t.eq([R.sb.EDGE_ON, R.ls['portalEdge:on']], [true, '1'], '?edge=1 で入り、端末に覚える');
@@ -116,7 +116,7 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     const res = await R.fetch(HOME);
     t.eq((await res.json()).via, 'edge', 'ホームは Worker 経由');
     const g = R.calls.edge[1] || { init: { headers: {} } };
-    t.eq([g.u, g.init.method, g.init.headers.authorization], [EDGE + '/portal/relay?action=portal&userId=' + UID + '&tab=homelite', 'GET', 'Bearer v1.tok.sig'], 'GET はクエリをそのまま /portal/relay へ（userId は Worker が捨てる）');
+    t.eq([g.u, g.init.method, g.init.headers.authorization, JSON.parse(g.init.body || '{}').q], [EDGE + '/portal/rget', 'POST', 'Bearer v1.tok.sig', '?action=portal&tab=homelite'], 'qa H1：GET は POST /portal/rget の本文で（URL に中身を乗せない・userId は画面で削る）');
     await R.fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'castCall', userId: UID, kind: 'help' }) });
     const p = R.calls.edge[2] || { init: { headers: {} } };
     t.eq([p.u, p.init.method, p.init.headers['content-type'], JSON.parse(p.init.body || '{}').action], [EDGE + '/portal/relay', 'POST', 'application/json', 'castCall'], 'POST も /portal/relay へ');
@@ -171,7 +171,7 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     R2.sb.edgePrepare_(UID); await settle();
     const r2 = await R2.fetch(HOME);
     t.eq([(await r2.json()).via, R2.sb._edgeDown], ['gas', true], '2回目も 401 → GAS へ直接');
-    t.eq([R2.calls.edge.filter((c) => c.u.indexOf('/portal/auth') > 0).length, R2.calls.edge.filter((c) => c.u.indexOf('/portal/relay') > 0).length], [2, 2], '取り直しは1回だけ（入口2回・取り次ぎ2回で止まる）');
+    t.eq([R2.calls.edge.filter((c) => c.u.indexOf('/portal/auth') > 0).length, R2.calls.edge.filter((c) => /\/portal\/(relay|rget)/.test(c.u)).length], [2, 2], '取り直しは1回だけ（入口2回・取り次ぎ2回で止まる）');
     const r3 = await R2.fetch(HOME);
     t.eq([(await r3.json()).via, R2.calls.edge.length], ['gas', 4], '以後は Worker を呼ばない');
   }
@@ -186,7 +186,7 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     const R = rig({ search: '?edge=1', idt, routes: { '/portal/auth': route, '/portal/relay': RELAY_OK } });
     R.sb.edgePrepare_(UID); await settle();
     const res = await R.fetch(HOME);
-    t.eq([(await res.json()).via, R.sb._edgeWhy, R.calls.edge.filter((c) => c.u.indexOf('/portal/relay') > 0).length], ['gas', why, 0], label + ' → 直接（' + why + '）');
+    t.eq([(await res.json()).via, R.sb._edgeWhy, R.calls.edge.filter((c) => /\/portal\/(relay|rget)/.test(c.u)).length], ['gas', why, 0], label + ' → 直接（' + why + '）');
   }
 
   t.section('覚えたトークン：持ち主が違う・期限が近いものは使わない／?edge=0 で切れる／開発用 #u= は旗を見ない');
@@ -207,7 +207,53 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     const R5 = rig({ search: '?edge=1', preview: true, viewAs: '架空B', routes: { '/portal/auth': AUTH_OK(), '/portal/relay': RELAY_OK } });
     R5.sb.edgePrepare_(UID); await settle();
     await R5.fetch(GAS_URL + '?action=portal&tab=stats&userId=' + UID + '&viewAs=x');
-    t.ok(/[?&]pv=1$/.test((R5.calls.edge[1] || {}).u || ''), '👤キャスト表示のときは pv=1 を足す（未公開の月の金額を受け取らない）');
+    t.ok(/[?&]pv=1$/.test(JSON.parse(((R5.calls.edge[1] || {}).init || {}).body || '{}').q || ''), '👤キャスト表示のときは pv=1 を足す（未公開の月の金額を受け取らない）');
+  }
+
+  t.section('qa H1：GET の中身（userId・証・検索語）を Worker の URL に乗せない');
+  {
+    const R = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/rget': RELAY_OK, '/portal/relay': RELAY_OK } });
+    R.sb.edgePrepare_(UID); await settle();
+    await R.fetch(GAS_URL + '?action=portal&tab=customers&userId=' + UID + '&pt=p1.x.1.y&idt=eyJ&dk=zz&pa=1&q=' + encodeURIComponent('架空検索語'));
+    const c = R.calls.edge.find((x) => x.u.indexOf('/portal/rget') > 0) || { u: '', init: {} };
+    const q = new URLSearchParams(JSON.parse(c.init.body || '{}').q || '');
+    t.eq([c.u, c.init.method], [EDGE + '/portal/rget', 'POST'], 'URL は /portal/rget だけ（クエリ無し）');
+    t.eq(['userId', 'pt', 'idt', 'dk', 'pa'].map((k) => q.get(k)), [null, null, null, null, null], 'userId・pt・idt・dk・pa は画面で削る');
+    t.eq([q.get('q'), q.get('tab')], ['架空検索語', 'customers'], '検索語は本文で運ぶ');
+    t.ok(R.calls.edge.every((x) => x.u.indexOf('?') < 0 && x.u.indexOf(UID) < 0 && x.u.indexOf(encodeURIComponent('架空検索語')) < 0), 'Worker のどの URL にも userId・検索語が無い');
+  }
+
+  t.section('qa M2：GAS が券を断った（error:auth）＝GAS は実行していない＝POST でも GAS へ直接1回だけ・以後は直接');
+  {
+    const R = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/relay': resp(200, { ok: false, error: 'auth', auth: 'invalid' }, { 'x-edge-relay': 'sent' }), '/portal/rget': resp(200, { ok: false, error: 'auth' }, { 'x-edge-relay': 'sent' }) } });
+    R.sb.edgePrepare_(UID); await settle();
+    const res = await R.fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'castCall' }) });
+    t.eq([(await res.json()).via, R.calls.direct.length, R.sb._edgeWhy], ['gas', 1, 'gas:auth'], 'POST は GAS へ直接1回');
+    await R.fetch(HOME);
+    t.eq([R.calls.direct.length, R.calls.edge.filter((x) => /rget|relay/.test(x.u)).length], [2, 1], '以後は Worker を通さない');
+    // ほかの断り（unregistered など）は GAS が判断した答え＝そのまま返す（直接へ回さない）
+    const R2 = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/relay': resp(200, { ok: false, error: 'unregistered' }, { 'x-edge-relay': 'sent' }) } });
+    R2.sb.edgePrepare_(UID); await settle();
+    const r2 = await R2.fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'castCall' }) });
+    t.eq([(await r2.json()).error, R2.calls.direct.length], ['unregistered', 0], 'auth 以外の断りは直接へ回さない（二重に送らない）');
+  }
+
+  t.section('qa M1：計測は旗がオンのときだけ・当てる道具は --test-page 以外 --edge-url 必須');
+  {
+    const R = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK() } });
+    R.sb.edgePrepare_(UID); await settle();
+    R.sb.edgeHomePainted_(); await settle();
+    t.eq(R.calls.beacon.length, 1, '旗がオンなら送る');
+    const os = require('os');
+    const tmpIn = path.join(os.tmpdir(), 'pe-in-' + process.pid + '.html'), tmpOut = path.join(os.tmpdir(), 'pe-out-' + process.pid + '.html');
+    fs.writeFileSync(tmpIn, HEAD);
+    const { spawnSync } = require('child_process');
+    const cli = (extra) => spawnSync(process.execPath, [process.env.PORTALEDGE_AP || path.join(REPO, 'tests/pending/apply-portal-edge.js'), tmpIn, tmpOut].concat(extra), { encoding: 'utf8' });
+    const r1 = cli([]);
+    t.eq([r1.status, fs.existsSync(tmpOut)], [2, false], '--edge-url を付け忘れたら書かずに止める');
+    const r2 = cli(['--edge-url=https://portal-edge-x.example.workers.dev']);
+    t.eq([r2.status, fs.existsSync(tmpOut) && fs.readFileSync(tmpOut, 'utf8').indexOf('var EDGE_URL = "https://portal-edge-x.example.workers.dev";') >= 0], [0, true], '--edge-url を付ければその URL で書く');
+    try { fs.unlinkSync(tmpIn); fs.unlinkSync(tmpOut); } catch (e) {}
   }
 
   /* ======== P-3 ホームの「今日」（MARK3） ======== */
