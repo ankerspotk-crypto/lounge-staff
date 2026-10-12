@@ -506,5 +506,28 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     t.ok(el2.innerHTML.indexOf('客G様') >= 0 && el2.innerHTML.indexOf('>0:30</div>') < el2.innerHTML.indexOf('>20:00</div>'), 'GAS の答え（arrive・masked 無し）は今までどおり（文字の並び・客名）');
   }
 
+  // P-4（2026-10-13・edge-platform apps/portal/src/reads.js）：画面は変えない。Worker が D1 から組んだ答え（x-edge-relay: edge）を
+  //   今の画面がそのまま受け取ること（GAS へ直接しない・送り直さない・トークンを捨てない）を、当てた画面の実物で確かめる
+  t.section('P-4：Worker が D1 から返した答え（x-edge-relay: edge）＝ワイン・予約一覧・お客様の誕生日は画面へそのまま');
+  {
+    const EDGE_ANS = { ok: true, via: 'd1', champagne: [], wine: [] };
+    const R = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/relay': resp(200, EDGE_ANS, { 'x-edge-relay': 'edge' }) } });
+    R.sb.edgePrepare_(UID); await settle();
+    const w = await R.fetch(GAS_URL + '?action=portal&tab=wine&userId=' + UID);
+    t.eq([(await w.json()).via, R.calls.direct.length], ['d1', 0], 'GET tab=wine：Worker の答えのまま（GAS へ直接しない）');
+    const y = await R.fetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + UID + '&date=2026-10-13');
+    t.eq([(await y.json()).via, R.calls.direct.length], ['d1', 0], 'GET tab=yoyaku：同じ');
+    const yq = JSON.parse((R.calls.edge[R.calls.edge.length - 1].init || {}).body || '{}').q;
+    t.eq(yq, '?action=portal&tab=yoyaku&date=2026-10-13', '予約一覧の日付は Worker に届く（userId は削る）');
+    const b = await R.fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'getCustomerBirthdays', userId: UID, month: 10 }) });
+    t.eq([(await b.json()).via, R.calls.direct.length], ['d1', 0], 'POST getCustomerBirthdays：同じ');
+    t.eq([R.sb._edgeDown, R.calls.edge.filter((c) => c.u.indexOf('/portal/auth') >= 0).length], [false, 1], '旗は落ちない・入口は1回だけ（トークンを使い回す）');
+    // D1 の答えが ok:false（GAS と同じ断りの形）でも、auth でなければ画面へそのまま
+    const R2 = rig({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/relay': resp(200, { ok: false, error: 'onleave', via: 'd1' }, { 'x-edge-relay': 'edge' }) } });
+    R2.sb.edgePrepare_(UID); await settle();
+    const n = await R2.fetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + UID + '&date=2026-10-13');
+    t.eq([(await n.json()).error, R2.calls.direct.length], ['onleave', 0], '断りもそのまま（GAS へ二度聞かない）');
+  }
+
   process.exit(t.summary() ? 0 : 1); // ⭐赤なら終了コード1（緑に見せない）
 })().catch((e) => { console.error(e); process.exit(1); });
