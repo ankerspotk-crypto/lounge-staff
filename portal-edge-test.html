@@ -956,6 +956,63 @@ if (_edgePrevFetch) window.fetch = function (input, init) {
   return p;
 };
 /* ===== ⚡ Cloudflare 経由 ここまで ===== */
+
+/* ⚡EDGE_P3 2026-10-13 */
+/* ===== ⚡ ホームの「今日」を Worker の /portal/home で（P-3）ここから =====
+   ⭐旗がオン・本人の画面（管理者の代理閲覧・プレビューでない）のときだけ。判定はこの edgeHomeUsable_ の1か所。
+   ⭐客名を見せる範囲は Worker（apps/portal/src/view-cast.js）が決める＝画面は返ってきた物を描くだけ（ここで伏せ直さない）。
+   ⭐Worker が使えないとき（null）は今までどおり GAS の homerest（現場を止めない）。 */
+function edgeHomeUsable_() { return edgeActive_() && !adminViewAs && !previewMode; }
+// GET EDGE_URL/portal/home → 答え（ok・edge:'home'）か null。トークンが切れていたら取り直して1回だけ
+function edgeHomeFetch_(again) {
+  if (!edgeHomeUsable_()) return Promise.resolve(null);
+  return edgeReady_().then(function (ok) {
+    if (!ok) return null;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+    return _paRawFetch(EDGE_URL + '/portal/home', { headers: { authorization: 'Bearer ' + _edgeTok }, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (r.status === 401 && !again) { edgeClear_(); return edgeHomeFetch_(1); }
+        if (r.status !== 200) return null; // 409 use_gas（管理者）・403・503 ＝ GAS へ
+        return r.json().then(function (d) {
+          if (!d || d.ok !== true || d.edge !== 'home') return null;
+          d.held = d.held || ''; // 前の答えの held を端末の覚えに残さない
+          return d;
+        });
+      }, function () { if (timer) clearTimeout(timer); return null; });
+  });
+}
+// ホームの答えが届くたびに（loadPortal の handleHome_）。st＝その読み込みの間だけの覚え
+function edgeAfterHome_(st, which, d, merged, gotLite, again, alive, fallback) {
+  if (which === 'edge') st.held = String(d.held || '');
+  // GAS（homelite）が「ゴーストでない」と答えたのに Worker は答え待ち・古い答えで止めた → 1回だけ取り直す（その時には Worker が答えを残している）
+  if (st.held && !st.refetched && gotLite && merged.ghost === false) {
+    st.refetched = true;
+    edgeHomeFetch_().then(function (d2) {
+      if (!alive()) return;
+      if (!d2) { fallback(); return; } // Worker に届かない＝今までどおり GAS
+      if (!d2.held) again(d2);         // まだ止まる（答えを残せなかった）＝出さない（取れないなら出さない）
+    });
+  }
+}
+// 空席の60秒ごとの取り直し。Worker が引き受けたら true（届かなければ今までどおり GAS へ）
+var _edgeVacBypass = false;
+function edgeVacancy_() {
+  if (_edgeVacBypass || !edgeHomeUsable_()) return false;
+  edgeHomeFetch_().then(function (d) {
+    if (d && d.vacancy !== undefined) { renderHomeVacancy(d.vacancy); return; }
+    if (d && d.held) return; // ゴーストの答え待ち＝今の表示のまま
+    _edgeVacBypass = true; try { fetchVacancy(); } finally { _edgeVacBypass = false; }
+  });
+  return true;
+}
+// 予約の時刻の「同伴」＝20:30（軍師と同じ：客名か時刻欄に「同伴」）。⭐旗がオフなら今までどおり（そのまま返す＝20:00 扱い）
+function edgeDohanTime_(time, customer) {
+  if (typeof EDGE_ON !== 'undefined' && EDGE_ON && /同伴/.test(String(time || '') + ' ' + String(customer || ''))) return '20:30';
+  return time;
+}
+/* ===== ⚡ ホームの「今日」 ここまで ===== */
 // ---- LIFF init ----
 // ホームを lite/rest の2本に分けて取る間、rest(席/今日の予約/空席)がまだ届いていないことを示す（2026-07-20）。
 // true の間 renderHome はフォールバックの個別取得を走らせず「読み込み中...」のまま待つ＝二重取得を防ぐ。
@@ -1089,7 +1146,8 @@ if (_devUid) {
      直すのは「古い判定が端末に居座ること」だけ＝この版を上げると全端末が次の1回で読み直す。
    ⛔挙動は1つも変えていない（キーが変わるだけ）。次の表示が一度だけ遅くなる。 */
 /* 🔐 v2→v3（2026-10-09）＝本人確認を入れた版。確かめていない userId で取った応答が端末に3日残らないよう、全員1回だけ捨てさせる。 */
-var HOME_CACHE_VER = 'v4'; // v4＝2026-10-10 表彰・合戦のボタンを外した（apply-remove-vote-kassen.js）＝端末に覚えたホームを捨てさせる
+/* ⚡v4→v5（2026-10-13・P-3）＝ホームの「今日」を Worker で組む版。旗がオンの端末は v5e（客名を伏せた答えと伏せていない答えを端末の覚えで混ぜない） */
+var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v5e' : 'v5'; // v4＝2026-10-10 表彰・合戦のボタンを外した（apply-remove-vote-kassen.js）＝端末に覚えたホームを捨てさせる
 function homeCacheKey_() { return 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + (adminViewAs || ''); }
 function readHomeCache_() {
   try {
@@ -1154,6 +1212,7 @@ function loadPortal(month) {
   var merged = {};
   if (cached) { try { merged = JSON.parse(JSON.stringify(cached)); } catch (e) { merged = {}; } }
   var gotLite = false, gotRest = false;
+  var edgeSt = { held: '', refetched: false }; // ⚡P-3：この読み込みの間だけの覚え
   // キャッシュが無い完全初回だけ、rest到着まで renderHome のフォールバック個別取得を止める
   homeRestPending = !renderedFromCache;
 
@@ -1178,7 +1237,10 @@ function loadPortal(month) {
     for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
     stripGhostData_(merged);   // ゴーストは予約/空席をホームキャッシュにも残さない
     if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }
+    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restFromGas_(''); }); // ⚡P-3
     // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
+    // ⚡P-3：Worker の答えは速い＝端末の覚えも homelite も無い初めての1回は、シフト（次の出勤）が届くまで描かない（「出勤予定がまだありません」を一瞬出さない）
+    if (which === 'edge' && !gotLite && !renderedFromCache) return;
     if (gotLite && gotRest) writeHomeCache_(merged); // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
     applyHomePayload_(merged);
     edgeHomePainted_(); // ⚡計測：届いたデータでホームを描いた（最初の1回だけ送る）
@@ -1193,7 +1255,8 @@ function loadPortal(month) {
       if (!renderedFromCache && !gotRest) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
     });
 
-  gasFetch(base + '&tab=homerest')
+  function restFromGas_(q) {
+  gasFetch(base + '&tab=homerest' + (q || ''))
     .then(function(r) { return r.json(); })
     .then(function(d) { handleHome_(d, 'rest'); })
     .catch(function(e) {
@@ -1202,6 +1265,17 @@ function loadPortal(month) {
       homeRestPending = false;
       if (gotLite || renderedFromCache) renderTab(currentTab);
     });
+  }
+  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。
+  //   Worker が使えない（管理者・落ちた・トークン不可）＝今までどおり GAS の homerest
+  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) {
+    edgeHomeFetch_().then(function (d) {
+      if (mySeq !== _homeLoadSeq) return;
+      if (!d) { restFromGas_(''); return; }
+      handleHome_(d, 'edge');
+      restFromGas_('&only=notices');
+    });
+  } else restFromGas_('');
 }
 
 function initAdminUI(castList) {
@@ -1468,10 +1542,11 @@ function renderTab(tab) {
 // ==== ホーム（キャストが最初に見る画面：次の出勤 ＋ 今日の予約） ====
 function homePad2(n){ return (n<10?'0':'') + n; }
 // 同伴予約は20:30来店として扱う（軍師と統一）
-function homeRsvArr(r){ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
+function homeRsvArr(r){ if (r && r.arrive !== undefined && r.masked !== undefined) return r.arrive || r.time || ''; /* ⚡P-3：Worker の答えは並びの根拠（同伴＝20:30）をそのまま */ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
 function homeMyName(){ return (portalData && (portalData.viewAs || portalData.name)) || ''; }
 function homeIsMine(r){
   var me = homeMyName(); if (!me) return false;
+  if (r && r.mine === true) return true; // ⚡P-3：Worker が「自分の予約」と判定した（「、」区切り・空白ゆれも）
   return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;
 }
 // portalData.shifts {"7/6":"20:00"...} / confirmedShifts から直近の出勤を求める
@@ -1750,7 +1825,7 @@ function renderHome(){
   if (ghost) { /* 予約カードを出していないので何もしない */ }
   else if (portalData && portalData.reservations !== undefined) {
     renderHomeRsv(portalData.reservations || []);
-  } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ
+  } else if (!homeRestPending && !(portalData && portalData.held)) {   // rest待ち中は個別取得せず、届くのを待つ（⚡P-3：Worker がゴーストの答え待ちで止めた間も GAS から取らない）
     var now = new Date();
     var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
     gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
@@ -1773,6 +1848,7 @@ function renderHome(){
   window._callGateTimer = setInterval(function(){ if(!document.getElementById('home-callbtns')){ clearInterval(window._callGateTimer); return; } renderMySeat(); applyWorkingGate(); }, 30000);
 }
 function fetchVacancy(){
+  if (typeof edgeVacancy_ === 'function' && edgeVacancy_()) return; // ⚡P-3：旗がオンなら Worker の /portal/home
   gasFetch(GAS_URL + '?action=portal&tab=vacancy&userId=' + encodeURIComponent(userId))
     .then(function(r){ return r.json(); })
     .then(function(d){ renderHomeVacancy((d && d.vacancy) || null); })
@@ -1805,7 +1881,8 @@ function renderHomeRsv(list){
   var cntEl  = document.getElementById('home-rsv-count');
   if (!listEl) return;
   list = (list || []).filter(function(r){ return r.status !== 'キャンセル'; });
-  list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
+  // ⚡P-3：Worker の答え（arrive・masked 付き）は軍師と同じ並びで届く＝並べ直さない（文字の比較だと 0:30 が 20:00 より前に来る）
+  if (!(list.length && list.every(function(r){ return r.arrive !== undefined && r.masked !== undefined; }))) list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
   var mine = list.filter(homeIsMine).length;
   if (cntEl) cntEl.textContent = list.length + '件' + (mine ? '（自分 ' + mine + '件）' : '');
   if (!list.length){
@@ -1824,7 +1901,7 @@ function renderHomeRsv(list){
       + (mineFlag ? 'border-left:3px solid #e6cf95;margin-left:-8px;padding-left:8px;' : '') + '">'
       + '<div style="font-size:16px;font-weight:700;color:#f2ead9;min-width:44px">' + arr + '</div>'
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:14px;color:#f2ead9">' + esc(r.customer) + '様 <span style="color:#b09f74;font-size:12px">' + r.pax + '名</span>'
+      +   '<div style="font-size:14px;color:#f2ead9">' + (r.masked ? '<span style="color:#94886a">ご予約</span> ' : esc(r.customer) + '様 ') + '<span style="color:#b09f74;font-size:12px">' + r.pax + '名</span>'
       +     (mineFlag ? ' <span style="font-size:10px;font-weight:700;color:#0a1f2e;background:#e6cf95;padding:1px 6px;border-radius:10px">自分</span>' : '') + '</div>'
       +   '<div style="font-size:12px;color:#b09f74;margin-top:2px">' + (r.table ? esc(r.table) + ' ・ ' : '') + tantou + '</div>'
       +   (r.checkTime ? '<div style="font-size:12px;color:#d8b26a;margin-top:2px">🕛 チェック予定 ' + esc(r.checkTime) + '</div>' : '')
@@ -5584,7 +5661,7 @@ function renderAvailability_(all) {
     if (rsvs.length === 0) return { isFree: true, label: '空き', color: '#66cc88' };
     var latestEnd = 0;
     rsvs.forEach(function(r) {
-      var pts = (r.time || '20:00').split(':');
+      var pts = (edgeDohanTime_(r.time, r.customer) || '20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）
       var sh = parseInt(pts[0]) || 20;
       if (sh < 6) sh += 24;
       var em = sh * 60 + (parseInt(pts[1]) || 0) + 120;
@@ -5686,7 +5763,7 @@ function renderYoyakuSched() {
       for (var k = 1; k < tables.length; k++) {
         if (tblIdxMap[tables[k].replace(/\s/g,'')] === i + k) span++; else break;
       }
-      var pts = (r.time||'20:00').split(':');
+      var pts = (edgeDohanTime_(r.time, r.customer)||'20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）
       var sh = parseInt(pts[0]); if (isNaN(sh)) sh = 20;
       var sm = sh * 60 + (parseInt(pts[1]) || 0);
       var lx = ((sm - SH*60) / 60) * HW, wx = ((120) / 60) * HW - 3;
@@ -6374,7 +6451,7 @@ function yoyakuCancelEdit() {
 /* 予約時刻 → 分。'同伴'等の時刻でない値は20:00扱い（スケジュール表・空き席判定と同じ規則）。
  * 深夜は+24hして前夜から連続させる。 */
 function yoyakuTimeMin_(t) {
-  var p = String(t || '').split(':');
+  var p = String(edgeDohanTime_(t, '') || '').split(':'); // ⚡P-3：旗がオンなら「同伴」は 20:30（軍師と同じ）
   var h = parseInt(p[0]); if (isNaN(h)) h = 20;
   var m = parseInt(p[1]) || 0;
   if (h < 6) h += 24;
@@ -6414,7 +6491,7 @@ function yoyakuBookedMap_(rsvs) {
   rsvs.forEach(function(r) {
     if (!r.table || r.table === '未定') return;
     if (yoyakuEditRsv && r.rowIdx === yoyakuEditRsv.rowIdx) return;
-    if (Math.abs(selMin - yoyakuTimeMin_(r.time)) >= 120) return;
+    if (Math.abs(selMin - yoyakuTimeMin_(edgeDohanTime_(r.time, r.customer))) >= 120) return;
     r.table.split('、').forEach(function(tbl) {
       var k = tbl.replace(/\s/g, '');
       if (!map[k]) map[k] = [];

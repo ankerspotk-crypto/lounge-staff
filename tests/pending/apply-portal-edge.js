@@ -20,7 +20,17 @@
      ・計測の印（navigationStart・liffReady・authEnd・reqStart・respEnd・homePainted）を sendBeacon で EDGE_URL/portal/perf（旗がオフでも送る＝比べるため）
      ・PM 判断（2026-10-13）：旗がオンの画面では 予約の「来店前（確定へ戻す）／来店済／退店済」を出さない（新しい軍師だけで扱う）・
        開くときの演出の最低1.9秒をやめ、データが届いたら閉じる
-   ⚠️冪等＝適用済み（MARK がある）なら何もしない。各 hunk は旧テキストがちょうど1箇所のときだけ当てる。1つでも外れたら何も書かずに止まる。
+   ------------------------------------------------------------------------
+   P-3（2026-10-13・MARK3）ホームの「今日」を Worker の /portal/home で描く（旗がオンのときだけ・画面の形は今と同じ）:
+     ・席・出勤中・今日の予約・空席＝EDGE_URL/portal/home（1本・速い）。お知らせだけ GAS の homerest を /portal/relay?only=notices で
+       （客名入りの席・予約・空席は端末へ届かない＝Worker が落とす）。Worker が使えない（管理者＝use_gas・落ちた・トークン不可）＝今までどおり GAS の homerest。
+     ・客名は Worker が伏せる（自分の予約・いま付いている席の来店中だけ）。伏せた行は「ご予約」と出す。並びと時刻は Worker の答え（同伴＝20:30・軍師と同じ）。
+     ・ゴースト在籍は GAS の答え（homelite の ghost）。Worker が「答え待ち」で予約・空席を返さなかったときは、homelite が届いて
+       「ゴーストでない」と分かったら1回だけ取り直す（取り直しても止まる＝出さない／Worker に届かない＝GAS へ）。
+     ・空席の60秒ごとの取り直しも /portal/home。
+     ・予約の画面の「同伴」も 20:30（空き席の判定・スケジュール表・重なりの判定。今は 20:00）＝軍師と同じ。⭐旗がオフなら今までどおり 20:00
+     ・HOME_CACHE_VER を v5 に（旗がオンの端末は v5e＝伏せた答えと伏せていない答えを端末の覚えで混ぜない）
+   ⚠️冪等＝適用済み（MARK がある）なら何もしない（P-1 と P-3 は別の印＝P-1 だけ当たったファイルには P-3 だけ当てる）。各 hunk は旧テキストがちょうど1箇所のときだけ当てる。1つでも外れたら何も書かずに止まる。
    ⚠️書き出す前に <script> の中身を node --check で構文検査。
    テスト:  node tests/portaledge/run.js
 ============================================================================ */
@@ -28,6 +38,7 @@ const fs = require('fs'), path = require('path'), os = require('os');
 const { execFileSync } = require('child_process');
 
 const MARK = '/* ⚡EDGE_P1 2026-10-13 */';
+const MARK3 = '/* ⚡EDGE_P3 2026-10-13 */';
 const TEST_EDGE_URL = 'https://portal-edge-test.ankerspot-k.workers.dev';
 
 function edgeBlock(edgeUrl) {
@@ -173,18 +184,144 @@ function hunks(edgeUrl) {
   ];
 }
 
-function apply(src, opts) {
-  opts = opts || {};
-  const edgeUrl = opts.edgeUrl || TEST_EDGE_URL;
-  if (!/^https:\/\/[a-z0-9.-]+\.workers\.dev$/.test(edgeUrl)) return { error: 'EDGE_URL の形が違います: ' + edgeUrl };
-  if (src.indexOf(MARK) >= 0) return { src, already: true };
-  let out = src;
-  for (const [a, b] of hunks(edgeUrl)) {
+
+function edgeHomeBlock() {
+  return `
+${MARK3}
+/* ===== ⚡ ホームの「今日」を Worker の /portal/home で（P-3）ここから =====
+   ⭐旗がオン・本人の画面（管理者の代理閲覧・プレビューでない）のときだけ。判定はこの edgeHomeUsable_ の1か所。
+   ⭐客名を見せる範囲は Worker（apps/portal/src/view-cast.js）が決める＝画面は返ってきた物を描くだけ（ここで伏せ直さない）。
+   ⭐Worker が使えないとき（null）は今までどおり GAS の homerest（現場を止めない）。 */
+function edgeHomeUsable_() { return edgeActive_() && !adminViewAs && !previewMode; }
+// GET EDGE_URL/portal/home → 答え（ok・edge:'home'）か null。トークンが切れていたら取り直して1回だけ
+function edgeHomeFetch_(again) {
+  if (!edgeHomeUsable_()) return Promise.resolve(null);
+  return edgeReady_().then(function (ok) {
+    if (!ok) return null;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+    return _paRawFetch(EDGE_URL + '/portal/home', { headers: { authorization: 'Bearer ' + _edgeTok }, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (r.status === 401 && !again) { edgeClear_(); return edgeHomeFetch_(1); }
+        if (r.status !== 200) return null; // 409 use_gas（管理者）・403・503 ＝ GAS へ
+        return r.json().then(function (d) {
+          if (!d || d.ok !== true || d.edge !== 'home') return null;
+          d.held = d.held || ''; // 前の答えの held を端末の覚えに残さない
+          return d;
+        });
+      }, function () { if (timer) clearTimeout(timer); return null; });
+  });
+}
+// ホームの答えが届くたびに（loadPortal の handleHome_）。st＝その読み込みの間だけの覚え
+function edgeAfterHome_(st, which, d, merged, gotLite, again, alive, fallback) {
+  if (which === 'edge') st.held = String(d.held || '');
+  // GAS（homelite）が「ゴーストでない」と答えたのに Worker は答え待ち・古い答えで止めた → 1回だけ取り直す（その時には Worker が答えを残している）
+  if (st.held && !st.refetched && gotLite && merged.ghost === false) {
+    st.refetched = true;
+    edgeHomeFetch_().then(function (d2) {
+      if (!alive()) return;
+      if (!d2) { fallback(); return; } // Worker に届かない＝今までどおり GAS
+      if (!d2.held) again(d2);         // まだ止まる（答えを残せなかった）＝出さない（取れないなら出さない）
+    });
+  }
+}
+// 空席の60秒ごとの取り直し。Worker が引き受けたら true（届かなければ今までどおり GAS へ）
+var _edgeVacBypass = false;
+function edgeVacancy_() {
+  if (_edgeVacBypass || !edgeHomeUsable_()) return false;
+  edgeHomeFetch_().then(function (d) {
+    if (d && d.vacancy !== undefined) { renderHomeVacancy(d.vacancy); return; }
+    if (d && d.held) return; // ゴーストの答え待ち＝今の表示のまま
+    _edgeVacBypass = true; try { fetchVacancy(); } finally { _edgeVacBypass = false; }
+  });
+  return true;
+}
+// 予約の時刻の「同伴」＝20:30（軍師と同じ：客名か時刻欄に「同伴」）。⭐旗がオフなら今までどおり（そのまま返す＝20:00 扱い）
+function edgeDohanTime_(time, customer) {
+  if (typeof EDGE_ON !== 'undefined' && EDGE_ON && /同伴/.test(String(time || '') + ' ' + String(customer || ''))) return '20:30';
+  return time;
+}
+/* ===== ⚡ ホームの「今日」 ここまで ===== */
+`;
+}
+
+// P-3 の [旧テキスト（ちょうど1か所）, 新テキスト]
+function hunks3() {
+  return [
+    ['/* ===== ⚡ Cloudflare 経由 ここまで ===== */\n', '/* ===== ⚡ Cloudflare 経由 ここまで ===== */\n' + edgeHomeBlock()],
+    ["var HOME_CACHE_VER = 'v4';",
+      "/* ⚡v4→v5（2026-10-13・P-3）＝ホームの「今日」を Worker で組む版。旗がオンの端末は v5e（客名を伏せた答えと伏せていない答えを端末の覚えで混ぜない） */\n"
+      + "var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v5e' : 'v5';"],
+    ["  var gotLite = false, gotRest = false;\n",
+      "  var gotLite = false, gotRest = false;\n  var edgeSt = { held: '', refetched: false }; // ⚡P-3：この読み込みの間だけの覚え\n"],
+    ["    if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }\n",
+      "    if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }\n"
+      + "    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restFromGas_(''); }); // ⚡P-3\n"],
+    ["    if (gotLite && gotRest) writeHomeCache_(merged);",
+      "    // ⚡P-3：Worker の答えは速い＝端末の覚えも homelite も無い初めての1回は、シフト（次の出勤）が届くまで描かない（「出勤予定がまだありません」を一瞬出さない）\n"
+      + "    if (which === 'edge' && !gotLite && !renderedFromCache) return;\n"
+      + "    if (gotLite && gotRest) writeHomeCache_(merged);"],
+    ["  gasFetch(base + '&tab=homerest')\n    .then(function(r) { return r.json(); })\n    .then(function(d) { handleHome_(d, 'rest'); })\n    .catch(function(e) {\n      if (mySeq !== _homeLoadSeq) return; // ★古い世代がガード(homeRestPending)を解除すると新しい読み込みが誤発動する\n      // 重い方だけ落ちた場合は画面を潰さず、renderHome 側の従来フォールバック（個別取得）に委ねる\n      homeRestPending = false;\n      if (gotLite || renderedFromCache) renderTab(currentTab);\n    });\n}\n",
+      "  function restFromGas_(q) {\n"
+      + "  gasFetch(base + '&tab=homerest' + (q || ''))\n    .then(function(r) { return r.json(); })\n    .then(function(d) { handleHome_(d, 'rest'); })\n    .catch(function(e) {\n      if (mySeq !== _homeLoadSeq) return; // ★古い世代がガード(homeRestPending)を解除すると新しい読み込みが誤発動する\n      // 重い方だけ落ちた場合は画面を潰さず、renderHome 側の従来フォールバック（個別取得）に委ねる\n      homeRestPending = false;\n      if (gotLite || renderedFromCache) renderTab(currentTab);\n    });\n  }\n"
+      + "  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。\n"
+      + "  //   Worker が使えない（管理者・落ちた・トークン不可）＝今までどおり GAS の homerest\n"
+      + "  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) {\n"
+      + "    edgeHomeFetch_().then(function (d) {\n"
+      + "      if (mySeq !== _homeLoadSeq) return;\n"
+      + "      if (!d) { restFromGas_(''); return; }\n"
+      + "      handleHome_(d, 'edge');\n"
+      + "      restFromGas_('&only=notices');\n"
+      + "    });\n"
+      + "  } else restFromGas_('');\n}\n"],
+    ["function homeRsvArr(r){ return",
+      "function homeRsvArr(r){ if (r && r.arrive !== undefined && r.masked !== undefined) return r.arrive || r.time || ''; /* ⚡P-3：Worker の答えは並びの根拠（同伴＝20:30）をそのまま */ return"],
+    ["  return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;\n",
+      "  if (r && r.mine === true) return true; // ⚡P-3：Worker が「自分の予約」と判定した（「、」区切り・空白ゆれも）\n  return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;\n"],
+    ["  list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });\n",
+      "  // ⚡P-3：Worker の答え（arrive・masked 付き）は軍師と同じ並びで届く＝並べ直さない（文字の比較だと 0:30 が 20:00 より前に来る）\n"
+      + "  if (!(list.length && list.every(function(r){ return r.arrive !== undefined && r.masked !== undefined; }))) list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });\n"],
+    ["esc(r.customer) + '様 <span",
+      "(r.masked ? '<span style=\"color:#94886a\">ご予約</span> ' : esc(r.customer) + '様 ') + '<span"],
+    ["function fetchVacancy(){\n",
+      "function fetchVacancy(){\n  if (typeof edgeVacancy_ === 'function' && edgeVacancy_()) return; // ⚡P-3：旗がオンなら Worker の /portal/home\n"],
+    ["  } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ\n    var now = new Date();\n",
+      "  } else if (!homeRestPending && !(portalData && portalData.held)) {   // rest待ち中は個別取得せず、届くのを待つ（⚡P-3：Worker がゴーストの答え待ちで止めた間も GAS から取らない）\n    var now = new Date();\n"],
+    ["  var p = String(t || '').split(':');\n",
+      "  var p = String(edgeDohanTime_(t, '') || '').split(':'); // ⚡P-3：旗がオンなら「同伴」は 20:30（軍師と同じ）\n"],
+    ["yoyakuTimeMin_(r.time)", "yoyakuTimeMin_(edgeDohanTime_(r.time, r.customer))"],
+    ["      var pts = (r.time || '20:00').split(':');\n", "      var pts = (edgeDohanTime_(r.time, r.customer) || '20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）\n"],
+    ["      var pts = (r.time||'20:00').split(':');\n", "      var pts = (edgeDohanTime_(r.time, r.customer)||'20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）\n"],
+  ];
+}
+
+function applyHunks(out, list) {
+  for (const [a, b] of list) {
     const n = out.split(a).length - 1;
     if (n !== 1) return { error: '旧テキストが ' + n + ' か所（1か所のときだけ当てる）: ' + JSON.stringify(a.slice(0, 60)) };
     out = out.replace(a, () => b);
   }
-  if (opts.testPage) {
+  return { src: out };
+}
+
+function apply(src, opts) {
+  opts = opts || {};
+  const edgeUrl = opts.edgeUrl || TEST_EDGE_URL;
+  if (!/^https:\/\/[a-z0-9.-]+\.workers\.dev$/.test(edgeUrl)) return { error: 'EDGE_URL の形が違います: ' + edgeUrl };
+  const has1 = src.indexOf(MARK) >= 0, has3 = src.indexOf(MARK3) >= 0;
+  if (has1 && has3) return { src, already: true };
+  if (!has1 && has3) return { error: 'P-3 だけ当たっていて P-1 が無い（作り直す）' };
+  let out = src;
+  if (!has1) {
+    const r1 = applyHunks(out, hunks(edgeUrl));
+    if (r1.error) return r1;
+    out = r1.src;
+  }
+  const r3 = applyHunks(out, hunks3());
+  if (r3.error) return r3;
+  out = r3.src;
+  if (opts.testPage && !has1) {
     const t = [['<title>IEYASLOUNGE PORTAL</title>', '<title>IEYASLOUNGE PORTAL（edge試験）</title>']];
     for (const [a, b] of t) { if (out.split(a).length - 1 !== 1) return { error: '題名が1か所ではありません' }; out = out.replace(a, b); }
     const re = /var PORTAL_BUILD = '([^']*)';/;
@@ -206,7 +343,7 @@ function syntaxCheck(html) {
   finally { try { fs.unlinkSync(tmp); } catch (e) {} }
 }
 
-module.exports = { apply, syntaxCheck, MARK, TEST_EDGE_URL, edgeBlock };
+module.exports = { apply, syntaxCheck, MARK, MARK3, TEST_EDGE_URL, edgeBlock, edgeHomeBlock };
 
 if (require.main === module) {
   const args = process.argv.slice(2);

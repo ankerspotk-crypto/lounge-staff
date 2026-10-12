@@ -12,7 +12,9 @@
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const { execFileSync } = require('child_process');
 const t = require('../pos/lib/tiny');
-const AP = require('../pending/apply-portal-edge');
+// PORTALEDGE_AP＝壊しテスト（tests/portaledge/break.js）が壊した写しを読ませるときだけ。普段は本物
+const AP = require(process.env.PORTALEDGE_AP || '../pending/apply-portal-edge');
+const BREAK = !!process.env.PORTALEDGE_AP;
 
 const REPO = path.resolve(__dirname, '..', '..');
 const HEAD = execFileSync('git', ['show', 'HEAD:portal.html'], { cwd: REPO, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -39,7 +41,7 @@ t.ok(AP.apply(HEAD.replace('function yoyakuSetStatus(rowIdx, status) {\n', 'func
 t.section('コミットする portal-edge-test.html が古くない');
 const FILE = path.join(REPO, 'portal-edge-test.html');
 const onDisk = fs.existsSync(FILE) ? fs.readFileSync(FILE, 'utf8') : '';
-t.ok(onDisk === OUT, 'portal-edge-test.html ＝ HEAD の portal.html に当てた物', onDisk ? '違う（node tests/pending/apply-portal-edge.js --test-page で作り直す）' : '無い');
+if (!BREAK) t.ok(onDisk === OUT, 'portal-edge-test.html ＝ HEAD の portal.html に当てた物', onDisk ? '違う（node tests/pending/apply-portal-edge.js --test-page で作り直す）' : '無い');
 t.ok(fs.readFileSync(path.join(REPO, 'portal.html'), 'utf8') === HEAD, '本番の portal.html（作業ツリー）は触っていない');
 
 /* ---- 旗の部分を vm で走らせる ---- */
@@ -206,6 +208,179 @@ const HOME = GAS_URL + '?action=portal&userId=' + UID + '&tab=homelite';
     R5.sb.edgePrepare_(UID); await settle();
     await R5.fetch(GAS_URL + '?action=portal&tab=stats&userId=' + UID + '&viewAs=x');
     t.ok(/[?&]pv=1$/.test((R5.calls.edge[1] || {}).u || ''), '👤キャスト表示のときは pv=1 を足す（未公開の月の金額を受け取らない）');
+  }
+
+  /* ======== P-3 ホームの「今日」（MARK3） ======== */
+  t.section('P-3：当てた形（静的）');
+  {
+    t.ok(OUT.indexOf(AP.MARK3) >= 0 && OUT.split(AP.MARK3).length === 2, 'P-3 の印がちょうど1つ');
+    t.ok(OUT.indexOf("var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v5e' : 'v5';") >= 0 && OUT.indexOf("var HOME_CACHE_VER = 'v4';") < 0, 'HOME_CACHE_VER を v5 に上げた（旗がオンは v5e）');
+    t.ok(OUT.indexOf("      restFromGas_('&only=notices');") >= 0 && OUT.indexOf("  } else restFromGas_('');\n}") >= 0, '旗がオンならお知らせだけ GAS・オフなら今までどおり homerest');
+    t.ok(OUT.indexOf("  if (typeof edgeVacancy_ === 'function' && edgeVacancy_()) return;") >= 0, '空席の60秒ごとの取り直しも Worker');
+    t.ok(OUT.indexOf("(r.masked ? '<span style=\"color:#94886a\">ご予約</span> ' : esc(r.customer) + '様 ')") >= 0, '伏せた予約は「ご予約」');
+    t.ok(OUT.indexOf("yoyakuTimeMin_(edgeDohanTime_(r.time, r.customer))") >= 0 && OUT.indexOf("var p = String(edgeDohanTime_(t, '') || '').split(':');") >= 0, '重なりの判定の同伴も 20:30（旗がオン）');
+    const p1only = fs.readFileSync(FILE, 'utf8');
+    t.ok(AP.apply(OUT).already === true, 'P-1・P-3 とも当たっていれば何もしない');
+    const noP3 = AP.apply(HEAD, { testPage: true }).src.replace(AP.MARK3, '/* x */');
+    t.ok(!!AP.apply(noP3).error, 'P-3 の印を消した物に当て直すと（旧テキストが無いので）止まる');
+    t.ok(p1only.length > 0, '（portal-edge-test.html は上で HEAD に当てた物と一致を確かめ済み）');
+  }
+
+  const blk3 = (OUT.match(/\/\* ⚡EDGE_P3 2026-10-13 \*\/[\s\S]*?\/\* ===== ⚡ ホームの「今日」 ここまで ===== \*\//) || [''])[0];
+  t.ok(blk3.length > 500, 'P-3 の部分を切り出せた');
+  const fnText = (name) => {
+    const i = OUT.indexOf('function ' + name + '(');
+    if (i < 0) return '';
+    let depth = 0, j = OUT.indexOf('{', i);
+    for (let k = j; k < OUT.length; k++) { const ch = OUT[k]; if (ch === '{') depth++; else if (ch === '}') { depth--; if (depth === 0) return OUT.slice(i, k + 1); } }
+    return '';
+  };
+  // P-1 の rig に P-3 の部分と画面の関数を足して走らせる（偽物は fetch・document・GAS だけ）
+  function rig3(opts) {
+    opts = opts || {};
+    const R = rig(opts);
+    const sb = R.sb;
+    const gas = [];
+    sb.gasFetch = (u) => { gas.push(u); const tab = (u.match(/tab=([a-z]+)/) || [])[1]; const g = (opts.gas || {})[tab + (u.indexOf('only=notices') >= 0 ? ':notices' : '')] || (opts.gas || {})[tab]; return Promise.resolve(resp(200, g || { ok: true, name: '架空A', ghost: false })); };
+    sb.applied = []; sb.readHomeCache_ = () => opts.cache || null; sb.writeHomeCache_ = () => {}; sb.setContent = () => {}; sb.showErr = () => {}; sb.retryBtn_ = () => '';
+    sb.renderTab = () => {}; sb.initAdminUI = () => { sb.applied.push('admin'); }; sb.currentTab = 'home'; sb.userId = UID; sb._homeLoadSeq = 0; sb.homeRestPending = false;
+    sb.applyHomePayload_ = (d) => { sb.applied.push(JSON.parse(JSON.stringify(d))); };
+    sb.renderHomeVacancy = (v) => { sb.vac = v; };
+    const src = [blk3, fnText('stripGhostData_'), fnText('loadPortal'), fnText('fetchVacancy'), fnText('esc'), fnText('homeRsvArr'), fnText('homeMyName'), fnText('homeIsMine'), fnText('renderHomeRsv')].join('\n');
+    vm.runInContext(src, sb);
+    return Object.assign(R, { gas });
+  }
+  const HOME_OK = (o) => resp(200, Object.assign({ ok: true, edge: 'home', name: '架空A', seats: [], working: true,
+    reservations: [{ rowIdx: 3, arrive: '20:00', time: '20:00', customer: '', masked: true, mine: false, pax: 1, table: '5F', tantouCast: '架空B', status: '確定' }],
+    vacancy: { ok: true, floors: [], at: '21:30' } }, o || {}));
+
+  t.section('P-3：/portal/home を取る（旗・管理者・答えの扱い）');
+  {
+    const R0 = rig3({});
+    t.eq([await R0.sb.edgeHomeFetch_(), R0.calls.edge.length], [null, 0], '旗がオフ＝Worker を呼ばない（null）');
+    const R = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK({ held: undefined }) } });
+    R.sb.edgePrepare_(UID); await settle();
+    const d = await R.sb.edgeHomeFetch_();
+    const h = R.calls.edge.find((c) => c.u === EDGE + '/portal/home') || { init: { headers: {} } };
+    t.eq([d && d.edge, d && d.held, h.init.headers.authorization], ['home', '', 'Bearer v1.tok.sig'], 'Bearer で /portal/home・held は空にそろえる（前の答えを残さない）');
+    for (const [label, route] of [['409 use_gas（管理者）', resp(409, { ok: false, error: 'use_gas' })], ['503', resp(503, { ok: false })], ['届かない', new TypeError('x')], ['edge でない答え', resp(200, { ok: true })]]) {
+      const Rx = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': route } });
+      Rx.sb.edgePrepare_(UID); await settle();
+      t.eq(await Rx.sb.edgeHomeFetch_(), null, label + ' → null（GAS へ）');
+    }
+    let n = 0;
+    const R4 = rig3({ search: '?edge=1', routes: { '/portal/auth': () => AUTH_OK(), '/portal/home': () => (++n === 1 ? resp(401, { ok: false }) : HOME_OK()) } });
+    R4.sb.edgePrepare_(UID); await settle();
+    const d4 = await R4.sb.edgeHomeFetch_();
+    t.eq([!!d4, R4.calls.edge.filter((c) => c.u.indexOf('/portal/auth') > 0).length], [true, 2], '401 は入口を取り直して1回だけ');
+    const R5 = rig3({ search: '?edge=1', viewAs: '架空B', routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() } });
+    R5.sb.edgePrepare_(UID); await settle();
+    t.eq(await R5.sb.edgeHomeFetch_(), null, '管理者の代理閲覧は Worker のホームを使わない');
+  }
+
+  t.section('P-3：ホームの読み込み（loadPortal）＝旗がオンなら「今日」は Worker・お知らせだけ GAS／落ちたら今までどおり');
+  {
+    const R = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() },
+      gas: { homelite: { ok: true, name: '架空A', ghost: false, shifts: {} }, 'homerest:notices': { ok: true, name: '架空A', ghost: false, notices: [{ id: 'n1' }] } } });
+    R.sb.edgePrepare_(UID); await settle();
+    R.sb.loadPortal(); await settle(); await settle();
+    t.eq(R.gas.map((u) => (u.match(/tab=[a-z]+(&only=notices)?/) || [''])[0]), ['tab=homelite', 'tab=homerest&only=notices'], 'GAS へは homelite と お知らせだけの homerest');
+    const last = R.sb.applied[R.sb.applied.length - 1] || {};
+    t.eq([last.reservations && last.reservations.length, (last.notices || []).length, last.edge], [1, 1, 'home'], '予約は Worker の答え・お知らせは GAS の答え（合わせて描く）');
+    // 端末の覚えが無い初めての1回：Worker の答えが先に届いても、homelite が届くまで描かない
+    const Rf = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() } });
+    const liteWait = [];
+    Rf.sb.edgePrepare_(UID); await settle();
+    const gf = Rf.sb.gasFetch;
+    // GAS は2本とも遅い（Worker の答えが先に届く）＝homelite とお知らせの homerest を止めておく
+    Rf.sb.gasFetch = (u) => new Promise((res) => liteWait.push(() => res(u.indexOf('tab=homelite') >= 0 ? resp(200, { ok: true, name: '架空A', ghost: false, shifts: { '10/13': '20:00' } }) : resp(200, { ok: true, name: '架空A', ghost: false, notices: [] }))));
+    Rf.sb.loadPortal(); await settle(); await settle();
+    t.eq(Rf.sb.applied.length, 0, 'homelite の前は描かない（覚えなし）');
+    liteWait.forEach((f) => f()); await settle(); await settle();
+    const lf = Rf.sb.applied[0] || {};
+    t.eq([!!lf.shifts, (lf.reservations || []).length], [true, 1], 'homelite が届いたら Worker の答えと一緒に描く');
+    const Rc = rig3({ search: '?edge=1', cache: { ok: true, name: '架空A', shifts: {} }, routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() } });
+    const liteWait2 = [];
+    Rc.sb.edgePrepare_(UID); await settle();
+    const gc = Rc.sb.gasFetch;
+    Rc.sb.gasFetch = (u) => (u.indexOf('tab=homelite') >= 0 ? new Promise((res) => liteWait2.push(() => res(resp(200, { ok: true })))) : gc(u));
+    Rc.sb.loadPortal(); await settle(); await settle();
+    t.ok(Rc.sb.applied.some((a) => (a.reservations || []).length === 1), '覚えがあれば Worker の答えをすぐ描く（homelite を待たない）');
+    const R2 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(503, { ok: false }) } });
+    R2.sb.edgePrepare_(UID); await settle();
+    R2.sb.loadPortal(); await settle(); await settle();
+    t.eq(R2.gas.map((u) => (u.match(/tab=[a-z]+(&only=notices)?/) || [''])[0]).sort(), ['tab=homelite', 'tab=homerest'], 'Worker が落ちた＝今までどおり homerest 丸ごと');
+    const R3 = rig3({});
+    R3.sb.loadPortal(); await settle(); await settle();
+    t.eq([R3.gas.map((u) => (u.match(/tab=[a-z]+(&only=notices)?/) || [''])[0]).sort(), R3.calls.edge.length], [['tab=homelite', 'tab=homerest'], 0], '旗がオフ＝今までどおり（Worker を呼ばない）');
+  }
+
+  t.section('P-3：ゴーストの答え待ち（held）＝予約を出さず、homelite が「ゴーストでない」と言ったら1回だけ取り直す');
+  {
+    let n = 0;
+    const R = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': () => (++n === 1 ? resp(200, { ok: true, edge: 'home', name: '架空A', seats: [], working: false, held: 'unknown' }) : HOME_OK()) },
+      gas: { homelite: { ok: true, name: '架空A', ghost: false } } });
+    R.sb.edgePrepare_(UID); await settle();
+    R.sb.loadPortal(); await settle(); await settle(); await settle();
+    const homes = R.calls.edge.filter((c) => c.u === EDGE + '/portal/home').length;
+    const last = R.sb.applied[R.sb.applied.length - 1] || {};
+    t.eq([homes, last.held, (last.reservations || []).length], [2, '', 1], '取り直して予約が出る（held は空に戻る）');
+    t.ok(R.sb.applied.some((a) => a.held === 'unknown' && !('reservations' in a)), '取り直す前は予約のキーが無い（空で塗らない）');
+    // homelite がゴースト＝取り直さない
+    const R2 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(200, { ok: true, edge: 'home', name: '架空A', seats: [], working: false, held: 'ghost' }) },
+      gas: { homelite: { ok: true, name: '架空A', ghost: true }, 'homerest:notices': { ok: true, name: '架空A', ghost: true, notices: [] } } });
+    R2.sb.edgePrepare_(UID); await settle();
+    R2.sb.loadPortal(); await settle(); await settle(); await settle();
+    t.eq(R2.calls.edge.filter((c) => c.u === EDGE + '/portal/home').length, 1, 'GAS もゴースト＝取り直さない');
+    // 取り直しても held（答えを残せなかった）＝出さない／取り直しが届かない＝GAS の homerest 丸ごと
+    const R3 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(200, { ok: true, edge: 'home', name: '架空A', seats: [], working: false, held: 'unknown' }) }, gas: { homelite: { ok: true, ghost: false } } });
+    R3.sb.edgePrepare_(UID); await settle();
+    R3.sb.loadPortal(); await settle(); await settle(); await settle();
+    t.eq([R3.calls.edge.filter((c) => c.u === EDGE + '/portal/home').length, R3.gas.filter((u) => /tab=homerest(?!&only)/.test(u)).length], [2, 0], '取り直しても止まる＝出さない（GAS の客名入りの homerest も取らない）');
+    t.eq(R3.sb.applied.length, 3, '止まったままの取り直しの答えは描き直さない（予約の無い答えで塗り直さない）');
+    let m = 0;
+    const R4 = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': () => (++m === 1 ? resp(200, { ok: true, edge: 'home', name: '架空A', seats: [], working: false, held: 'unknown' }) : resp(503, {})) }, gas: { homelite: { ok: true, ghost: false } } });
+    R4.sb.edgePrepare_(UID); await settle();
+    R4.sb.loadPortal(); await settle(); await settle(); await settle();
+    t.eq(R4.gas.filter((u) => /tab=homerest(?!&only)/.test(u)).length, 1, '取り直しが Worker に届かない＝今までどおり GAS の homerest');
+  }
+
+  t.section('P-3：空席の取り直し・同伴 20:30・伏せた予約の描き方');
+  {
+    const R = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': HOME_OK() } });
+    R.sb.edgePrepare_(UID); await settle();
+    R.sb.fetchVacancy(); await settle();
+    t.eq([R.sb.vac && R.sb.vac.at, R.gas.length], ['21:30', 0], '空席は /portal/home（GAS の tab=vacancy は呼ばない）');
+    const Rh = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(200, { ok: true, edge: 'home', held: 'unknown', seats: [] }) } });
+    Rh.sb.edgePrepare_(UID); await settle();
+    Rh.sb.fetchVacancy(); await settle();
+    t.eq([Rh.sb.vac, Rh.gas.length], [undefined, 0], 'held＝今の表示のまま（GAS にも取りに行かない）');
+    const Rd = rig3({ search: '?edge=1', routes: { '/portal/auth': AUTH_OK(), '/portal/home': resp(503, {}) } });
+    Rd.sb.edgePrepare_(UID); await settle();
+    Rd.sb.fetchVacancy(); await settle();
+    t.eq(Rd.gas.filter((u) => u.indexOf('tab=vacancy') >= 0).length, 1, 'Worker が落ちた＝GAS の tab=vacancy');
+    t.eq([R.sb.edgeDohanTime_('同伴', ''), R.sb.edgeDohanTime_('22:00', '客 同伴'), R.sb.edgeDohanTime_('21:00', '客')], ['20:30', '20:30', '21:00'], '旗がオン：同伴は 20:30（客名に同伴でも）');
+    const R0 = rig3({});
+    t.eq(R0.sb.edgeDohanTime_('同伴', ''), '同伴', '旗がオフ：今までどおり（20:00 扱いのまま）');
+    // 伏せた予約の描き方（renderHomeRsv を実物のまま）
+    const el = { innerHTML: '' }, cnt = { textContent: '' };
+    R.sb.document = { getElementById: (id) => (id === 'home-rsv-list' ? el : id === 'home-rsv-count' ? cnt : null) };
+    R.sb.portalData = { name: '架空A' };
+    R.sb.renderHomeRsv([
+      { rowIdx: 1, arrive: '20:30', time: '22:00', customer: '客自分 同伴', masked: false, mine: true, pax: 2, table: '', tantouCast: '架空C', dohanCast: '架空 A', status: '確定' },
+      { rowIdx: 2, arrive: '21:00', time: '21:00', customer: '', masked: true, mine: false, pax: 1, table: '5F', tantouCast: '架空B', status: '確定' },
+      { rowIdx: 3, arrive: '0:30', time: '0:30', customer: '', masked: true, mine: false, pax: 1, table: '', tantouCast: '架空B', status: '確定' },
+    ]);
+    const html = el.innerHTML;
+    t.ok(html.indexOf('ご予約') >= 0 && html.indexOf('undefined') < 0 && html.indexOf('>様') < 0, '伏せた予約は「ご予約」（「様」だけにならない）');
+    t.ok(html.indexOf('客自分 同伴様') >= 0, '自分の予約は客名を出す');
+    const at = (x) => html.indexOf('>' + x + '</div>');
+    t.ok(at('20:30') >= 0 && at('20:30') < at('21:00') && at('21:00') < at('0:30'), 'Worker の並びのまま（0:30 は後ろ）・同伴は 20:30 と出す');
+    t.eq(cnt.textContent, '3件（自分 1件）', '自分の数は Worker の mine（空白ゆれでも）');
+    const el2 = { innerHTML: '' };
+    R.sb.document = { getElementById: (id) => (id === 'home-rsv-list' ? el2 : null) };
+    R.sb.renderHomeRsv([{ rowIdx: 9, time: '0:30', customer: '客G', pax: 1, status: '確定' }, { rowIdx: 8, time: '20:00', customer: '客H', pax: 1, status: '確定' }]);
+    t.ok(el2.innerHTML.indexOf('客G様') >= 0 && el2.innerHTML.indexOf('>0:30</div>') < el2.innerHTML.indexOf('>20:00</div>'), 'GAS の答え（arrive・masked 無し）は今までどおり（文字の並び・客名）');
   }
 
   process.exit(t.summary() ? 0 : 1); // ⭐赤なら終了コード1（緑に見せない）
