@@ -604,7 +604,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-10-11b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-10-13e'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -703,7 +703,8 @@ function dismissOpening(){
 }
 // 最低表示時間（＝オープニングの"間"）を確保してから閉じる
 function requestDismissOpening(){
-  var wait = Math.max(0, 1900 - (Date.now() - _openStart));
+  // ⚡PM 判断（2026-10-13）：旗がオンの画面は最低1.9秒の"間"をやめ、データが届いたら閉じる
+  var wait = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 0 : Math.max(0, 1900 - (Date.now() - _openStart));
   setTimeout(dismissOpening, wait);
 }
 // 名前が取れなくても必ず閉じる保険（コールドスタートで固まらせない）
@@ -842,6 +843,204 @@ function paShowAuthError_(d) {
   el.style.display = 'flex';
 }
 /* ===== 🔐 本人確認 ここまで ===== */
+
+/* ⚡EDGE_P1 2026-10-13 */
+/* ===== ⚡ Cloudflare 経由（edge・ポータルの入口 P-1）ここから =====
+   ⭐旗（?edge=1／?edge=0・localStorage portalEdge:on）がオンのときだけ、GAS 宛ての通信を EDGE_URL の Worker 経由にする。
+     判定の正本はこの window.fetch の包み1か所（内側に 🔐 本人確認の paFetch_ の包みがある＝GAS へ直接はそちらが証を足す）。
+   ⭐Worker につながらないときだけ GAS へ直接。⛔POST は Worker に届いたか分からないとき送り直さない（二重の書き込みを作らない）。
+   ⭐画面が URL・本文に入れる userId は Worker が捨てる（LINE で確かめた本人の券を Worker が付ける）＝ここでは触らない。 */
+var EDGE_URL = "https://portal-edge.ankerspot-k.workers.dev";
+var EDGE_STORE_KEY = 'portalEdge:v1', EDGE_FLAG_KEY = 'portalEdge:on';
+var EDGE_ON = (function () {
+  var q = null; try { q = new URLSearchParams(location.search).get('edge'); } catch (e) {}
+  if (q === '1' || q === '0') { try { localStorage.setItem(EDGE_FLAG_KEY, q); } catch (e) {} return q === '1'; }
+  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }
+})();
+// 試験の画面だけ true（--test-page）：GAS へ直接戻る道を止める（GAS_URL は写しの GAS＝券なしの直接の依頼は受けない）。⭐本番に当てる形は false＝今までどおり本番の GAS へ戻る
+var EDGE_NO_DIRECT = false;
+var _edgeBlockedShown = false;
+// GAS へ直接（paFetch_ の包み）。試験の画面では止めて「試験の入口につながりません」を出す（試験中の操作を本番にも写しにも黙って送らない）
+function edgeDirect_(input, init) {
+  if (!EDGE_NO_DIRECT) return _edgePrevFetch(input, init);
+  if (!_edgeBlockedShown) { _edgeBlockedShown = true; try { showErr('試験の入口につながりません（PM に連絡してください）<br><small>' + String(_edgeWhy || 'edge').replace(/[<>&"]/g, '') + '</small>'); } catch (e) {} }
+  return Promise.reject(new Error('edge-test-blocked'));
+}
+var _edgeTok = '', _edgeExp = 0, _edgeUid = '', _edgeDown = false, _edgeWhy = '', _edgeAuthP = null, _edgeHomeReq = false;
+var _edgePerf = { marks: {}, sent: false, cached: false };
+function edgeActive_() { return EDGE_ON && !_edgeDown && !_devUid; }
+// PM 判断：旗がオンの画面では予約の状態の切り替え（来店前／来店済／退店済）を出さない（新しい軍師だけで扱う）
+function edgeNoRsvStatus_() { return EDGE_ON; }
+function edgeOff_(why) { _edgeDown = true; if (!_edgeWhy) _edgeWhy = String(why || 'down').replace(/[^a-z0-9:_-]/gi, '').slice(0, 40); }
+function edgeT0_() { try { return (performance.timeOrigin || performance.timing.navigationStart) || _openStart; } catch (e) { return _openStart; } }
+function edgeMark_(k) { if (_edgePerf.marks[k] == null) _edgePerf.marks[k] = Math.max(0, Math.round(Date.now() - edgeT0_())); }
+function edgeSendPerf_() {
+  if (!EDGE_ON) return; // qa M1（PM 判断）：計測は旗がオンのときだけ送る
+  if (_edgePerf.sent) return; _edgePerf.sent = true;
+  var m = _edgePerf.marks; m.navigationStart = 0;
+  var o = { v: 1, edge: edgeActive_(), cached: !!_edgePerf.cached, build: PORTAL_BUILD, marks: m };
+  if (_edgeWhy) o.why = _edgeWhy.toLowerCase();
+  var body = JSON.stringify(o);
+  try { if (navigator.sendBeacon && navigator.sendBeacon(EDGE_URL + '/portal/perf', new Blob([body], { type: 'text/plain' }))) return; } catch (e) {}
+  try { _paRawFetch(EDGE_URL + '/portal/perf', { method: 'POST', body: body, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(function () {}); } catch (e) {}
+}
+function edgeHomePainted_() { edgeMark_('homePainted'); setTimeout(edgeSendPerf_, 0); }
+try { window.addEventListener('pagehide', edgeSendPerf_); } catch (e) {}
+function edgeLoad_() { try { var o = JSON.parse(localStorage.getItem(EDGE_STORE_KEY) || 'null'); return (o && o.t) ? o : null; } catch (e) { return null; } }
+function edgeSave_(t, exp) { _edgeTok = String(t || ''); _edgeExp = Number(exp) || 0; try { localStorage.setItem(EDGE_STORE_KEY, JSON.stringify({ t: _edgeTok, exp: _edgeExp, uid: _edgeUid })); } catch (e) {} }
+function edgeClear_() { _edgeTok = ''; _edgeExp = 0; try { localStorage.removeItem(EDGE_STORE_KEY); } catch (e) {} }
+// LIFF でログインした直後に1回（paPrepare_ の後）。トークンは持ち主が同じで期限まで1分以上あるときだけ使う。無ければ入口を先に叩いておく
+function edgePrepare_(uid) {
+  _edgeUid = String(uid || '');
+  if (!edgeActive_()) return;
+  var o = edgeLoad_();
+  if (o && o.uid === _edgeUid && Number(o.exp) * 1000 > Date.now() + 60000) { _edgeTok = String(o.t); _edgeExp = Number(o.exp); }
+  else edgeClear_();
+  if (!_edgeTok) edgeAuth_();
+}
+// 入口：LIFF の id_token → ポータル自分のトークン。⭐断られた／届かない＝この開いている間は GAS へ直接（今までどおり）
+function edgeAuth_() {
+  if (_edgeAuthP) return _edgeAuthP;
+  if (!_paIdt) { edgeOff_('no_idt'); return Promise.resolve(false); }
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+  _edgeAuthP = _paRawFetch(EDGE_URL + '/portal/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idt: _paIdt }), signal: ctrl ? ctrl.signal : undefined, cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (timer) clearTimeout(timer);
+      edgeMark_('authEnd');
+      if (d && d.ok && d.token) { edgeSave_(d.token, d.exp); return true; }
+      edgeOff_('auth:' + ((d && (d.auth || d.error)) || 'ng'));
+      return false;
+    }, function () { if (timer) clearTimeout(timer); edgeMark_('authEnd'); edgeOff_('auth:net'); return false; })
+    .then(function (ok) { _edgeAuthP = null; return ok; });
+  return _edgeAuthP;
+}
+function edgeReady_() {
+  if (!edgeActive_()) return Promise.resolve(false);
+  if (_edgeTok && _edgeExp * 1000 > Date.now() + 30000) return Promise.resolve(true);
+  edgeClear_();
+  return edgeAuth_();
+}
+// qa H1（2026-10-13）：GET の中身は Worker の URL に乗せない（Workers Logs に残る）＝POST /portal/rget の本文 { q } で運ぶ。
+//   本人の名乗り・証（userId・pt・idt・dk ほか）は画面の側でも必ず削る（Worker も捨てる＝二重）
+var EDGE_STRIP_KEYS = ['userId', 'pt', 'idt', 'dk', 'pa', 'k', 'key'];
+function edgeRelayQuery_(u) {
+  var i = u.indexOf('?');
+  var p = new URLSearchParams(i >= 0 ? u.slice(i + 1) : '');
+  EDGE_STRIP_KEYS.forEach(function (k) { p.delete(k); });
+  // 👤キャスト表示（プレビュー）中は、未公開の月の金額を受け取らない（paDecorate_ と同じ印 pv=1）
+  if (previewMode && adminViewAs && u.indexOf('action=portal') >= 0) p.set('pv', '1');
+  return '?' + p.toString();
+}
+function edgeFetch_(u, init, attempt) {
+  var method = String((init && init.method) || 'GET').toUpperCase();
+  var isGet = method === 'GET';
+  var direct = function () { return edgeDirect_(u, init); };
+  return edgeReady_().then(function (ok) {
+    if (!ok) return direct();
+    // GET も POST で送る（中身は本文）。GET＝/portal/rget（Worker が GAS へ GET で取り次ぐ）・POST＝/portal/relay
+    var opts = { method: 'POST', headers: { authorization: 'Bearer ' + _edgeTok, 'content-type': 'application/json' }, cache: 'no-store' };
+    opts.body = isGet ? JSON.stringify({ q: edgeRelayQuery_(u) }) : (init && init.body);
+    if (init && init.signal) opts.signal = init.signal;
+    return _paRawFetch(EDGE_URL + (isGet ? '/portal/rget' : '/portal/relay'), opts).then(function (r) {
+      var notSent = !!(r && r.headers && r.headers.get && r.headers.get('x-edge-relay') === 'not-sent');
+      // トークンが切れた・鍵が替わった＝Worker は GAS へ送っていない → 取り直して1回だけ（POST でも二重にならない）
+      if (r.status === 401 && notSent && !attempt) { edgeClear_(); return edgeFetch_(u, init, 1); }
+      if (notSent && r.status === 429) return direct();
+      if (notSent && (r.status === 401 || r.status >= 500)) { edgeOff_('relay:' + r.status); return direct(); }
+      // GET は何度読んでも同じ＝Worker が GAS に届かなかった・時間切れなら GAS へ直接
+      if (isGet && (r.status === 502 || r.status === 504)) return direct();
+      // qa M2：GAS が Worker の券を断った（error:'auth'）＝GAS は実行していない＝POST でも GAS へ直接1回だけ（paFetch_ と同じ理屈）。以後は直接
+      if (r.status === 200 && r.headers && r.headers.get && r.headers.get('x-edge-relay') === 'sent' && r.clone) {
+        return r.clone().json().then(function (d) {
+          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }
+          return r;
+        }, function () { return r; });
+      }
+      return r;
+    }, function (e) {
+      if (e && e.name === 'AbortError') throw e; // 画面の時間切れ＝gasFetch の取り直しに任せる
+      if (isGet) return direct();                // Worker に届かない GET＝その1本を GAS へ直接
+      throw e;                                   // ⛔POST は送り直さない（届いたか分からない）
+    });
+  });
+}
+// メンテの確かめが Worker に届かないとき（試験の画面）＝「止めていない」の答え（現場を止めない・画面の checkPortalMaintenance_ は on:false で通常起動）
+function resp503_() { return Promise.resolve({ ok: true, status: 200, headers: { get: function () { return null; } }, json: function () { return Promise.resolve({ on: false, unknown: true }); }, clone: function () { return this; } }); }
+var _edgePrevFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null; // 🔐 paFetch_ の包み（GAS へ直接＝今までどおり）
+if (_edgePrevFetch) window.fetch = function (input, init) {
+  if (typeof input !== 'string' || input.indexOf(GAS_URL) !== 0) return _edgePrevFetch(input, init);
+  var home = !_edgeHomeReq && input.indexOf('action=portal') >= 0 && input.indexOf('tab=homelite') >= 0;
+  if (home) { _edgeHomeReq = true; edgeMark_('reqStart'); }
+  var p;
+  if (edgeActive_() && input.indexOf('action=portalMaintenance') >= 0) p = _paRawFetch(EDGE_URL + '/portal/maint', { cache: 'no-store' }).catch(function () { return EDGE_NO_DIRECT ? resp503_() : edgeDirect_(input, init); });
+  else if (edgeActive_() && paIsGas_(input)) p = edgeFetch_(input, init, 0);
+  else if (EDGE_NO_DIRECT && input.indexOf('action=portalMaintenance') >= 0) p = resp503_(); // 試験の画面：メンテの確かめは止めていない扱い（全面表示で止めない）
+  else p = edgeDirect_(input, init);
+  if (home) p = p.then(function (r) { edgeMark_('respEnd'); return r; });
+  return p;
+};
+/* ===== ⚡ Cloudflare 経由 ここまで ===== */
+
+/* ⚡EDGE_P3 2026-10-13 */
+/* ===== ⚡ ホームの「今日」を Worker の /portal/home で（P-3）ここから =====
+   ⭐旗がオン・本人の画面（管理者の代理閲覧・プレビューでない）のときだけ。判定はこの edgeHomeUsable_ の1か所。
+   ⭐客名を見せる範囲は Worker（apps/portal/src/view-cast.js）が決める＝画面は返ってきた物を描くだけ（ここで伏せ直さない）。
+   ⭐Worker が使えないとき（null）は今までどおり GAS の homerest（現場を止めない）。 */
+function edgeHomeUsable_() { return edgeActive_() && !adminViewAs && !previewMode; }
+// GET EDGE_URL/portal/home → 答え（ok・edge:'home'）か null。トークンが切れていたら取り直して1回だけ
+function edgeHomeFetch_(again) {
+  if (!edgeHomeUsable_()) return Promise.resolve(null);
+  return edgeReady_().then(function (ok) {
+    if (!ok) return null;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+    return _paRawFetch(EDGE_URL + '/portal/home', { headers: { authorization: 'Bearer ' + _edgeTok }, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (r.status === 401 && !again) { edgeClear_(); return edgeHomeFetch_(1); }
+        if (r.status !== 200) return null; // 409 use_gas（管理者）・403・503 ＝ GAS へ
+        return r.json().then(function (d) {
+          if (!d || d.ok !== true || d.edge !== 'home') return null;
+          d.held = d.held || ''; // 前の答えの held を端末の覚えに残さない
+          return d;
+        });
+      }, function () { if (timer) clearTimeout(timer); return null; });
+  });
+}
+// ホームの答えが届くたびに（loadPortal の handleHome_）。st＝その読み込みの間だけの覚え
+function edgeAfterHome_(st, which, d, merged, gotLite, again, alive, fallback) {
+  if (which === 'edge') st.held = String(d.held || '');
+  // qa L-3：答え待ち・ゴーストで止めた答え＝端末の覚えにある前の予約・空席を描かない（覚え直しもしない＝handleHome_ の writeHomeCache_ の手前で held を見る）
+  if (which === 'edge' && d.held) { delete merged.reservations; delete merged.vacancy; }
+  // GAS（homelite）が「ゴーストでない」と答えたのに Worker は答え待ち・古い答えで止めた → 1回だけ取り直す（その時には Worker が答えを残している）
+  if (st.held && !st.refetched && gotLite && merged.ghost === false) {
+    st.refetched = true;
+    edgeHomeFetch_().then(function (d2) {
+      if (!alive()) return;
+      if (!d2) { fallback(); return; } // Worker に届かない＝今までどおり GAS
+      if (!d2.held) again(d2);         // まだ止まる（答えを残せなかった）＝出さない（取れないなら出さない）
+    });
+  }
+}
+// 空席の60秒ごとの取り直し。Worker が引き受けたら true（届かなければ今までどおり GAS へ）
+var _edgeVacBypass = false;
+function edgeVacancy_() {
+  if (_edgeVacBypass || !edgeHomeUsable_()) return false;
+  edgeHomeFetch_().then(function (d) {
+    if (d && d.vacancy !== undefined) { renderHomeVacancy(d.vacancy); return; }
+    if (d && d.held) return; // ゴーストの答え待ち＝今の表示のまま
+    _edgeVacBypass = true; try { fetchVacancy(); } finally { _edgeVacBypass = false; }
+  });
+  return true;
+}
+// 予約の時刻の「同伴」＝20:30（軍師と同じ：客名か時刻欄に「同伴」）。⭐旗がオフなら今までどおり（そのまま返す＝20:00 扱い）
+function edgeDohanTime_(time, customer) {
+  if (typeof EDGE_ON !== 'undefined' && EDGE_ON && /同伴/.test(String(time || '') + ' ' + String(customer || ''))) return '20:30';
+  return time;
+}
+/* ===== ⚡ ホームの「今日」 ここまで ===== */
 // ---- LIFF init ----
 // ホームを lite/rest の2本に分けて取る間、rest(席/今日の予約/空席)がまだ届いていないことを示す（2026-07-20）。
 // true の間 renderHome はフォールバックの個別取得を走らせず「読み込み中...」のまま待つ＝二重取得を防ぐ。
@@ -939,6 +1138,7 @@ if (_devUid) {
   try {
     liff.init({ liffId: LIFF_ID }).then(function() {
       clearTimeout(initTimer);
+      edgeMark_('liffReady'); // ⚡計測の印
       if (!liff.isLoggedIn()) {
         setContent('<div class="loading">LINEログイン中...</div>');
         liff.login();
@@ -950,6 +1150,7 @@ if (_devUid) {
       userId   = p.userId;
       userName = p.displayName;
       paPrepare_(p.userId); // 🔐 券の読み出し／LIFF の ID トークン（以後の GAS 宛ては paFetch_ が証を足す）
+      edgePrepare_(p.userId); // ⚡旗がオンなら Worker の入口を先に叩く（id_token は paPrepare_ が読んだ物）
       if (_kt) { doKioskAuth(userId, _kt); return; }
       document.getElementById('user-name').textContent = p.displayName;
       openingSetName(p.displayName);
@@ -973,7 +1174,8 @@ if (_devUid) {
      直すのは「古い判定が端末に居座ること」だけ＝この版を上げると全端末が次の1回で読み直す。
    ⛔挙動は1つも変えていない（キーが変わるだけ）。次の表示が一度だけ遅くなる。 */
 /* 🔐 v2→v3（2026-10-09）＝本人確認を入れた版。確かめていない userId で取った応答が端末に3日残らないよう、全員1回だけ捨てさせる。 */
-var HOME_CACHE_VER = 'v4'; // v4＝2026-10-10 表彰・合戦のボタンを外した（apply-remove-vote-kassen.js）＝端末に覚えたホームを捨てさせる
+/* ⚡v4→v5（2026-10-13・P-3）＝ホームの「今日」を Worker で組む版。旗がオンの端末は v5e（客名を伏せた答えと伏せていない答えを端末の覚えで混ぜない） */
+var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v5e' : 'v5'; // v4＝2026-10-10 表彰・合戦のボタンを外した（apply-remove-vote-kassen.js）＝端末に覚えたホームを捨てさせる
 function homeCacheKey_() { return 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + (adminViewAs || ''); }
 function readHomeCache_() {
   try {
@@ -1021,6 +1223,7 @@ function loadPortal(month) {
   var cached = readHomeCache_();
   var renderedFromCache = false;
   if (cached) { try { applyHomePayload_(cached); renderedFromCache = true; } catch (e) { renderedFromCache = false; } }
+  if (renderedFromCache) _edgePerf.cached = true; // ⚡計測：端末に覚えたホームを先に描いた
   if (!renderedFromCache) setContent('<div class="loading">データ取得中...</div>');
 
   // ホームを2本に分けて「並列で」取る（2026-07-20）。
@@ -1037,6 +1240,7 @@ function loadPortal(month) {
   var merged = {};
   if (cached) { try { merged = JSON.parse(JSON.stringify(cached)); } catch (e) { merged = {}; } }
   var gotLite = false, gotRest = false;
+  var edgeSt = { held: '', refetched: false, wait: false, rest: '' }; // ⚡P-3：この読み込みの間だけの覚え（wait＝homelite の後に Worker を呼ぶ・rest＝GAS の homerest を送った）
   // キャッシュが無い完全初回だけ、rest到着まで renderHome のフォールバック個別取得を止める
   homeRestPending = !renderedFromCache;
 
@@ -1061,21 +1265,25 @@ function loadPortal(month) {
     for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
     stripGhostData_(merged);   // ゴーストは予約/空席をホームキャッシュにも残さない
     if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }
+    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restOnce_(''); }); // ⚡P-3
     // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
-    if (gotLite && gotRest) writeHomeCache_(merged); // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
+    if (gotLite && gotRest && !merged.held) writeHomeCache_(merged); // ⚡P-3（qa L-3）：答え待ちの答えは覚えない // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
     applyHomePayload_(merged);
+    edgeHomePainted_(); // ⚡計測：届いたデータでホームを描いた（最初の1回だけ送る）
   }
 
   gasFetch(base + '&tab=homelite')
     .then(function(r) { return r.json(); })
-    .then(function(d) { handleHome_(d, 'lite'); })
+    .then(function(d) { handleHome_(d, 'lite'); if (edgeSt.wait) edgeKick_(!!(d && d.ok)); }) // ⚡P-3：homelite の後に Worker
     .catch(function(e) {
       if (mySeq !== _homeLoadSeq) return; // 古い世代の失敗で新しい画面を潰さない
+      if (edgeSt.wait) edgeKick_(false); // ⚡P-3：homelite が落ちた＝今までどおり GAS の homerest
       // キャッシュから描画済み、または重い方が既に届いているなら画面を潰さない
       if (!renderedFromCache && !gotRest) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
     });
 
-  gasFetch(base + '&tab=homerest')
+  function restFromGas_(q) {
+  gasFetch(base + '&tab=homerest' + (q || ''))
     .then(function(r) { return r.json(); })
     .then(function(d) { handleHome_(d, 'rest'); })
     .catch(function(e) {
@@ -1084,6 +1292,24 @@ function loadPortal(month) {
       homeRestPending = false;
       if (gotLite || renderedFromCache) renderTab(currentTab);
     });
+  }
+  // ⚡P-3（qa L-4）：GAS の homerest は1回の読み込みで1本だけ（お知らせだけ／丸ごと のどちらか）
+  function restOnce_(q) { if (edgeSt.rest) return; edgeSt.rest = q || 'full'; restFromGas_(q); }
+  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。⭐呼ぶのは homelite（ゴーストの答え）が届いた後（qa M-C）。
+  //   お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。Worker が使えない（管理者・落ちた）・homelite が落ちた＝今までどおり GAS の homerest
+  function edgeKick_(liteOk) {
+    edgeSt.wait = false;
+    if (mySeq !== _homeLoadSeq) return;
+    if (!liteOk) { restOnce_(''); return; }
+    edgeHomeFetch_().then(function (d) {
+      if (mySeq !== _homeLoadSeq) return;
+      if (!d) { restOnce_(''); return; }
+      handleHome_(d, 'edge');
+      restOnce_('&only=notices');
+    });
+  }
+  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) edgeSt.wait = true;
+  else restFromGas_('');
 }
 
 function initAdminUI(castList) {
@@ -1350,10 +1576,11 @@ function renderTab(tab) {
 // ==== ホーム（キャストが最初に見る画面：次の出勤 ＋ 今日の予約） ====
 function homePad2(n){ return (n<10?'0':'') + n; }
 // 同伴予約は20:30来店として扱う（軍師と統一）
-function homeRsvArr(r){ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
+function homeRsvArr(r){ if (r && r.arrive !== undefined && r.masked !== undefined) return r.arrive || r.time || ''; /* ⚡P-3：Worker の答えは並びの根拠（同伴＝20:30）をそのまま */ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
 function homeMyName(){ return (portalData && (portalData.viewAs || portalData.name)) || ''; }
 function homeIsMine(r){
   var me = homeMyName(); if (!me) return false;
+  if (r && r.mine === true) return true; // ⚡P-3：Worker が「自分の予約」と判定した（「、」区切り・空白ゆれも）
   return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;
 }
 // portalData.shifts {"7/6":"20:00"...} / confirmedShifts から直近の出勤を求める
@@ -1632,7 +1859,7 @@ function renderHome(){
   if (ghost) { /* 予約カードを出していないので何もしない */ }
   else if (portalData && portalData.reservations !== undefined) {
     renderHomeRsv(portalData.reservations || []);
-  } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ
+  } else if (!homeRestPending && !(portalData && portalData.held)) {   // rest待ち中は個別取得せず、届くのを待つ（⚡P-3：Worker がゴーストの答え待ちで止めた間も GAS から取らない）
     var now = new Date();
     var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
     gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
@@ -1655,6 +1882,7 @@ function renderHome(){
   window._callGateTimer = setInterval(function(){ if(!document.getElementById('home-callbtns')){ clearInterval(window._callGateTimer); return; } renderMySeat(); applyWorkingGate(); }, 30000);
 }
 function fetchVacancy(){
+  if (typeof edgeVacancy_ === 'function' && edgeVacancy_()) return; // ⚡P-3：旗がオンなら Worker の /portal/home
   gasFetch(GAS_URL + '?action=portal&tab=vacancy&userId=' + encodeURIComponent(userId))
     .then(function(r){ return r.json(); })
     .then(function(d){ renderHomeVacancy((d && d.vacancy) || null); })
@@ -1687,7 +1915,8 @@ function renderHomeRsv(list){
   var cntEl  = document.getElementById('home-rsv-count');
   if (!listEl) return;
   list = (list || []).filter(function(r){ return r.status !== 'キャンセル'; });
-  list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
+  // ⚡P-3：Worker の答え（arrive・masked 付き）は軍師と同じ並びで届く＝並べ直さない（文字の比較だと 0:30 が 20:00 より前に来る）
+  if (!(list.length && list.every(function(r){ return r.arrive !== undefined && r.masked !== undefined; }))) list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
   var mine = list.filter(homeIsMine).length;
   if (cntEl) cntEl.textContent = list.length + '件' + (mine ? '（自分 ' + mine + '件）' : '');
   if (!list.length){
@@ -1706,7 +1935,7 @@ function renderHomeRsv(list){
       + (mineFlag ? 'border-left:3px solid #e6cf95;margin-left:-8px;padding-left:8px;' : '') + '">'
       + '<div style="font-size:16px;font-weight:700;color:#f2ead9;min-width:44px">' + arr + '</div>'
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:14px;color:#f2ead9">' + esc(r.customer) + '様 <span style="color:#b09f74;font-size:12px">' + r.pax + '名</span>'
+      +   '<div style="font-size:14px;color:#f2ead9">' + (r.masked ? '<span style="color:#94886a">ご予約</span> ' : esc(r.customer) + '様 ') + '<span style="color:#b09f74;font-size:12px">' + r.pax + '名</span>'
       +     (mineFlag ? ' <span style="font-size:10px;font-weight:700;color:#0a1f2e;background:#e6cf95;padding:1px 6px;border-radius:10px">自分</span>' : '') + '</div>'
       +   '<div style="font-size:12px;color:#b09f74;margin-top:2px">' + (r.table ? esc(r.table) + ' ・ ' : '') + tantou + '</div>'
       +   (r.checkTime ? '<div style="font-size:12px;color:#d8b26a;margin-top:2px">🕛 チェック予定 ' + esc(r.checkTime) + '</div>' : '')
@@ -5323,7 +5552,7 @@ function renderYoyakuList() {
     var canEdit = canEditYoyaku();
     var statusBtns = r.status === '仮予約'
       ? '<span style="margin-left:auto;font-size:10px;font-weight:700;color:#ffcc66;background:#2a1800;border:1px solid #553300;border-radius:6px;padding:3px 7px;flex-shrink:0">仮予約</span>'
-      : canEdit
+      : (canEdit && !edgeNoRsvStatus_()) // ⚡PM 判断：旗がオンの画面では来店前／来店済／退店済を出さない（新しい軍師だけで扱う）
       ? '<span style="margin-left:auto;display:flex;gap:3px;flex-shrink:0" onclick="event.stopPropagation()">'
         + [
           {k:'来店前', s:'確定'},
@@ -5466,7 +5695,7 @@ function renderAvailability_(all) {
     if (rsvs.length === 0) return { isFree: true, label: '空き', color: '#66cc88' };
     var latestEnd = 0;
     rsvs.forEach(function(r) {
-      var pts = (r.time || '20:00').split(':');
+      var pts = (edgeDohanTime_(r.time, r.customer) || '20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）
       var sh = parseInt(pts[0]) || 20;
       if (sh < 6) sh += 24;
       var em = sh * 60 + (parseInt(pts[1]) || 0) + 120;
@@ -5568,7 +5797,7 @@ function renderYoyakuSched() {
       for (var k = 1; k < tables.length; k++) {
         if (tblIdxMap[tables[k].replace(/\s/g,'')] === i + k) span++; else break;
       }
-      var pts = (r.time||'20:00').split(':');
+      var pts = (edgeDohanTime_(r.time, r.customer)||'20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）
       var sh = parseInt(pts[0]); if (isNaN(sh)) sh = 20;
       var sm = sh * 60 + (parseInt(pts[1]) || 0);
       var lx = ((sm - SH*60) / 60) * HW, wx = ((120) / 60) * HW - 3;
@@ -6209,6 +6438,7 @@ function yoyakuCheckOut(rowIdx) {
 }
 
 function yoyakuSetStatus(rowIdx, status) {
+  if (edgeNoRsvStatus_()) { alert('来店・退店・来店前に戻すは軍師で記録してください。'); return; } // ⚡PM 判断（Worker の取り次ぎでも断る）
   if (status === '来店済') { yoyakuCheckIn(rowIdx); return; }
   if (status === '退店済') { yoyakuCheckOut(rowIdx); return; }
   var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
@@ -6255,7 +6485,7 @@ function yoyakuCancelEdit() {
 /* 予約時刻 → 分。'同伴'等の時刻でない値は20:00扱い（スケジュール表・空き席判定と同じ規則）。
  * 深夜は+24hして前夜から連続させる。 */
 function yoyakuTimeMin_(t) {
-  var p = String(t || '').split(':');
+  var p = String(edgeDohanTime_(t, '') || '').split(':'); // ⚡P-3：旗がオンなら「同伴」は 20:30（軍師と同じ）
   var h = parseInt(p[0]); if (isNaN(h)) h = 20;
   var m = parseInt(p[1]) || 0;
   if (h < 6) h += 24;
@@ -6295,7 +6525,7 @@ function yoyakuBookedMap_(rsvs) {
   rsvs.forEach(function(r) {
     if (!r.table || r.table === '未定') return;
     if (yoyakuEditRsv && r.rowIdx === yoyakuEditRsv.rowIdx) return;
-    if (Math.abs(selMin - yoyakuTimeMin_(r.time)) >= 120) return;
+    if (Math.abs(selMin - yoyakuTimeMin_(edgeDohanTime_(r.time, r.customer))) >= 120) return;
     r.table.split('、').forEach(function(tbl) {
       var k = tbl.replace(/\s/g, '');
       if (!map[k]) map[k] = [];
