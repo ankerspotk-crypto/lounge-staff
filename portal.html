@@ -604,7 +604,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-10-13e'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-10-13f'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -855,7 +855,8 @@ var EDGE_STORE_KEY = 'portalEdge:v1', EDGE_FLAG_KEY = 'portalEdge:on';
 var EDGE_ON = (function () {
   var q = null; try { q = new URLSearchParams(location.search).get('edge'); } catch (e) {}
   if (q === '1' || q === '0') { try { localStorage.setItem(EDGE_FLAG_KEY, q); } catch (e) {} return q === '1'; }
-  try { return localStorage.getItem(EDGE_FLAG_KEY) === '1'; } catch (e) { return false; }
+  // 2026-10-13 22:3x ボス号令：本人確認を enforce にしたので全員オン（既定）。?edge=0 の端末だけ GAS へ直接
+  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; }
 })();
 // 試験の画面だけ true（--test-page）：GAS へ直接戻る道を止める（GAS_URL は写しの GAS＝券なしの直接の依頼は受けない）。⭐本番に当てる形は false＝今までどおり本番の GAS へ戻る
 var EDGE_NO_DIRECT = false;
