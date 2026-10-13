@@ -69,11 +69,11 @@ function paModeFor_(mode, claimed) {
 }
 
 /* v2：画面が送る「idToken が取れない理由」（pn）。記録の「詳細」に1語だけ残す。
-   ⛔画面の言うことなので信じない＝決まった形（英小文字・数字・ハイフン 24 字まで）以外は捨てる（シートに任意の文字を書かせない）。
+   ⛔画面の言うことなので信じない＝決まった形（英小文字・数字・ハイフン 24 字まで・先頭は英数字）以外は捨てる（シートに任意の文字を書かせない）。
    形の例：c-noscope（LINE の中・Scope に openid が無い）／b-nologin（外のブラウザ・未ログイン）／c-idtexp（idToken の期限切れ）／dev */
 function paHint_(pn) {
   var s = String(pn || '');
-  return /^[a-z0-9-]{1,24}$/.test(s) ? s : '';
+  return /^[a-z0-9][a-z0-9-]{0,23}$/.test(s) ? s : ''; // 先頭はハイフン不可（"-1+1" のような式の形を作らせない）
 }
 
 /* LIFF のチャネルID。⭐推測で書かない＝KIOSK_LIFF_ID_（portal.html の LIFF_ID と同じ値）の先頭が
@@ -297,6 +297,13 @@ function paAttachTicketObj_(result, g) {
   return result;
 }
 
+/* v2（PM 判断 2026-10-13）：記録に書く文字列は、先頭が = + - @ なら ' を付ける（シートが式として読まない）。
+   ⛔名乗った userId・viewAs・targetName は画面の言い値＝「=NOW()」「=IMPORTXML(…)」を名乗られても式にしない。
+   ⭐記録に書く列（種別・名前・userId(末尾)・入口・詳細）は全部ここを通す＝正本はこの1本。 */
+function paCell_(v) {
+  var s = String(v == null ? '' : v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
 function paMask_(uid) { var s = String(uid || ''); return s.length <= 6 ? s : ('…' + s.slice(-6)); }
 
 /* 監査：1日×種別×人で1行だけ（ScriptCache で重複を止める）＝業務の通信1本ごとにシートへ書かない。
@@ -320,8 +327,8 @@ function paAudit_(kind, uid, entry, detail) {
       catch (e) { sh = ss.getSheetByName(PA_AUDIT_TAB_); }
     }
     if (!sh) return;
-    sh.appendRow([Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'), String(kind), name,
-      paMask_(uid), String(entry || ''), String(detail || '')]);
+    sh.appendRow([Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'), paCell_(kind), paCell_(name),
+      paCell_(paMask_(uid)), paCell_(entry), paCell_(detail)]);
   } catch (e) {}
 }
 

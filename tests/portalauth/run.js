@@ -20,14 +20,14 @@
      ⑧ 画面⇄サーバの通し：idToken が取れない → no_token（理由つき）→ enforce なら全面の案内／log なら止めない
      ② v2：取れない理由（pn）を記録の詳細に／券の期限切れ・無効に印 _paRenew／PORTAL_AUTH_ENFORCE_UIDS
      ⑥ v2：idToken は送る直前に読み直す／期限切れは送らない／切れかけの券は送らない／_paRenew で券を捨てる／外のブラウザだけ1回ログインし直す
-   既定の検査対象＝scratchpad/pa2/out3（prod961 と配信中の portal.html に v1 済み＋v2 を当てた写し） */
+   既定の検査対象＝scratchpad/pa2/out5（prod961 と配信中の portal.html に v1 済み＋v2 を当てた写し） */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..', '..');
-const OUT_DEFAULT = '/private/tmp/claude-501/-Users-apple-cloud/ae884d7f-5851-44b6-8de1-2006a292a6ea/scratchpad/pa2/out3';
+const OUT_DEFAULT = '/private/tmp/claude-501/-Users-apple-cloud/ae884d7f-5851-44b6-8de1-2006a292a6ea/scratchpad/pa2/out5';
 const argv = process.argv.slice(2);
 const argOf = k => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : ''; };
 const GAS_DIR = argOf('--gas') || path.join(OUT_DEFAULT, 'gas');
@@ -370,6 +370,24 @@ function suiteServer2(t, srcs) {
   const lastBody = world.calls[world.calls.length - 1].body;
   t.eq([r.ok, r._paRenew, 'pn' in lastBody], [true, 'ticket_expired', false], 'POST でも印が付く・理由（pn）は下流に渡さない');
   world.t -= (6 * 3600 + 5) * 1000;
+
+  t.section('② サーバ v2：記録に式を書かせない（先頭が = + - @ なら \' を付ける）');
+  ({ ctx, world } = build(srcs));
+  // userId(末尾) は6字を超えると「…」から始まる＝6字以内で試す
+  ['=NOW()', '+1', '-1+1', '@x'].forEach(u => get(ctx, { tab: 'homelite', userId: u, pa: '1' }));
+  t.eq(rows().map(x => x[3]), ["'=NOW()", "'+1", "'-1+1", "'@x"], '名乗った userId（末尾）が = + - @ で始まれば \' を付ける');
+  get(ctx, { tab: 'homelite', userId: 'U_cast_bbbbbbbbbbbbbbbb', pa: '1', pn: '-abc' });
+  t.eq(rows().slice(-1).map(x => x[5]), [''], 'pn の先頭のハイフンは形の検査で捨てる（式の形を作らせない）');
+  get(ctx, { tab: 'homelite', userId: 'U_cast_aaaaaaaaaaaaaaaa', pa: '1', pn: 'c-noscope' });
+  t.eq(rows().slice(-1).map(x => [x[2], x[3], x[5]]), [['あかり', '…aaaaaa', 'c-noscope']], 'ふつうの値はそのまま（\' を付けない）');
+  vm.runInContext("paAudit_('k1', '', '=HYPERLINK(1)', '@detail')", ctx);
+  t.eq(rows().slice(-1).map(x => [x[4], x[5]]), [["'=HYPERLINK(1)", "'@detail"]], '入口・詳細の列も同じ');
+  ctx.getStaffName = () => '=NAME()';
+  vm.runInContext("paAudit_('k2', 'U_cast_bbbbbbbbbbbbbbbb', 'portal:x', '')", ctx);
+  t.eq(rows().slice(-1).map(x => x[2]), ["'=NAME()"], '名前の列も同じ');
+  vm.runInContext("paAudit_('=kind', 'U_z', 'portal:x', '')", ctx);
+  t.eq(rows().slice(-1).map(x => x[1]), ["'=kind"], '種別の列も同じ');
+  t.eq(vm.runInContext("[paCell_('a=b'), paCell_(''), paCell_(null), paCell_(12)]", ctx), ['a=b', '', '', '12'], '途中の = や空・数は触らない');
 
   t.section('② サーバ v2：失敗した idToken も60秒覚える（LINE を連打しない）');
   ({ ctx, world } = build(srcs));
@@ -805,11 +823,17 @@ const MUTANTS = [
   ['画面：券を断られても送り直さない', 'front', "        if (!attempt && cred.k === 'pt') { paClearTicket_(); if (paIdtNow_().t) return paFetch_(u, init, 1); }\n", ''],
   ['画面：別アカウントの券を使う', 'front', "  if (o && o.uid === _paUid && Number(o.exp)", "  if (o && Number(o.exp)"],
   // ---- v2 ----
+  ['v2 式を書かせる（paCell_ を素通し）', 'pa', "  return /^[=+\\-@]/.test(s) ? \"'\" + s : s;", '  return s;'],
+  ['v2 userId(末尾)の列だけ paCell_ を外す', 'pa', 'paCell_(paMask_(uid))', 'paMask_(uid)'],
+  ['v2 名前の列だけ paCell_ を外す', 'pa', 'paCell_(name),', 'name,'],
+  ['v2 入口の列だけ paCell_ を外す', 'pa', 'paCell_(entry),', 'String(entry || \'\'),'],
+  ['v2 詳細の列だけ paCell_ を外す', 'pa', 'paCell_(detail)]', 'String(detail || \'\')]'],
   ['v2 理由を記録しない', 'pa', "var hint = (why === 'ticket' || why === 'ticket_expired') ? '' : paHint_(p.pn);", "var hint = '';"],
   ['v2 券の失敗にも pn を残す', 'pa', "var hint = (why === 'ticket' || why === 'ticket_expired') ? '' : paHint_(p.pn);", 'var hint = paHint_(p.pn);'],
   ['v2 失敗を覚えない', 'pa', '      try { cache.put(fkey, r.reason, PA_FAIL_TTL_SEC_); } catch (e) {}\n', ''],
   ['v2 LINE が落ちた失敗も覚える', 'pa', "} else if (r.reason !== 'unavailable') {", '} else if (true) {'],
-  ['v2 理由の形を見ない', 'pa', "return /^[a-z0-9-]{1,24}$/.test(s) ? s : '';", 'return s;'],
+  ['v2 理由の形を見ない', 'pa', "return /^[a-z0-9][a-z0-9-]{0,23}$/.test(s) ? s : '';", 'return s;'],
+  ['v2 理由の先頭のハイフンを許す', 'pa', "return /^[a-z0-9][a-z0-9-]{0,23}$/.test(s) ? s : '';", "return /^[a-z0-9-]{1,24}$/.test(s) ? s : '';"],
   ['v2 券を捨てさせる印を付けない', 'pa', "var renew = (why === 'ticket' || why === 'ticket_expired') ? why : '';", "var renew = '';"],
   ['v2 ENFORCE_UIDS を見ない', 'pa', "return list.indexOf(String(claimed)) >= 0 ? 'enforce' : mode;", 'return mode;'],
   ['v2 POST に印を足さない', 'pa', 'if (g.renew) result._paRenew = String(g.renew);', ''],
