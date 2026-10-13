@@ -145,7 +145,10 @@ function paVerifyTicket_(t) {
 
 /* LINE の verify API。⭐確かめた結果は ScriptCache に idToken のハッシュで覚える（同じ token は LINE を呼ばない）。
    ⚠️UrlFetch は1回 0.2〜0.5秒・1日の上限は2万回（Workspace 10万）＝券のおかげで1人あたり6時間に1回で済む。
-   ⛔失敗の理由は区別して返す（expired / channel / invalid / unavailable）＝ログで原因が分かるように。 */
+   ⛔失敗の理由は区別して返す（expired / channel / invalid / unavailable）＝ログで原因が分かるように。
+   v2（qa 指摘）：失敗も60秒だけ覚える（PA_F_＝同じ悪い token の連打で毎回 LINE を呼ばない・UrlFetch の上限を守る）。
+     ⚠️unavailable（LINE が落ちた・届かない）は覚えない＝一時的な失敗で60秒締め出さない。 */
+var PA_FAIL_TTL_SEC_ = 60;
 function paVerifyIdToken_(idt) {
   var token = String(idt || '');
   if (!token || token.length > 4096) return { ok: false, reason: 'invalid' };
@@ -154,9 +157,24 @@ function paVerifyIdToken_(idt) {
   var ckey = 'PA_I_' + paSha_(token);
   var cache = null;
   try { cache = CacheService.getScriptCache(); } catch (e) {}
+  var fkey = 'PA_F_' + ckey.slice(5);
   if (cache) {
     try { var hit = cache.get(ckey); if (hit) return { ok: true, uid: hit, cached: true }; } catch (e) {}
+    try { var bad = cache.get(fkey); if (bad) return { ok: false, reason: bad, cached: true }; } catch (e) {}
   }
+  var r = paVerifyIdTokenLine_(token, cid);
+  if (cache) {
+    if (r.ok) {
+      var ttl = Math.min(Number(r.exp) - paNow_() - 30, 21600);
+      if (ttl >= 1) { try { cache.put(ckey, r.uid, ttl); } catch (e) {} }
+    } else if (r.reason !== 'unavailable') {
+      try { cache.put(fkey, r.reason, PA_FAIL_TTL_SEC_); } catch (e) {}
+    }
+  }
+  return r.ok ? { ok: true, uid: r.uid } : { ok: false, reason: r.reason };
+}
+// LINE に1回だけ聞く（覚えるのは呼び元）。戻り { ok, uid, exp } か { ok:false, reason }
+function paVerifyIdTokenLine_(token, cid) {
   var res;
   try {
     res = UrlFetchApp.fetch(PA_VERIFY_URL_, {
@@ -180,11 +198,7 @@ function paVerifyIdToken_(idt) {
   if (!(Number(body.exp) > now)) return { ok: false, reason: 'expired' };
   var sub = String(body.sub || '');
   if (!sub) return { ok: false, reason: 'invalid' };
-  if (cache) {
-    var ttl = Math.min(Number(body.exp) - now - 30, 21600);
-    if (ttl >= 1) { try { cache.put(ckey, sub, ttl); } catch (e) {} }
-  }
-  return { ok: true, uid: sub };
+  return { ok: true, uid: sub, exp: Number(body.exp) };
 }
 
 function paDevOk_(dk, uid) {
@@ -238,7 +252,9 @@ function paGateCore_(p, entry, mode, claimed) {
   }
   // 新しい画面（pa=1）なのに何も持っていない＝LIFF の openid が無い／getIDToken が空 ⇒ 'no_token' で区別して残す
   if (!why) why = (String(p.pa || '') === '1') ? 'no_token' : 'required';
-  var hint = why === 'no_token' ? paHint_(p.pn) : ''; // v2：取れない理由（画面の申告）を「詳細」に1語
+  /* v2：画面の申告を「詳細」に1語。no_token（取れない理由）と idToken の失敗（画面の時計で切れて見えた c-idtexp 等）だけ。
+     ⛔券の失敗には残さない（画面は券と一緒に pn を送らない＝券に添えて来る pn は作り物） */
+  var hint = (why === 'ticket' || why === 'ticket_expired') ? '' : paHint_(p.pn);
   if (paModeFor_(mode, claimed) === 'enforce') {
     paAudit_('deny:' + why, claimed, entry, hint);
     return { ok: false, resp: { ok: false, error: 'auth', auth: why, message: 'LINEから開き直してください。' } };

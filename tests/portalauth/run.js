@@ -20,14 +20,14 @@
      ⑧ 画面⇄サーバの通し：idToken が取れない → no_token（理由つき）→ enforce なら全面の案内／log なら止めない
      ② v2：取れない理由（pn）を記録の詳細に／券の期限切れ・無効に印 _paRenew／PORTAL_AUTH_ENFORCE_UIDS
      ⑥ v2：idToken は送る直前に読み直す／期限切れは送らない／切れかけの券は送らない／_paRenew で券を捨てる／外のブラウザだけ1回ログインし直す
-   既定の検査対象＝scratchpad/pa2/out1（prod961 と配信中の portal.html に v1 済み＋v2 を当てた写し） */
+   既定の検査対象＝scratchpad/pa2/out3（prod961 と配信中の portal.html に v1 済み＋v2 を当てた写し） */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 
 const ROOT = path.join(__dirname, '..', '..');
-const OUT_DEFAULT = '/private/tmp/claude-501/-Users-apple-cloud/ae884d7f-5851-44b6-8de1-2006a292a6ea/scratchpad/pa2/out1';
+const OUT_DEFAULT = '/private/tmp/claude-501/-Users-apple-cloud/ae884d7f-5851-44b6-8de1-2006a292a6ea/scratchpad/pa2/out3';
 const argv = process.argv.slice(2);
 const argOf = k => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : ''; };
 const GAS_DIR = argOf('--gas') || path.join(OUT_DEFAULT, 'gas');
@@ -234,10 +234,10 @@ function suiteFiles(t, srcs) {
   let rep2 = null;
   try { rep2 = APPLY.applyHunks(srcs.code, APPLY2.BACK, 'コード.js').report; } catch (e) { rep2 = ['例外 ' + e.message]; }
   t.ok(rep2.every(s => / 当て済み$/.test(s)), 'コード.js は v2 の当て直し不要（B1・B2）', rep2.join(' / '));
-  const g2 = APPLY2.frontHunks().map(h => (exp.frontBody && h.id === 'G1') ? Object.assign({}, h, { neu: exp.frontBody }) : h);
+  const g2 = APPLY2.frontHunks(srcs.front).map(h => (exp.frontBody && h.id === 'G1') ? Object.assign({}, h, { neu: exp.frontBody }) : h);
   let frep2 = null;
   try { frep2 = APPLY.applyHunks(srcs.front, g2, 'portal.html').report; } catch (e) { frep2 = ['例外 ' + e.message]; }
-  t.ok(frep2.every(s => / 当て済み$/.test(s)), 'portal.html は v2 の当て直し不要（G1・G3）', frep2.join(' / '));
+  t.ok(frep2.every(s => / 当て済み$/.test(s)), 'portal.html は v2 の当て直し不要（G1・G3・G4）', frep2.join(' / '));
   const code0 = unConsoleTicket(APPLY2.revert(srcs.code, APPLY2.BACK));
   const front0 = APPLY2.revert(srcs.front, g2);
   try { rep = APPLY.applyHunks(code0, APPLY.BACK, 'コード.js').report; } catch (e) { rep = ['例外 ' + e.message]; }
@@ -361,7 +361,8 @@ function suiteServer2(t, srcs) {
   r = get(ctx, { tab: 'stats', userId: 'U_cast_aaaaaaaaaaaaaaaa', pt: tk, pa: '1' });
   t.eq([r.ok, r._paRenew, r._pt], [true, undefined, undefined], '生きている券には印を付けない');
   world.t += (6 * 3600 + 5) * 1000;
-  r = get(ctx, { tab: 'stats', userId: 'U_cast_aaaaaaaaaaaaaaaa', pt: tk, pa: '1' });
+  r = get(ctx, { tab: 'stats', userId: 'U_cast_aaaaaaaaaaaaaaaa', pt: tk, pa: '1', pn: 'c-x' });
+  t.ok(rows().some(x => x[1] === 'fail:ticket_expired' && x[5] === ''), '券の失敗には pn を残さない（画面は券と一緒に pn を送らない）');
   t.eq([r.ok, r.seen, r._paRenew], [true, 'U_cast_aaaaaaaaaaaaaaaa', 'ticket_expired'], 'log：期限切れの券は通す＋印 _paRenew＝ticket_expired（画面が券を捨てて取り直す）');
   r = get(ctx, { tab: 'stats', userId: 'U_cast_aaaaaaaaaaaaaaaa', pt: 'p1.QQ.1.x', pa: '1' });
   t.eq([r.ok, r._paRenew], [true, 'ticket'], 'log：無効な券（鍵の入れ替え後など）も印 _paRenew＝ticket');
@@ -369,6 +370,26 @@ function suiteServer2(t, srcs) {
   const lastBody = world.calls[world.calls.length - 1].body;
   t.eq([r.ok, r._paRenew, 'pn' in lastBody], [true, 'ticket_expired', false], 'POST でも印が付く・理由（pn）は下流に渡さない');
   world.t -= (6 * 3600 + 5) * 1000;
+
+  t.section('② サーバ v2：失敗した idToken も60秒覚える（LINE を連打しない）');
+  ({ ctx, world } = build(srcs));
+  const badT = fakeIdt('U_cast_aaaaaaaaaaaaaaaa', '1999999999', now() + 3600);
+  for (let i = 0; i < 5; i++) get(ctx, { tab: 'homelite', idt: badT, pa: '1' });
+  t.eq(world.fetches.length, 1, '同じ悪い idToken を5回＝LINE への問い合わせは1回');
+  r = get(ctx, { tab: 'homelite', idt: badT, pa: '1' });
+  t.ok(rows().some(x => x[1] === 'fail:channel'), '覚えた失敗でも理由（channel）は同じ');
+  world.t += 61 * 1000;
+  get(ctx, { tab: 'homelite', idt: badT, pa: '1' });
+  t.eq(world.fetches.length, 2, '60秒たったら聞き直す');
+  world.line = '500';
+  const t5 = fakeIdt('U_cast_aaaaaaaaaaaaaaaa', CID, now() + 3600);
+  get(ctx, { tab: 'homelite', idt: t5 }); get(ctx, { tab: 'homelite', idt: t5 });
+  t.eq(world.fetches.length, 4, 'LINE が落ちた（unavailable）は覚えない＝一時的な失敗で締め出さない');
+  world.line = 'normal';
+  r = get(ctx, { tab: 'homelite', idt: t5 });
+  t.eq([r.ok, typeof r._pt], [true, 'string'], 'LINE が戻れば同じ idToken で通る');
+  get(ctx, { tab: 'homelite', userId: 'U_cast_bbbbbbbbbbbbbbbb', idt: fakeIdt('U_cast_bbbbbbbbbbbbbbbb', CID, now() - 5), pa: '1', pn: 'c-idtexp' });
+  t.ok(rows().some(x => x[1] === 'fail:expired' && x[5] === 'c-idtexp'), 'idToken の失敗には画面の印（c-idtexp）を残す＝本当の期限切れか時計のずれかを見分ける');
 
   ({ ctx, world } = build(srcs));
   world.props.PORTAL_AUTH_ENFORCE_UIDS = ' U_cast_aaaaaaaaaaaaaaaa , TEST_TOKUKO';
@@ -386,6 +407,41 @@ function suiteServer2(t, srcs) {
   world.breakHmac = true;
   r = get(ctx, { tab: 'homelite', userId: 'U_cast_aaaaaaaaaaaaaaaa', idt: fakeIdt('U_cast_aaaaaaaaaaaaaaaa', CID, now() + 3600) });
   t.eq([r.ok, r.auth], [false, 'error'], '載った人は例外のときも断る（enforce と同じ）');
+}
+
+/* 呼び元＝liff.init(...).then(function(p){…}) の中身を実物から切り出し、偽物の上で走らせる。
+   ⭐paPrepare_ が true（ログインし直しに入った）なら doKioskAuth／loadPortal／⚡edgePrepare_ のどれにも進まないこと */
+function callerRun(html, ret, kt) {
+  const a = html.indexOf('    }).then(function(p) {\n'), b = html.indexOf('\n    }).catch(', a);
+  if (a < 0 || b < 0) throw new Error('LIFF ログイン直後の呼び元が見つからない');
+  const body = html.slice(a + '    }).then(function(p) {\n'.length, b);
+  const seen = [];
+  const ctx = vm.createContext({
+    paPrepare_() { seen.push('paPrepare_'); return ret; }, edgePrepare_() { seen.push('edgePrepare_'); },
+    doKioskAuth() { seen.push('doKioskAuth'); }, loadPortal() { seen.push('loadPortal'); }, openingSetName() {},
+    document: { getElementById() { return { textContent: '' }; } }, _kt: kt || null, userId: '', userName: ''
+  });
+  vm.runInContext('(function(p){\n' + body + '\n})({ userId: "U_me", displayName: "x" });', ctx);
+  return seen;
+}
+async function suiteCaller(t, srcs) {
+  t.eq(callerRun(srcs.front, true, null), ['paPrepare_'], 'ログインし直しに入ったら（true）ホーム（loadPortal）へ進まない');
+  t.eq(callerRun(srcs.front, true, 'K1'), ['paPrepare_'], 'ログインし直しに入ったら軍師の QR 承認（doKioskAuth）へ進まない');
+  t.eq(callerRun(srcs.front, false, null), ['paPrepare_', 'loadPortal'], 'ふだん（false）はホームへ進む');
+  t.eq(callerRun(srcs.front, false, 'K1'), ['paPrepare_', 'doKioskAuth'], 'ふだん（false）は QR 承認へ進む');
+  // ⚡edge と重ねた形（順番は edge → v2）。edgePrepare_ も止まること
+  let AP = null; try { AP = require(path.join(ROOT, 'tests', 'pending', 'apply-portal-edge.js')); } catch (e) {}
+  if (!AP) { t.ok(false, '⚡apply-portal-edge.js が読めない（重ねた形を試せない）'); return; }
+  const raw = srcs.frontRaw || srcs.front; // ⚠️srcs.front は unVoteKassen で HOME_CACHE_VER を戻してある＝edge が探す v4 の行が無い。edge には生の画面を使う
+  const plain = APPLY2.revert(raw, APPLY2.frontHunks(raw));
+  const er = AP.apply(plain, { edgeUrl: 'https://portal-edge-test.ankerspot-k.workers.dev' });
+  let both = '';
+  try { both = er.src ? APPLY.applyHunks(er.src, APPLY2.frontHunks(er.src), 'portal.html').out : ''; } catch (e) { both = ''; }
+  t.ok(!!both && both.indexOf(APPLY2.PA_CALL_V2 + APPLY2.EDGE_CALL) >= 0, 'edge → v2 の順で当たる（G4 は edgePrepare_ の行ごと差し替える）', er.error);
+  t.eq(both ? callerRun(both, true, null) : null, ['paPrepare_'], 'edge と重ねても、ログインし直し中は edgePrepare_／loadPortal へ進まない');
+  t.eq(both ? callerRun(both, false, null) : null, ['paPrepare_', 'edgePrepare_', 'loadPortal'], 'edge と重ねても、ふだんは edgePrepare_ → loadPortal');
+  const rev = AP.apply(raw, { edgeUrl: 'https://portal-edge-test.ankerspot-k.workers.dev' });
+  t.ok(!!rev.error && !rev.src, 'v2 の後に edge は当たらない（何も書かずに止まる＝順番は edge → v2）', rev.error);
 }
 
 const cu = (f, i) => (f.calls[i] || {}).u || ''; // 呼ばれなかった通信は空文字（壊しテストで落ちて総数が減らないように）
@@ -421,6 +477,15 @@ async function suiteE2E(t, srcs) {
       t.ok(!f.els.portalAuthOverlay, 'log：案内は出さない');
       t.ok(rows.some(x => x[1] === 'fail:no_token' && x[5] === 'c-noscope'), 'log：記録に fail:no_token と理由 c-noscope');
     }
+  }
+  t.section('⑧ 通し：画面の時計が1時間進んでいても止めない（qa）');
+  {
+    const b2 = build(srcs); b2.world.t = Date.now(); b2.world.props.PORTAL_AUTH_MODE = 'enforce';
+    const n2 = Math.floor(b2.world.now() / 1000);
+    const f2 = frontCtx(srcs, { idt: fakeIdt('U_cast_aaaaaaaaaaaaaaaa', CID, n2 + 1800), idtExp: n2 - 1800, server: wire(b2) });
+    f2.ctx.paPrepare_('U_cast_aaaaaaaaaaaaaaaa');
+    const r2 = await f2.ctx.window.fetch(f2.GAS + '?action=portal&tab=homelite&userId=U_cast_aaaaaaaaaaaaaaaa');
+    t.eq([(r2._b || {}).ok, typeof (r2._b || {})._pt, !f2.els.portalAuthOverlay], [true, 'string', true], 'enforce：画面には切れて見える idToken でも送る→サーバが通す（案内は出ない）');
   }
   t.section('⑧ 通し：openid が入った後＝idToken → 券 → 期限切れ → 印で捨てて取り直す');
   const b = build(srcs);
@@ -543,8 +608,10 @@ function frontCtx(srcs, opts) {
   const win = { fetch: fetchFn };
   const ctx = vm.createContext({
     window: win, document: doc, console, JSON, Promise, Object, Date, encodeURIComponent, Number, String, Array,
-    localStorage: { getItem(k) { return k in store ? store[k] : null; }, setItem(k, v) { store[k] = String(v); }, removeItem(k) { delete store[k]; } },
-    sessionStorage: { getItem(k) { return k in sstore ? sstore[k] : null; }, setItem(k, v) { sstore[k] = String(v); } },
+    localStorage: (opts && opts.noStorage) ? { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); }, removeItem() { throw new Error('SecurityError'); } }
+      : { getItem(k) { return k in store ? store[k] : null; }, setItem(k, v) { store[k] = String(v); }, removeItem(k) { delete store[k]; } },
+    sessionStorage: (opts && opts.noStorage) ? { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('SecurityError'); } }
+      : { getItem(k) { return k in sstore ? sstore[k] : null; }, setItem(k, v) { sstore[k] = String(v); } },
     location: { href: 'https://x/portal.html?kt=K1', search: '?kt=K1', reload() { calls.push({ reload: true }); } },
     LIFF_ID: '2010376677-EDF5MZuq',
     /* LIFF の偽物。⭐v2：idt:null（Scope に openid が無い）・scope・期限（idtExp 秒）・中か外か（inClient）・ログイン有無を変えられる。
@@ -649,7 +716,7 @@ async function suiteFront(t, srcs) {
   f = frontCtx(srcs, { idtExp: Math.floor(Date.now() / 1000) - 10 });
   f.ctx.paPrepare_('U_me');
   await f.ctx.window.fetch(f.GAS + '?action=portal&tab=stats&userId=U_me');
-  t.eq([q(cu(f, 0), 'idt'), q(cu(f, 0), 'pn')], [null, 'c-idtexp'], '期限切れの idToken は送らない（理由 c-idtexp）');
+  t.eq([q(cu(f, 0), 'idt'), q(cu(f, 0), 'pn')], ['IDT-1', 'c-idtexp'], '画面の時計で期限切れに見えても idToken は送る（判定はサーバ）＋印 c-idtexp を添える（qa：時計のずれで止めない）');
   t.ok(!f.calls.some(c => c.login), 'LINE の中では期限切れでも勝手にログインし直さない（log の間は通る＝止めない）');
   f = frontCtx(srcs, { idtExp: Math.floor(Date.now() / 1000) - 10, inClient: false });
   t.eq(f.ctx.paPrepare_('U_me'), true, '外のブラウザで券も idToken も切れていれば LINE ログインし直し');
@@ -675,6 +742,19 @@ async function suiteFront(t, srcs) {
   f = frontCtx(srcs, { inClient: false });
   f.ctx.paRelogin_();
   t.eq(f.calls.filter(c => c.logout || c.login).length, 2, '開き直す（外のブラウザ）＝ログアウト→ログイン');
+
+  // qa：連打で古い券の印が後から届いても、取り直した新しい券は捨てない
+  f = frontCtx(srcs, { responses: [{ ok: true, _pt: 'p1.NEW', _ptExp: 9999999999 }, { ok: true, _paRenew: 'ticket' }] });
+  f.store['portalAuth:v1'] = JSON.stringify({ t: 'p1.OLD', exp: 9999999999, uid: 'U_me' });
+  f.ctx.paPrepare_('U_me');
+  await Promise.all([f.ctx.window.fetch(f.GAS + '?action=portal&tab=homelite&userId=U_me'), f.ctx.window.fetch(f.GAS + '?action=portal&tab=homerest&userId=U_me')]);
+  t.eq((JSON.parse(f.store['portalAuth:v1'] || '{}')).t, 'p1.NEW', '印は「送った券＝今の券」のときだけ効く（古い券の印で新しい券を捨てない）');
+  // qa：sessionStorage／localStorage が使えない端末でも、開いている間はログインし直しを5分に1回まで
+  f = frontCtx(srcs, { idtExp: Math.floor(Date.now() / 1000) - 10, inClient: false, noStorage: true });
+  t.eq([f.ctx.paPrepare_('U_me'), f.ctx.paPrepare_('U_me'), f.ctx.paPrepare_('U_me')], [true, false, false], '保存が使えない端末でもログインし直しは1回だけ（メモリで5分の制限）');
+
+  t.section('⑥ 画面 v2：呼び元（LIFF ログイン直後）');
+  await suiteCaller(t, srcs);
 
   t.section('⑥ 画面：静的な確かめ');
   const h = srcs.front;
@@ -725,21 +805,28 @@ const MUTANTS = [
   ['画面：券を断られても送り直さない', 'front', "        if (!attempt && cred.k === 'pt') { paClearTicket_(); if (paIdtNow_().t) return paFetch_(u, init, 1); }\n", ''],
   ['画面：別アカウントの券を使う', 'front', "  if (o && o.uid === _paUid && Number(o.exp)", "  if (o && Number(o.exp)"],
   // ---- v2 ----
-  ['v2 理由を記録しない', 'pa', "var hint = why === 'no_token' ? paHint_(p.pn) : '';", "var hint = '';"],
+  ['v2 理由を記録しない', 'pa', "var hint = (why === 'ticket' || why === 'ticket_expired') ? '' : paHint_(p.pn);", "var hint = '';"],
+  ['v2 券の失敗にも pn を残す', 'pa', "var hint = (why === 'ticket' || why === 'ticket_expired') ? '' : paHint_(p.pn);", 'var hint = paHint_(p.pn);'],
+  ['v2 失敗を覚えない', 'pa', '      try { cache.put(fkey, r.reason, PA_FAIL_TTL_SEC_); } catch (e) {}\n', ''],
+  ['v2 LINE が落ちた失敗も覚える', 'pa', "} else if (r.reason !== 'unavailable') {", '} else if (true) {'],
   ['v2 理由の形を見ない', 'pa', "return /^[a-z0-9-]{1,24}$/.test(s) ? s : '';", 'return s;'],
   ['v2 券を捨てさせる印を付けない', 'pa', "var renew = (why === 'ticket' || why === 'ticket_expired') ? why : '';", "var renew = '';"],
   ['v2 ENFORCE_UIDS を見ない', 'pa', "return list.indexOf(String(claimed)) >= 0 ? 'enforce' : mode;", 'return mode;'],
   ['v2 POST に印を足さない', 'pa', 'if (g.renew) result._paRenew = String(g.renew);', ''],
   ['v2 doGet が印を落とす', 'code', 'if (!_pa.ticket && !_pa.renew) return _pout;', 'if (!_pa.ticket) return _pout;'],
-  ['v2 画面：送る直前に読み直さない', 'front', "  var it = paIdtNow_();\n  _paIdt = it.t;\n  if (_paIdt) return { k: 'idt', v: _paIdt };", "  var it = { t: _paIdt, why: '' };\n  if (_paIdt) return { k: 'idt', v: _paIdt };"],
-  ['v2 画面：idToken の期限を見ない', 'front', "  if (exp && exp * 1000 <= Date.now() + 30000) return { t: '', why: pre + 'idtexp' };\n", ''],
+  ['v2 画面：送る直前に読み直さない', 'front', "  var it = paIdtNow_();\n  _paIdt = it.t;\n  if (_paIdt) return { k: 'idt', v: _paIdt, why: it.why };", "  var it = { t: _paIdt, why: '' };\n  if (_paIdt) return { k: 'idt', v: _paIdt, why: it.why };"],
+  ['v2 画面：idToken の期限を見ない', 'front', "  if (exp && exp * 1000 <= Date.now() + 30000) return { t: t, why: pre + 'idtexp', expired: true };\n", ''],
+  ['v2 画面：切れて見える idToken を送らない', 'front', "return { t: t, why: pre + 'idtexp', expired: true };", "return { t: '', why: pre + 'idtexp', expired: true };"],
+  ['v2 画面：印で別の券も捨てる', 'front', '&& cred.v === _paTicket) paClearTicket_();', ') paClearTicket_();'],
+  ['v2 画面：保存が使えないと制限が効かない', 'front', '  var v = _paReloginAt;\n', '  var v = 0;\n'],
+  ['v2 呼び元：戻り値を捨てる', 'front', '      if (paPrepare_(p.userId)) return; //', '      paPrepare_(p.userId); //'],
   ['v2 画面：Scope を見ない', 'front', "    if (sc && sc.indexOf && sc.indexOf('openid') < 0) return { t: '', why: pre + 'noscope' };\n", ''],
-  ['v2 画面：理由を送らない', 'front', '  else if (cred.why) extra.pn = cred.why;\n', ''],
+  ['v2 画面：理由を送らない', 'front', '  if (cred.why) extra.pn = cred.why; // 取れない理由／idToken に添える印（v2）\n', ''],
   ['v2 画面：切れかけの券を送る', 'front', '  if (_paTicket && _paTicketExp && _paTicketExp * 1000 <= Date.now() + 60000) paClearTicket_();', '  if (false) paClearTicket_();'],
-  ['v2 画面：印 _paRenew を無視', 'front', "else if (d && d._paRenew && cred.k === 'pt')", 'else if (false)'],
+  ['v2 画面：印 _paRenew を無視', 'front', "else if (d && d._paRenew && cred.k === 'pt' && cred.v === _paTicket)", 'else if (false)'],
   ['v2 画面：断られても案内を出さない', 'front', '        paShowAuthError_(d, cred);\n', ''],
-  ['v2 画面：LINE の中でも勝手にログインし直す', 'front', "if (!_paTicket && it.why === 'b-idtexp') {", "if (!_paTicket && /idtexp$/.test(it.why)) {"],
-  ['v2 画面：ログインし直しが回り続ける', 'front', 'if (Date.now() - last > 5 * 60000) {', 'if (true) {'],
+  ['v2 画面：LINE の中でも勝手にログインし直す', 'front', "if (!_paTicket && it.expired && it.why === 'b-idtexp') {", "if (!_paTicket && it.expired) {"],
+  ['v2 画面：ログインし直しが回り続ける', 'front', 'if (Date.now() - paReloginLast_() > 5 * 60000) {', 'if (true) {'],
   ['v2 画面：LINE の中の開き直しを LIFF の URL にしない', 'front', "if (L && paInClient_() && typeof LIFF_ID === 'string' && LIFF_ID) {", 'if (false) {']
 ];
 
@@ -748,7 +835,8 @@ const MUTANTS = [
     code: fs.readFileSync(path.join(GAS_DIR, 'コード.js'), 'utf8'),
     pa: fs.readFileSync(path.join(GAS_DIR, 'portalauth.js'), 'utf8'),
     ca: fs.existsSync(path.join(GAS_DIR, 'consoleauth.js')) ? fs.readFileSync(path.join(GAS_DIR, 'consoleauth.js'), 'utf8') : '',
-    front: unVoteKassen(fs.readFileSync(FRONT, 'utf8'))
+    front: unVoteKassen(fs.readFileSync(FRONT, 'utf8')),
+    frontRaw: fs.readFileSync(FRONT, 'utf8')
   };
   console.log('\x1b[2m検査対象\x1b[0m GAS=' + GAS_DIR + '  画面=' + FRONT);
   const base = await runAll(srcs, false);
@@ -760,6 +848,7 @@ const MUTANTS = [
     const n = s[file].split(from).length - 1;
     if (n !== 1) { mutFail++; console.log('  \x1b[31m✘ ' + label + '：壊す場所が ' + n + ' 箇所（実装が変わった？）\x1b[0m'); continue; }
     s[file] = s[file].replace(from, () => to);
+    if (file === 'front' && s.frontRaw.split(from).length === 2) s.frontRaw = s.frontRaw.replace(from, () => to);
     // 「押すファイルが正本と同一」の検査で赤くなるのは当然なので、壊した版を正本扱いにして比べる
     // （v2：正本は portalauth.js と portal-front-v2.js＝srcs.expect で渡す。コード.js の hunk は BACK/BACK2 の neu を一時的に壊す）
     const backs = APPLY.BACK.concat(APPLY2.BACK), restoreBack = backs.map(h => h.neu);

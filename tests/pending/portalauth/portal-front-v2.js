@@ -9,7 +9,8 @@
    ----------------------------------------------------------------------------
    v2（2026-10-13）：本番の記録が 10/9〜10/13「全員 fail:no_token・idt_ok 0件」＝LIFF の Scope に openid が無く
      getIDToken() が空だった（PM が openid を足した）。v1 は「ログイン直後に1回だけ」idToken を読み、取れない理由を何も残さなかった。
-     ・idToken は送る直前に読み直す（paIdtNow_）。期限（getDecodedIDToken の exp）が切れていれば送らない
+     ・idToken は送る直前に読み直す（paIdtNow_）。期限（getDecodedIDToken の exp）が切れて見えても送る＝判定はサーバ（LINE）。
+       画面の時計はずれることがある（qa：+1時間ずれで、サーバなら通せた token を送らず止めた）。期限は「ログインし直すか」にだけ使い、pn=…-idtexp を添える
      ・取れないときは理由を1語（pn）で送る＝サーバの記録の「詳細」に残る（c-/b-＝LINE の中／外のブラウザ）
      ・券は覚えた期限（exp）でも見る＝切れかけた券は送らず idToken で取り直す
      ・サーバが「券を捨てて」（_paRenew）と言ったら捨てる（log の間でも取り直しが動く）
@@ -19,13 +20,26 @@
 var _paUid = '', _paTicket = '', _paTicketExp = 0, _paIdt = '';
 var PA_STORE_KEY = 'portalAuth:v1';
 var PA_RELOGIN_KEY = 'portalAuth:relogin';
+var _paReloginAt = 0; // sessionStorage／localStorage が使えない端末でも、開いている間は5分の制限を効かせる（qa 指摘）
+function paReloginLast_() {
+  var v = _paReloginAt;
+  try { v = Math.max(v, Number(sessionStorage.getItem(PA_RELOGIN_KEY)) || 0); } catch (e) {}
+  try { v = Math.max(v, Number(localStorage.getItem(PA_RELOGIN_KEY)) || 0); } catch (e) {}
+  return v;
+}
+function paReloginMark_() {
+  _paReloginAt = Date.now();
+  try { sessionStorage.setItem(PA_RELOGIN_KEY, String(_paReloginAt)); } catch (e) {}
+  try { localStorage.setItem(PA_RELOGIN_KEY, String(_paReloginAt)); } catch (e) {}
+}
 function paLoadTicket_() { try { var o = JSON.parse(localStorage.getItem(PA_STORE_KEY) || 'null'); return (o && o.t) ? o : null; } catch (e) { return null; } }
 function paSaveTicket_(t, exp) { _paTicket = String(t || ''); _paTicketExp = Number(exp) || 0; try { localStorage.setItem(PA_STORE_KEY, JSON.stringify({ t: _paTicket, exp: _paTicketExp, uid: _paUid })); } catch (e) {} }
 function paClearTicket_() { _paTicket = ''; _paTicketExp = 0; try { localStorage.removeItem(PA_STORE_KEY); } catch (e) {} }
 function paLiff_() { return (typeof window !== 'undefined' && window.liff) ? window.liff : null; }
 function paInClient_() { var L = paLiff_(); try { return !!(L && L.isInClient && L.isInClient()); } catch (e) { return false; } }
-/* 今の idToken を読み直す。戻り { t:<token か ''>, why:<取れない理由 1語> }。⭐判定の正本はここ1か所（送る直前・取り直し・開いた直後）
-   why：noliff（LIFF が無い）／nologin（ログインしていない）／noscope（Scope に openid が無い）／idtexp（期限切れ）／noidt（理由不明で空） */
+/* 今の idToken を読み直す。戻り { t:<token か ''>, why:<取れない理由／添える印 1語>, expired }。⭐判定の正本はここ1か所（送る直前・取り直し・開いた直後）
+   why：noliff（LIFF が無い）／nologin（ログインしていない）／noscope（Scope に openid が無い）／noidt（理由不明で空）
+        idtexp（画面の時計では期限切れ。⭐t はそのまま返す＝送ってサーバに判定させる） */
 function paIdtNow_() {
   var L = paLiff_();
   var pre = paInClient_() ? 'c-' : 'b-';
@@ -41,8 +55,8 @@ function paIdtNow_() {
   }
   var exp = 0;
   try { var dt = L.getDecodedIDToken && L.getDecodedIDToken(); exp = dt ? Number(dt.exp) || 0 : 0; } catch (e) { exp = 0; }
-  // 期限が読めないときは送る（サーバが確かめる）。読めて切れていれば送らない（LINE に聞くまでもない＝断られるだけ）
-  if (exp && exp * 1000 <= Date.now() + 30000) return { t: '', why: pre + 'idtexp' };
+  // 画面の時計で切れて見えても送る（時計がずれている端末がある）。印 idtexp を添え、ログインし直しの判断にだけ使う
+  if (exp && exp * 1000 <= Date.now() + 30000) return { t: t, why: pre + 'idtexp', expired: true };
   return { t: t, why: '' };
 }
 // LIFF でログインした直後に1回。券は持ち主が同じで期限まで1分以上あるときだけ使う
@@ -53,10 +67,9 @@ function paPrepare_(uid) {
   var it = paIdtNow_();
   _paIdt = it.t;
   // 外のブラウザで、券も idToken も切れている＝LINE ログインし直し（5分に1回まで）。⛔LINE の中ではしない（log の間は通る＝止めない）
-  if (!_paTicket && it.why === 'b-idtexp') {
-    var last = 0; try { last = Number(sessionStorage.getItem(PA_RELOGIN_KEY)) || 0; } catch (e) {}
-    if (Date.now() - last > 5 * 60000) {
-      try { sessionStorage.setItem(PA_RELOGIN_KEY, String(Date.now())); } catch (e) {}
+  if (!_paTicket && it.expired && it.why === 'b-idtexp') {
+    if (Date.now() - paReloginLast_() > 5 * 60000) {
+      paReloginMark_();
       try { var L = paLiff_(); L.logout(); L.login({ redirectUri: location.href }); return true; } catch (e) {}
     }
   }
@@ -69,7 +82,7 @@ function paCred_() {
   if (_paTicket) return { k: 'pt', v: _paTicket };
   var it = paIdtNow_();
   _paIdt = it.t;
-  if (_paIdt) return { k: 'idt', v: _paIdt };
+  if (_paIdt) return { k: 'idt', v: _paIdt, why: it.why }; // why＝画面の時計で切れて見えた印（idtexp）だけ。添えて送る
   return { k: '', v: '', why: it.why };
 }
 function paIsGas_(u) { return typeof u === 'string' && u.indexOf(GAS_URL) === 0 && u.indexOf('action=portalMaintenance') < 0; }
@@ -77,7 +90,7 @@ function paIsGas_(u) { return typeof u === 'string' && u.indexOf(GAS_URL) === 0 
 function paDecorate_(u, init, cred) {
   var extra = { pa: '1' };
   if (cred.k) extra[cred.k] = cred.v;
-  else if (cred.why) extra.pn = cred.why;
+  if (cred.why) extra.pn = cred.why; // 取れない理由／idToken に添える印（v2）
   var method = String((init && init.method) || 'GET').toUpperCase();
   if (method === 'GET') {
     // 👤キャスト表示（プレビュー）中は、未公開の月の金額をサーバから受け取らない（キャスト本人と同じ応答）
@@ -104,7 +117,7 @@ function paFetch_(u, init, attempt) {
     var c; try { c = r.clone(); } catch (e) { return r; }
     return c.json().then(function (d) {
       if (d && d._pt) paSaveTicket_(d._pt, d._ptExp);
-      else if (d && d._paRenew && cred.k === 'pt') paClearTicket_(); // v2：サーバが「その券はもう使えない」（log の間）＝捨てる。次の通信で idToken → 新しい券
+      else if (d && d._paRenew && cred.k === 'pt' && cred.v === _paTicket) paClearTicket_(); // v2：サーバが「その券はもう使えない」（log の間）＝捨てる。⭐送った券が今の券のときだけ（連打で古い券の印が後から届いても、取り直した新しい券は捨てない）
       if (d && d.ok === false && d.error === 'auth') {
         if (!attempt && cred.k === 'pt') { paClearTicket_(); if (paIdtNow_().t) return paFetch_(u, init, 1); }
         paShowAuthError_(d, cred);

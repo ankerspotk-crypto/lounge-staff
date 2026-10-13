@@ -18,6 +18,9 @@
      G2 PORTAL_BUILD を --build=<版> に（省略時は上げない＝他の当て物と一緒に上げるとき）
      ⛔HOME_CACHE_VER は上げない（ホームの応答の意味は変えていない。_paRenew は券の印で、ホームのキャッシュには残さない＝G1 の writeHomeCache_ 側は v1 の delete d._pt のまま→G3 で _paRenew も落とす）
      G3 ホームのキャッシュに _paRenew も残さない
+     G4 LIFF ログイン直後の呼び元：`if (paPrepare_(p.userId)) return;`（true＝LINE ログインし直しに入った＝QR 承認・ホーム・⚡edge へ進まない）
+        ⚠️⚡edge（apply-portal-edge.js）は同じ行の直後に edgePrepare_ を足す＝edge が先に当たっていれば2行まとめて差し替える
+          （edgePrepare_ も止める）。⛔v2 の後に edge は当たらない（edge が探す行が変わる＝edge は何も書かずに止まる）＝順番は edge → v2
    使い方:
      node tests/pending/apply-portal-auth2.js backend <配信元のディレクトリ> [--dry]
      node tests/pending/apply-portal-auth2.js front   <portal.html のパス> [--build=2026-10-14a] [--dry]
@@ -51,7 +54,18 @@ const END = '/* ===== 🔐 本人確認 ここまで ===== */';
 const V1_BODY = V1.FRONT_BLOCK.slice(0, V1.FRONT_BLOCK.indexOf(END));
 function v2Body() { return fs.readFileSync(FRONT_SRC, 'utf8'); }
 
-function frontHunks() {
+const PA_CALL = '      paPrepare_(p.userId); // 🔐 券の読み出し／LIFF の ID トークン（以後の GAS 宛ては paFetch_ が証を足す）\n';
+const PA_CALL_V2 = '      if (paPrepare_(p.userId)) return; // 🔐 券の読み出し／LIFF の ID トークン（以後の GAS 宛ては paFetch_ が証を足す）。v2：true＝LINE ログインし直しに入った＝先へ進まない\n';
+const EDGE_CALL = '      edgePrepare_(p.userId); // ⚡旗がオンなら Worker の入口を先に叩く（id_token は paPrepare_ が読んだ物）\n';
+// G4：edge が当たっているか（当たっていれば2行で）で形を選ぶ
+function g4(src) {
+  const withEdge = src.indexOf(PA_CALL + EDGE_CALL) >= 0 || src.indexOf(PA_CALL_V2 + EDGE_CALL) >= 0;
+  return withEdge
+    ? { id: 'G4', what: '呼び元：ログインし直し中は止まる（⚡edge の edgePrepare_ も）', old: PA_CALL + EDGE_CALL, neu: PA_CALL_V2 + EDGE_CALL }
+    : { id: 'G4', what: '呼び元：ログインし直し中は止まる', old: PA_CALL, neu: PA_CALL_V2 };
+}
+
+function frontHunks(src) {
   return [
     { id: 'G1', what: '本人確認のかたまり v1→v2', old: V1_BODY, neu: v2Body() },
     {
@@ -59,7 +73,7 @@ function frontHunks() {
       old: "  if (d && d._pt) { d = Object.assign({}, d); delete d._pt; delete d._ptExp; } // 🔐 券は portalAuth:v1 だけに置く\n",
       neu: "  if (d && (d._pt || d._paRenew)) { d = Object.assign({}, d); delete d._pt; delete d._ptExp; delete d._paRenew; } // 🔐 券は portalAuth:v1 だけに置く（v2：券の印も残さない）\n"
     }
-  ];
+  ].concat(src == null ? [] : [g4(src)]);
 }
 
 const sha1 = s => crypto.createHash('sha1').update(s, 'utf8').digest('hex');
@@ -98,7 +112,7 @@ function main() {
   } else if (mode === 'front') {
     const src = fs.readFileSync(target, 'utf8');
     if (src.split(START).length !== 2 || src.split(END).length !== 2) throw new Error('本人確認のかたまりの印が1か所ずつではない＝止める');
-    let { out, report } = V1.applyHunks(src, frontHunks(), path.basename(target));
+    let { out, report } = V1.applyHunks(src, frontHunks(src), path.basename(target));
     if (build) {
       const re = /var PORTAL_BUILD = '([^']*)';/;
       const m = out.match(re);
@@ -120,4 +134,4 @@ function main() {
 if (require.main === module) {
   try { main(); } catch (e) { console.error('⛔ ' + e.message); process.exit(1); }
 }
-module.exports = { BACK, frontHunks, revert, PA_SRC, FRONT_SRC, PA_V1_SHA1, START, END, V1_BODY };
+module.exports = { BACK, frontHunks, g4, revert, PA_SRC, FRONT_SRC, PA_V1_SHA1, START, END, V1_BODY, PA_CALL, PA_CALL_V2, EDGE_CALL };
