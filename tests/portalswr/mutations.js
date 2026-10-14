@@ -1,0 +1,37 @@
+'use strict';
+/* 壊しテスト用の変異（tests/portalswr/break.js）。1つずつ当てて「赤くなる」「総数が減らない」を見る。
+   ⭐各変異は当てた物（OUT）の中の文字を1か所だけ替える。当たらなければ run.js が「変異が当たっていない」と出す。 */
+const rep = (a, b) => (s) => s.split(a).join(b);
+module.exports = {
+  'no-owner-check': rep('if (o.u !== ctx.u || o.m !== ctx.m', 'if (o.m !== ctx.m'),
+  'no-mode': rep("function homeCacheMode_() { return previewMode ? 'p' : (adminViewAs ? 'a' : 'c'); }", "function homeCacheMode_() { return 'c'; }"),
+  'no-viewas-check': rep(" || String(o.va || '') !== ctx.va) return null;", ') return null;'),
+  'retry-18s': rep('return once(fullMs).catch(function(e) {', 'return once(Math.min(fullMs, 18000)).catch(function(e) { if (e && e._timeout) return once(fullMs);'),
+  'retry-always': rep('var quickNet = e && !e._timeout && (Date.now() - t0) < GAS_GET_QUICK_RETRY_MS && e.message', 'var quickNet = e && e.message'),
+  'no-badge': rep("  var s = _homeStale;\n  if (!s) return '';", "  return '';"),
+  'no-ctx-guard': rep("    if (homeCacheCtx_().key !== cctx.key) { if (_homeStale && _homeStale.seq === mySeq) _homeStale = null; return; }\n", ''),
+  'no-prune': rep('drop.forEach(function (k) { localStorage.removeItem(k); });', ''),
+  'old-ver': rep("? 'v6e' : 'v6';", "? 'v5e' : 'v5';"),
+  'no-cache-first': rep('if (cached) { try { applyHomePayload_(cached); renderedFromCache = true; }', 'if (false) { try { applyHomePayload_(cached); renderedFromCache = true; }'),
+  'no-fail-badge': rep("  _homeStale.st = 'failed';\n", ''),
+  'no-clear-badge': rep('if (gotLite && gotRest && _homeStale && _homeStale.seq === mySeq) _homeStale = null;', ''),
+  'no-expiry': rep('if (age > HOME_CACHE_MAX_MS || age < -60000) return null;', ''),
+  'write-without-uid': rep('  if (!ctx.u) return;\n  if (d && d._pt)', '  if (d && d._pt)'),
+  'cache-ghost-unstripped': rep('  stripGhostData_(d);    // 古いキャッシュ由来', '  // stripGhostData_(d);    // 古いキャッシュ由来'),
+  'no-shift-err-card': rep("  } else if (homeShiftState_() === 'err') {", '  } else if (false) {'),
+  'no-shift-loading-card': rep("  } else if (homeShiftState_() === 'loading') {", '  } else if (false) {'),
+  'no-shift-fail-on-catch': rep('      homeShiftFail_(mySeq, gotRest); // ⚡SWR_HOME：覚えも無い', '      // 変異で外した // ⚡SWR_HOME：覚えも無い'),
+  'no-shift-fail-on-notok': rep("      if (which === 'lite') homeShiftFail_(mySeq, gotRest);", '      '),
+  'no-shift-repaint': rep("  if (painted && currentTab === 'home') { try { renderTab('home'); } catch (e) {} }", ''),
+  'repaint-any-tab': rep("  if (painted && currentTab === 'home') {", '  if (painted) {'),
+  'shift-state-ignores-cache': rep("  _homeShift = renderedFromCache ? null : { seq: mySeq, st: 'loading' };", "  _homeShift = { seq: mySeq, st: 'loading' };"),
+  'shift-not-cleared-on-lite': rep("    if (which === 'lite' && _homeShift && _homeShift.seq === mySeq) _homeShift = null;", ''),
+  'deny-no-forget': rep('denied = true; homeCacheForget_(cctx);', 'denied = true;'),
+  'deny-no-retired': rep("var HOME_DENY_ERRORS = ['retired', 'forbidden', 'unregistered'];", "var HOME_DENY_ERRORS = ['forbidden', 'unregistered'];"),
+  'deny-keeps-drawing': rep('    if (denied) return;\n', ''),
+  'deny-keeps-portaldata': rep('merged = {}; portalData = null;', 'merged = {};'),
+  'forget-only-key': rep("drop.forEach(function (k) { localStorage.removeItem(k); });\n  } catch (e) {}\n}\n// 「◯分前", "\n  } catch (e) {}\n}\n// 「◯分前"),
+  'retired-unescaped': rep("_e(d.message || 'このアカウントは退職済みのためご利用いただけません。')", "(d.message || 'このアカウントは退職済みのためご利用いただけません。')"),
+  'no-ctx-catch-lite': rep('      if (homeCacheCtx_().key !== cctx.key || denied) return; // ⚡SWR_HOME（qa）：途中で', '      // 変異 // ⚡SWR_HOME（qa）：途中で'),
+  'no-ctx-catch-rest': rep('      if (homeCacheCtx_().key !== cctx.key || denied) return; // ⚡SWR_HOME（qa）：同上', '      // 変異 // ⚡SWR_HOME（qa）：同上'),
+};
