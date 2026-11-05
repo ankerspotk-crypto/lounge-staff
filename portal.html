@@ -604,7 +604,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-10-15a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-05a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -5715,8 +5715,7 @@ function renderYoyakuList() {
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
       + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#b8a67c">'+esc(r.memberId)+'</span>'+memberInfo:'')+'</span>'+statusBtns+'</div>'
       + castRow
-      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'
-      + ((r.subCustomers && r.subCustomers.length) ? '<span class="yb" style="background:#0d2010;border:1px solid #1a4a22;color:#66cc88">👥 +'+r.subCustomers.length+'名</span>' : '')
+      + '<div class="yc-badges"><span class="yb yb-pax">'+rsvPaxLabel_(r)+'</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'
       + '</div>'
       + ((r.subCustomers && r.subCustomers.length) ? '<div class="yc-note" style="color:#66cc88">同席: '+r.subCustomers.map(function(s){ return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':''); }).join('、')+'</div>' : '')
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
@@ -6168,7 +6167,7 @@ function renderYoyakuAdd() {
     + renderRsvTimeSel()
     + '<div class="yform-label">チェック予定<span style="font-size:10px;color:#94886a;margin-left:6px">（退店予定・任意）</span></div>'
     + '<input type="time" class="yform-input" id="yrsv-checktime" value="'+esc(yoyakuCheckTime||'')+'" style="margin-bottom:12px;max-width:180px" onchange="yoyakuCheckTime=this.value">'
-    + '<div class="yform-label">人数</div>'
+    + '<div class="yform-label">人数<span style="font-size:10px;color:#94886a;margin-left:6px">（同席を含む全員の合計）</span></div>'
     + (function(){
         var curPax = yoyakuRsvPax || 1;
         /* 1〜20名。団体もそのままの人数で登録できる（旧「6名+」は6名に丸めていた）。
@@ -6176,7 +6175,8 @@ function renderYoyakuAdd() {
         var opts = '', maxPax = Math.max(20, curPax);
         for (var pn = 1; pn <= maxPax; pn++) opts += '<option'+(pn===curPax?' selected':'')+'>'+pn+'名</option>';
         /* 人数を変えたら見取り図の「定員が足りない席」ヒントだけ塗り替える（再描画はしない＝入力中の欄が飛ぶ） */
-        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px" onchange="yoyakuMapCapHint_()">'+opts+'</select>';
+        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px" onchange="yoyakuMapCapHint_();yoyakuPaxNote_()">'+opts+'</select>'
+          + '<div id="yrsv-paxnote">'+yoyakuPaxNoteHtml_(curPax)+'</div>';
       })()
     + (yoyakuRsvMode === '仮予約' ? '' :
         /* 席の選び方は2通り（端末ごとに保持）。既定=🗺見取り図＝店内の並びそのまま。▦一覧=従来のチップ羅列を温存 */
@@ -6396,7 +6396,7 @@ function yoyakuSelectCust(i) {
 // ── 同席の追加会員（Feature1）: 1予約に複数会員をフル情報で登録 ──
 function renderYoyakuSubs() {
   var h = '<div class="yform-label" style="display:flex;align-items:center;gap:8px;margin-top:4px">同席の会員'
-    + '<span style="font-size:10px;color:#94886a">（複数会員をまとめて登録）</span></div>';
+    + '<span style="font-size:10px;color:#94886a">（人数は下の「人数」に含めます）</span></div>';
   if (yoyakuRsvSubs.length) {
     h += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">';
     yoyakuRsvSubs.forEach(function(s, i) {
@@ -6418,12 +6418,12 @@ function renderYoyakuSubs() {
   }
   if (yoyakuSubSearchOpen) {
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-      + '<span style="font-size:12px;color:#b8a67c;cursor:pointer" onclick="yoyakuSubSearchOpen=false;renderYoyaku()">← 閉じる</span>'
+      + '<span style="font-size:12px;color:#b8a67c;cursor:pointer" onclick="saveFormInputs();yoyakuSubSearchOpen=false;renderYoyaku()">← 閉じる</span>'
       + '<span style="font-size:12px;color:#e6cf95">会員を検索して追加</span></div>'
       + '<input type="text" class="ycust-search" id="ysub-q" placeholder="顧客名・会員番号で検索" oninput="custSearchInput(event,yoyakuSubSearch)" oncompositionend="custSearchInput(event,yoyakuSubSearch)" onkeydown="custSearchKey(event,yoyakuSubSearch)" style="margin-bottom:6px">'
       + '<div id="ysub-results"></div>';
   } else {
-    h += '<div onclick="yoyakuSubSearchOpen=true;renderYoyaku()" style="text-align:center;padding:9px;background:#0d2010;border:1px dashed #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88;margin-bottom:'+(yoyakuRsvSubs.length?'8px':'12px')+'">＋ 会員を追加</div>';
+    h += '<div onclick="saveFormInputs();yoyakuSubSearchOpen=true;renderYoyaku()" style="text-align:center;padding:9px;background:#0d2010;border:1px dashed #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88;margin-bottom:'+(yoyakuRsvSubs.length?'8px':'12px')+'">＋ 会員を追加</div>';
   }
   // 売上/来店の集計モード（会員が複数いる時だけ選べる）
   if (yoyakuRsvSubs.length) {
@@ -6431,7 +6431,7 @@ function renderYoyakuSubs() {
       + '<div style="display:flex;gap:6px;margin-bottom:12px">'
       + [['merge','まとめる','代表者に集約'],['split','会員ごとに分ける','各会員に記録']].map(function(m){
           var active = yoyakuRsvAggMode === m[0];
-          return '<div onclick="yoyakuRsvAggMode=\''+m[0]+'\';renderYoyaku()" style="flex:1;text-align:center;padding:8px 6px;border-radius:8px;cursor:pointer;'
+          return '<div onclick="saveFormInputs();yoyakuRsvAggMode=\''+m[0]+'\';renderYoyaku()" style="flex:1;text-align:center;padding:8px 6px;border-radius:8px;cursor:pointer;'
             + (active ? 'background:#241d10;color:#e6cf95;border:1px solid #b8934e' : 'background:#1b1710;color:#94886a;border:1px solid #33291a')
             + '"><div style="font-size:12px;font-weight:600">'+m[1]+'</div><div style="font-size:9px;opacity:.8;margin-top:1px">'+m[2]+'</div></div>';
         }).join('')
@@ -6463,12 +6463,41 @@ function yoyakuSubSearch(q) {
 function yoyakuSubSelectCust(i) {
   var c = yoyakuSubCustResults[i];
   if (!c) return;
+  saveFormInputs();
   yoyakuRsvSubs.push({ name: c.name || c.card || '', memberId: c.no || '', pax: 1, tantouCast: c.tantou || '', splitSales: false });
   yoyakuSubSearchOpen = false;
   renderYoyaku();
 }
-function yoyakuRemoveSub(i) { yoyakuRsvSubs.splice(i, 1); renderYoyaku(); }
-function yoyakuSubSetPax(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].pax = parseInt(v) || 1; }
+function yoyakuRemoveSub(i) { saveFormInputs(); yoyakuRsvSubs.splice(i, 1); renderYoyaku(); }
+function yoyakuSubSetPax(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].pax = parseInt(v) || 1; yoyakuPaxNote_(); }
+
+/* ⭐予約の人数の決まり（2026-11-05 ボス決定）：人数（r.pax＝シート列5）は同席を含む全員の合計。同席の人数は内訳＝足さない。代表は最低1名。
+ *   画面の判定と文言はこの3つだけ（カード・フォーム・送信の前で別に書かない）。同席の人数が空・0 は1名扱い（GAS 旧 rsvPaxOf_ と同じ）。
+ *   ⭐人数を自動で増やさない：同席の人数の打ち間違いが黙って人数（＝伝票のセットの数の元）を増やすより、足りないことを見せて人に直させる */
+function rsvSubsPax_(subs) { return (subs || []).reduce(function(m, s){ return m + (Number(s && s.pax) || 1); }, 0); }
+function rsvPaxLabel_(r) {
+  var sp = rsvSubsPax_(r && r.subCustomers);
+  return r.pax + '名' + (sp ? '（うち同席' + sp + '名）' : '');
+}
+function yoyakuPaxErr_(pax, subs) {
+  var sp = rsvSubsPax_(subs);
+  if (!sp || (Number(pax) || 1) >= sp + 1) return '';
+  return '人数は同席を含む全員の合計です。同席が' + sp + '名いるので、' + (sp + 1) + '名以上にしてください';
+}
+/* 人数欄の下の1行（同席がいるときだけ）。同席なしは空＝画面は今までと同じ */
+function yoyakuPaxNoteHtml_(pax) {
+  var subs = yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); });
+  var sp = rsvSubsPax_(subs);
+  if (!sp) return '';
+  var err = yoyakuPaxErr_(pax, subs);
+  return err
+    ? '<div style="font-size:12px;color:#ff8a80;margin:-2px 0 10px;line-height:1.45">⚠️ ' + esc(err) + '</div>'
+    : '<div style="font-size:12px;color:#66cc88;margin:-2px 0 10px">全員 ' + (Number(pax) || 1) + '名（うち同席' + sp + '名）</div>';
+}
+function yoyakuPaxNote_() {
+  var box = document.getElementById('yrsv-paxnote'), el = document.getElementById('yrsv-pax');
+  if (box && el) box.innerHTML = yoyakuPaxNoteHtml_(parseInt(el.value) || 1);
+}
 function yoyakuSubSetTantou(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].tantouCast = v; }
 
 
@@ -6695,15 +6724,13 @@ function yoyakuCapWarnMsg_(tableStr, pax, subs) {
     if (!hit) return ''; // 知らない席名が混ざったら判定を捨てる
     cap += hit.cap;
   }
-  var total = pax;
-  for (var k = 0; k < (subs || []).length; k++) total += parseInt(subs[k].pax) || 1;
+  var total = pax; /* 人数は同席を含む全員の合計（2026-11-05）＝同席を足さない */
+  var subPax = rsvSubsPax_(subs);
   if (!cap || total <= cap) return '';
   var seat = names.length > 1
     ? names.join('＋') + '（定員合計' + cap + '名）'
     : cap + '名の席';
-  var who = (subs && subs.length)
-    ? total + '名（本人' + pax + '名＋同席' + (total - pax) + '名）'
-    : total + '名';
+  var who = subPax ? total + '名（うち同席' + subPax + '名）' : total + '名';
   return seat + 'ですが、' + who + 'で予約しますか？';
 }
 
@@ -6722,6 +6749,10 @@ function yoyakuSubmitRsv() {
   var rsvPax = parseInt(paxEl ? paxEl.value : '1') || 1;
   var rsvTable = yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })();
   var rsvSubs = yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); });
+  var paxTouched = !yoyakuEditRsv || rsvPax !== (Number(yoyakuEditRsv.pax) || 1)
+    || rsvSubsPax_(rsvSubs) !== rsvSubsPax_((yoyakuEditRsv.subCustomers || []).filter(function(s){ return s && String(s.name||'').trim(); }));
+  var paxErr = paxTouched ? yoyakuPaxErr_(rsvPax, rsvSubs) : '';
+  if (paxErr) { if (stat) stat.textContent = '⚠️ ' + paxErr; return; }
   var bookWarn = yoyakuBookedWarnMsg_(rsvTable);
   if (bookWarn && !confirm(bookWarn)) return; // 予約済みの席も通すが、一度必ず目を通させる
   var capWarn = yoyakuCapWarnMsg_(rsvTable, rsvPax, rsvSubs);
