@@ -604,7 +604,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-11-05a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-18a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -1496,6 +1496,7 @@ function setPreviewMode(on) {
   portalData = null;
   currentMonth = '';
   billsMonth = '';   // ⛔前に見ていたキャストの月を持ち越さない（在籍期間が違う）
+  salesMonth = '';   // ⛔同上（売上明細の月）
   var sel = document.getElementById('admin-viewas-sel');
   if (sel) sel.value = '';
   updateModeUI();
@@ -1508,6 +1509,7 @@ function adminChange(name) {
   adminViewAs = name;
   currentMonth = '';
   billsMonth = '';   // ⛔前に見ていたキャストの月を持ち越さない（在籍期間が違う）
+  salesMonth = '';   // ⛔同上（売上明細の月）
   portalData = null;
   if (name) staffRole = adminCastRoles[name] || 'キャスト';
   currentTab = 'home';
@@ -2163,6 +2165,9 @@ var billsJumpDate = '';  // 顧客の来店記録タップ→その日の伝票�
 //     共有すると伝票で9月を選んだ瞬間に他タブの月が勝手に飛ぶ（`months.indexOf(currentMonth)<0`）。
 //   ⭐中身はサーバの答え（`d.month`）で毎回上書きする＝画面が月を数え直さない。
 var billsMonth = '';
+// 📊 売上明細タブが見ている月（2026-11-18 速報）。⭐`currentMonth` とは別に持つ（billsMonth と同じ理由）。
+//   ⛔速報の月（今月・給与の無い月）を `currentMonth` に入れると［給与明細］［成績］の月が飛ぶ。給与の月を選んだときだけ currentMonth も合わせる
+var salesMonth = '';
 // 給与ロック画面での自動リフレッシュ済みフラグ（月キー単位・1度だけ）。公開直後の反映漏れ対策で
 // ロックを踏んだら一度だけ最新の公開状態を取り直す。ループ防止に月ごとに済みを記録する。
 var payLockAutoRefreshed = {};
@@ -2195,6 +2200,7 @@ function loadStatsData(force, cb) {
       portalData.sales = d.sales; portalData.pay = d.pay; portalData.months = d.months;
       portalData.hairTotals = d.hairTotals; portalData.payPublished = d.payPublished;
       portalData.salesDataDates = d.salesDataDates; portalData.payReceipt = d.payReceipt;
+      portalData.salesTabs = d.salesTabs; portalData.sokuho = d.sokuho;   // 📊売上明細の月の札と速報（2026-11-18）。⛔sales には混ざっていない
       if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
       if (cb) cb();
     })
@@ -2389,39 +2395,112 @@ function showAdminTab() {
 }
 
 // ---- 売上明細 ----
+/* 📊 月の札（2026-11-18 速報）：正本はサーバの salesTabs（payrollnippo.js payNippoPortalSales_）。⛔ここで月や種類を数え直さない。
+   kind 'pay'＝給与の月（今までどおりのカード）／'sokuho'＝給与がまだ無い月（確定した日報の速報）／
+        'locked'＝給与は確定したが未公開（速報があれば速報＋「給与明細は確認中」・無ければ🔒）。
+   ⚠️salesTabs を返さない古いサーバのときだけ、今までどおり給与の月（sales のキー）で描く。 */
+function salesTabsOf_() {
+  var pd = portalData || {};
+  if (Object.prototype.toString.call(pd.salesTabs) === '[object Array]') return pd.salesTabs;
+  var s = pd.sales || {};
+  return Object.keys(s).sort().reverse().map(function (m) { return { month: m, kind: (s[m] && s[m].__locked) ? 'locked' : 'pay' }; });
+}
+/* 速報を出す月か（サーバが sokuho を付けた sokuho／locked の月だけ）。⛔pay の月には付いていても出さない */
+function salesTabIsSokuho_(t) {
+  var sk = (portalData && portalData.sokuho) || {};
+  return !!(t && (t.kind === 'sokuho' || t.kind === 'locked') && sk[t.month]);
+}
+/* 📊 速報のカード。⭐出すのはサーバが許可リスト（PAYNIPPO_SOKUHO_ITEMS_）で絞った5項目だけ。
+   ⛔バック・源泉・支給額は出さない／バック率メーターも出さない（月の途中の倍率は後で下がることがある）。
+   ⭐確定と見分ける＝点線の枠・青みの色・札に「速報」。 */
+function sokuhoCardHtml_(sel, sok, payLocked) {
+  var it = (sok && sok.items) || {};
+  var n = function (v) { return parseInt(v, 10) || 0; };
+  var yenS = function (v) { return '¥' + n(v).toLocaleString(); };
+  var md = function (d) { var p = String(d || '').split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : esc(String(d || '')); };
+  var hm = function (v) { var m = n(v), hh = Math.floor(m / 60), mm = m % 60; return hh + '時間' + (mm ? mm + '分' : ''); };
+  function line(label, val, color) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #1d2830">'
+      + '<span style="font-size:13px;color:#8aa0ad">' + label + '</span>'
+      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#d6e4ec') + '">' + val + '</span></div>';
+  }
+  var h = '';
+  if (payLocked) {
+    h += '<div style="margin-bottom:10px;padding:10px 12px;border:1px solid #4a3a1e;border-radius:10px;background:#16120b;font-size:12px;color:#d8c79a;line-height:1.7">'
+      + '🔒 ' + esc(sel) + ' の給与明細は確認中です。公開されるまでは、確定した日報の速報を出しています。'
+      + '<div style="margin-top:6px"><button onclick="loadStatsData(true, renderStats)" style="padding:5px 14px;border-radius:14px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:12px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button></div></div>';
+  }
+  h += '<div data-sokuho="1" style="background:#10151a;border:1.5px dashed #5f8296;border-radius:12px;padding:14px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
+    + '<span style="font-size:12px;color:#9fc2d6;font-weight:700;letter-spacing:0.5px">' + esc(sel) + ' 速報</span>'
+    + '<span style="font-size:10px;color:#9fc2d6;border:1px dashed #5f8296;border-radius:9px;padding:2px 8px;white-space:nowrap">速報・給与ではありません</span></div>';
+  h += '<div style="font-size:11px;color:#a9bfcc;line-height:1.7">'
+    + (n(sok.fixedDays) > 0 ? 'お店の日報 ' + md(sok.through) + ' まで（' + n(sok.fixedDays) + '日分）を集計しました' : 'この月のお店の日報はまだ確定していません')
+    + '</div>';
+  h += '<div data-sokuho-head="1" style="font-size:11px;color:#7f98a6;line-height:1.7;margin-bottom:6px">日報の訂正があった日は数字が変わることがあります</div>';
+  h += line('担当売上', yenS(it['担当小計']), '#cfe3ee');
+  if (n(it['同伴小計']) > 0) h += line('同伴売上', yenS(it['同伴小計']), '#a9bfcc');
+  h += line('勤務日数', n(it['勤務日数']) + '日', '#b9cfdb');
+  h += line('出勤時間', hm(it['出勤時間']), '#b9cfdb');
+  h += line('時間報酬', yenS(it['時間報酬']));
+  // ⭐確認中の日＝本人の日だけ（サーバが絞る）。今日の営業中は別の一言
+  var pend = (sok && sok.pending) || [];
+  if (pend.length) {
+    var shown = pend.slice(0, 12).map(md).join('・') + (pend.length > 12 ? ' ほか' + (pend.length - 12) + '日' : '');
+    h += '<div data-sokuho-pending="1" style="margin-top:10px;font-size:11px;color:#a9bfcc;line-height:1.7">確認中の日：' + shown
+      + '<br><span style="color:#7f98a6">日報の確定や確認が済むと、この速報に入ります。</span></div>';
+  }
+  if (sok && sok.todayOpen) h += '<div data-sokuho-today="1" style="margin-top:8px;font-size:11px;color:#a9bfcc;line-height:1.7">今日の分は閉店後の日報の確定で入ります。</div>';
+  h += '</div>';
+  h += '<div style="font-size:10px;color:#94886a;line-height:1.7;padding:10px 4px;text-align:center">給与ではありません。お給料（バック・源泉・支給額）は給与の確定と公開のあと［給与明細］に出ます。日報の訂正があった日は数字が変わることがあります。お店の売上調整は給与の確定のときに反映されます。</div>';
+  return h;
+}
 function renderSales() {
-  var sales = portalData && portalData.sales;
-  if (!sales || Object.keys(sales).length === 0) {
+  var sales = (portalData && portalData.sales) || {};
+  var tabs = salesTabsOf_();
+  if (!tabs.length) {
     setContent('<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">データなし</div>'
-      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">今月の売上データはまだ取得されていません。<br>毎日深夜に自動更新されます。</div>'
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">まだ見られる月がありません。<br>閉店のあと日報が確定すると、その日の分から『速報』として出ます。<br>給与明細は給与の確定・公開のあとに出ます。</div>'
       + '</div>');
     return;
   }
 
-  var months = Object.keys(sales).sort().reverse();
-  var sel = currentMonth && sales[currentMonth] ? currentMonth : months[0];
+  var months = tabs.map(function (t) { return t.month; });
+  // ⭐選ぶ月は売上明細の月（salesMonth）。⛔currentMonth（給与・給率の共有）は速報の月にしない＝renderPay の関所を揺らさない
+  var sel = (salesMonth && months.indexOf(salesMonth) >= 0) ? salesMonth : months[0];
+  var tab = tabs[months.indexOf(sel)];
   var row = sales[sel];
 
   function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
   function num(v) { return parseInt(v) || 0; }
 
-  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
-    .reduce(function(s, k) { return s + num(row[k]); }, 0);
-
   var h = '<div style="padding:14px">';
 
-  // 月タブ
+  // 月タブ（速報の月は札に「速報」・点線）
   if (months.length > 1) {
     h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
-    months.forEach(function(m) {
-      var act = m === sel;
-      h += '<button onclick="switchSalesMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
-        + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
-        + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+    tabs.forEach(function(t) {
+      var m = t.month, act = m === sel, sk = salesTabIsSokuho_(t);
+      h += '<button onclick="switchSalesMonth(\'' + esc(m) + '\')" style="padding:5px 14px;border-radius:16px;border:1px ' + (sk ? 'dashed ' : 'solid ')
+        + (sk ? (act ? '#9fc2d6' : '#3f5867') : (act ? '#e6cf95' : '#241d10')) + ';background:' + (act ? (sk ? '#10151a' : '#241d10') : 'transparent')
+        + ';color:' + (sk ? (act ? '#9fc2d6' : '#7f98a6') : (act ? '#e6cf95' : '#b8a67c')) + ';font-size:12px;cursor:pointer;white-space:nowrap">' + esc(m) + (sk ? ' 速報' : '') + '</button>';
     });
     h += '</div>';
+  }
+
+  // 📊 速報（給与がまだ無い月／給与は確定したが未公開の日報の月）＝サーバが返した許可リストの項目だけ
+  if (salesTabIsSokuho_(tab)) {
+    h += sokuhoCardHtml_(sel, portalData.sokuho[sel], tab.kind === 'locked');
+    h += '</div>';
+    setContent(h);
+    return;
+  }
+  if (!row) {   // 速報の札なのに中身が無い（来ないはず）＝推測で埋めない
+    h += '<div style="text-align:center;padding:50px 20px;font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' のデータはまだありません。</div></div>';
+    setContent(h);
+    return;
   }
 
   // 🔐 未公開の月＝サーバが金額を落として { __locked:true } だけ返す（2026-10-09）。⛔ここで金額を探しにいかない
@@ -2432,13 +2511,17 @@ function renderSales() {
     setContent(h);
     return;
   }
+
+  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
+    .reduce(function(s, k) { return s + num(row[k]); }, 0);
+
   // カード
   h += '<div style="background:#16130d;border:1px solid #211a0f;border-radius:12px;padding:14px">';
   var salesDates = (portalData && portalData.salesDataDates) || {};
   var asOf = salesDates[sel] || '';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
   h += '<span style="font-size:10px;color:#94886a;letter-spacing:0.5px">' + sel + ' 給与データ'
-    + (asOf ? '　<span style="color:#e6cf95;font-weight:600">' + asOf + '時点</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>') + '</span>';
+    + (asOf ? '　<span style="color:#e6cf95;font-weight:600">' + asOf + '時点</span>' : (tab && tab.payFixedAt ? '　<span style="color:#b8a67c">給与確定 ' + esc(tab.payFixedAt) + '</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>')) + '</span>';
   if (adminPriv()) {
     h += '<span style="font-size:10px;color:#b8a67c;cursor:pointer;text-decoration:underline" onclick="salesSetDate(\'' + sel + '\')">'
       + (asOf ? '変更' : '取込日を設定') + '</span>';
@@ -2549,7 +2632,13 @@ function renderSales() {
   setContent(h);
 }
 
-function switchSalesMonth(m) { currentMonth = m; renderSales(); }
+/* ⭐売上明細の月は salesMonth。給与の月（サーバの months）を選んだときだけ currentMonth も合わせる（給与明細と同じ月を開ける）。
+   ⛔速報の月を currentMonth に入れない（renderPay・成績の月が飛ぶ） */
+function switchSalesMonth(m) {
+  salesMonth = m;
+  if (portalData && Object.prototype.toString.call(portalData.months) === '[object Array]' && portalData.months.indexOf(m) >= 0) currentMonth = m;
+  renderSales();
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 📊 じぶんの採算（キャスト本人が「時給以上の仕事ができているか」を見る）
@@ -2746,7 +2835,7 @@ function renderKyuritsuBody(d) {
     h += '<div style="text-align:center;padding:56px 20px">'
       + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">この月のデータはまだありません</div>'
-      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">売上データは毎日深夜に自動更新されます。</div></div></div>';
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">9月以降は［売上明細］の速報と［伝票］で見られます。</div></div></div>';
     setContent(h); return;
   }
 
