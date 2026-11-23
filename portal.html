@@ -604,7 +604,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-11-18a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-24a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -1185,7 +1185,10 @@ if (_devUid) {
 /* ⚡v4→v5（2026-10-13・P-3）＝ホームの「今日」を Worker で組む版。旗がオンの端末は v5e（客名を伏せた答えと伏せていない答えを端末の覚えで混ぜない） */
 /* ⚡SWR_HOME v5→v6（2026-10-15）＝覚える形を変えた（中に持ち主 u・画面の種類 m・代理の相手 va を入れ、読むときに今と照らす）。
    ⭐古い形（v5 以前）は読まない＝全員1回だけ捨てる（書くときに消える）。v4＝2026-10-10 表彰・合戦のボタンを外した版。 */
-var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v6e' : 'v6';
+/* 💰STATS_FRESH v6→v7（2026-11-24）＝成績（売上・給与）がホームの覚えに混ざって保存され、次に開いた日も成績を取りに行かなかった
+   （10月分の給与を公開した後も［給与明細］が「データなし」のまま＝ボスへ申告）。いまは成績を覚えに入れない（writeHomeCache_／readHomeCache_ が STATS_KEYS_ を落とす）。
+   ⭐版を上げて、成績の混ざった今の覚え（v6／v6e）を全員1回だけ捨てる（読まない・次に書くとき homeCachePrune_ が消す）。次のホームの表示が一度だけ遅くなる。 */
+var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v7e' : 'v7';
 var HOME_CACHE_MAX_MS = 3 * 24 * 3600 * 1000; // 3日超は初期描画に使わない（裏取得はする）
 // 画面の種類：c＝本人／a＝管理者が代理で見る／p＝管理者のキャスト表示（プレビュー＝未公開の月の金額を受け取らない応答）。⛔混ぜない
 function homeCacheMode_() { return previewMode ? 'p' : (adminViewAs ? 'a' : 'c'); }
@@ -1207,6 +1210,7 @@ function readHomeCache_(ctx) {
     if (o.u !== ctx.u || o.m !== ctx.m || String(o.va || '') !== ctx.va) return null;
     var age = Date.now() - o.t;
     if (age > HOME_CACHE_MAX_MS || age < -60000) return null; // 古すぎる／時計が戻った端末
+    statsStrip_(o.d); // 💰STATS_FRESH：覚えに成績が残っていても使わない（書く側でも落としている＝二重。成績は loadStatsData が取る）
     return { t: o.t, d: o.d };
   } catch (e) { return null; }
 }
@@ -1214,6 +1218,7 @@ function writeHomeCache_(d, ctx) {
   ctx = ctx || homeCacheCtx_();
   if (!ctx.u) return;
   if (d && d._pt) { d = Object.assign({}, d); delete d._pt; delete d._ptExp; } // 🔐 券は portalAuth:v1 だけに置く
+  if (d) d = statsStrip_(Object.assign({}, d)); // 💰STATS_FRESH：成績（STATS_KEYS_）はホームの覚えに入れない。⛔入れると次に開いた日も「取ってある」と見て取りに行かなかった（2026-11-24）。⚠️写しから落とす＝画面の portalData は消さない
   try { localStorage.setItem(ctx.key, JSON.stringify({ t: Date.now(), u: ctx.u, m: ctx.m, va: ctx.va, d: d })); } catch (e) {}
   homeCachePrune_(ctx.u);
 }
@@ -2168,9 +2173,8 @@ var billsMonth = '';
 // 📊 売上明細タブが見ている月（2026-11-18 速報）。⭐`currentMonth` とは別に持つ（billsMonth と同じ理由）。
 //   ⛔速報の月（今月・給与の無い月）を `currentMonth` に入れると［給与明細］［成績］の月が飛ぶ。給与の月を選んだときだけ currentMonth も合わせる
 var salesMonth = '';
-// 給与ロック画面での自動リフレッシュ済みフラグ（月キー単位・1度だけ）。公開直後の反映漏れ対策で
-// ロックを踏んだら一度だけ最新の公開状態を取り直す。ループ防止に月ごとに済みを記録する。
-var payLockAutoRefreshed = {};
+// 💰STATS_FRESH（2026-11-24）：給与の鍵の画面の「月ごとに1回だけ自動で取り直す」（payLockAutoRefreshed）は statsAutoRecheck_ に1本化した
+//   （「データなし」と同じ決まり＝見せた成績が古いときだけ・その成績につき1回）。
 
 // 来店記録（顧客詳細）から、その来店日の伝票へ飛ぶ。担当キャスト/管理者のみ呼ばれる（呼び出し側でガード済み）
 function jumpToBillDayFromVisit(date) {
@@ -2185,26 +2189,91 @@ function jumpToBillDayFromVisit(date) {
   switchTab('stats');
 }
 
-// 成績データ（売上/給与/月一覧/領収書合計/受領状況）を遅延ロードしてportalDataにマージ。
-// ホームは tab=home の軽量ペイロードで先に描画し、成績タブを開いた時だけこれを叩く（初回ロード高速化）。
+/* 💰STATS_FRESH 2026-11-24 */
+/* 成績（売上・給与・月一覧・領収書合計・受領状況・売上明細の月の札と速報）は、成績の画面を開いた時だけ取る（ホームは軽い答えで先に描く）。
+   ⛔2026-11-24 まで＝「portalData.sales があれば取りに行かない」（1回だけ取る）。しかも成績がホームの覚え（localStorage・3日）に混ざって保存され、
+     次に開いた日も、覚えから戻った成績で「取ってある」と見て取りに行かなかった。
+     ⚠️実害＝10月分の給与を公開（11/24 1時）した後も、公開前に開いた人は［給与明細］が「データなし」のまま
+       （給与の月が1つも無かった人＝黒服・新しい子・残り支給が少ない人が多い）。「データなし」には取り直しの道も無かった。
+       LINE の中でアプリが生きたままだと、同じ画面のまま何日でも古い（記憶 reference_portal_stats_stale_cache の残り）。
+   ⭐いまは：
+     ・成績はホームの覚えに入れない（writeHomeCache_／readHomeCache_ が STATS_KEYS_ を落とす）＝開き直せば必ず取りに行く。
+     ・取った成績は _statsHold に「誰の・どの画面の物か（homeCacheCtx_ の鍵）＋取った時刻」と一緒に持つ。
+       ホームの答えで portalData が入れ替わっても、同じ人・同じ画面なら載せ直す（取り直さない）。
+     ・STATS_FRESH_MS より古ければ、成績の画面を開いたときに取り直す。force（［最新の状態に更新］・自動の取り直し）は必ず取りに行く。
+     ・取りに行っている最中にまた呼ばれたら、その1本の答えを待つ（連打・ホームの答えでの描き直しで何本も出さない）。
+       ⚠️STATS_REQ_STALE_MS を過ぎた1本は待たない（答えが返らない通信のせいで更新できなくならない）。
+     ・答えが届いた時に相手・モード（管理者の代理・キャスト表示）が替わっていたら載せない（前の人の成績を今の画面に入れない）。
+     ・答えで描き直す・通信エラーを出すのは、成績の画面を見ているときだけ（ホームなど、ほかの画面を塗り潰さない）。
+   ⛔成績のキーの正本は STATS_KEYS_ の1本（載せる・覚えから落とす、の両方がこれを読む）。サーバの tab=stats の答えにキーを足したら、ここに足す。 */
+var STATS_KEYS_ = ['sales', 'pay', 'months', 'hairTotals', 'payPublished', 'salesDataDates', 'payReceipt', 'salesTabs', 'sokuho'];
+var STATS_FRESH_MS = 5 * 60 * 1000;    // 取ってからこれより古い成績は、成績の画面を開いたときに取り直す
+var STATS_RECHECK_MS = 30 * 1000;      // 「データなし」「まだ公開されていません」を出したとき、取ってからこれより経っていれば1回だけ自動で取り直す
+var STATS_REQ_STALE_MS = 35 * 1000;    // 取りに行っている1本をこれより長くは待たない（gasFetch の打ち切り 28秒＋すぐの取り直しより長く）
+var _statsHold = null;                 // 最後に取れた成績 { key, at, d, rechecked }
+var _statsReq = null;                  // 取りに行っている1本 { key, at, cbs }
+function statsStrip_(d) { if (d && typeof d === 'object') STATS_KEYS_.forEach(function (k) { delete d[k]; }); return d; }
+// 今の画面（誰の・どのモードか）の成績で、STATS_FRESH_MS より新しい物。無ければ null。
+//   ⛔portalData が無い（退職などで止めた・管理者が相手を替えた直後）ときは使わない＝今までどおりサーバに聞く
+function statsFresh_() {
+  var h = _statsHold;
+  if (!h || !portalData || h.key !== homeCacheCtx_().key) return null;
+  var age = Date.now() - h.at;
+  return (age >= -60000 && age < STATS_FRESH_MS) ? h : null;
+}
+function statsAttach_(h) {
+  if (!portalData) portalData = {};
+  STATS_KEYS_.forEach(function (k) { portalData[k] = h.d[k]; });
+  if (!currentMonth && h.d.months && h.d.months.length > 0) currentMonth = h.d.months[0];
+}
 function loadStatsData(force, cb) {
-  if (portalData && portalData.sales !== undefined && !force) { if (cb) cb(); return; }
+  var h = force ? null : statsFresh_();
+  if (h) { statsAttach_(h); if (cb) cb(); return; }
+  var key = homeCacheCtx_().key;
+  var r0 = _statsReq;
+  if (r0 && r0.key === key && (Date.now() - r0.at) >= 0 && (Date.now() - r0.at) < STATS_REQ_STALE_MS) { if (cb && r0.cbs.indexOf(cb) < 0) r0.cbs.push(cb); return; } // 取りに行っている最中＝同じ1本の答えを待つ
+  var req = { key: key, at: Date.now(), cbs: cb ? [cb] : [] };
+  _statsReq = req;
   var url = GAS_URL + '?action=portal&tab=stats&userId=' + encodeURIComponent(userId);
   if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
   if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
   gasFetch(url)
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (!d.ok) { showErr('エラー: ' + (d.error||'') + retryBtn_('renderStats')); return; }
-      if (!portalData) portalData = {};
-      portalData.sales = d.sales; portalData.pay = d.pay; portalData.months = d.months;
-      portalData.hairTotals = d.hairTotals; portalData.payPublished = d.payPublished;
-      portalData.salesDataDates = d.salesDataDates; portalData.payReceipt = d.payReceipt;
-      portalData.salesTabs = d.salesTabs; portalData.sokuho = d.sokuho;   // 📊売上明細の月の札と速報（2026-11-18）。⛔sales には混ざっていない
-      if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
-      if (cb) cb();
+      if (_statsReq !== req) return;              // 後から別の1本が出た＝この答えは使わない
+      _statsReq = null;
+      if (homeCacheCtx_().key !== key) return;    // 途中で相手・モードが替わった＝今の画面の物ではない
+      if (!d || !d.ok) { if (currentTab === 'stats') showErr('エラー: ' + ((d && d.error) || '') + retryBtn_('statsRefreshNow_')); return; }
+      var o = {};
+      STATS_KEYS_.forEach(function (k) { o[k] = d[k]; }); // 📊salesTabs・sokuho＝売上明細の月の札と速報（2026-11-18）。⛔sales には混ざっていない
+      _statsHold = { key: key, at: Date.now(), d: o, rechecked: false };
+      statsAttach_(_statsHold);
+      if (currentTab === 'stats') req.cbs.forEach(function (f) { f(); });
     })
-    .catch(function(e){ showErr('通信エラー<br><small>'+(e&&e.message||'')+'</small>'+retryBtn_('renderStats')); });
+    .catch(function(e){
+      if (_statsReq !== req) return;
+      _statsReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      if (currentTab === 'stats') showErr('通信エラー<br><small>'+(e&&e.message||'')+'</small>'+retryBtn_('statsRefreshNow_'));
+    });
+}
+// ［最新の状態に更新］＝必ず取りに行く
+function statsRefreshNow_() { loadStatsData(true, renderStats); }
+// 書いた後（給与受領の送信など）＝取りに行っている途中の1本（書く前の状態かもしれない）を待たない
+function statsAfterWrite_() { _statsReq = null; }
+// ［最新の状態に更新］のボタン。⭐押す所は 44px（指で押せる大きさ）。small＝札の中に置く小さい余白
+function statsRefreshBtn_(small) {
+  return '<div style="margin-top:' + (small ? '8px' : '22px') + '"><button type="button" data-stats-refresh="1" onclick="statsRefreshNow_()" style="min-height:44px;padding:0 22px;border-radius:22px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:13px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button></div>';
+}
+// 「データなし」「まだ公開されていません」を出したときに呼ぶ。見せた成績を取ってから STATS_RECHECK_MS 以上たっていれば、その成績につき1回だけ自動で取り直す。
+//   ⭐取り直した答えは新しい（STATS_RECHECK_MS より新しい）＝そこではもう取らない＝ループしない。取れなければ通信エラー［再試行］（勝手に繰り返さない）
+function statsAutoRecheck_() {
+  var h = _statsHold;
+  if (!h || h.rechecked || h.key !== homeCacheCtx_().key) return false;
+  if ((Date.now() - h.at) < STATS_RECHECK_MS) return false;
+  h.rechecked = true;
+  loadStatsData(true, renderStats);
+  return true;
 }
 
 function renderStats() {
@@ -2233,8 +2302,12 @@ function renderStats() {
   // 伝票・給率は成績ペイロード非依存（専用APIをその場でfetch）
   if (statsSubTab === 'bills') { renderBills(); return; }
   if (statsSubTab === 'kyuritsu') { renderKyuritsu(); return; }
-  // 成績データ未ロード（tab=homeでは含まれない）なら遅延ロードしてから再描画
-  if (!portalData || portalData.sales === undefined) { loadStatsData(false, function(){ renderStats(); }); return; }
+  // 💰STATS_FRESH：成績が無い・別の人／モードの物・古い（STATS_FRESH_MS）なら取ってから描く（loadStatsData が1本に絞る）。
+  //   ⭐新しければ portalData に載せ直す（ホームの答えで portalData が入れ替わっても取り直さない）。
+  //   ⛔portalData.sales の有無では決めない（端末の覚えから戻った古い成績で止まった＝2026-11-24）
+  var hs = statsFresh_();
+  if (!hs) { loadStatsData(false, renderStats); return; }
+  statsAttach_(hs);
   if (statsSubTab === 'sales') renderSales();
   else if (statsSubTab === 'pay') renderPay();
 }
@@ -2428,7 +2501,7 @@ function sokuhoCardHtml_(sel, sok, payLocked) {
   if (payLocked) {
     h += '<div style="margin-bottom:10px;padding:10px 12px;border:1px solid #4a3a1e;border-radius:10px;background:#16120b;font-size:12px;color:#d8c79a;line-height:1.7">'
       + '🔒 ' + esc(sel) + ' の給与明細は確認中です。公開されるまでは、確定した日報の速報を出しています。'
-      + '<div style="margin-top:6px"><button onclick="loadStatsData(true, renderStats)" style="padding:5px 14px;border-radius:14px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:12px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button></div></div>';
+      + statsRefreshBtn_(true) + '</div>'; // 💰STATS_FRESH：押す所 44px
   }
   h += '<div data-sokuho="1" style="background:#10151a;border:1.5px dashed #5f8296;border-radius:12px;padding:14px">';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
@@ -2463,7 +2536,9 @@ function renderSales() {
       + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">データなし</div>'
       + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">まだ見られる月がありません。<br>閉店のあと日報が確定すると、その日の分から『速報』として出ます。<br>給与明細は給与の確定・公開のあとに出ます。</div>'
+      + statsRefreshBtn_()
       + '</div>');
+    statsAutoRecheck_(); // 💰STATS_FRESH：見せた成績が古ければ1回だけ取り直す（［給与明細］の「データなし」と同じ）
     return;
   }
 
@@ -2495,11 +2570,13 @@ function renderSales() {
     h += sokuhoCardHtml_(sel, portalData.sokuho[sel], tab.kind === 'locked');
     h += '</div>';
     setContent(h);
+    if (tab.kind === 'locked') statsAutoRecheck_(); // 💰STATS_FRESH：給与は確定・未公開＝公開の直後に古いまま止まらない
     return;
   }
   if (!row) {   // 速報の札なのに中身が無い（来ないはず）＝推測で埋めない
-    h += '<div style="text-align:center;padding:50px 20px;font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' のデータはまだありません。</div></div>';
+    h += '<div style="text-align:center;padding:50px 20px;font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' のデータはまだありません。' + statsRefreshBtn_() + '</div></div>';
     setContent(h);
+    statsAutoRecheck_(); // 💰STATS_FRESH
     return;
   }
 
@@ -2507,8 +2584,10 @@ function renderSales() {
   if (row && row.__locked) {
     h += '<div style="text-align:center;padding:50px 20px"><div style="font-size:34px;margin-bottom:12px">🔒</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
-      + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与データは確認中です。<br>公開されるまでお待ちください。</div></div></div>';
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与データは確認中です。<br>公開されるまでお待ちください。</div>'
+      + statsRefreshBtn_() + '</div></div>';
     setContent(h);
+    statsAutoRecheck_(); // 💰STATS_FRESH：公開の直後に古いまま止まらない（［給与明細］の鍵と同じ）
     return;
   }
 
@@ -2969,10 +3048,16 @@ function renderPay() {
     : Object.keys(sales).sort().reverse();
 
   if (allMonths.length === 0) {
+    // 💰STATS_FRESH（2026-11-24）：⛔ここに取り直しの道が無く、公開前に取った「給与の月が無い」のまま固まった
+    //   （10月分の給与を公開した後も「データなし」＝給与の月が1つも無かった黒服・新しい子）。
+    //   ⭐［最新の状態に更新］を出し、見せた成績が古ければ1回だけ自動で取り直す（鍵の画面と同じ statsAutoRecheck_ の1本）
     setContent('<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">データなし</div>'
       + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
+      + statsRefreshBtn_()
+      + '<div style="font-size:11px;color:#7a6f52;margin-top:10px;line-height:1.7">給与が公開された直後は、このボタンで最新の状態を取り直せます。</div>'
       + '</div>');
+    statsAutoRecheck_();
     return;
   }
 
@@ -3009,24 +3094,20 @@ function renderPay() {
   //   ⛔あのスイッチを true に戻すなら、ここが「未公開でもロックを素通りする道」になることを必ず読み直すこと。
   var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
   if (!adminPriv() && !payPublished[sel] && !isHairOnlyMonth) {
-    // ⚠️ 成績データは初回のみ取得（loadStatsDataのload-onceガード）。管理者が公開した後に
-    //    アプリを開いたままだと payPublished が古いまま＝「公開したのにキャストはロックのまま」になる。
+    // ⚠️ 管理者が公開した後にアプリを開いたままだと payPublished が古いまま＝「公開したのにキャストはロックのまま」になる。
     //    ここで手動リロード導線を必ず出す＝webviewを閉じ直さずワンタップで最新の公開状態を取り直せる。
+    // 💰STATS_FRESH（2026-11-24）：ボタンは押す所 44px（statsRefreshBtn_）。自動の取り直しは statsAutoRecheck_ の1本（「データなし」と同じ決まり）。
+    //   ⛔それまでの「月ごとに1回だけ（payLockAutoRefreshed）」は、取ったばかりでも取り直し、同じ画面のまま日をまたぐと二度と取り直さなかった。
     var hLock = '<div style="padding:14px">' + monthTabsHtml(sel)
       + '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
       + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与明細は確認中です。<br>公開されるまでお待ちください。</div>'
-      + '<button onclick="loadStatsData(true, renderStats)" style="margin-top:22px;padding:9px 22px;border-radius:18px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:13px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button>'
+      + statsRefreshBtn_()
       + '<div style="font-size:11px;color:#7a6f52;margin-top:10px;line-height:1.7">公開直後はアプリ側が古いままのことがあります。<br>このボタンで最新の公開状態を取り直せます。</div>'
       + '</div></div>';
     setContent(hLock);
-    // 公開直後の反映漏れ対策: この月でまだ自動更新していなければ、一度だけ最新の公開状態を取り直す。
-    // 取り直して公開済みなら payslip を表示、まだ未公開ならロックのまま（ガードで再ループしない）。
-    if (!payLockAutoRefreshed[sel]) {
-      payLockAutoRefreshed[sel] = true;
-      loadStatsData(true, renderStats);
-    }
+    statsAutoRecheck_(); // 見せた成績が古ければ1回だけ取り直す（取り直して公開済みなら明細、まだ未公開なら鍵のまま＝もう取り直さない）
     return;
   }
 
@@ -3326,7 +3407,7 @@ function sendPayrollReceipt(month, method) {
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
-    if (d.ok) { alert('送信しました'); loadStatsData(true, function(){ renderStats(); }); }
+    if (d.ok) { alert('送信しました'); statsAfterWrite_(); loadStatsData(true, renderStats); } // 💰STATS_FRESH：送る前に出た取りかけの1本は待たない（受領の状態が古いまま「未送信」に見えない）
     else alert('エラー: ' + (d.error || 'unknown'));
   })
   .catch(function() { alert('通信エラーが発生しました'); });
