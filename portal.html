@@ -96,6 +96,11 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.kyukin { background: #2a1515; border-color: #bb4444; }
 .day.kyukin .num { color: #ff8888; }
 .day.kyukin .kyukin-label { font-size: 9px; color: #ff8888; margin-top: 2px; }
+/* 🏷 店都合の休み（2026-11-25）：⚖️出勤調整で店の都合で休ませた日＝欠勤（赤）ではなく落ち着いた色で「休み／店都合」 */
+.day.kyukin.shoprest { background: #1b2230; border-color: #5d7aa6; }
+.day.kyukin.shoprest .num { color: #a9c0e6; }
+.day.kyukin.shoprest .kyukin-label { color: #a9c0e6; }
+.day .shoprest-label { font-size: 8px; color: #a9c0e6; line-height: 1.1; text-align: center; white-space: nowrap; }
 .day .shift-time { font-size: 8px; margin-top: 2px; line-height: 1.1; text-align: center; }
 .day.scheduled { background: #152a1a; border-color: #336633; }
 .day.scheduled .num { color: #88ffaa; }
@@ -604,7 +609,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-11-24a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-25a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -4286,6 +4291,49 @@ function renderShiftCal() {
   document.getElementById('submit-bar').style.display = 'block';
   updateSubmitBar();
   renderDeclineBtn();
+  shopRestLoad_(); // 🏷 店都合の休み：暦を描いた後に取りに行く（60秒は覚える・届いて変わっていれば描き直す）
+}
+
+/* 🏷 店都合の休み（2026-11-25 ボス指示）：⚖️出勤調整で店の都合で休ませた日を、暦で「欠勤」ではなく「休み／店都合」と出す。
+   ⭐判定はサーバだけ（GAS tab=shoprest・shoprest.js shopRestIs_＝暦に出している値が『休み』で、まだ戻していない店都合の記録がある日）。
+     画面は答えの M/d を覚えて、その日の札を替えるだけ（数え方・押したときの動きは今までどおり）。
+   ⚠️取れない・遅い＝今までどおり（欠勤の札）で出す＝画面は止めない。ホーム（homelite）の答えは使わない＝速い入口の比べに触らない。
+   ⚠️遅れて届いた答え：相手（homeCacheCtx_ の key＝本人／代理閲覧の相手）が替わっていたら捨てる・暦のタブでなければ覚えるだけ。
+   ⛔qa②（11/25）：答えの形が違う・ok:false・通信の失敗でも必ず覚える（覚えないと暦を描き直すたびに GAS を呼ぶ。
+     tab=shoprest を知らない GAS では既定の重い答え＝給与・売上まで読む答えに落ちる）。答えが来たら形に関わらず60秒（使えない答えは空＝欠勤の札のまま）・
+     通信の失敗は30秒（前に覚えた印はそのまま使う）。 */
+var SHOPREST_FRESH_MS = 60000, SHOPREST_REQ_MS = 20000, SHOPREST_FAIL_MS = 30000;
+var _shopRest = null;    // { key, at, ttl, keys:['M/d'…] }
+var _shopRestReq = null; // { key, at }
+function shopRestKeys_() {
+  var key = homeCacheCtx_().key;
+  return (_shopRest && _shopRest.key === key) ? _shopRest.keys : [];
+}
+function shopRestLoad_() {
+  var key = homeCacheCtx_().key, now = Date.now();
+  if (_shopRest && _shopRest.key === key && now - _shopRest.at >= 0 && now - _shopRest.at < (_shopRest.ttl || SHOPREST_FRESH_MS)) return;
+  if (_shopRestReq && _shopRestReq.key === key && now - _shopRestReq.at >= 0 && now - _shopRestReq.at < SHOPREST_REQ_MS) return; // 取りに行っている最中
+  var req = { key: key, at: now };
+  _shopRestReq = req;
+  var url = GAS_URL + '?action=portal&tab=shoprest&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (_shopRestReq !== req) return;
+      _shopRestReq = null;
+      if (homeCacheCtx_().key !== key) return;                 // 途中で相手が替わった＝今の画面の物ではない
+      var ok = !!(d && d.ok && Array.isArray(d.shopRest));     // 使えない答え（形が違う・ok:false・tab を知らない GAS）＝空として60秒覚える
+      var before = JSON.stringify(shopRestKeys_());
+      _shopRest = { key: key, at: Date.now(), ttl: SHOPREST_FRESH_MS, keys: ok ? d.shopRest.map(function(k) { return String(k); }) : [] };
+      if (currentTab === 'shift' && JSON.stringify(_shopRest.keys) !== before) renderShiftCal();
+    })
+    .catch(function() {
+      if (_shopRestReq !== req) return;
+      _shopRestReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      _shopRest = { key: key, at: Date.now(), ttl: SHOPREST_FAIL_MS, keys: shopRestKeys_() }; // 通信の失敗＝30秒は取り直さない（前の印はそのまま）
+    });
 }
 
 // ---- 来週は出勤なし 報告 ----
@@ -4355,6 +4403,8 @@ function calHtml() {
     var existShift = portalData && portalData.shifts && portalData.shifts[key];
     var isPending = pendingShifts[key];
     var isKyukin = sel === '欠勤' || (!sel && existShift === '休み') || (!sel && !existShift && isPending === '欠勤');
+    // 🏷 店都合の休み：シフト表が「休み」の日で、サーバが店都合と答えた日だけ（本人が選び直している日は今までどおり）
+    var isShopRest = isKyukin && !sel && existShift === '休み' && shopRestKeys_().indexOf(key) !== -1;
     var role = portalData && portalData.staffRole;
     var isKurofukuRole = role === '黒服社員' || role === '黒服バイト';
     // 黒服はシフト表/承諾済みに載っている(=existShift)時点で確定＝ピッカーの「欠勤申請」表示条件と一致させる。
@@ -4373,7 +4423,7 @@ function calHtml() {
     if (past) cls += ' past';
     if (isToday) cls += ' today';
     if (isClosed) cls += ' holiday';
-    if (isKyukin) cls += ' kyukin';
+    if (isKyukin) cls += isShopRest ? ' kyukin shoprest' : ' kyukin';
     else if (sel) cls += ' selected';
     else if (isPending || notYetConfirmed) cls += ' pending-shift';
     else if (existShift) cls += ' scheduled';
@@ -4396,7 +4446,7 @@ function calHtml() {
       + '<div class="num">'+d+'</div>'
       + (isClosed ? '<div class="holiday-label">🏖休</div>'
           : (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : ''))
-      + (!isClosed && isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
+      + (!isClosed && isKyukin ? (isShopRest ? '<div class="kyukin-label">休み</div><div class="shoprest-label">店都合</div>' : '<div class="kyukin-label">欠勤</div>') : '')
       + (!isClosed && statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
       + '</div>';
   }
