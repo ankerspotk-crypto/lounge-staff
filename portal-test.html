@@ -96,6 +96,11 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.kyukin { background: #2a1515; border-color: #bb4444; }
 .day.kyukin .num { color: #ff8888; }
 .day.kyukin .kyukin-label { font-size: 9px; color: #ff8888; margin-top: 2px; }
+/* 🏷 店都合の休み（2026-11-25）：⚖️出勤調整で店の都合で休ませた日＝欠勤（赤）ではなく落ち着いた色で「休み／店都合」 */
+.day.kyukin.shoprest { background: #1b2230; border-color: #5d7aa6; }
+.day.kyukin.shoprest .num { color: #a9c0e6; }
+.day.kyukin.shoprest .kyukin-label { color: #a9c0e6; }
+.day .shoprest-label { font-size: 8px; color: #a9c0e6; line-height: 1.1; text-align: center; white-space: nowrap; }
 .day .shift-time { font-size: 8px; margin-top: 2px; line-height: 1.1; text-align: center; }
 .day.scheduled { background: #152a1a; border-color: #336633; }
 .day.scheduled .num { color: #88ffaa; }
@@ -199,6 +204,9 @@ header h1 { font-size: 17px; font-weight: 600; }
 .req-status { text-align: center; font-size: 13px; padding: 6px 0; }
 .req-status.ok  { color: #88ffaa; }
 .req-status.off { color: #ff8866; }
+.req-status.warn { color: #ffb066; }  /* 『シフト表未反映』＝要回収。未処理と同じ色にしない */
+.reqhist-bar { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.reqhist-bar .notif-group-sel { width:auto; flex:1 1 46%; min-width:130px; }
 .req-empty { text-align: center; color: #94886a; padding: 40px 0; font-size: 14px; }
 .reqhist-date { font-size: 13px; font-weight: 700; color: #e6cf95; margin: 18px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #33291a; }
 .reqhist-date:first-of-type { margin-top: 4px; }
@@ -556,115 +564,10 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 .home-hero .hh-rule{ margin:13px 0 0; height:1px; width:64px; background:linear-gradient(90deg,#c9a95f,transparent); }
 .home-hero .hh-line{ margin-top:11px; font-size:13px; letter-spacing:.05em; color:#dcc084; position:relative; }
 
-/* 🏆 表彰・匿名ピア投票 */
-.aw-head{ display:flex; align-items:center; gap:9px; margin:2px 2px 6px; }
-.aw-head .aw-emoji{ font-size:23px; }
-.aw-head .aw-title{ font-size:19px; font-weight:800; color:#f4ecdc; }
-.aw-sub{ font-size:12px; color:#b09f74; margin:0 2px 12px; letter-spacing:.03em; }
-.aw-note{ background:linear-gradient(135deg,#1c1710,#141009); border:1px solid rgba(214,183,120,.2); border-radius:12px; padding:12px 13px; font-size:12.5px; color:#c7ae74; line-height:1.7; margin-bottom:14px; }
-.aw-reward{ display:flex; align-items:center; gap:12px; background:linear-gradient(135deg,#2c2113,#171009); border:1px solid rgba(214,183,120,.42); border-radius:14px; padding:14px 15px; margin-bottom:13px; box-shadow:0 8px 22px rgba(0,0,0,.34); }
-.aw-reward.done{ border-color:rgba(214,183,120,.62); box-shadow:0 8px 24px rgba(185,152,90,.22); }
-.aw-prog{ font-size:12px; color:#b09f74; text-align:center; margin:0 0 14px; letter-spacing:.04em; }
-.aw-cat{ background:linear-gradient(180deg,#17140d,#120f09); border:1px solid rgba(214,183,120,.16); border-radius:14px; padding:15px 14px; margin-bottom:11px; box-shadow:0 6px 16px rgba(0,0,0,.28); }
-.aw-cat .aw-c-top{ display:flex; align-items:center; gap:9px; margin-bottom:4px; }
-.aw-cat .aw-c-ico{ font-size:21px; }
-.aw-cat .aw-c-name{ font-size:15.5px; font-weight:800; color:#f2ead9; }
-.aw-scope{ margin-left:auto; font-size:10.5px; font-weight:700; color:#c9a459; background:#241d10; border:1px solid rgba(214,183,120,.3); border-radius:8px; padding:2px 8px; white-space:nowrap; }
-.aw-cat .aw-c-desc{ font-size:12px; color:#94886a; margin:0 0 12px; line-height:1.55; }
-.aw-pick{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:13px 14px; border-radius:11px; border:1px solid rgba(214,183,120,.3); background:#241d10; color:#f2ead9; font-size:15px; font-weight:700; cursor:pointer; }
-.aw-pick:active{ filter:brightness(1.08); }
-.aw-pick.empty{ color:#94886a; font-weight:600; border-style:dashed; background:#141009; }
-.aw-pick .aw-pick-r{ color:#c9a459; font-size:13px; font-weight:600; }
-.aw-cmt{ margin-top:9px; width:100%; background:#100d08; border:1px solid rgba(214,183,120,.16); border-radius:10px; padding:10px 12px; font-size:13.5px; color:#f2ead9; resize:none; font-family:inherit; line-height:1.5; }
-.aw-cmt::placeholder{ color:#6f6650; }
-.aw-search{ width:100%; background:#100d08; border:1px solid rgba(214,183,120,.24); border-radius:11px; padding:12px 14px; font-size:15px; color:#f2ead9; }
-.aw-search::placeholder{ color:#6f6650; }
-.aw-cand{ display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid #241d10; cursor:pointer; }
-.aw-cand:active{ background:#1c160d; }
-.aw-cand .aw-av{ width:38px; height:38px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; background:linear-gradient(135deg,#2a2114,#1a140b); border:1px solid rgba(214,183,120,.32); color:#e6cf95; }
-.aw-cand .aw-nm{ flex:1; min-width:0; font-size:15px; color:#f2ead9; font-weight:600; }
-.aw-cand .aw-role{ font-size:11px; color:#94886a; white-space:nowrap; }
-.aw-cand.sel{ background:#241d10; }
-.aw-cand.sel .aw-nm{ color:#f4d98a; font-weight:800; }
-.aw-cand.sel .aw-av{ border-color:#c9a459; color:#f4d98a; }
-.aw-win{ position:relative; overflow:hidden; background:linear-gradient(135deg,#241c0f,#15100a); border:1px solid rgba(214,183,120,.34); border-radius:16px; padding:16px; margin-bottom:11px; box-shadow:0 10px 26px rgba(0,0,0,.4); }
-.aw-win::before{ content:''; position:absolute; top:-40%; right:-12%; width:150px; height:150px; border-radius:50%; background:radial-gradient(circle, rgba(232,202,122,.16), rgba(232,202,122,0) 70%); pointer-events:none; }
-.aw-win .aw-w-cat{ font-size:12px; color:#c7ae74; letter-spacing:.06em; }
-.aw-win .aw-w-name{ margin-top:6px; font-size:22px; font-weight:800; color:#f4ecdc; }
-.aw-win .aw-w-name b{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-.aw-mine{ background:linear-gradient(135deg,#2a2012,#15100a); border:1px solid rgba(214,183,120,.42); border-radius:16px; padding:20px 18px; margin-bottom:14px; text-align:center; box-shadow:0 12px 30px rgba(0,0,0,.42); }
-
-
-/* ⚔️ いえやす合戦（出勤キャスト同士の非同期ターン制対戦） */
-.ks-arena{ position:relative; overflow:hidden; background:linear-gradient(160deg,#221a0f,#14100a 60%,#0f0c07); border:1px solid rgba(214,183,120,.34); border-radius:18px; padding:16px 15px 14px; margin-bottom:13px; box-shadow:0 12px 30px rgba(0,0,0,.44); }
-.ks-arena::before{ content:''; position:absolute; top:-55%; left:50%; transform:translateX(-50%); width:230px; height:230px; border-radius:50%; background:radial-gradient(circle, rgba(232,202,122,.13), rgba(232,202,122,0) 70%); pointer-events:none; }
-.ks-turn{ position:relative; text-align:center; font-size:11.5px; letter-spacing:.16em; color:#c7ae74; margin-bottom:13px; }
-.ks-fight{ position:relative; display:flex; align-items:flex-start; gap:8px; }
-.ks-side{ flex:1; min-width:0; }
-.ks-side .ks-flag{ font-size:10.5px; font-weight:700; letter-spacing:.1em; color:#8d7c56; }
-.ks-side .ks-nm{ font-size:15.5px; font-weight:800; color:#f2ead9; margin:2px 0 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ks-side.me .ks-nm{ color:#f4d98a; }
-.ks-hp{ height:9px; border-radius:5px; background:#0d0a06; border:1px solid rgba(214,183,120,.2); overflow:hidden; }
-.ks-hp i{ display:block; height:100%; background:linear-gradient(90deg,#b8933f,#f0d38d); transition:width .5s cubic-bezier(.2,.8,.3,1); }
-.ks-side.hurt .ks-hp i{ background:linear-gradient(90deg,#8d3040,#d1697a); }
-.ks-stat{ display:flex; justify-content:space-between; font-size:11px; color:#94886a; margin-top:5px; }
-.ks-stat b{ color:#e6cf95; font-weight:700; }
-.ks-vs{ align-self:center; font-size:13px; font-weight:800; color:#8d7c56; letter-spacing:.06em; padding-top:16px; }
-.ks-panel{ background:linear-gradient(180deg,#17140d,#120f09); border:1px solid rgba(214,183,120,.16); border-radius:14px; padding:15px 14px; margin-bottom:12px; box-shadow:0 6px 16px rgba(0,0,0,.28); }
-.ks-lbl{ font-size:11.5px; color:#b09f74; letter-spacing:.06em; margin-bottom:9px; }
-.ks-hands{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-.ks-hand{ display:flex; flex-direction:column; align-items:center; gap:5px; padding:14px 4px 11px; border-radius:13px; border:1px solid rgba(214,183,120,.22); background:#181309; color:#cbb98a; cursor:pointer; font-family:inherit; transition:transform .12s, border-color .18s, background .18s; }
-.ks-hand .ks-h-ico{ font-size:27px; line-height:1; }
-.ks-hand .ks-h-nm{ font-size:13.5px; font-weight:800; }
-.ks-hand:active{ transform:scale(.96); }
-.ks-hand.sel{ background:linear-gradient(160deg,#3a2c15,#221a0d); border-color:#d6b778; color:#f6e2ab; box-shadow:0 0 0 1px rgba(214,183,120,.32), 0 6px 18px rgba(185,152,90,.24); }
-.ks-bets{ display:flex; gap:7px; }
-.ks-bet{ flex:1; padding:12px 0; border-radius:11px; border:1px solid rgba(214,183,120,.22); background:#181309; color:#cbb98a; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit; transition:transform .12s, border-color .18s, background .18s; }
-.ks-bet:active{ transform:scale(.94); }
-.ks-bet.sel{ background:linear-gradient(160deg,#3a2c15,#221a0d); border-color:#d6b778; color:#f6e2ab; }
-.ks-bet:disabled{ opacity:.28; cursor:default; }
-.ks-go{ width:100%; margin-top:14px; padding:16px 0; border-radius:13px; border:1px solid rgba(214,183,120,.5); background:linear-gradient(135deg,#3d2d14,#241a0c); color:#f6e2ab; font-size:17px; font-weight:800; letter-spacing:.1em; cursor:pointer; font-family:inherit; box-shadow:0 8px 22px rgba(0,0,0,.36); }
-.ks-go:disabled{ opacity:.36; cursor:default; box-shadow:none; }
-.ks-go:active:not(:disabled){ filter:brightness(1.12); }
-.ks-wait{ text-align:center; padding:22px 8px; }
-.ks-wait .ks-w-ico{ font-size:32px; line-height:1; }
-.ks-wait .ks-w-t{ margin-top:9px; font-size:14.5px; font-weight:700; color:#f2ead9; }
-.ks-wait .ks-w-s{ margin-top:5px; font-size:12px; color:#94886a; line-height:1.7; }
-.ks-dot{ display:inline-block; width:5px; height:5px; margin:0 2px; border-radius:50%; background:#c9a459; animation:ksBlink 1.3s infinite; }
-.ks-dot:nth-child(2){ animation-delay:.22s } .ks-dot:nth-child(3){ animation-delay:.44s }
-@keyframes ksBlink{ 0%,60%,100%{opacity:.22} 30%{opacity:1} }
-.ks-res{ position:relative; overflow:hidden; text-align:center; padding:26px 16px; border-radius:16px; margin-bottom:12px; border:1px solid rgba(214,183,120,.34); background:linear-gradient(135deg,#2a2012,#15100a); box-shadow:0 12px 30px rgba(0,0,0,.42); }
-.ks-res.win{ border-color:rgba(214,183,120,.62); box-shadow:0 12px 32px rgba(185,152,90,.26); }
-.ks-res .ks-r-ico{ font-size:44px; line-height:1; }
-.ks-res .ks-r-t{ margin-top:8px; font-size:25px; font-weight:800; color:#f4ecdc; letter-spacing:.06em; }
-.ks-res.win .ks-r-t{ background:var(--grad-gold); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
-.ks-res .ks-r-s{ margin-top:7px; font-size:12.5px; color:#c7ae74; }
-.ks-log{ display:flex; align-items:center; gap:9px; padding:9px 4px; border-bottom:1px solid #221b11; font-size:13px; }
-.ks-log:last-child{ border-bottom:none; }
-.ks-log .ks-l-t{ font-size:10.5px; color:#8d7c56; width:34px; flex-shrink:0; letter-spacing:.04em; }
-.ks-log .ks-l-h{ color:#cbb98a; white-space:nowrap; }
-.ks-log .ks-l-r{ margin-left:auto; font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:8px; white-space:nowrap; }
-.ks-log .ks-l-r.win{ color:#f4d98a; background:#2a2012; border:1px solid rgba(214,183,120,.34); }
-.ks-log .ks-l-r.lose{ color:#cc8a96; background:#241318; border:1px solid rgba(204,138,150,.26); }
-.ks-log .ks-l-r.draw{ color:#94886a; background:#191510; border:1px solid rgba(214,183,120,.14); }
-.ks-rule{ font-size:11.5px; color:#8d7c56; line-height:1.85; letter-spacing:.02em; }
-.ks-rule b{ color:#c9a459; font-weight:700; }
-.ks-rank{ display:flex; align-items:center; gap:11px; padding:11px 4px; border-bottom:1px solid #221b11; }
-.ks-rank:last-child{ border-bottom:none; }
-.ks-rank .ks-no{ width:26px; flex-shrink:0; text-align:center; font-size:13px; font-weight:800; color:#8d7c56; }
-.ks-rank.top .ks-no{ font-size:17px; }
-.ks-rank .ks-r-nm{ flex:1; min-width:0; font-size:14.5px; color:#f2ead9; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.ks-rank.me .ks-r-nm{ color:#f4d98a; font-weight:800; }
-.ks-rank .ks-r-w{ font-size:12.5px; color:#94886a; white-space:nowrap; }
-.ks-rank .ks-r-w b{ color:#e6cf95; font-size:15px; font-weight:800; }
+/* 🏆表彰・⚔️合戦の画面は 2026-10-10 ボス指示で削除（apply-remove-vote-kassen.js）。 */
 </style>
 </head>
 <body>
-<script>
-/* ===== テスト環境リボン（ファイル名 -test.html で判定・本番では何も出力しない） ===== */
-if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7a1020;color:#ffd7dd;font:700 12px/1.7 system-ui,-apple-system,sans-serif;text-align:center;padding:4px 8px;letter-spacing:.04em;box-shadow:0 1px 6px rgba(0,0,0,.5);">⚠️ ポータル テスト環境 — 本番バックエンド接続（実データ）。確定操作は本番に反映されます</div>');}
-</script>
-
 <div class="opening" id="opening" aria-hidden="true"><div class="op-inner">
   <div class="op-mark">IEYAS</div>
   <div class="op-sub">L O U N G E</div>
@@ -693,15 +596,6 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
   </div>
 </div>
 
-<div class="overlay" id="aw-overlay" onclick="if(event.target===this)closeCandPicker()">
-  <div class="picker" onclick="event.stopPropagation()" style="max-height:82vh;display:flex;flex-direction:column">
-    <div class="picker-title" id="aw-pk-title"></div>
-    <input class="aw-search" id="aw-search" placeholder="名前で探す" oninput="filterCand()" autocomplete="off">
-    <div id="aw-cand-list" style="overflow-y:auto;flex:1;margin-top:4px"></div>
-    <button class="picker-cancel" onclick="closeCandPicker()">閉じる</button>
-  </div>
-</div>
-
 <div class="overlay" id="notice-overlay" style="align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeNoticeModal()">
   <div id="notice-modal-box" style="background:#0e1726;border:1px solid #33291a;border-radius:16px;padding:22px;max-width:440px;width:100%;max-height:80vh;overflow-y:auto"></div>
 </div>
@@ -714,9 +608,14 @@ if(/-test\.html/i.test(location.pathname)){document.write('<div style="position:
 
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
-var IS_TEST_ENV = /-test\.html/i.test(location.pathname); /* テスト環境フラグ（ファイル名で判定） */
-var GAS_URL ='https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-08-27a-test'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示） */
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
+var PORTAL_BUILD = '2026-11-27a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+   ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
+     ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
+     （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
+     ⚠️同日、`tests/actor` が版バッジを改修の有無の材料にしていて、BUILDを1つ進めただけで黙って赤くなった。 */
+/* [notrust-wording] 🗓 2026-09-18 ボス確定（指示箱#32）：画面に出す文字に「TRUST」と書かない（2026-09-01で使うのをやめた旧システム）。
+   8月以前のデータの話は「旧システム」と呼ぶ。⚠️内部名（シート名・関数名・比較に使う値）はそのまま。見張り＝tests/close/suites/04_notrust.js */
 
 var userId = '', userName = '', portalData = null;
 var currentTab = 'home', currentMonth = '';
@@ -809,7 +708,8 @@ function dismissOpening(){
 }
 // 最低表示時間（＝オープニングの"間"）を確保してから閉じる
 function requestDismissOpening(){
-  var wait = Math.max(0, 1900 - (Date.now() - _openStart));
+  // ⚡PM 判断（2026-10-13）：旗がオンの画面は最低1.9秒の"間"をやめ、データが届いたら閉じる
+  var wait = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 0 : Math.max(0, 1900 - (Date.now() - _openStart));
   setTimeout(dismissOpening, wait);
 }
 // 名前が取れなくても必ず閉じる保険（コールドスタートで固まらせない）
@@ -825,6 +725,7 @@ function homeGreetHero(){
 }
 
 // ---- タイムアウト付き fetch ヘルパー ----
+var GAS_GET_QUICK_RETRY_MS = 3000; // ⚡SWR_HOME：GET を取り直すのは、この時間より早く「つながらない」が返ったときだけ
 function gasFetch(url, options, timeoutMs) {
   var fullMs = timeoutMs || 28000;
   var isGet = !options || !options.method || String(options.method).toUpperCase() === 'GET';
@@ -842,11 +743,17 @@ function gasFetch(url, options, timeoutMs) {
       throw e;
     });
   }
-  // POSTは二重送信を避けるため単発。GETはコールドスタート対策で「初回18sで見切り→ウォームになった状態で1回だけ再試行」
+  /* ⚡SWR_HOME 2026-10-15 */
+  /* ⚡2026-10-15：GET の「初回18秒で見切り→1回だけ取り直す」をやめた。
+     ⛔実害（portal_perf 実測）＝homelite が GAS で 8.6〜13秒かかる日、18秒で切って取り直すと GAS は同じ依頼を2回走らせる
+       （画面が切っても GAS の1本目は止まらない）。2本目は同じ重さを最初からやり直す＝最初の表示まで最大57秒。
+     ⭐いまは：GET も1本を最後（fullMs＝28秒）まで待つ。取り直すのは「3秒以内につながらなかった」ときの1回だけ（GAS に届いていない見込みが高い）。
+     ⭐POST は今までどおり単発（二重送信を作らない）。 */
   if (!isGet) return once(fullMs);
-  return once(Math.min(fullMs, 18000)).catch(function(e) {
-    var retryable = e && (e._timeout || (e.message && /Failed to fetch|NetworkError|Load failed|network/i.test(e.message)));
-    if (retryable) return once(fullMs);
+  var t0 = Date.now();
+  return once(fullMs).catch(function(e) {
+    var quickNet = e && !e._timeout && (Date.now() - t0) < GAS_GET_QUICK_RETRY_MS && e.message && /Failed to fetch|NetworkError|Load failed|network/i.test(e.message);
+    if (quickNet) return once(fullMs);
     throw e;
   });
 }
@@ -855,6 +762,298 @@ function retryBtn_(fn) {
   return '<br><button onclick="' + fn + '()" style="margin-top:14px;padding:10px 24px;background:#241d10;color:#e6cf95;border:1px solid #8a6d3a;border-radius:8px;font-size:14px;cursor:pointer">再試行</button>';
 }
 
+/* ===== 🔐 本人確認（2026-10-09 ボス決定「今の GAS ですぐ塞ぐ」）ここから =====
+   ⛔それまでは LINE の userId をそのまま送り、サーバも信じていた＝userId を知られると誰でも本人として入れた。
+   ⭐いまは GAS 宛ての通信だけ、この入口1本（window.fetch の包み）で本人の証を足す：
+     券（pt・サーバの署名・6時間）があれば券／無ければ LIFF の ID トークン（idt）。サーバは idt を LINE で確かめて券を返す。
+     開発用 `#u=` は鍵（dk）を足すだけ＝効くかどうかはサーバ（鍵＋試験用アカウントだけ）が決める。
+   ⭐ここで足すので、各画面の gasFetch / fetch(GAS_URL…) は1行も直していない（直し漏れの道を作らない）。
+   ⭐断られた依頼（error:'auth'）はサーバの入口で止まっていて何も実行されていない＝POST でも1回だけ送り直してよい。
+   ⚠️券は localStorage（portalAuth:v1）。別の LINE アカウントの券は使わない（持ち主の userId で照合）。 */
+var _paUid = '', _paTicket = '', _paIdt = '';
+var PA_STORE_KEY = 'portalAuth:v1';
+function paLoadTicket_() { try { var o = JSON.parse(localStorage.getItem(PA_STORE_KEY) || 'null'); return (o && o.t) ? o : null; } catch (e) { return null; } }
+function paSaveTicket_(t, exp) { _paTicket = String(t || ''); try { localStorage.setItem(PA_STORE_KEY, JSON.stringify({ t: _paTicket, exp: Number(exp) || 0, uid: _paUid })); } catch (e) {} }
+function paClearTicket_() { _paTicket = ''; try { localStorage.removeItem(PA_STORE_KEY); } catch (e) {} }
+// LIFF でログインした直後に1回。券は持ち主が同じで期限まで1分以上あるときだけ使う
+function paPrepare_(uid) {
+  _paUid = String(uid || '');
+  var o = paLoadTicket_();
+  if (o && o.uid === _paUid && Number(o.exp) * 1000 > Date.now() + 60000) _paTicket = String(o.t); else paClearTicket_();
+  try { _paIdt = (window.liff && liff.getIDToken && liff.getIDToken()) || ''; } catch (e) { _paIdt = ''; }
+}
+function paCred_() {
+  if (_devUid) return _devKey ? { k: 'dk', v: _devKey } : { k: '', v: '' };
+  if (_paTicket) return { k: 'pt', v: _paTicket };
+  if (_paIdt) return { k: 'idt', v: _paIdt };
+  return { k: '', v: '' };
+}
+function paIsGas_(u) { return typeof u === 'string' && u.indexOf(GAS_URL) === 0 && u.indexOf('action=portalMaintenance') < 0; }
+// pa=1＝新しい画面の印（サーバは「新しい画面なのに証が無い＝LIFF の openid が無い」を見分けて記録する）
+function paDecorate_(u, init, cred) {
+  var extra = { pa: '1' };
+  if (cred.k) extra[cred.k] = cred.v;
+  var method = String((init && init.method) || 'GET').toUpperCase();
+  if (method === 'GET') {
+    // 👤キャスト表示（プレビュー）中は、未公開の月の金額をサーバから受け取らない（キャスト本人と同じ応答）
+    if (previewMode && adminViewAs && u.indexOf('action=portal') >= 0) extra.pv = '1';
+    var q = Object.keys(extra).map(function (k) { return k + '=' + encodeURIComponent(extra[k]); }).join('&');
+    return { url: u + (u.indexOf('?') >= 0 ? '&' : '?') + q, init: init };
+  }
+  if (init && typeof init.body === 'string') {
+    try {
+      var b = JSON.parse(init.body);
+      if (b && typeof b === 'object' && !Array.isArray(b)) {
+        Object.keys(extra).forEach(function (k) { b[k] = extra[k]; });
+        return { url: u, init: Object.assign({}, init, { body: JSON.stringify(b) }) };
+      }
+    } catch (e) {}
+  }
+  return { url: u, init: init };
+}
+var _paRawFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null;
+function paFetch_(u, init, attempt) {
+  var cred = paCred_();
+  var dd = paDecorate_(u, init, cred);
+  return _paRawFetch(dd.url, dd.init).then(function (r) {
+    var c; try { c = r.clone(); } catch (e) { return r; }
+    return c.json().then(function (d) {
+      if (d && d._pt) paSaveTicket_(d._pt, d._ptExp);
+      if (d && d.ok === false && d.error === 'auth') {
+        if (!attempt && cred.k === 'pt') { paClearTicket_(); if (_paIdt) return paFetch_(u, init, 1); }
+        paShowAuthError_(d);
+      }
+      return r;
+    }, function () { return r; });
+  });
+}
+if (_paRawFetch) window.fetch = function (input, init) {
+  if (paIsGas_(input)) return paFetch_(input, init, 0);
+  return _paRawFetch(input, init);
+};
+function paRelogin_() {
+  paClearTicket_();
+  try { if (window.liff && liff.isInClient && !liff.isInClient() && liff.isLoggedIn && liff.isLoggedIn()) { liff.logout(); liff.login({ redirectUri: location.href }); return; } } catch (e) {}
+  location.reload();
+}
+// 断られたら全面に案内を出す（下の画面が遅れて何を描いても隠れない）。メンテナンスの全面表示よりは下
+function paShowAuthError_(d) {
+  try { dismissOpening(); } catch (e) {}
+  var el = document.getElementById('portalAuthOverlay');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'portalAuthOverlay';
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#16130d,#080604 72%)';
+    document.body.appendChild(el);
+  }
+  var expired = d && (d.auth === 'expired' || d.auth === 'ticket_expired');
+  el.innerHTML = '<div style="max-width:440px;text-align:center;padding:30px 24px;color:#f2ead9">'
+    + '<div style="font-size:46px;line-height:1;margin-bottom:16px">🔐</div>'
+    + '<div style="font-family:serif;font-size:20px;font-weight:800;color:#e6cf95;margin-bottom:12px">' + (expired ? 'ログインの期限が切れました' : '本人確認ができませんでした') + '</div>'
+    + '<div style="font-size:14px;line-height:1.9">LINE のトークから、ポータルを開き直してください。</div>'
+    + '<button onclick="paRelogin_()" style="margin-top:22px;padding:12px 26px;border-radius:10px;border:1px solid #8a6d3a;background:#241d10;color:#e6cf95;font-size:15px;font-weight:800">🔄 開き直す</button>'
+    + '</div>';
+  el.style.display = 'flex';
+}
+/* ===== 🔐 本人確認 ここまで ===== */
+
+/* ⚡EDGE_P1 2026-10-13 */
+/* ===== ⚡ Cloudflare 経由（edge・ポータルの入口 P-1）ここから =====
+   ⭐旗（?edge=1／?edge=0・localStorage portalEdge:on）がオンのときだけ、GAS 宛ての通信を EDGE_URL の Worker 経由にする。
+     判定の正本はこの window.fetch の包み1か所（内側に 🔐 本人確認の paFetch_ の包みがある＝GAS へ直接はそちらが証を足す）。
+   ⭐Worker につながらないときだけ GAS へ直接。⛔POST は Worker に届いたか分からないとき送り直さない（二重の書き込みを作らない）。
+   ⭐画面が URL・本文に入れる userId は Worker が捨てる（LINE で確かめた本人の券を Worker が付ける）＝ここでは触らない。 */
+var EDGE_URL = "https://portal-edge.ankerspot-k.workers.dev";
+var EDGE_STORE_KEY = 'portalEdge:v1', EDGE_FLAG_KEY = 'portalEdge:on';
+var EDGE_ON = (function () {
+  var q = null; try { q = new URLSearchParams(location.search).get('edge'); } catch (e) {}
+  if (q === '1' || q === '0') { try { localStorage.setItem(EDGE_FLAG_KEY, q); } catch (e) {} return q === '1'; }
+  // 2026-10-13 23:1x ボス号令（今夜すぐ）：本人確認 enforce・券の鍵を入れ直して relay ok を確かめた後に全員オン。?edge=0 の端末だけ GAS へ直接
+  try { return localStorage.getItem(EDGE_FLAG_KEY) !== '0'; } catch (e) { return true; }
+})();
+// 試験の画面だけ true（--test-page）：GAS へ直接戻る道を止める（GAS_URL は写しの GAS＝券なしの直接の依頼は受けない）。⭐本番に当てる形は false＝今までどおり本番の GAS へ戻る
+var EDGE_NO_DIRECT = false;
+var _edgeBlockedShown = false;
+// GAS へ直接（paFetch_ の包み）。試験の画面では止めて「試験の入口につながりません」を出す（試験中の操作を本番にも写しにも黙って送らない）
+function edgeDirect_(input, init) {
+  if (!EDGE_NO_DIRECT) return _edgePrevFetch(input, init);
+  if (!_edgeBlockedShown) { _edgeBlockedShown = true; try { showErr('試験の入口につながりません（PM に連絡してください）<br><small>' + String(_edgeWhy || 'edge').replace(/[<>&"]/g, '') + '</small>'); } catch (e) {} }
+  return Promise.reject(new Error('edge-test-blocked'));
+}
+var _edgeTok = '', _edgeExp = 0, _edgeUid = '', _edgeDown = false, _edgeWhy = '', _edgeAuthP = null, _edgeHomeReq = false;
+var _edgePerf = { marks: {}, sent: false, cached: false };
+function edgeActive_() { return EDGE_ON && !_edgeDown && !_devUid; }
+// PM 判断：旗がオンの画面では予約の状態の切り替え（来店前／来店済／退店済）を出さない（新しい軍師だけで扱う）
+function edgeNoRsvStatus_() { return EDGE_ON; }
+function edgeOff_(why) { _edgeDown = true; if (!_edgeWhy) _edgeWhy = String(why || 'down').replace(/[^a-z0-9:_-]/gi, '').slice(0, 40); }
+function edgeT0_() { try { return (performance.timeOrigin || performance.timing.navigationStart) || _openStart; } catch (e) { return _openStart; } }
+function edgeMark_(k) { if (_edgePerf.marks[k] == null) _edgePerf.marks[k] = Math.max(0, Math.round(Date.now() - edgeT0_())); }
+function edgeSendPerf_() {
+  if (!EDGE_ON) return; // qa M1（PM 判断）：計測は旗がオンのときだけ送る
+  if (_edgePerf.sent) return; _edgePerf.sent = true;
+  var m = _edgePerf.marks; m.navigationStart = 0;
+  var o = { v: 1, edge: edgeActive_(), cached: !!_edgePerf.cached, build: PORTAL_BUILD, marks: m };
+  if (_edgeWhy) o.why = _edgeWhy.toLowerCase();
+  var body = JSON.stringify(o);
+  try { if (navigator.sendBeacon && navigator.sendBeacon(EDGE_URL + '/portal/perf', new Blob([body], { type: 'text/plain' }))) return; } catch (e) {}
+  try { _paRawFetch(EDGE_URL + '/portal/perf', { method: 'POST', body: body, keepalive: true, headers: { 'content-type': 'text/plain' } }).catch(function () {}); } catch (e) {}
+}
+function edgeHomePainted_() { edgeMark_('homePainted'); setTimeout(edgeSendPerf_, 0); }
+try { window.addEventListener('pagehide', edgeSendPerf_); } catch (e) {}
+function edgeLoad_() { try { var o = JSON.parse(localStorage.getItem(EDGE_STORE_KEY) || 'null'); return (o && o.t) ? o : null; } catch (e) { return null; } }
+function edgeSave_(t, exp) { _edgeTok = String(t || ''); _edgeExp = Number(exp) || 0; try { localStorage.setItem(EDGE_STORE_KEY, JSON.stringify({ t: _edgeTok, exp: _edgeExp, uid: _edgeUid })); } catch (e) {} }
+function edgeClear_() { _edgeTok = ''; _edgeExp = 0; try { localStorage.removeItem(EDGE_STORE_KEY); } catch (e) {} }
+// LIFF でログインした直後に1回（paPrepare_ の後）。トークンは持ち主が同じで期限まで1分以上あるときだけ使う。無ければ入口を先に叩いておく
+function edgePrepare_(uid) {
+  _edgeUid = String(uid || '');
+  if (!edgeActive_()) return;
+  var o = edgeLoad_();
+  if (o && o.uid === _edgeUid && Number(o.exp) * 1000 > Date.now() + 60000) { _edgeTok = String(o.t); _edgeExp = Number(o.exp); }
+  else edgeClear_();
+  if (!_edgeTok) edgeAuth_();
+}
+// 入口：LIFF の id_token → ポータル自分のトークン。⭐断られた／届かない＝この開いている間は GAS へ直接（今までどおり）
+function edgeAuth_() {
+  if (_edgeAuthP) return _edgeAuthP;
+  if (!_paIdt) { edgeOff_('no_idt'); return Promise.resolve(false); }
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+  _edgeAuthP = _paRawFetch(EDGE_URL + '/portal/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idt: _paIdt }), signal: ctrl ? ctrl.signal : undefined, cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (timer) clearTimeout(timer);
+      edgeMark_('authEnd');
+      if (d && d.ok && d.token) { edgeSave_(d.token, d.exp); return true; }
+      edgeOff_('auth:' + ((d && (d.auth || d.error)) || 'ng'));
+      return false;
+    }, function () { if (timer) clearTimeout(timer); edgeMark_('authEnd'); edgeOff_('auth:net'); return false; })
+    .then(function (ok) { _edgeAuthP = null; return ok; });
+  return _edgeAuthP;
+}
+function edgeReady_() {
+  if (!edgeActive_()) return Promise.resolve(false);
+  if (_edgeTok && _edgeExp * 1000 > Date.now() + 30000) return Promise.resolve(true);
+  edgeClear_();
+  return edgeAuth_();
+}
+// qa H1（2026-10-13）：GET の中身は Worker の URL に乗せない（Workers Logs に残る）＝POST /portal/rget の本文 { q } で運ぶ。
+//   本人の名乗り・証（userId・pt・idt・dk ほか）は画面の側でも必ず削る（Worker も捨てる＝二重）
+var EDGE_STRIP_KEYS = ['userId', 'pt', 'idt', 'dk', 'pa', 'k', 'key'];
+function edgeRelayQuery_(u) {
+  var i = u.indexOf('?');
+  var p = new URLSearchParams(i >= 0 ? u.slice(i + 1) : '');
+  EDGE_STRIP_KEYS.forEach(function (k) { p.delete(k); });
+  // 👤キャスト表示（プレビュー）中は、未公開の月の金額を受け取らない（paDecorate_ と同じ印 pv=1）
+  if (previewMode && adminViewAs && u.indexOf('action=portal') >= 0) p.set('pv', '1');
+  return '?' + p.toString();
+}
+function edgeFetch_(u, init, attempt) {
+  var method = String((init && init.method) || 'GET').toUpperCase();
+  var isGet = method === 'GET';
+  var direct = function () { return edgeDirect_(u, init); };
+  return edgeReady_().then(function (ok) {
+    if (!ok) return direct();
+    // GET も POST で送る（中身は本文）。GET＝/portal/rget（Worker が GAS へ GET で取り次ぐ）・POST＝/portal/relay
+    var opts = { method: 'POST', headers: { authorization: 'Bearer ' + _edgeTok, 'content-type': 'application/json' }, cache: 'no-store' };
+    opts.body = isGet ? JSON.stringify({ q: edgeRelayQuery_(u) }) : (init && init.body);
+    if (init && init.signal) opts.signal = init.signal;
+    return _paRawFetch(EDGE_URL + (isGet ? '/portal/rget' : '/portal/relay'), opts).then(function (r) {
+      var notSent = !!(r && r.headers && r.headers.get && r.headers.get('x-edge-relay') === 'not-sent');
+      // トークンが切れた・鍵が替わった＝Worker は GAS へ送っていない → 取り直して1回だけ（POST でも二重にならない）
+      if (r.status === 401 && notSent && !attempt) { edgeClear_(); return edgeFetch_(u, init, 1); }
+      if (notSent && r.status === 429) return direct();
+      if (notSent && (r.status === 401 || r.status >= 500)) { edgeOff_('relay:' + r.status); return direct(); }
+      // GET は何度読んでも同じ＝Worker が GAS に届かなかった・時間切れなら GAS へ直接
+      if (isGet && (r.status === 502 || r.status === 504)) return direct();
+      // qa M2：GAS が Worker の券を断った（error:'auth'）＝GAS は実行していない＝POST でも GAS へ直接1回だけ（paFetch_ と同じ理屈）。以後は直接
+      if (r.status === 200 && r.headers && r.headers.get && r.headers.get('x-edge-relay') === 'sent' && r.clone) {
+        return r.clone().json().then(function (d) {
+          if (d && d.ok === false && d.error === 'auth') { edgeOff_('gas:auth'); return direct(); }
+          return r;
+        }, function () { return r; });
+      }
+      return r;
+    }, function (e) {
+      if (e && e.name === 'AbortError') throw e; // 画面の時間切れ＝gasFetch の取り直しに任せる
+      if (isGet) return direct();                // Worker に届かない GET＝その1本を GAS へ直接
+      throw e;                                   // ⛔POST は送り直さない（届いたか分からない）
+    });
+  });
+}
+// メンテの確かめが Worker に届かないとき（試験の画面）＝「止めていない」の答え（現場を止めない・画面の checkPortalMaintenance_ は on:false で通常起動）
+function resp503_() { return Promise.resolve({ ok: true, status: 200, headers: { get: function () { return null; } }, json: function () { return Promise.resolve({ on: false, unknown: true }); }, clone: function () { return this; } }); }
+var _edgePrevFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : null; // 🔐 paFetch_ の包み（GAS へ直接＝今までどおり）
+if (_edgePrevFetch) window.fetch = function (input, init) {
+  if (typeof input !== 'string' || input.indexOf(GAS_URL) !== 0) return _edgePrevFetch(input, init);
+  var home = !_edgeHomeReq && input.indexOf('action=portal') >= 0 && input.indexOf('tab=homelite') >= 0;
+  if (home) { _edgeHomeReq = true; edgeMark_('reqStart'); }
+  var p;
+  if (edgeActive_() && input.indexOf('action=portalMaintenance') >= 0) p = _paRawFetch(EDGE_URL + '/portal/maint', { cache: 'no-store' }).catch(function () { return EDGE_NO_DIRECT ? resp503_() : edgeDirect_(input, init); });
+  else if (edgeActive_() && paIsGas_(input)) p = edgeFetch_(input, init, 0);
+  else if (EDGE_NO_DIRECT && input.indexOf('action=portalMaintenance') >= 0) p = resp503_(); // 試験の画面：メンテの確かめは止めていない扱い（全面表示で止めない）
+  else p = edgeDirect_(input, init);
+  if (home) p = p.then(function (r) { edgeMark_('respEnd'); return r; });
+  return p;
+};
+/* ===== ⚡ Cloudflare 経由 ここまで ===== */
+
+/* ⚡EDGE_P3 2026-10-13 */
+/* ===== ⚡ ホームの「今日」を Worker の /portal/home で（P-3）ここから =====
+   ⭐旗がオン・本人の画面（管理者の代理閲覧・プレビューでない）のときだけ。判定はこの edgeHomeUsable_ の1か所。
+   ⭐客名を見せる範囲は Worker（apps/portal/src/view-cast.js）が決める＝画面は返ってきた物を描くだけ（ここで伏せ直さない）。
+   ⭐Worker が使えないとき（null）は今までどおり GAS の homerest（現場を止めない）。 */
+function edgeHomeUsable_() { return edgeActive_() && !adminViewAs && !previewMode; }
+// GET EDGE_URL/portal/home → 答え（ok・edge:'home'）か null。トークンが切れていたら取り直して1回だけ
+function edgeHomeFetch_(again) {
+  if (!edgeHomeUsable_()) return Promise.resolve(null);
+  return edgeReady_().then(function (ok) {
+    if (!ok) return null;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+    return _paRawFetch(EDGE_URL + '/portal/home', { headers: { authorization: 'Bearer ' + _edgeTok }, cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
+      .then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (r.status === 401 && !again) { edgeClear_(); return edgeHomeFetch_(1); }
+        if (r.status !== 200) return null; // 409 use_gas（管理者）・403・503 ＝ GAS へ
+        return r.json().then(function (d) {
+          if (!d || d.ok !== true || d.edge !== 'home') return null;
+          d.held = d.held || ''; // 前の答えの held を端末の覚えに残さない
+          return d;
+        });
+      }, function () { if (timer) clearTimeout(timer); return null; });
+  });
+}
+// ホームの答えが届くたびに（loadPortal の handleHome_）。st＝その読み込みの間だけの覚え
+function edgeAfterHome_(st, which, d, merged, gotLite, again, alive, fallback) {
+  if (which === 'edge') st.held = String(d.held || '');
+  // qa L-3：答え待ち・ゴーストで止めた答え＝端末の覚えにある前の予約・空席を描かない（覚え直しもしない＝handleHome_ の writeHomeCache_ の手前で held を見る）
+  if (which === 'edge' && d.held) { delete merged.reservations; delete merged.vacancy; }
+  // GAS（homelite）が「ゴーストでない」と答えたのに Worker は答え待ち・古い答えで止めた → 1回だけ取り直す（その時には Worker が答えを残している）
+  if (st.held && !st.refetched && gotLite && merged.ghost === false) {
+    st.refetched = true;
+    edgeHomeFetch_().then(function (d2) {
+      if (!alive()) return;
+      if (!d2) { fallback(); return; } // Worker に届かない＝今までどおり GAS
+      if (!d2.held) again(d2);         // まだ止まる（答えを残せなかった）＝出さない（取れないなら出さない）
+    });
+  }
+}
+// 空席の60秒ごとの取り直し。Worker が引き受けたら true（届かなければ今までどおり GAS へ）
+var _edgeVacBypass = false;
+function edgeVacancy_() {
+  if (_edgeVacBypass || !edgeHomeUsable_()) return false;
+  edgeHomeFetch_().then(function (d) {
+    if (d && d.vacancy !== undefined) { renderHomeVacancy(d.vacancy); return; }
+    if (d && d.held) return; // ゴーストの答え待ち＝今の表示のまま
+    _edgeVacBypass = true; try { fetchVacancy(); } finally { _edgeVacBypass = false; }
+  });
+  return true;
+}
+// 予約の時刻の「同伴」＝20:30（軍師と同じ：客名か時刻欄に「同伴」）。⭐旗がオフなら今までどおり（そのまま返す＝20:00 扱い）
+function edgeDohanTime_(time, customer) {
+  if (typeof EDGE_ON !== 'undefined' && EDGE_ON && /同伴/.test(String(time || '') + ' ' + String(customer || ''))) return '20:30';
+  return time;
+}
+/* ===== ⚡ ホームの「今日」 ここまで ===== */
 // ---- LIFF init ----
 // ホームを lite/rest の2本に分けて取る間、rest(席/今日の予約/空席)がまだ届いていないことを示す（2026-07-20）。
 // true の間 renderHome はフォールバックの個別取得を走らせず「読み込み中...」のまま待つ＝二重取得を防ぐ。
@@ -870,6 +1069,9 @@ var homeRestPending = false;
 //   （既知の罠。最新世代の応答は必ず処理されるので、この形なら固まらない）。
 var _homeLoadSeq = 0;
 var _devUid = new URLSearchParams(location.hash.slice(1)).get('u');
+/* 🔐 `#u=` は開発・確認用。⛔2026-10-09 まではこれだけで誰にでもなれた。いまは鍵 `#u=…&dk=…` を足して送るだけで、
+   通すかどうかはサーバ（PORTAL_AUTH_DEV_KEY と試験用アカウント PORTAL_AUTH_DEV_UIDS の両方）が決める。 */
+var _devKey = new URLSearchParams(location.hash.slice(1)).get('dk') || '';
 var _kt = new URLSearchParams(location.search).get('kt'); // 軍師QRログインのトークン
 
 // 軍師QRログイン: 本人のuserIdでトークンを認証
@@ -949,6 +1151,7 @@ if (_devUid) {
   try {
     liff.init({ liffId: LIFF_ID }).then(function() {
       clearTimeout(initTimer);
+      edgeMark_('liffReady'); // ⚡計測の印
       if (!liff.isLoggedIn()) {
         setContent('<div class="loading">LINEログイン中...</div>');
         liff.login();
@@ -959,6 +1162,8 @@ if (_devUid) {
       if (!p) return; // login redirect pending
       userId   = p.userId;
       userName = p.displayName;
+      paPrepare_(p.userId); // 🔐 券の読み出し／LIFF の ID トークン（以後の GAS 宛ては paFetch_ が証を足す）
+      edgePrepare_(p.userId); // ⚡旗がオンなら Worker の入口を先に叩く（id_token は paPrepare_ が読んだ物）
       if (_kt) { doKioskAuth(userId, _kt); return; }
       document.getElementById('user-name').textContent = p.displayName;
       openingSetName(p.displayName);
@@ -975,20 +1180,118 @@ if (_devUid) {
 
 // ── ホームのクライアントキャッシュ（SWR: 前回内容を即描画→裏で最新取得して差し替え）──
 // キャッシュはキャスト本人のホームペイロードのみ。管理者のcastList応答は対象外。
-var HOME_CACHE_VER = 'v1';
-function homeCacheKey_() { return 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + (adminViewAs || ''); }
-function readHomeCache_() {
+/* ⛔v1→v2（2026-09-28）＝端末に3日残るホームキャッシュを全員1回だけ捨てさせる。
+   ⚠️実害＝ゆきが「ポータルで予約入力ができない」と申告。サーバは `ghost:false`（9/29〜10/3に出勤あり）なのに、
+     **出勤が入る前に開いたときの `ghost:true` が端末に残って** 🗓予約管理／💺席リクエストが畳まれたままだった。
+   ⭐ボス確定 2026-09-28＝**未来の出勤予定が入っていれば予約は誰でも見られる**。判定はサーバが正しく出しているので、
+     直すのは「古い判定が端末に居座ること」だけ＝この版を上げると全端末が次の1回で読み直す。
+   ⛔挙動は1つも変えていない（キーが変わるだけ）。次の表示が一度だけ遅くなる。 */
+/* 🔐 v2→v3（2026-10-09）＝本人確認を入れた版。確かめていない userId で取った応答が端末に3日残らないよう、全員1回だけ捨てさせる。 */
+/* ⚡v4→v5（2026-10-13・P-3）＝ホームの「今日」を Worker で組む版。旗がオンの端末は v5e（客名を伏せた答えと伏せていない答えを端末の覚えで混ぜない） */
+/* ⚡SWR_HOME v5→v6（2026-10-15）＝覚える形を変えた（中に持ち主 u・画面の種類 m・代理の相手 va を入れ、読むときに今と照らす）。
+   ⭐古い形（v5 以前）は読まない＝全員1回だけ捨てる（書くときに消える）。v4＝2026-10-10 表彰・合戦のボタンを外した版。 */
+/* 💰STATS_FRESH v6→v7（2026-11-24）＝成績（売上・給与）がホームの覚えに混ざって保存され、次に開いた日も成績を取りに行かなかった
+   （10月分の給与を公開した後も［給与明細］が「データなし」のまま＝ボスへ申告）。いまは成績を覚えに入れない（writeHomeCache_／readHomeCache_ が STATS_KEYS_ を落とす）。
+   ⭐版を上げて、成績の混ざった今の覚え（v6／v6e）を全員1回だけ捨てる（読まない・次に書くとき homeCachePrune_ が消す）。次のホームの表示が一度だけ遅くなる。 */
+var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v7e' : 'v7';
+var HOME_CACHE_MAX_MS = 3 * 24 * 3600 * 1000; // 3日超は初期描画に使わない（裏取得はする）
+// 画面の種類：c＝本人／a＝管理者が代理で見る／p＝管理者のキャスト表示（プレビュー＝未公開の月の金額を受け取らない応答）。⛔混ぜない
+function homeCacheMode_() { return previewMode ? 'p' : (adminViewAs ? 'a' : 'c'); }
+// 読み込みを始めた瞬間の「誰の・どの画面の覚えか」。⭐loadPortal はこれを最後まで使う（途中でモード・相手が替わったら答えを捨てる）
+function homeCacheCtx_() {
+  var m = homeCacheMode_(), va = adminViewAs || '';
+  return { u: userId, m: m, va: va, key: 'portalHome:' + HOME_CACHE_VER + ':' + userId + ':' + m + ':' + va };
+}
+function homeCacheKey_() { return homeCacheCtx_().key; }
+// → { t: 覚えた時刻(ms), d: 中身 } か null。⭐持ち主・種類・相手が ctx と違えば使わない（鍵だけに頼らない＝二重）
+function readHomeCache_(ctx) {
   try {
-    var raw = localStorage.getItem(homeCacheKey_());
+    ctx = ctx || homeCacheCtx_();
+    if (!ctx.u) return null;
+    var raw = localStorage.getItem(ctx.key);
     if (!raw) return null;
     var o = JSON.parse(raw);
     if (!o || !o.t || !o.d) return null;
-    if (Date.now() - o.t > 3 * 24 * 3600 * 1000) return null; // 3日超は初期描画に使わない（裏取得はする）
-    return o.d;
+    if (o.u !== ctx.u || o.m !== ctx.m || String(o.va || '') !== ctx.va) return null;
+    var age = Date.now() - o.t;
+    if (age > HOME_CACHE_MAX_MS || age < -60000) return null; // 古すぎる／時計が戻った端末
+    statsStrip_(o.d); // 💰STATS_FRESH：覚えに成績が残っていても使わない（書く側でも落としている＝二重。成績は loadStatsData が取る）
+    return { t: o.t, d: o.d };
   } catch (e) { return null; }
 }
-function writeHomeCache_(d) {
-  try { localStorage.setItem(homeCacheKey_(), JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
+function writeHomeCache_(d, ctx) {
+  ctx = ctx || homeCacheCtx_();
+  if (!ctx.u) return;
+  if (d && d._pt) { d = Object.assign({}, d); delete d._pt; delete d._ptExp; } // 🔐 券は portalAuth:v1 だけに置く
+  if (d) d = statsStrip_(Object.assign({}, d)); // 💰STATS_FRESH：成績（STATS_KEYS_）はホームの覚えに入れない。⛔入れると次に開いた日も「取ってある」と見て取りに行かなかった（2026-11-24）。⚠️写しから落とす＝画面の portalData は消さない
+  try { localStorage.setItem(ctx.key, JSON.stringify({ t: Date.now(), u: ctx.u, m: ctx.m, va: ctx.va, d: d })); } catch (e) {}
+  homeCachePrune_(ctx.u);
+}
+// 他の人の覚え・古い版の覚えを消す（共用の端末に他人の中身を残さない・容量を食わない）
+function homeCachePrune_(uid) {
+  try {
+    var drop = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf('portalHome:') !== 0) continue;
+      var p = k.split(':');
+      if (p[1] !== HOME_CACHE_VER || p[2] !== uid) drop.push(k);
+    }
+    drop.forEach(function (k) { localStorage.removeItem(k); });
+  } catch (e) {}
+}
+// ⚡SWR_HOME（qa 2026-10-15）：退職・止められた・未登録＝自分の覚えを全部消す（ctx の鍵＋ portalHome: で始まる自分の鍵）。
+//   ⛔それまでは退職者の端末に前回のホーム（今日の予約＝客名）が最大3日残り、開くたびに先に描かれていた
+var HOME_DENY_ERRORS = ['retired', 'forbidden', 'unregistered'];
+function homeCacheForget_(ctx) {
+  try {
+    if (ctx && ctx.key) localStorage.removeItem(ctx.key);
+    var drop = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf('portalHome:') === 0 && k.split(':')[2] === String((ctx && ctx.u) || '')) drop.push(k);
+    }
+    drop.forEach(function (k) { localStorage.removeItem(k); });
+  } catch (e) {}
+}
+// 「◯分前の表示・更新中」の札。_homeStale＝覚えた中身で先に描いている間だけ { t, st:'loading'|'failed', seq }
+var _homeStale = null;
+function homeStaleAgo_(t) {
+  var min = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  if (min < 1) return 'さっき';
+  if (min < 60) return min + '分前';
+  if (min < 1440) return Math.floor(min / 60) + '時間前';
+  return Math.floor(min / 1440) + '日前';
+}
+function homeStaleBadge_() {
+  var s = _homeStale;
+  if (!s) return '';
+  var failed = s.st === 'failed';
+  return '<div id="home-stale" data-st="' + (failed ? 'failed' : 'loading') + '" style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:7px 12px;border:1px solid ' + (failed ? '#7a4a3a' : '#4a3a1e') + ';border-radius:999px;background:#16120b;color:' + (failed ? '#e0b0a0' : '#b09f74') + ';font-size:12px;line-height:1.5">'
+    + '🕘 ' + homeStaleAgo_(s.t) + 'の表示' + (failed ? '・最新を取れませんでした' : '・更新中…')
+    + (failed ? '<button onclick="loadPortal()" style="padding:3px 12px;border-radius:999px;border:1px solid #8a6d3a;background:#241d10;color:#e6cf95;font-size:12px;font-weight:700;cursor:pointer">再読み込み</button>' : '')
+    + '</div>';
+}
+// 取れなかった＝札だけ替える（覚えた中身の画面は潰さない＝現場を止めない）
+function homeStaleFail_(seq) {
+  if (!_homeStale || _homeStale.seq !== seq) return;
+  _homeStale.st = 'failed';
+  try { var el = document.getElementById('home-stale'); if (el) el.outerHTML = homeStaleBadge_(); } catch (e) {}
+}
+/* ⚡SWR_HOME：覚えが無い読み込みで、シフト（homelite）が「まだ」／「取れなかった」。{ seq, st:'loading'|'err' } か null
+   ⛔それまでは、覚えが無いとき homelite より先（または落ちた後）に届いた homerest（席・予約・お知らせ）だけでホームを描き、
+     シフトが空＝「出勤予定がまだありません／シフトを提出する」と出ていた（取れていないのに「無い」と言う）。
+     homelite が落ちた後は描き直しもしないので、その表示のまま残った。
+   ⭐いまは 読み込み中＝「シフトを読み込み中…」／取れなかった＝「シフトを取れませんでした［再読み込み］」。
+     ホームの他（呼び出し・予約・メニュー）は今までどおり出す＝現場を止めない。
+   ⭐loadPortal が始まるたびに必ず入れ直す（覚えあり＝null）＝前の読み込みの状態は残らない。古い世代の答えは handleHome_／catch の入口で捨てている。 */
+var _homeShift = null;
+function homeShiftState_() { return _homeShift ? _homeShift.st : ''; }
+// homelite が落ちた。ホームを既に描いている（homerest が先に届いた）なら、シフトのカードを直すために描き直す
+function homeShiftFail_(seq, painted) {
+  if (!_homeShift || _homeShift.seq !== seq) return;
+  _homeShift.st = 'err';
+  if (painted && currentTab === 'home') { try { renderTab('home'); } catch (e) {} }
 }
 // キャスト本人のホームペイロードを画面に反映（初回キャッシュ描画と最新反映で共用）
 function applyHomePayload_(d) {
@@ -998,7 +1301,12 @@ function applyHomePayload_(d) {
   if (onLeave && currentTab !== 'home' && LEAVE_KEYS.indexOf(currentTab) < 0) currentTab = 'home';
   ghost = !!d.ghost;     // 今日以降の出勤ゼロ＝予約管理／席リクエスト／今日の予約／空席を出さない
   stripGhostData_(d);    // 古いキャッシュ由来の予約/空席が画面に残らないよう毎回落とす
-  if (ghost && GHOST_DENY_KEYS.indexOf(currentTab) >= 0) currentTab = 'home';
+  /* ⛔2026-09-28＝ここで `currentTab='home'` に書き戻していた。
+     ⚠️実害＝案内（renderGhostNotice）を出した数秒後に **遅れて届いたホームの応答** がタブを home に戻し、
+       画面をホームで塗り潰す＝本人には「押しても何も起きない」に見える（ゆきの申告そのもの）。
+     ⭐ポータルは homelite と homerest を並列で取り、**届くたびにここを通る**（GASの床 1.9秒×2）。
+       キャッシュから即描画された画面で本人が押すのは、ほぼ確実にこの数秒の間。
+     ⭐判定は ghostAllows_ の1本・描画は renderTab の1本に揃えた＝ここでは**タブを動かさない**。 */
   if (isAdmin) showAdminTab();
   if (_devUid && d.name) document.getElementById('user-name').textContent = d.name;
   portalData = d;
@@ -1014,9 +1322,17 @@ function applyHomePayload_(d) {
 function loadPortal(month) {
   var mySeq = ++_homeLoadSeq; // この呼び出しの世代。以降の応答は最新世代のときだけ反映する
   // SWR: キャッシュがあれば即描画（体感を一瞬に）。無ければ従来のローディング表示。
-  var cached = readHomeCache_();
+  // ⚡SWR_HOME：この読み込みの「誰の・どの画面の覚えか」を最初に決め、最後まで同じ物を使う
+  var cctx = homeCacheCtx_();
+  var denied = false; // ⚡SWR_HOME：退職・止められた・未登録と言われた＝この読み込みでは以後なにも描かない（後から届く答え・覚えで描き直さない）
+  var hit = readHomeCache_(cctx);
+  var cached = hit ? hit.d : null;
+  _homeStale = hit ? { t: hit.t, st: 'loading', seq: mySeq } : null; // 先に描く画面に「◯分前の表示・更新中」の札
   var renderedFromCache = false;
   if (cached) { try { applyHomePayload_(cached); renderedFromCache = true; } catch (e) { renderedFromCache = false; } }
+  if (!renderedFromCache) _homeStale = null;
+  _homeShift = renderedFromCache ? null : { seq: mySeq, st: 'loading' }; // ⚡SWR_HOME：覚えが無い＝シフトは homelite が来るまで分からない
+  if (renderedFromCache) { _edgePerf.cached = true; if (typeof edgeMark_ === 'function') edgeMark_('cachePainted'); } // ⚡計測：端末に覚えたホームを先に描いた（その時刻）
   if (!renderedFromCache) setContent('<div class="loading">データ取得中...</div>');
 
   // ホームを2本に分けて「並列で」取る（2026-07-20）。
@@ -1033,15 +1349,27 @@ function loadPortal(month) {
   var merged = {};
   if (cached) { try { merged = JSON.parse(JSON.stringify(cached)); } catch (e) { merged = {}; } }
   var gotLite = false, gotRest = false;
+  var edgeSt = { held: '', refetched: false, wait: false, rest: '' }; // ⚡P-3：この読み込みの間だけの覚え（wait＝homelite の後に Worker を呼ぶ・rest＝GAS の homerest を送った）
   // キャッシュが無い完全初回だけ、rest到着まで renderHome のフォールバック個別取得を止める
   homeRestPending = !renderedFromCache;
 
   function handleHome_(d, which) {
     if (mySeq !== _homeLoadSeq) return; // 古い世代の応答＝新しい読み込みが走っているので捨てる
+    // ⚡SWR_HOME：読み込みの途中で管理者がモード・相手を替えた＝この答えは今の画面の物ではない（描かない・覚えない）
+    if (homeCacheCtx_().key !== cctx.key) { if (_homeStale && _homeStale.seq === mySeq) _homeStale = null; return; }
+    if (denied) return;
     if (!d || !d.ok) {
-      if (d && d.error === 'unregistered') { showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>'); homeRestPending = false; return; }
-      if (d && d.error === 'forbidden')    { showErr('🚫 アクセスできません<br><small>' + (d.message || 'このアカウントではポータルをご利用いただけません。') + '</small>'); homeRestPending = false; return; }
+      if (d && HOME_DENY_ERRORS.indexOf(d.error) >= 0) {
+        // ⭐覚えがあってもなくても全面の表示に替える（札を付けて前の画面を残さない）＋覚えを消す
+        denied = true; homeCacheForget_(cctx); merged = {}; portalData = null; _homeStale = null; _homeShift = null; homeRestPending = false;
+        if (d.error === 'unregistered') showErr('登録が見つかりません<br><small>グループLINEで #登録 名前 を送ってください</small>');
+        else if (d.error === 'retired') showErr('🚫 ご利用いただけません<br><small>' + _e(d.message || 'このアカウントは退職済みのためご利用いただけません。') + '</small>');
+        else showErr('🚫 アクセスできません<br><small>' + (d.message || 'このアカウントではポータルをご利用いただけません。') + '</small>');
+        return;
+      }
+      if (which === 'lite') homeShiftFail_(mySeq, gotRest); // ⚡SWR_HOME：シフトは取れていない（homerest だけで「出勤予定なし」と描かない）
       if (!renderedFromCache && !gotLite && !gotRest) showErr('エラー: ' + ((d && d.error) || '不明') + retryBtn_('loadPortal'));
+      homeStaleFail_(mySeq); // 覚えた中身で描いている＝画面は潰さず札だけ「取れませんでした」
       homeRestPending = false;
       return;
     }
@@ -1051,35 +1379,65 @@ function loadPortal(month) {
       adminCastList = d.castList;
       adminCastRoles = d.castRoles || {};
       homeRestPending = false;
+      _homeStale = null;
       initAdminUI(d.castList);
       return;
     }
     for (var k in d) { if (Object.prototype.hasOwnProperty.call(d, k)) merged[k] = d[k]; }
     stripGhostData_(merged);   // ゴーストは予約/空席をホームキャッシュにも残さない
     if (which === 'lite') gotLite = true; else { gotRest = true; homeRestPending = false; }
+    if (typeof edgeAfterHome_ === 'function') edgeAfterHome_(edgeSt, which, d, merged, gotLite, function (d2) { handleHome_(d2, 'edge'); }, function () { return mySeq === _homeLoadSeq; }, function () { restOnce_(''); }); // ⚡P-3
     // 横断リンクなし（軍師・管理コンソールへの導線は貼らない）
-    if (gotLite && gotRest) writeHomeCache_(merged); // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
+    if (gotLite && gotRest && !merged.held) writeHomeCache_(merged, cctx); // ⚡P-3（qa L-3）：答え待ちの答えは覚えない // 両方揃ってから保存＝片肺の状態を次回の即描画に使わない
+    if (gotLite && gotRest && _homeStale && _homeStale.seq === mySeq) _homeStale = null; // ⚡SWR_HOME：両方そろった＝札を外して最新で描く
+    if (which === 'lite' && _homeShift && _homeShift.seq === mySeq) _homeShift = null; // ⚡SWR_HOME：シフトが届いた
     applyHomePayload_(merged);
+    edgeHomePainted_(); // ⚡計測：届いたデータでホームを描いた（最初の1回だけ送る）
   }
 
   gasFetch(base + '&tab=homelite')
     .then(function(r) { return r.json(); })
-    .then(function(d) { handleHome_(d, 'lite'); })
+    .then(function(d) { handleHome_(d, 'lite'); if (edgeSt.wait) edgeKick_(!!(d && d.ok)); }) // ⚡P-3：homelite の後に Worker
     .catch(function(e) {
       if (mySeq !== _homeLoadSeq) return; // 古い世代の失敗で新しい画面を潰さない
+      if (homeCacheCtx_().key !== cctx.key || denied) return; // ⚡SWR_HOME（qa）：途中でモード・相手を替えた／退職などと言われた後の時間切れで画面を潰さない
+      if (edgeSt.wait) edgeKick_(false); // ⚡P-3：homelite が落ちた＝今までどおり GAS の homerest
+      homeStaleFail_(mySeq); // ⚡SWR_HOME：シフトが取れなかった＝札を「取れませんでした」に
+      homeShiftFail_(mySeq, gotRest); // ⚡SWR_HOME：覚えも無い＝シフトは分からない（空のシフトとして描かない・既に描いていれば直す）
       // キャッシュから描画済み、または重い方が既に届いているなら画面を潰さない
       if (!renderedFromCache && !gotRest) showErr('通信エラー<br><small>' + (e && e.message || '') + '</small>' + retryBtn_('loadPortal'));
     });
 
-  gasFetch(base + '&tab=homerest')
+  function restFromGas_(q) {
+  gasFetch(base + '&tab=homerest' + (q || ''))
     .then(function(r) { return r.json(); })
     .then(function(d) { handleHome_(d, 'rest'); })
     .catch(function(e) {
       if (mySeq !== _homeLoadSeq) return; // ★古い世代がガード(homeRestPending)を解除すると新しい読み込みが誤発動する
+      if (homeCacheCtx_().key !== cctx.key || denied) return; // ⚡SWR_HOME（qa）：同上（覚えで描き直さない）
       // 重い方だけ落ちた場合は画面を潰さず、renderHome 側の従来フォールバック（個別取得）に委ねる
+      homeStaleFail_(mySeq); // ⚡SWR_HOME
       homeRestPending = false;
       if (gotLite || renderedFromCache) renderTab(currentTab);
     });
+  }
+  // ⚡P-3（qa L-4）：GAS の homerest は1回の読み込みで1本だけ（お知らせだけ／丸ごと のどちらか）
+  function restOnce_(q) { if (edgeSt.rest) return; edgeSt.rest = q || 'full'; restFromGas_(q); }
+  // ⚡P-3：旗がオンなら「今日」（席・出勤中・予約・空席）は Worker の /portal/home。⭐呼ぶのは homelite（ゴーストの答え）が届いた後（qa M-C）。
+  //   お知らせだけ GAS（only=notices＝客名入りの中身は Worker が落とす）。Worker が使えない（管理者・落ちた）・homelite が落ちた＝今までどおり GAS の homerest
+  function edgeKick_(liteOk) {
+    edgeSt.wait = false;
+    if (mySeq !== _homeLoadSeq) return;
+    if (!liteOk) { restOnce_(''); return; }
+    edgeHomeFetch_().then(function (d) {
+      if (mySeq !== _homeLoadSeq) return;
+      if (!d) { restOnce_(''); return; }
+      handleHome_(d, 'edge');
+      restOnce_('&only=notices');
+    });
+  }
+  if (typeof edgeHomeUsable_ === 'function' && edgeHomeUsable_()) edgeSt.wait = true;
+  else restFromGas_('');
 }
 
 function initAdminUI(castList) {
@@ -1147,6 +1505,8 @@ function setPreviewMode(on) {
   adminViewAs = '';
   portalData = null;
   currentMonth = '';
+  billsMonth = '';   // ⛔前に見ていたキャストの月を持ち越さない（在籍期間が違う）
+  salesMonth = '';   // ⛔同上（売上明細の月）
   var sel = document.getElementById('admin-viewas-sel');
   if (sel) sel.value = '';
   updateModeUI();
@@ -1158,6 +1518,8 @@ function setPreviewMode(on) {
 function adminChange(name) {
   adminViewAs = name;
   currentMonth = '';
+  billsMonth = '';   // ⛔前に見ていたキャストの月を持ち越さない（在籍期間が違う）
+  salesMonth = '';   // ⛔同上（売上明細の月）
   portalData = null;
   if (name) staffRole = adminCastRoles[name] || 'キャスト';
   currentTab = 'home';
@@ -1171,8 +1533,6 @@ function adminChange(name) {
 // セクション名（戻るバー・メニュー用）
 var SECTIONS = {
   board:    { t:'お知らせ',     i:'📢' },
-  awards:   { t:'表彰・投票',   i:'🏆' },
-  kassen:   { t:'合戦',         i:'⚔️' },
   shift:    { t:'シフト提出',   i:'📅' },
   yoyaku:   { t:'予約管理',     i:'🗓' },
   stats:    { t:'売上・給与',   i:'💰' },
@@ -1185,9 +1545,7 @@ var SECTIONS = {
   custbday: { t:'今月誕生日の客', i:'🎂' },
   wine:     { t:'シャンパン・ワイン在庫', i:'🍾' },
   skill:    { t:'スキルテスト',   i:'📝' },
-  requests: { t:'申請管理',     i:'📥' },
   shiftmgmt:{ t:'全員シフト',   i:'📋' },
-  cashapv:  { t:'現金の承認・差し戻し', i:'🌙' },
   notif:    { t:'通知設定',     i:'🔔' },
   cashset:  { t:'軍師設定',     i:'⚙️' }
 };
@@ -1221,10 +1579,6 @@ function menuBtn(key) {
     var un = noticeUnread().length;
     if (un) badge = '<span style="position:absolute;top:10px;right:10px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;background:#c0405a;color:#fff;border-radius:10px;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">' + un + '</span>';
   }
-  // 合戦ボタンは「あなたの手番です」を金バッジで表示（未読の赤バッジとは意味が違うので色を分ける）
-  if (key === 'kassen' && ksPending > 0) {
-    badge = '<span style="position:absolute;top:10px;right:10px;height:20px;padding:0 8px;box-sizing:border-box;background:linear-gradient(135deg,#c9a459,#8d6f2e);color:#1a1409;border-radius:10px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;letter-spacing:.04em">手番</span>';
-  }
   return '<button onclick="switchTab(\'' + key + '\')" style="position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:16px 14px;background:linear-gradient(180deg,#191510,#120f09);border:1px solid rgba(214,183,120,.16);border-radius:14px;text-align:left;cursor:pointer;width:100%;box-shadow:0 6px 16px rgba(0,0,0,.28)">'
     + badge
     + '<span style="font-size:23px;line-height:1;filter:saturate(.85)">' + s.i + '</span>'
@@ -1241,12 +1595,15 @@ function versionFooter() {
 }
 
 function homeMenu() {
-  ksPingOnce();   // ⚔️合戦の「手番」バッジ用。ホーム描画をブロックしない（結果が来たら描き直す）
-  var castKeys = ['board','awards','kassen','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
+  var castKeys = ['board','shift','yoyaku','stats','kyuritsu','hair','seatreq','customers','custbday','bday','profile','wine'];
   // 休職中は シフト提出／お知らせ／給与明細 のみ（予約・顧客・領収書・席リクエスト・誕生日は出さない）
   if (onLeave) castKeys = castKeys.filter(function(k){ return LEAVE_KEYS.indexOf(k) >= 0; });
-  // ゴースト在籍（今日以降の出勤ゼロ）は 予約管理／席リクエスト を出さない。理由は画面に一切書かない（休職中と同じ流儀）
-  if (ghost) castKeys = castKeys.filter(function(k){ return GHOST_DENY_KEYS.indexOf(k) < 0; });
+  /* 🗓 ゴースト在籍（今日以降の出勤ゼロ）＝⭐**ボタンは消さない。押したら理由を出す**（ボス確定 2026-09-28）。
+     ⛔旧＝`castKeys.filter(...)` でボタンごと消し、理由も一切出さなかった（休職中と同じ流儀）。
+       ⚠️実害＝ゆきから「ポータルで予約入力ができなくなってる」と申告が来た。本人には**消えた理由が分からず**、
+       こちらも原因に辿り着くまでに時間がかかった（サーバは正しく ghost を出していた）。
+     ⭐ボスの言葉＝「予約管理を消すんじゃなくて、押したらそういう対象の子にはメッセージ出るようにするとか」。
+     ⛔休職中（onLeave）の方は**従来どおり消す**＝そちらは「見せない」こと自体が目的。ここだけを変える。 */
   // 📝 スキルテスト受験は 黒服 と 管理者属性 だけに出す（作問・結果はコンソール）
   //   ⚠️キャスト表示中は adminPriv()=false ＝ プレビュー対象が黒服のときだけ出る（本人と同じ挙動）
   if (!onLeave && (adminPriv() || staffRole === '黒服社員' || staffRole === '黒服バイト' || staffRole === '黒服')) castKeys.push('skill');
@@ -1257,7 +1614,7 @@ function homeMenu() {
     //   ゲートはサーバ側 isAdmin_（管理者ロール＋りく）＝ここに出るのは管理者/りくだけ。
     //   申請管理・通知設定・軍師設定は従来どおり管理コンソールに集約。
     html += '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:20px 2px 8px">管理者・りく 専用</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + menuBtn('shiftmgmt') + menuBtn('cashapv') + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' + menuBtn('shiftmgmt') + '</div>'
       + '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:12px;font-size:12px;color:#cbb98a;line-height:1.6;margin-top:10px">その他の管理機能（申請管理・通知設定・軍師設定）は<b style="color:#f2ead9">管理コンソール</b>に集約しています。</div>';
   }
   return html + versionFooter();
@@ -1278,22 +1635,40 @@ function updateAdminBar(castList) {
 // 休職中が触れる画面か（ボタンを消すだけでなく、直接呼ばれても通さない）
 function leaveAllows_(tab) { return !onLeave || tab === 'home' || LEAVE_KEYS.indexOf(tab) >= 0; }
 
+/* 🗓 出勤予定が無い方への案内。⭐**なぜ見られないか**と⭐**どうすれば見られるか**を1本道で書く
+   （[[feedback_beginner_guide_no_branching]]＝案内に条件分岐を置かない）。
+   ⛔「権限がありません」と書かない＝本人は何も悪くない。⭐シフトを出せば自動で戻る、とだけ伝える。 */
+function renderGhostNotice(tab) {
+  var s = SECTIONS[tab] || { i:'🗓', t:'予約管理' };
+  document.getElementById('content').innerHTML =
+    '<div style="background:#16130d;border:1px solid #33291a;border-radius:14px;padding:22px 18px;margin-top:10px;text-align:center">'
+    + '<div style="font-size:34px;line-height:1;margin-bottom:12px">' + s.i + '</div>'
+    + '<div style="font-size:15px;font-weight:700;color:#f2ead9;margin-bottom:12px">'
+    +   esc(s.t) + 'は、これから先の出勤予定が入っている方がご利用いただけます</div>'
+    + '<div style="font-size:13px;color:#cbb98a;line-height:1.9">'
+    +   'いまのところ、今日より先の出勤予定が入っていません。<br>'
+    +   'シフトを提出して確定すると、自動でご利用いただけるようになります。</div>'
+    + '<button onclick="switchTab(\'shift\')" style="margin-top:18px;padding:12px 22px;background:linear-gradient(135deg,#c9a459,#8d6f2e);border:none;border-radius:10px;color:#1a1409;font-size:14px;font-weight:800;cursor:pointer">シフトを提出する</button>'
+    + '<div style="font-size:12px;color:#8d8168;margin-top:14px">分からないときは黒服にお声がけください。</div>'
+    + '</div>';
+}
+
 function switchTab(tab) {
   contentTargetId = 'content';
-  if (!leaveAllows_(tab) || !ghostAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  /* 🗓 出勤予定が無い方が 予約管理／席リクエスト を押したとき＝⭐**理由を出して止める**（ボス確定 2026-09-28）。
+     ⛔ホームへ弾き返すな＝何も起きないように見えて「壊れている」と受け取られる（ゆきの申告がこの形）。
+     ⚠️サーバはこの状態のとき予約も空席も**送ってきていない**＝中身を描こうとしても空になる。だから必ずここで止める。 */
+  if (!ghostAllows_(tab)) { switchTabActive(tab); renderGhostNotice(tab); return; }
   switchTabActive(tab);
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'board') { loadBoard(); return; }
-  if (tab === 'awards') { loadAwards(); return; }
-  if (tab === 'kassen') { loadKassen(); return; }
   if (tab === 'stats') { renderStats(); return; }
   if (tab === 'kyuritsu') { renderKyuritsu(); return; }
   if (tab === 'seatreq') { seatReqRsvs = null; seatReqSelected = []; renderSeatRequest(); return; }
-  if (tab === 'requests') { loadRequests(); return; }
   if (tab === 'notif') { loadNotifSettings(); return; }
   if (tab === 'cashset') { loadCashThresholds(); return; }
   if (tab === 'shiftmgmt') { loadShiftMgmt(); return; }
-  if (tab === 'cashapv') { loadCashApproval(); return; }
   if (tab === 'yoyaku') { yoyakuSubTab = 'list'; loadYoyaku(); return; }
   if (tab === 'hair') { loadHairReceipts(); return; }
   if (tab === 'wine') { loadWine(); return; }
@@ -1311,10 +1686,14 @@ function switchTab(tab) {
 }
 
 function renderTab(tab) {
-  if (!leaveAllows_(tab) || !ghostAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  if (!leaveAllows_(tab)) { switchTabActive('home'); renderHome(); return; }
+  /* 🗓 出勤予定が無い方の 予約管理／席リクエスト＝⛔**ホームへ弾き返さず、理由を出す**（switchTab と同じ形）。
+     ⛔ここを switchTab と違う形にしていたのが 2026-09-28 の取りこぼし＝
+       押した瞬間は案内が出るのに、遅れて届いたホームの応答がここを通って**案内をホームで塗り潰していた**。
+     ⚠️**片方だけ直すと直らない。**判定は ghostAllows_ の1本・描画は renderGhostNotice の1本。 */
+  if (!ghostAllows_(tab)) { switchTabActive(tab); renderGhostNotice(tab); return; }
   if (tab === 'home') { renderHome(); return; }
   if (tab === 'stats') { renderStats(); return; }
-  if (tab === 'awards') { loadAwards(); return; }
   if (isAdmin && !adminViewAs) {
     setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">上のドロップダウンからキャストを選択してください</div>');
     return;
@@ -1327,10 +1706,11 @@ function renderTab(tab) {
 // ==== ホーム（キャストが最初に見る画面：次の出勤 ＋ 今日の予約） ====
 function homePad2(n){ return (n<10?'0':'') + n; }
 // 同伴予約は20:30来店として扱う（軍師と統一）
-function homeRsvArr(r){ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
+function homeRsvArr(r){ if (r && r.arrive !== undefined && r.masked !== undefined) return r.arrive || r.time || ''; /* ⚡P-3：Worker の答えは並びの根拠（同伴＝20:30）をそのまま */ return /同伴/.test((r.customer||'')+' '+(r.time||'')) ? '20:30' : (r.time||''); }
 function homeMyName(){ return (portalData && (portalData.viewAs || portalData.name)) || ''; }
 function homeIsMine(r){
   var me = homeMyName(); if (!me) return false;
+  if (r && r.mine === true) return true; // ⚡P-3：Worker が「自分の予約」と判定した（「、」区切り・空白ゆれも）
   return r.tantouCast === me || r.yoyakuCast === me || r.dohanCast === me;
 }
 // portalData.shifts {"7/6":"20:00"...} / confirmedShifts から直近の出勤を求める
@@ -1501,385 +1881,8 @@ function loadBoard(){
   setContent(head + cards);
 }
 
-// ================= 🏆 表彰・匿名ピア投票 =================
-// 全員（キャスト＋黒服）が匿名で相互評価→月イチ多部門で表彰。管理者は監査可・本人同士は完全匿名。
-// バックエンド未配線のため、現状はモック(window.__AW_MOCK__)があればそれを使う。無ければ実エンドポイントを叩く。
-var awData = null, awPickCat = null;
-function awFetch(){
-  if (window.__AW_MOCK__) return Promise.resolve(JSON.parse(JSON.stringify(window.__AW_MOCK__)));
-  return gasFetch(GAS_URL + '?action=portal&tab=awards&userId=' + encodeURIComponent(userId) + (adminViewAs?'&viewAs='+encodeURIComponent(adminViewAs):''))
-    .then(function(r){ return r.json(); });
-}
-function loadAwards(){
-  contentTargetId = 'content';
-  setContent('<div class="loading">表彰を読み込み中...</div>');
-  awFetch().then(function(d){ awData = d; renderAwards(); })
-    .catch(function(){ setContent('<div class="err" style="text-align:center;color:#cc7766;padding:50px 0">表彰の取得に失敗しました' + retryBtn_('loadAwards') + '</div>'); });
-}
-function candName(id){ var c=(awData&&awData.candidates||[]).filter(function(x){return x.id===id;})[0]; return c?c.name:''; }
-function saveAwVote(catKey, pick, comment){
-  if (window.__AW_MOCK__) return; // モック時は保存しない
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'awardVote', userId:userId, viewAs:(adminViewAs||''), catKey:catKey, pick:(pick||''), comment:(comment||'') }) })
-    .then(function(r){ return r.json(); }).catch(function(){});
-}
-function renderAwards(){
-  if (!awData){ loadAwards(); return; }
-  var html = '';
-  if (awData.lastResult && awData.lastResult.categories && awData.lastResult.categories.length){
-    html += renderAwardsResult(awData.lastResult, awData.myAwards, awData.myReceived);
-  }
-  if (awData.voteOpen){ html += renderAwardsVote(); }
-  else if (!html){
-    html = '<div class="aw-head"><span class="aw-emoji">🏆</span><span class="aw-title">表彰</span></div>'
-      + '<div style="text-align:center;color:#94886a;padding:44px 0;font-size:14px;line-height:1.7">いまは投票期間ではありません。<br>月末が近づいたら投票を受け付けます。</div>';
-  }
-  setContent(html);
-}
-function renderAwardsVote(){
-  var cats = awData.categories || [], myV = awData.myVotes || {};
-  var done = cats.filter(function(c){ return myV[c.key] && myV[c.key].pick; }).length;
-  var h = '<div class="aw-head"><span class="aw-emoji">🏆</span><span class="aw-title">今月の表彰投票</span></div>';
-  h += '<div class="aw-sub">締切：' + esc(awData.deadline || '今月末') + '</div>';
-  var yen = (awData.rewardYen || 500), total = cats.length, complete = (total > 0 && done >= total);
-  h += '<div class="aw-reward' + (complete ? ' done' : '') + '">'
-    + (complete
-        ? '<span style="font-size:24px">✅</span><div><div style="font-size:15px;font-weight:800;color:#f4d98a">投票完了！¥' + yen + ' 獲得 🎉</div><div style="font-size:12px;color:#c7ae74;margin-top:2px">お給料に反映されます。投票の変更はいつでもOK。</div></div>'
-        : '<span style="font-size:24px">🎁</span><div><div style="font-size:15px;font-weight:800;color:#f4d98a">全部門に投票して ¥' + yen + ' ゲット</div><div style="font-size:12px;color:#c7ae74;margin-top:3px">投票済み <b style="color:#f4d98a">' + done + '</b>／' + total + '部門　・　あと <b style="color:#f4d98a">' + (total - done) + '</b>部門でGET</div></div>')
-    + '</div>';
-  h += '<div class="aw-note">🤫 <b style="color:#e6cf95">完全匿名</b>です。あなたが誰に入れたかは、本人にも他の人にも分かりません。素直に「すごい」と思う人を選んでください。一言を添えると、匿名のまま本人に届きます。</div>';
-  h += cats.map(function(c){
-    var v = myV[c.key] || {};
-    var picked = v.pick ? candName(v.pick) : '';
-    return '<div class="aw-cat">'
-      + '<div class="aw-c-top"><span class="aw-c-ico">' + (c.icon||'🏆') + '</span><span class="aw-c-name">' + esc(c.title) + '</span>'
-      +   (awScopeLabel_(c.scope) ? '<span class="aw-scope">' + esc(awScopeLabel_(c.scope)) + '</span>' : '')
-      + '</div>'
-      + '<div class="aw-c-desc">' + esc(c.desc || '') + '</div>'
-      + '<button class="aw-pick' + (picked?'':' empty') + '" onclick="openCandPicker(\'' + c.key + '\')">'
-      +   '<span>' + (picked ? '✓ ' + esc(picked) + ' さん' : '選ぶ') + '</span>'
-      +   '<span class="aw-pick-r">' + (picked?'変更':'▾') + '</span></button>'
-      + (picked ? '<textarea class="aw-cmt" id="awcmt-' + c.key + '" rows="2" placeholder="一言そえる（任意・匿名で本人に届きます）" onblur="saveAwComment(\'' + c.key + '\')">' + esc(v.comment || '') + '</textarea>' : '')
-      + '</div>';
-  }).join('');
-  return h;
-}
-function renderAwardsResult(res, myAwards, myRecv){
-  var h = '<div class="aw-head"><span class="aw-emoji">🎉</span><span class="aw-title">' + esc(res.monthLabel || '先月') + 'の受賞者</span></div>';
-  if (myAwards && myAwards.length){
-    h += '<div class="aw-mine"><div style="font-size:34px;line-height:1">🏆</div>'
-      + '<div style="font-size:13px;color:#c7ae74;margin-top:6px;letter-spacing:.08em">おめでとうございます</div>'
-      + '<div style="font-size:20px;font-weight:800;color:#f4d98a;margin-top:6px">' + myAwards.map(function(a){ return esc(a.title); }).join(' ・ ') + '</div>'
-      + '<div style="font-size:13px;color:#c7ae74;margin-top:2px">受賞</div></div>';
-  }
-  if (myRecv && (myRecv.votes || (myRecv.comments && myRecv.comments.length))){
-    h += '<div class="aw-note">💌 <b style="color:#e6cf95">あなたに届いた声</b>' + (myRecv.votes ? '（' + myRecv.votes + '票）' : '')
-      + (myRecv.comments && myRecv.comments.length ? '<div style="margin-top:8px;line-height:1.8">' + myRecv.comments.map(function(c){ return '「' + esc(c) + '」'; }).join('<br>') + '</div>' : '') + '</div>';
-  }
-  h += res.categories.map(function(c){
-    return '<div class="aw-win"><div class="aw-w-cat">' + (c.icon||'🏆') + ' ' + esc(c.title) + '</div>'
-      + '<div class="aw-w-name"><b>' + esc(c.winner) + '</b> さん' + (c.role ? ' <span style="font-size:12px;color:#94886a">（' + esc(c.role) + '）</span>' : '') + '</div>'
-      + (c.votes ? '<div style="font-size:12px;color:#94886a;margin-top:5px">' + c.votes + '票</div>' : '') + '</div>';
-  }).join('');
-  return h;
-}
-// 候補ピッカー（ボトムシート）
-function openCandPicker(catKey){
-  awPickCat = catKey;
-  var cat = (awData.categories || []).filter(function(c){ return c.key === catKey; })[0] || {};
-  document.getElementById('aw-pk-title').textContent = (cat.icon||'🏆') + ' ' + (cat.title||'') + ' に選ぶ';
-  document.getElementById('aw-search').value = '';
-  renderCandList('');
-  document.getElementById('aw-overlay').classList.add('show');
-}
-// 部門の「対象」で候補を絞る（黒服部門＝候補は黒服だけ。投票は全員できる）
-function awCatOf_(key){ var a=(awData&&awData.categories)||[]; for(var i=0;i<a.length;i++){ if(a[i].key===key) return a[i]; } return null; }
-function awScopeOk_(scope, role){ if(scope==='kurofuku') return role==='黒服'; if(scope==='cast') return role==='キャスト'; return true; }
-function awScopeLabel_(scope){ return scope==='kurofuku' ? '黒服から選ぶ' : (scope==='cast' ? 'キャストから選ぶ' : ''); }
-function renderCandList(q){
-  var cat = awCatOf_(awPickCat) || {};
-  var list = (awData.candidates || []).filter(function(c){ return c.id !== awData.meId && awScopeOk_(cat.scope, c.role); });
-  q = (q||'').trim();
-  if (q) list = list.filter(function(c){ return String(c.name).indexOf(q) >= 0; });
-  var cur = (awData.myVotes && awData.myVotes[awPickCat] && awData.myVotes[awPickCat].pick) || '';
-  var el = document.getElementById('aw-cand-list');
-  if (!list.length){ el.innerHTML = '<div style="text-align:center;color:#94886a;padding:26px 0;font-size:14px">見つかりません</div>'; return; }
-  el.innerHTML = list.map(function(c){
-    var sel = c.id === cur;
-    return '<div class="aw-cand' + (sel?' sel':'') + '" onclick="selectCand(\'' + c.id + '\')">'
-      + '<div class="aw-av">' + esc(String(c.name).slice(0,1)) + '</div>'
-      + '<div class="aw-nm">' + esc(c.name) + (sel?' ✓':'') + '</div>'
-      + '<div class="aw-role">' + esc(c.role || '') + '</div></div>';
-  }).join('');
-}
-function filterCand(){ renderCandList(document.getElementById('aw-search').value); }
-function selectCand(id){
-  if (!awPickCat) return;
-  awData.myVotes = awData.myVotes || {};
-  var prev = awData.myVotes[awPickCat] || {};
-  awData.myVotes[awPickCat] = { pick:id, comment:(prev.comment||'') };
-  saveAwVote(awPickCat, id, prev.comment||'');
-  closeCandPicker();
-  renderAwards();
-}
-function closeCandPicker(){ document.getElementById('aw-overlay').classList.remove('show'); awPickCat = null; }
-function saveAwComment(catKey){
-  var el = document.getElementById('awcmt-' + catKey); if (!el) return;
-  awData.myVotes = awData.myVotes || {};
-  var v = awData.myVotes[catKey] || {}; v.comment = el.value; awData.myVotes[catKey] = v;
-  saveAwVote(catKey, v.pick || '', el.value);
-}
-// ホームの投票受付バナー（portalData.awVoteOpen のとき）
-function awHomeBanner(){
-  if (!(portalData && portalData.awVoteOpen)) return '';
-  return '<div class="card" onclick="switchTab(\'awards\')" style="cursor:pointer;background:linear-gradient(135deg,#2a2012,#15100a);border-color:rgba(214,183,120,.4)">'
-    + '<div style="display:flex;align-items:center;gap:11px">'
-    +   '<span style="font-size:26px">🏆</span>'
-    +   '<div style="flex:1"><div style="font-size:15px;font-weight:800;color:#f4d98a">今月の表彰投票 受付中</div>'
-    +     '<div style="font-size:12px;color:#c7ae74;margin-top:2px">匿名で選んで <b style="color:#f4d98a">¥500</b> ゲット（お給料に反映）</div></div>'
-    +   '<span style="font-size:20px;color:#c9a459">›</span>'
-    + '</div></div>';
-}
-
-// ================= ⚔️ いえやす合戦 =================
-// 出勤キャスト同士の非同期ターン制対戦。相手を待たない「同時選択」方式＝接客の合間に2タップで打てる。
-// ⚠️ LINE通知は入れない（通数が即死する）。気づかせるのはホームのバッジだけ。
-var ksData = null, ksSelHand = '', ksSelBet = 0, ksBusy = false, ksPoll = null, ksReqToken = 0, ksPending = -1;
-var KS_HAND_ICO = { '槍': '🗡', '盾': '🛡', '計略': '🎴' };
-
-function ksFetch(){
-  return gasFetch(GAS_URL + '?action=portal&tab=kassen&userId=' + encodeURIComponent(userId)
-      + (adminViewAs ? '&viewAs=' + encodeURIComponent(adminViewAs) : ''))
-    .then(function(r){ return r.json(); });
-}
-function loadKassen(){
-  contentTargetId = 'content';
-  setContent('<div class="loading">陣容を確認中...</div>');
-  var token = ++ksReqToken;   // 古い応答は捨てる。※busyフラグで新規要求を止めない＝永久ローディングにしない
-  ksFetch().then(function(d){
-    if (token !== ksReqToken) return;
-    ksData = d; ksSelHand = ''; ksSelBet = 0;
-    renderKassen();
-  }).catch(function(){
-    if (token !== ksReqToken) return;
-    setContent('<div class="err" style="text-align:center;color:#cc7766;padding:50px 0">合戦の取得に失敗しました' + retryBtn_('loadKassen') + '</div>');
-  });
-}
-function ksStopPoll(){ if (ksPoll){ clearInterval(ksPoll); ksPoll = null; } }
-// 相手の手が入ったかの確認。※この画面を開いていて、かつ自分が打ち終えて相手待ちの時だけ動かす
-function ksSyncPoll(){
-  ksStopPoll();
-  var m = ksData && ksData.match;
-  if (!m || m.state !== '進行中' || !m.iPlayed) return;
-  ksPoll = setInterval(function(){
-    if (currentTab !== 'kassen'){ ksStopPoll(); return; }
-    ksFetch().then(function(d){
-      if (currentTab !== 'kassen' || !d || !d.ok || !d.match) return;
-      var om = ksData && ksData.match;
-      // ターンが進んだ／決着した時だけ描き直す（毎回描くと選択中のUIがチラつく）
-      if (!om || d.match.turn !== om.turn || d.match.state !== om.state){ ksData = d; renderKassen(); }
-    }).catch(function(){});
-  }, 10000);
-}
-
-function ksSelectHand(h){ ksSelHand = h; renderKassen(); }
-function ksSelectBet(n){ ksSelBet = n; renderKassen(); }
-
-function ksPlay(){
-  if (ksBusy) return;                       // 連打の二重送信を止める（サーバ側でも already_played で弾く）
-  var m = ksData && ksData.match;
-  if (!m || !ksSelHand) return;
-  ksBusy = true;
-  var btn = document.getElementById('ks-go');
-  if (btn){ btn.disabled = true; btn.textContent = '出陣中...'; }
-  var done = function(){ ksBusy = false; };  // ⚠️ 成否にかかわらず必ず解除する
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({
-      action:'kassenPlay', userId:userId, viewAs:(adminViewAs||''),
-      matchId:m.id, hand:ksSelHand, bet:ksSelBet }) })
-    .then(function(r){ return r.json(); })
-    .then(function(res){
-      done();
-      if (!res || !res.ok){
-        var msg = { already_played:'この陣はもう出陣済みです', finished:'この合戦は決着しています',
-                    not_your_match:'あなたの合戦ではありません', disabled:'いまは合戦をお休みしています',
-                    busy:'混み合っています。もう一度お試しください' }[res && res.error] || '出陣に失敗しました';
-        alert(msg);
-        loadKassen();
-        return;
-      }
-      ksData.match = res.match; ksSelHand = ''; ksSelBet = 0;
-      renderKassen();
-    })
-    .catch(function(){ done(); alert('通信に失敗しました。もう一度お試しください'); renderKassen(); });
-}
-
-function ksHpBar(hp, max, hurt){
-  var pct = Math.max(0, Math.min(100, Math.round((hp / (max || 1)) * 100)));
-  return '<div class="ks-hp"' + (hurt ? ' style="--x:1"' : '') + '><i style="width:' + pct + '%"></i></div>';
-}
-function ksSideHtml(name, hp, troops, maxHp, isMe, flag){
-  var hurt = (hp / (maxHp || 1)) <= 0.34;
-  return '<div class="ks-side' + (isMe ? ' me' : '') + (hurt ? ' hurt' : '') + '">'
-    + '<div class="ks-flag">' + flag + '</div>'
-    + '<div class="ks-nm">' + esc(name) + '</div>'
-    + ksHpBar(hp, maxHp)
-    + '<div class="ks-stat"><span>城 <b>' + hp + '</b></span><span>兵力 <b>' + troops + '</b></span></div>'
-    + '</div>';
-}
-function ksArenaHtml(m, rules){
-  // 東軍/西軍はサーバが決めた実際の陣営を出す（自分を常に東にすると表示が嘘になる）
-  var myFlag = (m.mySide === '西') ? '西軍' : '東軍';
-  var opFlag = (m.mySide === '西') ? '東軍' : '西軍';
-  return '<div class="ks-arena">'
-    + '<div class="ks-turn">' + (m.state === '決着' ? '決着' : ('第 ' + m.turn + ' 陣 ／ 全 ' + rules.turns + ' 陣')) + '</div>'
-    + '<div class="ks-fight">'
-    +   ksSideHtml(ksData.me, m.myHp, m.myTroops, rules.hp, true, myFlag)
-    +   '<div class="ks-vs">VS</div>'
-    +   ksSideHtml(m.opponent, m.opHp, m.opTroops, rules.hp, false, opFlag)
-    + '</div></div>';
-}
-function ksChooseHtml(m, rules){
-  var remain = m.myTroops;
-  var h = '<div class="ks-panel"><div class="ks-lbl">一、手を選ぶ</div><div class="ks-hands">';
-  ['槍','盾','計略'].forEach(function(x){
-    h += '<button class="ks-hand' + (ksSelHand === x ? ' sel' : '') + '" onclick="ksSelectHand(\'' + x + '\')">'
-      +  '<span class="ks-h-ico">' + KS_HAND_ICO[x] + '</span><span class="ks-h-nm">' + x + '</span></button>';
-  });
-  h += '</div></div>';
-
-  h += '<div class="ks-panel"><div class="ks-lbl">二、兵力を賭ける　<span style="color:#8d7c56">残り ' + remain + '</span></div>';
-  if (remain <= 0){
-    h += '<div style="font-size:13px;color:#94886a;line-height:1.7">兵力を使い切りました。手だけを選んで出陣できます（この陣のダメージは 0 です）。</div>';
-  } else {
-    h += '<div class="ks-bets">';
-    for (var n = 1; n <= rules.maxBet; n++){
-      var over = n > remain;
-      h += '<button class="ks-bet' + (ksSelBet === n ? ' sel' : '') + '"' + (over ? ' disabled' : '')
-        +  ' onclick="ksSelectBet(' + n + ')">' + n + '</button>';
-    }
-    h += '</div>';
-  }
-  var ready = !!ksSelHand && (remain <= 0 || ksSelBet > 0);
-  h += '<button class="ks-go" id="ks-go"' + (ready ? '' : ' disabled') + ' onclick="ksPlay()">出 陣</button>';
-  h += '</div>';
-  return h;
-}
-function ksWaitHtml(m){
-  return '<div class="ks-panel"><div class="ks-wait">'
-    + '<div class="ks-w-ico">' + (KS_HAND_ICO[m.myHandThisTurn] || '⚔️') + '</div>'
-    + '<div class="ks-w-t">' + esc(m.opponent) + ' さんの手を待っています</div>'
-    + '<div class="ks-w-s">あなたの手：<b style="color:#e6cf95">' + esc(m.myHandThisTurn) + '</b>'
-    +   (m.myBetThisTurn > 0 ? '　兵力 <b style="color:#e6cf95">' + m.myBetThisTurn + '</b>' : '')
-    +   '<br>相手が打つと、この陣の勝敗が決まります'
-    + '<div style="margin-top:9px"><span class="ks-dot"></span><span class="ks-dot"></span><span class="ks-dot"></span></div>'
-    + '</div></div></div>';
-}
-function ksResultHtml(m){
-  var draw = !m.winner, win = m.iWon;
-  var ico = draw ? '🤝' : (win ? '🏯' : '🌾');
-  var ttl = draw ? '痛み分け' : (win ? '勝鬨' : '無念');
-  var sub = draw ? '互角の勝負でした' : (win ? esc(m.opponent) + ' さんに勝ちました' : esc(m.opponent) + ' さんに敗れました');
-  return '<div class="ks-res' + (win ? ' win' : '') + '">'
-    + '<div class="ks-r-ico">' + ico + '</div><div class="ks-r-t">' + ttl + '</div>'
-    + '<div class="ks-r-s">' + sub + '　（城 ' + m.myHp + ' － ' + m.opHp + '）</div></div>';
-}
-function ksLogHtml(log){
-  if (!log || !log.length) return '';
-  var h = '<div class="ks-panel"><div class="ks-lbl">戦の記録</div>';
-  log.forEach(function(l){
-    var lbl = { win:'勝', lose:'負', draw:'分' }[l.result];
-    h += '<div class="ks-log"><span class="ks-l-t">' + l.turn + '陣</span>'
-      +  '<span class="ks-l-h">' + (KS_HAND_ICO[l.myHand]||'') + ' ' + esc(l.myHand) + ' ' + l.myBet
-      +    ' <span style="color:#6f6650">対</span> ' + (KS_HAND_ICO[l.opHand]||'') + ' ' + esc(l.opHand) + ' ' + l.opBet + '</span>'
-      +  '<span class="ks-l-r ' + l.result + '">' + lbl + (l.damage ? ' ' + l.damage : '') + '</span></div>';
-  });
-  return h + '</div>';
-}
-function ksRankHtml(rank){
-  if (!rank || !rank.rows || !rank.rows.length) return '';
-  var meK = String(ksData.me || '');
-  var h = '<div class="ks-panel"><div class="ks-lbl">今月の番付　<span style="color:#8d7c56">勝ち星の数（負けても減りません）</span></div>';
-  rank.rows.slice(0, 10).forEach(function(r, i){
-    var medal = ['🥇','🥈','🥉'][i] || String(i + 1);
-    h += '<div class="ks-rank' + (i < 3 ? ' top' : '') + (r.name === meK ? ' me' : '') + '">'
-      +  '<span class="ks-no">' + medal + '</span>'
-      +  '<span class="ks-r-nm">' + esc(r.name) + '</span>'
-      +  '<span class="ks-r-w"><b>' + r.win + '</b> 勝 <span style="color:#6f6650">/ ' + r.played + '戦</span></span></div>';
-  });
-  return h + '</div>';
-}
-function ksHistHtml(hist){
-  if (!hist || !hist.length) return '';
-  var h = '<div class="ks-panel"><div class="ks-lbl">これまでの戦</div>';
-  hist.forEach(function(x){
-    var lbl = { win:'勝', lose:'負', draw:'分' }[x.result];
-    h += '<div class="ks-log"><span class="ks-l-t">' + esc(String(x.date).slice(5).replace('-','/')) + '</span>'
-      +  '<span class="ks-l-h">' + esc(x.opponent) + ' <span style="color:#6f6650">戦</span></span>'
-      +  '<span class="ks-l-r ' + x.result + '">' + lbl + '</span></div>';
-  });
-  return h + '</div>';
-}
-var KS_RULE_HTML = '<div class="ks-panel"><div class="ks-lbl">合戦の心得</div><div class="ks-rule">'
-  + '<b>🗡 槍</b> は <b>🎴 計略</b> を破り、<b>🎴 計略</b> は <b>🛡 盾</b> を崩し、<b>🛡 盾</b> は <b>🗡 槍</b> を防ぐ。<br>'
-  + '勝った側は、賭けた<b>兵力</b>の分だけ相手の<b>城</b>を削る。同じ手なら痛み分け。<br>'
-  + '兵力は全五陣で使い切り。<b>どこに厚く賭けるか</b>が将の腕。<br>'
-  + '相手を待つ必要はない。<b>先に打っておける</b>ので、接客の合間で構わない。'
-  + '</div></div>';
-
-function renderKassen(){
-  if (!ksData){ loadKassen(); return; }
-  if (ksData.ok === false){
-    setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">合戦に参加できませんでした</div>');
-    return;
-  }
-  if (!ksData.enabled){
-    setContent('<div class="aw-head"><span class="aw-emoji">⚔️</span><span class="aw-title">合戦</span></div>'
-      + '<div style="text-align:center;color:#94886a;padding:44px 0;font-size:14px;line-height:1.7">いまは合戦をお休みしています。</div>');
-    return;
-  }
-  var m = ksData.match, rules = ksData.rules || { turns:5, maxBet:5, hp:15, troops:15 };
-  var h = '<div class="aw-head"><span class="aw-emoji">⚔️</span><span class="aw-title">本日の合戦</span></div>';
-
-  if (!m){
-    h += '<div class="aw-sub">' + esc(ksData.bizDate || '') + '</div>'
-      +  '<div style="text-align:center;color:#94886a;padding:38px 8px;font-size:14px;line-height:1.8">'
-      +  (ksData.noMatchReason === 'few_entrants'
-          ? '今日は出勤が少なく、合戦は組まれていません。<br>出勤者が2人以上そろうと自動で組まれます。'
-          : '今日のあなたの対戦は組まれていません。<br>次の出勤日をお待ちください。')
-      +  '</div>';
-    h += KS_RULE_HTML + ksRankHtml(ksData.ranking) + ksHistHtml(ksData.history);
-    setContent(h); ksStopPoll(); ksPending = 0;
-    return;
-  }
-
-  h += ksArenaHtml(m, rules);
-  if (m.state === '決着')      h += ksResultHtml(m);
-  else if (!m.iPlayed)         h += ksChooseHtml(m, rules);
-  else                         h += ksWaitHtml(m);
-  h += ksLogHtml(m.log);
-  h += KS_RULE_HTML;
-  h += ksRankHtml(ksData.ranking);
-  h += ksHistHtml(ksData.history);
-  setContent(h);
-
-  ksPending = (m.state === '進行中' && !m.iPlayed) ? 1 : 0;  // ホームのバッジと同期
-  ksSyncPoll();
-}
-
-// ホームの⚔️ボタンに「手番が来ています」バッジを出すための軽い問い合わせ。
-// ⚠️ ホーム本体のペイロードには相乗りさせない（ホームの初回描画をこれ以上遅くしないため）
-function ksPingOnce(){
-  if (ksPending >= 0) return;              // 1回のポータル起動につき1回だけ
-  if (isAdmin && !adminViewAs) { ksPending = 0; return; }
-  ksPending = 0;                            // 先に確定させて多重発火を防ぐ
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'kassenPing', userId:userId, viewAs:(adminViewAs||'') }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      var n = (d && d.pending) || 0;
-      if (!n || n === ksPending) return;
-      ksPending = n;
-      if (currentTab === 'home') renderHome();
-    }).catch(function(){});
-}
+// 🏆表彰（匿名ピア投票）・⚔️いえやす合戦は 2026-10-10 ボス指示で削除（apply-remove-vote-kassen.js）。
+//   サーバ側（award.js／kassen.js）も同じ号令で外す。シート（表彰_*／合戦_*）は消していない＝読まれなくなるだけ。
 
 function renderHome(){
   contentTargetId = 'content';
@@ -1934,6 +1937,16 @@ function renderHome(){
       + '</div>'
       + '<div style="margin-top:10px;font-size:15px;color:#f2ead9">' + timeHtml + '</div>'
       + '</div>';
+  } else if (homeShiftState_() === 'err') {
+    // ⚡SWR_HOME：シフトを取れなかった（覚えも無い）＝「無い」とは言わない。再読み込みだけ出す（ホームの他はそのまま使える）
+    shiftCard =
+      '<div class="card" id="home-shift-err" style="text-align:center">'
+      + '<div style="font-size:13px;color:#e0b0a0;margin-bottom:12px">シフトを取れませんでした</div>'
+      + '<button onclick="loadPortal()" style="width:100%;padding:13px;background:#241d10;color:#e6cf95;border:1px solid #8a6d3a;border-radius:10px;font-size:15px;font-weight:700">再読み込み</button>'
+      + '</div>';
+  } else if (homeShiftState_() === 'loading') {
+    // ⚡SWR_HOME：homerest が先に届いた＝シフトはまだ（「無い」とは言わない）
+    shiftCard = '<div class="card" id="home-shift-loading" style="text-align:center;color:#94886a;font-size:13px;padding:18px">シフトを読み込み中…</div>';
   } else {
     shiftCard =
       '<div class="card" style="text-align:center">'
@@ -1945,7 +1958,8 @@ function renderHome(){
   // --- 今日の予約カード（枠だけ先に出して非同期で埋める）。休職中は予約・空席・呼び出しを出さない ---
   // ⚠️休職中である旨は本人の画面に一切表示しない（ボス指定2026-07-15）。メニューが黙って減るだけ。
   // ＝本人が「予約が消えた」と黒服に問い合わせてくる可能性がある点は承知の上での判断。
-  var html = homeGreetHero() + awHomeBanner() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard
+  var html = homeStaleBadge_() + homeGreetHero() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard // ⚡SWR_HOME：覚えた中身で描いている間だけ札
+    + homeDecBonusCard() // 🎁 12月の特別報酬（2026-11-27）：枠だけ（覚えがあれば中身も）。中身は下の loadDecBonus_ が埋める
     + (onLeave ? '' : homeCallCard()
     // ゴースト在籍は「今日の予約」「空席状況」カードごと出さない（呼び出しカードは残す）
     + (ghost ? '' : '<div class="card">'
@@ -1967,6 +1981,7 @@ function renderHome(){
     + homeMenu();
   setContent(html);
   loadHomeKyuritsu();   // 📊給率カードを非同期で埋める（初回描画はブロックしない）
+  loadDecBonus_();      // 🎁 12月の特別報酬（10分は覚える・使えない答えならカードを出さない）
   // 休職中は予約/空席/席の非同期描画そのものを走らせない（要素も無い）
   if (onLeave) return;
 
@@ -1986,7 +2001,7 @@ function renderHome(){
   if (ghost) { /* 予約カードを出していないので何もしない */ }
   else if (portalData && portalData.reservations !== undefined) {
     renderHomeRsv(portalData.reservations || []);
-  } else if (!homeRestPending) {   // rest待ち中は個別取得せず、届くのを待つ
+  } else if (!homeRestPending && !(portalData && portalData.held)) {   // rest待ち中は個別取得せず、届くのを待つ（⚡P-3：Worker がゴーストの答え待ちで止めた間も GAS から取らない）
     var now = new Date();
     var ds = now.getFullYear() + '-' + homePad2(now.getMonth()+1) + '-' + homePad2(now.getDate());
     gasFetch(GAS_URL + '?action=portal&tab=yoyaku&userId=' + encodeURIComponent(userId) + '&date=' + ds)
@@ -2009,6 +2024,7 @@ function renderHome(){
   window._callGateTimer = setInterval(function(){ if(!document.getElementById('home-callbtns')){ clearInterval(window._callGateTimer); return; } renderMySeat(); applyWorkingGate(); }, 30000);
 }
 function fetchVacancy(){
+  if (typeof edgeVacancy_ === 'function' && edgeVacancy_()) return; // ⚡P-3：旗がオンなら Worker の /portal/home
   gasFetch(GAS_URL + '?action=portal&tab=vacancy&userId=' + encodeURIComponent(userId))
     .then(function(r){ return r.json(); })
     .then(function(d){ renderHomeVacancy((d && d.vacancy) || null); })
@@ -2041,7 +2057,8 @@ function renderHomeRsv(list){
   var cntEl  = document.getElementById('home-rsv-count');
   if (!listEl) return;
   list = (list || []).filter(function(r){ return r.status !== 'キャンセル'; });
-  list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
+  // ⚡P-3：Worker の答え（arrive・masked 付き）は軍師と同じ並びで届く＝並べ直さない（文字の比較だと 0:30 が 20:00 より前に来る）
+  if (!(list.length && list.every(function(r){ return r.arrive !== undefined && r.masked !== undefined; }))) list.sort(function(a,b){ return homeRsvArr(a).localeCompare(homeRsvArr(b)); });
   var mine = list.filter(homeIsMine).length;
   if (cntEl) cntEl.textContent = list.length + '件' + (mine ? '（自分 ' + mine + '件）' : '');
   if (!list.length){
@@ -2060,7 +2077,7 @@ function renderHomeRsv(list){
       + (mineFlag ? 'border-left:3px solid #e6cf95;margin-left:-8px;padding-left:8px;' : '') + '">'
       + '<div style="font-size:16px;font-weight:700;color:#f2ead9;min-width:44px">' + arr + '</div>'
       + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:14px;color:#f2ead9">' + esc(r.customer) + '様 <span style="color:#b09f74;font-size:12px">' + r.pax + '名</span>'
+      +   '<div style="font-size:14px;color:#f2ead9">' + (r.masked ? '<span style="color:#94886a">ご予約</span> ' : esc(r.customer) + '様 ') + '<span style="color:#b09f74;font-size:12px">' + r.pax + '名</span>'
       +     (mineFlag ? ' <span style="font-size:10px;font-weight:700;color:#0a1f2e;background:#e6cf95;padding:1px 6px;border-radius:10px">自分</span>' : '') + '</div>'
       +   '<div style="font-size:12px;color:#b09f74;margin-top:2px">' + (r.table ? esc(r.table) + ' ・ ' : '') + tantou + '</div>'
       +   (r.checkTime ? '<div style="font-size:12px;color:#d8b26a;margin-top:2px">🕛 チェック予定 ' + esc(r.checkTime) + '</div>' : '')
@@ -2154,38 +2171,116 @@ function homeToast(msg, ok){
 // ---- 成績（売上明細／給与明細／ランキングをまとめたタブ） ----
 var statsSubTab = 'sales';
 var billsJumpDate = '';  // 顧客の来店記録タップ→その日の伝票へ飛ぶ時だけセット（renderBillsBodyで1回だけ消費）
-// 給与ロック画面での自動リフレッシュ済みフラグ（月キー単位・1度だけ）。公開直後の反映漏れ対策で
-// ロックを踏んだら一度だけ最新の公開状態を取り直す。ループ防止に月ごとに済みを記録する。
-var payLockAutoRefreshed = {};
+// 🧾 伝票タブが見ている月。⭐**`currentMonth` とは別に持つ。**
+//   ⛔`currentMonth` は給与の月一覧（`TRUST報酬` ＝6/7/8）に紐づいた共有変数で、
+//     給与・給率・売上明細の3タブが読む。伝票の月一覧は**別の集合**（9月以降を含む）なので、
+//     共有すると伝票で9月を選んだ瞬間に他タブの月が勝手に飛ぶ（`months.indexOf(currentMonth)<0`）。
+//   ⭐中身はサーバの答え（`d.month`）で毎回上書きする＝画面が月を数え直さない。
+var billsMonth = '';
+// 📊 売上明細タブが見ている月（2026-11-18 速報）。⭐`currentMonth` とは別に持つ（billsMonth と同じ理由）。
+//   ⛔速報の月（今月・給与の無い月）を `currentMonth` に入れると［給与明細］［成績］の月が飛ぶ。給与の月を選んだときだけ currentMonth も合わせる
+var salesMonth = '';
+// 💰STATS_FRESH（2026-11-24）：給与の鍵の画面の「月ごとに1回だけ自動で取り直す」（payLockAutoRefreshed）は statsAutoRecheck_ に1本化した
+//   （「データなし」と同じ決まり＝見せた成績が古いときだけ・その成績につき1回）。
 
 // 来店記録（顧客詳細）から、その来店日の伝票へ飛ぶ。担当キャスト/管理者のみ呼ばれる（呼び出し側でガード済み）
 function jumpToBillDayFromVisit(date) {
   if (!date) return;
   billsJumpDate = date;
-  currentMonth = String(date).slice(0, 7);
+  // ⭐伝票タブ専用の月だけ動かす。⛔`currentMonth`（給与・給率・売上明細の共有）は触らない。
+  //   ⚠️ここが `currentMonth` を書いていたせいで、給与タブに戻ると月が飛んでいた。
+  //     しかも 2026-09-26 に塞いだ「未公開の給与が本人に漏れる穴」の**到達経路がここ**だった
+  //     （renderPay のコメント参照）。⛔あちらの関所 `months.indexOf(currentMonth) >= 0` は残す（二重）。
+  billsMonth = String(date).slice(0, 7);
   statsSubTab = 'bills';
   switchTab('stats');
 }
 
-// 成績データ（売上/給与/月一覧/領収書合計/受領状況）を遅延ロードしてportalDataにマージ。
-// ホームは tab=home の軽量ペイロードで先に描画し、成績タブを開いた時だけこれを叩く（初回ロード高速化）。
+/* 💰STATS_FRESH 2026-11-24 */
+/* 成績（売上・給与・月一覧・領収書合計・受領状況・売上明細の月の札と速報）は、成績の画面を開いた時だけ取る（ホームは軽い答えで先に描く）。
+   ⛔2026-11-24 まで＝「portalData.sales があれば取りに行かない」（1回だけ取る）。しかも成績がホームの覚え（localStorage・3日）に混ざって保存され、
+     次に開いた日も、覚えから戻った成績で「取ってある」と見て取りに行かなかった。
+     ⚠️実害＝10月分の給与を公開（11/24 1時）した後も、公開前に開いた人は［給与明細］が「データなし」のまま
+       （給与の月が1つも無かった人＝黒服・新しい子・残り支給が少ない人が多い）。「データなし」には取り直しの道も無かった。
+       LINE の中でアプリが生きたままだと、同じ画面のまま何日でも古い（記憶 reference_portal_stats_stale_cache の残り）。
+   ⭐いまは：
+     ・成績はホームの覚えに入れない（writeHomeCache_／readHomeCache_ が STATS_KEYS_ を落とす）＝開き直せば必ず取りに行く。
+     ・取った成績は _statsHold に「誰の・どの画面の物か（homeCacheCtx_ の鍵）＋取った時刻」と一緒に持つ。
+       ホームの答えで portalData が入れ替わっても、同じ人・同じ画面なら載せ直す（取り直さない）。
+     ・STATS_FRESH_MS より古ければ、成績の画面を開いたときに取り直す。force（［最新の状態に更新］・自動の取り直し）は必ず取りに行く。
+     ・取りに行っている最中にまた呼ばれたら、その1本の答えを待つ（連打・ホームの答えでの描き直しで何本も出さない）。
+       ⚠️STATS_REQ_STALE_MS を過ぎた1本は待たない（答えが返らない通信のせいで更新できなくならない）。
+     ・答えが届いた時に相手・モード（管理者の代理・キャスト表示）が替わっていたら載せない（前の人の成績を今の画面に入れない）。
+     ・答えで描き直す・通信エラーを出すのは、成績の画面を見ているときだけ（ホームなど、ほかの画面を塗り潰さない）。
+   ⛔成績のキーの正本は STATS_KEYS_ の1本（載せる・覚えから落とす、の両方がこれを読む）。サーバの tab=stats の答えにキーを足したら、ここに足す。 */
+var STATS_KEYS_ = ['sales', 'pay', 'months', 'hairTotals', 'payPublished', 'salesDataDates', 'payReceipt', 'salesTabs', 'sokuho'];
+var STATS_FRESH_MS = 5 * 60 * 1000;    // 取ってからこれより古い成績は、成績の画面を開いたときに取り直す
+var STATS_RECHECK_MS = 30 * 1000;      // 「データなし」「まだ公開されていません」を出したとき、取ってからこれより経っていれば1回だけ自動で取り直す
+var STATS_REQ_STALE_MS = 35 * 1000;    // 取りに行っている1本をこれより長くは待たない（gasFetch の打ち切り 28秒＋すぐの取り直しより長く）
+var _statsHold = null;                 // 最後に取れた成績 { key, at, d, rechecked }
+var _statsReq = null;                  // 取りに行っている1本 { key, at, cbs }
+function statsStrip_(d) { if (d && typeof d === 'object') STATS_KEYS_.forEach(function (k) { delete d[k]; }); return d; }
+// 今の画面（誰の・どのモードか）の成績で、STATS_FRESH_MS より新しい物。無ければ null。
+//   ⛔portalData が無い（退職などで止めた・管理者が相手を替えた直後）ときは使わない＝今までどおりサーバに聞く
+function statsFresh_() {
+  var h = _statsHold;
+  if (!h || !portalData || h.key !== homeCacheCtx_().key) return null;
+  var age = Date.now() - h.at;
+  return (age >= -60000 && age < STATS_FRESH_MS) ? h : null;
+}
+function statsAttach_(h) {
+  if (!portalData) portalData = {};
+  STATS_KEYS_.forEach(function (k) { portalData[k] = h.d[k]; });
+  if (!currentMonth && h.d.months && h.d.months.length > 0) currentMonth = h.d.months[0];
+}
 function loadStatsData(force, cb) {
-  if (portalData && portalData.sales !== undefined && !force) { if (cb) cb(); return; }
+  var h = force ? null : statsFresh_();
+  if (h) { statsAttach_(h); if (cb) cb(); return; }
+  var key = homeCacheCtx_().key;
+  var r0 = _statsReq;
+  if (r0 && r0.key === key && (Date.now() - r0.at) >= 0 && (Date.now() - r0.at) < STATS_REQ_STALE_MS) { if (cb && r0.cbs.indexOf(cb) < 0) r0.cbs.push(cb); return; } // 取りに行っている最中＝同じ1本の答えを待つ
+  var req = { key: key, at: Date.now(), cbs: cb ? [cb] : [] };
+  _statsReq = req;
   var url = GAS_URL + '?action=portal&tab=stats&userId=' + encodeURIComponent(userId);
   if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
   if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
   gasFetch(url)
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if (!d.ok) { showErr('エラー: ' + (d.error||'') + retryBtn_('renderStats')); return; }
-      if (!portalData) portalData = {};
-      portalData.sales = d.sales; portalData.pay = d.pay; portalData.months = d.months;
-      portalData.hairTotals = d.hairTotals; portalData.payPublished = d.payPublished;
-      portalData.salesDataDates = d.salesDataDates; portalData.payReceipt = d.payReceipt;
-      if (!currentMonth && d.months && d.months.length > 0) currentMonth = d.months[0];
-      if (cb) cb();
+      if (_statsReq !== req) return;              // 後から別の1本が出た＝この答えは使わない
+      _statsReq = null;
+      if (homeCacheCtx_().key !== key) return;    // 途中で相手・モードが替わった＝今の画面の物ではない
+      if (!d || !d.ok) { if (currentTab === 'stats') showErr('エラー: ' + ((d && d.error) || '') + retryBtn_('statsRefreshNow_')); return; }
+      var o = {};
+      STATS_KEYS_.forEach(function (k) { o[k] = d[k]; }); // 📊salesTabs・sokuho＝売上明細の月の札と速報（2026-11-18）。⛔sales には混ざっていない
+      _statsHold = { key: key, at: Date.now(), d: o, rechecked: false };
+      statsAttach_(_statsHold);
+      if (currentTab === 'stats') req.cbs.forEach(function (f) { f(); });
     })
-    .catch(function(e){ showErr('通信エラー<br><small>'+(e&&e.message||'')+'</small>'+retryBtn_('renderStats')); });
+    .catch(function(e){
+      if (_statsReq !== req) return;
+      _statsReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      if (currentTab === 'stats') showErr('通信エラー<br><small>'+(e&&e.message||'')+'</small>'+retryBtn_('statsRefreshNow_'));
+    });
+}
+// ［最新の状態に更新］＝必ず取りに行く
+function statsRefreshNow_() { loadStatsData(true, renderStats); }
+// 書いた後（給与受領の送信など）＝取りに行っている途中の1本（書く前の状態かもしれない）を待たない
+function statsAfterWrite_() { _statsReq = null; }
+// ［最新の状態に更新］のボタン。⭐押す所は 44px（指で押せる大きさ）。small＝札の中に置く小さい余白
+function statsRefreshBtn_(small) {
+  return '<div style="margin-top:' + (small ? '8px' : '22px') + '"><button type="button" data-stats-refresh="1" onclick="statsRefreshNow_()" style="min-height:44px;padding:0 22px;border-radius:22px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:13px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button></div>';
+}
+// 「データなし」「まだ公開されていません」を出したときに呼ぶ。見せた成績を取ってから STATS_RECHECK_MS 以上たっていれば、その成績につき1回だけ自動で取り直す。
+//   ⭐取り直した答えは新しい（STATS_RECHECK_MS より新しい）＝そこではもう取らない＝ループしない。取れなければ通信エラー［再試行］（勝手に繰り返さない）
+function statsAutoRecheck_() {
+  var h = _statsHold;
+  if (!h || h.rechecked || h.key !== homeCacheCtx_().key) return false;
+  if ((Date.now() - h.at) < STATS_RECHECK_MS) return false;
+  h.rechecked = true;
+  loadStatsData(true, renderStats);
+  return true;
 }
 
 function renderStats() {
@@ -2214,8 +2309,12 @@ function renderStats() {
   // 伝票・給率は成績ペイロード非依存（専用APIをその場でfetch）
   if (statsSubTab === 'bills') { renderBills(); return; }
   if (statsSubTab === 'kyuritsu') { renderKyuritsu(); return; }
-  // 成績データ未ロード（tab=homeでは含まれない）なら遅延ロードしてから再描画
-  if (!portalData || portalData.sales === undefined) { loadStatsData(false, function(){ renderStats(); }); return; }
+  // 💰STATS_FRESH：成績が無い・別の人／モードの物・古い（STATS_FRESH_MS）なら取ってから描く（loadStatsData が1本に絞る）。
+  //   ⭐新しければ portalData に載せ直す（ホームの答えで portalData が入れ替わっても取り直さない）。
+  //   ⛔portalData.sales の有無では決めない（端末の覚えから戻った古い成績で止まった＝2026-11-24）
+  var hs = statsFresh_();
+  if (!hs) { loadStatsData(false, renderStats); return; }
+  statsAttach_(hs);
   if (statsSubTab === 'sales') renderSales();
   else if (statsSubTab === 'pay') renderPay();
 }
@@ -2228,7 +2327,9 @@ function renderBills() {
   setContent('<div class="loading">読み込み中...</div>');
   var url = GAS_URL + '?action=portal&tab=bills&userId=' + encodeURIComponent(userId);
   if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
-  if (currentMonth) url += '&month=' + encodeURIComponent(currentMonth);
+  // ⭐送るのは伝票タブの月。⛔`currentMonth`（給与の月＝6/7/8）を送ると9月が永遠に選べない。
+  //   空で送ってよい＝サーバが「伝票がある月のいちばん新しい方」を選んで `month` で名乗る。
+  if (billsMonth) url += '&month=' + encodeURIComponent(billsMonth);
   gasFetch(url).then(function(r){ return r.json(); }).then(function(d){
     if (!d.ok) { setContent('<div style="color:#e88;padding:24px 16px;font-size:13px">エラー: ' + esc(d.error||'') + '</div>'); return; }
     renderBillsBody(d);
@@ -2256,9 +2357,25 @@ function renderBillsBody(d) {
     }
   }
   var days = d.days || [];
+  // ⭐サーバが「どの月を出したか」を名乗るので、画面はそれに合わせるだけ（月を数え直さない）。
+  //   ⚠️頼んだ月に伝票が無ければサーバが一覧の先頭を返す＝ここでズレを吸収する。
+  if (d.month) billsMonth = d.month;
+  var bMonths = d.months || [];
   var h = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
     + '<div style="font-size:13px;color:#e6cf95;font-weight:700">' + esc(d.cast||'') + ' さんの伝票</div>'
     + '<div style="font-size:11px;color:#b8a67c">' + esc(d.month||'') + '・前日まで</div></div>';
+  // 🗓 月チップ。⭐並びと中身は**サーバの `months`**（＝伝票シートにある月）。
+  //   ⛔`portalData.months`（給与の月）を使わない。1ヶ月しか無い人には出さない（📊給率と同じ作法）。
+  if (bMonths.length > 1) {
+    h += '<div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px">';
+    bMonths.forEach(function(m) {
+      var act = m === d.month;
+      h += '<button onclick="switchBillsMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
+        + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
+        + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + esc(m) + '</button>';
+    });
+    h += '</div>';
+  }
   h += '<div style="background:#241d10;border:1px solid #8a6a2e;border-radius:8px;padding:11px 13px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'
     + '<span style="font-size:12px;color:#b8a67c">今月の担当売上（前日まで）</span>'
     + '<span style="font-size:19px;font-weight:800;color:#e6cf95">' + yen(d.monthTotal||0) + '</span></div>';
@@ -2286,6 +2403,9 @@ function renderBillsBody(d) {
   });
   finishBills(h);
 }
+
+// 🗓 伝票タブの月を切り替える。⛔`currentMonth` は触らない（給与・給率・売上明細の月を飛ばさない）。
+function switchBillsMonth(m) { billsMonth = m; renderBills(); }
 
 function toggleBillDay(el){ var b = el.nextElementSibling; b.style.display = (b.style.display === 'none' ? 'block' : 'none'); }
 
@@ -2346,8 +2466,6 @@ function showGunshiLink() {
 
 // 管理者タブを表示
 function showAdminTab() {
-  var el = document.getElementById('tab-requests');
-  if (el) el.style.display = '';
   var el2 = document.getElementById('tab-notif');
   if (el2) el2.style.display = '';
   var el3 = document.getElementById('tab-cashset');
@@ -2357,48 +2475,139 @@ function showAdminTab() {
 }
 
 // ---- 売上明細 ----
+/* 📊 月の札（2026-11-18 速報）：正本はサーバの salesTabs（payrollnippo.js payNippoPortalSales_）。⛔ここで月や種類を数え直さない。
+   kind 'pay'＝給与の月（今までどおりのカード）／'sokuho'＝給与がまだ無い月（確定した日報の速報）／
+        'locked'＝給与は確定したが未公開（速報があれば速報＋「給与明細は確認中」・無ければ🔒）。
+   ⚠️salesTabs を返さない古いサーバのときだけ、今までどおり給与の月（sales のキー）で描く。 */
+function salesTabsOf_() {
+  var pd = portalData || {};
+  if (Object.prototype.toString.call(pd.salesTabs) === '[object Array]') return pd.salesTabs;
+  var s = pd.sales || {};
+  return Object.keys(s).sort().reverse().map(function (m) { return { month: m, kind: (s[m] && s[m].__locked) ? 'locked' : 'pay' }; });
+}
+/* 速報を出す月か（サーバが sokuho を付けた sokuho／locked の月だけ）。⛔pay の月には付いていても出さない */
+function salesTabIsSokuho_(t) {
+  var sk = (portalData && portalData.sokuho) || {};
+  return !!(t && (t.kind === 'sokuho' || t.kind === 'locked') && sk[t.month]);
+}
+/* 📊 速報のカード。⭐出すのはサーバが許可リスト（PAYNIPPO_SOKUHO_ITEMS_）で絞った5項目だけ。
+   ⛔バック・源泉・支給額は出さない／バック率メーターも出さない（月の途中の倍率は後で下がることがある）。
+   ⭐確定と見分ける＝点線の枠・青みの色・札に「速報」。 */
+function sokuhoCardHtml_(sel, sok, payLocked) {
+  var it = (sok && sok.items) || {};
+  var n = function (v) { return parseInt(v, 10) || 0; };
+  var yenS = function (v) { return '¥' + n(v).toLocaleString(); };
+  var md = function (d) { var p = String(d || '').split('-'); return p.length === 3 ? (Number(p[1]) + '/' + Number(p[2])) : esc(String(d || '')); };
+  var hm = function (v) { var m = n(v), hh = Math.floor(m / 60), mm = m % 60; return hh + '時間' + (mm ? mm + '分' : ''); };
+  function line(label, val, color) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #1d2830">'
+      + '<span style="font-size:13px;color:#8aa0ad">' + label + '</span>'
+      + '<span style="font-size:15px;font-weight:600;color:' + (color || '#d6e4ec') + '">' + val + '</span></div>';
+  }
+  var h = '';
+  if (payLocked) {
+    h += '<div style="margin-bottom:10px;padding:10px 12px;border:1px solid #4a3a1e;border-radius:10px;background:#16120b;font-size:12px;color:#d8c79a;line-height:1.7">'
+      + '🔒 ' + esc(sel) + ' の給与明細は確認中です。公開されるまでは、確定した日報の速報を出しています。'
+      + statsRefreshBtn_(true) + '</div>'; // 💰STATS_FRESH：押す所 44px
+  }
+  h += '<div data-sokuho="1" style="background:#10151a;border:1.5px dashed #5f8296;border-radius:12px;padding:14px">';
+  h += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">'
+    + '<span style="font-size:12px;color:#9fc2d6;font-weight:700;letter-spacing:0.5px">' + esc(sel) + ' 速報</span>'
+    + '<span style="font-size:10px;color:#9fc2d6;border:1px dashed #5f8296;border-radius:9px;padding:2px 8px;white-space:nowrap">速報・給与ではありません</span></div>';
+  h += '<div style="font-size:11px;color:#a9bfcc;line-height:1.7">'
+    + (n(sok.fixedDays) > 0 ? 'お店の日報 ' + md(sok.through) + ' まで（' + n(sok.fixedDays) + '日分）を集計しました' : 'この月のお店の日報はまだ確定していません')
+    + '</div>';
+  h += '<div data-sokuho-head="1" style="font-size:11px;color:#7f98a6;line-height:1.7;margin-bottom:6px">日報の訂正があった日は数字が変わることがあります</div>';
+  h += line('担当売上', yenS(it['担当小計']), '#cfe3ee');
+  if (n(it['同伴小計']) > 0) h += line('同伴売上', yenS(it['同伴小計']), '#a9bfcc');
+  h += line('勤務日数', n(it['勤務日数']) + '日', '#b9cfdb');
+  h += line('出勤時間', hm(it['出勤時間']), '#b9cfdb');
+  h += line('時間報酬', yenS(it['時間報酬']));
+  // ⭐確認中の日＝本人の日だけ（サーバが絞る）。今日の営業中は別の一言
+  var pend = (sok && sok.pending) || [];
+  if (pend.length) {
+    var shown = pend.slice(0, 12).map(md).join('・') + (pend.length > 12 ? ' ほか' + (pend.length - 12) + '日' : '');
+    h += '<div data-sokuho-pending="1" style="margin-top:10px;font-size:11px;color:#a9bfcc;line-height:1.7">確認中の日：' + shown
+      + '<br><span style="color:#7f98a6">日報の確定や確認が済むと、この速報に入ります。</span></div>';
+  }
+  if (sok && sok.todayOpen) h += '<div data-sokuho-today="1" style="margin-top:8px;font-size:11px;color:#a9bfcc;line-height:1.7">今日の分は閉店後の日報の確定で入ります。</div>';
+  h += '</div>';
+  h += '<div style="font-size:10px;color:#94886a;line-height:1.7;padding:10px 4px;text-align:center">給与ではありません。お給料（バック・源泉・支給額）は給与の確定と公開のあと［給与明細］に出ます。日報の訂正があった日は数字が変わることがあります。お店の売上調整は給与の確定のときに反映されます。</div>';
+  return h;
+}
 function renderSales() {
-  var sales = portalData && portalData.sales;
-  if (!sales || Object.keys(sales).length === 0) {
+  var sales = (portalData && portalData.sales) || {};
+  var tabs = salesTabsOf_();
+  if (!tabs.length) {
     setContent('<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">データなし</div>'
-      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">今月の売上データはまだ取得されていません。<br>毎日深夜に自動更新されます。</div>'
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">まだ見られる月がありません。<br>閉店のあと日報が確定すると、その日の分から『速報』として出ます。<br>給与明細は給与の確定・公開のあとに出ます。</div>'
+      + statsRefreshBtn_()
       + '</div>');
+    statsAutoRecheck_(); // 💰STATS_FRESH：見せた成績が古ければ1回だけ取り直す（［給与明細］の「データなし」と同じ）
     return;
   }
 
-  var months = Object.keys(sales).sort().reverse();
-  var sel = currentMonth && sales[currentMonth] ? currentMonth : months[0];
+  var months = tabs.map(function (t) { return t.month; });
+  // ⭐選ぶ月は売上明細の月（salesMonth）。⛔currentMonth（給与・給率の共有）は速報の月にしない＝renderPay の関所を揺らさない
+  var sel = (salesMonth && months.indexOf(salesMonth) >= 0) ? salesMonth : months[0];
+  var tab = tabs[months.indexOf(sel)];
   var row = sales[sel];
 
   function yen(v) { var n = parseInt(v) || 0; return n ? '¥' + n.toLocaleString() : '--'; }
   function num(v) { return parseInt(v) || 0; }
 
-  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
-    .reduce(function(s, k) { return s + num(row[k]); }, 0);
-
   var h = '<div style="padding:14px">';
 
-  // 月タブ
+  // 月タブ（速報の月は札に「速報」・点線）
   if (months.length > 1) {
     h += '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">';
-    months.forEach(function(m) {
-      var act = m === sel;
-      h += '<button onclick="switchSalesMonth(\'' + m + '\')" style="padding:5px 14px;border-radius:16px;border:1px solid '
-        + (act ? '#e6cf95' : '#241d10') + ';background:' + (act ? '#241d10' : 'transparent')
-        + ';color:' + (act ? '#e6cf95' : '#b8a67c') + ';font-size:12px;cursor:pointer;white-space:nowrap">' + m + '</button>';
+    tabs.forEach(function(t) {
+      var m = t.month, act = m === sel, sk = salesTabIsSokuho_(t);
+      h += '<button onclick="switchSalesMonth(\'' + esc(m) + '\')" style="padding:5px 14px;border-radius:16px;border:1px ' + (sk ? 'dashed ' : 'solid ')
+        + (sk ? (act ? '#9fc2d6' : '#3f5867') : (act ? '#e6cf95' : '#241d10')) + ';background:' + (act ? (sk ? '#10151a' : '#241d10') : 'transparent')
+        + ';color:' + (sk ? (act ? '#9fc2d6' : '#7f98a6') : (act ? '#e6cf95' : '#b8a67c')) + ';font-size:12px;cursor:pointer;white-space:nowrap">' + esc(m) + (sk ? ' 速報' : '') + '</button>';
     });
     h += '</div>';
   }
+
+  // 📊 速報（給与がまだ無い月／給与は確定したが未公開の日報の月）＝サーバが返した許可リストの項目だけ
+  if (salesTabIsSokuho_(tab)) {
+    h += sokuhoCardHtml_(sel, portalData.sokuho[sel], tab.kind === 'locked');
+    h += '</div>';
+    setContent(h);
+    if (tab.kind === 'locked') statsAutoRecheck_(); // 💰STATS_FRESH：給与は確定・未公開＝公開の直後に古いまま止まらない
+    return;
+  }
+  if (!row) {   // 速報の札なのに中身が無い（来ないはず）＝推測で埋めない
+    h += '<div style="text-align:center;padding:50px 20px;font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' のデータはまだありません。' + statsRefreshBtn_() + '</div></div>';
+    setContent(h);
+    statsAutoRecheck_(); // 💰STATS_FRESH
+    return;
+  }
+
+  // 🔐 未公開の月＝サーバが金額を落として { __locked:true } だけ返す（2026-10-09）。⛔ここで金額を探しにいかない
+  if (row && row.__locked) {
+    h += '<div style="text-align:center;padding:50px 20px"><div style="font-size:34px;margin-bottom:12px">🔒</div>'
+      + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与データは確認中です。<br>公開されるまでお待ちください。</div>'
+      + statsRefreshBtn_() + '</div></div>';
+    setContent(h);
+    statsAutoRecheck_(); // 💰STATS_FRESH：公開の直後に古いまま止まらない（［給与明細］の鍵と同じ）
+    return;
+  }
+
+  var backTotal = ['担当バック','予約バック','同伴バック','ドリンクバック','ボトルバック','年会費バック']
+    .reduce(function(s, k) { return s + num(row[k]); }, 0);
 
   // カード
   h += '<div style="background:#16130d;border:1px solid #211a0f;border-radius:12px;padding:14px">';
   var salesDates = (portalData && portalData.salesDataDates) || {};
   var asOf = salesDates[sel] || '';
   h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
-  h += '<span style="font-size:10px;color:#94886a;letter-spacing:0.5px">' + sel + ' TRUSTデータ'
-    + (asOf ? '　<span style="color:#e6cf95;font-weight:600">' + asOf + '時点</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>') + '</span>';
+  h += '<span style="font-size:10px;color:#94886a;letter-spacing:0.5px">' + sel + ' 給与データ'
+    + (asOf ? '　<span style="color:#e6cf95;font-weight:600">' + asOf + '時点</span>' : (tab && tab.payFixedAt ? '　<span style="color:#b8a67c">給与確定 ' + esc(tab.payFixedAt) + '</span>' : '<span style="color:#cc6666"> ※取込日未設定</span>')) + '</span>';
   if (adminPriv()) {
     h += '<span style="font-size:10px;color:#b8a67c;cursor:pointer;text-decoration:underline" onclick="salesSetDate(\'' + sel + '\')">'
       + (asOf ? '変更' : '取込日を設定') + '</span>';
@@ -2450,7 +2659,7 @@ function renderSales() {
 
   h += '</div>';
 
-  h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:10px 0">TRUSTシステムの集計値です</div>';
+  h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:10px 0">お店の給与計算の集計値です</div>';
   h += '</div>';
 
   // ---- バック率メーター（煽りあり） ----
@@ -2509,7 +2718,13 @@ function renderSales() {
   setContent(h);
 }
 
-function switchSalesMonth(m) { currentMonth = m; renderSales(); }
+/* ⭐売上明細の月は salesMonth。給与の月（サーバの months）を選んだときだけ currentMonth も合わせる（給与明細と同じ月を開ける）。
+   ⛔速報の月を currentMonth に入れない（renderPay・成績の月が飛ぶ） */
+function switchSalesMonth(m) {
+  salesMonth = m;
+  if (portalData && Object.prototype.toString.call(portalData.months) === '[object Array]' && portalData.months.indexOf(m) >= 0) currentMonth = m;
+  renderSales();
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 📊 じぶんの採算（キャスト本人が「時給以上の仕事ができているか」を見る）
@@ -2706,7 +2921,7 @@ function renderKyuritsuBody(d) {
     h += '<div style="text-align:center;padding:56px 20px">'
       + '<div style="font-size:30px;margin-bottom:12px">📊</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">この月のデータはまだありません</div>'
-      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">売上データは毎日深夜に自動更新されます。</div></div></div>';
+      + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">9月以降は［売上明細］の速報と［伝票］で見られます。</div></div></div>';
     setContent(h); return;
   }
 
@@ -2741,7 +2956,7 @@ function renderKyuritsuBody(d) {
   h += '<div style="margin-top:12px;padding-top:11px;border-top:1px solid #241d10;font-size:11px;color:#94886a;line-height:1.9">'
     + '担当売上 <b style="color:#cbb98a">' + kyu0(me.tanto) + '</b> ÷ 時間報酬 <b style="color:#cbb98a">' + kyu0(me.jikan) + '</b> ＝ ' + kyuBai(b) + '<br>'
     + '出勤 ' + me.days + '日　（お店の言い方だと <b style="color:#cbb98a">給率 ' + kyuPct(me.rate) + '</b>・目標は' + T + '%以下）'
-    + '<br><span style="color:#7d7159">※バックは含みません（バックは頑張った分のご褒美。TRUSTの給率欄はバック込みのため数字が異なります）</span>'
+    + '<br><span style="color:#7d7159">※バックは含みません（バックは頑張った分のご褒美。以前の給与明細の給率欄はバック込みのため数字が異なります）</span>'
     + '</div></div>';
 
   // ── 出勤1日あたり ──
@@ -2815,25 +3030,53 @@ function renderKyuritsuBody(d) {
   setContent(h);
 }
 
+/* ヘアサロン立替＝**領収書として登録された分だけ**（コンソール🧮給与明細 getHairReceipts_ と同じ1本）。
+   ⛔2026-09-26 まで、領収書が0円のときは `給与計算` シートの「ヘアサロン立替(手入力)」へ落ちていた。
+     `給与計算` は 2026-07 で更新が止まった手入力シート＝**ポータルだけ最終支給額が大きくなる**
+     （本番実測は 2026/05 りお ¥2,400 の1件）。コンソールは落ちない＝2画面で金額が食い違う原因だった。
+   ⭐給与明細の表示(renderPay)と受領確認の送信額(sendPayrollReceipt)は**この1本**を見る。
+   ⛔同じ式を2箇所に書き戻さない。片方だけ直すと、画面の金額とLINEに飛ぶ金額が黙ってズレる。 */
+function payHairAmount(month) {
+  var hairTotals = (portalData && portalData.hairTotals) || {};
+  return Number(hairTotals[month]) || 0;
+}
+
 // ---- 給与明細（TRUST明細書形式） ----
 function renderPay() {
   var sales = (portalData && portalData.sales) || {};
   var hairTotals = (portalData && portalData.hairTotals) || {};
-  var salesMonths = Object.keys(sales);
-  var hairMonths  = Object.keys(hairTotals).filter(function(m) { return !salesMonths.includes(m); });
-  var allMonths   = salesMonths.concat(hairMonths).sort().reverse();
+  // ⭐月タブの正本はサーバが返す months（backend の portalPayMonths_）。⛔ここで月を数え直さない。
+  //   数え直していたせいで、サーバが「当月は給与として出さない」と決めた月でも、領収書だけある月は
+  //   画面がすり抜けて出していた＝同じ条件を2箇所で判定していた（2026-09-26 に1本化）。
+  //   ⚠️months が来ていない古いペイロードのときだけ、給与のある月で描く（領収書だけの月は落ちるが、
+  //     止まった旧方式の月が復活することは無い＝安全側に倒す）。領収書そのものは📄領収書タブで見える。
+  var allMonths = (portalData && Object.prototype.toString.call(portalData.months) === '[object Array]' && portalData.months.length)
+    ? portalData.months.slice()
+    : Object.keys(sales).sort().reverse();
 
   if (allMonths.length === 0) {
+    // 💰STATS_FRESH（2026-11-24）：⛔ここに取り直しの道が無く、公開前に取った「給与の月が無い」のまま固まった
+    //   （10月分の給与を公開した後も「データなし」＝給与の月が1つも無かった黒服・新しい子）。
+    //   ⭐［最新の状態に更新］を出し、見せた成績が古ければ1回だけ自動で取り直す（鍵の画面と同じ statsAutoRecheck_ の1本）
     setContent('<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">データなし</div>'
       + '<div style="font-size:12px;color:#b8a67c;line-height:1.7">今月の給与データはまだ取得されていません。</div>'
+      + statsRefreshBtn_()
+      + '<div style="font-size:11px;color:#7a6f52;margin-top:10px;line-height:1.7">給与が公開された直後は、このボタンで最新の状態を取り直せます。</div>'
       + '</div>');
+    statsAutoRecheck_();
     return;
   }
 
   var pay = portalData && portalData.pay;
   var months = allMonths;
-  var sel = (currentMonth && (sales[currentMonth] || hairTotals[currentMonth])) ? currentMonth : months[0];
+  // ⭐選べる月は**必ず月タブの中**（＝サーバが返した months）。⛔`sales[...]`/`hairTotals[...]` で判定し直さない。
+  //   ⛔2026-09-26 まで hairTotals を見ていたので**月タブに無い月が選ばれた**（qaがブラウザで再現）：
+  //     月タブは 2026/08・07・06 なのに本文が「令和8年9月分／ヘアサロン立替代 ＋¥7,000／最終支給額 ¥7,000」になり、
+  //     payPublished['2026/09'] が無いのに **🔒未公開ロックを素通りした**＝**未公開の給与が本人に漏れる穴**。
+  //     発火条件は「当月のヘアサロン領収書が1件でもある」＝キャストは月中に登録するのでいずれ必ず満たす。
+  //   到達経路の一例＝jumpToBillDayFromVisit(date) が currentMonth を当月にしてから成績タブへ飛ぶ。
+  var sel = (currentMonth && months.indexOf(currentMonth) >= 0) ? currentMonth : months[0];
 
   // 公開チェック（非管理者は未公開月を表示しない）
   var payPublished = portalData.payPublished || {};
@@ -2853,26 +3096,25 @@ function renderPay() {
     return t;
   }
 
+  // ⚠️「領収書だけの月」＝給与の行が無い月。サーバの `PORTAL_PAY_SHOW_HAIR_ONLY_` が false のあいだ、
+  //   months には**給与の行がある月しか来ない**＝isHairOnlyMonth は常に false ＝**この逃げ道は到達しない**。
+  //   ⛔あのスイッチを true に戻すなら、ここが「未公開でもロックを素通りする道」になることを必ず読み直すこと。
   var isHairOnlyMonth = !sales[sel] || Object.keys(sales[sel] || {}).length === 0;
   if (!adminPriv() && !payPublished[sel] && !isHairOnlyMonth) {
-    // ⚠️ 成績データは初回のみ取得（loadStatsDataのload-onceガード）。管理者が公開した後に
-    //    アプリを開いたままだと payPublished が古いまま＝「公開したのにキャストはロックのまま」になる。
+    // ⚠️ 管理者が公開した後にアプリを開いたままだと payPublished が古いまま＝「公開したのにキャストはロックのまま」になる。
     //    ここで手動リロード導線を必ず出す＝webviewを閉じ直さずワンタップで最新の公開状態を取り直せる。
+    // 💰STATS_FRESH（2026-11-24）：ボタンは押す所 44px（statsRefreshBtn_）。自動の取り直しは statsAutoRecheck_ の1本（「データなし」と同じ決まり）。
+    //   ⛔それまでの「月ごとに1回だけ（payLockAutoRefreshed）」は、取ったばかりでも取り直し、同じ画面のまま日をまたぐと二度と取り直さなかった。
     var hLock = '<div style="padding:14px">' + monthTabsHtml(sel)
       + '<div style="text-align:center;padding:60px 20px">'
       + '<div style="font-size:36px;margin-bottom:14px">🔒</div>'
       + '<div style="font-size:15px;font-weight:600;color:#e6cf95;margin-bottom:8px">まだ公開されていません</div>'
       + '<div style="font-size:12px;color:#b8a67c;line-height:1.8">' + esc(sel) + ' の給与明細は確認中です。<br>公開されるまでお待ちください。</div>'
-      + '<button onclick="loadStatsData(true, renderStats)" style="margin-top:22px;padding:9px 22px;border-radius:18px;border:1px solid #8a6a2e;background:#241d10;color:#e6cf95;font-size:13px;font-weight:700;cursor:pointer">🔄 最新の状態に更新</button>'
+      + statsRefreshBtn_()
       + '<div style="font-size:11px;color:#7a6f52;margin-top:10px;line-height:1.7">公開直後はアプリ側が古いままのことがあります。<br>このボタンで最新の公開状態を取り直せます。</div>'
       + '</div></div>';
     setContent(hLock);
-    // 公開直後の反映漏れ対策: この月でまだ自動更新していなければ、一度だけ最新の公開状態を取り直す。
-    // 取り直して公開済みなら payslip を表示、まだ未公開ならロックのまま（ガードで再ループしない）。
-    if (!payLockAutoRefreshed[sel]) {
-      payLockAutoRefreshed[sel] = true;
-      loadStatsData(true, renderStats);
-    }
+    statsAutoRecheck_(); // 見せた成績が古ければ1回だけ取り直す（取り直して公開済みなら明細、まだ未公開なら鍵のまま＝もう取り直さない）
     return;
   }
 
@@ -2883,6 +3125,8 @@ function renderPay() {
   function yen(v) { return '¥' + (parseInt(v) || 0).toLocaleString(); }
 
   // 売上データなし・領収書のみの月
+  // ⚠️上の isHairOnlyMonth と同じ理由で、`PORTAL_PAY_SHOW_HAIR_ONLY_` が false のあいだ**ここも到達しない**。
+  //   残してあるのはスイッチを戻したときのため。⛔消すなら上の逃げ道と一緒に消すこと（片方だけ消さない）。
   var hairTotals = portalData.hairTotals || {};
   var hairOnly = Object.keys(s).length === 0;
   if (hairOnly && hairTotals[sel]) {
@@ -2899,18 +3143,6 @@ function renderPay() {
       hOnly += '<button onclick="togglePayPublish(\'' + esc(sel) + '\',\'' + (isPubO ? 'unpublishPay' : 'publishPay') + '\')" style="padding:8px 16px;background:' + (isPubO ? '#2a1010' : '#102a10') + ';border:1px solid ' + (isPubO ? '#cc4444' : '#44aa44') + ';border-radius:8px;color:' + (isPubO ? '#ff8888' : '#66dd66') + ';font-size:13px;font-weight:700;cursor:pointer">' + (isPubO ? '非公開に戻す' : '公開する') + '</button>';
       hOnly += '</div>';
 
-      hOnly += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
-      hOnly += '<div style="font-size:10px;color:#b8a67c;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
-      hOnly += '<div style="display:flex;gap:8px;align-items:center">';
-      hOnly += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
-        + 'style="width:80px;background:#0d0d18;border:1px solid #241d10;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
-      hOnly += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #3a2e18;border-radius:8px;color:#e6cf95;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
-      hOnly += 'CSVファイルを選択';
-      hOnly += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
-      hOnly += '</label>';
-      hOnly += '</div>';
-      hOnly += '<div id="payroll-csv-status" style="font-size:11px;color:#b8a67c;margin-top:6px"></div>';
-      hOnly += '</div>';
     }
     hOnly += '<div style="background:#f2ead9;color:#111;border-radius:12px;padding:16px 14px">';
     hOnly += '<div style="text-align:center;border-bottom:2px solid #94886a;padding-bottom:10px;margin-bottom:12px">';
@@ -2941,10 +3173,18 @@ function renderPay() {
   var urihan  = n(s['売り半']);
   var nyutenB = n(s['入店祝い金']);
   var bdayInfo = s['__bday'] || null; // 誕生日バック週の内訳（未設定null）
+  // 🎂過去月に後付けした誕生日バックの差額（この月に上乗せ）。黙って課税支給だけ増えると本人が検算できないので必ず行で出す
+  var retroB    = n(s['遡及差額']);
+  var retroInfo = s['__retro'] || null;
+  // 💴手当（2026-11-25）：固定の手当（毎月）とその月だけの手当。課税＝支給の合計に入る。黙って課税支給だけ増やさない＝必ず名目つきの行で出す
+  var teateB     = n(s['固定の手当']);
+  var teateItems = s['__teate'] || null;
+  var teateOnceB = n(s['その月の手当']);
+  var teateOnceNm = s['__teateOnceName'] || '';
   // 新バック方式では担当小計バック(s['担当バック']=新バック)が正。レガシー給与計算シート由来の小計バック(p['新バック'])は
   // 二重計上になるため、新バックがある月は抑制する（旧KYUYOのみの月はフォールバックで表示）。
   var shoBack = tantoB > 0 ? 0 : n(p['新バック']);
-  var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + sougei + zangyo + urihan + nyutenB;
+  var shikyu  = jikanH + shoBack + tantoB + yoyakuB + dohanB + drinkB + bottleB + foodB + bonus + sougei + zangyo + urihan + nyutenB + retroB + teateB + teateOnceB;
 
   var gensen    = n(s['源泉徴収']);
   var nichibara = n(s['日払']);
@@ -2952,11 +3192,8 @@ function renderPay() {
   var kojo      = gensen + nichibara + minus;
 
   var nokori    = n(s['残り支給額']);
-  var hairTotals = portalData.hairTotals || {};
-  var hairReceipt = hairTotals[sel] || 0;
-  var hairManual  = n(p['ヘアサロン立替(手入力)']);
-  var hair        = hairReceipt > 0 ? hairReceipt : hairManual;
-  var finalPay    = nokori + hair;
+  var hair      = payHairAmount(sel);   // 領収書1本（「給与計算」手入力へのフォールバックは廃止・2026-09-26）
+  var finalPay  = nokori + hair;
 
   // 令和変換
   var parts = sel.split('/');
@@ -2986,18 +3223,6 @@ function renderPay() {
       + (isPub ? '非公開に戻す' : '公開する') + '</button>';
     h += '</div>';
 
-    h += '<div style="background:#1b1710;border:1px solid #33291a;border-radius:10px;padding:11px 14px;margin-bottom:14px">';
-    h += '<div style="font-size:10px;color:#b8a67c;letter-spacing:0.5px;margin-bottom:8px">CSVから給与明細作成</div>';
-    h += '<div style="display:flex;gap:8px;align-items:center">';
-    h += '<input type="text" id="payroll-csv-month" value="' + esc(sel) + '" placeholder="2026/06" '
-      + 'style="width:80px;background:#0d0d18;border:1px solid #241d10;color:#fff;padding:8px;border-radius:8px;font-size:13px;text-align:center">';
-    h += '<label style="flex:1;padding:8px 12px;background:#0a1428;border:1px solid #3a2e18;border-radius:8px;color:#e6cf95;font-size:13px;cursor:pointer;text-align:center" id="payroll-csv-label">';
-    h += 'CSVファイルを選択';
-    h += '<input type="file" id="payroll-csv-input" accept=".csv,text/csv" style="display:none" onchange="handlePayrollCsv(this)">';
-    h += '</label>';
-    h += '</div>';
-    h += '<div id="payroll-csv-status" style="font-size:11px;color:#b8a67c;margin-top:6px"></div>';
-    h += '</div>';
   }
 
   // 受領確認状況・送信ボタン（管理者・キャスト共通）
@@ -3059,6 +3284,20 @@ function renderPay() {
   if (zangyo  > 0) h += tr('残業代',          yen(zangyo),  'shikyu');
   if (urihan  > 0) h += tr('売り半',          yen(urihan),  'shikyu');
   if (nyutenB > 0) h += tr('入店祝い金',      yen(nyutenB), 'shikyu');
+  if (retroB > 0) {
+    var retroLbl = '🎂 誕生日バック差額';
+    if (retroInfo && retroInfo.length) {
+      var ms = retroInfo.map(function (x) { return String(x.srcMonth || '').replace(/^(\d{4})\/0?(\d+)$/, '$1年$2月分'); });
+      retroLbl += '（' + ms.join('・') + '）';
+    }
+    h += tr(retroLbl, yen(retroB), 'shikyu');
+  }
+  // 💴手当（名目は esc で包む＝名簿・給与手入力に人が書いた文字）
+  if (teateB > 0) {
+    if (teateItems && teateItems.length) teateItems.forEach(function (x) { h += tr(esc(x.n || '手当') + '（毎月）', yen(n(x.a)), 'shikyu'); });
+    else h += tr('固定の手当', yen(teateB), 'shikyu');
+  }
+  if (teateOnceB > 0) h += tr(esc(teateOnceNm || 'その月の手当'), yen(teateOnceB), 'shikyu');
   h += tr('合計', yen(shikyu), 'total');
 
   h += trHead('控除対象');
@@ -3153,41 +3392,6 @@ function renderPay() {
 
 function switchPayMonth(m) { currentMonth = m; renderPay(); }
 
-function handlePayrollCsv(input) {
-  var file = input.files && input.files[0];
-  if (!file) return;
-  var monthEl = document.getElementById('payroll-csv-month');
-  var month = monthEl ? monthEl.value.trim() : '';
-  var statusEl = document.getElementById('payroll-csv-status');
-  if (!month) {
-    if (statusEl) statusEl.textContent = '⚠️ 対象月を入力してください（例: 2026/06）';
-    input.value = '';
-    return;
-  }
-  if (statusEl) statusEl.textContent = '読み込み中...';
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    var csvText = e.target.result;
-    gasFetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'importPayrollCsv', userId: userId, month: month, csvText: csvText })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      input.value = '';
-      if (!d.ok) { if (statusEl) statusEl.textContent = '⚠️ ' + (d.error || 'エラー'); return; }
-      if (statusEl) statusEl.textContent = '✅ ' + d.count + '名分を取り込みました';
-      currentMonth = month;
-      loadStatsData(true, function(){ renderStats(); });
-    })
-    .catch(function() {
-      input.value = '';
-      if (statusEl) statusEl.textContent = '⚠️ 通信エラーが発生しました';
-    });
-  };
-  reader.readAsText(file, 'UTF-8');
-}
-
 function togglePayPublish(month, action) {
   gasFetch(GAS_URL, {
     method: 'POST',
@@ -3208,12 +3412,10 @@ function togglePayPublish(month, action) {
 
 function sendPayrollReceipt(month, method) {
   var s = (portalData.sales && portalData.sales[month]) || {};
-  var p = (portalData.pay && portalData.pay[month]) || {};
   var num = function(v) { return parseFloat(String(v).replace(/[¥,]/g, '')) || 0; };
   var nokori = num(s['残り支給額']);
-  var hairTotals = portalData.hairTotals || {};
-  var hair = (hairTotals[month] || 0) > 0 ? hairTotals[month] : num(p['ヘアサロン立替(手入力)']);
-  var amount = nokori + hair;
+  // ⭐画面の最終支給額と同じ1本を見る（renderPay と同じ payHairAmount）＝送る額と見せる額をズラさない
+  var amount = nokori + payHairAmount(month);
 
   if (!confirm(method + 'で給与受領確認をLINEに送信します。よろしいですか？')) return;
 
@@ -3223,7 +3425,7 @@ function sendPayrollReceipt(month, method) {
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
-    if (d.ok) { alert('送信しました'); loadStatsData(true, function(){ renderStats(); }); }
+    if (d.ok) { alert('送信しました'); statsAfterWrite_(); loadStatsData(true, renderStats); } // 💰STATS_FRESH：送る前に出た取りかけの1本は待たない（受領の状態が古いまま「未送信」に見えない）
     else alert('エラー: ' + (d.error || 'unknown'));
   })
   .catch(function() { alert('通信エラーが発生しました'); });
@@ -3331,33 +3533,8 @@ function renderRanking(d) {
   h += rankCard('予約ランキング', rd.yoyaku, 'yoyakuCnt', true);
   h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:4px 0">LINE登録メンバーのみ表示</div>';
 
-  // 管理者：TRUST組数同期（ブックマークレット）
-  if (adminPriv()) {
-    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
-    h += '<div style="font-size:11px;color:#b8a67c;font-weight:600;margin-bottom:8px">🔄 TRUST 組数を同期する</div>';
-    h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
-       + '① 下のリンクをブックマークバーにドラッグ<br>'
-       + '② TRUSTを開いてそのブックマークをクリック<br>'
-       + '③ 自動で今月分の同伴・予約組数が反映される'
-       + '</div>';
-    h += '<a id="trust-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#0f201a;border:1px solid #336633;border-radius:10px;color:#66cc88;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 TRUSТSync ← ドラッグしてブックマーク登録</a>';
-    h += '</div>';
-
-    h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid #211a0f">';
-    h += '<div style="font-size:11px;color:#ccaa66;font-weight:600;margin-bottom:8px">💴 現金チェック用 日払い・経費を取得</div>';
-    h += '<div style="font-size:11px;color:#b09f74;line-height:1.7;margin-bottom:10px">'
-       + '① 下のリンクをブックマークバーにドラッグ<br>'
-       + '② 営業後、TRUSTを開いてそのブックマークをクリック<br>'
-       + '③ 当日の日払い合計・経費合計を自動取得して記録'
-       + '</div>';
-    h += '<a id="trust-cash-bookmarklet" href="" style="display:block;text-align:center;padding:10px;background:#2a2210;border:1px solid #886622;border-radius:10px;color:#ddbb55;font-size:13px;font-weight:600;text-decoration:none;cursor:grab">📌 現金Sync ← ドラッグしてブックマーク登録</a>';
-    h += '</div>';
-  }
-
   h += '</div>';
   setContent(h);
-  setupBookmarklet_();
-  setupCashBookmarklet_();
 }
 
 // ---- 📝 スキルテスト受験（黒服＋管理者属性。作問・結果はコンソール） ----
@@ -3551,7 +3728,7 @@ function renderWine(d) {
   h += wineCard_('🍷 ワイン', wineActive);
   if (dropped.length) h += wineDroppedCard_(dropped);
   h += '<div style="font-size:10px;color:#94886a;text-align:center;padding:8px 4px;line-height:1.6">'
-    + '単価は店舗メニューの価格です（会計はTRUSTが正）。<br>'
+    + '単価は店舗メニューの価格です（会計は伝票の金額が正）。<br>'
     + 'メニューに紐づいた銘柄のみ表示・在庫0本は非表示。</div>';
   h += '</div>';
   setContent(h);
@@ -3602,120 +3779,7 @@ function wineTag_(menuCat) {
   return '';
 }
 
-function setupBookmarklet_() {
-  var el = document.getElementById('trust-bookmarklet');
-  if (!el) return;
-  var secret = 'lounge-sync-2026';
-  var gas = GAS_URL;
-
-  // TRUSTの合計行(62列)から全データを抽出するヘルパーをブックマークレット内に埋め込む
-  // 列マッピング (実測):
-  //  1=残り支給額, 3=担当小計, 5=同伴小計, 6=給率%, 7=勤務日数
-  //  20=時間報酬計, 29=担当バック金額, 30=予約組数, 32=予約バック金額
-  //  33=同伴組数, 35=同伴バック金額, 39=ドリンクバック金額
-  //  43=ボトルバック金額, 47=年会費バック金額, 54=源泉徴収, 55=日払, 61=マイナス計
-  var code = 'javascript:(function(){'
-    + 'var G=' + JSON.stringify(gas) + ';'
-    + 'var S=' + JSON.stringify(secret) + ';'
-    + 'var now=new Date();var yr=now.getFullYear();var mo=now.getMonth()+1;'
-    + 'var mk=yr+"/"+(("0"+mo).slice(-2));'
-    + 'var show=function(t){var e=document.getElementById("_lsm");if(!e){e=document.createElement("div");e.id="_lsm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#16130d",border:"1px solid #c9a459",borderRadius:"10px",padding:"12px 16px",color:"#e6cf95",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
-    + 'function pv(s){if(!s||s==="--")return null;var n=parseFloat(s.replace(/[￥,]/g,""));return isNaN(n)?null:n;}'
-    + 'function extractCast(html,name){'
-    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
-    +   'var tot=null;'
-    +   'doc.querySelectorAll("tr").forEach(function(tr){var c=tr.querySelectorAll("td");if(c.length===62&&c[0].textContent.trim()==="合計")tot=c;});'
-    +   'if(!tot)return null;'
-    +   'function v(i){return pv(tot[i].textContent.trim());}'
-    +   'return{name:name,nokori:v(1),tanto:v(3),dohan:v(5),kyuritsu:v(6),kinmu:v(7),'
-    +     'jikan:v(20),tantoBk:v(29),yoyakuCnt:v(30),yoyakuBk:v(32),'
-    +     'dohanCnt:v(33),dohanBk:v(35),drinkBk:v(39),bottleBk:v(43),'
-    +     'foodBk:v(47),gensen:v(54),hizuke:v(55),minus:v(61)};'
-    + '}'
-    + 'show("① キャスト一覧を取得中...");'
-    + 'fetch("/cast/index/"+yr+"/"+mo+"/0").then(function(r){return r.text();})'
-    + '.then(function(html){'
-    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
-    +   'var links=doc.querySelectorAll("a[href*=\\"/cast/detail/\\"]");'
-    +   'var um={};links.forEach(function(a){var n=a.textContent.trim();var h=a.getAttribute("href");if(n&&h&&!um[n])um[n]=h;});'
-    +   'var names=Object.keys(um);'
-    +   'if(!names.length){show("❌ キャストURLが取得できません");return null;}'
-    +   'show("② "+names.length+"名の詳細を取得中...");'
-    +   'var done=0;'
-    +   'return Promise.all(names.map(function(name){'
-    +     'return fetch(um[name]).then(function(r){return r.text();}).then(function(h2){'
-    +       'done++;show("② "+done+"/"+names.length+"名 取得中...");'
-    +       'return extractCast(h2,name);'
-    +     '});'
-    +   '}));'
-    + '})'
-    + '.then(function(casts){'
-    +   'if(!casts)return null;'
-    +   'casts=casts.filter(function(c){return c!==null;});'
-    +   'show("③ GASにデータ送信中 ("+casts.length+"名)...");'
-    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustAll",syncSecret:S,monthKey:mk,casts:casts})}).then(function(r){return r.json();});'
-    + '})'
-    + '.then(function(res){'
-    +   'if(!res)return;'
-    +   'if(res.ok)show("✅ "+mk+" の売上データを同期しました<br><small>"+res.updated+"名分 完了</small>");'
-    +   'else show("❌ "+(res.error||"エラー"));'
-    +   'setTimeout(function(){var e=document.getElementById("_lsm");if(e)e.remove();},8000);'
-    + '})'
-    + '.catch(function(e){show("❌ "+(e.message||e));});'
-    + '})();';
-  el.href = code;
-}
-
-function setupCashBookmarklet_() {
-  var el = document.getElementById('trust-cash-bookmarklet');
-  if (!el) return;
-  var secret = 'lounge-sync-2026';
-  var gas = GAS_URL;
-
-  // TRUST「日報登録」(/report/index/{年}/{月}/{日}) から当日の日払い合計・経費合計を抽出する
-  // 実測で確認済み:
-  //  table#timecard (cast用・staff用の2つ) 内の input[name="1"] = 各人の日払い額 → 全行を合計
-  //  table#logCostOut の各行: select[name="cost_id"] の選択中option文字 = 経費カテゴリ名, input[name="price"] = 金額
-  //  営業は深夜に及ぶため、当日午前6時より前にクリックした場合は前日を営業日とみなす
-  var code = 'javascript:(function(){'
-    + 'var G=' + JSON.stringify(gas) + ';'
-    + 'var S=' + JSON.stringify(secret) + ';'
-    + 'var now=new Date();var biz=new Date(now);if(now.getHours()<6)biz.setDate(biz.getDate()-1);'
-    + 'var yr=biz.getFullYear();var mo=biz.getMonth()+1;var dy=biz.getDate();'
-    + 'function pad(n){return ("0"+n).slice(-2);}'
-    + 'var dateKey=yr+"-"+pad(mo)+"-"+pad(dy);'
-    + 'var path="/report/index/"+yr+"/"+pad(mo)+"/"+pad(dy);'
-    + 'var show=function(t){var e=document.getElementById("_lcm");if(!e){e=document.createElement("div");e.id="_lcm";Object.assign(e.style,{position:"fixed",top:"12px",right:"12px",background:"#2a2210",border:"1px solid #aa8822",borderRadius:"10px",padding:"12px 16px",color:"#ddbb55",zIndex:99999,fontSize:"13px",fontFamily:"sans-serif",maxWidth:"320px",boxShadow:"0 4px 20px rgba(0,0,0,0.6)",lineHeight:"1.5"});document.body.appendChild(e);}e.innerHTML=t;};'
-    + 'function pv(s){var n=parseFloat(String(s).replace(/[￥,]/g,""));return isNaN(n)?0:n;}'
-    + 'show("① "+dateKey+" の日報を取得中...");'
-    + 'fetch(path).then(function(r){return r.text();})'
-    + '.then(function(html){'
-    +   'var p=new DOMParser();var doc=p.parseFromString(html,"text/html");'
-    +   'var dayPayTotal=0;'
-    +   'doc.querySelectorAll("table#timecard input[name=\\"1\\"]").forEach(function(inp){dayPayTotal+=pv(inp.value);});'
-    +   'var costOutTotal=0;var costOutDetail=[];'
-    +   'doc.querySelectorAll("table#logCostOut tr").forEach(function(tr){'
-    +     'var sel=tr.querySelector("select[name=\\"cost_id\\"]");'
-    +     'var priceInp=tr.querySelector("input[name=\\"price\\"]");'
-    +     'if(!sel||!priceInp)return;'
-    +     'var label=sel.options[sel.selectedIndex]?sel.options[sel.selectedIndex].text:"";'
-    +     'var amount=pv(priceInp.value);'
-    +     'costOutTotal+=amount;'
-    +     'costOutDetail.push({label:label,amount:amount});'
-    +   '});'
-    +   'show("② GASに送信中...<br><small>日払い合計 ¥"+dayPayTotal.toLocaleString()+" / 経費合計 ¥"+costOutTotal.toLocaleString()+"</small>");'
-    +   'return fetch(G,{method:"POST",body:JSON.stringify({action:"syncTrustDailyCash",syncSecret:S,dateKey:dateKey,dayPayTotal:dayPayTotal,costOutTotal:costOutTotal,costOutDetail:costOutDetail})}).then(function(r){return r.json();});'
-    + '})'
-    + '.then(function(res){'
-    +   'if(res.ok)show("✅ "+dateKey+" の現金データを記録しました<br><small>日払い合計 ¥"+res.dayPayTotal.toLocaleString()+" / 経費合計 ¥"+res.costOutTotal.toLocaleString()+"</small>");'
-    +   'else show("❌ "+(res.error||"エラー"));'
-    +   'setTimeout(function(){var e=document.getElementById("_lcm");if(e)e.remove();},8000);'
-    + '})'
-    + '.catch(function(e){show("❌ "+(e.message||e));});'
-    + '})();';
-  el.href = code;
-}
-
+/* 🗑 旧システムの組数・日払い経費のブックマークレットは 2026-10-10 に削除（利用0回・apply-remove-unused-r2.js） */
 function toggleRankingPublish(month, action) {
   gasFetch(GAS_URL, {
     method: 'POST',
@@ -4038,7 +4102,7 @@ function renderPortalVisits(v) {
       + '<span style="width:66px;flex-shrink:0;font-weight:700;color:#efe4cd">' + esc(fmtVisitDate(r.date)) + '</span>'
       + '<span style="flex:1;color:#b09f74">' + esc(r.in || '') + (r.out ? '〜' + esc(r.out) : '') + (r.table ? '　' + esc(r.table) : '') + (r.pax ? '　' + r.pax + '名' : '') + (r.tantou ? '　担当' + esc(r.tantou) : '') + (sales ? '　' + sales : (fee ? '　' + fee : '')) + '</span>'
       + (r.dohan ? '<span class="ycm ycm-note" style="flex-shrink:0">🤝同伴' + (r.dohanCast ? esc(r.dohanCast) : '') + '</span>' : '')
-      + (r.source === 'TRUST' ? '<span class="ycm ycm-note" style="flex-shrink:0">TRUST</span>' : '')
+      + (r.source === 'TRUST' ? '<span class="ycm ycm-note" style="flex-shrink:0">旧システム</span>' : '')
       + (canJump ? '<span style="flex-shrink:0;color:#8c7f5e;font-size:12px">伝票 ›</span>' : '')
       + '</div>';
   }).join('');
@@ -4240,6 +4304,178 @@ function renderShiftCal() {
   document.getElementById('submit-bar').style.display = 'block';
   updateSubmitBar();
   renderDeclineBtn();
+  shopRestLoad_(); // 🏷 店都合の休み：暦を描いた後に取りに行く（60秒は覚える・届いて変わっていれば描き直す）
+}
+
+/* 🏷 店都合の休み（2026-11-25 ボス指示）：⚖️出勤調整で店の都合で休ませた日を、暦で「欠勤」ではなく「休み／店都合」と出す。
+   ⭐判定はサーバだけ（GAS tab=shoprest・shoprest.js shopRestIs_＝暦に出している値が『休み』で、まだ戻していない店都合の記録がある日）。
+     画面は答えの M/d を覚えて、その日の札を替えるだけ（数え方・押したときの動きは今までどおり）。
+   ⚠️取れない・遅い＝今までどおり（欠勤の札）で出す＝画面は止めない。ホーム（homelite）の答えは使わない＝速い入口の比べに触らない。
+   ⚠️遅れて届いた答え：相手（homeCacheCtx_ の key＝本人／代理閲覧の相手）が替わっていたら捨てる・暦のタブでなければ覚えるだけ。
+   ⛔qa②（11/25）：答えの形が違う・ok:false・通信の失敗でも必ず覚える（覚えないと暦を描き直すたびに GAS を呼ぶ。
+     tab=shoprest を知らない GAS では既定の重い答え＝給与・売上まで読む答えに落ちる）。答えが来たら形に関わらず60秒（使えない答えは空＝欠勤の札のまま）・
+     通信の失敗は30秒（前に覚えた印はそのまま使う）。 */
+var SHOPREST_FRESH_MS = 60000, SHOPREST_REQ_MS = 20000, SHOPREST_FAIL_MS = 30000;
+var _shopRest = null;    // { key, at, ttl, keys:['M/d'…] }
+var _shopRestReq = null; // { key, at }
+function shopRestKeys_() {
+  var key = homeCacheCtx_().key;
+  return (_shopRest && _shopRest.key === key) ? _shopRest.keys : [];
+}
+function shopRestLoad_() {
+  var key = homeCacheCtx_().key, now = Date.now();
+  if (_shopRest && _shopRest.key === key && now - _shopRest.at >= 0 && now - _shopRest.at < (_shopRest.ttl || SHOPREST_FRESH_MS)) return;
+  if (_shopRestReq && _shopRestReq.key === key && now - _shopRestReq.at >= 0 && now - _shopRestReq.at < SHOPREST_REQ_MS) return; // 取りに行っている最中
+  var req = { key: key, at: now };
+  _shopRestReq = req;
+  var url = GAS_URL + '?action=portal&tab=shoprest&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (_shopRestReq !== req) return;
+      _shopRestReq = null;
+      if (homeCacheCtx_().key !== key) return;                 // 途中で相手が替わった＝今の画面の物ではない
+      var ok = !!(d && d.ok && Array.isArray(d.shopRest));     // 使えない答え（形が違う・ok:false・tab を知らない GAS）＝空として60秒覚える
+      var before = JSON.stringify(shopRestKeys_());
+      _shopRest = { key: key, at: Date.now(), ttl: SHOPREST_FRESH_MS, keys: ok ? d.shopRest.map(function(k) { return String(k); }) : [] };
+      if (currentTab === 'shift' && JSON.stringify(_shopRest.keys) !== before) renderShiftCal();
+    })
+    .catch(function() {
+      if (_shopRestReq !== req) return;
+      _shopRestReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      _shopRest = { key: key, at: Date.now(), ttl: SHOPREST_FAIL_MS, keys: shopRestKeys_() }; // 通信の失敗＝30秒は取り直さない（前の印はそのまま）
+    });
+}
+
+/* 🎁 12月の特別報酬の進み具合（2026-11-27 ボス指示）：ホームに「12月の出勤ボーナスまであと何日」と店全体の売上目標の % を出す。
+   ⭐数え方・段・あと何日・売上の % はサーバだけ（GAS tab=decbonus・decbonus.js decBonusPortalTab_）。画面は答えを描くだけ（数え直さない）。
+     ⛔売上の円はサーバが返さない（% と達成の印だけ）＝画面にも端末にも円は来ない。
+   ⚠️ホーム（homelite）の答えは使わない・端末の覚え（HOME_CACHE_VER）にも入れない＝速い入口の比べ・3日の覚えに触らない。
+   ⚠️取れない・遅い・使えない答え（show:false・tab を知らない古い GAS）＝カードを出さない（ホームは止めない）。
+     答えは形に関わらず10分覚える（使えない答えも覚える＝ホームを描き直すたびに GAS を呼ばない）。通信の失敗は1分。
+   ⚠️遅れて届いた答え：相手（homeCacheCtx_ の key＝本人／代理閲覧の相手）が替わっていたら捨てる。 */
+var DECBONUS_FRESH_MS = 600000, DECBONUS_REQ_MS = 20000, DECBONUS_FAIL_MS = 60000;
+var _decBonus = null;    // { key, at, ttl, b: 答えの decbonus（使えなければ null） }
+var _decBonusReq = null; // { key, at }
+function decBonusSkip_() { return onLeave || (isAdmin && !adminViewAs); }
+function decBonusNow_() {
+  var key = homeCacheCtx_().key;
+  return (_decBonus && _decBonus.key === key) ? _decBonus.b : null;
+}
+function decBonusForget_() { _decBonus = null; } // シフトを出した直後＝次にホームを描くとき取り直す
+function homeDecBonusCard() {
+  if (decBonusSkip_()) return '';
+  return '<div id="home-decbonus">' + decBonusCardHtml_(decBonusNow_()) + '</div>';
+}
+function paintDecBonus_() {
+  var el = document.getElementById('home-decbonus');
+  if (el) el.innerHTML = decBonusCardHtml_(decBonusNow_());
+}
+function loadDecBonus_() {
+  if (decBonusSkip_()) return;
+  var key = homeCacheCtx_().key, now = Date.now();
+  if (_decBonus && _decBonus.key === key && now - _decBonus.at >= 0 && now - _decBonus.at < (_decBonus.ttl || DECBONUS_FRESH_MS)) { paintDecBonus_(); return; }
+  if (_decBonusReq && _decBonusReq.key === key && now - _decBonusReq.at >= 0 && now - _decBonusReq.at < DECBONUS_REQ_MS) return; // 取りに行っている最中
+  var req = { key: key, at: now };
+  _decBonusReq = req;
+  var url = GAS_URL + '?action=portal&tab=decbonus&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (_decBonusReq !== req) return;
+      _decBonusReq = null;
+      if (homeCacheCtx_().key !== key) return;                  // 途中で相手が替わった＝今の画面の物ではない
+      var b = (d && d.ok && d.decbonus && d.decbonus.show === true) ? d.decbonus : null;
+      _decBonus = { key: key, at: Date.now(), ttl: DECBONUS_FRESH_MS, b: b };
+      paintDecBonus_();
+    })
+    .catch(function() {
+      if (_decBonusReq !== req) return;
+      _decBonusReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      _decBonus = { key: key, at: Date.now(), ttl: DECBONUS_FAIL_MS, b: decBonusNow_() }; // 通信の失敗＝1分は取り直さない（前に出したカードはそのまま）
+    });
+}
+function decBonusN_(v) { var n = Number(v); return (isFinite(n) && n >= 0) ? Math.floor(n) : 0; }
+function decBonusYen_(v) { return '¥' + decBonusN_(v).toLocaleString(); }
+/* 段の目盛り（0〜22日＝20日の札が端で切れない幅）。出勤済み＝濃い金・締め待ちと予定＝薄い金の斜線（予定は実際に出ないと数えない）。
+   ⭐段の判定はサーバの tier/next だけ（ここは長さを描くだけ）。札は「日」と「額」を2段に＝390幅で隣の札と重ならない（1段だと16日と20日が重なった） */
+function decBonusBar_(done, rest) {
+  var MAX = 22, w = function(n) { return Math.max(0, Math.min(100, n / MAX * 100)); };
+  var dw = w(done), rw = Math.max(0, w(done + rest) - dw);
+  var h = '<div style="position:relative;height:10px;background:#241d10;border-radius:5px;overflow:hidden;margin-top:12px">'
+    + '<div style="position:absolute;left:0;top:0;bottom:0;width:' + dw.toFixed(1) + '%;background:#d6b778"></div>'
+    + '<div style="position:absolute;left:' + dw.toFixed(1) + '%;top:0;bottom:0;width:' + rw.toFixed(1) + '%;background:repeating-linear-gradient(45deg,#6e5a32 0 4px,#4d3f22 4px 8px)"></div>';
+  [12, 16, 20].forEach(function(n) { h += '<div style="position:absolute;left:' + w(n).toFixed(1) + '%;top:0;bottom:0;width:1px;background:#0e0b06"></div>'; });
+  h += '</div><div style="position:relative;height:26px;font-size:10px;line-height:12px;color:#8d7c56;margin-top:3px">';
+  [[12, '12日', '¥1万'], [16, '16日', '¥3万'], [20, '20日', '¥5万']].forEach(function(p) {
+    h += '<span style="position:absolute;left:' + w(p[0]).toFixed(1) + '%;transform:translateX(-50%);text-align:center;white-space:nowrap">' + p[1] + '<br>' + p[2] + '</span>';
+  });
+  return h + '</div>';
+}
+function decBonusCardHtml_(b) {
+  if (!b || b.show !== true) return '';
+  var done = decBonusN_(b.done), checking = decBonusN_(b.checking), plan = decBonusN_(b.plan), total = decBonusN_(b.total);
+  var after = b.phase === 'after', before = b.phase === 'before';
+  var tierTxt = (b.tier && b.tier.yen) ? decBonusYen_(b.tier.yen) : 'まだ段なし';
+  var h = '<div class="card" data-decbonus="1" onclick="switchTab(\'shift\')" style="cursor:pointer;background:linear-gradient(135deg,#221a0e,#14100a);border-color:#8a6d3a">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+    +   '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">🎁 12月の特別ボーナス</span>'
+    +   '<span style="font-size:11px;color:#8d7c56;white-space:nowrap">12/1〜12/26</span>'
+    + '</div>'
+    + '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap">'
+    +   '<div style="display:flex;align-items:baseline;gap:6px">'
+    +     '<span style="font-size:13px;color:#b8a67c">' + (after ? 'あなたの日数' : 'あなたの日数（見込み）') + '</span>'
+    +     '<span style="font-size:34px;font-weight:800;color:#f4d98a;line-height:1">' + total + '</span>'
+    +     '<span style="font-size:16px;font-weight:700;color:#f4d98a">日</span>'
+    +   '</div>'
+    +   '<span style="font-size:12px;font-weight:700;color:' + (b.tier ? '#f4d98a' : '#8d7c56') + ';border:1px solid ' + (b.tier ? '#c9a95f88' : '#5a4a2a') + ';border-radius:9px;padding:2px 10px;white-space:nowrap">' + (after ? '段 ' : '見込みの段 ') + tierTxt + '</span>'
+    + '</div>'
+    + decBonusBar_(done, checking + plan);
+  var msg;
+  if (b.next && b.next.need) msg = '次の段（' + decBonusN_(b.next.days) + '日・' + decBonusYen_(b.next.yen) + '）まで <b style="color:#f4d98a;font-size:17px">あと ' + decBonusN_(b.next.need) + '日</b>';
+  else msg = '<span style="color:#9fe0b4">🏆 最高の段（20日・¥50,000）に届いています</span>';
+  h += '<div style="margin-top:8px;font-size:13.5px;color:#e6d8b8;line-height:1.6">' + msg + '</div>';
+  /* 内訳：出勤済み（濃い金）／締め待ち／これからの予定（薄い金の斜線） */
+  var row = function(dot, label, n, sub) {
+    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;color:#cbb98a;padding:3px 0">'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:0;' + dot + '"></span>' + label
+      + (sub ? '<span style="font-size:10.5px;color:#7d7159;margin-left:4px">' + sub + '</span>' : '') + '</span>'
+      + '<b style="color:#efe4cd;white-space:nowrap">' + n + '日</b></div>';
+  };
+  var stripe = 'background:repeating-linear-gradient(45deg,#6e5a32 0 3px,#4d3f22 3px 6px)';
+  h += '<div style="margin-top:8px;padding-top:7px;border-top:1px solid #2a2214">'
+    + row('background:#d6b778', '出勤済み', done, '日報が締まった日')
+    + (checking ? row(stripe, '締め待ち', checking, '日報の確認が済むと出勤済みへ') : '')
+    + (after ? '' : row(stripe, 'これからの予定', plan, '確定したシフト'))
+    + '</div>';
+  var note = before ? '12/1 から数えます。いまは12月の確定したシフトの日数です。予定は実際に出勤しないと数えません。'
+    : after ? '期間は終わりました（12/26 まで）。日報の確認が済むと日数が決まります。支払いは12月分の給与と一緒です。'
+    : '予定の日は、実際に出勤しないと数えません（シフトが出ていない日・申請中の日は入りません）。';
+  h += '<div style="font-size:10.5px;color:#7d7159;line-height:1.7;margin-top:5px">' + note + '</div>';
+  /* 店全体の売上目標（⛔金額は来ない＝% だけ） */
+  var st = b.store || {}, need = decBonusN_(b.salesNeedDays) || 12, sb = decBonusYen_(b.salesBonus || 30000);
+  h += '<div style="margin-top:10px;padding-top:9px;border-top:1px solid #2a2214">'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">'
+    +   '<span style="font-size:12px;color:#b09f74">🏪 店全体の売上目標</span>';
+  if (st.phase === 'before') {
+    h += '<span style="font-size:12px;color:#8d7c56">12/1 から数えます</span></div>';
+  } else if (st.error || typeof st.pct !== 'number') {
+    h += '<span style="font-size:12px;color:#8d7c56">いまは取得できません</span></div>';
+  } else {
+    var pct = Math.max(0, Math.min(100, decBonusN_(st.pct)));
+    h += st.hit ? '<span style="font-size:14px;font-weight:800;color:#9fe0b4">🎉 達成</span></div>'
+      : '<span style="font-size:13px;color:#e6d8b8">目標まで <b style="font-size:18px;color:#f4d98a">' + pct + '%</b></span></div>';
+    h += '<div style="height:8px;background:#241d10;border-radius:4px;overflow:hidden;margin-top:7px"><div style="height:100%;width:' + pct + '%;background:' + (st.hit ? '#7fc99a' : '#c9a95f') + '"></div></div>';
+  }
+  h += '<div style="font-size:10.5px;color:#7d7159;line-height:1.7;margin-top:6px">'
+    + (st.hit ? '達成しました。' : '達成すると、') + need + '日以上出勤した人に ' + sb + '（12/1〜12/26 の店全体の売上）'
+    + '</div></div>';
+  h += '<div style="text-align:right;font-size:12px;color:#8d7c56;margin-top:6px">シフトを見る ›</div>';
+  return h + '</div>';
 }
 
 // ---- 来週は出勤なし 報告 ----
@@ -4309,6 +4545,8 @@ function calHtml() {
     var existShift = portalData && portalData.shifts && portalData.shifts[key];
     var isPending = pendingShifts[key];
     var isKyukin = sel === '欠勤' || (!sel && existShift === '休み') || (!sel && !existShift && isPending === '欠勤');
+    // 🏷 店都合の休み：シフト表が「休み」の日で、サーバが店都合と答えた日だけ（本人が選び直している日は今までどおり）
+    var isShopRest = isKyukin && !sel && existShift === '休み' && shopRestKeys_().indexOf(key) !== -1;
     var role = portalData && portalData.staffRole;
     var isKurofukuRole = role === '黒服社員' || role === '黒服バイト';
     // 黒服はシフト表/承諾済みに載っている(=existShift)時点で確定＝ピッカーの「欠勤申請」表示条件と一致させる。
@@ -4327,7 +4565,7 @@ function calHtml() {
     if (past) cls += ' past';
     if (isToday) cls += ' today';
     if (isClosed) cls += ' holiday';
-    if (isKyukin) cls += ' kyukin';
+    if (isKyukin) cls += isShopRest ? ' kyukin shoprest' : ' kyukin';
     else if (sel) cls += ' selected';
     else if (isPending || notYetConfirmed) cls += ' pending-shift';
     else if (existShift) cls += ' scheduled';
@@ -4350,7 +4588,7 @@ function calHtml() {
       + '<div class="num">'+d+'</div>'
       + (isClosed ? '<div class="holiday-label">🏖休</div>'
           : (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : ''))
-      + (!isClosed && isKyukin ? '<div class="kyukin-label">欠勤</div>' : '')
+      + (!isClosed && isKyukin ? (isShopRest ? '<div class="kyukin-label">休み</div><div class="shoprest-label">店都合</div>' : '<div class="kyukin-label">欠勤</div>') : '')
       + (!isClosed && statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
       + '</div>';
   }
@@ -4577,8 +4815,15 @@ function doSubmit() {
   .then(function(r) { return r.json(); })
   .then(function(d) {
     if (d.ok) {
+      decBonusForget_(); // 🎁 シフトを出した＝ホームの特別報酬の日数を次に取り直す
       btn.textContent = '✓ 提出しました';
       btn.style.background = '#1a4422';
+      // 🏖店休日で受け付けられなかった日（＝店休日を設定する前に開いた画面から送った場合）。
+      //   カレンダーは店休日を押せないので普段は起きないが、起きた時に黙って消えると「出したのに入っていない」になる。
+      if (d.closedSkipped && d.closedSkipped.length) {
+        alert('次の日は店休日のため受け付けられませんでした。\n\n' + d.closedSkipped.join('\n') + '\n\n画面を更新すると最新の店休日が反映されます。');
+        d.closedSkipped.forEach(function(x) { var k = String(x).split('（')[0]; delete submittedTimes[k]; });
+      }
       var autoSet = {};
       (d.autoApproved || []).forEach(function(date) { autoSet[date] = true; });
       Object.keys(submittedTimes).forEach(function(k) {
@@ -4632,140 +4877,8 @@ function row(label, val, cls) {
     + '<span class="row-val' + (cls ? ' '+cls : '') + '">' + (val !== undefined && val !== null ? esc(String(val)) : '—') + '</span></div>';
 }
 
-// ---- 申請管理 ----
-var reqFilter = 'pending';
-
-function loadRequests() {
-  setContent('<div class="loading">申請を読み込み中...</div>');
-  var url = GAS_URL + '?action=portal&userId=' + encodeURIComponent(userId) + '&tab=requests';
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (!d.ok) { setContent('<div class="err">エラー: ' + esc(d.error||'') + '</div>'); return; }
-      renderRequests(d.requests || []);
-    })
-    .catch(function(e) { setContent('<div class="err">通信エラー</div>'); });
-}
-
-function renderRequests(list) {
-  var filters = [
-    { key: 'pending', label: '未処理' },
-    { key: 'all',     label: 'すべて（履歴）' },
-  ];
-  var filterHtml = '<select id="shift-confirm-week" class="notif-group-sel" style="margin-bottom:8px">'
-    + buildWeekOptionsHtml_() + '</select>'
-    + '<button class="req-confirm-btn" id="shift-confirm-btn" onclick="confirmKurofukuShift(event)">'
-    + '📅 シフト確定→黒服に通知</button>'
-    + '<div class="req-filter">'
-    + filters.map(function(f) {
-        return '<button class="req-filter-btn' + (reqFilter === f.key ? ' active' : '')
-          + '" onclick="setReqFilter(\'' + f.key + '\')">' + f.label + '</button>';
-      }).join('')
-    + '</div>';
-
-  if (reqFilter !== 'all') {
-    // 未処理（承認待ち）＝アクションキュー。承諾/休みを即決する
-    var pend = list.filter(function(r) { return r.status === 'pending'; });
-    if (pend.length === 0) {
-      setContent(filterHtml + '<div class="req-empty">未処理の申請はありません</div>');
-      return;
-    }
-    var ph = filterHtml;
-    pend.forEach(function(r) { ph += reqCardHtml_(r, false); });
-    setContent(ph);
-    return;
-  }
-
-  // すべて（履歴）＝黒服の出勤希望を日付ごとにまとめて表示。
-  // 一旦確定したあとの欠員・シフト変更時に「元々出勤希望を出していた子」を確認して再調整するため。
-  if (list.length === 0) {
-    setContent(filterHtml + '<div class="req-empty">申請履歴はありません</div>');
-    return;
-  }
-  var groups = {}, order = [];
-  list.forEach(function(r) {
-    var p = mdParse_(r.date);
-    var gkey = p ? p.key : 99999999;
-    if (!groups[gkey]) { groups[gkey] = { label: (p ? p.label : r.date), items: [] }; order.push(gkey); }
-    groups[gkey].items.push(r);
-  });
-  order.sort(function(a, b) { return a - b; });
-  var hh = filterHtml
-    + '<div style="font-size:12px;color:#b8a67c;margin:2px 0 6px;line-height:1.6">'
-    + '黒服の出勤希望を日付ごとに表示。確定後の欠員・変更時に「元々出したい子」を確認して調整できます。</div>';
-  order.forEach(function(gkey) {
-    var g = groups[gkey];
-    hh += '<div class="reqhist-date">📅 ' + esc(g.label) + '</div>';
-    g.items.forEach(function(r) { hh += reqCardHtml_(r, true); });
-  });
-  setContent(hh);
-}
-
-// "M/d" を並べ替え用キー＋曜日付きラベルに変換（年は現在基準で推定、半年以上前の月は翌年扱い＝年跨ぎ対応）
-function mdParse_(md) {
-  var m = String(md).match(/^(\d{1,2})\/(\d{1,2})/);
-  if (!m) return null;
-  var mo = parseInt(m[1], 10), da = parseInt(m[2], 10);
-  var now = new Date();
-  var yr = now.getFullYear();
-  if (mo < (now.getMonth() + 1) - 6) yr += 1;
-  var dt = new Date(yr, mo - 1, da);
-  var wd = ['日','月','火','水','木','金','土'][dt.getDay()];
-  return { key: yr * 10000 + mo * 100 + da, label: mo + '/' + da + '（' + wd + '）' };
-}
-
-function reqStatusInfo_(s) {
-  if (s === '承諾') return { cls: 'ok',  txt: '✓ 承諾済み（出勤）' };
-  if (s === '休み' || s === '却下') return { cls: 'off', txt: '✗ 休み決定' };
-  if (s === 'クリア') return { cls: 'off', txt: '— クリア済み' };
-  // 『重複』＝同じ申請の二度押しを承認時にまとめて閉じた行（2026-08-07・closeDupRequests_）。未処理と誤読させない
-  if (s === '重複') return { cls: 'off', txt: '— 重複（同じ申請）' };
-  return { cls: '', txt: '⏳ 未処理' };
-}
-
-function reqCardHtml_(r, isHistory) {
-  var st = reqStatusInfo_(r.status);
-  var cardCls = 'req-card' + (r.status === '承諾' ? ' approved'
-    : (r.status === '休み' || r.status === '却下') ? ' rejected' : '');
-  var h = '<div class="' + cardCls + '">'
-    + '<div class="req-head">'
-    + '<span class="req-name">' + esc(r.name) + '</span>'
-    + '<span class="req-time">' + esc(r.submittedAt) + '</span>'
-    + '</div>'
-    + '<div class="req-detail">📅 ' + esc(r.date) + '　⏰ ' + esc(r.time)
-    + (r.role ? '　👤 ' + esc(r.role) : '') + '</div>';
-
-  if (!isHistory) {
-    h += '<div class="req-actions">'
-      + '<button class="req-btn approve" onclick="processReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 承諾</button>'
-      + '<button class="req-btn reject" onclick="processReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休み</button>'
-      + '</div>';
-  } else {
-    // 履歴ビュー：現在の状態を明示しつつ、再調整（出勤に戻す／休みにする）を確認付きで可能に
-    h += '<div class="req-status ' + st.cls + '">' + st.txt + '</div>'
-      + '<div class="req-actions">'
-      + '<button class="req-btn approve" onclick="readjustReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'承諾\')">✓ 出勤に</button>'
-      + '<button class="req-btn reject" onclick="readjustReq(event,' + r.rowIdx + ',\''
-        + esc(r.name) + '\',\'' + esc(r.date) + '\',\'' + esc(r.time) + '\',\'休み\')">✗ 休みに</button>'
-      + '</div>';
-  }
-  return h + '</div>';
-}
-
-// 履歴からの再調整（確定後のシフト変更）。誤操作防止で確認を挟んでから承諾/休みを反映
-function readjustReq(ev, rowIdx, name, date, time, decision) {
-  var label = decision === '承諾' ? '出勤（承諾）' : '休み';
-  if (!confirm(name + 'さんの ' + date + ' を「' + label + '」に変更します。よろしいですか？')) return;
-  processReq(ev, rowIdx, name, date, time, decision);
-}
-
-function setReqFilter(f) {
-  reqFilter = f;
-  loadRequests();
-}
+// 🗑 申請管理（loadRequests／履歴 loadReqHistory／processReq）は 2026-10-10 に削除（利用0回・apply-remove-unused-r2.js）。
+//   申請の承認はコンソールの申請管理で行う（サーバの approveShift・reqhistory は残す）。
 
 function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
 
@@ -4935,28 +5048,6 @@ function submitSeatRequest() {
   .catch(function() { alert('通信エラー'); });
 }
 
-function processReq(ev, rowIdx, name, date, time, decision) {
-  var card = ev && ev.target ? ev.target.closest('.req-card') : null;
-  if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
-
-  gasFetch(GAS_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'approveShift', userId: userId, rowIdx: rowIdx,
-                           name: name, date: date, time: time, decision: decision })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(d) {
-    if (d.ok) { loadRequests(); }
-    else {
-      if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
-      alert('エラー: ' + (d.error || '不明'));
-    }
-  })
-  .catch(function() {
-    if (card) { card.style.opacity = ''; card.style.pointerEvents = ''; }
-    alert('通信エラー');
-  });
-}
 
 var contentTargetId = 'content';
 // ---- 🎂 誕生日設定タブ（誕生日 & 誕生日週間の申請）----
@@ -5237,154 +5328,6 @@ function cancelBirthdayWeek() {
     .then(function(r){ return r.json(); })
     .then(function(d){ if (!d.ok) { alert(d.error || '取り下げに失敗しました'); return; } loadBirthday(); })
     .catch(function(){ alert('通信エラーが発生しました'); });
-}
-
-/* ===== 🌙 現金の承認・差し戻し（管理者・りく専用） =====
-   管理コンソール ⚙️運営 の「閉店チェックの承認」＋「♻️各種リセット」と同じ操作を、手元のポータルから。
-   ⚠️承認が有るのは閉店チェックだけ（開店・金庫は提出のみ＝差し戻して再提出させる）。
-   ⚠️権限の砦はサーバの isAdmin_。ここの adminPriv() は表示の出し分けにすぎない（[[project_portal_mode_separation]]）。 */
-var cashApvData = null, cashApvBusy = false;
-
-function loadCashApproval() {
-  if (!adminPriv()) {
-    setContent('<div style="padding:24px;color:#b09f74;font-size:14px;line-height:1.8">🌙 現金の承認・差し戻しは管理者専用の画面です。</div>');
-    return;
-  }
-  setContent('<div style="text-align:center;color:#94886a;padding:60px 0;font-size:14px">読み込み中...</div>');
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'portalCashApproval', userId: userId }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (!d.ok) { setContent('<div style="color:#f66;padding:20px">' + esc(d.error || 'エラー') + '</div>'); return; }
-      cashApvData = d; renderCashApproval(d);
-    })
-    .catch(function(){ setContent('<div style="color:#f66;padding:20px">通信エラーが発生しました</div>'); });
-}
-
-function cashApvYen(n) { return '¥' + Number(n || 0).toLocaleString(); }
-
-/* カードの1行（ラベル｜値）。値の色で 合/不合 を出す */
-function cashApvRow(label, value, color) {
-  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #241d12">'
-    + '<span style="font-size:12.5px;color:#b8a67c">' + label + '</span>'
-    + '<b style="font-size:14px;color:' + (color || '#f2ead9') + '">' + value + '</b></div>';
-}
-
-function cashApvCard(inner) {
-  return '<div style="background:#16130d;border:1px solid #33291a;border-radius:12px;padding:16px;margin-bottom:14px">' + inner + '</div>';
-}
-
-function cashApvSendbackBtn(kind, label, enabled, why) {
-  if (!enabled) return '<div style="margin-top:12px;font-size:12px;color:#8d7c56">' + esc(why || '差し戻せる記録がありません') + '</div>';
-  return '<button onclick="sendbackCash(\'' + kind + '\',\'' + esc(label) + '\')" '
-    + 'style="margin-top:12px;width:100%;padding:11px;background:#2a1214;color:#ff9aa0;border:1px solid #5a2226;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer">↩️ ' + esc(label) + ' を差し戻す</button>';
-}
-
-function renderCashApproval(d) {
-  var o = d.opening || {}, s = d.safe || {}, c = d.closing || {};
-  var h = '<div style="padding:14px">';
-  h += '<div style="font-size:12px;color:#b09f74;letter-spacing:.5px;margin:2px 2px 12px">対象日（営業日） <b style="color:#e6cf95">' + esc(d.dateKey) + '</b>　操作者 <b style="color:#e6cf95">' + esc(d.adminName || '') + '</b></div>';
-
-  /* 🌅 開店チェック */
-  var oh = '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:10px">🌅 開店チェック</div>';
-  if (o.submitted) {
-    oh += cashApvRow('報告者', esc(o.reporterName || '—'));
-    oh += cashApvRow('スタート合計（4袋）', cashApvYen(o.total));
-    if (o.safeUnchecked) oh += '<div style="margin-top:8px;font-size:12px;color:#e0a060">⚠️ 金庫は数えず前日残額を自動入力しています</div>';
-  } else {
-    oh += '<div style="font-size:13px;color:#e0a060;line-height:1.7">まだ提出されていません。<br>閉店チェックの照合は開店の提出が前提です。</div>';
-  }
-  oh += cashApvSendbackBtn('opening', '開店チェック', !!o.submitted, '未提出です（差し戻す記録がありません）');
-  h += cashApvCard(oh);
-
-  /* 🏦 金庫出金ログ */
-  var sh = '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:10px">🏦 金庫出金ログ</div>';
-  if (s.count) {
-    sh += cashApvRow('本日の出金', s.count + '件');
-    sh += cashApvRow('出金合計', cashApvYen(s.total), '#e0a060');
-    sh += '<div style="margin-top:10px;font-size:12px;color:#b8a67c;line-height:1.8">'
-      + (s.rows || []).map(function(x){
-          return '・' + esc(x.time) + '　' + esc(x.floor) + '　' + esc(x.out) + '（' + cashApvYen(x.amount) + '）' + (x.reporter ? '　' + esc(x.reporter) : '');
-        }).join('<br>') + '</div>';
-    sh += '<div style="margin-top:10px;font-size:11.5px;color:#8d7c56;line-height:1.6">⚠️ 差し戻すと本日の出金ログを<b>すべて</b>消します（1件だけの取り消しはできません）。</div>';
-  } else {
-    sh += '<div style="font-size:13px;color:#94886a">本日の金庫出金はありません。</div>';
-  }
-  sh += cashApvSendbackBtn('safe', '金庫出金ログ', !!s.count, '本日の出金記録はありません');
-  h += cashApvCard(sh);
-
-  /* 🌙 閉店チェック（承認があるのはここだけ） */
-  var ch = '<div style="font-size:15px;font-weight:800;color:#f2ead9;margin-bottom:10px">🌙 閉店チェック</div>';
-  if (!c.reportSubmitted) {
-    ch += '<div style="font-size:13px;color:#94886a;line-height:1.7">本日の閉店チェックはまだ黒服から提出されていません。</div>';
-    ch += cashApvSendbackBtn('closing', '閉店チェック', false, '未提出です（差し戻す記録がありません）');
-  } else {
-    ch += cashApvRow('報告者', esc(c.reporterName || '—'));
-    if (o.submitted) {
-      ch += cashApvRow('🌅 スタート', cashApvYen(c.openingTotal));
-      ch += cashApvRow('＋ 現金売上', cashApvYen(c.cashSalesInput), '#7be0a8');
-      ch += cashApvRow('－ 伝票 出金', cashApvYen(c.slipTotal), '#e0a060');
-      ch += cashApvRow('＝ 残るはず', cashApvYen(c.expectedRemain));
-      ch += cashApvRow('実測（4袋）', cashApvYen(c.actualTotal));
-      var df = Number(c.diff || 0), within = !!c.within;
-      ch += cashApvRow('差額', (within ? '✅ ' : '⚠️ ') + cashApvYen(Math.abs(df)) + (within ? '（許容内）' : (df > 0 ? ' 足りない' : ' 多い')), within ? '#66cc88' : '#e06666');
-    } else {
-      ch += '<div style="margin-top:8px;font-size:12.5px;color:#e0a060;line-height:1.7">⚠️ 開店の現金が未提出のため照合できていません（承認には開店チェックの提出が必要）</div>';
-    }
-    var slips = c.slipDetails || [];
-    if (slips.length) {
-      ch += '<div style="margin-top:10px;font-size:12px;color:#b8a67c;line-height:1.8">伝票 ' + slips.length + '枚：'
-        + slips.map(function(x){ return esc((x.category || 'その他') + (x.payee ? '/' + x.payee : '') + ' ') + cashApvYen(x.amount); }).join('、') + '</div>';
-    }
-    if (c.approved) {
-      ch += '<div style="margin-top:12px;padding:11px 13px;border-radius:10px;background:rgba(102,204,136,.14);color:#8fe0ab;font-size:13px;font-weight:700;line-height:1.7">✅ 承認済み　承認者 ' + esc(c.approver) + '（' + esc(c.approvedAt) + '）<br>黒服の退勤OK</div>';
-    } else if (o.submitted) {
-      ch += '<button onclick="approveCash()" style="margin-top:12px;width:100%;padding:13px;background:#1a2a0a;color:#a8e06a;border:1px solid #446622;border-radius:9px;font-size:15px;font-weight:800;cursor:pointer">✅ この内容で承認する</button>';
-    } else {
-      ch += '<div style="margin-top:12px;font-size:12px;color:#8d7c56">開店チェックが提出されると承認できるようになります。</div>';
-    }
-    ch += cashApvSendbackBtn('closing', '閉店チェック', true, '');
-  }
-  h += cashApvCard(ch);
-
-  h += '<div style="font-size:11.5px;color:#8d7c56;line-height:1.7;margin:2px 2px 34px">差し戻すとその記録を消して、黒服グループのLINEに再提出のお願いが流れます。'
-    + '同じ操作は黒服LINEでも可能です（「承認」＝閉店チェック承認／「修正」＝差し戻す対象を選ぶ）。</div>';
-  setContent(h + '</div>');
-}
-
-function approveCash() {
-  if (cashApvBusy) return;
-  var c = (cashApvData && cashApvData.closing) || {};
-  if (!confirm('本日(' + (cashApvData ? cashApvData.dateKey : '') + ')の閉店チェックを承認します。\n\n承認すると黒服の退勤が可能になり、本日の発注も「承認済み・未納品」で確定します。\n10分後に軍師の全端末が自動ログアウトします。\n\nよろしいですか？')) return;
-  cashApvBusy = true;
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'portalApproveCash', userId: userId }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      cashApvBusy = false;
-      if (!d || d.ok === false) { alert(d && d.error ? d.error : '承認に失敗しました'); loadCashApproval(); return; }
-      alert('✅ 承認しました。黒服グループにも通知しました。');
-      loadCashApproval();
-    })
-    .catch(function(){ cashApvBusy = false; alert('通信エラーが発生しました'); loadCashApproval(); });
-}
-
-function sendbackCash(kind, label) {
-  if (cashApvBusy) return;
-  var extra = (kind === 'safe') ? '\n\n※本日の金庫出金ログを「すべて」消します。' : '';
-  var c = (cashApvData && cashApvData.closing) || {};
-  if (kind === 'closing' && c.approved) extra = '\n\n※すでに承認済みです。差し戻すと承認も取り消されます（承認済みにした発注は戻りません）。';
-  if (!confirm(label + ' を差し戻します。記録を消して、黒服に再提出してもらいます。' + extra + '\n\nよろしいですか？')) return;
-  var reason = prompt(label + ' の差し戻し理由（黒服グループのLINEに載ります）:', '');
-  if (reason === null) return;   // キャンセル＝何もしない
-  cashApvBusy = true;
-  gasFetch(GAS_URL, { method:'POST', body: JSON.stringify({ action:'portalSendbackCash', userId: userId, kind: kind, reason: reason }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      cashApvBusy = false;
-      if (!d || d.ok === false) { alert(d && d.error ? d.error : '差し戻しに失敗しました'); loadCashApproval(); return; }
-      alert('↩️ ' + label + ' を差し戻しました。黒服グループに再提出のお願いを送りました。');
-      loadCashApproval();
-    })
-    .catch(function(){ cashApvBusy = false; alert('通信エラーが発生しました'); loadCashApproval(); });
 }
 
 function setContent(html) {
@@ -5936,7 +5879,7 @@ function loadYoyaku() {
       yoyakuRsvs = d.reservations || [];
       yoyakuCastList = d.casts || [];
       yoyakuMemberFeeMap = d.memberFeeMap || {};
-      yoyakuMyWants = d.myWants || [];   // ⚠️旧backendでは undefined ＝ボタンは押せるが押下済み表示にならない（デプロイ後に解消）
+      yoyakuMyWants = d.myWants || [];
       yoyakuCustMode = '';
       yoyakuRsvDate = ''; yoyakuRsvCalMonth = ''; yoyakuRsvTime = ''; yoyakuCheckTime = '';
       yoyakuRsvCustManual = ''; yoyakuRsvYoubou = ''; yoyakuRsvPax = 0; yoyakuRsvTable = ''; yoyakuRsvTantou = ''; yoyakuRsvYoyakuCast = ''; yoyakuRsvDohan = '';
@@ -6100,7 +6043,7 @@ function renderYoyakuList() {
     var canEdit = canEditYoyaku();
     var statusBtns = r.status === '仮予約'
       ? '<span style="margin-left:auto;font-size:10px;font-weight:700;color:#ffcc66;background:#2a1800;border:1px solid #553300;border-radius:6px;padding:3px 7px;flex-shrink:0">仮予約</span>'
-      : canEdit
+      : (canEdit && !edgeNoRsvStatus_()) // ⚡PM 判断：旗がオンの画面では来店前／来店済／退店済を出さない（新しい軍師だけで扱う）
       ? '<span style="margin-left:auto;display:flex;gap:3px;flex-shrink:0" onclick="event.stopPropagation()">'
         + [
           {k:'来店前', s:'確定'},
@@ -6135,8 +6078,7 @@ function renderYoyakuList() {
     return '<div class="yoyaku-card"'+(canEdit?' onclick="yoyakuOpenEdit('+r.rowIdx+')" style="cursor:pointer"':'')+' >'
       + '<div class="yc-row1"><span class="yc-time">'+esc(r.time)+'</span><span class="yc-name">'+esc(r.customer)+'様'+(r.memberId?' <span style="font-size:10px;color:#b8a67c">'+esc(r.memberId)+'</span>'+memberInfo:'')+'</span>'+statusBtns+'</div>'
       + castRow
-      + '<div class="yc-badges"><span class="yb yb-pax">'+r.pax+'名</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'
-      + ((r.subCustomers && r.subCustomers.length) ? '<span class="yb" style="background:#0d2010;border:1px solid #1a4a22;color:#66cc88">👥 +'+r.subCustomers.length+'名</span>' : '')
+      + '<div class="yc-badges"><span class="yb yb-pax">'+rsvPaxLabel_(r)+'</span><span class="yb yb-seat">'+esc(r.table||'未定')+'</span>'
       + '</div>'
       + ((r.subCustomers && r.subCustomers.length) ? '<div class="yc-note" style="color:#66cc88">同席: '+r.subCustomers.map(function(s){ return esc(s.name||'')+'様'+(s.tantouCast?'('+esc(s.tantouCast)+')':''); }).join('、')+'</div>' : '')
       + (r.youbou ? '<div class="yc-note">📝 '+esc(r.youbou)+'</div>' : '')
@@ -6243,7 +6185,7 @@ function renderAvailability_(all) {
     if (rsvs.length === 0) return { isFree: true, label: '空き', color: '#66cc88' };
     var latestEnd = 0;
     rsvs.forEach(function(r) {
-      var pts = (r.time || '20:00').split(':');
+      var pts = (edgeDohanTime_(r.time, r.customer) || '20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）
       var sh = parseInt(pts[0]) || 20;
       if (sh < 6) sh += 24;
       var em = sh * 60 + (parseInt(pts[1]) || 0) + 120;
@@ -6345,7 +6287,7 @@ function renderYoyakuSched() {
       for (var k = 1; k < tables.length; k++) {
         if (tblIdxMap[tables[k].replace(/\s/g,'')] === i + k) span++; else break;
       }
-      var pts = (r.time||'20:00').split(':');
+      var pts = (edgeDohanTime_(r.time, r.customer)||'20:00').split(':'); // ⚡P-3：同伴は 20:30（旗がオンのとき）
       var sh = parseInt(pts[0]); if (isNaN(sh)) sh = 20;
       var sm = sh * 60 + (parseInt(pts[1]) || 0);
       var lx = ((sm - SH*60) / 60) * HW, wx = ((120) / 60) * HW - 3;
@@ -6588,7 +6530,7 @@ function renderYoyakuAdd() {
     + renderRsvTimeSel()
     + '<div class="yform-label">チェック予定<span style="font-size:10px;color:#94886a;margin-left:6px">（退店予定・任意）</span></div>'
     + '<input type="time" class="yform-input" id="yrsv-checktime" value="'+esc(yoyakuCheckTime||'')+'" style="margin-bottom:12px;max-width:180px" onchange="yoyakuCheckTime=this.value">'
-    + '<div class="yform-label">人数</div>'
+    + '<div class="yform-label">人数<span style="font-size:10px;color:#94886a;margin-left:6px">（同席を含む全員の合計）</span></div>'
     + (function(){
         var curPax = yoyakuRsvPax || 1;
         /* 1〜20名。団体もそのままの人数で登録できる（旧「6名+」は6名に丸めていた）。
@@ -6596,7 +6538,8 @@ function renderYoyakuAdd() {
         var opts = '', maxPax = Math.max(20, curPax);
         for (var pn = 1; pn <= maxPax; pn++) opts += '<option'+(pn===curPax?' selected':'')+'>'+pn+'名</option>';
         /* 人数を変えたら見取り図の「定員が足りない席」ヒントだけ塗り替える（再描画はしない＝入力中の欄が飛ぶ） */
-        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px" onchange="yoyakuMapCapHint_()">'+opts+'</select>';
+        return '<select class="yform-input" id="yrsv-pax" style="margin-bottom:8px" onchange="yoyakuMapCapHint_();yoyakuPaxNote_()">'+opts+'</select>'
+          + '<div id="yrsv-paxnote">'+yoyakuPaxNoteHtml_(curPax)+'</div>';
       })()
     + (yoyakuRsvMode === '仮予約' ? '' :
         /* 席の選び方は2通り（端末ごとに保持）。既定=🗺見取り図＝店内の並びそのまま。▦一覧=従来のチップ羅列を温存 */
@@ -6816,7 +6759,7 @@ function yoyakuSelectCust(i) {
 // ── 同席の追加会員（Feature1）: 1予約に複数会員をフル情報で登録 ──
 function renderYoyakuSubs() {
   var h = '<div class="yform-label" style="display:flex;align-items:center;gap:8px;margin-top:4px">同席の会員'
-    + '<span style="font-size:10px;color:#94886a">（複数会員をまとめて登録）</span></div>';
+    + '<span style="font-size:10px;color:#94886a">（人数は下の「人数」に含めます）</span></div>';
   if (yoyakuRsvSubs.length) {
     h += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">';
     yoyakuRsvSubs.forEach(function(s, i) {
@@ -6838,12 +6781,12 @@ function renderYoyakuSubs() {
   }
   if (yoyakuSubSearchOpen) {
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
-      + '<span style="font-size:12px;color:#b8a67c;cursor:pointer" onclick="yoyakuSubSearchOpen=false;renderYoyaku()">← 閉じる</span>'
+      + '<span style="font-size:12px;color:#b8a67c;cursor:pointer" onclick="saveFormInputs();yoyakuSubSearchOpen=false;renderYoyaku()">← 閉じる</span>'
       + '<span style="font-size:12px;color:#e6cf95">会員を検索して追加</span></div>'
       + '<input type="text" class="ycust-search" id="ysub-q" placeholder="顧客名・会員番号で検索" oninput="custSearchInput(event,yoyakuSubSearch)" oncompositionend="custSearchInput(event,yoyakuSubSearch)" onkeydown="custSearchKey(event,yoyakuSubSearch)" style="margin-bottom:6px">'
       + '<div id="ysub-results"></div>';
   } else {
-    h += '<div onclick="yoyakuSubSearchOpen=true;renderYoyaku()" style="text-align:center;padding:9px;background:#0d2010;border:1px dashed #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88;margin-bottom:'+(yoyakuRsvSubs.length?'8px':'12px')+'">＋ 会員を追加</div>';
+    h += '<div onclick="saveFormInputs();yoyakuSubSearchOpen=true;renderYoyaku()" style="text-align:center;padding:9px;background:#0d2010;border:1px dashed #1a4a22;border-radius:8px;cursor:pointer;font-size:12px;color:#66cc88;margin-bottom:'+(yoyakuRsvSubs.length?'8px':'12px')+'">＋ 会員を追加</div>';
   }
   // 売上/来店の集計モード（会員が複数いる時だけ選べる）
   if (yoyakuRsvSubs.length) {
@@ -6851,7 +6794,7 @@ function renderYoyakuSubs() {
       + '<div style="display:flex;gap:6px;margin-bottom:12px">'
       + [['merge','まとめる','代表者に集約'],['split','会員ごとに分ける','各会員に記録']].map(function(m){
           var active = yoyakuRsvAggMode === m[0];
-          return '<div onclick="yoyakuRsvAggMode=\''+m[0]+'\';renderYoyaku()" style="flex:1;text-align:center;padding:8px 6px;border-radius:8px;cursor:pointer;'
+          return '<div onclick="saveFormInputs();yoyakuRsvAggMode=\''+m[0]+'\';renderYoyaku()" style="flex:1;text-align:center;padding:8px 6px;border-radius:8px;cursor:pointer;'
             + (active ? 'background:#241d10;color:#e6cf95;border:1px solid #b8934e' : 'background:#1b1710;color:#94886a;border:1px solid #33291a')
             + '"><div style="font-size:12px;font-weight:600">'+m[1]+'</div><div style="font-size:9px;opacity:.8;margin-top:1px">'+m[2]+'</div></div>';
         }).join('')
@@ -6883,12 +6826,41 @@ function yoyakuSubSearch(q) {
 function yoyakuSubSelectCust(i) {
   var c = yoyakuSubCustResults[i];
   if (!c) return;
+  saveFormInputs();
   yoyakuRsvSubs.push({ name: c.name || c.card || '', memberId: c.no || '', pax: 1, tantouCast: c.tantou || '', splitSales: false });
   yoyakuSubSearchOpen = false;
   renderYoyaku();
 }
-function yoyakuRemoveSub(i) { yoyakuRsvSubs.splice(i, 1); renderYoyaku(); }
-function yoyakuSubSetPax(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].pax = parseInt(v) || 1; }
+function yoyakuRemoveSub(i) { saveFormInputs(); yoyakuRsvSubs.splice(i, 1); renderYoyaku(); }
+function yoyakuSubSetPax(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].pax = parseInt(v) || 1; yoyakuPaxNote_(); }
+
+/* ⭐予約の人数の決まり（2026-11-05 ボス決定）：人数（r.pax＝シート列5）は同席を含む全員の合計。同席の人数は内訳＝足さない。代表は最低1名。
+ *   画面の判定と文言はこの3つだけ（カード・フォーム・送信の前で別に書かない）。同席の人数が空・0 は1名扱い（GAS 旧 rsvPaxOf_ と同じ）。
+ *   ⭐人数を自動で増やさない：同席の人数の打ち間違いが黙って人数（＝伝票のセットの数の元）を増やすより、足りないことを見せて人に直させる */
+function rsvSubsPax_(subs) { return (subs || []).reduce(function(m, s){ return m + (Number(s && s.pax) || 1); }, 0); }
+function rsvPaxLabel_(r) {
+  var sp = rsvSubsPax_(r && r.subCustomers);
+  return r.pax + '名' + (sp ? '（うち同席' + sp + '名）' : '');
+}
+function yoyakuPaxErr_(pax, subs) {
+  var sp = rsvSubsPax_(subs);
+  if (!sp || (Number(pax) || 1) >= sp + 1) return '';
+  return '人数は同席を含む全員の合計です。同席が' + sp + '名いるので、' + (sp + 1) + '名以上にしてください';
+}
+/* 人数欄の下の1行（同席がいるときだけ）。同席なしは空＝画面は今までと同じ */
+function yoyakuPaxNoteHtml_(pax) {
+  var subs = yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); });
+  var sp = rsvSubsPax_(subs);
+  if (!sp) return '';
+  var err = yoyakuPaxErr_(pax, subs);
+  return err
+    ? '<div style="font-size:12px;color:#ff8a80;margin:-2px 0 10px;line-height:1.45">⚠️ ' + esc(err) + '</div>'
+    : '<div style="font-size:12px;color:#66cc88;margin:-2px 0 10px">全員 ' + (Number(pax) || 1) + '名（うち同席' + sp + '名）</div>';
+}
+function yoyakuPaxNote_() {
+  var box = document.getElementById('yrsv-paxnote'), el = document.getElementById('yrsv-pax');
+  if (box && el) box.innerHTML = yoyakuPaxNoteHtml_(parseInt(el.value) || 1);
+}
 function yoyakuSubSetTantou(i, v) { if (yoyakuRsvSubs[i]) yoyakuRsvSubs[i].tantouCast = v; }
 
 
@@ -6986,6 +6958,7 @@ function yoyakuCheckOut(rowIdx) {
 }
 
 function yoyakuSetStatus(rowIdx, status) {
+  if (edgeNoRsvStatus_()) { alert('来店・退店・来店前に戻すは軍師で記録してください。'); return; } // ⚡PM 判断（Worker の取り次ぎでも断る）
   if (status === '来店済') { yoyakuCheckIn(rowIdx); return; }
   if (status === '退店済') { yoyakuCheckOut(rowIdx); return; }
   var rsv = yoyakuRsvs.find(function(r) { return r.rowIdx === rowIdx; });
@@ -7032,7 +7005,7 @@ function yoyakuCancelEdit() {
 /* 予約時刻 → 分。'同伴'等の時刻でない値は20:00扱い（スケジュール表・空き席判定と同じ規則）。
  * 深夜は+24hして前夜から連続させる。 */
 function yoyakuTimeMin_(t) {
-  var p = String(t || '').split(':');
+  var p = String(edgeDohanTime_(t, '') || '').split(':'); // ⚡P-3：旗がオンなら「同伴」は 20:30（軍師と同じ）
   var h = parseInt(p[0]); if (isNaN(h)) h = 20;
   var m = parseInt(p[1]) || 0;
   if (h < 6) h += 24;
@@ -7072,7 +7045,7 @@ function yoyakuBookedMap_(rsvs) {
   rsvs.forEach(function(r) {
     if (!r.table || r.table === '未定') return;
     if (yoyakuEditRsv && r.rowIdx === yoyakuEditRsv.rowIdx) return;
-    if (Math.abs(selMin - yoyakuTimeMin_(r.time)) >= 120) return;
+    if (Math.abs(selMin - yoyakuTimeMin_(edgeDohanTime_(r.time, r.customer))) >= 120) return;
     r.table.split('、').forEach(function(tbl) {
       var k = tbl.replace(/\s/g, '');
       if (!map[k]) map[k] = [];
@@ -7114,15 +7087,13 @@ function yoyakuCapWarnMsg_(tableStr, pax, subs) {
     if (!hit) return ''; // 知らない席名が混ざったら判定を捨てる
     cap += hit.cap;
   }
-  var total = pax;
-  for (var k = 0; k < (subs || []).length; k++) total += parseInt(subs[k].pax) || 1;
+  var total = pax; /* 人数は同席を含む全員の合計（2026-11-05）＝同席を足さない */
+  var subPax = rsvSubsPax_(subs);
   if (!cap || total <= cap) return '';
   var seat = names.length > 1
     ? names.join('＋') + '（定員合計' + cap + '名）'
     : cap + '名の席';
-  var who = (subs && subs.length)
-    ? total + '名（本人' + pax + '名＋同席' + (total - pax) + '名）'
-    : total + '名';
+  var who = subPax ? total + '名（うち同席' + subPax + '名）' : total + '名';
   return seat + 'ですが、' + who + 'で予約しますか？';
 }
 
@@ -7141,6 +7112,10 @@ function yoyakuSubmitRsv() {
   var rsvPax = parseInt(paxEl ? paxEl.value : '1') || 1;
   var rsvTable = yoyakuRsvMode === '仮予約' ? '未定' : (function(){ var w = document.getElementById('yrsv-table-wrap'); if (w) { var s = w.querySelectorAll('.table-chip.sel'); return Array.prototype.map.call(s, function(c){ return c.getAttribute('data-val'); }).join('、') || '未定'; } return yoyakuRsvTable || '未定'; })();
   var rsvSubs = yoyakuRsvSubs.filter(function(s){ return s && String(s.name||'').trim(); });
+  var paxTouched = !yoyakuEditRsv || rsvPax !== (Number(yoyakuEditRsv.pax) || 1)
+    || rsvSubsPax_(rsvSubs) !== rsvSubsPax_((yoyakuEditRsv.subCustomers || []).filter(function(s){ return s && String(s.name||'').trim(); }));
+  var paxErr = paxTouched ? yoyakuPaxErr_(rsvPax, rsvSubs) : '';
+  if (paxErr) { if (stat) stat.textContent = '⚠️ ' + paxErr; return; }
   var bookWarn = yoyakuBookedWarnMsg_(rsvTable);
   if (bookWarn && !confirm(bookWarn)) return; // 予約済みの席も通すが、一度必ず目を通させる
   var capWarn = yoyakuCapWarnMsg_(rsvTable, rsvPax, rsvSubs);
