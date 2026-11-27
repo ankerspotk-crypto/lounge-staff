@@ -1896,11 +1896,12 @@ function renderHome(){
   }
   // 管理者でキャスト未選択 → 呼び出し＋案内＋メニュー（previewMode時は上でreturn済み）
   if (isAdmin && !adminViewAs) {
-    setContent(homeGreetHero() + homeCallCard()
+    setContent(homeGreetHero() + homeDecBonusCard() + homeCallCard() // 🎁 管理者でも役割が黒服社員なら自分の特別報酬（出すかはサーバが決める）
       + '<div class="card" style="text-align:center;color:#b09f74;font-size:13px;line-height:1.7">下のメニューから操作を選べます。<br>キャスト個別の画面は、上のドロップダウンでキャストを選んでください。</div>'
       + homeMenu());
     homeWorking = true; applyWorkingGate();
     loadMySeat();
+    loadDecBonus_();
     return;
   }
   var me = homeMyName();
@@ -4359,7 +4360,11 @@ function shopRestLoad_() {
 var DECBONUS_FRESH_MS = 600000, DECBONUS_REQ_MS = 20000, DECBONUS_FAIL_MS = 60000;
 var _decBonus = null;    // { key, at, ttl, b: 答えの decbonus（使えなければ null） }
 var _decBonusReq = null; // { key, at }
-function decBonusSkip_() { return onLeave || (isAdmin && !adminViewAs); }
+/* ⭐出すかどうかはサーバ（decBonusPortalTab_＝名簿の役割の生の値）だけで決める（ボス決定 2026-11-27：管理者でも役割が黒服社員なら自分のカード）。
+   画面は休職中だけ取りに行かない（休職中はホームの他の非同期も止めている）。管理者の答えが show:false ならカードは出ない */
+function decBonusSkip_() { return onLeave; }
+/* カードを押したら12月のシフトの暦（11月中でも12月を開く・ボス決定 2026-11-27） */
+function decBonusOpenShift_() { viewYear = 2026; viewMonth = 11; switchTab('shift'); }
 function decBonusNow_() {
   var key = homeCacheCtx_().key;
   return (_decBonus && _decBonus.key === key) ? _decBonus.b : null;
@@ -4421,7 +4426,10 @@ function decBonusCardHtml_(b) {
   var done = decBonusN_(b.done), checking = decBonusN_(b.checking), plan = decBonusN_(b.plan), total = decBonusN_(b.total);
   var after = b.phase === 'after', before = b.phase === 'before';
   var tierTxt = (b.tier && b.tier.yen) ? decBonusYen_(b.tier.yen) : 'まだ段なし';
-  var h = '<div class="card" data-decbonus="1" onclick="switchTab(\'shift\')" style="cursor:pointer;background:linear-gradient(135deg,#221a0e,#14100a);border-color:#8a6d3a">'
+  /* 管理者がキャストを選んでいない＝シフトの画面は「キャストを選択してください」になる＝押せる見た目にしない */
+  var canOpen = !(isAdmin && !adminViewAs);
+  var h = '<div class="card" data-decbonus="1"' + (canOpen ? ' onclick="decBonusOpenShift_()" style="cursor:pointer;' : ' style="')
+    + 'background:linear-gradient(135deg,#221a0e,#14100a);border-color:#8a6d3a">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
     +   '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">🎁 12月の特別ボーナス</span>'
     +   '<span style="font-size:11px;color:#8d7c56;white-space:nowrap">12/1〜12/26</span>'
@@ -4468,13 +4476,13 @@ function decBonusCardHtml_(b) {
   } else {
     var pct = Math.max(0, Math.min(100, decBonusN_(st.pct)));
     h += st.hit ? '<span style="font-size:14px;font-weight:800;color:#9fe0b4">🎉 達成</span></div>'
-      : '<span style="font-size:13px;color:#e6d8b8">目標まで <b style="font-size:18px;color:#f4d98a">' + pct + '%</b></span></div>';
+      : '<span style="font-size:13px;color:#e6d8b8">目標の <b style="font-size:18px;color:#f4d98a">' + pct + '%</b></span></div>';
     h += '<div style="height:8px;background:#241d10;border-radius:4px;overflow:hidden;margin-top:7px"><div style="height:100%;width:' + pct + '%;background:' + (st.hit ? '#7fc99a' : '#c9a95f') + '"></div></div>';
   }
   h += '<div style="font-size:10.5px;color:#7d7159;line-height:1.7;margin-top:6px">'
     + (st.hit ? '達成しました。' : '達成すると、') + need + '日以上出勤した人に ' + sb + '（12/1〜12/26 の店全体の売上）'
     + '</div></div>';
-  h += '<div style="text-align:right;font-size:12px;color:#8d7c56;margin-top:6px">シフトを見る ›</div>';
+  if (canOpen) h += '<div style="text-align:right;font-size:12px;color:#8d7c56;margin-top:6px">12月のシフトを見る ›</div>';
   return h + '</div>';
 }
 

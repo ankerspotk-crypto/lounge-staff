@@ -15,14 +15,14 @@ const html = fs.readFileSync(FILE, 'utf8');
 const js = mainScript(html);
 const BASE = process.argv[3] ? fs.readFileSync(path.resolve(process.argv[3]), 'utf8')
   : execFileSync('git', ['show', 'origin/main:portal.html'], { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
-const EXPECTED = { A: 16, B: 5, C: 16, D: 9, E: 4 };
+const EXPECTED = { A: 17, B: 5, C: 16, D: 11, E: 4 };
 
 const results = []; let section = '';
 function sec(n) { section = n; }
 function t(name, cond, info) { results.push({ section, name, ok: !!cond, info: cond ? '' : (info === undefined ? '' : JSON.stringify(info).slice(0, 600)) }); }
 function blk(fn) { try { fn(); } catch (e) { t('塊が途中で落ちた: ' + String(e && e.stack || e).slice(0, 300), false); } }
 
-const FNS = ['decBonusSkip_', 'decBonusNow_', 'decBonusForget_', 'homeDecBonusCard', 'paintDecBonus_', 'loadDecBonus_', 'decBonusN_', 'decBonusYen_',
+const FNS = ['decBonusSkip_', 'decBonusOpenShift_', 'decBonusNow_', 'decBonusForget_', 'homeDecBonusCard', 'paintDecBonus_', 'loadDecBonus_', 'decBonusN_', 'decBonusYen_',
   'decBonusBar_', 'decBonusCardHtml_', 'homeCacheCtx_', 'homeCacheMode_'];
 const VARS = ['HOME_CACHE_VER', 'DECBONUS_FRESH_MS', '_decBonus', '_decBonusReq'];
 function page(o) {
@@ -60,7 +60,7 @@ const B = (o) => Object.assign({ show: true, phase: 'during', today: '2026-12-10
     t('次の段まで あと1日（12日・¥10,000）', s.indexOf('次の段（12日・¥10,000）まで あと 1日') >= 0, s);
     t('内訳＝出勤済み3日・締め待ち3日・これからの予定5日', /出勤済み 日報が締まった日 3日/.test(s) && /締め待ち 日報の確認が済むと出勤済みへ 3日/.test(s) && /これからの予定 確定したシフト 5日/.test(s), s);
     t('予定は出ないと数えない、の一言', s.indexOf('実際に出勤しないと数えません') >= 0, s);
-    t('店全体の売上目標 目標まで 45%', s.indexOf('店全体の売上目標 目標まで 45%') >= 0, s);
+    t('店全体の売上目標 目標の 45%（「目標まで」と書かない）', s.indexOf('店全体の売上目標 目標の 45%') >= 0 && s.indexOf('目標まで') < 0, s);
     t('達成すると12日以上出勤した人に ¥30,000', s.indexOf('達成すると、12日以上出勤した人に ¥30,000') >= 0, s);
     const h0 = P.ctx.decBonusCardHtml_(B({ checking: 0 }));
     t('締め待ちが0なら行を出さない', txt(h0).indexOf('締め待ち') < 0);
@@ -74,9 +74,12 @@ const B = (o) => Object.assign({ show: true, phase: 'during', today: '2026-12-10
     t('12/27 以降＝期間は終わりました・段（見込みと書かない）・これからの予定の行は出さない', ha.indexOf('段 ¥10,000') >= 0 && ha.indexOf('見込みの段') < 0 && ha.indexOf('期間は終わりました') >= 0 && ha.indexOf('これからの予定') < 0 && ha.indexOf('（見込み）') < 0, ha);
     t('達成＝🎉 達成・達成しました。12日以上出勤した人に ¥30,000', ha.indexOf('🎉 達成') >= 0 && ha.indexOf('達成しました。12日以上出勤した人に ¥30,000') >= 0, ha);
     const he = txt(P.ctx.decBonusCardHtml_(B({ store: { phase: 'during', error: true } })));
-    t('売上が取れない＝「いまは取得できません」（0% と出さない）', he.indexOf('いまは取得できません') >= 0 && !/目標まで/.test(he), he);
+    t('売上が取れない＝「いまは取得できません」（0% と出さない）', he.indexOf('いまは取得できません') >= 0 && !/目標の/.test(he), he);
     t('show:false・null・形が違う＝何も出さない', P.ctx.decBonusCardHtml_({ show: false, why: 'role' }) === '' && P.ctx.decBonusCardHtml_(null) === '' && P.ctx.decBonusCardHtml_({}) === '');
-    t('カードを押すとシフトへ', h.indexOf("onclick=\"switchTab('shift')\"") >= 0);
+    t('カードを押すと12月のシフトへ（文言も）', h.indexOf('onclick="decBonusOpenShift_()"') >= 0 && s.indexOf('12月のシフトを見る') >= 0);
+    const sw = []; P.ctx.viewYear = 2026; P.ctx.viewMonth = 10; P.ctx.switchTab = (x) => sw.push([x, P.ctx.viewYear, P.ctx.viewMonth]);
+    P.ctx.decBonusOpenShift_();
+    t('押すと 11月中でも 2026年12月の暦を開く', JSON.stringify(sw) === JSON.stringify([['shift', 2026, 11]]), sw);
   });
 
   sec('B 変な値でも崩れない・画面に字を差し込ませない');
@@ -86,7 +89,7 @@ const B = (o) => Object.assign({ show: true, phase: 'during', today: '2026-12-10
     t('数値でない値は 0（タグがそのまま入らない）', h.indexOf('<img') < 0 && h.indexOf('<script') < 0 && h.indexOf('<svg') < 0 && h.indexOf('<i>') < 0, h.slice(0, 300));
     t('% が数でなければ「取得できません」', txt(h).indexOf('いまは取得できません') >= 0);
     const big = txt(P.ctx.decBonusCardHtml_(B({ store: { phase: 'during', pct: 250, hit: false } })));
-    t('% は 100 を超えて出さない', big.indexOf('目標まで 100%') >= 0 && big.indexOf('250') < 0, big);
+    t('% は 100 を超えて出さない', big.indexOf('目標の 100%') >= 0 && big.indexOf('250') < 0, big);
     const bar = P.ctx.decBonusBar_(30, 10);
     t('目盛りは 100% を超えて伸びない', !/width:1[0-9][0-9]\.[0-9]%|width:[2-9][0-9][0-9]/.test(bar.replace('width:100.0%', '')) && bar.indexOf('width:100.0%') >= 0, bar);
     const amounts = (P.ctx.decBonusCardHtml_(B()).match(/¥[\d,]+万?/g) || []).filter(x => ['¥10,000', '¥30,000', '¥50,000', '¥1万', '¥3万', '¥5万'].indexOf(x) < 0);
@@ -134,13 +137,17 @@ const B = (o) => Object.assign({ show: true, phase: 'during', today: '2026-12-10
   blk(() => {
     const A = page({ admin: true });
     A.ctx.loadDecBonus_();
-    t('管理者でキャストを選んでいない＝枠も出さない・取りに行かない', A.ctx.homeDecBonusCard() === '' && A.fetches.length === 0);
+    t('管理者でキャストを選んでいない＝自分の分を取りに行く（出すかはサーバの役割の判定だけ＝黒服社員なら出る）', A.ctx.homeDecBonusCard() === '<div id="home-decbonus"></div>' && A.fetches.length === 1 && !/viewAs=/.test(A.fetches[0].url), A.fetches.map(f => f.url));
+    const ah = A.ctx.decBonusCardHtml_(B());
+    t('管理者がキャストを選んでいない＝カードは押せる形にしない（シフトの画面は「キャストを選択」になるため）', ah.indexOf('onclick=') < 0 && ah.indexOf('12月のシフトを見る') < 0 && ah.indexOf('あと 1日') >= 0);
+    const rha = grabFn(js, 'renderHome') || '';
+    t('管理者のホーム（キャスト未選択）にも枠を置いて取りに行く', rha.indexOf('setContent(homeGreetHero() + homeDecBonusCard() + homeCallCard()') >= 0 && rha.indexOf('loadMySeat();\n    loadDecBonus_();\n    return;') >= 0);
     const L = page({ onLeave: true });
     L.ctx.loadDecBonus_();
     t('休職中＝枠も出さない・取りに行かない', L.ctx.homeDecBonusCard() === '' && L.fetches.length === 0);
     const rh = grabFn(js, 'renderHome') || '';
     t('ホームは 次の出勤カードの直後に枠を置く', rh.indexOf("homeKyuCard() + shiftCard // ⚡SWR_HOME：覚えた中身で描いている間だけ札\n    + homeDecBonusCard()") >= 0);
-    t('ホームを描いた後に loadDecBonus_ を呼ぶ（休職中で return する前）', rh.indexOf('loadDecBonus_();') > rh.indexOf('setContent(html);') && rh.indexOf('loadDecBonus_();') < rh.indexOf('if (onLeave) return;'));
+    t('ホームを描いた後に loadDecBonus_ を呼ぶ（休職中で return する前）', rh.lastIndexOf('loadDecBonus_();') > rh.indexOf('setContent(html);') && rh.lastIndexOf('loadDecBonus_();') < rh.indexOf('if (onLeave) return;'));
     t('シフトを出せたら覚えを捨てる（次にホームで取り直す）', /if \(d\.ok\) \{\n      decBonusForget_\(\);/.test(js));
     t('HOME_CACHE_VER は変えない（ホームの答えは変わらない）', html.indexOf("var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v7e' : 'v7';") >= 0 && BASE.indexOf("var HOME_CACHE_VER = (typeof EDGE_ON !== 'undefined' && EDGE_ON) ? 'v7e' : 'v7';") >= 0);
     const fnsSrc = FNS.slice(0, 10).map(n => grabFn(js, n)).join('\n');
@@ -151,6 +158,8 @@ const B = (o) => Object.assign({ show: true, phase: 'during', today: '2026-12-10
         .replace("\n    + homeDecBonusCard() // 🎁 12月の特別報酬（2026-11-27）：枠だけ（覚えがあれば中身も）。中身は下の loadDecBonus_ が埋める", '')
         .replace("\n  loadDecBonus_();      // 🎁 12月の特別報酬（10分は覚える・使えない答えならカードを出さない）", '')
         .replace("\n      decBonusForget_(); // 🎁 シフトを出した＝ホームの特別報酬の日数を次に取り直す", '')
+        .replace(" + homeDecBonusCard() + homeCallCard() // 🎁 管理者でも役割が黒服社員なら自分の特別報酬（出すかはサーバが決める）", ' + homeCallCard()')
+        .replace("\n    loadMySeat();\n    loadDecBonus_();\n    return;", "\n    loadMySeat();\n    return;")
         .replace(/\n\/\* 🎁 12月の特別報酬の進み具合[\s\S]*?\nfunction decBonusCardHtml_\(b\) \{[\s\S]*?\n\}\n/, '');
       return strip(html) === BASE.replace(/var PORTAL_BUILD = '[^']*';/, '');
     })());
