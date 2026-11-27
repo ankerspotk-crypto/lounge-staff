@@ -609,7 +609,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-11-25b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-27a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -1959,6 +1959,7 @@ function renderHome(){
   // ⚠️休職中である旨は本人の画面に一切表示しない（ボス指定2026-07-15）。メニューが黙って減るだけ。
   // ＝本人が「予約が消えた」と黒服に問い合わせてくる可能性がある点は承知の上での判断。
   var html = homeStaleBadge_() + homeGreetHero() + '<div id="home-notice">' + noticeBanner() + '</div>' + homeKyuCard() + shiftCard // ⚡SWR_HOME：覚えた中身で描いている間だけ札
+    + homeDecBonusCard() // 🎁 12月の特別報酬（2026-11-27）：枠だけ（覚えがあれば中身も）。中身は下の loadDecBonus_ が埋める
     + (onLeave ? '' : homeCallCard()
     // ゴースト在籍は「今日の予約」「空席状況」カードごと出さない（呼び出しカードは残す）
     + (ghost ? '' : '<div class="card">'
@@ -1980,6 +1981,7 @@ function renderHome(){
     + homeMenu();
   setContent(html);
   loadHomeKyuritsu();   // 📊給率カードを非同期で埋める（初回描画はブロックしない）
+  loadDecBonus_();      // 🎁 12月の特別報酬（10分は覚える・使えない答えならカードを出さない）
   // 休職中は予約/空席/席の非同期描画そのものを走らせない（要素も無い）
   if (onLeave) return;
 
@@ -4347,6 +4349,135 @@ function shopRestLoad_() {
     });
 }
 
+/* 🎁 12月の特別報酬の進み具合（2026-11-27 ボス指示）：ホームに「12月の出勤ボーナスまであと何日」と店全体の売上目標の % を出す。
+   ⭐数え方・段・あと何日・売上の % はサーバだけ（GAS tab=decbonus・decbonus.js decBonusPortalTab_）。画面は答えを描くだけ（数え直さない）。
+     ⛔売上の円はサーバが返さない（% と達成の印だけ）＝画面にも端末にも円は来ない。
+   ⚠️ホーム（homelite）の答えは使わない・端末の覚え（HOME_CACHE_VER）にも入れない＝速い入口の比べ・3日の覚えに触らない。
+   ⚠️取れない・遅い・使えない答え（show:false・tab を知らない古い GAS）＝カードを出さない（ホームは止めない）。
+     答えは形に関わらず10分覚える（使えない答えも覚える＝ホームを描き直すたびに GAS を呼ばない）。通信の失敗は1分。
+   ⚠️遅れて届いた答え：相手（homeCacheCtx_ の key＝本人／代理閲覧の相手）が替わっていたら捨てる。 */
+var DECBONUS_FRESH_MS = 600000, DECBONUS_REQ_MS = 20000, DECBONUS_FAIL_MS = 60000;
+var _decBonus = null;    // { key, at, ttl, b: 答えの decbonus（使えなければ null） }
+var _decBonusReq = null; // { key, at }
+function decBonusSkip_() { return onLeave || (isAdmin && !adminViewAs); }
+function decBonusNow_() {
+  var key = homeCacheCtx_().key;
+  return (_decBonus && _decBonus.key === key) ? _decBonus.b : null;
+}
+function decBonusForget_() { _decBonus = null; } // シフトを出した直後＝次にホームを描くとき取り直す
+function homeDecBonusCard() {
+  if (decBonusSkip_()) return '';
+  return '<div id="home-decbonus">' + decBonusCardHtml_(decBonusNow_()) + '</div>';
+}
+function paintDecBonus_() {
+  var el = document.getElementById('home-decbonus');
+  if (el) el.innerHTML = decBonusCardHtml_(decBonusNow_());
+}
+function loadDecBonus_() {
+  if (decBonusSkip_()) return;
+  var key = homeCacheCtx_().key, now = Date.now();
+  if (_decBonus && _decBonus.key === key && now - _decBonus.at >= 0 && now - _decBonus.at < (_decBonus.ttl || DECBONUS_FRESH_MS)) { paintDecBonus_(); return; }
+  if (_decBonusReq && _decBonusReq.key === key && now - _decBonusReq.at >= 0 && now - _decBonusReq.at < DECBONUS_REQ_MS) return; // 取りに行っている最中
+  var req = { key: key, at: now };
+  _decBonusReq = req;
+  var url = GAS_URL + '?action=portal&tab=decbonus&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (_decBonusReq !== req) return;
+      _decBonusReq = null;
+      if (homeCacheCtx_().key !== key) return;                  // 途中で相手が替わった＝今の画面の物ではない
+      var b = (d && d.ok && d.decbonus && d.decbonus.show === true) ? d.decbonus : null;
+      _decBonus = { key: key, at: Date.now(), ttl: DECBONUS_FRESH_MS, b: b };
+      paintDecBonus_();
+    })
+    .catch(function() {
+      if (_decBonusReq !== req) return;
+      _decBonusReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      _decBonus = { key: key, at: Date.now(), ttl: DECBONUS_FAIL_MS, b: decBonusNow_() }; // 通信の失敗＝1分は取り直さない（前に出したカードはそのまま）
+    });
+}
+function decBonusN_(v) { var n = Number(v); return (isFinite(n) && n >= 0) ? Math.floor(n) : 0; }
+function decBonusYen_(v) { return '¥' + decBonusN_(v).toLocaleString(); }
+/* 段の目盛り（0〜22日＝20日の札が端で切れない幅）。出勤済み＝濃い金・締め待ちと予定＝薄い金の斜線（予定は実際に出ないと数えない）。
+   ⭐段の判定はサーバの tier/next だけ（ここは長さを描くだけ）。札は「日」と「額」を2段に＝390幅で隣の札と重ならない（1段だと16日と20日が重なった） */
+function decBonusBar_(done, rest) {
+  var MAX = 22, w = function(n) { return Math.max(0, Math.min(100, n / MAX * 100)); };
+  var dw = w(done), rw = Math.max(0, w(done + rest) - dw);
+  var h = '<div style="position:relative;height:10px;background:#241d10;border-radius:5px;overflow:hidden;margin-top:12px">'
+    + '<div style="position:absolute;left:0;top:0;bottom:0;width:' + dw.toFixed(1) + '%;background:#d6b778"></div>'
+    + '<div style="position:absolute;left:' + dw.toFixed(1) + '%;top:0;bottom:0;width:' + rw.toFixed(1) + '%;background:repeating-linear-gradient(45deg,#6e5a32 0 4px,#4d3f22 4px 8px)"></div>';
+  [12, 16, 20].forEach(function(n) { h += '<div style="position:absolute;left:' + w(n).toFixed(1) + '%;top:0;bottom:0;width:1px;background:#0e0b06"></div>'; });
+  h += '</div><div style="position:relative;height:26px;font-size:10px;line-height:12px;color:#8d7c56;margin-top:3px">';
+  [[12, '12日', '¥1万'], [16, '16日', '¥3万'], [20, '20日', '¥5万']].forEach(function(p) {
+    h += '<span style="position:absolute;left:' + w(p[0]).toFixed(1) + '%;transform:translateX(-50%);text-align:center;white-space:nowrap">' + p[1] + '<br>' + p[2] + '</span>';
+  });
+  return h + '</div>';
+}
+function decBonusCardHtml_(b) {
+  if (!b || b.show !== true) return '';
+  var done = decBonusN_(b.done), checking = decBonusN_(b.checking), plan = decBonusN_(b.plan), total = decBonusN_(b.total);
+  var after = b.phase === 'after', before = b.phase === 'before';
+  var tierTxt = (b.tier && b.tier.yen) ? decBonusYen_(b.tier.yen) : 'まだ段なし';
+  var h = '<div class="card" data-decbonus="1" onclick="switchTab(\'shift\')" style="cursor:pointer;background:linear-gradient(135deg,#221a0e,#14100a);border-color:#8a6d3a">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+    +   '<span style="font-size:12px;color:#b09f74;letter-spacing:.5px">🎁 12月の特別ボーナス</span>'
+    +   '<span style="font-size:11px;color:#8d7c56;white-space:nowrap">12/1〜12/26</span>'
+    + '</div>'
+    + '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap">'
+    +   '<div style="display:flex;align-items:baseline;gap:6px">'
+    +     '<span style="font-size:13px;color:#b8a67c">' + (after ? 'あなたの日数' : 'あなたの日数（見込み）') + '</span>'
+    +     '<span style="font-size:34px;font-weight:800;color:#f4d98a;line-height:1">' + total + '</span>'
+    +     '<span style="font-size:16px;font-weight:700;color:#f4d98a">日</span>'
+    +   '</div>'
+    +   '<span style="font-size:12px;font-weight:700;color:' + (b.tier ? '#f4d98a' : '#8d7c56') + ';border:1px solid ' + (b.tier ? '#c9a95f88' : '#5a4a2a') + ';border-radius:9px;padding:2px 10px;white-space:nowrap">' + (after ? '段 ' : '見込みの段 ') + tierTxt + '</span>'
+    + '</div>'
+    + decBonusBar_(done, checking + plan);
+  var msg;
+  if (b.next && b.next.need) msg = '次の段（' + decBonusN_(b.next.days) + '日・' + decBonusYen_(b.next.yen) + '）まで <b style="color:#f4d98a;font-size:17px">あと ' + decBonusN_(b.next.need) + '日</b>';
+  else msg = '<span style="color:#9fe0b4">🏆 最高の段（20日・¥50,000）に届いています</span>';
+  h += '<div style="margin-top:8px;font-size:13.5px;color:#e6d8b8;line-height:1.6">' + msg + '</div>';
+  /* 内訳：出勤済み（濃い金）／締め待ち／これからの予定（薄い金の斜線） */
+  var row = function(dot, label, n, sub) {
+    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;color:#cbb98a;padding:3px 0">'
+      + '<span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:0;' + dot + '"></span>' + label
+      + (sub ? '<span style="font-size:10.5px;color:#7d7159;margin-left:4px">' + sub + '</span>' : '') + '</span>'
+      + '<b style="color:#efe4cd;white-space:nowrap">' + n + '日</b></div>';
+  };
+  var stripe = 'background:repeating-linear-gradient(45deg,#6e5a32 0 3px,#4d3f22 3px 6px)';
+  h += '<div style="margin-top:8px;padding-top:7px;border-top:1px solid #2a2214">'
+    + row('background:#d6b778', '出勤済み', done, '日報が締まった日')
+    + (checking ? row(stripe, '締め待ち', checking, '日報の確認が済むと出勤済みへ') : '')
+    + (after ? '' : row(stripe, 'これからの予定', plan, '確定したシフト'))
+    + '</div>';
+  var note = before ? '12/1 から数えます。いまは12月の確定したシフトの日数です。予定は実際に出勤しないと数えません。'
+    : after ? '期間は終わりました（12/26 まで）。日報の確認が済むと日数が決まります。支払いは12月分の給与と一緒です。'
+    : '予定の日は、実際に出勤しないと数えません（シフトが出ていない日・申請中の日は入りません）。';
+  h += '<div style="font-size:10.5px;color:#7d7159;line-height:1.7;margin-top:5px">' + note + '</div>';
+  /* 店全体の売上目標（⛔金額は来ない＝% だけ） */
+  var st = b.store || {}, need = decBonusN_(b.salesNeedDays) || 12, sb = decBonusYen_(b.salesBonus || 30000);
+  h += '<div style="margin-top:10px;padding-top:9px;border-top:1px solid #2a2214">'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">'
+    +   '<span style="font-size:12px;color:#b09f74">🏪 店全体の売上目標</span>';
+  if (st.phase === 'before') {
+    h += '<span style="font-size:12px;color:#8d7c56">12/1 から数えます</span></div>';
+  } else if (st.error || typeof st.pct !== 'number') {
+    h += '<span style="font-size:12px;color:#8d7c56">いまは取得できません</span></div>';
+  } else {
+    var pct = Math.max(0, Math.min(100, decBonusN_(st.pct)));
+    h += st.hit ? '<span style="font-size:14px;font-weight:800;color:#9fe0b4">🎉 達成</span></div>'
+      : '<span style="font-size:13px;color:#e6d8b8">目標まで <b style="font-size:18px;color:#f4d98a">' + pct + '%</b></span></div>';
+    h += '<div style="height:8px;background:#241d10;border-radius:4px;overflow:hidden;margin-top:7px"><div style="height:100%;width:' + pct + '%;background:' + (st.hit ? '#7fc99a' : '#c9a95f') + '"></div></div>';
+  }
+  h += '<div style="font-size:10.5px;color:#7d7159;line-height:1.7;margin-top:6px">'
+    + (st.hit ? '達成しました。' : '達成すると、') + need + '日以上出勤した人に ' + sb + '（12/1〜12/26 の店全体の売上）'
+    + '</div></div>';
+  h += '<div style="text-align:right;font-size:12px;color:#8d7c56;margin-top:6px">シフトを見る ›</div>';
+  return h + '</div>';
+}
+
 // ---- 来週は出勤なし 報告 ----
 function renderDeclineBtn() {
   var el = document.getElementById('nextweek-decline');
@@ -4684,6 +4815,7 @@ function doSubmit() {
   .then(function(r) { return r.json(); })
   .then(function(d) {
     if (d.ok) {
+      decBonusForget_(); // 🎁 シフトを出した＝ホームの特別報酬の日数を次に取り直す
       btn.textContent = '✓ 提出しました';
       btn.style.background = '#1a4422';
       // 🏖店休日で受け付けられなかった日（＝店休日を設定する前に開いた画面から送った場合）。
