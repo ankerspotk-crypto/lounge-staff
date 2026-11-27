@@ -163,9 +163,34 @@ const TAIKEN_A = { ok: true, toku: [{ d: '2026-12-02', yen: 500 }], paid: false,
     t('ホームの答え（portalData）から特別日・黒服の数を読まない＝見本の口を残さない', js.indexOf('portalData.tokubetsu') < 0 && js.indexOf('portalData.kuroCount') < 0);
     t('役割を画面で見ない（staffRole で対象を決めない）', !/function tokuPaidRole_\(\) \{[^}]*staffRole/.test(js) && !/function tokuKuroRole_\(\) \{[^}]*staffRole/.test(js));
     t('端末の覚えの版（HOME_CACHE_VER）は変えない', /var HOME_CACHE_VER = \(typeof EDGE_ON !== 'undefined' && EDGE_ON\) \? 'v7e' : 'v7';/.test(js));
-    t('PORTAL_BUILD を上げた', /var PORTAL_BUILD = '2026-11-27b'/.test(js));
+    t('PORTAL_BUILD を上げた', /var PORTAL_BUILD = '2026-11-27c'/.test(js));
     t('シフトを出した直後に tokuForget_ を呼ぶ', /decBonusForget_\(\);[^\n]*\n\s*if \(typeof tokuForget_ === 'function'\) tokuForget_\(\);/.test(js));
   });
+
+  sec('G 給与のバック率メーター：特別日手当は倍率の母数から除く（qa 1）・手当の無い月は前の版と1文字も同じ');
+  await (async () => {
+    const L = require('../portalstatsfresh/lib.js');
+    const OLD = (() => { try { return require('child_process').execSync('git show a264717:portal.html', { cwd: path.join(__dirname, '..', '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }); } catch (e) { return ''; } })();
+    const draw = (src, row, fn) => {
+      const p = L.newPage(src, new Map(), () => ({ ok: true }), {});
+      p.ctx.portalData = { sales: { '2026/12': row }, months: ['2026/12'], salesTabs: [{ month: '2026/12', kind: 'pay' }], pay: { '2026/12': row }, payPublished: { '2026/12': true } };
+      p.ctx.currentMonth = '2026/12'; p.ctx.salesMonth = '2026/12';
+      try { p.ctx[fn](); } catch (e) { return 'ERR ' + e.message; }
+      return p.out.html;
+    };
+    const txt = (h) => h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    const TK = { '担当小計': 400000, '時間報酬': 204000, '特別日手当': 4000, '倍率': 2, 'バック率(%)': 15, '残り支給額': 100000, '__nippo': true };
+    for (const fn of ['renderSales', 'renderPay']) {
+      const h = txt(draw(html, TK, fn));
+      t(fn + '：時間報酬 204,000（うち手当 4,000）・担当小計 400,000＝倍率 2.00倍・15%（手当で 10% に落ちない）', /倍率 2\.00倍 → バック率 15%/.test(h), h.slice(0, 300));
+      t(fn + '：次の段（20%）までの額も手当を除いた母数で＝3×200,000−400,000＝¥200,000', /¥200,000/.test(h) && !/¥212,000/.test(h), (h.match(/あと.{0,60}/) || [''])[0]);
+    }
+    const NO = { '担当小計': 400000, '時間報酬': 204000, '倍率': 1.96, 'バック率(%)': 10, '残り支給額': 100000, '__nippo': true };
+    for (const fn of ['renderSales', 'renderPay']) {
+      const nh = draw(html, NO, fn);
+      t(fn + '：特別日手当の無い月＝前の版（a264717）と描いた HTML が1文字も同じ（描けていること）', !!OLD && !/^ERR/.test(nh) && /倍率 1\.96倍 → バック率 10%/.test(txt(nh)) && nh === draw(OLD, NO, fn));
+    }
+  })().catch(e => t('落ちた G ' + e, false));
 
   const bySec = {};
   results.forEach(r => { (bySec[r.section] = bySec[r.section] || { ok: 0, ng: 0 })[r.ok ? 'ok' : 'ng']++; });

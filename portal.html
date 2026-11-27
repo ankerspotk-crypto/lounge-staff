@@ -633,7 +633,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-11-27b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-27c'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -2691,7 +2691,9 @@ function renderSales() {
   var tantoK_s = num(row['担当小計']);
   var jikanH_s = num(row['時間報酬']);
   if (tantoK_s > 0 && jikanH_s > 0) {
-    var bairitu_s  = tantoK_s / jikanH_s;
+    // 🔥 11/27 特別日手当（時間報酬の内数）は倍率の母数から除く（ボス決定＝給与の計算 newBackCalc_ と同じ）。行に「特別日手当」が無い月は今と同じ式
+    var jikanR_s = jikanH_s - num(row['特別日手当']); if (!(jikanR_s > 0)) jikanR_s = jikanH_s;
+    var bairitu_s  = tantoK_s / jikanR_s;
     var curRate_s  = bairitu_s < 2 ? 10 : (bairitu_s < 3 ? 15 : 20);
     var nextRate_s = bairitu_s < 2 ? 15 : (bairitu_s < 3 ? 20 : null);
     var nextThr_s  = bairitu_s < 2 ? 2  : (bairitu_s < 3 ? 3  : null);
@@ -2722,7 +2724,7 @@ function renderSales() {
     h += '<div style="font-size:13px;font-weight:600;color:#efe4cd">倍率 ' + bairitu_s.toFixed(2) + '倍 → <span style="color:' + barColor_s + '">バック率 ' + curRate_s + '%</span></div>';
 
     if (nextRate_s) {
-      var needed_s = Math.ceil(nextThr_s * jikanH_s - tantoK_s);
+      var needed_s = Math.ceil(nextThr_s * jikanR_s - tantoK_s);
       var neededW  = Math.ceil(needed_s / 10000);
       // 煽りメッセージ
       var cheers = curRate_s === 10
@@ -3362,7 +3364,9 @@ function renderPay() {
 
   // ---- バック率メーター ----
   if (tantoK > 0 && jikanH > 0) {
-    var bairitu = tantoK / jikanH;
+    // 🔥 11/27 特別日手当は倍率の母数から除く（給与の計算と同じ）。無い月は今と同じ式
+    var jikanR = jikanH - n(s['特別日手当']); if (!(jikanR > 0)) jikanR = jikanH;
+    var bairitu = tantoK / jikanR;
     var curRate  = bairitu < 2 ? 10 : (bairitu < 3 ? 15 : 20);
     var nextRate = bairitu < 2 ? 15 : (bairitu < 3 ? 20 : null);
     var nextThr  = bairitu < 2 ? 2  : (bairitu < 3 ? 3  : null);
@@ -3400,7 +3404,7 @@ function renderPay() {
     h += '<div style="margin-top:8px;padding-top:10px;border-top:1px solid #211a0f">';
     h += '<div style="font-size:13px;font-weight:600;color:#efe4cd">倍率 ' + bairitu.toFixed(2) + '倍 → <span style="color:' + barColor + '">バック率 ' + curRate + '%</span></div>';
     if (nextRate) {
-      var needed = Math.ceil(nextThr * jikanH - tantoK);
+      var needed = Math.ceil(nextThr * jikanR - tantoK);
       h += '<div style="font-size:12px;color:#b09f74;margin-top:4px">'
         + '<span style="color:#e6cf95;font-weight:600">' + nextRate + '%</span> まであと担当売上 '
         + '<span style="color:#e6cf95;font-weight:600">¥' + needed.toLocaleString() + '</span></div>';
