@@ -115,6 +115,30 @@ header h1 { font-size: 17px; font-weight: 600; }
 .day.holiday { background: #241a2e; border-color: #7a5bb0; pointer-events: none; }
 .day.holiday .num { color: #c9a8f0; }
 .day.holiday .holiday-label { font-size: 9px; color: #c9a8f0; margin-top: 2px; text-align: center; line-height: 1.1; }
+/* 🔥 特別日・👔黒服の人数（2026-11-27）：金の「特」の札を右上に。⚠️position は .day.toku / .day.kuro-short にだけ付ける（.day 全体に足さない） */
+.day.toku, .day.kuro-short { position: relative; }
+.day.toku { border-color: #c9a459; box-shadow: inset 0 0 0 1px rgba(230,207,149,.25); }
+.day.toku:not(.scheduled):not(.selected):not(.pending-shift):not(.kyukin) { background: #221a0b; }
+.day .toku-badge { position: absolute; top: -4px; right: -3px; min-width: 15px; height: 15px; padding: 0 2px; border-radius: 4px;
+  background: linear-gradient(180deg,#f3dc9a,#c9a459); color: #1a1208; font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.6); }
+/* ⚠️「黒服 1/2」は枠の下端に掛ける札（中身の行に足すと .day の aspect-ratio:1 が高さに合わせて幅まで広げ、暦が右へはみ出す＝見本で踏んだ） */
+.day .kuro-short-label { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); font-size: 8px; line-height: 11px; padding: 0 3px; border-radius: 3px; background: #3a1414; border: 1px solid #bb4444; color: #ff8a8a; font-weight: 700; white-space: nowrap; z-index: 1; }
+.day.kuro-short:not(.toku) { border-color: #bb4444; }
+.day.kuro-short { padding-bottom: 8px; } /* 下端の札に「確定／申請中」が隠れないよう中身を少し上へ（border-box なので枠の大きさは変わらない） */
+.toku-legend { display: flex; align-items: center; gap: 9px; margin: 0 0 8px; padding: 9px 11px; border-radius: 10px; border: 1px solid #8a6d3a; background: linear-gradient(180deg,#241c0c,#1a140a); font-size: 12px; color: #efe4cd; line-height: 1.45; }
+.toku-legend .tk { flex-shrink: 0; width: 22px; height: 22px; border-radius: 5px; background: linear-gradient(180deg,#f3dc9a,#c9a459); color: #1a1208; font-weight: 800; font-size: 13px; line-height: 22px; text-align: center; }
+.toku-legend b { color: #f3dc9a; }
+.toku-legend .sub { display: block; font-size: 11px; color: #b09f74; }
+.toku-legend.kuro { border-color: #7a3030; background: linear-gradient(180deg,#261212,#1a0e0e); }
+.toku-legend.kuro .tk { width: auto; padding: 0 5px; font-size: 10px; background: #3a1414; color: #ff8a8a; border: 1px solid #bb4444; }
+.toku-legend.kuro b { color: #ff9a9a; }
+.toku-note { grid-column: span 2; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; border: 1px solid #8a6d3a; background: #241c0c; color: #efe4cd; }
+.toku-note b { color: #f3dc9a; }
+.toku-note .sub { display: block; font-size: 11px; color: #b09f74; margin-top: 2px; }
+.toku-note.kuro { border-color: #bb4444; background: #2a1515; }
+.toku-note.kuro b { color: #ff9a9a; }
+.shift-count .toku-cnt { color: #f3dc9a; font-weight: 700; }
 .seatreq-rsv-card { background: #1b1710; border: 1px solid #33291a; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
 .seatreq-rsv-card.sel { background: #241d10; border-color: #9a7a3e; }
 
@@ -609,7 +633,7 @@ header h1 .wm-sub{ font-size:11px; letter-spacing:.42em; color:#a98f57; padding-
 <script>
 var LIFF_ID = '2010376677-EDF5MZuq';
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbxG4IdWtMdU-81wfQUvTg6nYqKboK9wWB-XcfFYI8w0KRUrSpZmwJyb9jBYuMUP5K1q4g/exec'; /* 本番backend（匿名可・test/prod共用）。フルスタック検証で一時テストbackendを使う時だけ差し替える */
-var PORTAL_BUILD = '2026-11-27a'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
+var PORTAL_BUILD = '2026-11-27b'; /* ⚠️デプロイのたびに手で更新。端末のキャッシュ版照合用（ホーム最下部フッターに表示）
    ⛔2026-09-28＝**中身を2回直したのに据え置かれていた**（HOME_CACHE_VER v2／予約管理の理由表示）。
      ⭐版は「いつ出したか」の記録であって「何が入っているか」の証拠ではない。⛔どちらの向きにも使うな
      （版で改修の有無を判定するな／中身を変えたのに版を据え置くな）。
@@ -4301,11 +4325,12 @@ function genTimes(startH, startM, endH, endM) {
 function renderShiftCal() {
   var now = new Date();
   if (!viewYear) { viewYear = now.getFullYear(); viewMonth = now.getMonth(); }
-  setContent(calHtml() + '<div class="shift-spacer"></div>');
+  setContent((typeof tokuLegendHtml_ === 'function' ? tokuLegendHtml_() : '') + calHtml() + '<div class="shift-spacer"></div>'); // 🔥 凡例（無い版の部品だけで描いても落ちない）
   document.getElementById('submit-bar').style.display = 'block';
   updateSubmitBar();
   renderDeclineBtn();
   shopRestLoad_(); // 🏷 店都合の休み：暦を描いた後に取りに行く（60秒は覚える・届いて変わっていれば描き直す）
+  if (typeof tokuLoad_ === 'function') tokuLoad_();     // 🔥 特別日・👔黒服の人数：同じ形（60秒は覚える・届いて変わっていれば描き直す）
 }
 
 /* 🏷 店都合の休み（2026-11-25 ボス指示）：⚖️出勤調整で店の都合で休ませた日を、暦で「欠勤」ではなく「休み／店都合」と出す。
@@ -4524,6 +4549,135 @@ function toggleNextWeekDecline(declined) {
   .catch(function(e) { alert('通信エラー: ' + (e && e.message || '')); renderDeclineBtn(); });
 }
 
+/* 🔥 特別日（時給+500円）と 👔黒服の人数（2人に満たない日）——2026-11-27 ボス決定。
+   ボス：店が指定した「特別日」に出勤したキャストは時給+500円（体験・派遣・黒服は対象外）。シフトの暦に「特」・凡例・押したときの一言。
+     黒服の暦には「特」（キャストの時給アップの日）と、黒服が2人に満たない日の「黒服 n/2」。
+   ⭐どの日が特別日か・時給アップの対象か（paid）・黒服か（kuroRole）・黒服の人数は**サーバだけ**で決める（GAS tab=tokubetsu・tokubetsu.js tokuPortalTab_）。
+     画面は答えを描くだけ（役割をこちらで見ない＝判定の正本を2箇所にしない）。
+   ⚠️取れない・遅い・形が違う答え＝何も出さない（今の暦のまま）。答えは形に関わらず60秒覚える（暦を描くたびに GAS を呼ばない）・通信の失敗は30秒。
+   ⚠️ホーム（homelite）の答えは使わない・端末の覚え（HOME_CACHE_VER）にも入れない＝速い入口の比べ・3日の覚えに触らない（店都合の休みと同じ形）。
+   ⚠️遅れて届いた答え：相手（homeCacheCtx_ の key＝本人／代理閲覧の相手）が替わっていたら捨てる・暦のタブでなければ覚えるだけ。
+   ⭐日付は答えでは yyyy-MM-dd（年まで）。暦の鍵 'M/d' は見ている年（viewYear）で yyyy-MM-dd に直して引く。 */
+var TOKU_FRESH_MS = 60000, TOKU_REQ_MS = 20000, TOKU_FAIL_MS = 30000;
+var _toku = null;    // { key, at, ttl, a: { days:{'yyyy-MM-dd':円}, paid, kuroRole, kuro:{'yyyy-MM-dd':{n,need,pending}} } }
+var _tokuReq = null; // { key, at }
+var TOKU_EMPTY_ = { days: {}, paid: false, kuroRole: false, kuro: {} };
+function tokuNow_() { var key = homeCacheCtx_().key; return (_toku && _toku.key === key && _toku.a) ? _toku.a : TOKU_EMPTY_; }
+/* 答えの形を確かめて覚える形に（崩れた答えは空＝何も出さない） */
+function tokuShape_(d) {
+  var a = { days: {}, paid: false, kuroRole: false, kuro: {} };
+  if (!d || d.ok !== true || !Array.isArray(d.toku)) return a;
+  d.toku.forEach(function(x) { if (x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.d)) && Number(x.yen) > 0) a.days[String(x.d)] = Math.round(Number(x.yen)); });
+  a.paid = d.paid === true;
+  a.kuroRole = d.kuroRole === true;
+  if (a.kuroRole && d.kuro && typeof d.kuro === 'object') Object.keys(d.kuro).forEach(function(k) {
+    var c = d.kuro[k];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(k) && c && typeof c.n === 'number' && typeof c.need === 'number') a.kuro[k] = { n: c.n, need: c.need, pending: Number(c.pending) || 0 };
+  });
+  return a;
+}
+function tokuLoad_() {
+  var key = homeCacheCtx_().key, now = Date.now();
+  if (_toku && _toku.key === key && now - _toku.at >= 0 && now - _toku.at < (_toku.ttl || TOKU_FRESH_MS)) return;
+  if (_tokuReq && _tokuReq.key === key && now - _tokuReq.at >= 0 && now - _tokuReq.at < TOKU_REQ_MS) return; // 取りに行っている最中
+  var req = { key: key, at: now };
+  _tokuReq = req;
+  var url = GAS_URL + '?action=portal&tab=tokubetsu&userId=' + encodeURIComponent(userId);
+  if (adminViewAs) url += '&viewAs=' + encodeURIComponent(adminViewAs);
+  gasFetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (_tokuReq !== req) return;
+      _tokuReq = null;
+      if (homeCacheCtx_().key !== key) return;                 // 途中で相手が替わった＝今の画面の物ではない
+      var before = JSON.stringify(tokuNow_());
+      _toku = { key: key, at: Date.now(), ttl: TOKU_FRESH_MS, a: tokuShape_(d) };
+      if (currentTab === 'shift' && JSON.stringify(_toku.a) !== before) renderShiftCal();
+    })
+    .catch(function() {
+      if (_tokuReq !== req) return;
+      _tokuReq = null;
+      if (homeCacheCtx_().key !== key) return;
+      _toku = { key: key, at: Date.now(), ttl: TOKU_FAIL_MS, a: tokuNow_() }; // 通信の失敗＝30秒は取り直さない（前の答えはそのまま）
+    });
+}
+function tokuForget_() { _toku = null; } // シフトを出した直後＝次に暦を描くとき取り直す（黒服の人数が変わる）
+/* 'M/d' → 'yyyy-MM-dd'（見ている暦の年。半年より離れた月は前後の年＝12月に1月を選んだとき） */
+function tokuIso_(md) {
+  var p = String(md).split('/'); var m = +p[0], d = +p[1], y = viewYear || new Date().getFullYear(), vm1 = (viewMonth || 0) + 1;
+  if (m - vm1 > 6) y--; else if (vm1 - m > 6) y++;
+  return y + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2);
+}
+function tokuYen_(key) { var y = tokuNow_().days[tokuIso_(key)]; return y > 0 ? y : 0; }
+function tokuIs_(key) { return tokuYen_(key) > 0; }
+function tokuKuroRole_() { return tokuNow_().kuroRole; } // 黒服かどうか＝サーバの答え
+function tokuPaidRole_() { return tokuNow_().paid; }     // 時給アップの対象か＝サーバの答え（キャストだけ）
+function kuroShort_(key) {
+  if (!tokuKuroRole_()) return null;
+  var c = tokuNow_().kuro[tokuIso_(key)];
+  return (c && c.n < c.need) ? c : null;
+}
+function tokuWd_(iso) { // 'yyyy-MM-dd' → 'M/d（水）'
+  var p = String(iso).split('-'); var dt = new Date(+p[0], (+p[1]) - 1, +p[2]);
+  return (+p[1]) + '/' + (+p[2]) + '（' + '日月火水木金土'.charAt(dt.getDay()) + '）';
+}
+function tokuInView_(isos) { var pre = viewYear + '-' + ('0' + (viewMonth + 1)).slice(-2) + '-'; return isos.filter(function(k) { return k.indexOf(pre) === 0; }).sort(); }
+function tokuLegendHtml_() {
+  var h = '', A = tokuNow_(), toku = tokuInView_(Object.keys(A.days));
+  if (toku.length) {
+    var list = toku.map(tokuWd_).join('・');
+    var yen = A.days[toku[0]];
+    if (tokuPaidRole_()) {
+      h += '<div class="toku-legend"><span class="tk">特</span><div><b>🔥 特別日＝出勤すると時給 +' + yen + '円</b>'
+        + '<span class="sub">' + (viewMonth + 1) + '月の特別日：' + list + '　予約が多い日です</span></div></div>';
+    } else {
+      h += '<div class="toku-legend"><span class="tk">特</span><div><b>特別日＝予約が多い日</b>'
+        + '<span class="sub">' + list + (tokuKuroRole_() ? '　キャストの時給アップの日です' : '　時給アップはキャストのみです') + '</span></div></div>';
+    }
+  }
+  if (tokuKuroRole_()) {
+    var today = new Date(); today.setHours(0,0,0,0);
+    var short = tokuInView_(Object.keys(A.kuro)).filter(function(k) {
+      var p = k.split('-'); var dt = new Date(+p[0], (+p[1]) - 1, +p[2]);
+      var c = A.kuro[k];
+      return dt >= today && c && c.n < c.need;
+    });
+    if (short.length) {
+      h += '<div class="toku-legend kuro"><span class="tk">黒服1/2</span><div><b>黒服が2人に満たない日：' + short.length + '日</b>'
+        + '<span class="sub">出られる日はシフト申請を（店舗管理者が承認して確定）</span></div></div>';
+    }
+  }
+  return h;
+}
+function tokuPickerNotes_(g, key) {
+  if (tokuIs_(key)) {
+    var n = document.createElement('div'); n.className = 'toku-note';
+    n.innerHTML = tokuPaidRole_()
+      ? '🔥 <b>特別日：時給 +' + tokuYen_(key) + '円</b><span class="sub">予約が多い日です。この日に出勤すると時給が上がります</span>'
+      : '<b>特別日（予約が多い日）</b><span class="sub">' + (tokuKuroRole_() ? 'キャストの時給アップの日です' : '時給アップはキャストのみです') + '</span>';
+    g.appendChild(n);
+  }
+  var ks = kuroShort_(key);
+  if (ks) {
+    var mine = portalData && portalData.shifts && portalData.shifts[key];
+    var mineOn = !!mine && mine !== '休み';           // 自分はもう入っている（数に入っている）
+    var minePend = !mineOn && !!pendingShifts[key];   // 自分の申請が承認待ち
+    var m = document.createElement('div'); m.className = 'toku-note kuro';
+    if (mineOn) {
+      m.innerHTML = '👔 <b>この日の黒服は、あなたを入れて ' + ks.n + '人です（' + ks.need + '人必要）</b>'
+        + '<span class="sub">あと ' + (ks.need - ks.n) + '人を黒服グループで募集しています。</span>';
+    } else if (minePend) {
+      m.innerHTML = '👔 <b>この日は黒服が ' + ks.n + '人です（' + ks.need + '人必要）</b>'
+        + '<span class="sub">あなたの申請が承認されると ' + (ks.n + 1) + '人になります（店舗管理者が承認して確定）。</span>';
+    } else {
+      m.innerHTML = '👔 <b>この日は黒服が ' + ks.n + '人です（' + ks.need + '人必要）</b>'
+        + '<span class="sub">出られるときはシフト申請をお願いします。店舗管理者が承認して確定します。'
+        + (ks.pending ? '（ほかに承認待ちの申請 ' + ks.pending + '件）' : '') + '</span>';
+    }
+    g.appendChild(m);
+  }
+}
+
 function calHtml() {
   var today = new Date(); today.setHours(0,0,0,0);
   var firstWday = new Date(viewYear, viewMonth, 1).getDay();
@@ -4573,6 +4727,10 @@ function calHtml() {
     if (past) cls += ' past';
     if (isToday) cls += ' today';
     if (isClosed) cls += ' holiday';
+    var isToku = !isClosed && typeof tokuIs_ === 'function' && tokuIs_(key);                                       // 🔥特別日（サーバの答え）
+    var kuroS = (!past && !isClosed && typeof kuroShort_ === 'function') ? kuroShort_(key) : null;                     // 👔黒服 1/2（サーバの答え＝定休日・店休日はサーバが入れない）
+    if (isToku) cls += ' toku';
+    if (kuroS) cls += ' kuro-short';
     if (isKyukin) cls += isShopRest ? ' kyukin shoprest' : ' kyukin';
     else if (sel) cls += ' selected';
     else if (isPending || notYetConfirmed) cls += ' pending-shift';
@@ -4598,6 +4756,8 @@ function calHtml() {
           : (timeLabel ? '<div class="shift-time">'+timeLabel+'</div>' : ''))
       + (!isClosed && isKyukin ? (isShopRest ? '<div class="kyukin-label">休み</div><div class="shoprest-label">店都合</div>' : '<div class="kyukin-label">欠勤</div>') : '')
       + (!isClosed && statusLabel ? '<div class="shift-status-label">'+statusLabel+'</div>' : '')
+      + (kuroS ? '<div class="kuro-short-label">黒服' + kuroS.n + '/' + kuroS.need + '</div>' : '')
+      + (isToku ? '<div class="toku-badge">特</div>' : '')
       + '</div>';
   }
   h += '</div>';
@@ -4676,6 +4836,7 @@ function showStartPicker() {
   document.getElementById('picker-title').textContent = pickerKey + ' のシフト';
   var g = document.getElementById('picker-grid');
   g.innerHTML = '';
+  if (typeof tokuPickerNotes_ === 'function') tokuPickerNotes_(g, pickerKey); // 🔥特別日・👔黒服の人数の一言（サーバの答えを描くだけ）
 
   // 欠勤申請（既登録日のみ）
   var hasShift = portalData && portalData.shifts && portalData.shifts[pickerKey];
@@ -4793,7 +4954,11 @@ function closePicker() {
 
 function updateSubmitBar() {
   var count = Object.keys(shiftSelections).length;
-  document.getElementById('shift-count').textContent = count > 0 ? count + '日分選択中' : '';
+  // 🔥特別日：選んだ中に特別日があれば一言（欠勤の申請は数えない・時給アップの対象＝サーバの答え paid）
+  var tokuSel = (typeof tokuPaidRole_ === 'function' && tokuPaidRole_()) ? Object.keys(shiftSelections).filter(function(k) { return shiftSelections[k] !== '欠勤' && tokuIs_(k); }).length : 0;
+  document.getElementById('shift-count').innerHTML = count > 0
+    ? count + '日分選択中' + (tokuSel ? '<br><span class="toku-cnt">🔥 特別日 ' + tokuSel + '日を含みます（時給アップ）</span>' : '')
+    : '';
   document.getElementById('submit-btn').disabled = count === 0;
 }
 
@@ -4824,6 +4989,7 @@ function doSubmit() {
   .then(function(d) {
     if (d.ok) {
       decBonusForget_(); // 🎁 シフトを出した＝ホームの特別報酬の日数を次に取り直す
+      if (typeof tokuForget_ === 'function') tokuForget_();     // 👔 シフトを出した＝黒服の人数を次に暦を描くとき取り直す
       btn.textContent = '✓ 提出しました';
       btn.style.background = '#1a4422';
       // 🏖店休日で受け付けられなかった日（＝店休日を設定する前に開いた画面から送った場合）。
